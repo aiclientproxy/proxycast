@@ -116,6 +116,29 @@ describe("App Server notification drift", () => {
     }
   });
 
+  it("keeps excluded environment and external-agent notifications diagnostic-only", () => {
+    for (const method of [
+      "thread/environment/connected",
+      "thread/environment/disconnected",
+      "externalAgentConfig/import/progress",
+      "externalAgentConfig/import/completed",
+    ]) {
+      const source = notification(method, {
+        threadId: "thread-excluded",
+        turnId: "turn-excluded",
+        environmentId: "remote-exec",
+        path: "/private/import",
+        content: "must-not-reach-the-renderer",
+      });
+
+      const diagnostic = readAppServerNotificationDrift(source);
+      expect(diagnostic.disposition).toBe("known_diagnostic_only");
+      expect(JSON.stringify(diagnostic)).not.toContain("remote-exec");
+      expect(JSON.stringify(diagnostic)).not.toContain("must-not-reach");
+      expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
+    }
+  });
+
   it("classifies turn diff as a projected current notification", () => {
     const source = notification("turn/diff/updated", {
       threadId: "thread-1",

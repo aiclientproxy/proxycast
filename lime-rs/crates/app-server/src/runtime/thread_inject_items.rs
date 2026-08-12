@@ -252,8 +252,9 @@ mod tests {
         );
         let actor = runtime
             .session_loops
-            .get_or_create(&session.session_id)
-            .await;
+            .get_or_create(&session.session_id, &session.thread_id)
+            .await
+            .expect("bind inject-items session actor");
         let submission = actor
             .submit(Arc::new(task), false)
             .await

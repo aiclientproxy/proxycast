@@ -6,7 +6,9 @@ use crate::provider_capabilities::ProviderCapabilities;
 use crate::provider_stream::RuntimeReplyProviderRequestWireShape;
 use crate::runtime_provider::RuntimeProviderConfig;
 use agent_protocol::ImageDetail;
-use runtime_core::{CanonicalRequest, CanonicalRole, ContentPart, ToolResultValue};
+use runtime_core::{
+    CanonicalRequest, CanonicalRole, CanonicalToolDefinition, ContentPart, ToolResultValue,
+};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 
@@ -15,7 +17,8 @@ pub(super) fn chat_completions_request(
     request: &CanonicalRequest,
     wire_shape: &RuntimeReplyProviderRequestWireShape,
     media_payloads: &BTreeMap<String, String>,
-) -> Value {
+) -> Result<Value, super::CurrentProviderError> {
+    ensure_no_custom_history(request, "Chat Completions")?;
     let mut messages = Vec::new();
     let system = text_from_parts(&request.system);
     if !system.is_empty() {
@@ -39,7 +42,13 @@ pub(super) fn chat_completions_request(
     if !request.tools.is_empty() {
         object.insert(
             "tools".to_string(),
-            Value::Array(request.tools.iter().map(chat_tool).collect()),
+            Value::Array(
+                request
+                    .tools
+                    .iter()
+                    .map(chat_tool)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
         );
         if let Some(parallel_tool_calls) = wire_shape.parallel_tool_calls {
             object.insert(
@@ -61,7 +70,7 @@ pub(super) fn chat_completions_request(
             json!({ "enable_thinking": enable_thinking }),
         );
     }
-    Value::Object(object)
+    Ok(Value::Object(object))
 }
 
 pub(super) fn responses_request(
@@ -69,7 +78,14 @@ pub(super) fn responses_request(
     request: &CanonicalRequest,
     wire_shape: &RuntimeReplyProviderRequestWireShape,
     media_payloads: &BTreeMap<String, String>,
-) -> Value {
+) -> Result<Value, super::CurrentProviderError> {
+    if contains_custom_history(request)
+        && !ProviderCapabilities::from_runtime_config(config).custom_tools
+    {
+        return Err(super::CurrentProviderError::invalid_request(
+            "resolved Responses route does not support custom tool call history",
+        ));
+    }
     let mut input = Vec::new();
     for message in &request.messages {
         input.extend(responses_message(message, media_payloads));
@@ -89,7 +105,7 @@ pub(super) fn responses_request(
         .tools
         .iter()
         .map(|tool| responses_tool(config, tool))
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()?;
     let mut input_prefix = Vec::new();
     if tools_in_input {
         input_prefix.push(json!({
@@ -135,7 +151,7 @@ pub(super) fn responses_request(
             Value::Object(client_metadata),
         );
     }
-    Value::Object(object)
+    Ok(Value::Object(object))
 }
 
 fn responses_client_metadata(request: &CanonicalRequest) -> Option<Map<String, Value>> {
@@ -183,7 +199,8 @@ pub(super) fn anthropic_request(
     config: &RuntimeProviderConfig,
     request: &CanonicalRequest,
     media_payloads: &BTreeMap<String, String>,
-) -> Value {
+) -> Result<Value, super::CurrentProviderError> {
+    ensure_no_custom_history(request, "Anthropic Messages")?;
     let messages = request
         .messages
         .iter()
@@ -206,19 +223,13 @@ pub(super) fn anthropic_request(
                 request
                     .tools
                     .iter()
-                    .map(|tool| {
-                        json!({
-                            "name": tool.name,
-                            "description": tool.description,
-                            "input_schema": tool.input_schema,
-                        })
-                    })
-                    .collect(),
+                    .map(anthropic_tool)
+                    .collect::<Result<Vec<_>, _>>()?,
             ),
         );
     }
     apply_generation_options(&mut object, request, "max_tokens", true);
-    Value::Object(object)
+    Ok(Value::Object(object))
 }
 
 fn apply_generation_options(
@@ -369,6 +380,29 @@ fn chat_message(
     }
 }
 
+fn ensure_no_custom_history(
+    request: &CanonicalRequest,
+    protocol: &str,
+) -> Result<(), super::CurrentProviderError> {
+    if contains_custom_history(request) {
+        return Err(super::CurrentProviderError::invalid_request(format!(
+            "{protocol} cannot lower custom tool call history"
+        )));
+    }
+    Ok(())
+}
+
+fn contains_custom_history(request: &CanonicalRequest) -> bool {
+    request.messages.iter().any(|message| {
+        message.content.iter().any(|part| {
+            matches!(
+                part,
+                ContentPart::CustomToolCall { .. } | ContentPart::CustomToolResult { .. }
+            )
+        })
+    })
+}
+
 fn wire_role(role: CanonicalRole) -> &'static str {
     match role {
         CanonicalRole::System => "system",
@@ -410,39 +444,101 @@ fn chat_content(content: &[ContentPart], media_payloads: &BTreeMap<String, Strin
     )
 }
 
-fn chat_tool(tool: &runtime_core::CanonicalToolDefinition) -> Value {
-    json!({
+fn chat_tool(tool: &CanonicalToolDefinition) -> Result<Value, super::CurrentProviderError> {
+    let CanonicalToolDefinition::Function {
+        name,
+        description,
+        input_schema,
+        ..
+    } = tool
+    else {
+        return Err(super::CurrentProviderError::invalid_request(
+            "custom tools require a Responses provider route",
+        ));
+    };
+    Ok(json!({
         "type": "function",
         "function": {
-            "name": tool.name,
-            "description": tool.description,
-            "parameters": tool.input_schema,
+            "name": name,
+            "description": description,
+            "parameters": input_schema,
             "strict": false,
         }
-    })
+    }))
 }
 
 fn responses_tool(
     config: &RuntimeProviderConfig,
-    tool: &runtime_core::CanonicalToolDefinition,
-) -> Value {
+    tool: &CanonicalToolDefinition,
+) -> Result<Value, super::CurrentProviderError> {
+    let CanonicalToolDefinition::Function {
+        name,
+        description,
+        input_schema,
+        ..
+    } = tool
+    else {
+        let CanonicalToolDefinition::Custom {
+            name,
+            description,
+            format,
+            ..
+        } = tool
+        else {
+            unreachable!();
+        };
+        if !ProviderCapabilities::from_runtime_config(config).custom_tools {
+            return Err(super::CurrentProviderError::invalid_request(
+                "resolved Responses route does not support custom tools",
+            ));
+        }
+        return Ok(json!({
+            "type": "custom",
+            "name": name,
+            "description": description,
+            "format": {
+                "type": format.r#type,
+                "syntax": format.syntax,
+                "definition": format.definition,
+            },
+        }));
+    };
     let capabilities = ProviderCapabilities::from_runtime_config(config);
-    if capabilities.web_search && is_web_search_tool_name(&tool.name) {
-        return json!({
+    if capabilities.web_search && is_web_search_tool_name(name) {
+        return Ok(json!({
             "type": "web_search",
             "external_web_access": true,
-        });
+        }));
     }
-    if capabilities.image_generation && is_image_generation_tool_name(&tool.name) {
-        return json!({ "type": "image_generation" });
+    if capabilities.image_generation && is_image_generation_tool_name(name) {
+        return Ok(json!({ "type": "image_generation" }));
     }
-    json!({
+    Ok(json!({
         "type": "function",
-        "name": tool.name,
-        "description": tool.description,
-        "parameters": tool.input_schema,
+        "name": name,
+        "description": description,
+        "parameters": input_schema,
         "strict": false,
-    })
+    }))
+}
+
+fn anthropic_tool(tool: &CanonicalToolDefinition) -> Result<Value, super::CurrentProviderError> {
+    let CanonicalToolDefinition::Function {
+        name,
+        description,
+        input_schema,
+        ..
+    } = tool
+    else {
+        return Err(super::CurrentProviderError::invalid_request(
+            "custom tools require a Responses provider route",
+        ));
+    };
+    Ok(json!({
+        "name": name,
+        "description": description,
+        "input_schema": input_schema,
+    }))
 }
 
 fn is_web_search_tool_name(name: &str) -> bool {
@@ -470,7 +566,7 @@ fn strip_responses_lite_image_details(value: &mut Value) {
     }
 }
 
-fn responses_message(
+pub(super) fn responses_message(
     message: &runtime_core::CanonicalMessage,
     media_payloads: &BTreeMap<String, String>,
 ) -> Vec<Value> {
@@ -485,6 +581,13 @@ fn responses_message(
                     "type": "function_call_output",
                     "call_id": id,
                     "output": tool_result_text(result, error.as_deref()),
+                })),
+                ContentPart::CustomToolResult {
+                    id, result, error, ..
+                } => Some(json!({
+                    "type": "custom_tool_call_output",
+                    "call_id": id,
+                    "output": custom_tool_result_text(result, error.as_deref()),
                 })),
                 _ => None,
             })
@@ -509,6 +612,24 @@ fn responses_message(
                         "name": name,
                         "arguments": input.to_string(),
                     })),
+                    ContentPart::CustomToolCall {
+                        id,
+                        name,
+                        input,
+                        namespace,
+                        ..
+                    } => {
+                        let mut item = json!({
+                            "type": "custom_tool_call",
+                            "call_id": id,
+                            "name": name,
+                            "input": input,
+                        });
+                        if let Some(namespace) = namespace {
+                            item["namespace"] = json!(namespace);
+                        }
+                        items.push(item);
+                    }
                     ContentPart::RawResponseItem { item } => items.push(item.clone()),
                     _ => {}
                 }
@@ -589,6 +710,7 @@ fn anthropic_message(
                 "tool_use_id": id,
                 "content": tool_result_text(result, error.as_deref()),
             })),
+            ContentPart::CustomToolCall { .. } | ContentPart::CustomToolResult { .. } => None,
             ContentPart::RawResponseItem { .. } => None,
         })
         .collect::<Vec<_>>();
@@ -659,6 +781,17 @@ fn tool_result_text(result: &ToolResultValue, error: Option<&str>) -> String {
         ToolResultValue::Json { value } | ToolResultValue::Error { value } => value.to_string(),
         ToolResultValue::Content { value } => text_from_parts(value),
     }
+}
+
+fn custom_tool_result_text(result: &ToolResultValue, error: Option<&str>) -> String {
+    if let ToolResultValue::Error { value } = result {
+        if let Some(output) = value.get("output").and_then(Value::as_str) {
+            if !output.is_empty() {
+                return output.to_string();
+            }
+        }
+    }
+    tool_result_text(result, error)
 }
 
 #[cfg(test)]
@@ -779,7 +912,8 @@ mod tests {
             &request,
             &RuntimeReplyProviderRequestWireShape::default(),
             &BTreeMap::new(),
-        );
+        )
+        .expect("Chat Completions lowering");
         assert_eq!(chat["reasoning_effort"], "high");
 
         let responses = responses_request(
@@ -787,23 +921,22 @@ mod tests {
             &request,
             &RuntimeReplyProviderRequestWireShape::default(),
             &BTreeMap::new(),
-        );
+        )
+        .expect("Responses lowering");
         assert_eq!(responses["reasoning"], json!({ "effort": "high" }));
     }
 
     fn request_with_tool() -> CanonicalRequest {
         let mut request = CanonicalRequest::text("gpt-5-codex", "hello");
-        request.tools = vec![runtime_core::CanonicalToolDefinition {
-            name: "read_file".to_string(),
-            description: "Read a file".to_string(),
-            input_schema: json!({
+        request.tools = vec![runtime_core::CanonicalToolDefinition::function(
+            "read_file",
+            "Read a file",
+            json!({
                 "type": "object",
                 "properties": { "path": { "type": "string" } },
                 "required": ["path"]
             }),
-            output_schema: None,
-            metadata: Default::default(),
-        }];
+        )];
         request
     }
 
@@ -821,7 +954,8 @@ mod tests {
                 ..Default::default()
             };
             let responses =
-                responses_request(&config(None), &request, &wire_shape, &BTreeMap::new());
+                responses_request(&config(None), &request, &wire_shape, &BTreeMap::new())
+                    .expect("Responses lowering");
             assert_eq!(
                 responses
                     .get("parallel_tool_calls")
@@ -847,7 +981,8 @@ mod tests {
             &request,
             &wire_shape,
             &BTreeMap::new(),
-        );
+        )
+        .expect("Responses lowering");
 
         assert_eq!(
             responses["reasoning"],
@@ -874,7 +1009,8 @@ mod tests {
             ..Default::default()
         };
 
-        let responses = responses_request(&config(None), &request, &wire_shape, &media_payloads());
+        let responses = responses_request(&config(None), &request, &wire_shape, &media_payloads())
+            .expect("Responses lowering");
 
         assert_eq!(
             responses,
@@ -922,6 +1058,87 @@ mod tests {
     }
 
     #[test]
+    fn custom_responses_tools_preserve_freeform_history_and_fail_closed_elsewhere() {
+        let mut request = CanonicalRequest::text("gpt-5-codex", "inspect the workspace");
+        request.tools = vec![CanonicalToolDefinition::custom(
+            "run_code",
+            "Run a bounded CodeMode program",
+            runtime_core::FreeformToolFormat {
+                r#type: "grammar".to_string(),
+                syntax: "lark".to_string(),
+                definition: "program := statement*".to_string(),
+            },
+        )];
+        request.messages.extend([
+            runtime_core::CanonicalMessage {
+                id: None,
+                role: CanonicalRole::Assistant,
+                content: vec![ContentPart::CustomToolCall {
+                    id: "custom-call-1".to_string(),
+                    name: "run_code".to_string(),
+                    input: "return 42;".to_string(),
+                    namespace: Some("codemode".to_string()),
+                    metadata: BTreeMap::new(),
+                }],
+                metadata: BTreeMap::new(),
+            },
+            runtime_core::CanonicalMessage {
+                id: None,
+                role: CanonicalRole::Tool,
+                content: vec![ContentPart::CustomToolResult {
+                    id: "custom-call-1".to_string(),
+                    name: "run_code".to_string(),
+                    result: ToolResultValue::text("42"),
+                    error: None,
+                    metadata: BTreeMap::new(),
+                }],
+                metadata: BTreeMap::new(),
+            },
+        ]);
+
+        let mut official = config(None);
+        official.provider_name = "openai".to_string();
+        official.provider_selector = Some("openai".to_string());
+        official.base_url = Some("https://api.openai.com/v1".to_string());
+        official.protocol = Some(crate::runtime_provider::RuntimeProviderProtocol::Responses);
+        let responses = responses_request(
+            &official,
+            &request,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        )
+        .expect("official Responses custom lowering");
+
+        assert_eq!(responses["tools"][0]["type"], "custom");
+        assert_eq!(responses["tools"][0]["format"]["syntax"], "lark");
+        assert_eq!(responses["input"][1]["type"], "custom_tool_call");
+        assert_eq!(responses["input"][1]["namespace"], "codemode");
+        assert_eq!(responses["input"][2]["type"], "custom_tool_call_output");
+
+        let mut gateway = official.clone();
+        gateway.base_url = Some("https://gateway.example.com/v1".to_string());
+        let error = responses_request(
+            &gateway,
+            &request,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        )
+        .expect_err("gateway custom tools must fail closed");
+        assert!(error.message.contains("custom tool"));
+        let error = chat_completions_request(
+            &gateway,
+            &request,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        )
+        .expect_err("Chat Completions custom tools must fail closed");
+        assert!(error.message.contains("custom tool"));
+        let error = anthropic_request(&gateway, &request, &BTreeMap::new())
+            .expect_err("Anthropic custom tools must fail closed");
+        assert!(error.message.contains("custom tool"));
+    }
+
+    #[test]
     fn responses_only_emits_codex_turn_identity_and_protects_reserved_metadata() {
         let metadata = super::super::CurrentProviderRequestMetadata::new(
             "session-1",
@@ -954,7 +1171,8 @@ mod tests {
             &canonical,
             &RuntimeReplyProviderRequestWireShape::default(),
             &BTreeMap::new(),
-        );
+        )
+        .expect("Responses lowering");
         let client_metadata = responses["client_metadata"]
             .as_object()
             .expect("Responses client_metadata");
@@ -981,8 +1199,10 @@ mod tests {
             &canonical,
             &RuntimeReplyProviderRequestWireShape::default(),
             &BTreeMap::new(),
-        );
-        let anthropic = anthropic_request(&config(None), &canonical, &BTreeMap::new());
+        )
+        .expect("Chat Completions lowering");
+        let anthropic = anthropic_request(&config(None), &canonical, &BTreeMap::new())
+            .expect("Anthropic lowering");
         assert!(chat.get("client_metadata").is_none());
         assert!(anthropic.get("client_metadata").is_none());
     }
@@ -995,7 +1215,8 @@ mod tests {
             &request,
             &RuntimeReplyProviderRequestWireShape::default(),
             &BTreeMap::new(),
-        );
+        )
+        .expect("Chat Completions lowering");
 
         assert!(value.get("reasoning_effort").is_none());
     }
@@ -1011,13 +1232,15 @@ mod tests {
             &request,
             &RuntimeReplyProviderRequestWireShape::default(),
             &BTreeMap::new(),
-        );
+        )
+        .expect("Chat Completions lowering");
         let responses = responses_request(
             &config,
             &request,
             &RuntimeReplyProviderRequestWireShape::default(),
             &BTreeMap::new(),
-        );
+        )
+        .expect("Responses lowering");
 
         assert_eq!(chat["service_tier"], "priority");
         assert_eq!(responses["service_tier"], "priority");

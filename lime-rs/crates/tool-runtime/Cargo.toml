@@ -10,18 +10,24 @@ name = "tool_runtime"
 path = "src/lib.rs"
 doctest = false
 
+[[bin]]
+name = "code-mode-host"
+path = "src/bin/code-mode-host.rs"
+
 [dependencies]
 agent-protocol.workspace = true
 app-server-protocol.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 chrono.workspace = true
+deno_core_icudata.workspace = true
 dirs.workspace = true
 document-preview.workspace = true
 encoding_rs = "0.8"
 futures.workspace = true
 glob.workspace = true
 hex.workspace = true
+jsonschema.workspace = true
 lime-core.workspace = true
 lime-skills.workspace = true
 patch-apply.workspace = true
@@ -35,11 +41,13 @@ serde_json.workspace = true
 sha2.workspace = true
 tiktoken-rs.workspace = true
 tokio.workspace = true
-tokio-util.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
 toml_edit.workspace = true
+tracing.workspace = true
 url.workspace = true
 urlencoding.workspace = true
 uuid.workspace = true
+v8.workspace = true
 which = "8.0.0"
 
 [dev-dependencies]

@@ -1,13 +1,13 @@
 # Lime v1.125.0 发布执行计划
 
-状态：windows-gate-b-verified / tag-fixed
-日期：2026-08-09
+状态：release-published-at-4ee8d3577 / warning-fix-local-validated / retag-confirmation-pending / windows-runner-pending
+日期：2026-08-11
 目标版本：`1.125.0`
 目标 tag：`v1.125.0`
 
 ## 主目标
 
-在不移动或覆盖已存在的 `v1.125.0` tag 的前提下，发布当前工作树中的 Agent runtime、App Server/protocol、Plugin v3、GUI、文档与质量治理改动。
+将 `v1.125.0` 收敛到完整且通过 Windows 实机门禁的 release candidate，发布 Agent runtime、App Server/protocol、Plugin v3、GUI、文档与质量治理改动；已发布 tag 如需重定位，必须先完成新候选验证并取得单独危险操作确认。
 
 ## Release Candidate
 
@@ -82,7 +82,7 @@
 
 ## Windows target session 投影修复
 
-状态：`fix-validated-locally / windows-runner-pending`
+状态：`fix-validated-locally / retag-confirmation-pending / windows-runner-pending`
 
 - runner `31347609969` 使用完整 SHA `22a96e5e1df9b771120ba6ea26ab7f562d5eafcd`；Windows path contract、sherpa runtime、Electron Windows package、N-1 Squirrel 安装 smoke 均通过，Plugin Gate B 仍在等待 `mcp_elicitation` 90 秒后失败。
 - 失败证据确认 enabled canonical turn 已 `completed`、thread 已 `idle`，items 只有 user message 与空 agent message；enabled provider 只有 `/v1/models`，没有 `/v1/chat/completions`，而 disabled boundary provider 收到后续请求。失败截图标题已进入 enabled 会话，但正文仍显示 disabled boundary 结果，证明 renderer 的目标 session 与提交 thread 发生漂移。
@@ -211,3 +211,31 @@
 - 修复提交 `8738c8a623a763c50267d208facb4667ca9736c6` 已推送到 `origin/main`。Windows runner [`31444743300`](https://github.com/limecloud/lime/actions/runs/31444743300) 与 Job `93636406363` 均为 `success`；Windows path contract、sherpa runtime、Electron x64 Squirrel 构建、N-1 installer 下载、真实安装/升级 smoke 和 installed Plugin Gate B 全部通过。
 - Windows Gate B Artifact `9084355493`（`lime-windows-agent-plugin-gate-b-evidence`）已下载并审计：`ok=true`、`appVersion=1.125.0`、`platform=win32`、`arch=x64`、packaged/preload/App Server JSONL 真链成立、provider request `2`、MCP ledger accepted、reload/cold restore 通过、resource read/HTML load `3/3`、Electron launch `2`、卸载/installed projection 清理/历史恢复全部通过；卸载后没有重启 MCP runtime、重跑 provider 或 tool，`productionMockFallbackHitCount=0`、`missingRequiredMethods=[]`、`legacyMcpCommandsSeen=[]`、`consoleErrors=[]`。
 - 退出条件已满足。Windows runner 检出的产品修复 SHA 为 `8738c8a623a763c50267d208facb4667ca9736c6`；本地与远端 `v1.125.0` tag 均继续固定在 `8647d18fa358e3a9c86e520348d39e4b3eba6041`，未移动或覆盖。
+
+## 标准 Release run `31449908543`
+
+状态：`complete / published-at-4ee8d3577`
+
+- 用户确认后，本地与远端 `v1.125.0` tag 以及 GitHub Release target 已重定位到 `4ee8d3577e3d30df3a310450aca01320139a28d1`。
+- 标准 Release run [`31449908543`](https://github.com/limecloud/lime/actions/runs/31449908543) 全部成功：macOS arm64/x64、Windows x64 Electron 构建，Windows installed Squirrel smoke，Electron/CLI asset 发布和 Cloudflare R2 updater 发布均通过。
+- GitHub Release 已有 `13` 个真实资产：Windows Setup/full nupkg、macOS arm64/x64 DMG/ZIP/updater metadata，以及 macOS arm64/x64、Linux x64、Windows x64 CLI 包。
+- 该 run 的 Windows 编译日志暴露跨平台 unused/dead-code warning；现有资产对应 warning 修复前的 `4ee8d3577`，不能作为下一候选的 warning-free 证据。
+
+## Windows warning 与 Codex 对齐修复
+
+状态：`fix-validated-locally / retag-confirmation-pending / windows-runner-pending`
+
+- Codex 对照结论：`app-server-transport` Unix socket 与 MCP `OsStr` 仅缺少精确平台导入边界，分类为 `current / cfg-fix`；没有缺失 transport 或 MCP 执行实现。
+- `tool-runtime` 确有 Windows 功能遗漏：Lime 公开了 `login` 参数却在 PowerShell 分支始终添加 `-NoProfile`。按 Codex `Shell::derive_exec_args` 对齐为 `login=false` 添加 `-NoProfile`、`login=true` 加载 profile，同时保留非交互执行参数，并补 Windows 定向回归。
+- Skills 的插件版 snapshot、selection、prompt context 已从 turn request、telemetry 与 runtime enable 主链消费；三个 warning 符号只是无插件测试包装层，分类为 `dead`，已删除并让测试直接调用插件版 current owner。
+- workflow 审计自由函数已被 turn execution/control/read-model 测试真实消费；未使用的 `RuntimeCore` 同名方法是重复入口，分类为 `dead` 并删除。Codex 没有 Lime 预留的 `workflow.tool/connector/hook/artifact` 事件校验面，仓库也无消费者，整组分类为 `dead` 并删除；保留在用的 run/step current 事件。
+- 定向 `rustfmt --check`、workspace `cargo fmt --all -- --check` 与 `git diff --check` 通过；host `cargo check --lib -p app-server-transport -p tool-runtime -p lime-mcp -p app-server` 通过且没有 warning；Windows target `app-server-transport` check 通过且没有 warning。
+- owner 测试通过：`app-server-transport 18/18`、`lime-mcp environment 7/7`、`tool-runtime unified_exec 10/10`、`agent_skills_context 13/13`、`runtime::workflow 13/13`。
+- `npm run test:rust:related -- <本轮 7 个 Rust 路径>` 最终退出码为 `0`，全部 `11` 个相关/反向依赖 crate 通过；此前并行 `provider_turn` 回归失败已由其 owner 收口，不再阻塞候选。
+- `npm run typecheck`、`npm run verify:app-version` 与 `npm run governance:legacy-report` 通过；版本事实源保持 `1.125.0`，治理报告为零候选、零漂移、零违规。
+- `npm run test:contracts` 通过：协议生成零漂移、App Server client `301 checks`、命令/fixture/modality/scripts/Electron release/docs 边界全部通过。
+- `npm run smoke:agent-runtime-current-fixture` 通过：覆盖真实 Electron 的 Thread/Turn/Item、工具终态、approval、Skills、MCP、Workbench 与历史恢复；`liveProviderUsed=false`。
+- `npm run verify:gui-smoke` 通过；Electron/App Server evidence 为 `standalone-shell-01-20260811030633-6629`，App Server 版本 `1.125.0`。
+- `app-server/src/runtime_backend/tests.rs` 仍有一个只在 lib test 构建出现的测试 helper dead-code warning，不属于用户报告的 release build warning，也不进入标准 Release 编译路径；本轮不跨写集夹写，后续由该测试 owner 独立收口。
+- 本机其余 Windows target check 被 `ring`、`zstd-sys`、`bzip2-sys` 缺少 MSVC C 标准头阻断；最终 warning-free 证据必须来自新 release candidate 的真实 Windows runner。
+- 下一步：获得单独危险操作确认后提交全部 release candidate、强制重定位 `v1.125.0` 并重跑标准 Release，最终复核 GitHub Release 资产时间与 Windows 日志。

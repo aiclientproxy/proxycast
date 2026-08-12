@@ -143,6 +143,7 @@ export type AppServerReleaseArtifact = {
   platform: AppServerArtifactPlatform;
   url: string;
   sha256: string;
+  codeModeHostSha256?: string;
 };
 
 export type AppServerReleaseManifest = {

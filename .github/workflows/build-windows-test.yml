@@ -99,6 +99,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --config.node-linker=hoisted
 
+      - name: Configure sandboxed rusty_v8 artifacts
+        shell: bash
+        run: node scripts/lib/rusty-v8-artifacts.mjs --github-env
+
       - name: Run Windows Agent Plugin path contract tests
         shell: bash
         run: |
@@ -119,7 +123,7 @@ jobs:
           node scripts/prepare-sherpa-onnx-runtime.mjs \
             --target "x86_64-pc-windows-msvc"
 
-      - name: Build Electron Windows test package
+      - name: Build Electron Windows test package with app-server and code-mode-host sidecars
         shell: bash
         env:
           CARGO_PROFILE_RELEASE_LTO: "off"

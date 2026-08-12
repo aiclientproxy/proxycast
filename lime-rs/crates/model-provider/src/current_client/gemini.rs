@@ -4,8 +4,8 @@ use async_stream::try_stream;
 use futures::{Stream, StreamExt};
 use reqwest::Response;
 use runtime_core::{
-    CanonicalLlmEvent as LlmEvent, CanonicalRequest, CanonicalRole, ContentPart,
-    FailureClassification, FinishReason, ToolResultValue, Usage,
+    CanonicalLlmEvent as LlmEvent, CanonicalRequest, CanonicalRole, CanonicalToolDefinition,
+    ContentPart, FailureClassification, FinishReason, ToolResultValue, Usage,
 };
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -81,16 +81,27 @@ pub(super) fn request(
             .tools
             .iter()
             .map(|tool| {
+                let CanonicalToolDefinition::Function {
+                    name,
+                    description,
+                    input_schema,
+                    ..
+                } = tool
+                else {
+                    return Err(CurrentProviderError::invalid_request(
+                        "custom tools require a Responses provider route",
+                    ));
+                };
                 let mut declaration = Map::from_iter([
-                    ("name".to_string(), json!(tool.name)),
-                    ("description".to_string(), json!(tool.description)),
+                    ("name".to_string(), json!(name)),
+                    ("description".to_string(), json!(description)),
                 ]);
-                if let Some(parameters) = gemini_tool_schema(&tool.input_schema) {
+                if let Some(parameters) = gemini_tool_schema(input_schema) {
                     declaration.insert("parameters".to_string(), parameters);
                 }
-                Value::Object(declaration)
+                Ok(Value::Object(declaration))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
         object.insert(
             "tools".to_string(),
             json!([{ "functionDeclarations": declarations }]),
@@ -551,7 +562,7 @@ fn reduce_event(
                 events.push(LlmEvent::ToolInputDelta {
                     id: id.clone(),
                     name: name.to_string(),
-                    text: arguments,
+                    text: arguments.clone(),
                 });
                 events.push(LlmEvent::ToolInputEnd {
                     id: id.clone(),
@@ -561,6 +572,7 @@ fn reduce_event(
                     id,
                     name: name.to_string(),
                     input,
+                    raw_arguments: Some(arguments),
                     provider_executed: None,
                     provider_metadata: part
                         .get("thoughtSignature")

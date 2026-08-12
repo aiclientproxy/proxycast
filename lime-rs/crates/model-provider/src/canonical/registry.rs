@@ -115,6 +115,7 @@ mod tests {
             input_modalities: vec!["text".to_string()],
             output_modalities: vec!["text".to_string()],
             runtime_features: Vec::new(),
+            tool_mode: None,
             supports_tools: false,
             supports_reasoning: false,
             supports_prompt_cache: false,

@@ -2270,6 +2270,12 @@
     "output_modalities": [
       "text"
     ],
+    "runtime_features": [
+      "custom_tools",
+      "streaming",
+      "tool_calling",
+      "json_schema"
+    ],
     "supports_tools": true,
     "pricing": {
       "prompt": 1.75e-6,

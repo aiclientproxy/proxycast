@@ -2,7 +2,7 @@ use super::request_context::RuntimeModelSelection;
 use lime_agent::SessionProviderConfig;
 use lime_core::database::DbConnection;
 use lime_core::models::model_registry::{
-    EnhancedModelMetadata, ModelCapabilityProvenance, ModelModality,
+    EnhancedModelMetadata, ModelCapabilityProvenance, ModelModality, ModelRuntimeFeature,
 };
 use lime_core::models::RuntimeProviderCredential;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
@@ -12,17 +12,69 @@ use serde_json::{json, Value};
 #[derive(Debug, Clone)]
 pub(super) struct RuntimeModelRegistryMetadata {
     payload: Value,
+    tool_mode: tool_runtime::code_mode::RuntimeToolMode,
+    supports_custom_tools: bool,
 }
 
 impl RuntimeModelRegistryMetadata {
     #[cfg(test)]
     pub(super) fn from_payload(payload: Value) -> Self {
-        Self { payload }
+        let tool_mode = runtime_tool_mode_from_payload(&payload);
+        let supports_custom_tools = payload_supports_custom_tools(&payload);
+        Self {
+            payload,
+            tool_mode,
+            supports_custom_tools,
+        }
     }
 
     pub(super) fn payload(&self) -> &Value {
         &self.payload
     }
+
+    pub(super) fn tool_mode(&self) -> tool_runtime::code_mode::RuntimeToolMode {
+        self.tool_mode
+    }
+
+    pub(super) fn supports_custom_tools(&self) -> bool {
+        self.supports_custom_tools
+    }
+}
+
+fn runtime_tool_mode(value: Option<&str>) -> tool_runtime::code_mode::RuntimeToolMode {
+    match value.map(str::trim) {
+        Some("code_mode") => tool_runtime::code_mode::RuntimeToolMode::CodeMode,
+        Some("code_mode_only") => tool_runtime::code_mode::RuntimeToolMode::CodeModeOnly,
+        _ => tool_runtime::code_mode::RuntimeToolMode::Direct,
+    }
+}
+
+#[cfg(test)]
+fn runtime_tool_mode_from_payload(payload: &Value) -> tool_runtime::code_mode::RuntimeToolMode {
+    runtime_tool_mode(
+        payload
+            .pointer("/model/tool_mode")
+            .or_else(|| payload.pointer("/model/toolMode"))
+            .or_else(|| payload.get("tool_mode"))
+            .or_else(|| payload.get("toolMode"))
+            .and_then(Value::as_str),
+    )
+}
+
+#[cfg(test)]
+fn payload_supports_custom_tools(payload: &Value) -> bool {
+    [
+        "/model/runtime_features",
+        "/model/runtimeFeatures",
+        "/model_capabilities/runtime_features",
+        "/modelCapabilities/runtimeFeatures",
+    ]
+    .into_iter()
+    .filter_map(|pointer| payload.pointer(pointer))
+    .filter_map(Value::as_array)
+    .flatten()
+    .filter_map(Value::as_str)
+    .any(|feature| feature == "custom_tools")
 }
 
 pub(super) async fn resolve_runtime_model_registry_metadata(
@@ -33,9 +85,22 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
     route_credential: Option<&RuntimeProviderCredential>,
 ) -> Result<RuntimeModelRegistryMetadata, String> {
     if let Some(config) = direct_provider_config {
+        let tool_mode = runtime_tool_mode(
+            config
+                .model_capabilities
+                .as_ref()
+                .and_then(|value| value.get("tool_mode").or_else(|| value.get("toolMode")))
+                .and_then(Value::as_str),
+        );
         let capability_snapshot = config.model_capabilities.as_ref().map(|value| {
             let snapshot = runtime_core::capability_snapshot_from_model_capabilities(value);
             snapshot
+        });
+        let supports_custom_tools = capability_snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot
+                .runtime_features
+                .iter()
+                .any(|feature| feature == "custom_tools")
         });
         let chat_wire_was_lowered = capability_snapshot.as_ref().is_some_and(|snapshot| {
             snapshot
@@ -71,7 +136,14 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
                 "modelAlias": null,
                 "model_alias": null,
                 "reasoning": null,
+                "toolMode": match tool_mode {
+                    tool_runtime::code_mode::RuntimeToolMode::Direct => "direct",
+                    tool_runtime::code_mode::RuntimeToolMode::CodeMode => "code_mode",
+                    tool_runtime::code_mode::RuntimeToolMode::CodeModeOnly => "code_mode_only",
+                },
             }),
+            tool_mode,
+            supports_custom_tools,
         });
     }
 
@@ -130,6 +202,16 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
             "reasoning_effort": model.capabilities.reasoning_effort,
         })
     });
+    let tool_mode = runtime_tool_mode(
+        chat_wire_model
+            .as_ref()
+            .and_then(|model| model.tool_mode.as_deref()),
+    );
+    let supports_custom_tools = chat_wire_model.as_ref().is_some_and(|model| {
+        model
+            .runtime_features
+            .contains(&ModelRuntimeFeature::CustomTools)
+    });
 
     Ok(RuntimeModelRegistryMetadata {
         payload: json!({
@@ -157,7 +239,10 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
             "modelAlias": model_alias,
             "model_alias": model_alias,
             "reasoning": reasoning,
+            "toolMode": chat_wire_model.as_ref().and_then(|model| model.tool_mode.clone()),
         }),
+        tool_mode,
+        supports_custom_tools,
     })
 }
 
@@ -241,6 +326,45 @@ mod tests {
             vec![ModelModality::Text, ModelModality::Image]
         );
         assert_eq!(model.input_modalities.len(), 5);
+    }
+
+    #[test]
+    fn registry_payload_requires_explicit_tool_mode_and_custom_tools_capability() {
+        let executable = RuntimeModelRegistryMetadata::from_payload(json!({
+            "model": {
+                "toolMode": "code_mode_only",
+                "runtimeFeatures": ["streaming", "custom_tools"]
+            }
+        }));
+        assert_eq!(
+            executable.tool_mode(),
+            tool_runtime::code_mode::RuntimeToolMode::CodeModeOnly
+        );
+        assert!(executable.supports_custom_tools());
+
+        let unknown_mode = RuntimeModelRegistryMetadata::from_payload(json!({
+            "model": {
+                "tool_mode": "code_interpreter",
+                "runtime_features": ["custom_tools"]
+            }
+        }));
+        assert_eq!(
+            unknown_mode.tool_mode(),
+            tool_runtime::code_mode::RuntimeToolMode::Direct
+        );
+        assert!(unknown_mode.supports_custom_tools());
+
+        let missing_capability = RuntimeModelRegistryMetadata::from_payload(json!({
+            "model": {
+                "tool_mode": "code_mode",
+                "runtime_features": ["tool_calling"]
+            }
+        }));
+        assert_eq!(
+            missing_capability.tool_mode(),
+            tool_runtime::code_mode::RuntimeToolMode::CodeMode
+        );
+        assert!(!missing_capability.supports_custom_tools());
     }
 
     #[tokio::test]
@@ -400,6 +524,11 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(true)
         );
+        assert_eq!(
+            metadata.tool_mode(),
+            tool_runtime::code_mode::RuntimeToolMode::Direct
+        );
+        assert!(!metadata.supports_custom_tools());
         let encoded = metadata.payload().to_string();
         assert!(!encoded.contains("must-not-persist"));
         assert!(!encoded.contains("example.test"));

@@ -1,6 +1,8 @@
 use crate::types::{McpServerConfig, DEFAULT_MCP_SERVER_ENVIRONMENT_ID};
 use std::collections::HashMap;
-use std::ffi::{OsStr, OsString};
+#[cfg(unix)]
+use std::ffi::OsStr;
+use std::ffi::OsString;
 #[cfg(unix)]
 use std::path::Path;
 

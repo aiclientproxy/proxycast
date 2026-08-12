@@ -198,6 +198,9 @@ fn capability_satisfied(required: &str, snapshot: &CapabilitySnapshot) -> bool {
                     .any(|feature| feature == "tool_calling")
         }
         "function_calling" => snapshot.capabilities.function_calling,
+        "custom_tools" => normalized_values(&snapshot.runtime_features)
+            .iter()
+            .any(|feature| feature == "custom_tools"),
         "streaming" => {
             snapshot.capabilities.streaming
                 || normalized_values(&snapshot.runtime_features)
@@ -436,6 +439,41 @@ mod tests {
         assert_eq!(
             route_capability_gap(&request, &snapshot).as_deref(),
             Some("capability:future_unknown_capability")
+        );
+    }
+
+    #[test]
+    fn custom_tool_capability_requires_explicit_runtime_feature() {
+        let request = build_model_task_request(ModelTaskRequestInput {
+            task_kind: ModelTaskKind::Chat,
+            source: ModelTaskSource::AgentTurn,
+            provider_id: Some("openai".to_string()),
+            model_id: Some("gpt-5.2".to_string()),
+            model_ref_source: ModelRefSource::ProfileSlot,
+            modality_contract_key: None,
+            routing_slot: Some("coding".to_string()),
+            task_families: Vec::new(),
+            input_modalities: Vec::new(),
+            output_modalities: Vec::new(),
+            runtime_features: Vec::new(),
+            capabilities: vec!["custom_tools".to_string()],
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            content_id: None,
+            trace_id: None,
+        });
+        let declared = capability_snapshot_from_model_capabilities(&json!({
+            "runtimeFeatures": ["custom_tools"]
+        }));
+        let missing = capability_snapshot_from_model_capabilities(&json!({
+            "runtimeFeatures": ["tool_calling"]
+        }));
+
+        assert_eq!(route_capability_gap(&request, &declared), None);
+        assert_eq!(
+            route_capability_gap(&request, &missing).as_deref(),
+            Some("capability:custom_tools")
         );
     }
 

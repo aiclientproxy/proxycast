@@ -26,15 +26,15 @@ fn config(provider_name: &str, base_url: Option<&str>) -> RuntimeProviderConfig 
 }
 
 fn request(tool_name: &str) -> CurrentProviderRequest {
-    CurrentProviderRequest::new(Vec::new()).with_tools(vec![CurrentProviderTool {
-        name: tool_name.to_string(),
-        description: "Search the web".to_string(),
-        input_schema: json!({
+    CurrentProviderRequest::new(Vec::new()).with_tools(vec![CurrentProviderTool::function(
+        tool_name,
+        "Search the web",
+        json!({
             "type": "object",
             "properties": { "query": { "type": "string" } },
             "required": ["query"],
         }),
-    }])
+    )])
 }
 
 fn lowered_tools(config: &RuntimeProviderConfig, tool_name: &str) -> serde_json::Value {
@@ -46,7 +46,8 @@ fn lowered_tools(config: &RuntimeProviderConfig, tool_name: &str) -> serde_json:
         &canonical,
         &RuntimeReplyProviderRequestWireShape::default(),
         &BTreeMap::new(),
-    )["tools"]
+    )
+    .expect("Responses lowering")["tools"]
         .clone()
 }
 

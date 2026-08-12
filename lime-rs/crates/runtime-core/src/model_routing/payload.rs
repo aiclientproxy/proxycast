@@ -10,6 +10,7 @@ pub fn routing_decision_payload(
     readiness: &ProviderReadiness,
     model_registry_payload: &Value,
 ) -> Value {
+    let required_capabilities = required_capabilities(routing, selection);
     let selected_provider = selection.provider.clone();
     let selected_model = selection.model.clone();
     let requested_provider = routing
@@ -41,12 +42,12 @@ pub fn routing_decision_payload(
         "requested_model": requested_model,
         "fallbackChain": routing.fallback_chain,
         "fallback_chain": routing.fallback_chain,
-        "requiredCapabilities": REQUIRED_CODING_CAPABILITIES,
-        "required_capabilities": REQUIRED_CODING_CAPABILITIES,
+        "requiredCapabilities": &required_capabilities,
+        "required_capabilities": &required_capabilities,
         "modelRegistry": model_registry_payload,
         "model_registry": model_registry_payload,
     });
-    let model_slot = model_slot_payload(routing, selection);
+    let model_slot = model_slot_payload(routing, selection, &required_capabilities);
 
     json!({
         "backend": "runtime",
@@ -79,8 +80,8 @@ pub fn routing_decision_payload(
         "requested_model": requested_model,
         "fallbackChain": routing.fallback_chain,
         "fallback_chain": routing.fallback_chain,
-        "requiredCapabilities": REQUIRED_CODING_CAPABILITIES,
-        "required_capabilities": REQUIRED_CODING_CAPABILITIES,
+        "requiredCapabilities": &required_capabilities,
+        "required_capabilities": &required_capabilities,
     })
 }
 
@@ -201,7 +202,11 @@ pub fn routing_not_possible_payload_with_attempts(
     payload
 }
 
-fn model_slot_payload(routing: &ModelRoutingDecision, selection: &RuntimeModelSelection) -> Value {
+fn model_slot_payload(
+    routing: &ModelRoutingDecision,
+    selection: &RuntimeModelSelection,
+    required_capabilities: &[String],
+) -> Value {
     json!({
         "serviceModelSlot": routing.service_model_slot,
         "service_model_slot": routing.service_model_slot,
@@ -220,9 +225,41 @@ fn model_slot_payload(routing: &ModelRoutingDecision, selection: &RuntimeModelSe
             .iter()
             .map(profile_slot_payload)
             .collect::<Vec<_>>(),
-        "requiredCapabilities": REQUIRED_CODING_CAPABILITIES,
-        "required_capabilities": REQUIRED_CODING_CAPABILITIES,
+        "requiredCapabilities": required_capabilities,
+        "required_capabilities": required_capabilities,
     })
+}
+
+fn required_capabilities(
+    routing: &ModelRoutingDecision,
+    selection: &RuntimeModelSelection,
+) -> Vec<String> {
+    let mut required = REQUIRED_CODING_CAPABILITIES
+        .iter()
+        .map(|capability| (*capability).to_string())
+        .collect::<Vec<_>>();
+    let selected_slot = routing.profile_slots.iter().find(|slot| {
+        slot.slot == routing.service_model_slot
+            && slot.provider.as_deref() == Some(selection.provider.as_str())
+            && slot.model.as_deref() == Some(selection.model.as_str())
+    });
+
+    for capability in selected_slot
+        .into_iter()
+        .flat_map(|slot| slot.capability_tags.iter())
+        .filter_map(|capability| normalize_capability(capability))
+    {
+        if !required.iter().any(|existing| existing == &capability) {
+            required.push(capability);
+        }
+    }
+
+    required
+}
+
+fn normalize_capability(value: &str) -> Option<String> {
+    let normalized = value.trim().to_ascii_lowercase().replace(['-', ' '], "_");
+    (!normalized.is_empty()).then_some(normalized)
 }
 
 fn profile_slot_payload(slot: &super::ProfileModelSlot) -> Value {

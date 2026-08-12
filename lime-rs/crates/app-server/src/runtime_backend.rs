@@ -508,6 +508,8 @@ impl RuntimeBackend {
                 config_metadata.clone(),
                 &turn_plugin_snapshots,
             );
+            session_config.tool_mode = route_resolution.tool_mode;
+            session_config.supports_custom_tools = route_resolution.supports_custom_tools;
             mention_selection.apply_to_session_config(&mut session_config);
             let model_context_window = lime_agent::model_request_policy_from_turn_context(
                 session_config.turn_context.as_ref(),

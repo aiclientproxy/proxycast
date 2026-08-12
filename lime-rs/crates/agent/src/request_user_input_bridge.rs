@@ -174,7 +174,10 @@ mod tests {
             auto_resolution_ms: Some(60_000),
         };
         let registry = RuntimeSessionRegistry::default();
-        let session = registry.get_or_create("session-1").await;
+        let session = registry
+            .get_or_create("session-1", "thread-1")
+            .await
+            .expect("bind user-input bridge session actor");
         let (response_tx, response_rx) = tokio::sync::oneshot::channel();
         let response_tx = Arc::new(StdMutex::new(Some(response_tx)));
         let task_state = Arc::clone(&state);

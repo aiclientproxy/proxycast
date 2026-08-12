@@ -18,23 +18,6 @@ pub(super) struct AgentSkillsTurnContext {
     pub snapshot: Option<AgentSkillSnapshot>,
 }
 
-pub(super) fn agent_skills_context_for_turn(
-    system_prompt: Option<String>,
-    user_input: &str,
-    metadata_values: &[&Value],
-    working_dir: Option<&Path>,
-    project_root: Option<&Path>,
-) -> AgentSkillsTurnContext {
-    agent_skills_context_for_turn_with_plugins(
-        system_prompt,
-        user_input,
-        metadata_values,
-        working_dir,
-        project_root,
-        &[],
-    )
-}
-
 pub(super) fn agent_skills_context_for_turn_with_plugins(
     system_prompt: Option<String>,
     user_input: &str,
@@ -128,19 +111,6 @@ pub(super) fn selected_agent_skill_names_for_turn_with_plugins(
     .collect()
 }
 
-pub(super) fn build_agent_skill_snapshot_for_turn(
-    working_dir: Option<&Path>,
-    project_root: Option<&Path>,
-    metadata_values: &[&Value],
-) -> AgentSkillSnapshot {
-    build_agent_skill_snapshot_for_turn_with_plugins(
-        working_dir,
-        project_root,
-        metadata_values,
-        &[],
-    )
-}
-
 pub(super) fn build_agent_skill_snapshot_for_turn_with_plugins(
     working_dir: Option<&Path>,
     project_root: Option<&Path>,
@@ -197,19 +167,6 @@ pub(super) fn selected_agent_skill_selections_with_plugins(
         return selections;
     }
     select_implicit_agent_skills(user_input, snapshot)
-}
-
-pub(super) fn selected_agent_skill_body_selections_for_prompt(
-    user_input: &str,
-    metadata_values: &[&Value],
-    snapshot: &AgentSkillSnapshot,
-) -> Vec<AgentSkillSelection> {
-    selected_agent_skill_body_selections_for_prompt_with_plugins(
-        user_input,
-        metadata_values,
-        snapshot,
-        &[],
-    )
 }
 
 pub(super) fn selected_agent_skill_body_selections_for_prompt_with_plugins(
@@ -571,12 +528,13 @@ fn append_agent_skills_context_to_system_prompt(
     working_dir: Option<&Path>,
     project_root: Option<&Path>,
 ) -> Option<String> {
-    agent_skills_context_for_turn(
+    agent_skills_context_for_turn_with_plugins(
         system_prompt,
         user_input,
         metadata_values,
         working_dir,
         project_root,
+        &[],
     )
     .system_prompt
 }
@@ -639,12 +597,18 @@ mod tests {
     fn body_evaluation_uses_the_real_skill_body_budget_before_prompt_injection() {
         let workspace = TempDir::new().expect("workspace");
         write_skill(&workspace, "writer", "Writer", "Write clearly.");
-        let snapshot = build_agent_skill_snapshot_for_turn(
+        let snapshot = build_agent_skill_snapshot_for_turn_with_plugins(
             Some(workspace.path()),
             Some(workspace.path()),
             &[],
+            &[],
         );
-        let selections = selected_agent_skill_body_selections_for_prompt("$writer", &[], &snapshot);
+        let selections = selected_agent_skill_body_selections_for_prompt_with_plugins(
+            "$writer",
+            &[],
+            &snapshot,
+            &[],
+        );
 
         let evaluations = selected_agent_skill_body_evaluations(&selections, &snapshot);
 

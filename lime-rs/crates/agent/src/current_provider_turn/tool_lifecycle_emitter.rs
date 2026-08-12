@@ -14,6 +14,7 @@ use std::sync::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 use tool_runtime::tool_lifecycle::{
     ToolLifecycleEmissionFuture, ToolLifecycleEmitter, ToolLifecycleEvent, ToolLifecyclePhase,
+    ToolOutputDeltaEvent,
 };
 
 pub(super) struct CurrentTurnToolLifecycleEmitter {
@@ -262,6 +263,32 @@ impl ToolLifecycleEmitter for CurrentTurnToolLifecycleEmitter {
             }
         })
     }
+
+    fn emit_output_delta<'a>(
+        &'a self,
+        event: ToolOutputDeltaEvent,
+    ) -> ToolLifecycleEmissionFuture<'a> {
+        Box::pin(async move {
+            if event.delta.is_empty() {
+                return;
+            }
+            let mut metadata = event.metadata;
+            metadata
+                .entry("turn_id".to_string())
+                .or_insert_with(|| serde_json::Value::String(event.turn_id));
+            metadata
+                .entry("tool_name".to_string())
+                .or_insert_with(|| serde_json::Value::String(event.tool_name));
+            let _ = self.event_sender.send(CurrentTurnHostEvent::ToolLifecycle(
+                AgentEvent::ToolOutputDelta {
+                    tool_id: event.call_id,
+                    delta: event.delta,
+                    output_kind: event.output_kind,
+                    metadata: Some(metadata),
+                },
+            ));
+        })
+    }
 }
 
 #[cfg(test)]
@@ -271,6 +298,59 @@ mod tests {
     use std::path::PathBuf;
     use tool_runtime::tool_call::ToolEnvironment;
     use tool_runtime::tool_result_projection::NormalizedToolOutput;
+
+    #[tokio::test]
+    async fn output_delta_keeps_code_mode_call_and_cell_correlation() {
+        let (event_sender, mut events) = tokio::sync::mpsc::unbounded_channel();
+        let emitter = CurrentTurnToolLifecycleEmitter::new(
+            event_sender,
+            "session-code-mode",
+            "thread-code-mode",
+        );
+        emitter
+            .emit_output_delta(ToolOutputDeltaEvent {
+                turn_id: "turn-code-mode".to_string(),
+                call_id: "exec-call-1".to_string(),
+                tool_name: "exec".to_string(),
+                delta: "cell update".to_string(),
+                output_kind: Some("code_mode_notify".to_string()),
+                metadata: HashMap::from([(
+                    "code_mode_cell_id".to_string(),
+                    serde_json::Value::String("cell-1".to_string()),
+                )]),
+            })
+            .await;
+
+        let CurrentTurnHostEvent::ToolLifecycle(AgentEvent::ToolOutputDelta {
+            tool_id,
+            delta,
+            output_kind,
+            metadata,
+        }) = events.recv().await.expect("output delta event")
+        else {
+            panic!("expected canonical tool output delta")
+        };
+        assert_eq!(tool_id, "exec-call-1");
+        assert_eq!(delta, "cell update");
+        assert_eq!(output_kind.as_deref(), Some("code_mode_notify"));
+        let metadata = metadata.expect("output delta metadata");
+        assert_eq!(
+            metadata
+                .get("code_mode_cell_id")
+                .and_then(serde_json::Value::as_str),
+            Some("cell-1")
+        );
+        assert_eq!(
+            metadata.get("turn_id").and_then(serde_json::Value::as_str),
+            Some("turn-code-mode")
+        );
+        assert_eq!(
+            metadata
+                .get("tool_name")
+                .and_then(serde_json::Value::as_str),
+            Some("exec")
+        );
+    }
 
     #[test]
     fn exact_snapshot_route_projects_mcp_item() {

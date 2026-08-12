@@ -123,6 +123,8 @@ where
         pending_input.clone(),
         mcp_tool_routes.clone(),
         dynamic_tool_routes.clone(),
+        session_config.tool_mode,
+        session_config.supports_custom_tools,
     );
     let lifecycle_emitter = Arc::new(CurrentTurnToolLifecycleEmitter::with_tool_routes(
         host_event_sender.clone(),

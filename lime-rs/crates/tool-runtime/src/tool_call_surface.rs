@@ -1,5 +1,13 @@
+use crate::file_read_execution::file_read_canonical_tool_name;
+use crate::file_search_execution::file_search_canonical_tool_name;
+use crate::native_dispatch::runtime_native_dispatch;
+use crate::tool_definition::RuntimeToolDefinition;
+use jsonschema::error::ValidationErrorKind;
+use jsonschema::ValidationError;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+
+const MAX_SCHEMA_ERRORS: usize = 4;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -8,6 +16,8 @@ pub enum ToolCallRepairFailureKind {
     UnknownTool,
     MalformedArguments,
     ArgumentsNotObject,
+    InvalidSchema,
+    SchemaMismatch,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -33,6 +43,55 @@ pub struct ToolCallRepairFailure {
     pub requested_name: String,
     pub raw_arguments: String,
     pub kind: ToolCallRepairFailureKind,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub schema_errors: Vec<String>,
+}
+
+impl ToolCallRepairFailure {
+    pub fn message(&self) -> String {
+        match self.kind {
+            ToolCallRepairFailureKind::MissingName => {
+                "Provider tool call omitted tool name".to_string()
+            }
+            ToolCallRepairFailureKind::UnknownTool => format!(
+                "tool '{}' was not advertised for this sampling step",
+                self.requested_name
+            ),
+            ToolCallRepairFailureKind::MalformedArguments => format!(
+                "tool '{}' received malformed JSON arguments",
+                self.requested_name
+            ),
+            ToolCallRepairFailureKind::ArgumentsNotObject => format!(
+                "tool '{}' arguments must be a JSON object",
+                self.requested_name
+            ),
+            ToolCallRepairFailureKind::InvalidSchema => format!(
+                "tool '{}' advertised an invalid input schema",
+                self.requested_name
+            ),
+            ToolCallRepairFailureKind::SchemaMismatch => {
+                let message = format!(
+                    "tool '{}' arguments did not match the advertised input schema",
+                    self.requested_name
+                );
+                if self.schema_errors.is_empty() {
+                    message
+                } else {
+                    format!("{message}: {}", self.schema_errors.join("; "))
+                }
+            }
+        }
+    }
+
+    pub fn model_arguments(&self) -> Map<String, Value> {
+        Map::from_iter([
+            (
+                "tool".to_string(),
+                Value::String(self.requested_name.clone()),
+            ),
+            ("error".to_string(), Value::String(self.message())),
+        ])
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -42,8 +101,8 @@ pub enum ToolCallRepairOutcome {
     Invalid(ToolCallRepairFailure),
 }
 
-pub fn repair_tool_call<T: AsRef<str>>(
-    available_tool_names: &[T],
+pub fn repair_tool_call(
+    available_tools: &[RuntimeToolDefinition],
     requested_name: &str,
     raw_arguments: &str,
     canonical_name: &dyn Fn(&str) -> Option<String>,
@@ -56,8 +115,12 @@ pub fn repair_tool_call<T: AsRef<str>>(
             ToolCallRepairFailureKind::MissingName,
         );
     }
+    let available_tool_names = available_tools
+        .iter()
+        .map(|definition| definition.name.as_str())
+        .collect::<Vec<_>>();
     let Some(resolved_name) =
-        runtime_tool_call_surface_name(available_tool_names, requested_name, canonical_name)
+        runtime_tool_call_surface_name(&available_tool_names, requested_name, canonical_name)
     else {
         return invalid_tool_call_repair(
             requested_name,
@@ -82,8 +145,41 @@ pub fn repair_tool_call<T: AsRef<str>>(
             ToolCallRepairFailureKind::ArgumentsNotObject,
         );
     };
+    let definition = available_tools
+        .iter()
+        .find(|definition| definition.name == resolved_name)
+        .expect("resolved tool name must come from the frozen definitions");
     let mut arguments = original_arguments.clone();
     runtime_tool_call_normalize_arguments(&resolved_name, &mut arguments);
+    let mut argument_value = Value::Object(arguments);
+    coerce_numeric_strings(&mut argument_value, &definition.input_schema);
+    let Value::Object(arguments) = argument_value else {
+        unreachable!("tool arguments remain an object after schema coercion");
+    };
+    let validator = match jsonschema::validator_for(&definition.input_schema) {
+        Ok(validator) => validator,
+        Err(_) => {
+            return invalid_tool_call_schema_repair(
+                requested_name,
+                raw_arguments,
+                ToolCallRepairFailureKind::InvalidSchema,
+                Vec::new(),
+            );
+        }
+    };
+    let schema_errors = validator
+        .iter_errors(&Value::Object(arguments.clone()))
+        .take(MAX_SCHEMA_ERRORS)
+        .map(safe_schema_validation_error)
+        .collect::<Vec<_>>();
+    if !schema_errors.is_empty() {
+        return invalid_tool_call_schema_repair(
+            requested_name,
+            raw_arguments,
+            ToolCallRepairFailureKind::SchemaMismatch,
+            schema_errors,
+        );
+    }
     let argument_changes = arguments
         .iter()
         .filter_map(|(key, after)| {
@@ -110,11 +206,80 @@ fn invalid_tool_call_repair(
     raw_arguments: &str,
     kind: ToolCallRepairFailureKind,
 ) -> ToolCallRepairOutcome {
+    invalid_tool_call_schema_repair(requested_name, raw_arguments, kind, Vec::new())
+}
+
+fn invalid_tool_call_schema_repair(
+    requested_name: &str,
+    raw_arguments: &str,
+    kind: ToolCallRepairFailureKind,
+    schema_errors: Vec<String>,
+) -> ToolCallRepairOutcome {
     ToolCallRepairOutcome::Invalid(ToolCallRepairFailure {
         requested_name: requested_name.to_string(),
         raw_arguments: raw_arguments.to_string(),
         kind,
+        schema_errors,
     })
+}
+
+fn coerce_numeric_strings(value: &mut Value, schema: &Value) {
+    let Some(schema) = schema.as_object() else {
+        return;
+    };
+    match schema.get("type").and_then(Value::as_str) {
+        Some("integer" | "number") => {
+            let Value::String(text) = value else {
+                return;
+            };
+            let Ok(Value::Number(number)) = serde_json::from_str::<Value>(text.trim()) else {
+                return;
+            };
+            *value = Value::Number(number);
+        }
+        Some("object") => {
+            let (Value::Object(arguments), Some(properties)) =
+                (value, schema.get("properties").and_then(Value::as_object))
+            else {
+                return;
+            };
+            for (key, property_schema) in properties {
+                if let Some(argument) = arguments.get_mut(key) {
+                    coerce_numeric_strings(argument, property_schema);
+                }
+            }
+        }
+        Some("array") => {
+            let (Value::Array(items), Some(item_schema)) = (value, schema.get("items")) else {
+                return;
+            };
+            for item in items {
+                coerce_numeric_strings(item, item_schema);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn safe_schema_validation_error(error: ValidationError<'_>) -> String {
+    let detail = match &error.kind {
+        ValidationErrorKind::AdditionalProperties { .. } => {
+            "additional properties are not allowed".to_string()
+        }
+        ValidationErrorKind::UnevaluatedProperties { .. } => {
+            "unevaluated properties are not allowed".to_string()
+        }
+        ValidationErrorKind::PropertyNames { .. } => {
+            "a property name did not match the schema".to_string()
+        }
+        _ => error.masked().to_string(),
+    };
+    let schema_path = error.schema_path.to_string();
+    if schema_path.is_empty() {
+        detail
+    } else {
+        format!("schema {schema_path}: {detail}")
+    }
 }
 
 pub fn runtime_tool_call_surface_name<T: AsRef<str>>(
@@ -133,6 +298,14 @@ pub fn runtime_tool_call_surface_name<T: AsRef<str>>(
 
     let canonical_name = canonical_name(requested_name)?;
     current_surface_tool_name(available_tool_names, &canonical_name)
+}
+
+pub fn runtime_tool_call_canonical_name(requested_name: &str) -> Option<String> {
+    runtime_native_dispatch()
+        .canonical_name(requested_name)
+        .map(ToString::to_string)
+        .or_else(|| file_read_canonical_tool_name(requested_name).map(ToString::to_string))
+        .or_else(|| file_search_canonical_tool_name(requested_name).map(ToString::to_string))
 }
 
 pub fn runtime_tool_call_normalize_arguments(
@@ -210,6 +383,13 @@ mod tests {
     use super::*;
     use serde_json::{json, Map};
 
+    fn tool_definitions(names: &[&str]) -> Vec<RuntimeToolDefinition> {
+        names
+            .iter()
+            .map(|name| RuntimeToolDefinition::new(*name, "test tool", json!({})))
+            .collect()
+    }
+
     fn canonical_name(name: &str) -> Option<String> {
         match name {
             "read_file" | "ReadTool" => Some("Read".to_string()),
@@ -247,6 +427,18 @@ mod tests {
         assert_eq!(
             runtime_tool_call_surface_name(&tools, "unknown", &canonical_name),
             None
+        );
+    }
+
+    #[test]
+    fn production_canonical_name_includes_workspace_alias_owners() {
+        assert_eq!(
+            runtime_tool_call_canonical_name("functions.read_file"),
+            Some("Read".to_string())
+        );
+        assert_eq!(
+            runtime_tool_call_canonical_name("ripgrep"),
+            Some("Grep".to_string())
         );
     }
 
@@ -295,7 +487,7 @@ mod tests {
     #[test]
     fn repair_resolves_alias_and_records_read_argument_changes() {
         let outcome = repair_tool_call(
-            &["Read", "Grep"],
+            &tool_definitions(&["Read", "Grep"]),
             "read_file",
             r#"{"file_path":" src/lib.rs ","head":"42"}"#,
             &canonical_name,
@@ -335,7 +527,7 @@ mod tests {
     #[test]
     fn repair_preserves_existing_target_arguments() {
         let outcome = repair_tool_call(
-            &["Read"],
+            &tool_definitions(&["Read"]),
             "read",
             r#"{"filePath":"other.rs","path":"current.rs","head":10,"end_line":5}"#,
             &canonical_name,
@@ -353,12 +545,17 @@ mod tests {
     #[test]
     fn repair_returns_typed_invalid_for_bad_arguments() {
         let malformed = repair_tool_call(
-            &["Read"],
+            &tool_definitions(&["Read"]),
             "Read",
             r#"{"path": "unfinished"#,
             &canonical_name,
         );
-        let scalar = repair_tool_call(&["Read"], "Read", r#"["src/lib.rs"]"#, &canonical_name);
+        let scalar = repair_tool_call(
+            &tool_definitions(&["Read"]),
+            "Read",
+            r#"["src/lib.rs"]"#,
+            &canonical_name,
+        );
 
         assert!(matches!(
             malformed,
@@ -378,8 +575,9 @@ mod tests {
 
     #[test]
     fn repair_returns_typed_invalid_for_missing_or_unknown_tool() {
-        let missing = repair_tool_call(&["Read"], " ", "{}", &canonical_name);
-        let unknown = repair_tool_call(&["Read"], "write_file", "{}", &canonical_name);
+        let tools = tool_definitions(&["Read"]);
+        let missing = repair_tool_call(&tools, " ", "{}", &canonical_name);
+        let unknown = repair_tool_call(&tools, "write_file", "{}", &canonical_name);
 
         assert!(matches!(
             missing,
@@ -399,8 +597,18 @@ mod tests {
 
     #[test]
     fn repair_outcome_serializes_as_typed_contract() {
-        let ready = repair_tool_call(&["Grep"], "ripgrep", r#"{"query":"TODO"}"#, &canonical_name);
-        let invalid = repair_tool_call(&["Read"], "unknown", "{}", &canonical_name);
+        let ready = repair_tool_call(
+            &tool_definitions(&["Grep"]),
+            "ripgrep",
+            r#"{"query":"TODO"}"#,
+            &canonical_name,
+        );
+        let invalid = repair_tool_call(
+            &tool_definitions(&["Read"]),
+            "unknown",
+            "{}",
+            &canonical_name,
+        );
 
         let ready_value = json!({
             "status": "ready",
@@ -437,5 +645,116 @@ mod tests {
                 .expect("deserialize invalid repair"),
             invalid
         );
+    }
+
+    #[test]
+    fn invalid_repair_projects_safe_model_arguments_without_raw_payload() {
+        let failure = ToolCallRepairFailure {
+            requested_name: "Read".to_string(),
+            raw_arguments: "{not-json".to_string(),
+            kind: ToolCallRepairFailureKind::MalformedArguments,
+            schema_errors: Vec::new(),
+        };
+
+        assert_eq!(
+            failure.model_arguments(),
+            Map::from_iter([
+                ("tool".to_string(), json!("Read")),
+                (
+                    "error".to_string(),
+                    json!("tool 'Read' received malformed JSON arguments"),
+                ),
+            ])
+        );
+    }
+
+    #[test]
+    fn repair_coerces_only_explicit_numeric_schema_fields() {
+        let tools = vec![RuntimeToolDefinition::new(
+            "measure",
+            "test numeric coercion",
+            json!({
+                "type": "object",
+                "properties": {
+                    "count": { "type": "integer", "minimum": 1 },
+                    "ratio": { "type": "number" },
+                    "label": { "type": "string" },
+                    "samples": {
+                        "type": "array",
+                        "items": { "type": "integer" }
+                    }
+                },
+                "required": ["count", "ratio", "label", "samples"],
+                "additionalProperties": false
+            }),
+        )];
+
+        let outcome = repair_tool_call(
+            &tools,
+            "measure",
+            r#"{"count":"42","ratio":"1.5","label":"7","samples":["2",3]}"#,
+            &canonical_name,
+        );
+
+        let ToolCallRepairOutcome::Ready(repair) = outcome else {
+            panic!("numeric strings covered by explicit schema types should be repaired");
+        };
+        assert_eq!(repair.arguments["count"], json!(42));
+        assert_eq!(repair.arguments["ratio"], json!(1.5));
+        assert_eq!(repair.arguments["label"], json!("7"));
+        assert_eq!(repair.arguments["samples"], json!([2, 3]));
+        assert_eq!(repair.argument_changes.len(), 3);
+    }
+
+    #[test]
+    fn repair_rejects_schema_mismatch_without_exposing_argument_values() {
+        let tools = vec![RuntimeToolDefinition::new(
+            "measure",
+            "test schema validation",
+            json!({
+                "type": "object",
+                "properties": {
+                    "count": { "type": "integer", "minimum": 1 }
+                },
+                "required": ["count"],
+                "additionalProperties": false
+            }),
+        )];
+        let outcome = repair_tool_call(
+            &tools,
+            "measure",
+            r#"{"count":"private-not-a-number"}"#,
+            &canonical_name,
+        );
+
+        let ToolCallRepairOutcome::Invalid(failure) = outcome else {
+            panic!("schema mismatch must be invalid");
+        };
+        assert_eq!(failure.kind, ToolCallRepairFailureKind::SchemaMismatch);
+        assert!(!failure.schema_errors.is_empty());
+        assert!(!failure.message().contains("private-not-a-number"));
+        assert!(!failure
+            .model_arguments()
+            .values()
+            .any(|value| value.to_string().contains("private-not-a-number")));
+    }
+
+    #[test]
+    fn repair_fails_closed_when_advertised_schema_is_invalid() {
+        let tools = vec![RuntimeToolDefinition::new(
+            "broken",
+            "invalid schema",
+            json!({ "type": 42 }),
+        )];
+
+        let outcome = repair_tool_call(&tools, "broken", "{}", &canonical_name);
+
+        assert!(matches!(
+            outcome,
+            ToolCallRepairOutcome::Invalid(ToolCallRepairFailure {
+                kind: ToolCallRepairFailureKind::InvalidSchema,
+                ..
+            })
+        ));
     }
 }

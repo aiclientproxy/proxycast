@@ -296,7 +296,9 @@ describe("Codex render projection coverage boundary", () => {
       true,
     );
     expect(coverage.upstream.revision).toBe(itemInventory.upstream.revision);
-    expect(coverage.upstream.methodRevision).toBe(methodScope.upstream.revision);
+    expect(coverage.upstream.methodRevision).toBe(
+      methodScope.upstream.revision,
+    );
     expect(coverage.upstream.itemSchemaSource).toBe(
       itemInventory.upstream.schemaSource,
     );

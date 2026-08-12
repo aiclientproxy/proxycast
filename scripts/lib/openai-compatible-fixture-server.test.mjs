@@ -109,6 +109,102 @@ describe("openai-compatible-fixture-server", () => {
     });
   });
 
+  it("模型发现应保留显式 CodeMode 与 custom_tools capability", async () => {
+    const fixture = await startFixture({
+      model: "fixture-code-mode",
+      modelRuntimeFeatures: [
+        "streaming",
+        "tool_calling",
+        "custom_tools",
+        "responses_api",
+      ],
+      modelToolMode: "code_mode",
+    });
+    const response = await fetch(`${fixture.baseUrl}/v1/models`);
+
+    expect(response.ok).toBe(true);
+    await expect(response.json()).resolves.toMatchObject({
+      data: [
+        {
+          id: "fixture-code-mode",
+          runtime_features: [
+            "streaming",
+            "tool_calling",
+            "custom_tools",
+            "responses_api",
+          ],
+          tool_mode: "code_mode",
+        },
+      ],
+    });
+    expect(fixture.modelRequests).toHaveLength(1);
+    expect(fixture.modelRequests[0]).toMatchObject({
+      method: "GET",
+      path: "/v1/models",
+    });
+  });
+
+  it("应支持 Responses custom tool call 与后续文本回采样", async () => {
+    const fixture = await startFixture({
+      scriptedResponses: [
+        {
+          type: "custom_tool_call",
+          id: "call-code-mode-fixture",
+          name: "exec",
+          input: 'text("CODE_MODE_FIXTURE_OK");',
+        },
+        {
+          type: "text",
+          content: "CODE_MODE_RESPONSES_DONE",
+        },
+      ],
+    });
+    const tools = [{ type: "custom", name: "exec", description: "Execute" }];
+    const first = await fetch(`${fixture.baseUrl}/v1/responses`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: DEFAULT_FIXTURE_MODEL,
+        input: [{ role: "user", content: "run code" }],
+        tools,
+        stream: true,
+      }),
+    });
+    const firstText = await first.text();
+    expect(first.ok).toBe(true);
+    expect(firstText).toContain('"type":"custom_tool_call"');
+    expect(firstText).toContain('text(\\"CODE_MODE_FIXTURE_OK\\");');
+
+    const second = await fetch(`${fixture.baseUrl}/v1/responses`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: DEFAULT_FIXTURE_MODEL,
+        input: [
+          {
+            type: "custom_tool_call_output",
+            call_id: "call-code-mode-fixture",
+            output: "CODE_MODE_FIXTURE_OK",
+          },
+        ],
+        tools,
+        stream: true,
+      }),
+    });
+    const secondText = await second.text();
+    expect(second.ok).toBe(true);
+    expect(secondText).toContain("CODE_MODE_RESPONSES_DONE");
+    expect(fixture.requests).toHaveLength(2);
+    expect(fixture.requests.map((request) => request.path)).toEqual([
+      "/v1/responses",
+      "/v1/responses",
+    ]);
+    expect(fixture.requests[1].body.input[0]).toMatchObject({
+      type: "custom_tool_call_output",
+      call_id: "call-code-mode-fixture",
+    });
+  });
+
   it("应支持 OpenAI-compatible streaming chat completions", async () => {
     const fixture = await startFixture({ content: "MO_OK_STREAM" });
     const response = await fetch(`${fixture.baseUrl}/v1/chat/completions`, {

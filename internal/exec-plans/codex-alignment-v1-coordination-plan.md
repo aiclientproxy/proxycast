@@ -6,6 +6,116 @@
 Fal/Bedrock adapter、真实云 Provider/地区/凭证矩阵，以及
 audio/video/file 的逐 Provider chat wire 属于后续细节，不计入本阶段完成度。
 
+## 2026-08-11 P1-01 provider tool-call repair 接线
+
+状态：`completed / current`（provider sampling + JSON Schema repair + 组合竞态 + 跨协议 capture 四刀；CodeMode 规划、provider custom canonical contract、catalog/readiness、Agent loop executable boundary、thread-owned lazy service、per-cell nested dispatch、lifecycle/notify projection、late terminal guard、projection scope correction与 production in-process V8/factory 第五至十三刀为 `current foundation`，P1-01 总项未关闭）。
+
+主目标：把已经存在于 `tool-runtime` 的 typed repair outcome 接入 current provider sampling
+step，确保 provider 返回的 malformed/scalar/unknown tool call 不再提前中止整步，也绝不进入
+真实 handler；大小写、current native alias、已知参数别名和 JSON Schema 校验只按本 step 冻结的
+definitions 执行。
+
+窄写集：`runtime-core/src/llm_protocol/canonical.rs`、
+`model-provider/src/current_client{,/stream,/request_capture_tests}.rs`、`agent-runtime/src/provider_turn{,/tests}.rs`、
+`tool-runtime/{Cargo.toml,src/tool_call_surface.rs,src/code_mode.rs,src/tool_definition.rs,src/turn_snapshot.rs,src/lib.rs}`、`lime-rs/Cargo.lock`、本计划、
+`internal/aiprompts/architecture.md` 与 `internal/refactor/v1/08-third-audit-gap-register.md`。
+
+唯一数据流：
+
+`provider raw tool call -> canonical LlmEvent(raw_arguments) -> frozen RuntimeToolStepSnapshot(definition + schema + executor) -> repair_tool_call -> deterministic numeric coercion -> JSON Schema validation -> executable call | invalid no-handler lifecycle -> tool result -> next sampling step`
+
+退出条件：repair success 使用 canonical name/arguments 且只执行一次；malformed/scalar/unknown/schema mismatch
+统一产生 exactly-one started/completed lifecycle 和一个 model-visible failed tool result，
+`handler_executed=false`；坏 schema fail closed；provider error 不再吞掉可恢复调用；repair 后的 cancel/timeout/
+late completion 组合不覆盖或重放 canonical terminal。最低验证为四个 Rust owner 的 related/integration、
+`smoke:agent-runtime-current-fixture`、治理报告和 diff check。本刀不改 GUI/bridge；Electron Gate B
+只作为 Desktop 主链无回归证据，不冒充 schema repair 语义或 live provider 证据。
+
+完成结果：`runtime-core` canonical `ToolCall` 显式保留 `raw_arguments`；`model-provider` 对 malformed
+JSON、scalar arguments 和空工具名只保留 raw call，不再把整个 provider step 提前终止。`agent-runtime`
+在写入 transcript 前用冻结的 `RuntimeToolStepSnapshot` 调用 `tool-runtime::repair_tool_call`：大小写、current
+native/workspace alias 和已知参数别名修复为 canonical call；unknown、空名称、malformed 或 scalar 参数统一
+转为带 typed repair metadata 的 `invalid` call。专用 `before_handler` executor 保证 invalid call 不触达真实
+handler，同时仍只产生一组 started/completed lifecycle 和一个 model-visible failed result；下一 sampling step
+只看到 canonical call/result transcript。
+
+第二刀把 `repair_tool_call` 的 API 直接切换为接收冻结的 `RuntimeToolDefinition`，不保留 names-only
+兼容入口。alias normalization 后，只对 schema 明确声明为 `integer`/`number` 的合法 JSON 数值字符串做
+递归 deterministic coercion，再使用同一 `input_schema` 完整校验；schema mismatch 与 schema 编译失败都进入
+typed `invalid` no-handler lifecycle。validation error 使用 masked instance value，model-visible arguments 和
+下一 sampling transcript 都不包含原始参数值；没有新增第二份 schema owner 或自然语言猜测修复。
+
+第三刀在 `agent-runtime::provider_turn` 补齐组合竞态：repair 后的 canonical handler 启动后取消 turn，canonical
+executor 立即生成唯一 `aborted` completed 并释放 turn；测试随后显式释放 handler 自有后台工作，证明迟到 success
+无法覆盖终态、追加 lifecycle 或触发第二次 provider sampling。另一场景让 repaired tool 正常完成后挂起下一 provider
+step 并触发 absolute timeout，证明 handler 只执行一次，canonical call/result transcript 只进入该 request，
+lifecycle 不重放。该刀只增加 current owner 跨层回归，不新增生产分支或第二终态 owner。
+
+第四刀补齐全部 current chat transport 的 request-capture 矩阵。既有 Gemini、Vertex、Azure Responses 与 Ollama
+Responses 已从真实 loopback 捕获 path/auth/body 并消费 native SSE；Responses WebSocket 已捕获 handshake、
+`response.create` 与 HTTP replay。新增独立 `request_capture_tests`，从 `CurrentProviderClient::stream` 分别进入
+OpenAI Chat Completions、OpenAI Responses HTTP 与 Anthropic Messages，联合断言 canonical system/user/image、
+repaired tool call/result transcript、tool schema、generation lowering、native auth/header、exact endpoint 与 SSE
+terminal。Anthropic 只断言服务端真实返回的 input/output usage，不伪造 `total_tokens`。该刀不新增 transport、
+protocol alias 或生产 capture owner；Bedrock/Fal 继续在发网前 fail closed。
+
+第五刀完成 CodeMode 的 planning foundation，但不伪造可执行能力。`tool-runtime` 的 exposure 直接切换为 Codex
+六态 `Direct / Deferred / DeferredModelOnly / DirectModelOnly / CodeModeOnly / Hidden`，并新增唯一
+`RuntimeToolMode::{Direct, CodeMode, CodeModeOnly}` 决策和 frozen tool plan。规划器精确区分 direct model surface、
+searchable surface 与 nested CodeMode surface，复用 Codex namespace 拼接、JavaScript identifier normalization、
+`exec`/`wait` 保留名和 normalization collision first-winner 语义；不可用的普通 CodeMode 只在明确允许时回退
+Direct，CodeModeOnly 或禁用 fallback 时直接 fail closed。当前 `model-provider` 仍只有跨协议 function-tool canonical
+contract，仓库也没有 CodeMode session/runtime host，因此本刀不向 provider 曝光假的 `exec`/`wait`，不新增 V8/JS
+依赖，也不复制 TUI warning 或远程 host。
+
+验证结果：第一刀 `tool-runtime tool_call_surface` `12/12`、`model-provider --lib` `236/236`、
+`agent-runtime provider_turn::tests` `43/43` 通过；第二刀 `tool-runtime tool_call_surface` `15/15`，完整
+`tool-runtime 320/320`、`agent-runtime 193/193` 与 provider-turn `43/43` 通过。第三刀两个新增组合回归
+定向 `3/3`、完整 provider-turn `45/45` 与完整 `agent-runtime 195/195` 通过；并行首轮曾由测试自身 `1s`
+外层防死锁超时先于业务 `20ms` deadline 被调度，放宽为不改变生产语义的 `5s` 测试护栏后完整回归稳定通过。
+`npm run test:rust:related -- lime-rs/crates/agent-runtime/src/provider_turn/tests.rs` 扩展到 `agent-runtime`、
+`app-server`、`lime-agent`、`lime-scheduler`、`lime-server` 五个 current/反向依赖 crate 并退出 `0`；仅有一条
+既有 `app-server` 测试 helper 的 dead-code warning，与本刀无关。
+第四刀 request capture 定向 `3/3`、完整 `model-provider 239/239` 通过，覆盖新增 Chat/Responses HTTP/Anthropic
+与既有 Gemini/Vertex/Azure/Ollama/Responses WebSocket/reducer 全矩阵；未调用 live provider 或读取真实凭证。
+`npm run test:rust:related -- lime-rs/crates/model-provider/src/current_client.rs lime-rs/crates/model-provider/src/current_client/request_capture_tests.rs`
+扩展到 `model-provider` 与 12 个反向依赖 crate 并退出 `0`；其中 `agent-runtime 195/195`、
+`model-provider 239/239`、`tool-runtime 320/320` 全绿，仍只有一条既有 `app-server` 测试 helper dead-code warning。
+第五刀新增 CodeMode planning 定向测试 `3/3`、snapshot 回归 `1/1` 与完整 `tool-runtime 323/323`
+通过。`npm run test:rust:related -- lime-rs/crates/tool-runtime/src/{code_mode.rs,tool_definition.rs,turn_snapshot.rs,lib.rs}`
+扩展到 `agent-runtime`、`app-server`、`lime-agent`、`lime-mcp`、`lime-scheduler`、`lime-server`、
+`tool-runtime` 七个 current/反向依赖 crate 并退出 `0`，其中 `agent-runtime 195/195`、`tool-runtime 323/323`；
+仅有一条既有 `app-server` 测试 helper dead-code warning，与本刀无关。
+`npm run test:rust:related -- lime-rs/crates/{runtime-core,model-provider,tool-runtime,agent-runtime}` 对扩展后的
+14 个 current/反向依赖 crate 退出码为 `0`，其中 `agent-runtime 193/193`、`tool-runtime 317/317`。
+第二刀 `npm run test:rust:related -- lime-rs/crates/{tool-runtime,agent-runtime}` 扩展到 7 个 current/反向依赖
+crate 并退出 `0`；其中新增依赖后的 `agent-runtime 193/193`、`tool-runtime 320/320` 全绿。
+`npm run test:contracts` 通过，生成 `959` 个 protocol types 且零漂移，App Server client contract
+`301` checks 全绿。`npm run governance:legacy-report` 扫描 `2120` 个 current 文件，零引用候选、分类漂移和
+边界违规均为 `0`；`cargo fmt --all -- --check` 与 `git diff --check` 通过。
+
+`npm run smoke:agent-runtime-current-fixture` 最终完整退出 `0`，覆盖真实 Electron Desktop Host、preload/IPC、
+`app_server_handle_json_lines`、App Server/runtime/read model 和 GUI，且 `liveProviderUsed=false`。首轮在
+Expert Panel Skills Runtime 场景的失败已确认是另一聚合进程使用同一静态 prefix/backend ledger 造成证据串线：
+失败摘要的外层 session 与被轮询 read-model thread identity 不同；使用唯一 prefix 的专项复跑退出 `0`，待并发
+进程结束后的完整聚合复跑同样退出 `0`。因此 Gate B 只作为 Desktop 主链无回归证据，不冒充 repair 语义或 live
+provider 证据。
+
+第二刀在无同类聚合进程并发的条件下再次完整运行该 Gate B 并直接退出 `0`；unknown Item、首页热路径、
+Coding Workbench、图片命令、cancel/continue、approval、Plan、Skills Runtime、MCP structuredContent、media
+reference、Expert Plaza/Panel、typed error success/failure 与 Content Factory 均通过，`liveProviderUsed=false`。
+
+分类：canonical raw call、冻结 schema repair、typed invalid no-handler lifecycle 与回归证据均为 `current`；此前
+provider malformed call 直接终止整个 step、以及未按冻结 schema 校验便执行 handler 的行为均为
+`dead / deleted / forbidden-to-restore`；无新增 `compat` 或 `deprecated`。前四刀关闭 provider sampling、
+JSON Schema repair、repair 后 cancel/timeout/late completion 的组合竞态与全部 current chat transport 的
+request capture；CodeMode exposure/mode/plan、provider freeform/custom-tool canonical contract、
+catalog/readiness gate、transport-neutral session contract 与测试注入下的 Agent loop `exec/wait` boundary 为
+`current foundation`；canonical thread-owned lazy service、actor identity/interrupt/shutdown owner 同属
+`current foundation`；per-cell nested dispatch、outer `exec/wait` canonical Tool lifecycle 与 notify Desktop event
+projection 也同属 `current foundation`。P1-01 总项仍保留 standalone CodeMode host 的 OS 进程隔离、thread-owned
+CodeCell trace/evidence owner、CodeMode 专项 Electron Gate B，以及 extension/background terminal 组合证据。
+
 本文件是并行执行的协调面，不定义新的 runtime owner。目标是让多个进程同时推进
 Codex v2 对齐时保持窄写集、可编译、可回滚和可验证。所有实现仍服从：
 
@@ -4543,7 +4653,7 @@ Rust fmt 已完成。本切片没有改变 GUI、Electron/preload、Thread/Turn/
 
 ### 2026-08-10 Desktop fuzzy file mention current slice
 
-状态：in progress。
+状态：completed。
 
 主目标：把 Composer 已有 `@` 输入面板缺失的项目文件检索接到 Codex exact 一发式
 `fuzzyFileSearch { query, roots, cancellationToken }`，形成
@@ -4569,3 +4679,461 @@ release 计划。
 模式且存在项目 root 时查询；选中带空格路径时正确加引号并只替换当前 `@token`。同步 generated contracts、五语言、产品
 矩阵与回流守卫，并运行 Rust related/public JSON-RPC、Renderer unit/component、`npm run test:contracts`、
 `npm run governance:legacy-report`、typecheck、GUI smoke 与风险匹配的 Gate A/Gate B。
+
+完成结果：one-shot `fuzzyFileSearch` 已由 `CharacterMention` 接入 Renderer typed gateway、Electron
+`app_server_handle_json_lines`、App Server JSON-RPC 与 filesystem search owner。Composer 已覆盖 loading/error/empty、
+AbortSignal、稳定 cancellation token、request version 和陈旧响应丢弃；项目文件候选使用相对路径，选中后只替换当前
+`@token`，空格路径加引号，不创建 connector/plugin `Mention`。协议 schema、generated client、Rust handler、五语言文案、
+产品矩阵和负向回流守卫已同步。产品矩阵更新为 `140 implemented / 22 planned / 59 product-scope-excluded`，产品范围完成度
+为 `140 / 162 = 86.4%`。
+
+验证结果：Renderer gateway、插入 helper、hook 与组件定向测试 `29/29` 通过；产品矩阵、Renderer 投影覆盖和 notification
+drift 定向测试 `20/20` 通过；Rust related 反向依赖扩圈退出码为 `0`；`npm run typecheck`、`npm run test:contracts`
+（generated protocol types `959`、App Server client contract `301` checks）、`npm run governance:legacy-report`（零引用
+候选、零分类漂移、零边界违规）和 `npm run verify:gui-smoke` 均通过。通用 GUI smoke 的真实 Electron/App Server shell
+Gate B 证据位于 `.lime/qc/project-gates/standalone-shell-01-20260810115558-33013/shell-01-electron-smoke/summary.json`。
+
+专用用户闭环 Gate B 已在真实 `http://127.0.0.1:1420/?nativeStartup=1` Electron 页签完成：
+`window.__LIME_ELECTRON__ === true` 且 preload invoke 存在；当前项目为仓库根 `lime`，在 Composer 中输入
+`保留前缀 @forge 保留后缀` 后看到 `forge.config.mjs` 等项目文件候选，点击首项后得到
+`保留前缀 forge.config.mjs 保留后缀`，只替换当前 token 并关闭面板。脱敏 trace 证明
+`transport=electron-ipc`、`command=app_server_handle_json_lines`、JSON-RPC method `fuzzyFileSearch`、单一 root 命中当前仓库且
+cancellation token 存在；console error、page error、invoke error 与 production mock fallback 均为 `0`。截图证据：
+`.lime/qc/gui-evidence/fuzzy-file-search-forge-candidates.png` 与
+`.lime/qc/gui-evidence/fuzzy-file-search-forge-selected.png`。
+
+分类：one-shot method、filesystem search owner、typed gateway、Composer 文件候选和本轮 Gate B 证据为 `current`；没有
+`compat` 或 `deprecated`；三个 experimental session request 与两个 session notification 为
+`product-scope-excluded / forbidden-to-restore`，旧 session registry、第二搜索入口和生产 mock fallback 为
+`dead / deleted / forbidden-to-restore`。架构确认：confirmed；责任开发者 root，2026-08-10。多模型与多模态 control
+plane 未改动，继续归 Grok-aligned `model-provider`。
+
+### 2026-08-10 Codex remote environment and migration scope closure
+
+状态：completed。
+
+目标与窄写集：复核剩余 `planned` method 是否属于 Lime Desktop 产品范围。只审计 Codex exact
+`environment/{add,info,status}`、`thread/environment/{connected,disconnected}`、
+`externalAgentConfig/*`、`marketplace/*` 和 `plugin/share/*` 的协议语义、四层消费者与唯一 owner；不新增
+远端 executor、配置迁移器、Plugin share service、marketplace backend、Electron IPC 或 renderer mock fallback。
+
+事实裁决：Codex `environment/*` 通过 App Server `EnvironmentManager` 注册远端 exec-server WebSocket，读取 shell/cwd
+并报告连接状态；Lime 当前只有本地执行环境、`TurnEnvironmentParams` identity、tool/MCP provenance 和 world-state cwd
+投影，没有远端 registry、连接恢复或桌面环境选择 workflow。Codex external-agent config 是从其他 agent 产品检测和导入
+配置/历史的迁移服务，Lime 没有 import wizard、source adapter 或 migration store。Codex `marketplace/*` 与
+`plugin/share/*` 是远端 Plugin marketplace/share service 的管理和 principal mutation；Lime 的 marketplace 是独立
+`skillMarketplace/install`，Plugin current owner 只承接本地 v3 catalog/install/activation。已有
+`PluginShareContext` DTO 不是 handler、gateway 或 GUI consumer，不能冒充实现。
+
+完成结果：19 个方向化 method 从 `planned` 移入 `product-scope-excluded / forbidden-to-restore`：
+3 个 environment request、2 个 environment notification、4 个 external-agent request、2 个
+external-agent notification、3 个 marketplace request、5 个 plugin/share request。矩阵更新为
+`140 implemented / 3 planned / 78 product-scope-excluded`，产品范围完成度为 `140 / 143 = 97.9%`。
+environment 与 external-agent notification 保留在 upstream drift inventory，但只进入 method/field-name 脱敏 diagnostics，
+不得进入 Header、timeline、pending interaction 或 current projector；所有 excluded method 均由负向 manifest guard 锁定。
+
+事实源分类：本地环境 identity、world-state、tool-runtime/MCP provenance、Plugin v3 catalog 和 Skills marketplace 为
+`current`；本轮 excluded Codex remote/TUI/cloud surface 为 `product-scope-excluded / forbidden-to-restore`；无新增
+`compat` 或 `deprecated`。未实现的 Windows setup/notifications 仍是 `planned`，必须等 Windows/MSVC toolchain、
+restricted-token enforcement 和真实 Electron Gate B 证据，不得用 macOS 代码或 readiness `updateRequired` 伪造完成。
+
+架构确认：confirmed；责任开发者 root，2026-08-10。本轮只收敛产品范围与 diagnostics 边界，未改变
+`Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI`，也未改变
+Grok-aligned `model-provider` owner。下一刀回到 Windows 平台证据，或基于新发现的真实 Desktop consumer 重新做范围审计。
+
+验证结果：JSON 解析通过；method matrix、environment/external-agent diagnostic-only 与 render projection 定向测试共
+`22/22` 通过；`npm run test:contracts` 通过（generated protocol types `959`、App Server client contract `301` checks）；
+`npm run governance:legacy-report`、`npm run typecheck`、受影响文件 Prettier 和 `git diff --check` 均通过。由于本轮无 GUI、
+Electron、Rust runtime producer 改动，不重复 Gate B；已有 fuzzy-file Gate B 证据保持有效。
+
+### 2026-08-11 CodeMode provider custom-tool canonical contract
+
+状态：`completed / current foundation`（provider canonical contract 第六刀与 catalog/readiness 第七刀）。
+
+主目标：沿 Codex CodeMode planning foundation 的下一刀，把 provider-neutral freeform/custom-tool contract
+落到唯一的 Grok-aligned `model-provider` owner；保持 Lime 为 Desktop 产品，不恢复 Codex TUI 或第二套 runtime。
+
+窄写集：`runtime-core` canonical tool/content/event、`model-provider` current request/lowering/Responses SSE reducer、
+provider capability snapshot、`agent-runtime` provider-turn fail-closed、legacy provider-call handler negative boundary，
+以及对应 Rust request-capture、lowering、stream 和架构/缺口文档。未引入 V8、JavaScript executor、`exec`/`wait` 广告或
+compat wrapper。`current_client.rs`、`lowering.rs`、`stream.rs` 与 `provider_turn.rs` 已超过 1000 行，本刀只在既有
+owner 点完成 contract 接线；下一次继续增加 provider/CodeMode 业务逻辑前，必须先把 current request DTO/conversion、
+lowering tests 和 Responses custom reducer 分别拆到短领域模块，不能继续向这些大文件堆叠。
+
+完成结果：新增 `ToolDefinition::Custom` + `FreeformToolFormat`、`CustomToolCall/CustomToolResult` canonical
+variants；官方 OpenAI Responses route 在显式 `custom_tools` capability 下 lowering 为原生 `type: "custom"`、
+`custom_tool_call`、`custom_tool_call_output`，custom input delta/done、output item 与 response.completed 均投影为
+typed `CustomToolCall`；completed-only custom call 也补齐 exactly-once `ToolInputStart/Delta/End` lifecycle。grammar
+fixture 与 Codex 保持 `syntax: "lark"`。Chat Completions、Anthropic、Gemini、第三方 Responses route 和 legacy
+provider-call endpoint 对 custom 都 fail closed；provider turn 明确返回“需要可执行 CodeMode session”，不会把
+不可执行 custom call 当普通工具。
+
+验证：owner 单测 `model-provider 242/242`、`agent-runtime 196/196`、`lime-server 119/119`、`runtime-core 59/59`
+通过；`cargo check -p runtime-core -p model-provider -p agent-runtime -p lime-server` 通过。`npm run
+test:rust:related -- <本切片路径>` 对 14 个直接/反向依赖 crate 扩圈退出码 `0`，其中 `tool-runtime 323/323`；
+`npm run governance:legacy-report` 为零引用候选、零分类漂移、零边界违规，Rust fmt 与 `git diff --check` 通过。
+`npm run smoke:agent-runtime-current-fixture` 的真实 Electron/preload/IPC/App Server/read model 多场景 Gate B 通过，
+`liveProviderUsed=false`；它证明 current runtime 无回归，不冒充 live provider 或可执行 CodeMode 证据。
+新增 provider-turn 定向回归同时证明 custom call 在没有可执行 session 时为不可重试、不可 reroute 的
+`InvalidRequest`，普通 tool executor 调用数与普通 lifecycle event 数均为零。
+
+分类：canonical contract、official Responses lowering/stream、capability gate 和 negative boundaries 为 `current`；
+未实现的 CodeMode session/V8、nested dispatch、yield/resume/terminate、approval/cancel 与 canonical terminal 为
+`planned`；无 `compat`/`deprecated`。不得以当前 provider contract 宣称 CodeMode 已可执行。
+
+第七刀完成 Grok-aligned catalog/readiness 接线。模型 taxonomy 新增标准 token `custom_tools`；基础
+`coding/tools/streaming` requirement 只合入最终选中 profile slot 的 capability tags，fallback 后不继承原 slot，
+未选中 review/fast/local 标签不污染当前 route。上游 Codex 八个 freeform 模型中，Lime canonical catalog 只有
+`gpt-5.2 -> openai/gpt-5.2` 精确映射，因此只给该条目显式声明，不按 GPT/Codex 名称扩散。App Server effective
+snapshot 取 authoritative model declaration 与 resolved provider protocol/host capability 的交集；仅官方 OpenAI
+Responses 保留 `custom_tools`，第三方 Responses、Chat Completions、Azure 与 Ollama 均在 sampling 前返回不可重试的
+`capability_gap / capability:custom_tools`。普通聊天未要求该 feature 时只裁剪 effective snapshot，不受阻塞。
+
+第七刀写集为 `runtime-core` routing payload/model task、`core/services` runtime-feature taxonomy、
+`model-provider` canonical catalog/provider capability、App Server resolved route contract 与本架构/计划。
+`services/src/model_registry_service.rs` 已超过 1000 行，本刀只增加既有 taxonomy 映射；下一次继续增加 provider
+catalog 解析或推断规则前，必须把 runtime-feature parsing/taxonomy 拆到独立短模块。
+
+第七刀定向验证：selected-slot 与 fallback requirement `2/2`、runtime capability `1/1`、provider route capability
+`1/1`、canonical catalog exact mapping `1/1`、App Server official/configured-provider/fail-closed/normal-chat route
+`5/5` 通过。独立 `CARGO_TARGET_DIR=/tmp/lime-custom-tools-target` 下 App Server lib `1646/1646` 通过；
+`npm run test:rust:related -- <本刀 Rust 路径>` 扩展到 20 个 current/反向依赖 crate 并退出 `0`，其中
+`agent-runtime 196/196`、`model-provider 242/242`、`tool-runtime 323/323`。canonical JSON exact assertion、
+`cargo fmt --all --check`、`git diff --check` 与 `npm run governance:legacy-report` 均通过，治理结果为零引用候选、
+分类漂移和边界违规全部为 `0`。`npm run smoke:agent-runtime-current-fixture` 使用本轮最新 App Server sidecar
+完成真实 Electron/preload/IPC/App Server/read model 聚合场景并通过，`liveProviderUsed=false`；它证明普通聊天、
+审批、取消/继续、Plan、Skills、MCP、媒体与工作台 current 主链未被 readiness 交集回归，不冒充 live provider
+或可执行 CodeMode 证据。第七刀完成度为 `100%`。
+
+下一刀进入 thread-owned CodeMode session runtime，仍不得向生产模型广告尚不可执行的 `exec`/`wait`。
+
+### 2026-08-11 CodeMode Agent loop executable boundary
+
+状态：`completed / current foundation`（第八刀；P1-01 总项仍未关闭）。
+
+主目标：把第六、七刀的 provider custom contract 接到可验证的 Agent loop/session 生命周期边界，同时保持
+production fail closed；本刀不使用 Node、shell eval、Electron renderer 或测试 fake 冒充隔离 JavaScript host。
+
+窄写集：`tool-runtime::code_mode` transport-neutral contract、`agent-runtime::provider_turn::code_mode` 调度模块、
+`model-provider` custom failure lowering、对应 owner tests，以及本架构/执行计划。遵守上一刀大文件退出条件：
+CodeMode 执行逻辑已从超过 1000 行的 `provider_turn.rs` 拆到短领域模块，新增 lowering 回归也放入独立
+`current_client/code_mode_tests.rs`，没有继续向 `lowering.rs` 的 inline tests 堆业务场景。
+
+完成结果：session contract 与 Codex 同构为 `StartedCell(cell_id + initial_response)`、`execute/wait/terminate/shutdown`、
+保留 live/missing 的 wait outcome、session provider availability/create/limits 与 nested tool/notification/cell-close
+delegate。response adapter 固定 `Script running/completed/failed/terminated`，yielded 输出稳定携带 `cell_id`，
+terminated 是成功终态，失败同时保留 partial output 与 error，并复用统一 token truncation。
+
+Agent loop 只在 frozen sampling-step snapshot 注入 executable session handle 时成组广告 `exec` custom tool 与
+`wait` function tool；默认 production snapshot source 没有该 handle，因此不广告、不产生假 capability。
+provider stream 先完整 materialize，再按同批并行策略执行 function/custom/wait，结果按原始 call 顺序回写；
+`wait` 支持 `yield_time_ms/max_tokens/terminate`，turn cancel 对已启动 cell 调用 `terminate`。非 `exec` custom call、
+无 session custom call 与 unsupported limits 均 fail closed。Responses lowering 对 failed custom result 优先发送
+完整格式化 runtime output，不再只发送裸 error。
+
+定向与 owner 验证：`agent-runtime 202/202`、`model-provider 243/243`、`tool-runtime 327/327` 全部通过；
+`cargo check -p agent-runtime --lib` 通过。`npm run test:rust:related -- <本刀 13 个 current/反向依赖 crate 的路径>`
+最终退出 `0`，其中 `app-server 1646/1646` 通过，仅有既有 test helper `dead_code` warning；拆分后
+`cargo fmt --all -- --check` 与 `git diff --check` 均通过。新增回归覆盖 session handle 四操作、provider
+default/non-default limits、yield/terminal/status、`exec`/`wait` 广告、wait resampling、mixed function/custom
+结果顺序、session error recovery、无 session/非 exec fail closed、取消终止 active cell，以及 failed custom
+output 的官方 Responses lowering。
+
+production fail-closed 复核：current turn 在 `lime-agent::current_provider_turn` 中只从
+`current_tool_step_snapshot_source` 捕获工具快照，该 source 只调用
+`RuntimeToolStepSnapshot::with_tool_metadata(...)`；全仓非测试 Rust 源码没有
+`with_code_mode_session(...)` 调用。因此 production sampling snapshot 不持有 executable handle，
+`provider_turn` 的 `exec`/`wait` 成组广告分支保持关闭。
+
+聚合门禁：`npm run governance:legacy-report` 通过，扫描 `2120` 个文件，零引用候选、分类漂移候选、边界违规
+均为 `0`。`npm run smoke:agent-runtime-current-fixture` 通过；该门禁重建 App Server sidecar，并实际经过
+Electron、preload/IPC、App Server、runtime/read model 与 GUI，覆盖历史恢复、流式终态、停止/继续、approval、
+Plan、Skills、MCP、媒体引用、Coding Workbench 等 current fixture 场景；结果明确
+`liveProviderUsed=false`，因此属于 Gate B external fixture 证据，不冒充 live provider 或 production CodeMode host。
+
+分类：transport-neutral session/provider/delegate contract、Agent loop adapter、测试注入下的 `exec/wait` executable
+boundary 与 custom failure lowering 为 `current foundation`；production thread-owned session registry、隔离 JS/V8
+host、nested delegate dispatch、notification/cell-close implementation、thread interrupt/shutdown owner、canonical
+CodeCell/Tool Item 与 GUI projection 为 `planned`；无 `compat`/`deprecated`，无新增 mock production fallback。
+
+架构确认：confirmed；责任开发者 root，2026-08-11。确认范围包括
+`tool-runtime -> agent-runtime -> model-provider` 依赖方向、Desktop/TUI 分界、StartedCell 生命周期、取消/终止、
+mixed-call transcript 顺序和 production availability fail-closed。第八刀完成度为 `100%`，P1-01 不得据此标记完成。
+
+下一刀建立按 canonical Thread identity 持有的 lazy CodeMode service：session actor interrupt 终止 active cells，
+shutdown 关闭 session，provider availability 未就绪时不创建 owner。随后才能接真实隔离 host 和 nested dispatch；
+在这两项完成前继续禁止 production 注入 handle 或对外宣称 CodeMode 可用。
+
+### 2026-08-11 CodeMode thread-owned lazy service
+
+状态：`completed / current foundation`（第九刀；P1-01 总项仍未关闭）。
+
+主目标：把 CodeMode session 生命周期收进 canonical Thread 对应的 session actor，建立 lazy create、active cell
+interrupt 与 thread shutdown 边界；本刀不接真实隔离 host、nested tool dispatch、canonical Item 或 production
+sampling snapshot 注入。
+
+窄写集：`agent-runtime::code_mode`、`agent-runtime::session_loop` actor/resource/context、App Server 中创建 session
+actor 的 current 调用点、对应 owner tests，以及本架构/执行计划。退出条件：session actor 创建必须同时绑定
+`session_id + thread_id` 且拒绝 identity 漂移；provider availability 失败不得创建 service/runtime session；首次
+CodeMode operation 才能 lazy create；interrupt 必须 terminate active cells；shutdown 必须关闭已初始化 session，未初始化
+service 的 shutdown 不得反向触发 create。
+
+完成结果：新增 `agent-runtime::code_mode::RuntimeCodeModeServiceFactory` 与 per-thread
+`RuntimeCodeModeService`，availability 和 delegate factory 任一失败都使 actor 不持有 CodeMode handle；runtime session
+由 `OnceCell` lazy create，active cell 由 service 精确跟踪。`RuntimeSessionResources` 现在由 actor 唯一持有 canonical
+`thread_id` 与可选 service，task context/input handle 只投影该资源。actor replace/interrupt 先终止 active cells，再
+结束当前 task；显式 shutdown、command channel 关闭和 registry shutdown 都关闭已初始化 runtime session，未使用的
+service 不会启动 provider session。
+
+`RuntimeSessionRegistry::get_or_create` 已直接切换为 `(session_id, thread_id)`，空 identity 与同 session 的 thread
+漂移均 fail closed；旧单参数 API 已删除。App Server compact、turn submit/steer/action、session operation 与 shell 等
+current actor 创建点全部传入 stored canonical thread identity。production `RuntimeCore` 仍使用
+`RuntimeSessionRegistry::default()`，没有注入 CodeMode factory；因此 production snapshot 不持有 handle，`exec/wait`
+广告保持关闭。
+
+验证结果：第九刀 lifecycle 定向覆盖 availability fail-closed、stable identity、unused shutdown、active cell
+interrupt 与 session shutdown；完整 `agent-runtime 205/205`、`app-server 1646/1646` 已通过。`npm run
+test:rust:related -- <第九刀 agent-runtime/App Server 路径>` 扩展到 `agent-runtime`、`app-server`、`lime-agent`、
+`lime-scheduler`、`lime-server` 并退出 `0`，仅有既有 App Server test helper `dead_code` warning。`cargo fmt --all
+-- --check` 与 `git diff --check` 通过。此前同一实现状态下的 `npm run smoke:agent-runtime-current-fixture` 已通过真实
+Electron/preload/IPC/App Server/runtime/read model/GUI 聚合场景，`liveProviderUsed=false`；它只证明 Desktop current
+主链无回归，不冒充 production CodeMode host 或 live provider 证据。
+
+文件边界：`session_loop` 的 registry/resources 已从 actor 拆到短领域模块；`input_queue.rs` 当前 856 行，仅增加
+资源引用和 context getter，未继续堆叠 lifecycle 逻辑。下一次修改 input queue 业务规则前，应把 task context/input
+handle 与 pending queue 分离到独立模块，使非生成文件回落到 800 行以内。
+
+分类：thread-owned service、canonical actor identity、lazy create、active-cell interrupt 与 shutdown 为
+`current foundation`；production isolated host、nested delegate dispatch、notification/cell-close implementation、
+canonical CodeCell/Tool Item 和 GUI projection 为 `planned`；无 `compat` 或 `deprecated`，旧单参数 actor API 为
+`dead / deleted / forbidden-to-restore`。第九刀完成度为 `100%`，P1-01 不得据此标记完成。
+
+下一刀进入真实隔离 JS/V8 host 与 nested delegate；在两者完成、canonical lifecycle 接线并通过 Desktop Gate B 前，
+继续禁止 production 注入 CodeMode factory/handle 或对外宣称 CodeMode 可用。多模型、多模态 catalog/readiness 与
+sampling/media lowering 继续归 Grok-aligned `model-provider`，本刀未改变这些 owner。
+
+### 2026-08-12 CodeMode per-cell nested dispatch
+
+状态：`completed / current foundation`（第十刀；P1-01 总项仍未关闭）。
+
+主目标：把 CodeMode runtime 发起的 nested tool callback 精确路由到启动该 cell 的 frozen sampling-step executor，
+保证它继续复用普通工具的权限、取消、lifecycle 与 output contract；本刀不注入 production factory，也不以 synthetic
+session 冒充隔离 JavaScript host。
+
+窄写集：`tool-runtime::code_mode` 的 transport-neutral per-cell delegate extension、`agent-runtime::code_mode` 的
+route/gate 生命周期、`agent-runtime::provider_turn::code_mode` 的 frozen executor delegate、对应 owner tests，以及本
+架构/执行计划。未修改超过 800 行的 `session_loop/input_queue.rs`，也未新增 crate、脚本或 parallel runtime owner。
+
+完成结果：session contract 新增 `execute_with_delegate`，默认保持普通 `execute` 语义；thread-owned service 为每个
+started cell 注册独立 delegate route，并用 watch gate 解决 runtime callback 先于 `StartedCell` 返回的竞态。terminal
+initial response、wait terminal/missing、terminate、actor interrupt、cell close 与 shutdown 都清理 route/gate；fallback
+只属于 session factory 创建时冻结的 thread delegate，不读取最近 active turn。
+
+provider-turn nested delegate 按 `RuntimeCodeModeTool.global_name` 在当前 sampling step 的 frozen 工具集合中查找，拒绝
+未启用工具与 `exec`/`wait` 递归调用；调用继续经过同一个 `RuntimeToolExecutorHandle.bind(...).execute_call(...)`，并
+携带 canonical turn/session、working directory、turn context、cancellation token 与 lifecycle emitter。structured output
+优先回传给 JS，失败保持 error；没有建立第二套权限、approval 或 handler registry。
+
+验证结果：新增 service race 回归证明 cell route 在 nested callback dispatch 前完成绑定；provider-turn 回归证明 nested
+`read` 只执行冻结 executor 一次，并发出同一普通 lifecycle 的 Started/Completed。完整 `agent-runtime 207/207`、
+`app-server 1646/1646` 通过；`npm run test:rust:related -- <第十刀四个 owner 路径>` 扩展到
+`agent-runtime`、`app-server`、`lime-agent`、`lime-mcp`、`lime-scheduler`、`lime-server`、`tool-runtime` 并退出
+`0`，其中 `tool-runtime 327/327`，仅有既有 App Server test helper `dead_code` warning。`cargo fmt
+--manifest-path lime-rs/Cargo.toml --all` 已应用，本轮继续以 fmt check、diff check 与治理扫描收尾。
+
+分类：per-cell delegate contract、route/gate 生命周期与 frozen normal-tool dispatch 为 `current foundation`；production
+isolated JS/V8 host、notify 注入、canonical CodeCell/Tool Item/GUI projection 与 App Server factory 注入为 `planned`；
+无 `compat`/`deprecated`，未增加 mock production fallback。第十刀完成度为 `100%`，P1-01 不得据此标记完成。
+
+下一刀先把 `exec`/`wait` 与 notify 接入 canonical Tool/Thread/Turn/Item 生命周期，继续保持 production unavailable；
+随后再引入独立 V8 host。新增 `v8`/ICU 及 host binary 属于核心依赖与打包变更，必须单独确认并同步 Cargo/Forge、
+macOS/Windows packaging 和 Gate B 证据。多模型、多模态 owner 继续是 Grok-aligned `model-provider`。
+
+### 2026-08-12 CodeMode lifecycle 与 notify Desktop projection
+
+状态：`completed / current foundation`（第十一刀；P1-01 总项仍未关闭）。
+
+主目标：让 CodeMode control tools 不再绕过 canonical Tool lifecycle，并把 nested `notify` 接入 Lime Desktop 已有的
+增量事件投影；本刀不注入 production factory，不把 GUI notification 冒充 provider transcript，也不建立平行
+CodeCell 存储或第二套 lifecycle owner。
+
+窄写集：`tool-runtime::tool_lifecycle` 的 transport-neutral output-delta extension、
+`agent-runtime::provider_turn::code_mode` 的 outer control-tool lifecycle/notify delegate、Lime Agent current provider-turn
+emitter、对应 owner tests，以及本架构/执行计划。没有修改 Electron/JSON-RPC schema、GUI 文案、provider wire、
+workspace manifest 或核心依赖。
+
+完成结果：`exec` 与 `wait` 现在都以原 provider call identity 发出 canonical Started/Completed lifecycle；完成输出保留
+`code_mode_cell_id`、`code_mode_output_status`、`handler_executed=true` 与格式化 partial output，CodeMode failure 不再被
+普通 failure normalization 吞掉正文。nested 普通工具仍使用自己的 lifecycle，outer `exec` 因此形成
+`exec started -> nested started/completed -> exec completed` 的稳定顺序；`wait` 继续复用同一 thread-owned session。
+
+`ToolLifecycleEmitter` 新增默认 no-op 的 `emit_output_delta` host capability，避免 transport-neutral owner 依赖 Agent
+protocol。provider-turn delegate 把非空、未取消的 `notify` 投影为 `ToolOutputDeltaEvent`，绑定 outer `exec` call id、
+canonical turn id、cell id、`tool_name=exec` 与 `notification_kind=code_mode_notify`；
+`CurrentTurnToolLifecycleEmitter` 再把它接入既有 `AgentEvent::ToolOutputDelta` Desktop host event pipeline。该事件当前只供
+App Server/GUI 消费；同一 notify 同时进入本 sampling step 的下一次 provider request，作为 outer call id 对应的
+`custom_tool_call_output`，排在最终 exec output 前，补齐 Codex active-turn transcript 语义。该注入不经过
+`RuntimeSessionInputHandle`，不创建 durable Item；独立 CodeCell Item/cell-close projection 仍未实现。
+
+验证结果：notify correlation、outer `exec/wait` lifecycle、outer+nested lifecycle 顺序和 Agent output-delta projection
+定向回归通过；完整 `agent-runtime 207/207` 与 `lime-agent 255/255` 通过。`npm run test:rust:related --
+<第十一刀五个 owner 路径>` 扩展到 `agent-runtime 207/207`、`app-server 1646/1646`、`lime-agent 255/255`、
+`lime-mcp 160/160`、`lime-scheduler 24/24`、`lime-server 119/119` 与 `tool-runtime 327/327`，完整退出 `0`。
+`npm run governance:legacy-report` 扫描 `2120` 个 current 文件，零引用候选、分类漂移和边界违规均为 `0`；
+`npm run smoke:agent-runtime-current-fixture` 在重建本轮 App Server sidecar 后通过真实 Electron/preload/IPC/
+App Server/runtime/read model/GUI 聚合场景，`liveProviderUsed=false`；它证明 Desktop current 主链无回归，不冒充
+production CodeMode host 或 live provider 证据。`cargo fmt --manifest-path lime-rs/Cargo.toml --all -- --check` 与
+`git diff --check` 作为最终收尾门禁。
+
+分类：outer control-tool lifecycle、普通 Tool Item projection 与 notify Desktop output-delta 为 `current foundation`；
+本 sampling step 的 notify provider-transcript projection 也为 `current foundation`；production isolated JS/V8 host、
+CodeCell trace/evidence owner、App Server factory 注入和 CodeMode 专项 Gate B 为 `planned`。公开 App Server ThreadItem
+不新增 CodeCell variant；无 `compat`/`deprecated`，
+未增加 mock production fallback。
+第十一刀完成度为 `100%`，P1-01 不得据此标记完成，production 继续不广告 `exec/wait`。
+
+下一刀是 production isolated session provider，但它需要新增 V8/ICU 核心依赖和 Desktop host 打包边界；按仓库高风险
+包管理规则，必须取得明确确认后再修改 Cargo/lock/Forge。获批前最有价值的无依赖工作是核对 Codex rollout-trace 的
+CodeCell 事实与 Lime current owner；不得把 CodeCell 伪造成 per-turn `Tool` Item 或新的公开 ThreadItem。late-notify
+取消/终态守卫可独立落在 thread-owned runtime route，不改变 Thread/Turn/Item owner。
+
+### 2026-08-12 CodeMode late-notify terminal guard
+
+状态：`completed / current foundation`（第十二刀；P1-01 总项仍未关闭）。
+
+主目标：对齐 Codex cell-close 后的终态路由语义，禁止迟到的 nested `invoke`/`notify` 重新创建空 dispatch gate、永久等待、
+回落到 session fallback delegate，或继续写入 Desktop/provider transcript；本刀不新增 JS host、协议 schema、依赖或 durable
+CodeCell Item。
+
+窄写集：`agent-runtime::code_mode` 的 closed-cell route guard 与回归、`agent-runtime::provider_turn::code_mode` 的 nested
+delegate 原子终态守卫、架构说明与本执行计划。terminal response、terminate、actor interrupt、host `cell_closed` 和
+shutdown 都将 cell 标记为 closed；同 cell id 重新启动时先清除旧标记，再安装新的 route。late dispatch 在 route lookup
+入口 fail closed，避免重新创建 watch gate；provider-turn delegate 在工具执行前后以及 notify 投影/ transcript 注入前检查
+closed/cancelled，避免已关闭 cell 的输出越过终态边界。
+
+验证：`agent-runtime` CodeMode 定向测试 `5/5`（含 late notify 不等待回归），完整受影响矩阵 `agent-runtime 208/208`、
+`app-server 1646/1646`、`lime-agent 255/255`、`lime-scheduler 24/24`、`lime-server 119/119`，以及此前
+`lime-mcp 160/160`、`tool-runtime 327/327` 与真实 Desktop fixture Gate B 均已通过；`cargo fmt --all -- --check`、
+`npm run governance:legacy-report`（2120 文件，0 零引用候选/0 分类漂移/0 边界违规）与 `git diff --check` 均通过。独立 CodeCell
+terminal owner、production isolated host/factory 和 CodeMode 专项 Gate B 仍为 `planned`，无新增 `compat`/`deprecated`。
+
+### 2026-08-12 CodeMode CodeCell projection scope correction
+
+状态：`completed / current governance`（撤回临时 per-turn CodeCell Item projection）。
+
+对照 Codex 后确认，`app-server-protocol` 的公开 `ThreadItem` 没有 `CodeCell` variant；CodeCell 生命周期由
+`rollout-trace::CodeCellTraceContext` 以 thread/turn/call/runtime-cell identity 写入内部 trace，并由 reducer 关联
+model-visible `CustomToolCall`，不进入公开 GUI ThreadItem。Lime 当前没有 rollout-trace 等价 owner；App Server `RuntimeEvent`
+是产品事件链，不能作为 runtime trace 的隐式存储或 GUI 旁路。因此已删除把 CodeCell started/closed 伪造成 per-turn
+`Tool` Item 的临时实现与正向测试，保留 outer `exec`/`wait` canonical lifecycle、notify Desktop delta/provider transcript
+projection，以及第十二刀 closed-cell late-notify guard。
+
+分类：outer Tool lifecycle、notify projection、closed-cell route guard 为 `current foundation`；CodeCell trace owner、生产
+isolated session provider/factory、CodeMode 专项 Gate B 为 `planned / alignment-open`；伪造的 per-turn CodeCell Item 为
+`dead / deleted / forbidden-to-restore`；无 `compat`/`deprecated`。当前不新增 RuntimeEvent、ThreadItem union、GUI card 或
+第二套 trace store。
+
+验证：`agent-runtime 208/208`、`lime-agent 255/255`、`tool-runtime 327/327`、`cargo fmt --all -- --check`、
+`npm run governance:legacy-report`（2120 文件，0/0/0）与 `git diff --check` 通过；`rg` 未发现
+`CodeModeCellLifecycle*`/`emit_code_mode_cell` 回流。撤回后重新执行 `npm run smoke:agent-runtime-current-fixture`，
+真实 Electron/preload/IPC/App Server/runtime/read model/GUI 聚合场景完整通过，`liveProviderUsed=false`；该证据证明
+current Desktop 主链无回归，不冒充 production CodeMode host 或 live provider。
+
+下一步：取得 V8/ICU 隔离 host、Cargo/lock 与 Electron Forge 打包边界的明确确认后，先接 production session provider/factory；
+CodeCell trace 只有在出现真实 consumer 和 owner 后才实现，不得以 GUI Item 或 RuntimeEvent 临时承接。
+
+### 2026-08-12 CodeMode production in-process V8 与 factory
+
+状态：`completed / current foundation`（第十三刀；P1-01 总项仍未关闭）。
+
+主目标：在 Lime Desktop current App Server sidecar 中接入真实 sandbox-enabled V8 session provider，把 production
+Runtime backend factory、Grok-aligned model `tool_mode`、resolved provider `custom_tools` capability 与 thread-owned
+executable session 三重门禁接成唯一采样链，并建立可重复、校验失败即停止的 V8 编译产物供应链。本刀不恢复公开
+CodeCell Item，不把 Electron renderer/TUI/系统 Node 当 JS host，也不把 in-process isolate 宣称为 standalone host。
+
+窄写集：`tool-runtime::code_mode::v8`、`agent-runtime::code_mode/session_config`、Lime Agent current sampling snapshot、
+App Server runtime factory/model registry route、`core/services/model-provider` model metadata、Cargo manifest/lock、
+`scripts/lib/rusty-v8-artifacts.mjs` 与现有 Rust/sidecar 构建入口、Windows workflow，以及架构/本执行计划。Forge
+resources 仍只包含静态链接后的 `app-server` sidecar；V8 archive/binding 不作为运行时资源复制。
+
+退出条件：每个 cell 使用 fresh sandbox V8 isolate，支持 nested tools、notify、timer、yield/wait/terminate、store/load
+与 pragma limits；未知 pragma/tool mode、缺 provider capability、缺 session 与 `CodeModeOnly` 不可用均 fail closed；
+只有 `code_mode|code_mode_only + custom_tools + executable session` 才附着 session 并广告 `exec/wait`。所有 current
+Rust 与 Electron sidecar 构建入口从 Cargo.lock 解析精确 V8 version，只消费 Codex `ptrcomp_sandbox_release` 资产并
+验证 archive/binding 两项 SHA-256。最低验证为 V8/agent/app-server 定向与相关测试、artifact/sidecar tests、真实
+Electron CodeMode Gate B、scripts/legacy/version 治理、rustfmt 与 diff check。
+
+当前完成：V8/ICU process 初始化、fresh isolate cell runtime、session store、nested callback、notify、timer、
+yield/wait/terminate/cancel、sandbox verification 和 exec pragma 已落地；production factory 只注入 current runtime
+backend，mock/external/unavailable 不注入。model registry/direct provider config 只接受 `direct / code_mode /
+code_mode_only`，未知值回落 Direct；snapshot 三重门禁已补四场景回归。V8 内部无法到达 Lime nested-call contract 的
+`ToolKind/CodeModeToolKind` 传播链已按 dead 删除。构建 helper 已在默认 cache 与显式 override 两种路径验证 Codex
+release checksum，Rust layer、local CI、dev/rebuild sidecar、Electron assets build 和 Windows workflow 已接入。
+
+当前验证：`cargo check -p app-server --lib` 无本刀 warning；model metadata、tool-mode normalization 与三重门禁新增
+定向测试 `3/3` 通过；artifact/sidecar/Rust runner Vitest `36/36` 通过；真实无 override 下载与显式 override
+checksum 校验均通过。遗漏的 provider model tool-mode ingestion `1/1`、agent-runtime custom exec `3/3` 与 mixed
+function/custom result order `1/1` 已补跑。Responses fixture 与 Gate B 结构回归 `19/19` 通过。
+
+专项 `npm run smoke:code-mode-electron-gate-b` 已通过，evidence 位于
+`.lime/qc/gui-evidence/code-mode-electron-gate-b/code-mode-electron-gate-b-summary.json`，截图位于同目录 PNG。该 Gate B
+证明真实 Electron/preload/IPC、`app_server_handle_json_lines`、runtime backend、official-host Responses route、production
+V8 factory、custom `exec` 输出回采样、canonical `dynamicToolCall` completed 与 GUI 可见终态；Provider 请求 Host 仍为
+`api.openai.com`，只由标准 `HTTP_PROXY` 路由到受控 fixture。公开 Item 类型为
+`userMessage/dynamicToolCall/agentMessage`，没有 `CodeCell`，且 mock fallback、invoke/console/page/provider error 均为零。
+它不证明 live OpenAI、standalone OS-process sandbox 或 macOS/Windows packaged parity。
+
+收尾门禁：`npm run test:contracts` 通过 301 项 App Server client contract，并通过 protocol drift、command、harness、
+modality、scripts、Electron release workflow 与 docs boundary；`npm run verify:gui-smoke` 通过真实 Electron Host、preload、
+App Server 初始化、Claw shell 与设置页 smoke；`npm run smoke:agent-runtime-current-fixture` 完整通过当前聚合 Electron
+场景，`liveProviderUsed=false`。`npm run governance:scripts`、`npm run governance:legacy-report`（2120 个 current 文件，
+0 零引用候选 / 0 分类漂移 / 0 边界违规）、`npm run verify:app-version`、`cargo fmt --all -- --check` 与
+`git diff --check` 均通过。
+
+隔离边界：当前 provider 与 session actor 位于 App Server sidecar 进程内，V8 sandbox + fresh isolate 只提供 JS
+内存边界，不提供 Codex 最新 standalone CodeMode host 的进程故障和 OS 资源隔离。该差距与 thread-owned CodeCell
+trace/evidence owner 继续保持 `alignment-open`；在两者关闭前不得宣称 CodeMode 全面对齐完成。
+
+模型目录审计：Codex 当前有 8 个 `apply_patch_tool_type=freeform` 模型，Lime 只对
+`openai/gpt-5.2` 存在精确 canonical 映射；`gpt-5.6-sol/terra/luna`、`gpt-5.5`、`gpt-5.4/mini` 与
+`codex-auto-review` 尚不在 Grok-aligned catalog。该差距不阻塞本刀 deterministic Gate B，但继续属于多模型控制面
+`alignment-open`，只能在 `model-provider` catalog/capability/readiness owner 中补齐，不能按 provider 名称放宽。
+
+### 2026-08-12 CodeMode standalone process host
+
+状态：`completed / current`（第十四刀；P1-01 仅剩 CodeCell trace/evidence owner 未关闭）。
+
+主目标：按 Codex `ProcessOwnedCodeModeSessionProvider -> code-mode-host` 的本地 stdio host 边界，把 production V8 执行
+从 App Server sidecar 进程迁到独立 OS 进程。Lime 只实现 Desktop 当前需要的 process-owned stdio transport，不引入
+Codex TUI、remote WebSocket/gRPC 控制面或第二套 product runtime；迁移完成后 production factory 直接替换为 process
+provider，不保留 in-process fallback。
+
+窄写集：`tool-runtime::code_mode` 的 length-prefixed protocol/process client/host、`code-mode-host` bin、
+`agent-runtime::code_mode` production factory、现有 App Server/Electron sidecar build 与 resource packaging、CodeMode
+专项 Gate B、对应 Rust/Node tests，以及架构/本计划。现有 V8 runtime 只作为 host 内部执行 owner，App Server 只持有
+process client；不新增 crate、公开 ThreadItem、Renderer backend、compat wrapper 或 mock production fallback。
+
+退出条件：protocol V1 handshake/session open/execute initial response/wait/terminate/shutdown、nested tool/notify/cancel/
+cell-close correlation、frame size与 pending request 上限均 fail closed；host 缺失或崩溃不得回退 in-process，必须让当前
+session 显式失败且不拖垮 App Server。dev、Rust layer、Electron asset、Forge 和 Windows CI 必须成组构建/校验两个
+sidecar binary。专项 Electron Gate B 必须额外证明独立 `code-mode-host` PID、App Server PID 不同、完整 custom exec
+回采样与 GUI terminal；随后再运行 contracts、GUI/current fixture、scripts/legacy/version、rustfmt 与 diff 门禁。
+
+完成结果：production factory 已只使用 `ProcessCodeModeSessionProvider`；V8 provider 收敛为 host 内部 owner，没有
+App Server in-process fallback。protocol V1 覆盖握手、session open/execute 两阶段 response、wait/terminate/shutdown、
+nested tool/notify/cancel/cell-close、64 MiB frame、1024 in-flight/pending delegate 上限与连接失败传播。host 路径只从
+App Server/测试二进制同目录或显式测试环境解析，缺失时 availability fail closed。
+
+构建与资源结果：dev/Electron assets 在一次 Cargo invocation 中成组构建 `app-server` 与 `code-mode-host`；二者复制到
+`dist-electron/app-server/<platform>/`，manifest 分别记录 `sha256`/`codeModeHostSha256`，packaged verifier 强制校验。
+macOS arm64 实际资源为 `app-server 252775064 bytes` 与 `code-mode-host 66597536 bytes`，均为 `0755` 且双 SHA 复算一致。
+
+验证结果：标准 sandbox V8 环境下 App Server/host 双 binary Cargo check 无 warning；process Rust tests `6/6`，
+artifact/sidecar/assets/fixture/package/Gate B script tests `56/56`，Rust related 反向依赖矩阵、`npm run test:contracts`
+（303 项）、rustfmt 与 diff check 通过。Windows quality 现在显式以同一次 Cargo invocation 检查 `app-server` 与
+`code-mode-host`，client contract guard 固定该命令；Windows test package 继续由 `electron:build` 成组构建并由 packaged
+resource verifier 校验双 binary。专项 `npm run smoke:code-mode-electron-gate-b` 重新通过，evidence thread
+`019ff3ca-7f26-71d2-be81-6a16b7895515`；Electron/App Server/host PID 为 `44199/44203/44521`，host parent PID 为
+`44203`。17 项 Gate B assertion 全通过，custom exec 两次 Responses 回采样、canonical `dynamicToolCall`、GUI final text、
+IPC trace 均成立，production mock/invoke/console/page/provider error 为零。该证据不冒充 live OpenAI 或 Windows packaged
+parity；后者由 release Windows runner 继续验证。

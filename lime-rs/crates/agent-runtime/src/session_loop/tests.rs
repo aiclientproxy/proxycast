@@ -1,4 +1,5 @@
 use super::input_queue::{PendingInputQueue, RuntimeSessionTaskState};
+use super::resources::RuntimeSessionResources;
 use super::*;
 use crate::reply_input::RuntimeReplyInput;
 use futures::future::BoxFuture;
@@ -48,6 +49,14 @@ fn inter_agent_input(message_id: &str, content: &str) -> RuntimeSessionInterAgen
     }
 }
 
+async fn actor(registry: &RuntimeSessionRegistry, session_id: &str) -> RuntimeSessionHandle {
+    let thread_id = format!("thread-{session_id}");
+    registry
+        .get_or_create(session_id, &thread_id)
+        .await
+        .expect("bind session actor identity")
+}
+
 #[tokio::test]
 async fn session_snapshot_is_actor_ordered_and_reports_only_the_live_turn() {
     let registry = RuntimeSessionRegistry::default();
@@ -59,7 +68,7 @@ async fn session_snapshot_is_actor_ordered_and_reports_only_the_live_turn() {
         None
     );
 
-    let session = registry.get_or_create("session-snapshot").await;
+    let session = actor(&registry, "session-snapshot").await;
     let started = Arc::new(AtomicUsize::new(0));
     let finished = Arc::new(AtomicUsize::new(0));
     let submission = session
@@ -104,7 +113,7 @@ async fn session_snapshot_is_actor_ordered_and_reports_only_the_live_turn() {
 #[tokio::test]
 async fn session_loop_serializes_and_queues_tasks() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-1").await;
+    let session = actor(&registry, "session-1").await;
     let started = Arc::new(AtomicUsize::new(0));
     let finished = Arc::new(AtomicUsize::new(0));
     let first = session
@@ -143,7 +152,7 @@ async fn session_loop_serializes_and_queues_tasks() {
 #[tokio::test]
 async fn operation_submission_preserves_identity_and_trace_metadata() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-operation-envelope").await;
+    let session = actor(&registry, "session-operation-envelope").await;
     let context_metadata = Arc::new(Mutex::new(
         Option::<(String, Option<String>, Option<RuntimeSessionTraceContext>)>::None,
     ));
@@ -207,9 +216,7 @@ async fn operation_submission_preserves_identity_and_trace_metadata() {
 #[tokio::test]
 async fn replacing_task_operations_share_the_session_dispatcher() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry
-        .get_or_create("session-typed-task-operations")
-        .await;
+    let session = actor(&registry, "session-typed-task-operations").await;
     let operations = [
         RuntimeSessionTaskKind::Review,
         RuntimeSessionTaskKind::Compact,
@@ -252,7 +259,7 @@ async fn replacing_task_operations_share_the_session_dispatcher() {
 #[tokio::test]
 async fn inline_operations_run_in_submission_order_without_replacing_the_active_task() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-inline-operations").await;
+    let session = actor(&registry, "session-inline-operations").await;
     let active = RuntimeSessionClosureTask::new(
         "turn-inline-active",
         Vec::new(),
@@ -347,7 +354,7 @@ async fn inline_operations_run_in_submission_order_without_replacing_the_active_
 #[tokio::test]
 async fn shell_operation_attaches_to_the_active_turn_and_shares_cancellation() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-shell-active").await;
+    let session = actor(&registry, "session-shell-active").await;
     let active = RuntimeSessionClosureTask::new(
         "turn-shell-active",
         Vec::new(),
@@ -428,7 +435,7 @@ async fn shell_operation_attaches_to_the_active_turn_and_shares_cancellation() {
 #[tokio::test]
 async fn idle_shell_operation_owns_the_session_task_lifecycle() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-shell-idle").await;
+    let session = actor(&registry, "session-shell-idle").await;
     let auxiliary_calls = Arc::new(AtomicUsize::new(0));
     let auxiliary_calls_for_handler = Arc::clone(&auxiliary_calls);
     let auxiliary = RuntimeSessionHandler::new(move |_context| {
@@ -501,7 +508,7 @@ async fn idle_shell_operation_owns_the_session_task_lifecycle() {
 #[tokio::test]
 async fn user_input_starts_an_idle_candidate_with_the_submitted_input() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-user-input-start").await;
+    let session = actor(&registry, "session-user-input-start").await;
     let (seen_tx, seen_rx) = oneshot::channel();
     let seen_tx = Arc::new(Mutex::new(Some(seen_tx)));
     let task = RuntimeSessionClosureTask::new(
@@ -555,7 +562,7 @@ async fn user_input_starts_an_idle_candidate_with_the_submitted_input() {
 #[tokio::test]
 async fn user_input_steers_an_active_regular_task_without_starting_the_candidate() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-user-input-steer").await;
+    let session = actor(&registry, "session-user-input-steer").await;
     let ready = Arc::new(Notify::new());
     let ready_for_task = Arc::clone(&ready);
     let release = Arc::new(Notify::new());
@@ -637,7 +644,7 @@ async fn user_input_steers_an_active_regular_task_without_starting_the_candidate
 #[tokio::test]
 async fn promoted_task_context_preserves_submission_metadata() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-promoted-metadata").await;
+    let session = actor(&registry, "session-promoted-metadata").await;
     let first = RuntimeSessionClosureTask::new(
         "turn-promoted-blocker",
         Vec::new(),
@@ -731,7 +738,7 @@ async fn promoted_task_context_preserves_submission_metadata() {
 #[tokio::test]
 async fn shutdown_and_wait_allows_multiple_waiters() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-shutdown-waiters").await;
+    let session = actor(&registry, "session-shutdown-waiters").await;
     let submission = session
         .submit(
             Arc::new(RuntimeSessionClosureTask::new(
@@ -767,7 +774,7 @@ async fn shutdown_and_wait_allows_multiple_waiters() {
 #[tokio::test]
 async fn interrupt_preserves_session_mailbox_for_the_next_task() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-mailbox-interrupt").await;
+    let session = actor(&registry, "session-mailbox-interrupt").await;
     let (ready_tx, ready_rx) = oneshot::channel();
     let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
     let first = RuntimeSessionClosureTask::new(
@@ -844,7 +851,7 @@ async fn interrupt_preserves_session_mailbox_for_the_next_task() {
 #[tokio::test]
 async fn steer_and_mailbox_are_kept_in_separate_queues() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-2").await;
+    let session = actor(&registry, "session-2").await;
     let seen = Arc::new(Mutex::new(Vec::new()));
     let seen_for_task = Arc::clone(&seen);
     let (ready_sender, ready_receiver) = oneshot::channel();
@@ -901,7 +908,7 @@ async fn steer_and_mailbox_are_kept_in_separate_queues() {
 #[tokio::test]
 async fn mailbox_loader_is_deferred_until_the_mailbox_boundary() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-loader").await;
+    let session = actor(&registry, "session-loader").await;
     let loader_calls = Arc::new(AtomicUsize::new(0));
     let loader_calls_for_loader = Arc::clone(&loader_calls);
     let loader_calls_for_task = Arc::clone(&loader_calls);
@@ -955,7 +962,7 @@ async fn mailbox_loader_is_deferred_until_the_mailbox_boundary() {
 #[tokio::test]
 async fn busy_submission_completes_with_a_failure_instead_of_hanging() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-busy").await;
+    let session = actor(&registry, "session-busy").await;
     let started = Arc::new(AtomicUsize::new(0));
     let finished = Arc::new(AtomicUsize::new(0));
     let first = session
@@ -992,7 +999,7 @@ async fn busy_submission_completes_with_a_failure_instead_of_hanging() {
 #[tokio::test]
 async fn steer_for_turn_rejects_a_late_target() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-target").await;
+    let session = actor(&registry, "session-target").await;
     let started = Arc::new(AtomicUsize::new(0));
     let finished = Arc::new(AtomicUsize::new(0));
     let submission = session
@@ -1017,7 +1024,7 @@ async fn steer_for_turn_rejects_a_late_target() {
 #[tokio::test]
 async fn steer_returns_the_actor_confirmed_active_turn_id() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-steer-id").await;
+    let session = actor(&registry, "session-steer-id").await;
     let submission = session
         .submit(
             task(
@@ -1074,7 +1081,7 @@ impl RuntimeSessionTask for HangingAbortTask {
 #[tokio::test]
 async fn hanging_abort_is_forcefully_reaped() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-hanging-abort").await;
+    let session = actor(&registry, "session-hanging-abort").await;
     let submission = session
         .submit(
             Arc::new(HangingAbortTask {
@@ -1102,7 +1109,11 @@ async fn hanging_abort_is_forcefully_reaped() {
 
 #[tokio::test]
 async fn dropping_last_session_handle_shuts_down_active_and_queued_tasks() {
-    let session = RuntimeSessionActor::spawn("session-channel-close".to_string());
+    let session = RuntimeSessionActor::spawn(
+        "session-channel-close".to_string(),
+        "thread-channel-close".to_string(),
+        None,
+    );
     let started = Arc::new(AtomicUsize::new(0));
     let finished = Arc::new(AtomicUsize::new(0));
     let active = session
@@ -1140,7 +1151,7 @@ async fn dropping_last_session_handle_shuts_down_active_and_queued_tasks() {
 #[tokio::test]
 async fn stale_completion_cannot_finish_a_promoted_task() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-stale-completion").await;
+    let session = actor(&registry, "session-stale-completion").await;
     let (ready_tx, ready_rx) = oneshot::channel();
     let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
     let first = RuntimeSessionClosureTask::new(
@@ -1191,7 +1202,7 @@ async fn stale_completion_cannot_finish_a_promoted_task() {
 #[tokio::test]
 async fn replace_submission_closes_the_old_task_and_rejects_compact_steer() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-replace").await;
+    let session = actor(&registry, "session-replace").await;
     let first = RuntimeSessionClosureTask::new(
         "turn-compact",
         Vec::new(),
@@ -1245,7 +1256,7 @@ async fn replace_submission_closes_the_old_task_and_rejects_compact_steer() {
 #[tokio::test]
 async fn step_context_and_usage_are_turn_scoped_and_monotonic() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-step-context").await;
+    let session = actor(&registry, "session-step-context").await;
     let seen = Arc::new(Mutex::new(Vec::new()));
     let usage = Arc::new(Mutex::new(RuntimeSessionTokenUsage::default()));
     let seen_for_task = Arc::clone(&seen);
@@ -1302,7 +1313,7 @@ async fn step_context_and_usage_are_turn_scoped_and_monotonic() {
 #[tokio::test]
 async fn context_rollover_is_consumed_by_the_next_step_snapshot() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-context-rollover").await;
+    let session = actor(&registry, "session-context-rollover").await;
     let seen = Arc::new(Mutex::new(Vec::new()));
     let seen_for_task = Arc::clone(&seen);
     let task = RuntimeSessionClosureTask::new(
@@ -1342,7 +1353,7 @@ async fn context_rollover_is_consumed_by_the_next_step_snapshot() {
 #[tokio::test]
 async fn final_answer_defers_mailbox_until_steer_reopens_the_turn() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-mailbox-phase").await;
+    let session = actor(&registry, "session-mailbox-phase").await;
     let (ready_tx, ready_rx) = oneshot::channel();
     let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -1415,7 +1426,7 @@ async fn final_answer_defers_mailbox_until_steer_reopens_the_turn() {
 #[tokio::test]
 async fn stale_final_defer_does_not_override_a_steer() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-stale-defer").await;
+    let session = actor(&registry, "session-stale-defer").await;
     let (ready_tx, ready_rx) = oneshot::channel();
     let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
     let task = RuntimeSessionClosureTask::new(
@@ -1464,7 +1475,7 @@ async fn stale_final_defer_does_not_override_a_steer() {
 #[tokio::test]
 async fn response_waiter_uses_the_active_turn_generation() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-response").await;
+    let session = actor(&registry, "session-response").await;
     let (ready_tx, ready_rx) = oneshot::channel();
     let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
     let seen = Arc::new(Mutex::new(None));
@@ -1526,7 +1537,7 @@ async fn response_waiter_uses_the_active_turn_generation() {
 #[tokio::test]
 async fn typed_response_operations_route_to_distinct_waiters() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-typed-responses").await;
+    let session = actor(&registry, "session-typed-responses").await;
     let (ready_tx, ready_rx) = oneshot::channel();
     let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -1629,7 +1640,7 @@ async fn typed_response_operations_route_to_distinct_waiters() {
 #[tokio::test]
 async fn mailbox_loader_failure_preserves_steer_input() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-loader-error").await;
+    let session = actor(&registry, "session-loader-error").await;
     let (ready_tx, ready_rx) = oneshot::channel();
     let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -1698,6 +1709,7 @@ fn input_handle_with_loader(
         turn_id: Arc::from("turn-activity"),
         kind: RuntimeSessionTaskKind::Regular,
         mailbox_loader: Some(loader),
+        resources: Arc::new(RuntimeSessionResources::new("thread-activity", None)),
         state: Arc::new(RuntimeSessionTaskState::default()),
     }
 }
@@ -1893,7 +1905,7 @@ async fn handle_notification_is_visible_to_a_late_task_subscriber() {
         )
         .await
         .expect("missing session lookup"));
-    let session = registry.get_or_create("session-late-activity").await;
+    let session = actor(&registry, "session-late-activity").await;
     assert!(registry
         .notify_inter_agent_communication(
             "session-late-activity",

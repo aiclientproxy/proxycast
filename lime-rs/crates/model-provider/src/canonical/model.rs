@@ -75,6 +75,10 @@ pub struct CanonicalModel {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub runtime_features: Vec<String>,
 
+    /// Model-selected runtime tool surface. Unknown values are ignored by consumers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_mode: Option<String>,
+
     /// Whether the model supports tool calling
     #[serde(default)]
     pub supports_tools: bool,
@@ -330,6 +334,7 @@ mod tests {
             input_modalities: vec!["text".to_string(), "image".to_string(), "file".to_string()],
             output_modalities: vec!["text".to_string()],
             runtime_features: Vec::new(),
+            tool_mode: None,
             supports_tools: true,
             supports_reasoning: false,
             supports_prompt_cache: false,
@@ -381,6 +386,7 @@ mod tests {
             input_modalities: vec!["text".to_string()],
             output_modalities: vec!["image".to_string()],
             runtime_features: vec!["images_api".to_string()],
+            tool_mode: None,
             supports_tools: false,
             supports_reasoning: false,
             supports_prompt_cache: true,

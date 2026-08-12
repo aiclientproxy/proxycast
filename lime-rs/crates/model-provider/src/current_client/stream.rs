@@ -1,4 +1,4 @@
-use super::{CurrentProviderError, CurrentProviderToolCall};
+use super::{CurrentProviderCustomToolCall, CurrentProviderError, CurrentProviderToolCall};
 use agent_protocol::{anthropic, openai};
 use async_stream::try_stream;
 use futures::{Stream, StreamExt};
@@ -31,29 +31,17 @@ impl ToolCallAccumulator {
         self.id.clone().unwrap_or_else(|| fallback.to_string())
     }
 
-    fn into_call(
-        &mut self,
-        fallback: &str,
-    ) -> Result<Option<CurrentProviderToolCall>, CurrentProviderError> {
+    fn into_call(&mut self, fallback: &str) -> Option<CurrentProviderToolCall> {
         if self.emitted {
-            return Ok(None);
+            return None;
         }
-        let name = self
-            .name
-            .clone()
-            .ok_or_else(|| CurrentProviderError::new("Provider tool call omitted tool name"))?;
-        if name.trim().is_empty() {
-            return Err(CurrentProviderError::new(
-                "Provider tool call omitted tool name",
-            ));
-        }
-        let call = CurrentProviderToolCall::try_from_raw(
+        let call = CurrentProviderToolCall::from_raw(
             self.call_id(fallback),
-            name,
+            self.name.clone().unwrap_or_default(),
             self.arguments.clone(),
-        )?;
+        );
         self.emitted = true;
-        Ok(Some(call))
+        Some(call)
     }
 
     fn begin_input_if_ready(&mut self, fallback: &str) -> Option<(String, String, String)> {
@@ -70,6 +58,49 @@ impl ToolCallAccumulator {
             name.to_string(),
             self.arguments.clone(),
         ))
+    }
+}
+
+#[derive(Debug, Default)]
+struct CustomToolCallAccumulator {
+    id: Option<String>,
+    name: Option<String>,
+    namespace: Option<String>,
+    input: String,
+    emitted: bool,
+    started: bool,
+}
+
+impl CustomToolCallAccumulator {
+    fn call_id(&self, fallback: &str) -> String {
+        self.id.clone().unwrap_or_else(|| fallback.to_string())
+    }
+
+    fn into_call(&mut self, fallback: &str) -> Option<CurrentProviderCustomToolCall> {
+        if self.emitted {
+            return None;
+        }
+        let call = CurrentProviderCustomToolCall {
+            id: self.call_id(fallback),
+            name: self.name.clone().unwrap_or_default(),
+            input: self.input.clone(),
+            namespace: self.namespace.clone(),
+            provider_metadata: Default::default(),
+        };
+        self.emitted = true;
+        Some(call)
+    }
+
+    fn begin_input_if_ready(&mut self, fallback: &str) -> Option<(String, String, String)> {
+        if self.started || self.input.is_empty() {
+            return None;
+        }
+        let name = self.name.as_deref()?.trim();
+        if name.is_empty() {
+            return None;
+        }
+        self.started = true;
+        Some((self.call_id(fallback), name.to_string(), self.input.clone()))
     }
 }
 
@@ -222,7 +253,7 @@ fn take_openai_calls(state: &mut OpenAiStreamState) -> Result<Vec<LlmEvent>, Cur
                 text: arguments,
             });
         }
-        let Some(tool_call) = call.into_call(&format!("call_{index}"))? else {
+        let Some(tool_call) = call.into_call(&format!("call_{index}")) else {
             continue;
         };
         state.emitted_tool_call = true;
@@ -234,6 +265,7 @@ fn take_openai_calls(state: &mut OpenAiStreamState) -> Result<Vec<LlmEvent>, Cur
             id: tool_call.id,
             name: tool_call.name,
             input: tool_call.arguments,
+            raw_arguments: Some(tool_call.raw_arguments),
             provider_executed: None,
             provider_metadata: Default::default(),
         });
@@ -297,6 +329,7 @@ fn openai_usage(usage: openai::StreamUsage) -> Usage {
 struct ResponsesStreamState {
     response_id: Option<String>,
     calls: HashMap<String, ToolCallAccumulator>,
+    custom_calls: HashMap<String, CustomToolCallAccumulator>,
     emitted_calls: HashSet<String>,
     hosted_tools: HostedToolState,
     emitted_tool_call: bool,
@@ -423,6 +456,7 @@ impl ResponsesEventReducer {
                 if let Some(item) = payload.get("item") {
                     observe_active_responses_reasoning_item(item, &mut self.state);
                     absorb_responses_call(item, &mut self.state);
+                    absorb_responses_custom_call(item, &mut self.state);
                     events.extend(hosted_tool_events(
                         item,
                         &mut self.state.hosted_tools,
@@ -476,10 +510,60 @@ impl ResponsesEventReducer {
                 }
                 events.extend(take_responses_call(&mut self.state, &key)?);
             }
+            "response.custom_tool_call_input.delta" => {
+                let key = response_call_key(payload);
+                let call = self.state.custom_calls.entry(key.clone()).or_default();
+                if let Some(call_id) = payload.get("call_id").and_then(Value::as_str) {
+                    call.id = Some(call_id.to_string());
+                }
+                if let Some(name) = payload.get("name").and_then(Value::as_str) {
+                    call.name = Some(name.to_string());
+                }
+                if let Some(namespace) = payload.get("namespace").and_then(Value::as_str) {
+                    call.namespace = Some(namespace.to_string());
+                }
+                if let Some(delta) = payload.get("delta").and_then(Value::as_str) {
+                    call.input.push_str(delta);
+                    if let Some((id, name, input)) = call.begin_input_if_ready(&key) {
+                        events.push(LlmEvent::ToolInputStart {
+                            id: id.clone(),
+                            name: name.clone(),
+                        });
+                        events.push(LlmEvent::ToolInputDelta {
+                            id,
+                            name,
+                            text: input,
+                        });
+                    } else if call.started {
+                        if let Some(name) = call.name.clone() {
+                            events.push(LlmEvent::ToolInputDelta {
+                                id: call.call_id(&key),
+                                name,
+                                text: delta.to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+            "response.custom_tool_call_input.done" => {
+                let key = response_call_key(payload);
+                let call = self.state.custom_calls.entry(key.clone()).or_default();
+                if let Some(call_id) = payload.get("call_id").and_then(Value::as_str) {
+                    call.id = Some(call_id.to_string());
+                }
+                if let Some(name) = payload.get("name").and_then(Value::as_str) {
+                    call.name = Some(name.to_string());
+                }
+                if let Some(input) = payload.get("input").and_then(Value::as_str) {
+                    call.input = input.to_string();
+                }
+                events.extend(take_responses_custom_call(&mut self.state, &key)?);
+            }
             "response.output_item.done" => {
                 if let Some(item) = payload.get("item") {
                     clear_active_responses_reasoning_item(item, &mut self.state);
                     absorb_responses_call(item, &mut self.state);
+                    absorb_responses_custom_call(item, &mut self.state);
                     events.extend(hosted_tool_events(
                         item,
                         &mut self.state.hosted_tools,
@@ -488,6 +572,10 @@ impl ResponsesEventReducer {
                     if item.get("type").and_then(Value::as_str) == Some("function_call") {
                         let key = response_call_key(item);
                         events.extend(take_responses_call(&mut self.state, &key)?);
+                    }
+                    if item.get("type").and_then(Value::as_str) == Some("custom_tool_call") {
+                        let key = response_call_key(item);
+                        events.extend(take_responses_custom_call(&mut self.state, &key)?);
                     }
                 }
             }
@@ -511,6 +599,7 @@ impl ResponsesEventReducer {
                     .flatten()
                 {
                     absorb_responses_call(item, &mut self.state);
+                    absorb_responses_custom_call(item, &mut self.state);
                     events.extend(hosted_tool_events(
                         item,
                         &mut self.state.hosted_tools,
@@ -518,6 +607,7 @@ impl ResponsesEventReducer {
                     )?);
                 }
                 events.extend(take_responses_calls(&mut self.state)?);
+                events.extend(take_responses_custom_calls(&mut self.state)?);
                 events.extend(
                     self.state
                         .text_ids
@@ -691,6 +781,55 @@ fn take_responses_calls(
     Ok(events)
 }
 
+fn take_responses_custom_calls(
+    state: &mut ResponsesStreamState,
+) -> Result<Vec<LlmEvent>, CurrentProviderError> {
+    let keys = state.custom_calls.keys().cloned().collect::<Vec<_>>();
+    let mut events = Vec::new();
+    for key in keys {
+        events.extend(take_responses_custom_call(state, &key)?);
+    }
+    Ok(events)
+}
+
+fn take_responses_custom_call(
+    state: &mut ResponsesStreamState,
+    key: &str,
+) -> Result<Vec<LlmEvent>, CurrentProviderError> {
+    let call = state
+        .custom_calls
+        .get_mut(key)
+        .expect("response custom tool call must be accumulated before emission");
+    let mut events = Vec::new();
+    if let Some((id, name, input)) = call.begin_input_if_ready(key) {
+        events.push(LlmEvent::ToolInputStart {
+            id: id.clone(),
+            name: name.clone(),
+        });
+        events.push(LlmEvent::ToolInputDelta {
+            id,
+            name,
+            text: input,
+        });
+    }
+    let Some(call) = call.into_call(key) else {
+        return Ok(events);
+    };
+    state.emitted_tool_call = true;
+    events.push(LlmEvent::ToolInputEnd {
+        id: call.id.clone(),
+        name: call.name.clone(),
+    });
+    events.push(LlmEvent::CustomToolCall {
+        id: call.id,
+        name: call.name,
+        input: call.input,
+        namespace: call.namespace,
+        provider_metadata: call.provider_metadata,
+    });
+    Ok(events)
+}
+
 fn take_responses_call(
     state: &mut ResponsesStreamState,
     key: &str,
@@ -711,7 +850,7 @@ fn take_responses_call(
             text: arguments,
         });
     }
-    let Some(call) = call.into_call(key)? else {
+    let Some(call) = call.into_call(key) else {
         return Ok(events);
     };
     if state.emitted_calls.insert(call.id.clone()) {
@@ -724,6 +863,7 @@ fn take_responses_call(
             id: call.id,
             name: call.name,
             input: call.arguments,
+            raw_arguments: Some(call.raw_arguments),
             provider_executed: None,
             provider_metadata: Default::default(),
         });
@@ -817,6 +957,32 @@ fn absorb_responses_call(item: &Value, state: &mut ResponsesStreamState) {
     }
 }
 
+fn absorb_responses_custom_call(item: &Value, state: &mut ResponsesStreamState) {
+    if item.get("type").and_then(Value::as_str) != Some("custom_tool_call") {
+        return;
+    }
+    let key = response_call_key(item);
+    let call = state.custom_calls.entry(key).or_default();
+    call.id = item
+        .get("call_id")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or(call.id.clone());
+    call.name = item
+        .get("name")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or(call.name.clone());
+    call.namespace = item
+        .get("namespace")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or(call.namespace.clone());
+    if let Some(input) = item.get("input").and_then(Value::as_str) {
+        call.input = input.to_string();
+    }
+}
+
 #[cfg(test)]
 pub(super) fn response_item_tool_call(
     item: &Value,
@@ -839,7 +1005,7 @@ pub(super) fn response_item_tool_call(
         .and_then(Value::as_str)
         .unwrap_or("{}")
         .to_string();
-    CurrentProviderToolCall::try_from_raw(id, name, arguments).map(Some)
+    Ok(Some(CurrentProviderToolCall::from_raw(id, name, arguments)))
 }
 
 fn responses_usage(value: &Value) -> Usage {
@@ -951,13 +1117,11 @@ pub(super) fn anthropic_sse(
                     if let Some(call) = state
                         .calls
                         .get_mut(&index)
-                        .map(|call| call.into_call(&format!("tool_{index}")))
-                        .transpose()?
-                        .flatten()
+                        .and_then(|call| call.into_call(&format!("tool_{index}")))
                     {
                         state.emitted_tool_call = true;
                         yield LlmEvent::ToolInputEnd { id: call.id.clone(), name: call.name.clone() };
-                        yield LlmEvent::ToolCall { id: call.id, name: call.name, input: call.arguments, provider_executed: None, provider_metadata: Default::default() };
+                        yield LlmEvent::ToolCall { id: call.id, name: call.name, input: call.arguments, raw_arguments: Some(call.raw_arguments), provider_executed: None, provider_metadata: Default::default() };
                     }
                 }
                 anthropic::AnthropicStreamEvent::MessageDelta { delta, usage } => {
@@ -1178,15 +1342,16 @@ mod tests {
     }
 
     #[test]
-    fn openai_tool_call_with_blank_name_fails_closed() {
-        let error = CurrentProviderToolCall::try_from_raw(
+    fn openai_tool_call_with_blank_name_preserves_runtime_repair_input() {
+        let call = CurrentProviderToolCall::from_raw(
             "call-blank-name".to_string(),
             "   ".to_string(),
             "{}".to_string(),
-        )
-        .expect_err("blank tool name must fail closed");
+        );
 
-        assert_eq!(error.message, "Provider tool call omitted tool name");
+        assert_eq!(call.name, "");
+        assert_eq!(call.arguments, json!({}));
+        assert_eq!(call.raw_arguments, "{}");
     }
 
     #[test]
@@ -1208,25 +1373,75 @@ mod tests {
                 "{\"query\":\"latest Rust release\"}".to_string(),
             ))
         );
-        let call = call
-            .into_call("fallback")
-            .expect("complete tool call")
-            .expect("tool call");
+        let call = call.into_call("fallback").expect("tool call");
         assert_eq!(call.name, "WebSearch");
         assert_eq!(call.arguments["query"], "latest Rust release");
     }
 
     #[test]
-    fn tool_call_accumulator_rejects_terminal_arguments_without_name() {
+    fn tool_call_accumulator_preserves_terminal_arguments_without_name() {
         let mut call = ToolCallAccumulator {
             arguments: "{}".to_string(),
             ..Default::default()
         };
 
-        let error = call
+        let call = call
             .into_call("call-1")
-            .expect_err("incomplete tool call must fail closed");
+            .expect("incomplete tool call must reach runtime repair");
 
-        assert_eq!(error.message, "Provider tool call omitted tool name");
+        assert_eq!(call.id, "call-1");
+        assert_eq!(call.name, "");
+        assert_eq!(call.arguments, json!({}));
+    }
+
+    #[test]
+    fn completed_custom_tool_call_emits_complete_input_lifecycle() {
+        let events = ResponsesEventReducer::new(None, false)
+            .push(&json!({
+                "type": "response.completed",
+                "response": {
+                    "id": "response-1",
+                    "output": [{
+                        "type": "custom_tool_call",
+                        "call_id": "custom-call-1",
+                        "name": "run_code",
+                        "namespace": "codemode",
+                        "input": "return 42;"
+                    }]
+                }
+            }))
+            .expect("completed custom tool call")
+            .events;
+
+        assert_eq!(
+            events,
+            vec![
+                LlmEvent::ToolInputStart {
+                    id: "custom-call-1".to_string(),
+                    name: "run_code".to_string(),
+                },
+                LlmEvent::ToolInputDelta {
+                    id: "custom-call-1".to_string(),
+                    name: "run_code".to_string(),
+                    text: "return 42;".to_string(),
+                },
+                LlmEvent::ToolInputEnd {
+                    id: "custom-call-1".to_string(),
+                    name: "run_code".to_string(),
+                },
+                LlmEvent::CustomToolCall {
+                    id: "custom-call-1".to_string(),
+                    name: "run_code".to_string(),
+                    input: "return 42;".to_string(),
+                    namespace: Some("codemode".to_string()),
+                    provider_metadata: Default::default(),
+                },
+                LlmEvent::Finish {
+                    reason: FinishReason::ToolCall,
+                    usage: None,
+                    response_id: Some("response-1".to_string()),
+                },
+            ]
+        );
     }
 }

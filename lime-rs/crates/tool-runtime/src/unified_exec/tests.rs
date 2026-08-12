@@ -5,6 +5,25 @@ use crate::execution_process::{
 };
 use async_trait::async_trait;
 
+#[cfg(target_os = "windows")]
+#[test]
+fn powershell_login_flag_controls_profile_loading() {
+    assert_eq!(
+        build_shell_command("echo hello", Some("pwsh.exe"), true),
+        vec!["pwsh.exe", "-NonInteractive", "-Command", "echo hello",]
+    );
+    assert_eq!(
+        build_shell_command("echo hello", Some("pwsh.exe"), false),
+        vec![
+            "pwsh.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "echo hello",
+        ]
+    );
+}
+
 #[derive(Clone, Default)]
 struct FixtureGateway {
     state: Arc<Mutex<HashMap<String, FixtureProcess>>>,

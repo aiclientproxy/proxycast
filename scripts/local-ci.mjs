@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import process from "node:process";
 
 import { withNativeSystemPath } from "./lib/native-executable-env.mjs";
+import { resolveRustyV8CargoEnv } from "./lib/rusty-v8-artifacts.mjs";
 import { planQualityTasks, resolveDiffBase } from "./quality-task-planner.mjs";
 
 const options = parseArgs(process.argv.slice(2));
@@ -82,10 +83,15 @@ Lime 本地校验入口
 
 function runCommand(command, args) {
   console.log(`\n[local-ci] > ${command} ${args.join(" ")}`);
+  const baseEnv = withNativeSystemPath(process.env);
+  const env =
+    command === cargoCommand
+      ? { ...baseEnv, ...resolveRustyV8CargoEnv({ env: baseEnv }) }
+      : baseEnv;
   const result = spawnSync(command, args, {
     cwd: rootDir,
     stdio: "inherit",
-    env: withNativeSystemPath(process.env),
+    env,
   });
 
   if (typeof result.status === "number" && result.status !== 0) {

@@ -76,6 +76,15 @@ fn normalize_identifier(value: &str) -> String {
     value.trim().to_ascii_lowercase()
 }
 
+fn normalize_model_tool_mode(value: Option<&str>) -> Option<String> {
+    match value.map(str::trim).filter(|value| !value.is_empty()) {
+        Some("direct") => Some("direct".to_string()),
+        Some("code_mode") => Some("code_mode".to_string()),
+        Some("code_mode_only") => Some("code_mode_only".to_string()),
+        _ => None,
+    }
+}
+
 fn build_search_text(parts: &[Option<String>]) -> String {
     parts
         .iter()
@@ -269,6 +278,7 @@ fn parse_runtime_feature(value: &str) -> Option<ModelRuntimeFeature> {
         "tool_calling" | "tools" | "function_calling" | "functions" => {
             Some(ModelRuntimeFeature::ToolCalling)
         }
+        "custom_tools" => Some(ModelRuntimeFeature::CustomTools),
         "json_schema" | "json_mode" | "structured_output" => Some(ModelRuntimeFeature::JsonSchema),
         "reasoning" | "thinking" => Some(ModelRuntimeFeature::Reasoning),
         "prompt_cache" | "prompt_caching" => Some(ModelRuntimeFeature::PromptCache),
@@ -364,6 +374,9 @@ fn merge_api_capability_signals(
             }
             "tools" | "tool_calling" | "function_calling" | "functions" => {
                 push_unique(runtime_features, ModelRuntimeFeature::ToolCalling);
+            }
+            "custom_tools" => {
+                push_unique(runtime_features, ModelRuntimeFeature::CustomTools);
             }
             "json_mode" | "json_schema" | "structured_output" => {
                 push_unique(runtime_features, ModelRuntimeFeature::JsonSchema);
@@ -3136,6 +3149,7 @@ impl ModelRegistryService {
                 output_modalities: None,
                 modalities: None,
                 runtime_features: None,
+                tool_mode: None,
                 vision_supported: None,
                 capabilities: None,
                 supported_parameters: None,
@@ -3235,6 +3249,7 @@ impl ModelRegistryService {
                 output_modalities: None,
                 modalities: None,
                 runtime_features: None,
+                tool_mode: None,
                 vision_supported: None,
                 capabilities: None,
                 supported_parameters: None,
@@ -3277,6 +3292,7 @@ impl ModelRegistryService {
                 output_modalities: None,
                 modalities: None,
                 runtime_features: None,
+                tool_mode: None,
                 vision_supported: None,
                 capabilities: None,
                 supported_parameters: None,
@@ -3426,6 +3442,11 @@ impl ModelRegistryService {
             canonical_model: canonical_model.as_ref(),
         });
 
+        let tool_mode = normalize_model_tool_mode(model.tool_mode.as_deref().or_else(|| {
+            canonical_model
+                .as_ref()
+                .and_then(|model| model.tool_mode.as_deref())
+        }));
         EnhancedModelMetadata {
             id: model.id.clone(),
             display_name,
@@ -3444,6 +3465,7 @@ impl ModelRegistryService {
             input_modalities: taxonomy.input_modalities,
             output_modalities: taxonomy.output_modalities,
             runtime_features: taxonomy.runtime_features,
+            tool_mode,
             multi_agent_version: None,
             deployment_source: taxonomy.deployment_source,
             management_plane: taxonomy.management_plane,
@@ -3487,6 +3509,7 @@ impl ModelRegistryService {
                     output_modalities: None,
                     modalities: None,
                     runtime_features: None,
+                    tool_mode: None,
                     vision_supported: None,
                     capabilities: None,
                     supported_parameters: None,
@@ -3676,6 +3699,8 @@ struct ApiModelResponse {
     modalities: Option<ApiModelModalitiesResponse>,
     #[serde(default, alias = "runtimeFeatures")]
     runtime_features: Option<serde_json::Value>,
+    #[serde(default, alias = "toolMode")]
+    tool_mode: Option<String>,
     #[serde(
         default,
         alias = "visionSupported",
@@ -3857,9 +3882,10 @@ pub struct FetchModelsResult {
 mod tests {
     use super::{
         infer_model_capabilities, infer_model_taxonomy, infer_runtime_features,
-        infer_vision_capability, ModelFetchErrorKind, ModelFetchProtocol, ModelFetchSource,
-        ModelRegistryService, ModelTaxonomyInput, LIME_TENANT_HEADER,
-        PROVIDER_MODELS_CACHE_TAXONOMY_VERSION, PROVIDER_MODELS_CACHE_TTL_SECONDS,
+        infer_vision_capability, normalize_model_tool_mode, ModelFetchErrorKind,
+        ModelFetchProtocol, ModelFetchSource, ModelRegistryService, ModelTaxonomyInput,
+        LIME_TENANT_HEADER, PROVIDER_MODELS_CACHE_TAXONOMY_VERSION,
+        PROVIDER_MODELS_CACHE_TTL_SECONDS,
     };
     use lime_core::database::dao::api_key_provider::ApiProviderType;
     use lime_core::database::dao::route_state::RouteStateDao;
@@ -4097,6 +4123,76 @@ mod tests {
                 .runtime_features
                 .contains(&ModelRuntimeFeature::ToolCalling));
         }
+    }
+
+    #[test]
+    fn test_canonical_custom_tools_declaration_is_exact_to_gpt_5_2() {
+        let (service, _db) = setup_cache_service();
+        let response = ModelRegistryService::parse_openai_models_response(
+            r#"{"data":[{"id":"gpt-5.2"},{"id":"gpt-5.2-pro"}]}"#,
+        )
+        .expect("parse OpenAI models response");
+        let mut models = response
+            .into_iter()
+            .map(|model| service.convert_api_model(model, "openai", 0));
+        let gpt_5_2 = models.next().expect("gpt-5.2");
+        let gpt_5_2_pro = models.next().expect("gpt-5.2-pro");
+
+        assert_eq!(
+            gpt_5_2.capability_provenance,
+            ModelCapabilityProvenance::Canonical
+        );
+        assert!(gpt_5_2
+            .runtime_features
+            .contains(&ModelRuntimeFeature::CustomTools));
+        assert!(gpt_5_2
+            .runtime_features
+            .contains(&ModelRuntimeFeature::Streaming));
+        assert!(gpt_5_2
+            .runtime_features
+            .contains(&ModelRuntimeFeature::ToolCalling));
+        assert!(!gpt_5_2_pro
+            .runtime_features
+            .contains(&ModelRuntimeFeature::CustomTools));
+    }
+
+    #[test]
+    fn test_model_tool_mode_normalization_fails_closed() {
+        assert_eq!(
+            normalize_model_tool_mode(Some("direct")),
+            Some("direct".into())
+        );
+        assert_eq!(
+            normalize_model_tool_mode(Some(" code_mode ")),
+            Some("code_mode".into())
+        );
+        assert_eq!(
+            normalize_model_tool_mode(Some("code_mode_only")),
+            Some("code_mode_only".into())
+        );
+        assert_eq!(normalize_model_tool_mode(Some("code_interpreter")), None);
+        assert_eq!(normalize_model_tool_mode(None), None);
+    }
+
+    #[test]
+    fn test_provider_model_tool_mode_ingestion_is_explicit() {
+        let (service, _db) = setup_cache_service();
+        let response = ModelRegistryService::parse_openai_models_response(
+            r#"{"data":[
+                {"id":"fixture-code-mode","toolMode":"code_mode"},
+                {"id":"fixture-unknown-mode","tool_mode":"code_interpreter"}
+            ]}"#,
+        )
+        .expect("parse provider model tool modes");
+        let mut models = response
+            .into_iter()
+            .map(|model| service.convert_api_model(model, "fixture-provider", 0));
+
+        assert_eq!(
+            models.next().expect("code mode model").tool_mode.as_deref(),
+            Some("code_mode")
+        );
+        assert_eq!(models.next().expect("unknown mode model").tool_mode, None);
     }
 
     #[test]

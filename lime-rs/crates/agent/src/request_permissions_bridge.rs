@@ -55,7 +55,10 @@ mod tests {
     async fn bridge_emits_typed_permission_action_and_resumes_exact_waiter() {
         let state = Arc::new(ActionRequiredState::default());
         let registry = RuntimeSessionRegistry::default();
-        let session = registry.get_or_create("session-1").await;
+        let session = registry
+            .get_or_create("session-1", "thread-1")
+            .await
+            .expect("bind permission bridge session actor");
         let (event_sender, mut event_receiver) = tokio::sync::mpsc::unbounded_channel();
         let (result_tx, result_rx) = tokio::sync::oneshot::channel();
         let result_tx = Arc::new(StdMutex::new(Some(result_tx)));

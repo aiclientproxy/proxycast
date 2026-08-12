@@ -70,7 +70,10 @@ function scriptedToolRequired(scripted) {
 }
 
 function ensureScriptedToolAvailable(scripted, body) {
-  if (scripted?.type !== "tool_call" || !scriptedToolRequired(scripted)) {
+  if (
+    !["tool_call", "custom_tool_call"].includes(scripted?.type) ||
+    !scriptedToolRequired(scripted)
+  ) {
     return;
   }
 
@@ -342,6 +345,100 @@ function sendJsonChatCompletion(response, { model, content }) {
   });
 }
 
+function sendStreamingResponsesText(response, { content }) {
+  const responseId = `resp-fixture-${Date.now()}`;
+  const itemId = `message-fixture-${Date.now()}`;
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+  });
+  writeSse(response, {
+    type: "response.output_text.delta",
+    item_id: itemId,
+    delta: content,
+  });
+  writeSse(response, {
+    type: "response.completed",
+    response: {
+      id: responseId,
+      output: [],
+      usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+        total_tokens: 2,
+      },
+    },
+  });
+  response.end();
+}
+
+function sendStreamingResponsesCustomToolCall(response, { scripted }) {
+  const callId = scripted.id || `custom-call-fixture-${Date.now()}`;
+  const name = scriptedToolName(scripted);
+  const input = String(scripted.input ?? scripted.arguments ?? "");
+  const namespace = String(scripted.namespace || "").trim() || undefined;
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+  });
+  writeSse(response, {
+    type: "response.output_item.added",
+    item: {
+      type: "custom_tool_call",
+      call_id: callId,
+      name,
+      ...(namespace ? { namespace } : {}),
+    },
+  });
+  writeSse(response, {
+    type: "response.custom_tool_call_input.delta",
+    call_id: callId,
+    name,
+    delta: input,
+    ...(namespace ? { namespace } : {}),
+  });
+  writeSse(response, {
+    type: "response.custom_tool_call_input.done",
+    call_id: callId,
+    name,
+    input,
+    ...(namespace ? { namespace } : {}),
+  });
+  writeSse(response, {
+    type: "response.completed",
+    response: {
+      id: `resp-fixture-${Date.now()}`,
+      output: [],
+      usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+        total_tokens: 2,
+      },
+    },
+  });
+  response.end();
+}
+
+function sendScriptedResponses(response, { scripted, body }) {
+  if (!scripted || typeof scripted !== "object") {
+    return false;
+  }
+  if (scripted.type === "custom_tool_call") {
+    ensureScriptedToolAvailable(scripted, body);
+    sendStreamingResponsesCustomToolCall(response, { scripted });
+    return true;
+  }
+  if (scripted.type === "text" || typeof scripted.content === "string") {
+    sendStreamingResponsesText(response, {
+      content: String(scripted.content || ""),
+    });
+    return true;
+  }
+  return false;
+}
+
 function buildProviderDescriptor({ baseUrl, model, apiKey }) {
   return {
     providerPreference: "fixture-openai",
@@ -470,6 +567,10 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
     String(options.apiKey || DEFAULT_FIXTURE_API_KEY).trim() ||
     DEFAULT_FIXTURE_API_KEY;
   const content = String(options.content || "MO_OK");
+  const modelRuntimeFeatures = Array.isArray(options.modelRuntimeFeatures)
+    ? options.modelRuntimeFeatures.map(String)
+    : ["streaming", "tool_calling"];
+  const modelToolMode = String(options.modelToolMode || "").trim() || null;
   const scriptedResponses = normalizeScriptedResponses(
     options.scriptedResponses,
   );
@@ -479,6 +580,7 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
   };
   let scriptedIndex = 0;
   const requests = [];
+  const modelRequests = [];
   const connectionDiagnostics = [];
   const connectionDiagnosticsEnabled =
     options.connectionDiagnostics === true ||
@@ -543,6 +645,13 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
     let requestRecord = null;
 
     if (request.method === "GET" && url.pathname === "/v1/models") {
+      modelRequests.push({
+        method: request.method,
+        path: url.pathname,
+        requestTarget: request.url || null,
+        host: request.headers.host || null,
+        authorization: request.headers.authorization || null,
+      });
       jsonResponse(response, 200, {
         object: "list",
         data: [
@@ -554,7 +663,8 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
             task_families: ["chat"],
             input_modalities: ["text"],
             output_modalities: ["text"],
-            runtime_features: ["streaming", "tool_calling"],
+            runtime_features: modelRuntimeFeatures,
+            ...(modelToolMode ? { tool_mode: modelToolMode } : {}),
             capabilities: {
               tools: true,
               streaming: true,
@@ -566,7 +676,10 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
       return;
     }
 
-    if (request.method !== "POST" || url.pathname !== "/v1/chat/completions") {
+    if (
+      request.method !== "POST" ||
+      !["/v1/chat/completions", "/v1/responses"].includes(url.pathname)
+    ) {
       jsonResponse(response, 404, {
         error: {
           message: `fixture route not found: ${request.method} ${url.pathname}`,
@@ -581,6 +694,8 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
       requestRecord = {
         method: request.method,
         path: url.pathname,
+        requestTarget: request.url || null,
+        host: request.headers.host || null,
         authorization: request.headers.authorization || null,
         body,
       };
@@ -605,18 +720,23 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
             requestIndex,
             scriptedIndex,
           });
-      if (
-        scripted &&
-        sendScriptedChatCompletion(response, {
-          model: responseModel,
-          scripted,
-          stream: body?.stream === true,
-          body,
-        })
-      ) {
+      const scriptedSent =
+        url.pathname === "/v1/responses"
+          ? sendScriptedResponses(response, { scripted, body })
+          : sendScriptedChatCompletion(response, {
+              model: responseModel,
+              scripted,
+              stream: body?.stream === true,
+              body,
+            });
+      if (scripted && scriptedSent) {
         requestRecord.responseKind = scripted.type || "scripted";
         requestRecord.responseToolName = scriptedToolName(scripted) || null;
         scriptedIndex += 1;
+        return;
+      }
+      if (url.pathname === "/v1/responses") {
+        sendStreamingResponsesText(response, { content });
         return;
       }
       const shouldCallStructuredOutput = hasStructuredOutputTool(body);
@@ -690,6 +810,7 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
   return {
     baseUrl,
     requests,
+    modelRequests,
     connectionDiagnostics,
     provider: buildProviderDescriptor({ baseUrl, model, apiKey }),
     close: async () => {

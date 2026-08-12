@@ -7,13 +7,23 @@ pub enum RuntimeToolExposure {
     #[default]
     Direct,
     Deferred,
+    DeferredModelOnly,
     DirectModelOnly,
+    CodeModeOnly,
     Hidden,
 }
 
 impl RuntimeToolExposure {
     pub fn is_direct(self) -> bool {
         matches!(self, Self::Direct | Self::DirectModelOnly)
+    }
+
+    pub fn is_deferred(self) -> bool {
+        matches!(self, Self::Deferred | Self::DeferredModelOnly)
+    }
+
+    pub fn is_available_in_code_mode(self) -> bool {
+        matches!(self, Self::Direct | Self::Deferred | Self::CodeModeOnly)
     }
 }
 
@@ -48,6 +58,19 @@ mod tests {
         assert!(RuntimeToolExposure::Direct.is_direct());
         assert!(RuntimeToolExposure::DirectModelOnly.is_direct());
         assert!(!RuntimeToolExposure::Deferred.is_direct());
+        assert!(!RuntimeToolExposure::DeferredModelOnly.is_direct());
+        assert!(!RuntimeToolExposure::CodeModeOnly.is_direct());
         assert!(!RuntimeToolExposure::Hidden.is_direct());
+
+        assert!(RuntimeToolExposure::Deferred.is_deferred());
+        assert!(RuntimeToolExposure::DeferredModelOnly.is_deferred());
+        assert!(!RuntimeToolExposure::Direct.is_deferred());
+
+        assert!(RuntimeToolExposure::Direct.is_available_in_code_mode());
+        assert!(RuntimeToolExposure::Deferred.is_available_in_code_mode());
+        assert!(RuntimeToolExposure::CodeModeOnly.is_available_in_code_mode());
+        assert!(!RuntimeToolExposure::DirectModelOnly.is_available_in_code_mode());
+        assert!(!RuntimeToolExposure::DeferredModelOnly.is_available_in_code_mode());
+        assert!(!RuntimeToolExposure::Hidden.is_available_in_code_mode());
     }
 }

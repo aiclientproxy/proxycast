@@ -142,10 +142,10 @@ fn request_with_history() -> CurrentProviderRequest {
         )]),
     ])
     .with_system_prompt(Some("Be concise.".to_string()))
-    .with_tools(vec![CurrentProviderTool {
-        name: "lookup".to_string(),
-        description: "Lookup data".to_string(),
-        input_schema: json!({
+    .with_tools(vec![CurrentProviderTool::function(
+        "lookup",
+        "Lookup data",
+        json!({
             "type": "object",
             "properties": {
                 "query": { "type": ["string", "null"] },
@@ -154,7 +154,7 @@ fn request_with_history() -> CurrentProviderRequest {
             "required": ["query", "missing"],
             "additionalProperties": false
         }),
-    }])
+    )])
     .with_generation(GenerationOptions {
         max_tokens: Some(256),
         temperature: Some(0.2),

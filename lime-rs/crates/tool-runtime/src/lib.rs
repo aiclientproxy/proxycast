@@ -1,5 +1,6 @@
 pub mod agent_control;
 pub mod apply_patch;
+pub mod code_mode;
 pub mod command_semantics;
 pub mod current_time;
 pub mod execution_approval;

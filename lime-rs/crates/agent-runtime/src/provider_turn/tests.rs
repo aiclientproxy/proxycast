@@ -18,12 +18,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::sync::oneshot;
+use tool_runtime::code_mode::{
+    RuntimeCodeModeCellId, RuntimeCodeModeExecuteRequest, RuntimeCodeModeFuture,
+    RuntimeCodeModeNestedToolCall, RuntimeCodeModeResponse, RuntimeCodeModeSession,
+    RuntimeCodeModeSessionDelegate, RuntimeCodeModeSessionHandle, RuntimeCodeModeStartedCell,
+    RuntimeCodeModeWaitOutcome, RuntimeCodeModeWaitRequest,
+};
 use tool_runtime::tool_executor::{
     RuntimeToolExecutionFuture, RuntimeToolExecutionRequest, RuntimeToolExecutionResult,
     RuntimeToolExecutor,
 };
 use tool_runtime::tool_lifecycle::{
-    ToolLifecycleEmissionFuture, ToolLifecycleEvent, ToolLifecyclePhase,
+    ToolLifecycleEmissionFuture, ToolLifecycleEvent, ToolLifecyclePhase, ToolOutputDeltaEvent,
 };
 
 #[test]
@@ -222,6 +228,50 @@ impl CurrentProvider for HangingFirstEventProvider {
             {
                 let _ = sender.send(());
             }
+            let stream: CurrentProviderStream = Box::pin(stream::pending());
+            Ok(stream)
+        })
+    }
+}
+
+struct ToolCallThenHangingProvider {
+    attempt: AtomicUsize,
+    requests: Mutex<Vec<CurrentProviderRequest>>,
+}
+
+impl CurrentProvider for ToolCallThenHangingProvider {
+    fn stream<'a>(
+        &'a self,
+        request: CurrentProviderRequest,
+    ) -> BoxFuture<'a, Result<CurrentProviderStream, CurrentProviderError>> {
+        self.requests.lock().expect("record request").push(request);
+        if self.attempt.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Box::pin(async move {
+                let stream: CurrentProviderStream = Box::pin(stream::iter([
+                    Ok(CanonicalLlmEvent::ToolCall {
+                        id: "call-timeout".to_string(),
+                        name: "read_file".to_string(),
+                        input: serde_json::json!({
+                            "file_path": " README.md ",
+                            "start_line": "2"
+                        }),
+                        raw_arguments: Some(
+                            r#"{"file_path":" README.md ","start_line":"2"}"#.to_string(),
+                        ),
+                        provider_executed: None,
+                        provider_metadata: Default::default(),
+                    }),
+                    Ok(CanonicalLlmEvent::Finish {
+                        reason: FinishReason::ToolCall,
+                        usage: None,
+                        response_id: Some("response-tool".to_string()),
+                    }),
+                ]));
+                Ok(stream)
+            });
+        }
+
+        Box::pin(async move {
             let stream: CurrentProviderStream = Box::pin(stream::pending());
             Ok(stream)
         })
@@ -445,6 +495,320 @@ impl RuntimeToolExecutor for CountingTool {
     }
 }
 
+struct RecordingCodeModeSession {
+    requests: Mutex<Vec<(String, String, usize, bool)>>,
+    responses: Mutex<VecDeque<Result<RuntimeCodeModeResponse, String>>>,
+    wait_requests: Mutex<Vec<(String, u64)>>,
+    wait_responses: Mutex<VecDeque<Result<RuntimeCodeModeWaitOutcome, String>>>,
+    terminations: Mutex<Vec<String>>,
+}
+
+impl RecordingCodeModeSession {
+    fn new(responses: Vec<Result<RuntimeCodeModeResponse, String>>) -> Self {
+        Self {
+            requests: Mutex::new(Vec::new()),
+            responses: Mutex::new(VecDeque::from(responses)),
+            wait_requests: Mutex::new(Vec::new()),
+            wait_responses: Mutex::new(VecDeque::new()),
+            terminations: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn with_wait_responses(
+        mut self,
+        responses: Vec<Result<RuntimeCodeModeWaitOutcome, String>>,
+    ) -> Self {
+        self.wait_responses = Mutex::new(VecDeque::from(responses));
+        self
+    }
+
+    fn requests(&self) -> Vec<(String, String, usize, bool)> {
+        self.requests.lock().expect("code mode requests").clone()
+    }
+
+    fn terminations(&self) -> Vec<String> {
+        self.terminations
+            .lock()
+            .expect("code mode terminations")
+            .clone()
+    }
+
+    fn wait_requests(&self) -> Vec<(String, u64)> {
+        self.wait_requests
+            .lock()
+            .expect("code mode wait requests")
+            .clone()
+    }
+}
+
+impl RuntimeCodeModeSession for RecordingCodeModeSession {
+    fn execute<'a>(
+        &'a self,
+        request: RuntimeCodeModeExecuteRequest,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeStartedCell> {
+        Box::pin(async move {
+            self.requests
+                .lock()
+                .expect("record code mode request")
+                .push((
+                    request.tool_call_id,
+                    request.source,
+                    request.enabled_tools.len(),
+                    request.cancellation_token.is_some(),
+                ));
+            let response = self
+                .responses
+                .lock()
+                .expect("take code mode response")
+                .pop_front()
+                .unwrap_or_else(|| Err("missing code mode response".to_string()))?;
+            let cell_id = response.cell_id().clone();
+            Ok(RuntimeCodeModeStartedCell::new(
+                cell_id,
+                Box::pin(async move { Ok(response) }),
+            ))
+        })
+    }
+
+    fn wait<'a>(
+        &'a self,
+        request: RuntimeCodeModeWaitRequest,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeWaitOutcome> {
+        Box::pin(async move {
+            self.wait_requests
+                .lock()
+                .expect("record code mode wait")
+                .push((request.cell_id.to_string(), request.yield_time_ms));
+            self.wait_responses
+                .lock()
+                .expect("take code mode wait response")
+                .pop_front()
+                .unwrap_or_else(|| Err("missing code mode wait response".to_string()))
+        })
+    }
+
+    fn terminate<'a>(
+        &'a self,
+        cell_id: RuntimeCodeModeCellId,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeWaitOutcome> {
+        Box::pin(async move {
+            self.terminations
+                .lock()
+                .expect("record code mode terminate")
+                .push(cell_id.to_string());
+            Ok(RuntimeCodeModeWaitOutcome::LiveCell(
+                RuntimeCodeModeResponse::Terminated {
+                    cell_id,
+                    output: String::new(),
+                },
+            ))
+        })
+    }
+
+    fn shutdown(&self) -> RuntimeCodeModeFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
+struct NestedDispatchCodeModeSession;
+
+impl RuntimeCodeModeSession for NestedDispatchCodeModeSession {
+    fn execute<'a>(
+        &'a self,
+        _request: RuntimeCodeModeExecuteRequest,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeStartedCell> {
+        Box::pin(async {
+            let cell_id = RuntimeCodeModeCellId::new("cell-nested-provider-turn");
+            Ok(RuntimeCodeModeStartedCell::new(
+                cell_id.clone(),
+                Box::pin(async move {
+                    Ok(RuntimeCodeModeResponse::Result {
+                        cell_id,
+                        output: "unused".to_string(),
+                        error_text: None,
+                    })
+                }),
+            ))
+        })
+    }
+
+    fn execute_with_delegate<'a>(
+        &'a self,
+        request: RuntimeCodeModeExecuteRequest,
+        delegate: Option<Arc<dyn RuntimeCodeModeSessionDelegate>>,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeStartedCell> {
+        Box::pin(async move {
+            let cell_id = RuntimeCodeModeCellId::new("cell-nested-provider-turn");
+            let delegate = delegate.expect("provider turn must bind nested delegate");
+            let tool_call_id = request.tool_call_id;
+            Ok(RuntimeCodeModeStartedCell::new(
+                cell_id.clone(),
+                Box::pin(async move {
+                    delegate
+                        .notify(
+                            tool_call_id,
+                            cell_id.clone(),
+                            "nested tool starting".to_string(),
+                            tokio_util::sync::CancellationToken::new(),
+                        )
+                        .await?;
+                    let nested = delegate
+                        .invoke_tool(
+                            RuntimeCodeModeNestedToolCall {
+                                cell_id: cell_id.clone(),
+                                runtime_tool_call_id: "nested-read-1".to_string(),
+                                tool_name: "read".to_string(),
+                                input: Some(serde_json::json!({"path": "README.md"})),
+                            },
+                            tokio_util::sync::CancellationToken::new(),
+                        )
+                        .await?;
+                    Ok(RuntimeCodeModeResponse::Result {
+                        cell_id,
+                        output: nested.to_string(),
+                        error_text: None,
+                    })
+                }),
+            ))
+        })
+    }
+
+    fn wait<'a>(
+        &'a self,
+        request: RuntimeCodeModeWaitRequest,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeWaitOutcome> {
+        Box::pin(async move {
+            Ok(RuntimeCodeModeWaitOutcome::MissingCell(
+                RuntimeCodeModeResponse::Result {
+                    cell_id: request.cell_id,
+                    output: String::new(),
+                    error_text: Some("cell not found".to_string()),
+                },
+            ))
+        })
+    }
+
+    fn terminate<'a>(
+        &'a self,
+        cell_id: RuntimeCodeModeCellId,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeWaitOutcome> {
+        Box::pin(async move {
+            Ok(RuntimeCodeModeWaitOutcome::MissingCell(
+                RuntimeCodeModeResponse::Result {
+                    cell_id,
+                    output: String::new(),
+                    error_text: Some("cell not found".to_string()),
+                },
+            ))
+        })
+    }
+
+    fn shutdown(&self) -> RuntimeCodeModeFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
+struct HangingCodeModeSession {
+    started: Mutex<Option<oneshot::Sender<()>>>,
+    terminations: Mutex<Vec<String>>,
+}
+
+impl RuntimeCodeModeSession for HangingCodeModeSession {
+    fn execute<'a>(
+        &'a self,
+        _request: RuntimeCodeModeExecuteRequest,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeStartedCell> {
+        Box::pin(async move {
+            if let Some(started) = self.started.lock().expect("code mode started").take() {
+                let _ = started.send(());
+            }
+            Ok(RuntimeCodeModeStartedCell::new(
+                RuntimeCodeModeCellId::new("cell-hanging"),
+                Box::pin(std::future::pending()),
+            ))
+        })
+    }
+
+    fn wait<'a>(
+        &'a self,
+        _request: RuntimeCodeModeWaitRequest,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeWaitOutcome> {
+        Box::pin(async { Err("unexpected code mode wait".to_string()) })
+    }
+
+    fn terminate<'a>(
+        &'a self,
+        cell_id: RuntimeCodeModeCellId,
+    ) -> RuntimeCodeModeFuture<'a, RuntimeCodeModeWaitOutcome> {
+        Box::pin(async move {
+            self.terminations
+                .lock()
+                .expect("record hanging termination")
+                .push(cell_id.to_string());
+            Ok(RuntimeCodeModeWaitOutcome::LiveCell(
+                RuntimeCodeModeResponse::Terminated {
+                    cell_id,
+                    output: String::new(),
+                },
+            ))
+        })
+    }
+
+    fn shutdown(&self) -> RuntimeCodeModeFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
+struct LateCompletingTool {
+    calls: AtomicUsize,
+    started: Mutex<Option<oneshot::Sender<()>>>,
+    release_after_cancel: Mutex<Option<oneshot::Receiver<()>>>,
+    late_completed: Mutex<Option<oneshot::Sender<()>>>,
+}
+
+impl RuntimeToolExecutor for LateCompletingTool {
+    fn execute<'a>(
+        &'a self,
+        request: RuntimeToolExecutionRequest<'a>,
+    ) -> RuntimeToolExecutionFuture<'a> {
+        Box::pin(async move {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let release_after_cancel = self
+                .release_after_cancel
+                .lock()
+                .expect("late completion release")
+                .take()
+                .expect("late completion release receiver");
+            let late_completed = self
+                .late_completed
+                .lock()
+                .expect("late completion sender")
+                .take()
+                .expect("late completion sender");
+            let (result_sender, result_receiver) = oneshot::channel();
+            if let Some(started) = self.started.lock().expect("tool started sender").take() {
+                let _ = started.send(());
+            }
+            let tool_name = request.tool_name.to_string();
+            tokio::spawn(async move {
+                let _ = release_after_cancel.await;
+                let result = RuntimeToolExecutionResult::new(
+                    true,
+                    format!("late success from {tool_name}"),
+                    None,
+                    Default::default(),
+                );
+                let _ = result_sender.send(result);
+                let _ = late_completed.send(());
+            });
+
+            result_receiver.await.map_err(|_| {
+                RuntimeToolExecutionError::new("late tool result channel closed", None)
+            })
+        })
+    }
+}
+
 struct SequencedToolStepSnapshotSource {
     snapshots: Mutex<VecDeque<RuntimeToolStepSnapshot>>,
 }
@@ -490,11 +854,16 @@ impl RuntimeToolExecutor for ParallelProbe {
 #[derive(Default)]
 struct RecordingLifecycleEmitter {
     events: Mutex<Vec<ToolLifecycleEvent>>,
+    output_deltas: Mutex<Vec<ToolOutputDeltaEvent>>,
 }
 
 impl RecordingLifecycleEmitter {
     fn events(&self) -> Vec<ToolLifecycleEvent> {
         self.events.lock().expect("lifecycle events").clone()
+    }
+
+    fn output_deltas(&self) -> Vec<ToolOutputDeltaEvent> {
+        self.output_deltas.lock().expect("output deltas").clone()
     }
 }
 
@@ -504,6 +873,18 @@ impl ToolLifecycleEmitter for RecordingLifecycleEmitter {
             self.events
                 .lock()
                 .expect("record lifecycle event")
+                .push(event);
+        })
+    }
+
+    fn emit_output_delta<'a>(
+        &'a self,
+        event: ToolOutputDeltaEvent,
+    ) -> ToolLifecycleEmissionFuture<'a> {
+        Box::pin(async move {
+            self.output_deltas
+                .lock()
+                .expect("record output delta")
                 .push(event);
         })
     }
@@ -779,6 +1160,7 @@ async fn provider_metadata_is_deduplicated_across_sampling_steps() {
             id: "call-1".to_string(),
             name: "Read".to_string(),
             input: serde_json::json!({ "path": "README.md" }),
+            raw_arguments: None,
             provider_executed: None,
             provider_metadata: Default::default(),
         }),
@@ -887,6 +1269,7 @@ async fn reasoning_summary_and_content_share_item_but_only_content_enters_provid
                 id: "call-1".to_string(),
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
+                raw_arguments: None,
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -993,6 +1376,7 @@ async fn each_sampling_attempt_emits_independent_provider_phase_trace() {
                 id: "call-1".to_string(),
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
+                raw_arguments: None,
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -1206,6 +1590,7 @@ async fn max_turns_stops_before_starting_an_extra_provider_request() {
                 id: call_id.to_string(),
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
+                raw_arguments: None,
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -1300,6 +1685,7 @@ async fn provider_token_budget_stops_before_tool_execution_and_next_sampling() {
             id: "call-1".to_string(),
             name: "Read".to_string(),
             input: serde_json::json!({ "path": "README.md" }),
+            raw_arguments: None,
             provider_executed: None,
             provider_metadata: Default::default(),
         }),
@@ -1404,6 +1790,7 @@ async fn turn_executes_tool_then_continues_with_tool_result_transcript() {
                 id: "call-1".to_string(),
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
+                raw_arguments: None,
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -1516,6 +1903,7 @@ async fn provider_executed_web_search_emits_item_without_local_execution() {
             id: "ws_1".to_string(),
             name: "web_search".to_string(),
             input: serde_json::json!({ "type": "search", "query": "Rust release" }),
+            raw_arguments: None,
             provider_executed: Some(true),
             provider_metadata: ProviderMetadata::from([(
                 "raw_response_item".to_string(),
@@ -1639,6 +2027,7 @@ async fn each_sampling_step_uses_a_fresh_definition_and_executor_snapshot() {
                 id: "call-1".to_string(),
                 name: "FirstTool".to_string(),
                 input: serde_json::json!({}),
+                raw_arguments: None,
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -1709,8 +2098,8 @@ async fn each_sampling_step_uses_a_fresh_definition_and_executor_snapshot() {
 
     let requests = requests.lock().expect("recorded requests");
     assert_eq!(requests.len(), 2);
-    assert_eq!(requests[0].tools[0].name, "FirstTool");
-    assert_eq!(requests[1].tools[0].name, "SecondTool");
+    assert_eq!(requests[0].tools[0].name(), "FirstTool");
+    assert_eq!(requests[1].tools[0].name(), "SecondTool");
     assert!(matches!(
         requests[1].messages.last(),
         Some(CurrentProviderMessage {
@@ -1769,13 +2158,371 @@ async fn mcp_tool_lifecycle_uses_captured_environment_identity() {
 }
 
 #[tokio::test]
-async fn unadvertised_native_and_mcp_calls_fail_without_reaching_step_executor() {
+async fn repaired_tool_call_uses_canonical_snapshot_identity_and_arguments() {
     let provider = Arc::new(ScriptedProvider::new(vec![
         vec![
             Ok(CanonicalLlmEvent::ToolCall {
-                id: "call-native".to_string(),
-                name: "apply_patch".to_string(),
-                input: serde_json::json!({ "patch": "hidden" }),
+                id: "call-repaired".to_string(),
+                name: "read_file".to_string(),
+                input: serde_json::json!({
+                    "file_path": " README.md ",
+                    "start_line": "2",
+                    "end_line": "3"
+                }),
+                raw_arguments: Some(
+                    r#"{"file_path":" README.md ","start_line":"2","end_line":"3"}"#.to_string(),
+                ),
+                provider_executed: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::ToolCall,
+                usage: None,
+                response_id: Some("response-1".to_string()),
+            }),
+        ],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-final".to_string(),
+                text: "done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-2".to_string()),
+            }),
+        ],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+    let step_executor = Arc::new(CountingTool::default());
+    let lifecycle_emitter = Arc::new(RecordingLifecycleEmitter::default());
+
+    run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-1")
+                .turn_id("turn-1")
+                .max_turns(3)
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("read it".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    vec![RuntimeToolDefinition::new(
+                        "Read",
+                        "visible tool",
+                        serde_json::json!({
+                            "type": "object",
+                            "properties": {
+                                "path": { "type": "string" },
+                                "start_line": { "type": "integer", "minimum": 1 },
+                                "end_line": { "type": "integer", "minimum": 1 }
+                            },
+                            "required": ["path"]
+                        }),
+                    )],
+                    RuntimeToolExecutorHandle::new(step_executor.clone()),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: lifecycle_emitter.clone(),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("repaired tool call should complete");
+
+    assert_eq!(step_executor.calls.load(Ordering::SeqCst), 1);
+    let lifecycle_events = lifecycle_emitter.events();
+    assert_eq!(lifecycle_events.len(), 2);
+    for event in &lifecycle_events {
+        assert_eq!(event.tool_name, "Read");
+        assert_eq!(event.arguments["path"], "README.md");
+        assert_eq!(event.arguments["start_line"], 2);
+        assert_eq!(event.arguments["end_line"], 3);
+        assert_eq!(
+            event.provider_metadata[TOOL_CALL_REPAIR_METADATA_KEY]["status"],
+            "ready"
+        );
+    }
+
+    let requests = requests.lock().expect("recorded requests");
+    let repaired_call = requests[1]
+        .messages
+        .iter()
+        .find_map(|message| {
+            message.content.iter().find_map(|content| match content {
+                CurrentProviderContent::ToolCall(call) => Some(call),
+                _ => None,
+            })
+        })
+        .expect("repaired assistant tool call");
+    assert_eq!(repaired_call.name, "Read");
+    assert_eq!(repaired_call.arguments["path"], "README.md");
+    assert!(matches!(
+        requests[1].messages.last(),
+        Some(CurrentProviderMessage {
+            role: CurrentProviderRole::Tool,
+            content,
+        }) if matches!(content.as_slice(), [CurrentProviderContent::ToolResult(result)]
+            if result.name == "Read" && result.success)
+    ));
+}
+
+#[tokio::test]
+async fn repaired_tool_call_cancel_wins_over_late_handler_completion() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![
+            Ok(CanonicalLlmEvent::ToolCall {
+                id: "call-cancel-repaired".to_string(),
+                name: "read_file".to_string(),
+                input: serde_json::json!({
+                    "file_path": " README.md ",
+                    "start_line": "2"
+                }),
+                raw_arguments: Some(r#"{"file_path":" README.md ","start_line":"2"}"#.to_string()),
+                provider_executed: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::ToolCall,
+                usage: None,
+                response_id: Some("response-tool".to_string()),
+            }),
+        ],
+        vec![Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::Stop,
+            usage: None,
+            response_id: Some("response-after-tool".to_string()),
+        })],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+    let (started_sender, started_receiver) = oneshot::channel();
+    let (release_sender, release_receiver) = oneshot::channel();
+    let (late_completed_sender, late_completed_receiver) = oneshot::channel();
+    let tool = Arc::new(LateCompletingTool {
+        calls: AtomicUsize::new(0),
+        started: Mutex::new(Some(started_sender)),
+        release_after_cancel: Mutex::new(Some(release_receiver)),
+        late_completed: Mutex::new(Some(late_completed_sender)),
+    });
+    let lifecycle_emitter = Arc::new(RecordingLifecycleEmitter::default());
+    let turn_lifecycle_emitter = lifecycle_emitter.clone();
+    let turn_tool = tool.clone();
+    let cancel_token = CancellationToken::new();
+    let turn_cancel_token = cancel_token.clone();
+
+    let turn = tokio::spawn(async move {
+        run_current_provider_turn(
+            CurrentProviderTurnInput {
+                provider,
+                provider_trace_metadata: None,
+                session_config: crate::session_config::SessionConfigBuilder::new("session-cancel")
+                    .turn_id("turn-cancel")
+                    .max_turns(3)
+                    .build(),
+                initial_messages: vec![CurrentProviderMessage::user(vec![
+                    CurrentProviderContent::Text("read it".to_string()),
+                ])],
+                tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                    RuntimeToolStepSnapshot::new(
+                        vec![RuntimeToolDefinition::new(
+                            "Read",
+                            "visible tool",
+                            serde_json::json!({
+                                "type": "object",
+                                "properties": {
+                                    "path": { "type": "string" },
+                                    "start_line": { "type": "integer", "minimum": 1 }
+                                },
+                                "required": ["path"]
+                            }),
+                        )],
+                        RuntimeToolExecutorHandle::new(turn_tool),
+                    ),
+                ),
+                hook_snapshot_source: None,
+                model_request_policy: None,
+                tool_lifecycle_emitter: turn_lifecycle_emitter,
+                working_directory: PathBuf::from("."),
+                cancel_token: Some(turn_cancel_token),
+                pending_input: None,
+            },
+            |_| {},
+        )
+        .await
+    });
+
+    started_receiver
+        .await
+        .expect("repaired handler should start");
+    cancel_token.cancel();
+    let execution = tokio::time::timeout(Duration::from_secs(5), turn)
+        .await
+        .expect("cancel should release the repaired tool call")
+        .expect("turn task should complete")
+        .expect("cancel should be a normal terminal result");
+
+    assert!(execution.cancelled);
+    assert_eq!(execution.attempts_summary, "attempts=1");
+    assert_eq!(tool.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(requests.lock().expect("provider requests").len(), 1);
+    let lifecycle_events = lifecycle_emitter.events();
+    assert_eq!(lifecycle_events.len(), 2);
+    assert_eq!(lifecycle_events[0].phase, ToolLifecyclePhase::Started);
+    assert_eq!(lifecycle_events[1].phase, ToolLifecyclePhase::Completed);
+    for event in &lifecycle_events {
+        assert_eq!(event.tool_name, "Read");
+        assert_eq!(event.arguments["path"], "README.md");
+        assert_eq!(event.arguments["start_line"], 2);
+        assert_eq!(
+            event.provider_metadata[TOOL_CALL_REPAIR_METADATA_KEY]["status"],
+            "ready"
+        );
+    }
+    assert_eq!(
+        lifecycle_events[1]
+            .output
+            .as_ref()
+            .and_then(|output| output.metadata.get("tool_outcome"))
+            .and_then(serde_json::Value::as_str),
+        Some("aborted")
+    );
+
+    release_sender
+        .send(())
+        .expect("release late handler completion");
+    tokio::time::timeout(Duration::from_secs(5), late_completed_receiver)
+        .await
+        .expect("late handler should finish")
+        .expect("late handler completion signal");
+    assert_eq!(lifecycle_emitter.events(), lifecycle_events);
+    assert_eq!(requests.lock().expect("provider requests").len(), 1);
+}
+
+#[tokio::test]
+async fn repaired_tool_call_is_not_replayed_when_next_provider_step_times_out() {
+    let provider = Arc::new(ToolCallThenHangingProvider {
+        attempt: AtomicUsize::new(0),
+        requests: Mutex::new(Vec::new()),
+    });
+    let retained_provider = provider.clone();
+    let tool = Arc::new(CountingTool::default());
+    let lifecycle_emitter = Arc::new(RecordingLifecycleEmitter::default());
+    let mut turn_context = agent_protocol::turn_context::TurnContextOverride::default();
+    turn_context.metadata.insert(
+        "runtime_request".to_string(),
+        serde_json::json!({
+            "harness": {
+                "generation": {
+                    "first_visible_output_timeout_ms": 1_000,
+                    "provider_step_timeout_ms": 20
+                }
+            }
+        }),
+    );
+
+    let error = tokio::time::timeout(
+        Duration::from_secs(5),
+        run_current_provider_turn(
+            CurrentProviderTurnInput {
+                provider,
+                provider_trace_metadata: None,
+                session_config: crate::session_config::SessionConfigBuilder::new("session-timeout")
+                    .turn_id("turn-timeout")
+                    .turn_context(turn_context)
+                    .max_turns(3)
+                    .build(),
+                initial_messages: vec![CurrentProviderMessage::user(vec![
+                    CurrentProviderContent::Text("read it".to_string()),
+                ])],
+                tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                    RuntimeToolStepSnapshot::new(
+                        vec![RuntimeToolDefinition::new(
+                            "Read",
+                            "visible tool",
+                            serde_json::json!({
+                                "type": "object",
+                                "properties": {
+                                    "path": { "type": "string" },
+                                    "start_line": { "type": "integer", "minimum": 1 }
+                                },
+                                "required": ["path"]
+                            }),
+                        )],
+                        RuntimeToolExecutorHandle::new(tool.clone()),
+                    ),
+                ),
+                hook_snapshot_source: None,
+                model_request_policy: None,
+                tool_lifecycle_emitter: lifecycle_emitter.clone(),
+                working_directory: PathBuf::from("."),
+                cancel_token: None,
+                pending_input: None,
+            },
+            |_| {},
+        ),
+    )
+    .await
+    .expect("provider timeout should beat the outer test timeout")
+    .expect_err("second provider step should hit its absolute deadline");
+
+    assert_eq!(
+        error.message,
+        "Provider step exceeded the absolute deadline of 20ms"
+    );
+    assert_eq!(tool.calls.load(Ordering::SeqCst), 1);
+    let lifecycle_events = lifecycle_emitter.events();
+    assert_eq!(lifecycle_events.len(), 2);
+    assert_eq!(lifecycle_events[0].phase, ToolLifecyclePhase::Started);
+    assert_eq!(lifecycle_events[1].phase, ToolLifecyclePhase::Completed);
+    assert!(lifecycle_events[1]
+        .output
+        .as_ref()
+        .is_some_and(|output| output.success));
+
+    let requests = retained_provider
+        .requests
+        .lock()
+        .expect("provider requests");
+    assert_eq!(requests.len(), 2);
+    let repaired_call = requests[1]
+        .messages
+        .iter()
+        .flat_map(|message| message.content.iter())
+        .find_map(|content| match content {
+            CurrentProviderContent::ToolCall(call) => Some(call),
+            _ => None,
+        })
+        .expect("repaired assistant tool call");
+    assert_eq!(repaired_call.name, "Read");
+    assert_eq!(repaired_call.arguments["path"], "README.md");
+    assert_eq!(repaired_call.arguments["start_line"], 2);
+    assert!(matches!(
+        requests[1].messages.last(),
+        Some(CurrentProviderMessage {
+            role: CurrentProviderRole::Tool,
+            content,
+        }) if matches!(content.as_slice(), [CurrentProviderContent::ToolResult(result)]
+            if result.name == "Read" && result.success)
+    ));
+}
+
+#[tokio::test]
+async fn malformed_unknown_and_schema_mismatched_calls_fail_without_reaching_step_executor() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![
+            Ok(CanonicalLlmEvent::ToolCall {
+                id: "call-malformed".to_string(),
+                name: "Read".to_string(),
+                input: serde_json::json!("{not-json"),
+                raw_arguments: Some("{not-json".to_string()),
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -1783,6 +2530,15 @@ async fn unadvertised_native_and_mcp_calls_fail_without_reaching_step_executor()
                 id: "call-mcp".to_string(),
                 name: "mcp__hidden__unknown".to_string(),
                 input: serde_json::json!({}),
+                raw_arguments: None,
+                provider_executed: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::ToolCall {
+                id: "call-schema".to_string(),
+                name: "Read".to_string(),
+                input: serde_json::json!({ "path": 42 }),
+                raw_arguments: Some(r#"{"path":42}"#.to_string()),
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -1824,7 +2580,14 @@ async fn unadvertised_native_and_mcp_calls_fail_without_reaching_step_executor()
                     vec![RuntimeToolDefinition::new(
                         "Read",
                         "visible tool",
-                        serde_json::json!({}),
+                        serde_json::json!({
+                            "type": "object",
+                            "properties": {
+                                "path": { "type": "string" }
+                            },
+                            "required": ["path"],
+                            "additionalProperties": false
+                        }),
                     )],
                     RuntimeToolExecutorHandle::new(step_executor.clone()),
                 ),
@@ -1839,21 +2602,33 @@ async fn unadvertised_native_and_mcp_calls_fail_without_reaching_step_executor()
         |_| {},
     )
     .await
-    .expect("unadvertised tool calls should become failed tool results");
+    .expect("invalid tool calls should become failed tool results");
 
     assert_eq!(step_executor.calls.load(Ordering::SeqCst), 0);
     let lifecycle_events = lifecycle_emitter.events();
-    assert_eq!(lifecycle_events.len(), 4);
+    assert_eq!(lifecycle_events.len(), 6);
+    assert!(lifecycle_events
+        .iter()
+        .all(|event| event.tool_name == INVALID_TOOL_CALL_NAME));
+    let errors = lifecycle_events
+        .iter()
+        .filter(|event| event.phase == ToolLifecyclePhase::Completed)
+        .filter_map(|event| event.output.as_ref())
+        .filter_map(|output| output.error.as_deref())
+        .collect::<Vec<_>>();
+    assert!(errors
+        .iter()
+        .any(|error| error.contains("malformed JSON arguments")));
+    assert!(errors.iter().any(|error| error.contains("not advertised")));
+    assert!(errors
+        .iter()
+        .any(|error| error.contains("did not match the advertised input schema")));
     for completed in lifecycle_events
         .iter()
         .filter(|event| event.phase == ToolLifecyclePhase::Completed)
     {
         let output = completed.output.as_ref().expect("completed output");
         assert!(!output.success);
-        assert!(output
-            .error
-            .as_deref()
-            .is_some_and(|error| error.contains("not advertised")));
         assert_eq!(
             output
                 .metadata
@@ -1865,17 +2640,28 @@ async fn unadvertised_native_and_mcp_calls_fail_without_reaching_step_executor()
     let requests = requests.lock().expect("recorded requests");
     assert_eq!(requests.len(), 2);
     assert_eq!(requests[0].tools.len(), 1);
-    assert_eq!(requests[0].tools[0].name, "Read");
+    assert_eq!(requests[0].tools[0].name(), "Read");
+    let schema_invalid_call = requests[1]
+        .messages
+        .iter()
+        .flat_map(|message| message.content.iter())
+        .find_map(|content| match content {
+            CurrentProviderContent::ToolCall(call) if call.id == "call-schema" => Some(call),
+            _ => None,
+        })
+        .expect("schema-invalid assistant tool call");
+    assert_eq!(schema_invalid_call.name, INVALID_TOOL_CALL_NAME);
+    assert!(!schema_invalid_call.arguments.to_string().contains("42"));
     assert!(matches!(
         requests[1].messages.last(),
         Some(CurrentProviderMessage {
             role: CurrentProviderRole::Tool,
             content,
-        }) if content.len() == 2 && content.iter().all(|part| matches!(
+        }) if content.len() == 3 && content.iter().all(|part| matches!(
             part,
             CurrentProviderContent::ToolResult(result)
                 if !result.success
-                    && result.error.as_deref().is_some_and(|error| error.contains("not advertised"))
+                    && result.name == INVALID_TOOL_CALL_NAME
         ))
     ));
 }
@@ -1888,6 +2674,7 @@ async fn turn_executes_same_response_tool_batch_in_parallel_when_policy_allows()
                 id: "call-1".to_string(),
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
+                raw_arguments: None,
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -1895,6 +2682,7 @@ async fn turn_executes_same_response_tool_batch_in_parallel_when_policy_allows()
                 id: "call-2".to_string(),
                 name: "Glob".to_string(),
                 input: serde_json::json!({ "pattern": "*.rs" }),
+                raw_arguments: None,
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -2054,6 +2842,747 @@ async fn turn_propagates_canonical_provider_error() {
 }
 
 #[tokio::test]
+async fn custom_tool_call_fails_without_executable_code_mode_session() {
+    let provider = Arc::new(ScriptedProvider::new(vec![vec![Ok(
+        CanonicalLlmEvent::CustomToolCall {
+            id: "custom-call-1".to_string(),
+            name: "exec".to_string(),
+            input: "return 42;".to_string(),
+            namespace: Some("codemode".to_string()),
+            provider_metadata: Default::default(),
+        },
+    )]]));
+    let tool = Arc::new(CountingTool::default());
+    let lifecycle_emitter = Arc::new(RecordingLifecycleEmitter::default());
+
+    let error = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-custom")
+                .turn_id("turn-custom")
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("run the code".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(tool.clone()),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: lifecycle_emitter.clone(),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect_err("custom tool call must require an executable CodeMode session");
+
+    assert_eq!(
+        error.message,
+        "custom tool call requires an executable CodeMode session"
+    );
+    assert!(!error.emitted_any);
+    assert_eq!(
+        error.classification(),
+        Some(FailureClassification::InvalidRequest)
+    );
+    assert!(!error.retryable());
+    assert!(!error.is_reroutable_provider_failure());
+    assert_eq!(tool.calls.load(Ordering::SeqCst), 0);
+    assert!(lifecycle_emitter.events().is_empty());
+}
+
+#[tokio::test]
+async fn custom_exec_uses_code_mode_session_and_resamples_with_typed_result() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![
+            Ok(CanonicalLlmEvent::CustomToolCall {
+                id: "custom-call-1".to_string(),
+                name: "exec".to_string(),
+                input: "text(40 + 2);".to_string(),
+                namespace: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::ToolCall,
+                usage: None,
+                response_id: Some("response-custom-1".to_string()),
+            }),
+        ],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-0".to_string(),
+                text: "done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-custom-2".to_string()),
+            }),
+        ],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+    let code_mode = Arc::new(RecordingCodeModeSession::new(vec![Ok(
+        RuntimeCodeModeResponse::Result {
+            cell_id: RuntimeCodeModeCellId::new("1"),
+            output: "42".to_string(),
+            error_text: None,
+        },
+    )]));
+    let lifecycle_emitter = Arc::new(RecordingLifecycleEmitter::default());
+    let cancel_token = CancellationToken::new();
+
+    let execution = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-custom")
+                .turn_id("turn-custom")
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("run the code".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(CountingTool::default())),
+                )
+                .with_code_mode_session(
+                    RuntimeCodeModeSessionHandle::new(code_mode.clone()),
+                    Vec::new(),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: lifecycle_emitter.clone(),
+            working_directory: PathBuf::from("."),
+            cancel_token: Some(cancel_token),
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("custom exec turn");
+
+    assert_eq!(execution.text_output, "done");
+    assert_eq!(
+        code_mode.requests(),
+        vec![(
+            "custom-call-1".to_string(),
+            "text(40 + 2);".to_string(),
+            0,
+            true,
+        )]
+    );
+    let requests = requests.lock().expect("provider requests");
+    assert_eq!(requests.len(), 2);
+    assert!(matches!(
+        requests[0].tools.as_slice(),
+        [
+            CurrentProviderTool::Custom { name: exec, .. },
+            CurrentProviderTool::Function { name: wait, .. },
+        ] if exec == "exec" && wait == "wait"
+    ));
+    assert!(matches!(
+        requests[1].messages.as_slice(),
+        [..,
+            CurrentProviderMessage {
+                role: CurrentProviderRole::Assistant,
+                content: assistant_content,
+            },
+            CurrentProviderMessage {
+                role: CurrentProviderRole::Tool,
+                content: tool_content,
+            }
+        ] if matches!(assistant_content.as_slice(), [CurrentProviderContent::CustomToolCall(call)]
+            if call.id == "custom-call-1" && call.name == "exec" && call.input == "text(40 + 2);")
+            && matches!(tool_content.as_slice(), [CurrentProviderContent::CustomToolResult(result)]
+                if result.call_id == "custom-call-1"
+                    && result.name == "exec"
+                    && result.success
+                    && result.output == "Script completed\nOutput:\n42"
+                    && result.error.is_none())
+    ));
+    let events = lifecycle_emitter.events();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].phase, ToolLifecyclePhase::Started);
+    assert_eq!(events[0].call_id, "custom-call-1");
+    assert_eq!(events[0].tool_name, "exec");
+    assert_eq!(events[1].phase, ToolLifecyclePhase::Completed);
+    assert_eq!(events[1].call_id, "custom-call-1");
+    assert!(events[1]
+        .output
+        .as_ref()
+        .is_some_and(|output| output.success));
+}
+
+#[tokio::test]
+async fn custom_exec_nested_tool_reuses_the_frozen_executor_and_lifecycle() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![
+            Ok(CanonicalLlmEvent::CustomToolCall {
+                id: "custom-nested-1".to_string(),
+                name: "exec".to_string(),
+                input: "await tools.read({ path: 'README.md' });".to_string(),
+                namespace: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::ToolCall,
+                usage: None,
+                response_id: Some("response-nested-1".to_string()),
+            }),
+        ],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-nested-final".to_string(),
+                text: "nested done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-nested-2".to_string()),
+            }),
+        ],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+    let nested_executor = Arc::new(CountingTool::default());
+    let lifecycle_emitter = Arc::new(RecordingLifecycleEmitter::default());
+    let nested_definition =
+        RuntimeToolDefinition::new("read", "read files", serde_json::json!({"type": "object"}));
+    let nested_tool = RuntimeCodeModeTool {
+        identity: RuntimeToolIdentity::plain("read"),
+        definition: nested_definition.clone(),
+        code_name: "read".to_string(),
+        global_name: "read".to_string(),
+    };
+
+    let execution = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-nested")
+                .turn_id("turn-nested")
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("use a nested tool".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(nested_executor.clone()),
+                )
+                .with_code_mode_session(
+                    RuntimeCodeModeSessionHandle::new(Arc::new(NestedDispatchCodeModeSession)),
+                    vec![nested_tool],
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: lifecycle_emitter.clone(),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("nested CodeMode turn");
+
+    assert_eq!(execution.text_output, "nested done");
+    assert_eq!(nested_executor.calls.load(Ordering::SeqCst), 1);
+    let events = lifecycle_emitter.events();
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[0].phase, ToolLifecyclePhase::Started);
+    assert_eq!(events[0].call_id, "custom-nested-1");
+    assert_eq!(events[0].tool_name, "exec");
+    assert_eq!(events[1].phase, ToolLifecyclePhase::Started);
+    assert_eq!(events[1].call_id, "code-mode-nested-read-1");
+    assert_eq!(events[1].tool_name, "read");
+    assert_eq!(events[2].phase, ToolLifecyclePhase::Completed);
+    assert_eq!(events[2].call_id, "code-mode-nested-read-1");
+    assert!(events[2]
+        .output
+        .as_ref()
+        .is_some_and(|output| output.success));
+    assert_eq!(events[3].phase, ToolLifecyclePhase::Completed);
+    assert_eq!(events[3].call_id, "custom-nested-1");
+    let output_deltas = lifecycle_emitter.output_deltas();
+    assert_eq!(output_deltas.len(), 1);
+    assert_eq!(output_deltas[0].turn_id, "turn-nested");
+    assert_eq!(output_deltas[0].call_id, "custom-nested-1");
+    assert_eq!(output_deltas[0].tool_name, "exec");
+    assert_eq!(output_deltas[0].delta, "nested tool starting");
+    assert_eq!(
+        output_deltas[0]
+            .metadata
+            .get("code_mode_cell_id")
+            .and_then(serde_json::Value::as_str),
+        Some("cell-nested-provider-turn")
+    );
+    let requests = requests.lock().expect("provider requests");
+    assert!(matches!(
+        requests[1].messages.last(),
+        Some(CurrentProviderMessage {
+            role: CurrentProviderRole::Tool,
+            content,
+        }) if matches!(
+            content.as_slice(),
+            [
+                CurrentProviderContent::CustomToolResult(notification),
+                CurrentProviderContent::CustomToolResult(result),
+            ] if notification.call_id == "custom-nested-1"
+                && notification.success
+                && notification.output == "nested tool starting"
+                && result.call_id == "custom-nested-1"
+                && result.success
+                && result.output.contains("executed read")
+        )
+    ));
+}
+
+#[tokio::test]
+async fn wait_function_uses_the_same_code_mode_session_and_resamples() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![
+            Ok(CanonicalLlmEvent::ToolCall {
+                id: "wait-call-1".to_string(),
+                name: "wait".to_string(),
+                input: serde_json::json!({
+                    "cell_id": "cell-running",
+                    "yield_time_ms": 250,
+                    "max_tokens": 128,
+                }),
+                raw_arguments: None,
+                provider_executed: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::ToolCall,
+                usage: None,
+                response_id: Some("response-wait-1".to_string()),
+            }),
+        ],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-after-wait".to_string(),
+                text: "waited".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-wait-2".to_string()),
+            }),
+        ],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+    let code_mode = Arc::new(
+        RecordingCodeModeSession::new(Vec::new()).with_wait_responses(vec![Ok(
+            RuntimeCodeModeWaitOutcome::LiveCell(RuntimeCodeModeResponse::Result {
+                cell_id: RuntimeCodeModeCellId::new("cell-running"),
+                output: "finished".to_string(),
+                error_text: None,
+            }),
+        )]),
+    );
+
+    let execution = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-wait")
+                .turn_id("turn-wait")
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("wait for the cell".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(CountingTool::default())),
+                )
+                .with_code_mode_session(
+                    RuntimeCodeModeSessionHandle::new(code_mode.clone()),
+                    Vec::new(),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("wait turn");
+
+    assert_eq!(execution.text_output, "waited");
+    assert_eq!(
+        code_mode.wait_requests(),
+        vec![("cell-running".to_string(), 250)]
+    );
+    let requests = requests.lock().expect("provider requests");
+    assert!(matches!(
+        requests[1].messages.last(),
+        Some(CurrentProviderMessage {
+            role: CurrentProviderRole::Tool,
+            content,
+        }) if matches!(content.as_slice(), [CurrentProviderContent::ToolResult(result)]
+            if result.call_id == "wait-call-1"
+                && result.name == "wait"
+                && result.success
+                && result.output == "Script completed\nOutput:\nfinished")
+    ));
+}
+
+#[tokio::test]
+async fn custom_exec_session_failure_is_returned_to_model_for_recovery() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![
+            Ok(CanonicalLlmEvent::CustomToolCall {
+                id: "custom-call-failed".to_string(),
+                name: "exec".to_string(),
+                input: "throw new Error('boom');".to_string(),
+                namespace: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::ToolCall,
+                usage: None,
+                response_id: Some("response-custom-failed".to_string()),
+            }),
+        ],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-recovered".to_string(),
+                text: "recovered".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-custom-recovered".to_string()),
+            }),
+        ],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+    let code_mode = Arc::new(RecordingCodeModeSession::new(vec![Err(
+        "isolated runtime rejected source".to_string(),
+    )]));
+
+    let execution = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new(
+                "session-custom-error",
+            )
+            .turn_id("turn-custom-error")
+            .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("run invalid code".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(CountingTool::default())),
+                )
+                .with_code_mode_session(RuntimeCodeModeSessionHandle::new(code_mode), Vec::new()),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("model should recover from code mode failure");
+
+    assert_eq!(execution.text_output, "recovered");
+    let requests = requests.lock().expect("provider requests");
+    assert!(matches!(
+        requests[1].messages.last(),
+        Some(CurrentProviderMessage {
+            role: CurrentProviderRole::Tool,
+            content,
+        }) if matches!(content.as_slice(), [CurrentProviderContent::CustomToolResult(result)]
+            if !result.success
+                && result.output == "Script failed\nOutput:\n\nScript error:\nisolated runtime rejected source"
+                && result.error.as_deref() == Some("isolated runtime rejected source"))
+    ));
+}
+
+#[tokio::test]
+async fn mixed_function_and_custom_results_preserve_provider_call_order() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![
+            Ok(CanonicalLlmEvent::CustomToolCall {
+                id: "custom-yielded".to_string(),
+                name: "exec".to_string(),
+                input: "yield_control();".to_string(),
+                namespace: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::ToolCall {
+                id: "function-read".to_string(),
+                name: "Read".to_string(),
+                input: serde_json::json!({ "path": "README.md" }),
+                raw_arguments: None,
+                provider_executed: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::CustomToolCall {
+                id: "custom-completed".to_string(),
+                name: "exec".to_string(),
+                input: "text('done');".to_string(),
+                namespace: None,
+                provider_metadata: Default::default(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::ToolCall,
+                usage: None,
+                response_id: Some("response-mixed-tools".to_string()),
+            }),
+        ],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-mixed-final".to_string(),
+                text: "mixed done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-mixed-final".to_string()),
+            }),
+        ],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+    let code_mode = Arc::new(RecordingCodeModeSession::new(vec![
+        Ok(RuntimeCodeModeResponse::Yielded {
+            cell_id: RuntimeCodeModeCellId::new("cell-yielded"),
+            output: "partial".to_string(),
+        }),
+        Ok(RuntimeCodeModeResponse::Result {
+            cell_id: RuntimeCodeModeCellId::new("cell-completed"),
+            output: "done".to_string(),
+            error_text: None,
+        }),
+    ]));
+
+    let execution = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new("session-mixed-tools")
+                .turn_id("turn-mixed-tools")
+                .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("run mixed tools".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    vec![RuntimeToolDefinition::new(
+                        "Read",
+                        "read files",
+                        serde_json::json!({ "type": "object" }),
+                    )],
+                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                )
+                .with_code_mode_session(
+                    RuntimeCodeModeSessionHandle::new(code_mode.clone()),
+                    Vec::new(),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect("mixed tool turn");
+
+    assert_eq!(execution.text_output, "mixed done");
+    assert!(code_mode.terminations().is_empty());
+    let requests = requests.lock().expect("provider requests");
+    assert!(matches!(
+        requests[1].messages.as_slice(),
+        [..,
+            CurrentProviderMessage {
+                role: CurrentProviderRole::Assistant,
+                content: assistant_content,
+            },
+            CurrentProviderMessage {
+                role: CurrentProviderRole::Tool,
+                content: tool_content,
+            }
+        ] if matches!(assistant_content.as_slice(), [
+                CurrentProviderContent::CustomToolCall(first),
+                CurrentProviderContent::ToolCall(second),
+                CurrentProviderContent::CustomToolCall(third),
+            ] if first.id == "custom-yielded"
+                && second.id == "function-read"
+                && third.id == "custom-completed")
+            && matches!(tool_content.as_slice(), [
+                CurrentProviderContent::CustomToolResult(first),
+                CurrentProviderContent::ToolResult(second),
+                CurrentProviderContent::CustomToolResult(third),
+            ] if first.call_id == "custom-yielded"
+                && first.output == "Script running with cell ID cell-yielded\nOutput:\npartial"
+                && second.call_id == "function-read"
+                && third.call_id == "custom-completed")
+    ));
+}
+
+#[tokio::test]
+async fn cancellation_terminates_a_started_code_mode_cell() {
+    let provider = Arc::new(ScriptedProvider::new(vec![vec![
+        Ok(CanonicalLlmEvent::CustomToolCall {
+            id: "custom-hanging".to_string(),
+            name: "exec".to_string(),
+            input: "await new Promise(() => {});".to_string(),
+            namespace: None,
+            provider_metadata: Default::default(),
+        }),
+        Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::ToolCall,
+            usage: None,
+            response_id: Some("response-hanging".to_string()),
+        }),
+    ]]));
+    let (started_tx, started_rx) = oneshot::channel();
+    let code_mode = Arc::new(HangingCodeModeSession {
+        started: Mutex::new(Some(started_tx)),
+        terminations: Mutex::new(Vec::new()),
+    });
+    let cancel_token = CancellationToken::new();
+    let turn_cancel_token = cancel_token.clone();
+    let task_code_mode = code_mode.clone();
+
+    let turn = tokio::spawn(async move {
+        run_current_provider_turn(
+            CurrentProviderTurnInput {
+                provider,
+                provider_trace_metadata: None,
+                session_config: crate::session_config::SessionConfigBuilder::new(
+                    "session-custom-cancel",
+                )
+                .turn_id("turn-custom-cancel")
+                .build(),
+                initial_messages: vec![CurrentProviderMessage::user(vec![
+                    CurrentProviderContent::Text("run until canceled".to_string()),
+                ])],
+                tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                    RuntimeToolStepSnapshot::new(
+                        Vec::new(),
+                        RuntimeToolExecutorHandle::new(Arc::new(CountingTool::default())),
+                    )
+                    .with_code_mode_session(
+                        RuntimeCodeModeSessionHandle::new(task_code_mode),
+                        Vec::new(),
+                    ),
+                ),
+                hook_snapshot_source: None,
+                model_request_policy: None,
+                tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+                working_directory: PathBuf::from("."),
+                cancel_token: Some(turn_cancel_token),
+                pending_input: None,
+            },
+            |_| {},
+        )
+        .await
+    });
+
+    started_rx.await.expect("code mode cell started");
+    cancel_token.cancel();
+    let execution = tokio::time::timeout(Duration::from_secs(1), turn)
+        .await
+        .expect("cancellation should terminate the code mode cell")
+        .expect("turn task")
+        .expect("cancellation is a normal terminal result");
+
+    assert!(execution.cancelled);
+    assert_eq!(
+        code_mode
+            .terminations
+            .lock()
+            .expect("hanging terminations")
+            .as_slice(),
+        ["cell-hanging"]
+    );
+}
+
+#[tokio::test]
+async fn non_exec_custom_tool_is_rejected_before_code_mode_dispatch() {
+    let provider = Arc::new(ScriptedProvider::new(vec![vec![Ok(
+        CanonicalLlmEvent::CustomToolCall {
+            id: "custom-call-other".to_string(),
+            name: "run_code".to_string(),
+            input: "return 42;".to_string(),
+            namespace: None,
+            provider_metadata: Default::default(),
+        },
+    )]]));
+    let code_mode = Arc::new(RecordingCodeModeSession::new(Vec::new()));
+
+    let error = run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config: crate::session_config::SessionConfigBuilder::new(
+                "session-custom-other",
+            )
+            .turn_id("turn-custom-other")
+            .build(),
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("run the code".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(CountingTool::default())),
+                )
+                .with_code_mode_session(
+                    RuntimeCodeModeSessionHandle::new(code_mode.clone()),
+                    Vec::new(),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |_| {},
+    )
+    .await
+    .expect_err("only exact exec custom calls are executable");
+
+    assert_eq!(error.message, "unsupported custom tool call: run_code");
+    assert_eq!(
+        error.classification(),
+        Some(FailureClassification::InvalidRequest)
+    );
+    assert!(!error.retryable());
+    assert!(code_mode.requests().is_empty());
+}
+
+#[tokio::test]
 async fn provider_failure_after_consuming_steer_is_not_reroutable() {
     let (started_tx, started_rx) = oneshot::channel();
     let (continue_tx, continue_rx) = oneshot::channel();
@@ -2065,7 +3594,10 @@ async fn provider_failure_after_consuming_steer_is_not_reroutable() {
     });
     let observed_error = Arc::new(Mutex::new(None::<RuntimeReplyAttemptError>));
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-steer-reroute").await;
+    let session = registry
+        .get_or_create("session-steer-reroute", "thread-steer-reroute")
+        .await
+        .expect("bind steer reroute actor");
     let task_provider = Arc::clone(&provider);
     let task_error = Arc::clone(&observed_error);
     let task = RuntimeSessionClosureTask::new(
@@ -2356,6 +3888,7 @@ async fn empty_final_after_tool_call_resamples_without_spending_max_turns() {
                 id: "call-1".to_string(),
                 name: "Read".to_string(),
                 input: serde_json::json!({ "path": "README.md" }),
+                raw_arguments: None,
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),
@@ -2691,7 +4224,10 @@ async fn cancellation_preserves_usage_returned_by_the_same_provider_poll() {
 #[tokio::test]
 async fn cancellation_flushes_provider_usage_to_the_session_runtime() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-cancel-usage").await;
+    let session = registry
+        .get_or_create("session-cancel-usage", "thread-cancel-usage")
+        .await
+        .expect("bind cancel usage actor");
     let cancel_token = CancellationToken::new();
     let provider = Arc::new(CancelOnFirstUsageProvider {
         cancel_token: cancel_token.clone(),
@@ -2755,7 +4291,10 @@ async fn cancellation_flushes_provider_usage_to_the_session_runtime() {
 #[tokio::test]
 async fn provider_error_flushes_prior_usage_to_the_session_runtime() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-error-usage").await;
+    let session = registry
+        .get_or_create("session-error-usage", "thread-error-usage")
+        .await
+        .expect("bind error usage actor");
     let task = RuntimeSessionClosureTask::new(
         "turn-error-usage",
         Vec::new(),
@@ -2816,7 +4355,10 @@ async fn provider_error_flushes_prior_usage_to_the_session_runtime() {
 #[tokio::test]
 async fn stream_error_flushes_prior_usage_to_the_session_runtime() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-stream-error-usage").await;
+    let session = registry
+        .get_or_create("session-stream-error-usage", "thread-stream-error-usage")
+        .await
+        .expect("bind stream error usage actor");
     let task = RuntimeSessionClosureTask::new(
         "turn-stream-error-usage",
         Vec::new(),
@@ -2877,7 +4419,10 @@ async fn stream_error_flushes_prior_usage_to_the_session_runtime() {
 #[tokio::test]
 async fn provider_step_timeout_flushes_prior_usage_to_the_session_runtime() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-timeout-usage").await;
+    let session = registry
+        .get_or_create("session-timeout-usage", "thread-timeout-usage")
+        .await
+        .expect("bind timeout usage actor");
     let task = RuntimeSessionClosureTask::new(
         "turn-timeout-usage",
         Vec::new(),

@@ -226,11 +226,37 @@ Gemini、Bedrock、Fal、Vertex 等可能“路由成功、wire 错误”。
 
 ### P1-01：Tool lifecycle 与 provider tool repair
 
-Codex tools 还包含 `ToolExposure::{Direct, Deferred, Hidden}`、ToolSearch/loadable spec、
+Codex tools 还包含 `ToolExposure::{Direct, Deferred, DeferredModelOnly, DirectModelOnly, CodeModeOnly, Hidden}`、ToolSearch/loadable spec、
 pre/post/permission hook、CodeMode、parallel orchestration、argument diff、cancellation/
 teardown、output truncation、call/output pairing、extension tool 和 background terminal。
 OpenCode 的 `experimental_repairToolCall` 会修正常见参数/大小写错误，无法修复时生成
-`invalid` tool call；Lime 当前无同等 canonical 语义，invalid JSON 直接变成 provider error。
+`invalid` tool call。Lime 已完成前两刀 current 接线：provider canonical event 显式保留
+`raw_arguments`，sampling step 以冻结 definitions 和 current native alias 执行 typed repair；
+大小写/已知参数别名成功时在 transcript 前 canonical 化，malformed/scalar/unknown/空名称失败时
+统一生成 `invalid` call、exactly-one started/completed lifecycle 和 model-visible failed result，
+专用 `before_handler` executor 保证真实 handler 调用为零。此前“invalid JSON 直接变成 provider
+error”的判断已失效。repair 现在直接消费同一冻结 `RuntimeToolDefinition.input_schema`，只对 schema
+显式声明的 integer/number 执行合法 JSON 数值字符串 coercion；完整 schema 校验失败或 schema 本身
+无法编译时同样进入脱敏 `invalid` no-handler lifecycle，不基于字段描述或自然语言猜测参数。
+组合竞态也已闭合：repair 后 handler 已启动时 cancel 产生唯一 `aborted` completed，迟到 success
+不能覆盖终态、追加 lifecycle 或触发下一次 sampling；repair 成功并完成后，下一 provider step 的
+absolute timeout 不会重放 handler 或 call/result lifecycle。
+跨协议 request capture 也已闭合：OpenAI Chat、OpenAI Responses HTTP 与 Anthropic Messages 新增从
+`CurrentProviderClient::stream` 进入的真实 loopback path/auth/body/SSE terminal 联合证据，连同既有
+Gemini、Vertex、Azure Responses、Ollama Responses 与 Responses WebSocket capture，覆盖全部 current
+chat transport；Bedrock/Fal 等未实现协议仍在发网前 fail closed。
+
+CodeMode 第一刀 planning foundation 已完成：`tool-runtime` 现在持有与 Codex 同义的六态 exposure、
+`Direct / CodeMode / CodeModeOnly` 严格模式决策和 frozen tool plan，能够分别投影 direct model、searchable 与
+nested surface；namespace 拼接、JavaScript identifier normalization、`exec`/`wait` 保留名和 collision winner
+均有确定性回归。CodeMode runtime 不可用时，普通模式只有在允许 fallback 时才能降级为 Direct；
+CodeModeOnly 和禁用 fallback 的请求 fail closed。该切片没有向 provider 广告不可执行的 `exec`/`wait`。
+
+本项仍未关闭：provider freeform/custom-tool canonical contract 已完成，但仍缺 Grok-aligned capability/readiness
+gate 的更高层 catalog 接线、thread-owned session runtime、`exec`/`wait`、nested dispatch、yield/resume/terminate
+与 canonical terminal；extension/background terminal 组合证据也仍待补齐。当前 custom contract 只允许官方
+OpenAI Responses route 的显式 capability，其他协议/第三方 route 和历史在 lowering 前 fail closed，不得把它
+当作 CodeMode runtime 已交付。
 
 退出条件：tool definition、executor、hook snapshot 来自同一 sampling step；malformed args、
 unknown tool、repair success/failure、cancel/timeout、truncated output 和 late completion
@@ -278,6 +304,21 @@ replacement round-trip、malformed tail repair、unknown event preservation、at
 provider credential fingerprint、source provenance 和 replay import/export 一致性。evidence
 只能消费 current read model，不能反向驱动 runtime。
 
+### P1-07：Desktop Composer 项目文件搜索
+
+状态：`completed / current`（2026-08-10）。
+
+Desktop Composer 已通过 exact one-shot `fuzzyFileSearch { query, roots, cancellationToken }`
+接入 App Server filesystem search owner。项目 root 必须为绝对目录，结果最多 50 条并按
+score/path 排序，保留相对路径、file/directory、file name 与 match indices；同 token 新请求取消
+旧扫描，Renderer 同时使用 AbortSignal 与 request version 拒绝陈旧响应。选中候选只替换当前
+`@token`，空格路径加引号，不生成 connector/plugin `Mention`。
+
+Codex experimental `fuzzyFileSearch/sessionStart|sessionUpdate|sessionStop` 与
+`fuzzyFileSearch/sessionUpdated|sessionCompleted` 没有 Desktop consumer，分类为
+`product-scope-excluded / forbidden-to-restore`。notification inventory 仅保留 method/field-name
+诊断，禁止进入 pending interaction、current projector、generated manifest 或兼容 wrapper。
+
 ## 5. P2/P3 明确不能静默跳过
 
 | 域              | 必须逐项决定的 Codex contract                                                                                                                                                                                                                                                            | 允许的 Lime 结果                                                                          |
@@ -292,7 +333,7 @@ provider credential fingerprint、source provenance 和 replay import/export 一
 | 维度                                                           | primary               | secondary | 本轮新增验收                                                                              |
 | -------------------------------------------------------------- | --------------------- | --------- | ----------------------------------------------------------------------------------------- |
 | catalog/default/selection/switch/child subset/retry-breaker    | Grok Build            | -         | route readiness、credential identity、effective options、unsupported protocol fail closed |
-| endpoint/auth/query/header/variant/body/content/media/lowering | Lime `model-provider` | OpenCode  | variant/header/body merge、media capability、repairToolCall/invalid tool、协议穷举        |
+| endpoint/auth/query/header/variant/body/content/media/lowering | Lime `model-provider` | OpenCode  | variant/header/body merge、media capability、schema-aware repair、跨协议 invalid tool、协议穷举 |
 | runtime/session/history/Thread/Turn/Item                       | Codex                 | -         | 不把 OpenCode session store 或 Grok MvpAgent 带入 Lime                                    |
 
 Grok 的 `SamplerConfig` 与 Codex `ModelProviderInfo` 提醒我们：provider/model 选择还包括

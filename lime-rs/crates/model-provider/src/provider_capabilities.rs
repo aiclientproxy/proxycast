@@ -3,6 +3,7 @@ use crate::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProviderCapabilities {
     pub namespace_tools: bool,
+    pub custom_tools: bool,
     pub image_generation: bool,
     pub web_search: bool,
 }
@@ -10,6 +11,7 @@ pub struct ProviderCapabilities {
 impl ProviderCapabilities {
     pub const NONE: Self = Self {
         namespace_tools: false,
+        custom_tools: false,
         image_generation: false,
         web_search: false,
     };
@@ -20,16 +22,10 @@ impl ProviderCapabilities {
 
     pub fn from_provider_route(provider_type: &str, base_url: Option<&str>) -> Option<Self> {
         let protocol = RuntimeProviderProtocol::from_provider_type(provider_type)?;
-        Some(Self::for_resolved_route(provider_type, protocol, base_url))
+        Some(Self::from_resolved_route(provider_type, protocol, base_url))
     }
 
-    pub fn from_runtime_config(config: &RuntimeProviderConfig) -> Self {
-        config.protocol.map_or(Self::NONE, |protocol| {
-            Self::for_resolved_route(&config.provider_name, protocol, config.base_url.as_deref())
-        })
-    }
-
-    fn for_resolved_route(
+    pub fn from_resolved_route(
         provider_name: &str,
         protocol: RuntimeProviderProtocol,
         base_url: Option<&str>,
@@ -44,9 +40,16 @@ impl ProviderCapabilities {
             && is_official_openai_host(base_url);
         Self {
             namespace_tools: false,
+            custom_tools: hosted_tools,
             image_generation: hosted_tools,
             web_search: hosted_tools,
         }
+    }
+
+    pub fn from_runtime_config(config: &RuntimeProviderConfig) -> Self {
+        config.protocol.map_or(Self::NONE, |protocol| {
+            Self::from_resolved_route(&config.provider_name, protocol, config.base_url.as_deref())
+        })
     }
 }
 
@@ -102,6 +105,7 @@ mod tests {
     fn hosted_tools_require_official_responses_route_and_host() {
         let expected = Some(ProviderCapabilities {
             namespace_tools: false,
+            custom_tools: true,
             image_generation: true,
             web_search: true,
         });
@@ -136,6 +140,38 @@ mod tests {
                 Some("https://resource.openai.azure.com"),
             ),
             Some(ProviderCapabilities::NONE)
+        );
+        assert_eq!(
+            ProviderCapabilities::from_resolved_route(
+                "openai",
+                RuntimeProviderProtocol::Responses,
+                Some("https://api.openai.com/v1"),
+            ),
+            expected.expect("official Responses capability")
+        );
+        assert_eq!(
+            ProviderCapabilities::from_resolved_route(
+                "openai",
+                RuntimeProviderProtocol::ChatCompletions,
+                Some("https://api.openai.com/v1"),
+            ),
+            ProviderCapabilities::NONE
+        );
+        assert_eq!(
+            ProviderCapabilities::from_resolved_route(
+                "gateway",
+                RuntimeProviderProtocol::Responses,
+                Some("https://api.openai.com/v1"),
+            ),
+            ProviderCapabilities::NONE
+        );
+        assert_eq!(
+            ProviderCapabilities::from_resolved_route(
+                "azure-openai",
+                RuntimeProviderProtocol::AzureResponses,
+                Some("https://resource.openai.azure.com"),
+            ),
+            ProviderCapabilities::NONE
         );
     }
 

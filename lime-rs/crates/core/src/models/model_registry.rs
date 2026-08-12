@@ -186,6 +186,7 @@ pub enum ModelModality {
 pub enum ModelRuntimeFeature {
     Streaming,
     ToolCalling,
+    CustomTools,
     JsonSchema,
     Reasoning,
     PromptCache,
@@ -442,6 +443,9 @@ pub struct EnhancedModelMetadata {
     /// 运行时特性
     #[serde(default)]
     pub runtime_features: Vec<ModelRuntimeFeature>,
+    /// 模型显式选择的工具模式；runtime 不得按模型名推断。
+    #[serde(default)]
+    pub tool_mode: Option<String>,
     /// 模型显式声明支持的 Multi-Agent runtime；缺失时不得推断。
     #[serde(default)]
     pub multi_agent_version: Option<ModelMultiAgentVersion>,
@@ -502,6 +506,7 @@ impl EnhancedModelMetadata {
             input_modalities: vec![],
             output_modalities: vec![],
             runtime_features: vec![],
+            tool_mode: None,
             multi_agent_version: None,
             deployment_source: ModelDeploymentSource::UserCloud,
             management_plane: ModelManagementPlane::LocalSettings,
@@ -855,6 +860,7 @@ impl ModelsDevModel {
             input_modalities: vec![],
             output_modalities: vec![],
             runtime_features: vec![],
+            tool_mode: None,
             multi_agent_version: None,
             deployment_source: ModelDeploymentSource::UserCloud,
             management_plane: ModelManagementPlane::LocalSettings,

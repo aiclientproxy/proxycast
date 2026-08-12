@@ -1299,8 +1299,9 @@ async fn direct_message_publishes_activity_only_to_an_existing_recipient_session
     );
     let recipient_loop = core
         .session_loops
-        .get_or_create(&child.session.session_id)
-        .await;
+        .get_or_create(&child.session.session_id, &child.session.thread_id)
+        .await
+        .expect("bind recipient session actor");
     let submission = recipient_loop
         .submit_replacing(Arc::new(task))
         .await

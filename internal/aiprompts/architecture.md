@@ -459,6 +459,12 @@ provider capability upper bound 必须委托同一 adapter availability，禁止
 白名单而产生 ready/capability 漂移。`namespace_tools`、hosted `image_generation` 与 hosted `web_search`
 只有在 canonical schema、request lowering、stream reducer 和 route gate 全部可执行后才能置为 true；普通
 function/client tool 支持不能代替这些 provider capability。
+每个 current chat transport 都必须由真实 loopback request capture 同时证明 endpoint、认证头、canonical
+system/user/media/tool call/tool result/tool definition/generation lowering 与协议原生 terminal stream，不能用纯
+lowering 单测或 reducer fixture 冒充发网证据。OpenAI Chat Completions、OpenAI Responses HTTP、Anthropic
+Messages、Gemini GenerateContent、Vertex Gemini、Azure OpenAI Responses 与 Ollama Responses 已具备这套证据；
+Responses WebSocket 另有 handshake、`response.create` 与 HTTP replay capture。Anthropic 只保留服务端实际返回的
+input/output usage，不合成未提供的 `total_tokens`。
 Gemini GenerateContent、Vertex Gemini、Azure OpenAI Responses 与 Ollama Responses 已是 current adapter。Azure 使用 resource
 root、`/openai`、`/openai/v1` 或完整 `/openai/v1/responses` endpoint，认证仅允许 `api-key`，typed
 `api-version` 缺省为 `v1`；deployment URL、Bearer/NoAuth、Chat Completions、WebSocket 与 hosted tools 均 fail closed。
@@ -610,6 +616,28 @@ model-visible definition
 current provider 不得绕过 `RuntimeTool::execute_call` 直接调用 executor，也不得在 provider loop、lime-agent adapter 或 App Server 重复计时、归一化或合成 start/end。host emitter 负责把同一 lifecycle 直接投影为 canonical `item.started/item.completed`，并保证 `ItemStarted -> ActionRequired -> ItemCompleted` 的确定性顺序。执行上下文必须显式绑定 typed call/turn identity，current turn executor 必须持有已校验的 canonical thread identity；approval 和 request-user-input 不得从松散 metadata 反推 scope。`AgentEvent::ToolStart/ToolEnd`、App Server raw start/result mapper 与 backend event-name mapper、`core::agent::types::{StreamEvent,ToolExecutionResult,StreamResult}`、image-command raw lifecycle、live `tool.args` 与 imported raw Tool product wire 均为 `dead / deleted / forbidden-to-restore`。conversation import 只允许在 Codex source parser 输入边界读取 rollout，并在 source adapter 内维护 typed `CodexTimelineItem` / `CodexRolloutEvent` 解析态；`history_builder::build_canonical_history_events` 随即将其映射为 canonical Item。terminal-only、incomplete 和重复 lifecycle 必须在 source adapter 内确定性补齐或幂等忽略，随后在真实 session/thread/turn identity 边界写入 canonical Item。raw Tool intermediate 绝不得进入 normalizer 之后的链路、`StoredSession`、event log、ProjectionStore、read model、notification 或 GUI。
 
 current provider 的工具面按 model sampling step 冻结，不按整个用户 Turn 永久冻结。每次发 provider request 前必须生成一个 `RuntimeToolStepSnapshot`，同一 snapshot 同时拥有 model-visible definitions 与 exact executor；本 step 返回的 tool call 只能调用该 definitions allowlist 中的名称，未广告名称仍产生 canonical failed lifecycle，但不得进入真实 native/gateway/MCP executor。MCP snapshot 的唯一 owner 是 `tool-runtime::mcp_connection`：它按 server 隔离 discovery error/timeout，并把 prefixed definition、per-tool caller policy、dispatch route 与 immutable connection handle 一起冻结；同一步不得回查 live registry。`tool_search` 只更新本 Turn 的 deferred selection，旧 snapshot 不变，下一 sampling step 才可重新 capture。MCP bridge 的已归一化 tool timeout 固化在 connection client 中，因此 registry replace 后旧 step 继续使用旧 handle/timeout，新 step 才看到新配置。
+
+provider tool-call repair 也只能消费该 sampling step snapshot。`model-provider` 必须把 wire 中的
+`raw_arguments` 与解析后的 input 一起投影到 canonical `LlmEvent::ToolCall`，malformed JSON、空名称和
+scalar arguments 不能提前升级为整步 provider error。`agent-runtime` 随后调用 `tool-runtime::repair_tool_call`，
+只允许按本 step definitions、ASCII case 和 current native alias 得到 canonical name，并记录参数 diff。
+参数 normalization 后必须继续使用同一 `RuntimeToolDefinition.input_schema`：只允许把 schema 明确声明为
+`integer`/`number` 的合法 JSON 数值字符串确定性转为 number，不能按字段名、描述或自然语言猜测；随后用完整
+JSON Schema 校验 canonical arguments。schema 编译失败或参数仍不匹配都必须 fail closed，不能进入 handler。
+repair success 在写入 assistant transcript 前替换为 canonical name/arguments；repair failure 统一变为
+model-visible `invalid` call，由专用 `before_handler` executor 产生 exactly-one started/completed lifecycle 和
+failed tool result。即使 snapshot 中存在同名动态工具，带 typed repair failure metadata 的 `invalid` call 也
+不得进入真实 handler。原始 malformed payload 只保留在 typed repair metadata，不复制到 model-visible error
+arguments；schema 错误必须 mask 实例值，不能把 provider 参数原文带回模型。Architecture impact: major；本段改变
+canonical provider event 与 tool execution trust boundary，但不改变
+`model-provider -> agent-runtime -> tool-runtime -> Thread/Turn/Item` owner 方向。架构确认：confirmed；责任开发者
+root，2026-08-11。
+
+repair 后的 cancellation/timeout 继续复用同一 canonical terminal，不建立 provider-loop 旁路终态。handler 已启动时
+turn cancellation 必须先投影唯一 `aborted` completed lifecycle；即使 handler 自有后台工作随后返回 success，也不得
+覆盖该终态、追加第二条 completed 或触发下一次 provider sampling。repair 工具成功完成后，后续 provider sampling
+step 的 absolute timeout 也不得重放 handler 或 lifecycle；canonical call/result transcript 只供该次 request 使用。
+这两条组合竞态由 `agent-runtime::provider_turn` 跨 owner 回归直接守住。
 
 MCP resource、resource template、prompt 与 server status 属于 App Server 管理控制面，不是 model sampling-step inventory。GUI `mcpPrompt/*`、`mcpResource/*`、`mcpServerStatus/list` 每次通过 `LocalAppDataSource` 的全局 `lime-mcp::McpClientManager` 对当前 live connection 执行 typed read；它们不得进入 `McpStepSnapshot`、不得通过 caller-unaware registry dispatch 执行，也不得回写或替换 in-flight Tool snapshot。连接初始化返回的 server capabilities 只用于 manager status、tool filtering 与 bridge 装配事实；model bridge 只携带 tool discovery/call/notification 所需能力。MCP client initialize 只能广告已有 typed handler 的 client capability；Lime 没有 `sampling/createMessage` owner，必须与 Codex 一样保持 sampling absent，禁止先广告再由 rmcp 默认返回 method not found。Agent runtime 的唯一 owner 是 `AgentRuntimeState[sessionId] -> McpThreadRuntime`：创建时固定 canonical `threadId`，独立持有 runtime `McpClientManager`、真实 RMCP connection、bridge registry 与 immutable generation；runtime 只从管理面提供的 typed enabled server spec 创建连接，绝不复用管理面 `RunningService`。每个 enabled server 并发启动：`required=false` 的失败只使该 server 在候选 generation 中 absent，健康 server 的 bridge 仍可发布；任一 `required=true` 失败则关闭未发布候选的连接并拒绝替换，已发布 generation 与其 pending elicitation 不受影响。配置变化时只在候选 generation 完成启动策略和 snapshot 后原子发布，旧 sampling step 继续通过 `Arc` 持有原 connection handle；删除 session 才按精确 `(sessionId, threadId)` 关闭已发布 runtime，取消 turn 不关闭它。server-originated elicitation 独占 `mcpServer/elicitation/request` reverse JSON-RPC method，不得复用 `agentSession/action/respond`、Approval 或 `request_user_input`。它是 thread-scoped、turn-correlated 的瞬时 reverse request：App Server 只保留 exact in-memory waiter，`thread/read`、Thread/Turn/Item projection 和 durable store 不得写入 pending 或 terminal elicitation。公开 request contract 只有必填非空 `threadId`、可空 `turnId`、必填非空 `serverName` 与 typed `mode: "form"`；`sessionId`、`parentToolCallId`、raw MCP request id 和私有 token 均禁止进入 wire。per-call `McpCallScope` 只保留可空 `turnId` correlation；connection 已在 runtime 创建期绑定 session/thread owner，因此每次工具调用不得重传、推断或覆盖 owner。管理面 nested elicitation 因没有 runtime owner 必须在 MCP service 边界 fail closed；不得使用 singleton、最近 active turn、`sessionId` fallback、`parentToolCallId`、progress token 或 server metadata 猜测 owner。router 以 session owner 精确取消：未转发 waiter 直接 Cancel，已转发 waiter 只触发 closed，必须等待 App Server adapter 先发送 `serverRequest/resolved` 再释放 RMCP waiter；同一 server 的不同 session/thread 不串线。MCP 内部 opaque token 只捕获在 adapter task，App Server outer request id 只出现在 JSON-RPC，二者是双层精确 identity；`turnId` 只作 correlation，不参与路由，也不能伪造成 sampling-step capability。MCP operation timeout 由真实 connection handler 的 counted pause state 计算 active time；等待一个或多个用户 elicitation 不扣 tool timeout，turn cancellation 仍立即生效。elicitation capability 继续 absent：Lime 不广告没有独立协议 capability 的行为。
 
@@ -986,8 +1014,11 @@ Architecture impact: major; portable package、runtime owner、Electron 边界�
 
 MCP server 的执行环境身份只来自 `McpServerConfig.environment_id`，由 `lime-mcp::McpEnvironmentRegistry`
 在 transport 启动前解析。当前 registry 只注册 `local`；未知显式身份必须 fail closed，禁止把
-`remote` 或其它配置值降级成本机 stdio/HTTP 执行，也禁止从 `cwd` 猜测环境。远程 executor/backend
-尚未接入，继续作为 `OPEN_REF`，不得新增 compat fallback。
+`remote` 或其它配置值降级成本机 stdio/HTTP 执行，也禁止从 `cwd` 猜测环境。Codex 的远端
+`environment/{add,info,status}` 与 `thread/environment/*` 依赖 exec-server registry、WebSocket
+连接恢复和远端 Thread 选择，Lime Desktop 没有对应产品 consumer，已归入
+`product-scope-excluded / forbidden-to-restore`。远程 executor/backend 仍未接入 Lime current，禁止新增
+compat fallback 或空壳 JSON-RPC。
 
 本地 stdio 启动还必须复用 Codex 的平台核心环境变量 allowlist，并仅叠加配置显式 `env`；
 不得把 Desktop Host 的完整环境（尤其凭证变量）隐式继承给 MCP 子进程。启动 deadline
@@ -2233,7 +2264,11 @@ runtime fact 和 canonical read model 承接，terminal interaction 只保留 bo
 空字符串是有效 net-zero 结果，不得回退到由 GUI items 拼装的第二份 patch。该链路不复制 Codex TUI，也不改变 provider owner；
 多模型、多模态 sampling 和媒体 lowering 继续归 Grok-aligned `model-provider`。
 
-矩阵中的 `plugin/share/*`、`plugin/skill/read` 与其余 review notifications 继续为 `planned`；
+矩阵中的 `plugin/share/*`、Codex `marketplace/*`、external-agent migration 与远端
+`environment/*`/`thread/environment/*` 均按 Desktop 产品范围裁决为
+`product-scope-excluded / forbidden-to-restore`；`plugin/skill/read` 的 Codex remote-plugin-only
+wire 同样 excluded。Lime current 只保留本地 Plugin v3 catalog、Skills catalog/`skill/read` 与
+独立 `skillMarketplace/install` owner；
 `item/autoApprovalReview/*` 已由 Guardian current owner 承接；`turn/moderationMetadata` 由下一节 current
 主链接管。没有新增 `compat` 或
 `deprecated`；旧 Plugin 私有协议、Renderer 伪造 reverse request、raw diagnostic side-channel、未脱敏 terminal
@@ -2453,3 +2488,161 @@ Desktop Settings、App Server 与 tool-runtime 的唯一数据流写入架构事
 root, 2026-08-10。Confirmation content: 已核对 `SandboxBackendStatus::Planned`、`enforced=false`、
 `prepare_sandbox_command(RestrictedToken)` 拒绝路径、非 Windows/未配置状态，以及 Desktop/TUI、Codex runtime 和
 Grok model/multimodal owner 分界。
+
+## 43. Desktop Composer Fuzzy File Search Owner
+
+项目文件 `@` 补全属于对话工作台 Composer 的紧凑选择面板，不是新的文件浏览页，也不是 pending interaction。
+唯一产品链为：
+
+```text
+CharacterMention current @token
+  -> project root from App Server project read
+  -> Renderer typed fuzzyFileSearch gateway
+  -> Electron app_server_handle_json_lines
+  -> App Server fuzzyFileSearch processor
+  -> filesystem search owner
+  -> relative project path candidates
+  -> replace only the active @token
+```
+
+App Server 校验每个 root 是可读绝对目录，不跟随目录 symlink，并跳过 `.git/.hg/.svn/node_modules/target/dist/build/coverage`
+目录；结果限制为 50 条并按 score/path 稳定排序。同 cancellation token 的新请求标记旧扫描取消，Renderer 再用
+AbortSignal 与 request version 拒绝迟到响应。空 query/root 返回空结果；GUI 只显示项目相对路径，空格路径加引号，
+不会把本地文件伪装为 `plugin://`、connector 或 canonical UserInput Mention。
+
+Codex experimental session request/notification 会建立第二套长生命周期 search registry，Lime Desktop 没有对应产品
+consumer，因此统一为 `product-scope-excluded / forbidden-to-restore`；notification inventory 只做脱敏 drift diagnostics，
+不进入 current projector。Electron 不新增业务 IPC，Grok-aligned 多模型 catalog、route、capability/readiness 与多模态
+sampling/media lowering owner 不变。
+
+Architecture impact: major；本节新增 Composer 到 App Server filesystem search owner 的跨层数据流，并固定 one-shot
+request、双层取消、Desktop/TUI 分界和 session surface 排除。Responsible developer confirmation: root,
+2026-08-10。Confirmation content: 已核对 protocol/processor/client/gateway/Composer 依赖方向、绝对 root 与相对结果、
+session 回流守卫、Electron 通用转发边界，以及 Grok 多模型/多模态 owner 不变。
+
+## 44. Desktop CodeMode Runtime Boundary
+
+CodeMode 是 Agent runtime 的工具编排模式，不是 Codex TUI 功能。Lime Desktop 只复用其 runtime contract；
+模型 capability/readiness 与 provider wire 仍分别归 Grok-aligned `model-provider` 控制面和各协议 lowering。
+目标唯一数据流为：
+
+```text
+Desktop turn request + selected model capability
+  -> selected profile slot requiredCapabilities
+  -> authoritative model runtime_features
+  -> resolved provider protocol/host capability intersection
+  -> App Server / agent-runtime sampling-step snapshot
+  -> tool-runtime RuntimeToolMode + frozen CodeMode tool plan
+  -> model-provider native freeform/custom-tool lowering
+  -> thread-owned CodeMode session runtime
+  -> exec/wait -> canonical nested RuntimeTool execution
+  -> Tool lifecycle + Thread/Turn/Item projection -> GUI
+```
+
+当前已落地的 production foundation 包含 planning boundary、Agent loop executable boundary、thread-owned
+session service、in-process V8 provider 与 Runtime backend factory 接线。
+`RuntimeToolExposure` 与 Codex 一致为
+`Direct / Deferred / DeferredModelOnly / DirectModelOnly / CodeModeOnly / Hidden`；规划器从同一个 frozen
+tool snapshot 生成 direct model、searchable 和 nested surface，并固定 namespace 拼接、JavaScript identifier
+normalization、`exec`/`wait` 保留名与 normalization collision 的确定性 first-winner。普通 `CodeMode` 在 runtime
+不可用时仅可按显式策略回退 Direct；`CodeModeOnly` 或禁用 fallback 必须 fail closed。
+
+`tool-runtime::code_mode` 是 transport-neutral session contract owner：`execute` 返回带稳定 `cell_id` 与独立
+`initial_response` future 的 `RuntimeCodeModeStartedCell`，`wait/terminate` 返回保留 live/missing 语义的 outcome，
+同一 handle 提供 `shutdown`；session provider 在启动 host 前报告 availability，并以 delegate 承接 nested tool、
+notification 与 cell close，非默认 yield/heap limits 在 provider 未实现时 fail closed。模型可见结果固定包含
+`Script running/completed/failed/terminated` 状态，yielded 输出必须带 `cell_id`，error 不能吞掉已产生的 output；
+output token budget 复用 `tool-runtime` 的统一 token truncation。
+
+`agent-runtime::provider_turn::code_mode` 只在 frozen sampling-step snapshot 持有 executable session handle 时，
+成组广告 Codex `exec` custom tool 与 `wait` function tool；没有 handle 时继续拒绝 custom call，生产默认 snapshot
+不会暴露这两个工具。provider response 必须先完整 materialize，再执行 function/custom/wait，混合结果按原始 call
+顺序回写 transcript；同批并行策略仍保留。turn cancellation 在 cell 已启动后必须调用同一 session 的
+`terminate`，不得只丢弃 future 留下后台 cell。`wait` 的 `yield_time_ms/max_tokens/terminate` 都由该窄模块解析，
+普通 tool executor/lifecycle 不冒充 CodeMode runtime。
+
+模型门禁继续复用 Grok-aligned catalog/readiness 唯一事实源。`tool_mode` 与 provider capability 是两个独立事实：
+catalog/direct provider config 只接受 `direct / code_mode / code_mode_only` 三个精确 token，缺失或未知值统一为
+`Direct`，禁止按 model/provider 名称推断。基础 coding requirement 固定为
+`coding/tools/streaming`，只有最终选中的 profile slot 才能追加 `custom_tools`；review/fast/local 等未选中
+slot 只保留诊断展示，fallback 后按最终 slot 重算。模型侧必须在 authoritative `runtime_features` 显式声明
+`custom_tools`。当前只有 Codex 上游同样声明 freeform tool 的精确 canonical 映射 `openai/gpt-5.2` 带该 capability，
+但该模型没有 `tool_mode` 声明，因此仍按 `Direct` 执行；capability 不能反向开启 CodeMode。resolved route 再与实际 provider protocol/host 求交集：仅官方 OpenAI
+Responses route 保留该 feature；Chat Completions、Anthropic、Gemini、Azure、Ollama 和第三方 Responses
+均从 effective snapshot 移除，若选中 slot 要求该能力则以不可重试的
+`capability_gap / capability:custom_tools` 在 sampling 前失败。普通聊天没有该额外 requirement，不受影响。
+
+`model-provider` 已建立 provider-neutral `ToolDefinition::Custom`、`FreeformToolFormat`、
+`CustomToolCall/CustomToolResult` canonical contract，并只在官方 OpenAI Responses route 的显式
+`custom_tools` capability 下 lowering 为原生 `type: "custom"`、`custom_tool_call` 和
+`custom_tool_call_output`；Chat Completions、Anthropic、Gemini、第三方 Responses route 与无 capability
+历史均在发网前 fail closed。失败 custom output lowering 必须优先保留格式化 runtime output，不得只发送裸 error。
+
+`agent-runtime::session_loop` 现已成为 canonical thread-owned CodeMode lifecycle owner。actor 创建必须同时绑定
+`session_id + thread_id`；同一 session 的 thread identity 漂移直接 fail closed，不保留旧单参数入口。provider
+availability 通过后才建立 service，runtime session 在首次 CodeMode operation 时 lazy create；actor replace/interrupt
+终止 active cells，shutdown 关闭已初始化 session，未初始化 service 的 shutdown 不得反向创建 runtime session。
+task/input handle 只从 actor resources 读取同一 canonical `thread_id` 与 session handle，不另建全局 registry。
+
+production Runtime backend factory 只给 current runtime backend 注入 `RuntimeCodeModeServiceFactory::production()`；
+mock、external 与 unavailable backend 不注入。factory 只使用 `ProcessCodeModeSessionProvider`，通过同目录
+`code-mode-host` 的 length-prefixed stdio protocol 创建 session；host 进程内部使用 `V8CodeModeSessionProvider`，每个
+cell 在 fresh sandbox-enabled V8 isolate 中执行 async module。host 仅暴露 frozen nested tools、
+text/image/audio/generatedImage、store/load、notify、timer、yield 与 exit，不提供 Node、filesystem、network 或
+console。session store 只在同一 thread-owned host session 内共享，cell terminate 使用 V8 isolate handle；host
+缺失、握手不兼容、崩溃或资源上限不支持均 fail closed，production 不回退 App Server 进程内 V8。
+CodeMode model surface 必须同时满足模型 `tool_mode` 请求、resolved provider `custom_tools` capability 和当前
+`RuntimeSessionInputHandle` 持有 executable session，随后才附着 session 并由 provider turn 成组广告 `exec/wait`。
+普通 `CodeMode` 缺任一条件回落 Direct，`CodeModeOnly` 缺任一条件 fail closed，`Direct` 即使持有 session 也不广告。
+
+每个 `exec` cell 现在通过 `RuntimeCodeModeService` 建立独立 dispatch route；runtime 在 `execute` 返回
+`StartedCell` 前发起 nested callback 时，route gate 会等待 cell identity 绑定，而不是落到最近 turn 或 session-wide
+可变 delegate。provider-turn delegate 只从本 sampling step 的 frozen `RuntimeCodeModeTool` 集合按 JavaScript global
+name 查找定义，并复用同一个 `RuntimeToolExecutorHandle.bind(...).execute_call(...)`，因此 nested tool 继续经过普通
+权限、取消、lifecycle 和 output projection；`exec`/`wait` control tool 禁止递归 nested 调用。cell terminal、terminate、
+interrupt、cell-close 与 shutdown 都清理 route/gate，不能把下一 turn 的 executor 接到旧 cell。
+
+`exec` 与 `wait` 现在都经过 canonical `ToolLifecycleEmitter` 发出 Started/Completed；完成输出保留 cell identity、
+CodeMode terminal 状态、`handler_executed` 和格式化 partial output，并由既有 Tool lifecycle 投影形成普通 Tool Item。
+nested `notify` 复用同一 turn/call/cell correlation 发出 `ToolOutputDelta`，经 Lime Agent 的既有 Desktop host event
+pipeline 进入 App Server/GUI 可消费的事件链；同时以同一 outer `exec` call id 在本 sampling step 的下一次 provider
+request 中追加 `custom_tool_call_output`，顺序位于最终 exec output 之前，等价于 Codex
+`inject_if_running(CustomToolCallOutput)` 在当前 turn 内的模型可见结果。空通知静默，已取消通知 fail closed。该注入
+只存在于当前 provider turn 的下一 sampling request，不经过 `RuntimeSessionInputHandle`，也不作为独立 durable Item
+持久化；CodeCell 的 thread-owned trace/evidence owner 尚未建立，不能借用 current-turn `Tool` Item 或公开 ThreadItem
+伪造跨 Turn 的 started/closed 阶段。cell route 还保留 closed-cell 终态集合：terminal response、terminate、
+interrupt、shutdown 或 host `cell_closed` 后，迟到的 nested invoke/notify 直接返回 closed error，不会重新创建空 gate
+并永久等待，也不会落到 fallback delegate；provider-turn delegate 同时以原子 closed 标志拒绝迟到的 Desktop delta 和
+provider transcript output。
+
+V8 build 输入固定从 `lime-rs/Cargo.lock` 读取精确 crate version，`scripts/lib/rusty-v8-artifacts.mjs` 只接受
+Codex `ptrcomp_sandbox_release` 的受支持 platform target，下载 archive/binding/checksum manifest 后逐项校验 SHA-256，
+再向 Rust test、local CI 和 App Server sidecar build 注入成对的 `RUSTY_V8_ARCHIVE` /
+`RUSTY_V8_SRC_BINDING_PATH`。V8 archive 编译期只静态链接进 `code-mode-host`，不复制进 Electron resources。
+dev、Electron asset 与 Windows build 使用同一次 Cargo invocation 成组产出 `app-server` 和 `code-mode-host`；Electron
+release bundle 将二者放在同一平台目录，manifest 分别记录 `sha256` 与 `codeModeHostSha256`，packaged verifier 必须同时
+校验。`default_code_mode_host_path` 只解析 App Server/测试二进制同目录，不搜索 PATH 上的替代 runtime。
+
+CodeMode 专项 Electron Gate B 已通过
+`.lime/qc/gui-evidence/code-mode-electron-gate-b/code-mode-electron-gate-b-summary.json` 建立：真实 Electron、
+preload/contextBridge、IPC、`app_server_handle_json_lines`、App Server runtime backend、official-host Responses route、
+production process factory、custom `exec` 回采样、canonical Thread/Turn/Tool Item 与 GUI 可见终态使用同一 identity；
+Electron、App Server 与 `code-mode-host` PID 分别为 `44199 / 44203 / 44521`，host 的父 PID 精确为 App Server。公开 Item
+类型只有 `userMessage/dynamicToolCall/agentMessage`，mock fallback、invoke/console/page/provider error 均为零。该场景通过
+标准 `HTTP_PROXY` 把仍以 `api.openai.com` 为 Host 的请求路由到受控本地 fixture，只证明 official-host capability、
+production lowering 与 macOS dev-process isolation，不冒充 live OpenAI、Windows/packaged parity 或公网稳定性证据。
+
+当前 alignment blocker 只剩 thread-owned CodeCell trace/evidence owner；Codex 公开 App Server ThreadItem 本身没有
+CodeCell variant，现阶段只消费既有 outer Tool Item/GUI lifecycle surface，不新增 CodeCell GUI card 或产品事件旁路。
+不得借用系统 Node、shell eval、Electron renderer 或 Codex TUI 进程执行 JavaScript；CodeCell trace 只在建立真实
+consumer 与唯一 trace/evidence owner 后实现。Electron 仍只做 Desktop Host、sidecar lifecycle 与标准 GUI 投影。
+
+Architecture impact: major；本节固定 CodeMode 的唯一 owner、Desktop/TUI 分界、selected-slot requirement、
+authoritative model declaration 与 resolved provider route 交集、provider custom contract、session lifecycle contract
+和 Agent loop fail-closed 上线顺序。Responsible developer confirmation: root, 2026-08-12。Confirmation content:
+已核对 Codex `ToolMode`/`ToolExposure`、`StartedCell`、session provider/delegate、sandbox V8、freeform `exec`、function
+`wait`、yield/terminate/cancel 与 mixed-call transcript 顺序；确认 Lime 当前完成 transport-neutral contract、
+canonical thread-owned lazy service、process-owned sandbox V8 host、production factory、三重门禁、per-cell nested
+dispatch、outer Tool lifecycle、notify Desktop event/provider-transcript projection、双 sidecar 构建供应链与专项 Electron
+Gate B。当前明确保留 thread-owned CodeCell trace/evidence owner blocker；未把受控 fixture 等同于 live provider，也未把
+macOS dev Gate B 等同于 Windows/packaged parity。

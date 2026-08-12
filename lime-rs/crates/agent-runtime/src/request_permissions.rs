@@ -381,7 +381,10 @@ mod tests {
     async fn permission_action_preserves_identity_and_resolves_exactly_once() {
         let state = Arc::new(ActionRequiredState::default());
         let registry = RuntimeSessionRegistry::default();
-        let session = registry.get_or_create("session-permissions").await;
+        let session = registry
+            .get_or_create("session-permissions", "thread-permissions")
+            .await
+            .expect("bind permission session actor");
         let (action_tx, action_rx) = oneshot::channel();
         let action_tx = Arc::new(StdMutex::new(Some(action_tx)));
         let (result_tx, result_rx) = oneshot::channel();
@@ -485,7 +488,10 @@ mod tests {
     async fn permission_response_fails_closed_for_unsafe_session_review() {
         let state = Arc::new(ActionRequiredState::default());
         let registry = RuntimeSessionRegistry::default();
-        let session = registry.get_or_create("session-permissions").await;
+        let session = registry
+            .get_or_create("session-permissions", "thread-permissions")
+            .await
+            .expect("bind permission session actor");
         let (action_tx, action_rx) = oneshot::channel();
         let action_tx = Arc::new(StdMutex::new(Some(action_tx)));
         let (result_tx, result_rx) = oneshot::channel();

@@ -8,7 +8,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { electronAppServerBinaryDestination } from "./electron-app-server-assets.mjs";
+import {
+  electronAppServerBinaryDestination,
+  electronCodeModeHostBinaryDestination,
+} from "./electron-app-server-assets.mjs";
 
 const BUILD_READY_ENV = "LIME_ELECTRON_FIXTURE_BUILD_READY";
 const BUILD_LOCK_DIR = path.join(".lime", "electron-fixture-build.lock");
@@ -188,6 +191,9 @@ function electronFixtureBuildSegments({ rootDir }) {
       requiredFiles: [
         path.join(rootDir, "dist-electron", "app-server.release.json"),
         electronAppServerBinaryDestination({
+          outputRoot: path.join(rootDir, "dist-electron"),
+        }),
+        electronCodeModeHostBinaryDestination({
           outputRoot: path.join(rootDir, "dist-electron"),
         }),
       ],

@@ -7868,7 +7868,7 @@ const checks = [
     ],
   },
   {
-    name: "Electron dev sidecar defaults to App Server runtime backend and only keeps explicit external override",
+    name: "Electron dev sidecars default to App Server runtime backend and only keep explicit external override",
     files: [
       "scripts/lib/electron-dev-sidecar.mjs",
       "scripts/lib/electron-dev-sidecar.test.mjs",
@@ -7884,7 +7884,7 @@ const checks = [
       "APP_SERVER_BACKEND_TIMEOUT_MS",
       "默认 dev App Server backend 使用 App Server 内部 runtime",
       "显式 unavailable 时 dev App Server backend 不接 external",
-      "调用 cargo build 只构建 app-server sidecar",
+      "调用 cargo build 成组构建 app-server 与 code-mode host",
     ],
     absentSnippets: [
       "resolveDevAppServerAgentBackendBinary",
@@ -7894,6 +7894,26 @@ const checks = [
       "app-server-agent-backend",
       'APP_SERVER_BACKEND_MODE: "mock"',
       'backendMode: "mock"',
+    ],
+  },
+  {
+    name: "Windows workflows build both App Server sidecars with verified V8 inputs",
+    files: [
+      ".github/workflows/build-windows-test.yml",
+      ".github/workflows/quality.yml",
+    ],
+    snippets: [
+      "Configure sandboxed rusty_v8 artifacts",
+      "node scripts/lib/rusty-v8-artifacts.mjs --github-env",
+      "code-mode-host sidecars",
+    ],
+  },
+  {
+    name: "Windows quality explicitly checks both App Server sidecar binaries",
+    file: ".github/workflows/quality.yml",
+    snippets: [
+      "Check Windows app-server and code-mode-host sidecars",
+      "cargo check --manifest-path lime-rs/Cargo.toml -p app-server --bin app-server -p tool-runtime --bin code-mode-host",
     ],
   },
   {

@@ -21,8 +21,8 @@
     },
     "byStatus": {
       "implemented": 140,
-      "product-scope-excluded": 59,
-      "planned": 22
+      "product-scope-excluded": 78,
+      "planned": 3
     }
   },
   "groups": [
@@ -444,15 +444,20 @@
       "methods": ["config/mcpServer/reload"]
     },
     {
-      "id": "environment-planned",
+      "id": "environment-excluded",
       "direction": "clientRequest",
       "productArea": "environment",
-      "status": "planned",
-      "priority": "P2",
-      "owner": "app-server environment owner",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
       "counterpartRule": "none",
-      "gap": "Remote environment registry and status are not modeled on the current App Server boundary.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "Codex environment/add|info|status manages named remote exec-server WebSocket environments and their shell/cwd readiness. Lime Desktop has no remote exec-server registry, connection recovery, or environment picker; its local execution owner already carries cwd and environment identity through RuntimeCore/tool-runtime. Adding these methods would create a second execution backend rather than a user workflow.",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/turn.rs",
+        "lime-rs/crates/tool-runtime/src/tool_call.rs",
+        "lime-rs/crates/tool-runtime/src/mcp_connection/scope.rs",
+        "internal/aiprompts/architecture.md"
+      ],
       "methods": ["environment/add", "environment/info", "environment/status"]
     },
     {
@@ -477,15 +482,19 @@
       ]
     },
     {
-      "id": "external-agent-config-planned",
+      "id": "external-agent-config-excluded",
       "direction": "clientRequest",
       "productArea": "config-import",
-      "status": "planned",
-      "priority": "P4",
-      "owner": "app-server config import owner",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
       "counterpartRule": "none",
-      "gap": "External agent config detection/import has no current typed owner or product evidence.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "Codex externalAgentConfig methods migrate configuration and histories from other agent products. Lime has no import wizard, external-agent source adapter, migration persistence, or Desktop consumer; importing this TUI/cloud migration surface would add an unrelated configuration owner.",
+      "evidence": [
+        "internal/refactor/v1/08-third-audit-gap-register.md",
+        "internal/aiprompts/architecture.md",
+        "src/lib/api/agentRuntime/appServerNotificationDrift.ts"
+      ],
       "methods": [
         "externalAgentConfig/detect",
         "externalAgentConfig/import",
@@ -530,7 +539,6 @@
       "priority": "P1",
       "owner": "app-server filesystem search owner",
       "counterpartRule": "same-name",
-      "gap": "Exact one-shot fuzzy search is consumed by the Desktop Composer file mention flow.",
       "evidence": [
         "lime-rs/crates/app-server-protocol/src/protocol/v2/fuzzy_file_search.rs",
         "lime-rs/crates/app-server/src/fuzzy_file_search.rs",
@@ -577,15 +585,20 @@
       "methods": ["hooks/list"]
     },
     {
-      "id": "marketplace-planned",
+      "id": "marketplace-excluded",
       "direction": "clientRequest",
       "productArea": "plugins",
-      "status": "planned",
-      "priority": "P4",
-      "owner": "plugin registry",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
       "counterpartRule": "none",
-      "gap": "Marketplace mutations are not aligned to the Codex plugin registry contract.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "Codex marketplace mutations manage remote Plugin marketplace repositories. Lime Desktop's marketplace is the Skills catalog and skillMarketplace/install flow; it is a different owner and wire. Mapping Codex marketplace mutations onto it would misrepresent Skill installation as Plugin marketplace management.",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/plugin.rs",
+        "packages/app-server-client/src/request-client-methods.ts",
+        "src/lib/api/skills.ts",
+        "internal/aiprompts/architecture.md"
+      ],
       "methods": [
         "marketplace/add",
         "marketplace/remove",
@@ -704,15 +717,19 @@
       ]
     },
     {
-      "id": "plugins-share-planned",
+      "id": "plugins-share-excluded",
       "direction": "clientRequest",
       "productArea": "plugins",
-      "status": "planned",
-      "priority": "P1",
-      "owner": "Plugin share owner",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
       "counterpartRule": "none",
-      "gap": "Remote plugin share mutations still lack current Desktop lifecycle and evidence.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "Codex plugin/share methods operate on a remote sharing service and target principals. Lime Desktop has only local Plugin v3 discovery/install/activation and no share service, principal model, checkout store, or GUI workflow; the generated PluginShareContext DTO is not a consumer.",
+      "evidence": [
+        "packages/app-server-client/src/generated/protocol-types.ts",
+        "lime-rs/crates/app-server/src/processor/plugin.rs",
+        "internal/aiprompts/architecture.md"
+      ],
       "methods": [
         "plugin/share/checkout",
         "plugin/share/delete",
@@ -992,15 +1009,18 @@
       "methods": ["error", "warning"]
     },
     {
-      "id": "external-agent-config-notification-planned",
+      "id": "external-agent-config-notification-excluded",
       "direction": "serverNotification",
       "productArea": "config-import",
-      "status": "planned",
-      "priority": "P4",
-      "owner": "app-server config import owner",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "product-scope",
       "counterpartRule": "none",
-      "gap": "External agent config import progress has no current typed lifecycle.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "These notifications only report the excluded external-agent migration flow. Lime records method and field names as bounded drift diagnostics and has no import task UI or migration read model.",
+      "evidence": [
+        "src/lib/api/agentRuntime/appServerNotificationDrift.ts",
+        "internal/refactor/v1/08-third-audit-gap-register.md"
+      ],
       "methods": [
         "externalAgentConfig/import/completed",
         "externalAgentConfig/import/progress"
@@ -1203,15 +1223,19 @@
       "methods": ["skills/changed"]
     },
     {
-      "id": "environment-notification-planned",
+      "id": "environment-notification-excluded",
       "direction": "serverNotification",
       "productArea": "environment",
-      "status": "planned",
-      "priority": "P2",
-      "owner": "app-server environment owner",
+      "status": "product-scope-excluded",
+      "priority": "none",
+      "owner": "Renderer notification drift diagnostics",
       "counterpartRule": "none",
-      "gap": "Thread environment connection transitions have no current typed owner.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "rationale": "Connection lifecycle notifications belong to Codex remote exec-server environments. Lime has no corresponding remote environment owner or Desktop state surface; they remain method-only diagnostics and must not enter Header, timeline, or pending interaction projections.",
+      "evidence": [
+        "src/lib/api/agentRuntime/appServerNotificationDrift.ts",
+        "internal/refactor/v2/EVENT-PROJECTIONS.md",
+        "internal/aiprompts/architecture.md"
+      ],
       "methods": [
         "thread/environment/connected",
         "thread/environment/disconnected"

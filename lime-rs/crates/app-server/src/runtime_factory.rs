@@ -97,6 +97,9 @@ impl AppServerRuntimeFactory {
         RuntimeCore::with_backend(Arc::new(RuntimeBackend::with_execution_process_server(
             execution_process.clone(),
         )))
+        .with_code_mode_factory(
+            agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
+        )
         .with_execution_process_server(execution_process)
     }
 
@@ -105,6 +108,9 @@ impl AppServerRuntimeFactory {
         RuntimeCore::with_backend(Arc::new(
             RuntimeBackend::with_db_and_execution_process_server(db, execution_process.clone()),
         ))
+        .with_code_mode_factory(
+            agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
+        )
         .with_execution_process_server(execution_process)
     }
 
@@ -117,6 +123,9 @@ impl AppServerRuntimeFactory {
                 execution_process.clone(),
             )),
             capability_source,
+        )
+        .with_code_mode_factory(
+            agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
         )
         .with_execution_process_server(execution_process)
     }
@@ -132,6 +141,9 @@ impl AppServerRuntimeFactory {
                 execution_process.clone(),
             )),
             capability_source,
+        )
+        .with_code_mode_factory(
+            agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
         )
         .with_execution_process_server(execution_process)
     }

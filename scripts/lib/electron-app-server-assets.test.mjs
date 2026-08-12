@@ -6,10 +6,12 @@ import {
   appServerResourceBinaryName,
   appServerResourcePlatformKey,
   buildElectronAppServerReleaseManifest,
+  codeModeHostResourceBinaryName,
   copyElectronAppServerRuntimeLibraries,
   electronAppServerBinaryDestination,
   electronAppServerManifestPath,
   electronAppServerResourcesRoot,
+  electronCodeModeHostBinaryDestination,
   prepareElectronAppServerAssets,
   resolveElectronAppServerRuntimeEnv,
   resolveElectronAppServerSherpaTargetTriple,
@@ -19,7 +21,11 @@ describe("electron app-server assets", () => {
   it("按平台解析 resources sidecar 名称与平台 key", () => {
     expect(appServerResourceBinaryName("darwin")).toBe("app-server");
     expect(appServerResourceBinaryName("win32")).toBe("app-server.exe");
-    expect(appServerResourcePlatformKey("darwin", "arm64")).toBe("darwin-arm64");
+    expect(codeModeHostResourceBinaryName("darwin")).toBe("code-mode-host");
+    expect(codeModeHostResourceBinaryName("win32")).toBe("code-mode-host.exe");
+    expect(appServerResourcePlatformKey("darwin", "arm64")).toBe(
+      "darwin-arm64",
+    );
     expect(appServerResourcePlatformKey("darwin", "x64")).toBe("darwin-x64");
     expect(appServerResourcePlatformKey("win32", "x64")).toBe("win32-x64");
     expect(appServerResourcePlatformKey("linux", "x64")).toBe("linux-x64");
@@ -56,13 +62,28 @@ describe("electron app-server assets", () => {
         arch: "arm64",
       }),
     ).toBe(
-      path.resolve("/repo/lime/dist-electron/app-server/darwin-arm64/app-server"),
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/app-server",
+      ),
+    );
+    expect(
+      electronCodeModeHostBinaryDestination({
+        outputRoot,
+        platform: "darwin",
+        arch: "arm64",
+      }),
+    ).toBe(
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/code-mode-host",
+      ),
     );
   });
 
   it("生成 Electron packaged app-server manifest", async () => {
     const manifest = await buildElectronAppServerReleaseManifest({
       binaryPath: "/repo/lime/dist-electron/app-server/darwin-arm64/app-server",
+      codeModeHostBinaryPath:
+        "/repo/lime/dist-electron/app-server/darwin-arm64/code-mode-host",
       version: "1.59.0",
       platform: "darwin-arm64",
       sha256File: async () => "sha256",
@@ -76,6 +97,7 @@ describe("electron app-server assets", () => {
           platform: "darwin-arm64",
           url: "app-resource://app-server/darwin-arm64/app-server",
           sha256: "sha256",
+          codeModeHostSha256: "sha256",
         },
       ],
     });
@@ -90,10 +112,13 @@ describe("electron app-server assets", () => {
       platform: "darwin",
       arch: "arm64",
       sourceBinary: "/repo/lime/lime-rs/target/debug/app-server",
+      sourceCodeModeHostBinary:
+        "/repo/lime/lime-rs/target/debug/code-mode-host",
       readPackageJson: async () => ({ version: "1.59.0" }),
       makeDir: async (...args) => calls.push(["mkdir", ...args]),
       copy: async (...args) => calls.push(["copy", ...args]),
-      clearLaunchBlockingXattrs: async (...args) => calls.push(["xattr", ...args]),
+      clearLaunchBlockingXattrs: async (...args) =>
+        calls.push(["xattr", ...args]),
       getStat: async () => ({ mode: 0o755 }),
       changeMode: async (...args) => calls.push(["chmod", ...args]),
       prepareRuntimeBinary: (...args) => calls.push(["prepare", ...args]),
@@ -104,23 +129,35 @@ describe("electron app-server assets", () => {
           "prepare",
           {
             binaryPath: path.resolve(
-              "/repo/lime/dist-electron/app-server/darwin-arm64/app-server",
+              "/repo/lime/dist-electron/app-server/darwin-arm64/code-mode-host",
             ),
             platform: "darwin",
           },
         ]);
-        expect(filePath).toBe(
-          path.resolve("/repo/lime/dist-electron/app-server/darwin-arm64/app-server"),
-        );
+        expect([
+          path.resolve(
+            "/repo/lime/dist-electron/app-server/darwin-arm64/app-server",
+          ),
+          path.resolve(
+            "/repo/lime/dist-electron/app-server/darwin-arm64/code-mode-host",
+          ),
+        ]).toContain(filePath);
         return "sha256";
       },
     });
 
     expect(result.binaryPath).toBe(
-      path.resolve("/repo/lime/dist-electron/app-server/darwin-arm64/app-server"),
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/app-server",
+      ),
     );
     expect(result.manifestPath).toBe(
       path.resolve("/repo/lime/dist-electron/app-server.release.json"),
+    );
+    expect(result.codeModeHostBinaryPath).toBe(
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/code-mode-host",
+      ),
     );
     expect(calls[0]).toEqual([
       "mkdir",
@@ -130,19 +167,46 @@ describe("electron app-server assets", () => {
     expect(calls[1]).toEqual([
       "copy",
       path.resolve("/repo/lime/lime-rs/target/debug/app-server"),
-      path.resolve("/repo/lime/dist-electron/app-server/darwin-arm64/app-server"),
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/app-server",
+      ),
     ]);
     expect(calls[2]).toEqual([
-      "xattr",
-      path.resolve("/repo/lime/dist-electron/app-server/darwin-arm64/app-server"),
-      "darwin",
+      "copy",
+      path.resolve("/repo/lime/lime-rs/target/debug/code-mode-host"),
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/code-mode-host",
+      ),
     ]);
     expect(calls[3]).toEqual([
-      "chmod",
-      path.resolve("/repo/lime/dist-electron/app-server/darwin-arm64/app-server"),
-      0o755,
+      "xattr",
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/app-server",
+      ),
+      "darwin",
     ]);
     expect(calls[4]).toEqual([
+      "xattr",
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/code-mode-host",
+      ),
+      "darwin",
+    ]);
+    expect(calls[5]).toEqual([
+      "chmod",
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/app-server",
+      ),
+      0o755,
+    ]);
+    expect(calls[6]).toEqual([
+      "chmod",
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/code-mode-host",
+      ),
+      0o755,
+    ]);
+    expect(calls[7]).toEqual([
       "prepare",
       {
         binaryPath: path.resolve(
@@ -151,8 +215,17 @@ describe("electron app-server assets", () => {
         platform: "darwin",
       },
     ]);
-    expect(calls[5][0]).toBe("write");
-    expect(calls[5][1]).toBe(
+    expect(calls[8]).toEqual([
+      "prepare",
+      {
+        binaryPath: path.resolve(
+          "/repo/lime/dist-electron/app-server/darwin-arm64/code-mode-host",
+        ),
+        platform: "darwin",
+      },
+    ]);
+    expect(calls[9][0]).toBe("write");
+    expect(calls[9][1]).toBe(
       path.resolve("/repo/lime/dist-electron/app-server.release.json"),
     );
   });
@@ -172,15 +245,14 @@ describe("electron app-server assets", () => {
       },
       resolveBinary: (options) => {
         expect(options.env.APP_SERVER_BIN).toBeUndefined();
-        expect(options.env.CARGO_TARGET_DIR).toBe(
-          "/repo/lime/lime-rs/target",
-        );
+        expect(options.env.CARGO_TARGET_DIR).toBe("/repo/lime/lime-rs/target");
         return "/repo/lime/lime-rs/target/debug/app-server";
       },
       readPackageJson: async () => ({ version: "1.59.0" }),
       makeDir: async (...args) => calls.push(["mkdir", ...args]),
       copy: async (...args) => calls.push(["copy", ...args]),
-      clearLaunchBlockingXattrs: async (...args) => calls.push(["xattr", ...args]),
+      clearLaunchBlockingXattrs: async (...args) =>
+        calls.push(["xattr", ...args]),
       getStat: async () => ({ mode: 0o755 }),
       changeMode: async (...args) => calls.push(["chmod", ...args]),
       prepareRuntimeBinary: async () => undefined,
@@ -195,7 +267,9 @@ describe("electron app-server assets", () => {
     expect(calls[1]).toEqual([
       "copy",
       path.resolve("/repo/lime/lime-rs/target/debug/app-server"),
-      path.resolve("/repo/lime/dist-electron/app-server/darwin-arm64/app-server"),
+      path.resolve(
+        "/repo/lime/dist-electron/app-server/darwin-arm64/app-server",
+      ),
     ]);
   });
 
@@ -287,7 +361,8 @@ version = "1.13.0"
         platform: "darwin",
         arch: "arm64",
         sourceBinary: "/repo/lime/custom-target/debug/app-server",
-        destinationDirectory: "/repo/lime/dist-electron/app-server/darwin-arm64",
+        destinationDirectory:
+          "/repo/lime/dist-electron/app-server/darwin-arm64",
         readCargoLock: async () => `
 [[package]]
 name = "sherpa-onnx-sys"

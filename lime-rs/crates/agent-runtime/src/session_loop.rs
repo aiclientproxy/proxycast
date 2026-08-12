@@ -15,9 +15,10 @@ mod actor;
 mod handle;
 mod input_queue;
 mod inter_agent;
+mod registry;
+mod resources;
 mod step;
 
-pub use actor::RuntimeSessionRegistry;
 pub use handle::RuntimeSessionHandle;
 pub use input_queue::{
     RuntimeSessionClosureTask, RuntimeSessionInput, RuntimeSessionInputActivity,
@@ -29,6 +30,7 @@ pub use inter_agent::{
     RuntimeSessionInterAgentDeliveryMode, RuntimeSessionInterAgentInput,
     RuntimeSessionInterAgentMessageKind, RuntimeSessionInterAgentResultStatus,
 };
+pub use registry::RuntimeSessionRegistry;
 pub use step::{RuntimeSessionStepContext, RuntimeSessionTokenUsage};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -73,6 +75,7 @@ pub struct RuntimeSessionSnapshot {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeSessionOperationContext {
     pub session_id: String,
+    pub thread_id: String,
     pub submission_id: String,
     pub active_turn_id: Option<String>,
     pub client_user_message_id: Option<String>,

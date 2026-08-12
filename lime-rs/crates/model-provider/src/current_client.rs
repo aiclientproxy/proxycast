@@ -19,8 +19,8 @@ use futures::future::BoxFuture;
 use futures::Stream;
 use reqwest::{Client, Response, StatusCode};
 pub use runtime_core::{
-    CanonicalLlmEvent, FailureClassification, FinishReason, GenerationOptions, ModelRerouteReason,
-    ModelVerification, ProviderMetadata, ToolResultValue, Usage,
+    CanonicalLlmEvent, FailureClassification, FinishReason, FreeformToolFormat, GenerationOptions,
+    ModelRerouteReason, ModelVerification, ProviderMetadata, ToolResultValue, Usage,
 };
 use runtime_core::{CanonicalRequest, CanonicalRole, CanonicalToolDefinition, ContentPart};
 use serde_json::Value;
@@ -37,6 +37,8 @@ use tokio_tungstenite::tungstenite::Error as WebSocketError;
 
 #[cfg(test)]
 mod azure_responses_tests;
+#[cfg(test)]
+mod code_mode_tests;
 mod gemini;
 #[cfg(test)]
 mod gemini_tests;
@@ -46,6 +48,8 @@ mod hosted_web_search_tests;
 mod lowering;
 #[cfg(test)]
 mod ollama_responses_tests;
+#[cfg(test)]
+mod request_capture_tests;
 mod stream;
 #[cfg(test)]
 mod stream_tests;
@@ -239,12 +243,25 @@ impl CurrentProviderRequest {
         canonical.tools = self
             .tools
             .iter()
-            .map(|tool| CanonicalToolDefinition {
-                name: tool.name.clone(),
-                description: tool.description.clone(),
-                input_schema: tool.input_schema.clone(),
-                output_schema: None,
-                metadata: Default::default(),
+            .map(|tool| match tool {
+                CurrentProviderTool::Function {
+                    name,
+                    description,
+                    input_schema,
+                } => CanonicalToolDefinition::function(
+                    name.clone(),
+                    description.clone(),
+                    input_schema.clone(),
+                ),
+                CurrentProviderTool::Custom {
+                    name,
+                    description,
+                    format,
+                } => CanonicalToolDefinition::custom(
+                    name.clone(),
+                    description.clone(),
+                    format.clone(),
+                ),
             })
             .collect();
         canonical.generation = self.generation.clone();
@@ -340,6 +357,13 @@ fn canonical_content(
             provider_executed: None,
             metadata: call.provider_metadata.clone(),
         }),
+        CurrentProviderContent::CustomToolCall(call) => Ok(ContentPart::CustomToolCall {
+            id: call.id.clone(),
+            name: call.name.clone(),
+            input: call.input.clone(),
+            namespace: call.namespace.clone(),
+            metadata: call.provider_metadata.clone(),
+        }),
         CurrentProviderContent::ToolResult(result) => Ok(ContentPart::ToolResult {
             id: result.call_id.clone(),
             name: result.name.clone(),
@@ -355,6 +379,22 @@ fn canonical_content(
             },
             error: result.error.clone(),
             provider_executed: Some(false),
+            metadata: Default::default(),
+        }),
+        CurrentProviderContent::CustomToolResult(result) => Ok(ContentPart::CustomToolResult {
+            id: result.call_id.clone(),
+            name: result.name.clone(),
+            result: if result.success {
+                ToolResultValue::text(result.output.clone())
+            } else {
+                ToolResultValue::Error {
+                    value: serde_json::json!({
+                        "output": result.output,
+                        "error": result.error,
+                    }),
+                }
+            },
+            error: result.error.clone(),
             metadata: Default::default(),
         }),
         CurrentProviderContent::RawResponseItem(item) => {
@@ -422,7 +462,9 @@ pub enum CurrentProviderContent {
         detail: Option<ImageDetail>,
     },
     ToolCall(CurrentProviderToolCall),
+    CustomToolCall(CurrentProviderCustomToolCall),
     ToolResult(CurrentProviderToolResult),
+    CustomToolResult(CurrentProviderToolResult),
     RawResponseItem(Value),
 }
 
@@ -433,6 +475,27 @@ pub struct CurrentProviderToolCall {
     pub arguments: Value,
     pub raw_arguments: String,
     pub provider_metadata: ProviderMetadata,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CurrentProviderCustomToolCall {
+    pub id: String,
+    pub name: String,
+    pub input: String,
+    pub namespace: Option<String>,
+    pub provider_metadata: ProviderMetadata,
+}
+
+impl CurrentProviderCustomToolCall {
+    pub fn new(id: impl Into<String>, name: impl Into<String>, input: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            input: input.into(),
+            namespace: None,
+            provider_metadata: ProviderMetadata::new(),
+        }
+    }
 }
 
 impl CurrentProviderToolCall {
@@ -447,29 +510,16 @@ impl CurrentProviderToolCall {
         }
     }
 
-    fn try_from_raw(
-        id: String,
-        name: String,
-        raw_arguments: String,
-    ) -> Result<Self, CurrentProviderError> {
-        let name = name.trim();
-        if name.is_empty() {
-            return Err(CurrentProviderError::new(
-                "Provider tool call omitted tool name",
-            ));
-        }
-        let arguments = serde_json::from_str(&raw_arguments).map_err(|error| {
-            CurrentProviderError::new(format!(
-                "Provider returned invalid JSON arguments for tool {name}: {error}"
-            ))
-        })?;
-        Ok(Self {
+    pub fn from_raw(id: String, name: String, raw_arguments: String) -> Self {
+        let arguments = serde_json::from_str(&raw_arguments)
+            .unwrap_or_else(|_| Value::String(raw_arguments.clone()));
+        Self {
             id,
-            name: name.to_string(),
+            name: name.trim().to_string(),
             arguments,
             raw_arguments,
             provider_metadata: ProviderMetadata::new(),
-        })
+        }
     }
 
     pub fn with_provider_metadata(mut self, provider_metadata: ProviderMetadata) -> Self {
@@ -488,10 +538,49 @@ pub struct CurrentProviderToolResult {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct CurrentProviderTool {
-    pub name: String,
-    pub description: String,
-    pub input_schema: Value,
+pub enum CurrentProviderTool {
+    Function {
+        name: String,
+        description: String,
+        input_schema: Value,
+    },
+    Custom {
+        name: String,
+        description: String,
+        format: FreeformToolFormat,
+    },
+}
+
+impl CurrentProviderTool {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Function { name, .. } | Self::Custom { name, .. } => name,
+        }
+    }
+
+    pub fn function(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        input_schema: Value,
+    ) -> Self {
+        Self::Function {
+            name: name.into(),
+            description: description.into(),
+            input_schema,
+        }
+    }
+
+    pub fn custom(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        format: FreeformToolFormat,
+    ) -> Self {
+        Self::Custom {
+            name: name.into(),
+            description: description.into(),
+            format,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -667,27 +756,25 @@ impl CurrentProviderClient {
             request.model_request_policy.as_ref(),
         );
         let payload = match protocol {
-            ModelProviderProtocol::Responses => Ok(responses_request(
+            ModelProviderProtocol::Responses => responses_request(
                 &self.config,
                 &canonical_request,
                 &wire_shape,
                 &media_payloads,
-            )),
-            ModelProviderProtocol::AnthropicMessages => Ok(anthropic_request(
-                &self.config,
-                &canonical_request,
-                &media_payloads,
-            )),
+            ),
+            ModelProviderProtocol::AnthropicMessages => {
+                anthropic_request(&self.config, &canonical_request, &media_payloads)
+            }
             ModelProviderProtocol::GeminiGenerateContent => {
                 gemini::request(&canonical_request, &media_payloads)
             }
             ModelProviderProtocol::ChatCompletions | ModelProviderProtocol::Custom(_) => {
-                Ok(chat_completions_request(
+                chat_completions_request(
                     &self.config,
                     &canonical_request,
                     &wire_shape,
                     &media_payloads,
-                ))
+                )
             }
         }?;
         if matches!(protocol, ModelProviderProtocol::Responses)
@@ -1604,7 +1691,8 @@ mod tests {
             &canonical,
             &RuntimeReplyProviderRequestWireShape::default(),
             &Default::default(),
-        );
+        )
+        .expect("Responses lowering");
 
         assert_eq!(payload["input"], json!([item]));
     }
@@ -1808,7 +1896,8 @@ mod tests {
             &canonical,
             &RuntimeReplyProviderRequestWireShape::default(),
             &media_payloads,
-        );
+        )
+        .expect("Chat Completions lowering");
 
         assert_eq!(value["messages"][0]["content"][1]["type"], "image_url");
         assert_eq!(
@@ -1847,7 +1936,8 @@ mod tests {
             &canonical,
             &RuntimeReplyProviderRequestWireShape::default(),
             &Default::default(),
-        );
+        )
+        .expect("Chat Completions lowering");
 
         assert_eq!(value["max_tokens"], 128);
         assert_eq!(value["temperature"], 0.2);
@@ -1876,12 +1966,14 @@ mod tests {
             &canonical,
             &RuntimeReplyProviderRequestWireShape::default(),
             &media_payloads,
-        );
+        )
+        .expect("Responses lowering");
         let anthropic = anthropic_request(
             &config(Some(RuntimeProviderProtocol::AnthropicMessages)),
             &canonical,
             &media_payloads,
-        );
+        )
+        .expect("Anthropic lowering");
 
         assert_eq!(
             responses["input"][0]["content"][1]["image_url"],
@@ -1967,7 +2059,7 @@ mod tests {
     }
 
     #[test]
-    fn responses_tool_call_rejects_invalid_json_arguments() {
+    fn responses_tool_call_preserves_invalid_json_for_runtime_repair() {
         let item = json!({
             "type": "function_call",
             "call_id": "call-invalid",
@@ -1975,13 +2067,17 @@ mod tests {
             "arguments": "{not-json"
         });
 
-        let error = response_item_tool_call(&item).expect_err("invalid JSON must fail closed");
+        let call = response_item_tool_call(&item)
+            .expect("tool call envelope")
+            .expect("tool call");
 
-        assert!(error.message.contains("invalid JSON arguments"));
+        assert_eq!(call.name, "apply_patch");
+        assert_eq!(call.arguments, json!("{not-json"));
+        assert_eq!(call.raw_arguments, "{not-json");
     }
 
     #[test]
-    fn responses_tool_call_rejects_blank_tool_name() {
+    fn responses_tool_call_preserves_blank_tool_name_for_runtime_repair() {
         let item = json!({
             "type": "function_call",
             "call_id": "call-blank-name",
@@ -1989,9 +2085,12 @@ mod tests {
             "arguments": "{}"
         });
 
-        let error = response_item_tool_call(&item).expect_err("blank tool name must fail closed");
+        let call = response_item_tool_call(&item)
+            .expect("tool call envelope")
+            .expect("tool call");
 
-        assert_eq!(error.message, "Provider tool call omitted tool name");
+        assert_eq!(call.name, "");
+        assert_eq!(call.arguments, json!({}));
     }
 
     #[test]
@@ -2124,7 +2223,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn openai_tool_stream_rejects_arguments_without_name() {
+    async fn openai_tool_stream_preserves_arguments_without_name() {
         let body = concat!(
             "data: {\"id\":\"chatcmpl-missing-name\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-5.5\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}\n\n",
             "data: {\"id\":\"chatcmpl-missing-name\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-5.5\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"
@@ -2144,15 +2243,22 @@ mod tests {
             .await
             .expect("SSE response");
 
-        let error = openai_chat_sse(response)
+        let events = openai_chat_sse(response)
             .collect::<Vec<_>>()
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
-            .expect_err("non-empty incomplete tool call must fail closed");
+            .expect("incomplete tool call must reach runtime repair");
 
         server.await.expect("fixture server");
-        assert_eq!(error.message, "Provider tool call omitted tool name");
+        assert!(events.iter().any(|event| matches!(
+            event,
+            CanonicalLlmEvent::ToolCall {
+                name,
+                raw_arguments: Some(arguments),
+                ..
+            } if name.is_empty() && arguments == "{}"
+        )));
     }
 
     #[tokio::test]
@@ -2252,7 +2358,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn responses_tool_stream_rejects_terminal_arguments_without_name() {
+    async fn responses_tool_stream_preserves_terminal_arguments_without_name() {
         let body = concat!(
             "data: {\"type\":\"response.function_call_arguments.delta\",\"call_id\":\"call-1\",\"delta\":\"{}\"}\n\n",
             "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-1\",\"output\":[]}}\n\n"
@@ -2272,15 +2378,22 @@ mod tests {
             .await
             .expect("SSE response");
 
-        let error = responses_sse(response, true)
+        let events = responses_sse(response, true)
             .collect::<Vec<_>>()
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
-            .expect_err("terminal incomplete tool call must fail closed");
+            .expect("incomplete tool call must reach runtime repair");
 
         server.await.expect("fixture server");
-        assert_eq!(error.message, "Provider tool call omitted tool name");
+        assert!(events.iter().any(|event| matches!(
+            event,
+            CanonicalLlmEvent::ToolCall {
+                name,
+                raw_arguments: Some(arguments),
+                ..
+            } if name.is_empty() && arguments == "{}"
+        )));
     }
 
     #[tokio::test]

@@ -712,7 +712,10 @@ async fn respond_action_tool_confirmation_resumes_pending_agent_tool_future() {
     let stream_backend = backend.clone();
     let stream_events_for_sink = stream_events.clone();
     let registry = RuntimeSessionRegistry::default();
-    let session_loop = registry.get_or_create(&action_session.session_id).await;
+    let session_loop = registry
+        .get_or_create(&action_session.session_id, &action_session.thread_id)
+        .await
+        .expect("bind confirmation session actor");
     let turn_id = action_turn.turn_id.clone();
     let task = RuntimeSessionClosureTask::new(
         turn_id,

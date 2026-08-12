@@ -175,17 +175,61 @@ fn routing_payload_keeps_review_fast_local_as_diagnostics_only() {
 }
 
 #[test]
+fn routing_payload_requires_only_selected_profile_slot_capabilities() {
+    let metadata = json!({
+        "harness": {
+            "modelSlots": {
+                "coding": {
+                    "provider": "openai",
+                    "model": "gpt-5.2",
+                    "capabilityTags": ["custom-tools", "tools"]
+                },
+                "review": {
+                    "provider": "review-provider",
+                    "model": "review-model",
+                    "capabilityTags": ["review_only"]
+                }
+            }
+        }
+    });
+    let selection = selection("openai", "gpt-5.2");
+    let routing = resolve_model_routing_for_candidate(&[&metadata], &selection);
+    let payload = routing_decision_payload(
+        &selection,
+        &routing,
+        &ProviderReadiness::direct_request_ready(),
+        &json!({}),
+    );
+
+    assert_eq!(
+        payload["requiredCapabilities"],
+        json!(["coding", "tools", "streaming", "custom_tools"])
+    );
+    assert_eq!(
+        payload["modelSlot"]["requiredCapabilities"],
+        payload["requiredCapabilities"]
+    );
+    assert!(!payload["requiredCapabilities"]
+        .as_array()
+        .expect("required capabilities")
+        .iter()
+        .any(|capability| capability == "review_only"));
+}
+
+#[test]
 fn ready_routing_falls_back_from_unready_coding_slot_to_base_slot() {
     let metadata = json!({
         "harness": {
             "coding_model_slots": {
                 "coding": {
                     "provider": "custom-coding",
-                    "model": "missing-key-coder"
+                    "model": "missing-key-coder",
+                    "capabilityTags": ["custom_tools"]
                 },
                 "base": {
                     "provider": "openai",
-                    "model": "gpt-4.1-mini"
+                    "model": "gpt-4.1-mini",
+                    "capabilityTags": ["tools"]
                 }
             }
         }
@@ -230,6 +274,16 @@ fn ready_routing_falls_back_from_unready_coding_slot_to_base_slot() {
             "custom-coding/missing-key-coder".to_string(),
             "openai/gpt-4.1-mini".to_string()
         ]
+    );
+    let payload = routing_decision_payload(
+        &resolution.selection,
+        &resolution.routing,
+        &resolution.readiness,
+        &json!({}),
+    );
+    assert_eq!(
+        payload["requiredCapabilities"],
+        json!(["coding", "tools", "streaming"])
     );
 }
 

@@ -546,6 +546,15 @@ impl Default for RuntimeCore {
 }
 
 impl RuntimeCore {
+    pub(crate) fn with_code_mode_factory(
+        mut self,
+        factory: agent_runtime::code_mode::RuntimeCodeModeServiceFactory,
+    ) -> Self {
+        self.session_loops =
+            agent_runtime::session_loop::RuntimeSessionRegistry::with_code_mode(factory);
+        self
+    }
+
     pub fn with_backend(backend: Arc<dyn ExecutionBackend>) -> Self {
         Self::with_backend_and_capability_source(
             backend,

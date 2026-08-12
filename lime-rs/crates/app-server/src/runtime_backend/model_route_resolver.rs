@@ -20,6 +20,8 @@ pub(super) struct ChatModelRouteResolution {
     pub(super) decision_payload: Value,
     pub(super) fallback_payload: Option<Value>,
     pub(super) not_possible_payload: Option<Value>,
+    pub(super) tool_mode: tool_runtime::code_mode::RuntimeToolMode,
+    pub(super) supports_custom_tools: bool,
 }
 
 impl ChatModelRouteResolution {
@@ -164,6 +166,8 @@ pub(super) async fn assemble_chat_model_route(
         &model_task_request,
         &resolved_route,
     );
+    let tool_mode = model_registry.tool_mode();
+    let supports_custom_tools = model_registry.supports_custom_tools();
     Ok(ChatModelRouteResolution {
         selection,
         model_task_request,
@@ -171,6 +175,8 @@ pub(super) async fn assemble_chat_model_route(
         decision_payload: evidence.decision_payload,
         fallback_payload: evidence.fallback_payload,
         not_possible_payload: evidence.not_possible_payload,
+        tool_mode,
+        supports_custom_tools,
     })
 }
 

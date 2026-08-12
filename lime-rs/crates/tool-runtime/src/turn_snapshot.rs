@@ -114,9 +114,7 @@ impl RuntimeTurnSnapshot {
     }
 
     pub fn deferred_tools(&self) -> impl Iterator<Item = &RuntimeToolSnapshot> {
-        self.tools
-            .iter()
-            .filter(|tool| tool.exposure == RuntimeToolExposure::Deferred)
+        self.tools.iter().filter(|tool| tool.exposure.is_deferred())
     }
 
     pub fn hooks_for(
@@ -292,6 +290,18 @@ mod tests {
                     false,
                 ),
                 tool(
+                    RuntimeToolIdentity::plain("deferred_model_only"),
+                    RuntimeToolExposure::DeferredModelOnly,
+                    false,
+                    false,
+                ),
+                tool(
+                    RuntimeToolIdentity::plain("nested_only"),
+                    RuntimeToolExposure::CodeModeOnly,
+                    false,
+                    false,
+                ),
+                tool(
                     RuntimeToolIdentity::plain("hidden"),
                     RuntimeToolExposure::Hidden,
                     false,
@@ -314,7 +324,7 @@ mod tests {
                 .deferred_tools()
                 .map(|tool| tool.definition.name.as_str())
                 .collect::<Vec<_>>(),
-            vec!["deferred"]
+            vec!["deferred", "deferred_model_only"]
         );
         assert!(snapshot
             .tool(&RuntimeToolIdentity::plain("hidden"))

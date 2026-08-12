@@ -131,6 +131,10 @@ impl OpenAiStreamEncoder {
                     "data: [DONE]\n\n".to_string(),
                 ]
             }
+            CanonicalLlmEvent::CustomToolCall { .. } => self.error(
+                "legacy provider call endpoint cannot expose custom tool calls",
+                Some(FailureClassification::InvalidRequest),
+            ),
             CanonicalLlmEvent::TextStart { .. }
             | CanonicalLlmEvent::TextEnd { .. }
             | CanonicalLlmEvent::ReasoningStart { .. }
@@ -296,6 +300,10 @@ impl AnthropicStreamEncoder {
                 self.usage = usage.clone();
                 Vec::new()
             }
+            CanonicalLlmEvent::CustomToolCall { .. } => self.error(
+                "legacy provider call endpoint cannot expose custom tool calls",
+                Some(FailureClassification::InvalidRequest),
+            ),
             CanonicalLlmEvent::StepFinish { reason, usage, .. } => {
                 self.finish_reason = *reason;
                 if let Some(usage) = usage {

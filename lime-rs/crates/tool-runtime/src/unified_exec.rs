@@ -543,13 +543,16 @@ fn build_shell_command(command: &str, shell: Option<&str>, login: bool) -> Vec<S
         if shell.to_ascii_lowercase().contains("powershell")
             || shell.to_ascii_lowercase().contains("pwsh")
         {
-            return vec![
-                shell.to_string(),
-                "-NoProfile".to_string(),
+            let mut shell_command = vec![shell.to_string()];
+            if !login {
+                shell_command.push("-NoProfile".to_string());
+            }
+            shell_command.extend([
                 "-NonInteractive".to_string(),
                 "-Command".to_string(),
                 command.to_string(),
-            ];
+            ]);
+            return shell_command;
         }
         return vec![
             shell.to_string(),

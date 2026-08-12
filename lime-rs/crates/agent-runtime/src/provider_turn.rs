@@ -18,11 +18,11 @@ use agent_protocol::world_state::{RuntimeWorldState, WORLD_STATE_TURN_METADATA_K
 use futures::future::join_all;
 use futures::StreamExt;
 use model_provider::current_client::{
-    CanonicalLlmEvent, CurrentProvider, CurrentProviderContent, CurrentProviderError,
-    CurrentProviderMessage, CurrentProviderRequest, CurrentProviderRole, CurrentProviderStream,
-    CurrentProviderTool, CurrentProviderToolCall, CurrentProviderToolResult, CurrentProviderUsage,
-    FailureClassification, FinishReason, GenerationOptions, ModelVerification, ProviderMetadata,
-    ToolResultValue, Usage,
+    CanonicalLlmEvent, CurrentProvider, CurrentProviderContent, CurrentProviderCustomToolCall,
+    CurrentProviderError, CurrentProviderMessage, CurrentProviderRequest, CurrentProviderRole,
+    CurrentProviderStream, CurrentProviderTool, CurrentProviderToolCall, CurrentProviderToolResult,
+    CurrentProviderUsage, FailureClassification, FinishReason, GenerationOptions,
+    ModelVerification, ProviderMetadata, ToolResultValue, Usage,
 };
 use model_provider::provider_stream::RuntimeReplyModelRequestPolicy;
 use model_provider::provider_stream::RuntimeReplyProviderTraceMetadata;
@@ -34,8 +34,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
+use tool_runtime::code_mode::{
+    RuntimeCodeModeSessionHandle, RuntimeCodeModeTool, CODE_MODE_EXEC_TOOL_NAME,
+    CODE_MODE_WAIT_TOOL_NAME,
+};
 use tool_runtime::hook_lifecycle::RuntimeHookReporter;
 use tool_runtime::tool_call::{ToolCall, ToolEnvironment};
+use tool_runtime::tool_call_surface::{
+    repair_tool_call, runtime_tool_call_canonical_name, ToolCallRepairOutcome,
+};
 use tool_runtime::tool_definition::{RuntimeToolDefinition, RuntimeToolExposure};
 use tool_runtime::tool_executor::{
     RuntimeToolExecutionContext, RuntimeToolExecutionContextInput, RuntimeToolExecutionError,
@@ -45,8 +52,10 @@ use tool_runtime::tool_executor::{
 use tool_runtime::tool_lifecycle::ToolLifecycleEmitter;
 use tool_runtime::turn_snapshot::{RuntimeHookSnapshot, RuntimeToolIdentity, RuntimeToolSnapshot};
 
+mod code_mode;
 mod input;
 mod output_lifecycle;
+use code_mode::PendingProviderToolCall;
 #[cfg(test)]
 use input::runtime_inter_agent_text;
 use input::runtime_session_input_message;
@@ -58,6 +67,8 @@ use tool_runtime::tool_result_projection::NormalizedToolOutput;
 
 const LOCAL_TOOL_ENVIRONMENT_ID: &str = "local";
 const PROVIDER_TOOL_ENVIRONMENT_ID: &str = "provider";
+const INVALID_TOOL_CALL_NAME: &str = "invalid";
+const TOOL_CALL_REPAIR_METADATA_KEY: &str = "tool_call_repair";
 const DEFAULT_FIRST_VISIBLE_OUTPUT_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_PROVIDER_STEP_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -67,6 +78,8 @@ pub struct RuntimeToolStepSnapshot {
     pub executor: RuntimeToolExecutorHandle,
     serial_tool_names: Arc<HashSet<String>>,
     tool_environment_ids: Arc<HashMap<String, String>>,
+    code_mode_session: Option<RuntimeCodeModeSessionHandle>,
+    code_mode_tools: Arc<Vec<RuntimeCodeModeTool>>,
 }
 
 impl RuntimeToolStepSnapshot {
@@ -79,6 +92,8 @@ impl RuntimeToolStepSnapshot {
             executor,
             serial_tool_names: Arc::new(HashSet::new()),
             tool_environment_ids: Arc::new(HashMap::new()),
+            code_mode_session: None,
+            code_mode_tools: Arc::new(Vec::new()),
         }
     }
 
@@ -93,7 +108,19 @@ impl RuntimeToolStepSnapshot {
             executor,
             serial_tool_names: Arc::new(serial_tool_names.into_iter().collect()),
             tool_environment_ids: Arc::new(tool_environment_ids.into_iter().collect()),
+            code_mode_session: None,
+            code_mode_tools: Arc::new(Vec::new()),
         }
+    }
+
+    pub fn with_code_mode_session(
+        mut self,
+        session: RuntimeCodeModeSessionHandle,
+        tools: Vec<RuntimeCodeModeTool>,
+    ) -> Self {
+        self.code_mode_session = Some(session);
+        self.code_mode_tools = Arc::new(tools);
+        self
     }
 
     fn supports_parallel_tool_calls(&self, tool_name: &str) -> bool {
@@ -105,6 +132,10 @@ impl RuntimeToolStepSnapshot {
             .get(tool_name)
             .map(String::as_str)
             .unwrap_or(LOCAL_TOOL_ENVIRONMENT_ID)
+    }
+
+    fn code_mode_session(&self) -> Option<&RuntimeCodeModeSessionHandle> {
+        self.code_mode_session.as_ref()
     }
 }
 
@@ -433,15 +464,22 @@ where
             }
         }
 
-        let tools = tool_step_snapshot
+        let mut tools = tool_step_snapshot
             .definitions
             .iter()
-            .map(|definition| CurrentProviderTool {
-                name: definition.name.clone(),
-                description: definition.description.clone(),
-                input_schema: definition.input_schema.clone(),
+            .map(|definition| {
+                CurrentProviderTool::function(
+                    definition.name.clone(),
+                    definition.description.clone(),
+                    definition.input_schema.clone(),
+                )
             })
             .collect::<Vec<_>>();
+        if tool_step_snapshot.code_mode_session().is_some() {
+            tools.extend(code_mode::advertised_tools(
+                &tool_step_snapshot.code_mode_tools,
+            ));
+        }
 
         let request_metadata = session_config
             .thread_id
@@ -472,7 +510,7 @@ where
             )
         });
         if let Some(trace) = provider_trace_attempt.as_ref() {
-            let tool_names = tools.iter().map(|tool| tool.name.clone());
+            let tool_names = tools.iter().map(|tool| tool.name().to_string());
             emit_provider_trace(
                 &mut on_event,
                 provider_trace_metadata.as_ref(),
@@ -552,7 +590,7 @@ where
             }
         };
         let mut assistant_content = Vec::new();
-        let mut calls = Vec::new();
+        let mut pending_calls = Vec::new();
         let mut provider_executed_calls = HashMap::<String, ToolCall>::new();
         let mut completed = false;
         let mut tool_arguments = HashMap::<String, String>::new();
@@ -854,6 +892,7 @@ where
                     id,
                     name,
                     input,
+                    raw_arguments,
                     provider_executed,
                     provider_metadata,
                 } => {
@@ -884,10 +923,70 @@ where
                         provider_executed_calls.insert(id, call);
                         continue;
                     }
-                    let call = CurrentProviderToolCall::new(id, name, input)
-                        .with_provider_metadata(provider_metadata);
+                    let call = if name == CODE_MODE_WAIT_TOOL_NAME
+                        && tool_step_snapshot.code_mode_session().is_some()
+                    {
+                        let raw_arguments = raw_arguments.unwrap_or_else(|| {
+                            serde_json::to_string(&input).unwrap_or_else(|_| "{}".to_string())
+                        });
+                        CurrentProviderToolCall::from_raw(id, name, raw_arguments)
+                            .with_provider_metadata(provider_metadata)
+                    } else {
+                        prepare_provider_tool_call(
+                            &tool_step_snapshot,
+                            id,
+                            name,
+                            input,
+                            raw_arguments,
+                            provider_metadata,
+                        )
+                    };
                     assistant_content.push(CurrentProviderContent::ToolCall(call.clone()));
-                    calls.push(call);
+                    if call.name == CODE_MODE_WAIT_TOOL_NAME
+                        && tool_step_snapshot.code_mode_session().is_some()
+                    {
+                        pending_calls.push(PendingProviderToolCall::CodeModeWait(call));
+                    } else {
+                        pending_calls.push(PendingProviderToolCall::Function(call));
+                    }
+                }
+                CanonicalLlmEvent::CustomToolCall {
+                    id,
+                    name,
+                    input,
+                    namespace,
+                    provider_metadata,
+                } => {
+                    if name != CODE_MODE_EXEC_TOOL_NAME {
+                        return Err(provider_attempt_error(
+                            format!("unsupported custom tool call: {name}"),
+                            emitted_any,
+                            Some(FailureClassification::InvalidRequest),
+                            false,
+                            None,
+                            consumed_pending_input,
+                        ));
+                    }
+                    if tool_step_snapshot.code_mode_session().is_none() {
+                        return Err(provider_attempt_error(
+                            "custom tool call requires an executable CodeMode session",
+                            emitted_any,
+                            Some(FailureClassification::InvalidRequest),
+                            false,
+                            None,
+                            consumed_pending_input,
+                        ));
+                    };
+                    emitted_any = true;
+                    has_user_visible_output = true;
+                    step_emitted_tool_call = true;
+                    let mut custom_call =
+                        CurrentProviderCustomToolCall::new(id.clone(), name.clone(), input.clone());
+                    custom_call.namespace = namespace;
+                    custom_call.provider_metadata = provider_metadata;
+                    assistant_content
+                        .push(CurrentProviderContent::CustomToolCall(custom_call.clone()));
+                    pending_calls.push(PendingProviderToolCall::Custom(custom_call));
                 }
                 CanonicalLlmEvent::ToolResult {
                     id,
@@ -1019,7 +1118,7 @@ where
             &mut pending_text_item_ids,
             &mut on_event,
         );
-        let text_phase = if calls.is_empty() {
+        let text_phase = if pending_calls.is_empty() {
             CurrentProviderTextPhase::FinalAnswer
         } else {
             CurrentProviderTextPhase::Commentary
@@ -1036,7 +1135,7 @@ where
             finish_reason: finish_reason.clone(),
             text_output_chars: step_text_output_chars,
             reasoning_output_chars: step_reasoning_output_chars,
-            tool_call_count: calls.len().min(u32::MAX as usize) as u32,
+            tool_call_count: pending_calls.len().min(u32::MAX as usize) as u32,
             usage: step_usage.clone(),
         });
         record_session_token_usage(pending_input.as_ref(), step_usage.as_ref()).await;
@@ -1051,7 +1150,7 @@ where
         if assistant_message_pushed {
             initial_messages.push(CurrentProviderMessage::assistant(assistant_content));
         }
-        if calls.is_empty() {
+        if pending_calls.is_empty() {
             let pending_messages = match pending_input.as_ref() {
                 Some(input) => {
                     input.mark_mailbox_delivery_for_next_turn().await;
@@ -1204,27 +1303,98 @@ where
             None => Vec::new(),
         };
 
-        let results = execute_calls(
-            &tool_step_snapshot,
-            &turn_id,
-            &session_config.id,
-            session_config.turn_context.as_ref(),
-            &working_directory,
-            cancel_token.clone(),
-            tool_lifecycle_emitter.clone(),
-            calls,
-            model_request_policy
-                .as_ref()
-                .and_then(RuntimeReplyModelRequestPolicy::parallel_tool_calls)
-                .unwrap_or(false),
-        )
-        .await;
-        initial_messages.push(CurrentProviderMessage::tool(
-            results
-                .into_iter()
-                .map(CurrentProviderContent::ToolResult)
-                .collect(),
-        ));
+        let function_calls = pending_calls
+            .iter()
+            .filter_map(|call| match call {
+                PendingProviderToolCall::Function(call) => Some(call.clone()),
+                PendingProviderToolCall::Custom(_) | PendingProviderToolCall::CodeModeWait(_) => {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let custom_calls = pending_calls
+            .iter()
+            .filter_map(|call| match call {
+                PendingProviderToolCall::Function(_) | PendingProviderToolCall::CodeModeWait(_) => {
+                    None
+                }
+                PendingProviderToolCall::Custom(call) => Some(call.clone()),
+            })
+            .collect::<Vec<_>>();
+        let wait_calls = pending_calls
+            .iter()
+            .filter_map(|call| match call {
+                PendingProviderToolCall::Function(_) | PendingProviderToolCall::Custom(_) => None,
+                PendingProviderToolCall::CodeModeWait(call) => Some(call.clone()),
+            })
+            .collect::<Vec<_>>();
+        let code_mode_notification_sink = code_mode::CodeModeNotificationSink::default();
+        let allow_parallel = model_request_policy
+            .as_ref()
+            .and_then(RuntimeReplyModelRequestPolicy::parallel_tool_calls)
+            .unwrap_or(false);
+        let (function_results, custom_results, wait_results) = tokio::join!(
+            execute_calls(
+                &tool_step_snapshot,
+                &turn_id,
+                &session_config.id,
+                session_config.turn_context.as_ref(),
+                &working_directory,
+                cancel_token.clone(),
+                tool_lifecycle_emitter.clone(),
+                function_calls,
+                allow_parallel,
+            ),
+            code_mode::execute_calls(
+                &tool_step_snapshot,
+                &turn_id,
+                &session_config.id,
+                session_config.turn_context.as_ref(),
+                &working_directory,
+                tool_lifecycle_emitter.clone(),
+                code_mode_notification_sink.clone(),
+                custom_calls,
+                cancel_token.clone(),
+                allow_parallel,
+            ),
+            code_mode::execute_wait_calls(
+                &tool_step_snapshot,
+                &turn_id,
+                &working_directory,
+                tool_lifecycle_emitter.clone(),
+                wait_calls,
+                cancel_token.clone(),
+                allow_parallel,
+            ),
+        );
+        let mut function_results = function_results.into_iter();
+        let custom_notifications = custom_results.notifications;
+        let mut custom_results = custom_results.results.into_iter();
+        let mut wait_results = wait_results.into_iter();
+        let mut result_content = custom_notifications
+            .into_iter()
+            .map(CurrentProviderContent::CustomToolResult)
+            .collect::<Vec<_>>();
+        result_content.extend(pending_calls.into_iter().map(|call| {
+            match call {
+                PendingProviderToolCall::Function(_) => CurrentProviderContent::ToolResult(
+                    function_results
+                        .next()
+                        .expect("function result count must match pending calls"),
+                ),
+                PendingProviderToolCall::Custom(_) => CurrentProviderContent::CustomToolResult(
+                    custom_results
+                        .next()
+                        .expect("custom result count must match pending calls"),
+                ),
+                PendingProviderToolCall::CodeModeWait(_) => CurrentProviderContent::ToolResult(
+                    wait_results
+                        .next()
+                        .expect("wait result count must match pending calls"),
+                ),
+            }
+        }));
+        initial_messages.push(CurrentProviderMessage::tool(result_content));
         initial_messages.extend(pending_messages);
     }
 }
@@ -1738,7 +1908,19 @@ async fn execute_calls(
 ) -> Vec<CurrentProviderToolResult> {
     let parallel_execution = Arc::new(tokio::sync::RwLock::new(()));
     let execute = |call: CurrentProviderToolCall| {
-        let (definition, step_executor, advertised, environment_id) =
+        let (definition, step_executor, advertised, environment_id) = if call.name
+            == INVALID_TOOL_CALL_NAME
+            && call
+                .provider_metadata
+                .contains_key(TOOL_CALL_REPAIR_METADATA_KEY)
+        {
+            (
+                invalid_runtime_tool_definition(),
+                RuntimeToolExecutorHandle::new(Arc::new(InvalidStepToolExecutor)),
+                false,
+                LOCAL_TOOL_ENVIRONMENT_ID.to_string(),
+            )
+        } else {
             match runtime_tool_definition_for_call(&tool_step_snapshot.definitions, &call) {
                 Some(definition) => (
                     definition,
@@ -1752,7 +1934,8 @@ async fn execute_calls(
                     false,
                     LOCAL_TOOL_ENVIRONMENT_ID.to_string(),
                 ),
-            };
+            }
+        };
         let supports_parallel = allow_parallel
             && tool_step_snapshot.supports_parallel_tool_calls(&call.name)
             && advertised;
@@ -1802,6 +1985,56 @@ async fn execute_calls(
     results
 }
 
+fn prepare_provider_tool_call(
+    tool_step_snapshot: &RuntimeToolStepSnapshot,
+    id: String,
+    name: String,
+    input: serde_json::Value,
+    raw_arguments: Option<String>,
+    mut provider_metadata: ProviderMetadata,
+) -> CurrentProviderToolCall {
+    let raw_arguments = raw_arguments
+        .unwrap_or_else(|| serde_json::to_string(&input).unwrap_or_else(|_| "{}".to_string()));
+    let outcome = repair_tool_call(
+        &tool_step_snapshot.definitions,
+        &name,
+        &raw_arguments,
+        &runtime_tool_call_canonical_name,
+    );
+
+    match outcome {
+        ToolCallRepairOutcome::Ready(repair) => {
+            if repair.requested_name != repair.resolved_name || !repair.argument_changes.is_empty()
+            {
+                provider_metadata.insert(
+                    TOOL_CALL_REPAIR_METADATA_KEY.to_string(),
+                    serde_json::to_value(ToolCallRepairOutcome::Ready(repair.clone()))
+                        .expect("tool call repair outcome must serialize"),
+                );
+            }
+            CurrentProviderToolCall::new(
+                id,
+                repair.resolved_name,
+                serde_json::Value::Object(repair.arguments),
+            )
+            .with_provider_metadata(provider_metadata)
+        }
+        ToolCallRepairOutcome::Invalid(failure) => {
+            provider_metadata.insert(
+                TOOL_CALL_REPAIR_METADATA_KEY.to_string(),
+                serde_json::to_value(ToolCallRepairOutcome::Invalid(failure.clone()))
+                    .expect("tool call repair failure must serialize"),
+            );
+            CurrentProviderToolCall::new(
+                id,
+                INVALID_TOOL_CALL_NAME,
+                serde_json::Value::Object(failure.model_arguments()),
+            )
+            .with_provider_metadata(provider_metadata)
+        }
+    }
+}
+
 fn runtime_tool_definition_for_call(
     definitions: &[RuntimeToolDefinition],
     call: &CurrentProviderToolCall,
@@ -1820,7 +2053,41 @@ fn unavailable_runtime_tool_definition(call: &CurrentProviderToolCall) -> Runtim
     )
 }
 
+fn invalid_runtime_tool_definition() -> RuntimeToolDefinition {
+    RuntimeToolDefinition::new(
+        INVALID_TOOL_CALL_NAME,
+        "Provider tool call rejected before handler execution",
+        serde_json::json!({
+            "type": "object",
+            "required": ["tool", "error"],
+            "properties": {
+                "tool": { "type": "string" },
+                "error": { "type": "string" }
+            }
+        }),
+    )
+}
+
 struct UnavailableStepToolExecutor;
+
+struct InvalidStepToolExecutor;
+
+impl RuntimeToolExecutor for InvalidStepToolExecutor {
+    fn execute<'a>(
+        &'a self,
+        request: RuntimeToolExecutionRequest<'a>,
+    ) -> RuntimeToolExecutionFuture<'a> {
+        Box::pin(async move {
+            let message = request
+                .params
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("Provider tool call was invalid")
+                .to_string();
+            Err(RuntimeToolExecutionError::new(message, None).before_handler())
+        })
+    }
+}
 
 impl RuntimeToolExecutor for UnavailableStepToolExecutor {
     fn execute<'a>(

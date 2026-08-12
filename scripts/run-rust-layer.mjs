@@ -13,6 +13,7 @@ import {
   resolvePathScopedCargoArgs,
   resolveRustPathSelection,
 } from "./lib/rust-test-scope-core.mjs";
+import { resolveRustyV8CargoEnv } from "./lib/rusty-v8-artifacts.mjs";
 
 export { expandWithWorkspaceDependents, resolveRustPathSelection };
 
@@ -315,9 +316,13 @@ function runCargo(layer, cargoArgs, testArgs) {
     cargoArgs,
     finalTestArgs,
   );
+  const baseEnv = resolveRustTestEnv();
   const result = spawnSync("cargo", args, {
     encoding: failOnZeroExecutedTests ? "utf8" : undefined,
-    env: resolveRustTestEnv(),
+    env: {
+      ...baseEnv,
+      ...resolveRustyV8CargoEnv({ env: baseEnv }),
+    },
     maxBuffer: 50 * 1024 * 1024,
     stdio: failOnZeroExecutedTests ? "pipe" : "inherit",
   });

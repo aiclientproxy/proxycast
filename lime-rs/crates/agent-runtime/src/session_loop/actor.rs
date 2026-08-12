@@ -2,18 +2,20 @@ use super::input_queue::{
     PendingInputQueue, QueuedTask, RuntimeSessionTask, RuntimeSessionTaskContext,
     RuntimeSessionTaskMetadata, RuntimeSessionTaskOutcome, RuntimeSessionTaskState,
 };
+use super::resources::RuntimeSessionResources;
 use super::{
     RuntimeSessionHandle, RuntimeSessionLoopError, RuntimeSessionOperation,
     RuntimeSessionOperationContext, RuntimeSessionOperationResult,
     RuntimeSessionOperationSubmission, RuntimeSessionResponseKind, RuntimeSessionSnapshot,
     RuntimeSessionSubmitResult, RuntimeSessionTaskFailure,
 };
+use crate::code_mode::RuntimeCodeModeServiceFactory;
 use crate::session_loop::handle::runtime_session_submission;
 use futures::FutureExt;
 use serde_json::Value;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{timeout_at, Duration, Instant};
 use tokio_util::sync::CancellationToken;
@@ -55,111 +57,37 @@ struct TaskFinishedMessage {
     result: Result<(), RuntimeSessionTaskFailure>,
 }
 
-#[derive(Clone, Default)]
-pub struct RuntimeSessionRegistry {
-    sessions: Arc<Mutex<HashMap<String, RuntimeSessionHandle>>>,
-}
-
-impl RuntimeSessionRegistry {
-    pub async fn get_existing(&self, session_id: &str) -> Option<RuntimeSessionHandle> {
-        let sessions = self.sessions.lock().await;
-        sessions.get(session_id).cloned()
-    }
-
-    pub async fn get_or_create(&self, session_id: &str) -> RuntimeSessionHandle {
-        let mut sessions = self.sessions.lock().await;
-        if let Some(handle) = sessions.get(session_id) {
-            return handle.clone();
-        }
-        let handle = RuntimeSessionActor::spawn(session_id.to_string());
-        sessions.insert(session_id.to_string(), handle.clone());
-        handle
-    }
-
-    pub async fn shutdown(&self, session_id: &str) -> Result<(), RuntimeSessionLoopError> {
-        let mut sessions = self.sessions.lock().await;
-        let Some(handle) = sessions.get(session_id).cloned() else {
-            return Ok(());
-        };
-        let result = handle.shutdown().await;
-        sessions.remove(session_id);
-        if let Err(error) = result {
-            return Err(error);
-        }
-        Ok(())
-    }
-
-    pub async fn notify_inter_agent_communication(
-        &self,
-        session_id: &str,
-        input: super::RuntimeSessionInterAgentInput,
-    ) -> Result<bool, RuntimeSessionLoopError> {
-        let handle = {
-            let sessions = self.sessions.lock().await;
-            sessions.get(session_id).cloned()
-        };
-        let Some(handle) = handle else {
-            return Ok(false);
-        };
-        handle.notify_inter_agent_communication(input).await?;
-        Ok(true)
-    }
-
-    pub async fn subscribe_input_activity(
-        &self,
-        session_id: &str,
-    ) -> Result<
-        Option<(
-            watch::Receiver<super::RuntimeSessionInputActivity>,
-            Option<super::RuntimeSessionInputActivity>,
-        )>,
-        RuntimeSessionLoopError,
-    > {
-        let handle = {
-            let sessions = self.sessions.lock().await;
-            sessions.get(session_id).cloned()
-        };
-        let Some(handle) = handle else {
-            return Ok(None);
-        };
-        handle.subscribe_input_activity().await.map(Some)
-    }
-
-    pub async fn snapshot(
-        &self,
-        session_id: &str,
-    ) -> Result<Option<RuntimeSessionSnapshot>, RuntimeSessionLoopError> {
-        let handle = {
-            let sessions = self.sessions.lock().await;
-            sessions.get(session_id).cloned()
-        };
-        let Some(handle) = handle else {
-            return Ok(None);
-        };
-        handle.snapshot().await.map(Some)
-    }
-}
-
 pub(super) struct RuntimeSessionActor;
 
 impl RuntimeSessionActor {
-    pub(super) fn spawn(session_id: String) -> RuntimeSessionHandle {
+    pub(super) fn spawn(
+        session_id: String,
+        thread_id: String,
+        code_mode_factory: Option<&RuntimeCodeModeServiceFactory>,
+    ) -> RuntimeSessionHandle {
         let (tx, rx) = mpsc::channel(SESSION_COMMAND_BUFFER);
         let (finished_tx, finished_rx) = mpsc::unbounded_channel();
         let (termination_tx, termination) = watch::channel(false);
+        let resources = Arc::new(RuntimeSessionResources::new(thread_id, code_mode_factory));
         tokio::spawn(run_session_loop(
             session_id,
+            Arc::clone(&resources),
             rx,
             finished_rx,
             finished_tx,
             termination_tx,
         ));
-        RuntimeSessionHandle { tx, termination }
+        RuntimeSessionHandle {
+            tx,
+            termination,
+            resources,
+        }
     }
 }
 
 async fn run_session_loop(
     session_id: String,
+    resources: Arc<RuntimeSessionResources>,
     mut rx: mpsc::Receiver<RuntimeSessionCommand>,
     mut finished_rx: mpsc::UnboundedReceiver<TaskFinishedMessage>,
     finished_tx: mpsc::UnboundedSender<TaskFinishedMessage>,
@@ -226,6 +154,7 @@ async fn run_session_loop(
                             &mut active,
                             &mut queued,
                             Arc::clone(&session_id),
+                            Arc::clone(&resources),
                             Arc::clone(&pending_input),
                             finished_tx.clone(),
                             &mut next_task_key,
@@ -298,6 +227,7 @@ async fn run_session_loop(
                             &mut active,
                             &mut queued,
                             Arc::clone(&session_id),
+                            Arc::clone(&resources),
                             Arc::clone(&pending_input),
                             finished_tx.clone(),
                             &mut next_task_key,
@@ -320,6 +250,7 @@ async fn run_session_loop(
                             &mut active,
                             &mut queued,
                             Arc::clone(&session_id),
+                            Arc::clone(&resources),
                             Arc::clone(&pending_input),
                             finished_tx.clone(),
                             &mut next_task_key,
@@ -334,6 +265,7 @@ async fn run_session_loop(
                     | RuntimeSessionOperation::ReloadConfig { handler } => {
                         let context = RuntimeSessionOperationContext {
                             session_id: session_id.to_string(),
+                            thread_id: resources.thread_id().to_string(),
                             submission_id: id.clone(),
                             active_turn_id: active
                                 .as_ref()
@@ -354,6 +286,7 @@ async fn run_session_loop(
                             let turn_id = active_task.task.turn_id().to_string();
                             let context = RuntimeSessionOperationContext {
                                 session_id: session_id.to_string(),
+                                thread_id: resources.thread_id().to_string(),
                                 submission_id: id.clone(),
                                 active_turn_id: Some(turn_id.clone()),
                                 client_user_message_id,
@@ -385,6 +318,7 @@ async fn run_session_loop(
                                 &mut active,
                                 &mut queued,
                                 Arc::clone(&session_id),
+                                Arc::clone(&resources),
                                 Arc::clone(&pending_input),
                                 finished_tx.clone(),
                                 &mut next_task_key,
@@ -506,6 +440,7 @@ async fn run_session_loop(
                             }
                         }
                         let interrupted = if let Some(active_task) = active.take() {
+                            resources.interrupt_code_mode().await;
                             stop_active_task(active_task, RuntimeSessionTaskOutcome::Interrupted)
                                 .await;
                             true
@@ -517,6 +452,7 @@ async fn run_session_loop(
                                 &mut active,
                                 &mut queued,
                                 Arc::clone(&session_id),
+                                Arc::clone(&resources),
                                 Arc::clone(&pending_input),
                                 finished_tx.clone(),
                                 &mut next_task_key,
@@ -539,10 +475,15 @@ async fn run_session_loop(
                                 .send(Ok(RuntimeSessionTaskOutcome::Shutdown));
                         }
                         pending_input.clear().await;
-                        let _ = reply.send(Ok(RuntimeSessionOperationResult::Accepted {
-                            id,
-                            turn_id: None,
-                        }));
+                        let result = resources
+                            .shutdown_code_mode()
+                            .await
+                            .map_err(RuntimeSessionLoopError::OperationFailed)
+                            .map(|()| RuntimeSessionOperationResult::Accepted {
+                                id,
+                                turn_id: None,
+                            });
+                        let _ = reply.send(result);
                         break;
                     }
                 }
@@ -565,6 +506,7 @@ async fn run_session_loop(
                     &mut active,
                     &mut queued,
                     Arc::clone(&session_id),
+                    Arc::clone(&resources),
                     Arc::clone(&pending_input),
                     finished_tx.clone(),
                     &mut next_task_key,
@@ -584,6 +526,7 @@ async fn run_session_loop(
             .send(Ok(RuntimeSessionTaskOutcome::Shutdown));
     }
     pending_input.clear().await;
+    let _ = resources.shutdown_code_mode().await;
     termination_tx.send_replace(true);
 }
 
@@ -643,6 +586,7 @@ async fn submit_task(
     active: &mut Option<ActiveTask>,
     queued: &mut VecDeque<QueuedTask>,
     session_id: Arc<str>,
+    resources: Arc<RuntimeSessionResources>,
     pending_input: Arc<PendingInputQueue>,
     finished_tx: mpsc::UnboundedSender<TaskFinishedMessage>,
     next_task_key: &mut u64,
@@ -655,6 +599,7 @@ async fn submit_task(
     let (completion_tx, completion_rx) = oneshot::channel();
     if replace_active {
         if let Some(active_task) = active.take() {
+            resources.interrupt_code_mode().await;
             stop_active_task(active_task, RuntimeSessionTaskOutcome::Replaced).await;
         }
     } else if active.is_some() {
@@ -690,6 +635,7 @@ async fn submit_task(
 
     *active = Some(spawn_task(
         session_id,
+        resources,
         pending_input,
         task,
         input,
@@ -710,6 +656,7 @@ async fn submit_task(
 
 fn spawn_task(
     session_id: Arc<str>,
+    resources: Arc<RuntimeSessionResources>,
     pending_input: Arc<PendingInputQueue>,
     task: Arc<dyn RuntimeSessionTask>,
     initial_input: Vec<super::RuntimeSessionInput>,
@@ -727,6 +674,7 @@ fn spawn_task(
         metadata,
         Arc::clone(&pending_input),
         task.mailbox_loader(),
+        resources,
         state,
     );
     let cancellation_token = CancellationToken::new();
@@ -767,6 +715,7 @@ fn start_next_task(
     active: &mut Option<ActiveTask>,
     queued: &mut VecDeque<QueuedTask>,
     session_id: Arc<str>,
+    resources: Arc<RuntimeSessionResources>,
     pending_input: Arc<PendingInputQueue>,
     finished_tx: mpsc::UnboundedSender<TaskFinishedMessage>,
     next_task_key: &mut u64,
@@ -776,6 +725,7 @@ fn start_next_task(
     };
     *active = Some(spawn_task(
         session_id,
+        resources,
         pending_input,
         task.task,
         task.input,

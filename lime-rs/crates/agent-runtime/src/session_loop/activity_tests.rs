@@ -19,7 +19,10 @@ fn waiting_task(turn_id: &str, kind: RuntimeSessionTaskKind) -> Arc<dyn RuntimeS
 #[tokio::test]
 async fn session_handle_activity_subscription_observes_steer() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-activity-handle").await;
+    let session = registry
+        .get_or_create("session-activity-handle", "thread-activity-handle")
+        .await
+        .expect("bind activity session actor");
     let active = session
         .submit(
             waiting_task("turn-active", RuntimeSessionTaskKind::Regular),
@@ -62,7 +65,10 @@ async fn session_handle_activity_subscription_observes_steer() {
 #[tokio::test]
 async fn queued_user_admission_is_visible_to_late_activity_subscriber() {
     let registry = RuntimeSessionRegistry::default();
-    let session = registry.get_or_create("session-queued-activity").await;
+    let session = registry
+        .get_or_create("session-queued-activity", "thread-queued-activity")
+        .await
+        .expect("bind queued activity session actor");
     let active = session
         .submit(
             waiting_task("turn-review", RuntimeSessionTaskKind::Review),

@@ -97,6 +97,8 @@ const DIAGNOSTIC_ONLY_NOTIFICATION_METHODS = new Set([
   "rawResponseItem/completed",
   "remoteControl/status/changed",
   "thread/compacted",
+  "thread/environment/connected",
+  "thread/environment/disconnected",
   ...CODEX_REALTIME_NOTIFICATION_METHODS,
 ]);
 const PROJECTED_NOTIFICATION_METHODS = new Set([

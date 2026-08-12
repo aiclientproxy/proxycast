@@ -97,6 +97,12 @@ pub(crate) fn canonical_generation_prompt(
             ContentPart::Reasoning { .. } => return Err(unsupported(protocol, "reasoning")),
             ContentPart::ToolCall { .. } => return Err(unsupported(protocol, "tool_call")),
             ContentPart::ToolResult { .. } => return Err(unsupported(protocol, "tool_result")),
+            ContentPart::CustomToolCall { .. } => {
+                return Err(unsupported(protocol, "custom_tool_call"));
+            }
+            ContentPart::CustomToolResult { .. } => {
+                return Err(unsupported(protocol, "custom_tool_result"));
+            }
             ContentPart::RawResponseItem { .. } => {
                 return Err(unsupported(protocol, "raw_response_item"));
             }

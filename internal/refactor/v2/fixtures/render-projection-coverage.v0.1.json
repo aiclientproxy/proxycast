@@ -60,8 +60,14 @@
     { "method": "thread/name/updated", "outlets": ["header"] },
     { "method": "thread/goal/updated", "outlets": ["header"] },
     { "method": "thread/goal/cleared", "outlets": ["header"] },
-    { "method": "thread/environment/connected", "outlets": ["header"] },
-    { "method": "thread/environment/disconnected", "outlets": ["header"] },
+    {
+      "method": "thread/environment/connected",
+      "outlets": ["diagnostics"]
+    },
+    {
+      "method": "thread/environment/disconnected",
+      "outlets": ["diagnostics"]
+    },
     { "method": "thread/settings/updated", "outlets": ["header"] },
     {
       "method": "thread/tokenUsage/updated",

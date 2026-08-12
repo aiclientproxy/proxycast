@@ -1,3 +1,4 @@
+use super::resources::RuntimeSessionResources;
 use super::{
     RuntimeSessionInterAgentInput, RuntimeSessionLoopError, RuntimeSessionStepContext,
     RuntimeSessionTaskFailure, RuntimeSessionTokenUsage, RuntimeSessionTraceContext,
@@ -244,6 +245,7 @@ pub struct RuntimeSessionTaskContext {
     metadata: RuntimeSessionTaskMetadata,
     pending_input: Arc<PendingInputQueue>,
     mailbox_loader: Option<RuntimeSessionMailboxLoader>,
+    resources: Arc<RuntimeSessionResources>,
     state: Arc<RuntimeSessionTaskState>,
 }
 
@@ -294,6 +296,7 @@ pub struct RuntimeSessionInputHandle {
     pub(super) turn_id: Arc<str>,
     pub(super) kind: RuntimeSessionTaskKind,
     pub(super) mailbox_loader: Option<RuntimeSessionMailboxLoader>,
+    pub(super) resources: Arc<RuntimeSessionResources>,
     pub(super) state: Arc<RuntimeSessionTaskState>,
 }
 
@@ -327,6 +330,7 @@ impl RuntimeSessionTaskContext {
         metadata: RuntimeSessionTaskMetadata,
         pending_input: Arc<PendingInputQueue>,
         mailbox_loader: Option<RuntimeSessionMailboxLoader>,
+        resources: Arc<RuntimeSessionResources>,
         state: Arc<RuntimeSessionTaskState>,
     ) -> Self {
         Self {
@@ -336,6 +340,7 @@ impl RuntimeSessionTaskContext {
             metadata,
             pending_input,
             mailbox_loader,
+            resources,
             state,
         }
     }
@@ -346,6 +351,16 @@ impl RuntimeSessionTaskContext {
 
     pub fn turn_id(&self) -> &str {
         &self.turn_id
+    }
+
+    pub fn thread_id(&self) -> &str {
+        self.resources.thread_id()
+    }
+
+    pub fn code_mode_session(
+        &self,
+    ) -> Option<tool_runtime::code_mode::RuntimeCodeModeSessionHandle> {
+        self.resources.code_mode_session()
     }
 
     pub fn kind(&self) -> RuntimeSessionTaskKind {
@@ -371,6 +386,7 @@ impl RuntimeSessionTaskContext {
             turn_id: Arc::clone(&self.turn_id),
             kind: self.kind,
             mailbox_loader: self.mailbox_loader.clone(),
+            resources: Arc::clone(&self.resources),
             state: Arc::clone(&self.state),
         }
     }
@@ -477,6 +493,16 @@ impl RuntimeSessionTaskContext {
 }
 
 impl RuntimeSessionInputHandle {
+    pub fn thread_id(&self) -> &str {
+        self.resources.thread_id()
+    }
+
+    pub fn code_mode_session(
+        &self,
+    ) -> Option<tool_runtime::code_mode::RuntimeCodeModeSessionHandle> {
+        self.resources.code_mode_session()
+    }
+
     pub fn kind(&self) -> RuntimeSessionTaskKind {
         self.kind
     }

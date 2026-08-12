@@ -21,8 +21,10 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use tool_runtime::tool_definition::RuntimeToolDefinition;
+use tool_runtime::tool_definition::RuntimeToolExposure;
 use tool_runtime::tool_executor::RuntimeToolExecutorHandle;
 use tool_runtime::tool_extension::RuntimeToolCaller;
+use tool_runtime::turn_snapshot::{RuntimeToolIdentity, RuntimeToolSnapshot};
 use tool_runtime::turn_tool_surface::{
     runtime_turn_tool_scope_from_metadata, runtime_turn_tool_surface_allows_tool_name,
     runtime_turn_tool_surface_mode_from_metadata,
@@ -149,6 +151,8 @@ pub(super) fn current_tool_step_snapshot_source(
     pending_input: Option<RuntimeSessionInputHandle>,
     mcp_tool_routes: McpToolRoutes,
     dynamic_tool_routes: DynamicToolRoutes,
+    tool_mode: tool_runtime::code_mode::RuntimeToolMode,
+    supports_custom_tools: bool,
 ) -> RuntimeToolStepSnapshotSourceHandle {
     let deferred_tools = DeferredToolSelections::default();
     RuntimeToolStepSnapshotSourceHandle::new(Arc::new(CurrentTurnToolStepSnapshotSource {
@@ -163,6 +167,8 @@ pub(super) fn current_tool_step_snapshot_source(
         deferred_tools,
         mcp_tool_routes,
         dynamic_tool_routes,
+        tool_mode,
+        supports_custom_tools,
     }))
 }
 
@@ -375,6 +381,35 @@ struct CurrentTurnToolStepSnapshotSource {
     deferred_tools: DeferredToolSelections,
     mcp_tool_routes: McpToolRoutes,
     dynamic_tool_routes: DynamicToolRoutes,
+    tool_mode: tool_runtime::code_mode::RuntimeToolMode,
+    supports_custom_tools: bool,
+}
+
+struct CodeModeStepPlan {
+    tool_plan: tool_runtime::code_mode::RuntimeCodeModeToolPlan,
+    attach_session: bool,
+}
+
+fn code_mode_step_plan(
+    runtime_tools: &[RuntimeToolSnapshot],
+    requested: tool_runtime::code_mode::RuntimeToolMode,
+    supports_custom_tools: bool,
+    has_session: bool,
+) -> Result<CodeModeStepPlan, String> {
+    let code_mode_available = supports_custom_tools && has_session;
+    let tool_plan = tool_runtime::code_mode::plan_runtime_code_mode_tools(
+        runtime_tools,
+        requested,
+        code_mode_available,
+        false,
+    )
+    .map_err(|error| error.to_string())?;
+    let attach_session = code_mode_available
+        && tool_plan.resolution.effective != tool_runtime::code_mode::RuntimeToolMode::Direct;
+    Ok(CodeModeStepPlan {
+        tool_plan,
+        attach_session,
+    })
 }
 
 impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
@@ -426,12 +461,51 @@ impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
                 pending_input: self.pending_input.clone(),
                 dynamic_tool_routes: self.dynamic_tool_routes.clone(),
             }));
-            Ok(RuntimeToolStepSnapshot::with_tool_metadata(
+            let runtime_tools = definitions
+                .iter()
+                .cloned()
+                .map(|definition| {
+                    let supports_parallel = !serial_mcp_tool_names.contains(&definition.name);
+                    RuntimeToolSnapshot::new(
+                        RuntimeToolIdentity::plain(definition.name.clone()),
+                        definition,
+                        RuntimeToolExposure::Direct,
+                        supports_parallel,
+                        true,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let code_mode_session = self
+                .pending_input
+                .as_ref()
+                .and_then(RuntimeSessionInputHandle::code_mode_session);
+            let CodeModeStepPlan {
+                tool_plan,
+                attach_session,
+            } = code_mode_step_plan(
+                &runtime_tools,
+                self.tool_mode,
+                self.supports_custom_tools,
+                code_mode_session.is_some(),
+            )?;
+            let definitions = tool_plan
+                .model_visible_tools
+                .into_iter()
+                .map(|tool| tool.definition)
+                .collect();
+            let nested_tools = tool_plan.nested_tools;
+            let snapshot = RuntimeToolStepSnapshot::with_tool_metadata(
                 definitions,
                 executor,
                 serial_mcp_tool_names,
                 mcp_tool_environment_ids,
-            ))
+            );
+            if !attach_session {
+                return Ok(snapshot);
+            }
+            let session = code_mode_session
+                .ok_or_else(|| "CodeMode plan requires an executable session".to_string())?;
+            Ok(snapshot.with_code_mode_session(session, nested_tools))
         })
     }
 }
@@ -684,5 +758,64 @@ mod tests {
             ..Default::default()
         };
         assert!(tool_definitions(&state, &policy, Some(&collision), &snapshot, None).is_err());
+    }
+
+    #[test]
+    fn code_mode_step_requires_model_capability_and_executable_session() {
+        let tools = vec![RuntimeToolSnapshot::new(
+            RuntimeToolIdentity::plain("read"),
+            RuntimeToolDefinition::new("read", "Read a file", json!({})),
+            RuntimeToolExposure::Direct,
+            false,
+            true,
+        )];
+
+        let direct = code_mode_step_plan(
+            &tools,
+            tool_runtime::code_mode::RuntimeToolMode::Direct,
+            true,
+            true,
+        )
+        .expect("direct mode");
+        assert_eq!(
+            direct.tool_plan.resolution.effective,
+            tool_runtime::code_mode::RuntimeToolMode::Direct
+        );
+        assert!(!direct.attach_session);
+
+        let missing_capability = code_mode_step_plan(
+            &tools,
+            tool_runtime::code_mode::RuntimeToolMode::CodeMode,
+            false,
+            true,
+        )
+        .expect("regular CodeMode falls back to direct");
+        assert_eq!(
+            missing_capability.tool_plan.resolution.effective,
+            tool_runtime::code_mode::RuntimeToolMode::Direct
+        );
+        assert!(!missing_capability.attach_session);
+
+        let executable = code_mode_step_plan(
+            &tools,
+            tool_runtime::code_mode::RuntimeToolMode::CodeMode,
+            true,
+            true,
+        )
+        .expect("executable CodeMode");
+        assert_eq!(
+            executable.tool_plan.resolution.effective,
+            tool_runtime::code_mode::RuntimeToolMode::CodeMode
+        );
+        assert!(executable.attach_session);
+        assert_eq!(executable.tool_plan.nested_tools[0].global_name, "read");
+
+        assert!(code_mode_step_plan(
+            &tools,
+            tool_runtime::code_mode::RuntimeToolMode::CodeModeOnly,
+            true,
+            false,
+        )
+        .is_err());
     }
 }

@@ -266,22 +266,6 @@ impl RuntimeCore {
     }
 }
 
-impl RuntimeCore {
-    pub(in crate::runtime) fn append_workflow_audit_runtime_events(
-        &self,
-        request: &ExecutionRequest,
-        runtime_events: Vec<RuntimeEvent>,
-    ) -> Result<(), RuntimeCoreError> {
-        append_workflow_audit_runtime_events(
-            self.event_log_writer.as_deref(),
-            request.session.session_id.as_str(),
-            request.session.thread_id.as_str(),
-            Some(request.turn.turn_id.as_str()),
-            runtime_events,
-        )
-    }
-}
-
 pub(in crate::runtime) fn append_workflow_audit_runtime_events(
     event_log_writer: Option<&EventLogWriter>,
     session_id: &str,

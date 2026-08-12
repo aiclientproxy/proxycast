@@ -113,6 +113,7 @@ fn lifecycle_events(
             id: id.clone(),
             name: name.to_string(),
             input,
+            raw_arguments: None,
             provider_executed: Some(true),
             provider_metadata: BTreeMap::from([("raw_response_item".to_string(), item.clone())]),
         });

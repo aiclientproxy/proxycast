@@ -1,4 +1,5 @@
 use agent_protocol::turn_context::TurnContextOverride as AgentTurnContext;
+use tool_runtime::code_mode::RuntimeToolMode;
 
 pub struct AgentSessionConfigurationRequest {
     pub session_id: String,
@@ -25,6 +26,8 @@ pub struct AgentSessionConfig {
     pub system_prompt_override: Option<bool>,
     pub include_context_trace: Option<bool>,
     pub turn_context: Option<AgentTurnContext>,
+    pub tool_mode: RuntimeToolMode,
+    pub supports_custom_tools: bool,
 }
 
 pub fn build_agent_session_config(request: AgentSessionConfigurationRequest) -> AgentSessionConfig {
@@ -40,6 +43,8 @@ pub fn build_agent_session_config(request: AgentSessionConfigurationRequest) -> 
         system_prompt_override: Some(true),
         include_context_trace: Some(request.include_context_trace),
         turn_context: request.turn_context,
+        tool_mode: RuntimeToolMode::Direct,
+        supports_custom_tools: false,
     }
 }
 
@@ -59,6 +64,8 @@ pub struct SessionConfigBuilder {
     system_prompt_override: Option<bool>,
     include_context_trace: Option<bool>,
     turn_context: Option<AgentTurnContext>,
+    tool_mode: RuntimeToolMode,
+    supports_custom_tools: bool,
 }
 
 impl SessionConfigBuilder {
@@ -75,6 +82,8 @@ impl SessionConfigBuilder {
             system_prompt_override: None,
             include_context_trace: None,
             turn_context: None,
+            tool_mode: RuntimeToolMode::Direct,
+            supports_custom_tools: false,
         }
     }
 
@@ -128,6 +137,16 @@ impl SessionConfigBuilder {
         self
     }
 
+    pub fn tool_mode(mut self, tool_mode: RuntimeToolMode) -> Self {
+        self.tool_mode = tool_mode;
+        self
+    }
+
+    pub fn supports_custom_tools(mut self, supported: bool) -> Self {
+        self.supports_custom_tools = supported;
+        self
+    }
+
     pub fn build(self) -> AgentSessionConfig {
         AgentSessionConfig {
             id: self.id,
@@ -141,6 +160,8 @@ impl SessionConfigBuilder {
             system_prompt_override: self.system_prompt_override,
             include_context_trace: self.include_context_trace,
             turn_context: self.turn_context,
+            tool_mode: self.tool_mode,
+            supports_custom_tools: self.supports_custom_tools,
         }
     }
 }

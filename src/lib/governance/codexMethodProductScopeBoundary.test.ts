@@ -225,4 +225,44 @@ describe("Codex method product scope boundary", () => {
       ).toBe(false);
     }
   });
+
+  it("excluded remote environment, migration, marketplace and share surfaces cannot enter Desktop", () => {
+    const matrix = readJson<Matrix>(MATRIX_PATH);
+    const manifest = readJson<Manifest>(MANIFEST_PATH);
+    const excludedMethods = new Set([
+      "environment/add",
+      "environment/info",
+      "environment/status",
+      "externalAgentConfig/detect",
+      "externalAgentConfig/import",
+      "externalAgentConfig/import/readHistories",
+      "externalAgentConfig/import/recordHistory",
+      "marketplace/add",
+      "marketplace/remove",
+      "marketplace/upgrade",
+      "plugin/share/checkout",
+      "plugin/share/delete",
+      "plugin/share/list",
+      "plugin/share/save",
+      "plugin/share/updateTargets",
+      "thread/environment/connected",
+      "thread/environment/disconnected",
+      "externalAgentConfig/import/completed",
+      "externalAgentConfig/import/progress",
+    ]);
+    const entries = flatten(matrix).filter(({ method }) =>
+      excludedMethods.has(method),
+    );
+
+    expect(entries).toHaveLength(excludedMethods.size);
+    for (const entry of entries) {
+      expect(entry.status).toBe("product-scope-excluded");
+      expect(
+        manifest.methods.some(
+          ({ kind, method }) =>
+            kind === manifestKind(entry.direction) && method === entry.method,
+        ),
+      ).toBe(false);
+    }
+  });
 });

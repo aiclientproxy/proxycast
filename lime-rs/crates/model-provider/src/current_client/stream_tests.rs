@@ -196,6 +196,7 @@ async fn responses_projects_hosted_web_search_without_local_tool_finish_reason()
                 input,
                 provider_executed,
                 provider_metadata,
+                ..
             } => Some((id, name, input, provider_executed, provider_metadata)),
             _ => None,
         })
@@ -241,6 +242,7 @@ async fn responses_projects_hosted_image_generation_exactly_once_and_finishes_st
                 input,
                 provider_executed,
                 provider_metadata,
+                ..
             } => Some((id, name, input, provider_executed, provider_metadata)),
             _ => None,
         })

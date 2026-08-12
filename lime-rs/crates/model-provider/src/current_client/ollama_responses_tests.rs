@@ -131,15 +131,15 @@ fn request_with_tool_history() -> CurrentProviderRequest {
         )]),
     ])
     .with_system_prompt(Some("Follow repository rules".to_string()))
-    .with_tools(vec![CurrentProviderTool {
-        name: "read_file".to_string(),
-        description: "Read a file".to_string(),
-        input_schema: json!({
+    .with_tools(vec![CurrentProviderTool::function(
+        "read_file",
+        "Read a file",
+        json!({
             "type": "object",
             "properties": { "path": { "type": "string" } },
             "required": ["path"]
         }),
-    }])
+    )])
 }
 
 #[tokio::test]

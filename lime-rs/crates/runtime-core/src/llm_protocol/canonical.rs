@@ -81,6 +81,15 @@ pub enum ContentPart {
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         metadata: ProviderMetadata,
     },
+    CustomToolCall {
+        id: String,
+        name: String,
+        input: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        metadata: ProviderMetadata,
+    },
     ToolResult {
         id: String,
         name: String,
@@ -89,6 +98,15 @@ pub enum ContentPart {
         error: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider_executed: Option<bool>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        metadata: ProviderMetadata,
+    },
+    CustomToolResult {
+        id: String,
+        name: String,
+        result: ToolResultValue,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         metadata: ProviderMetadata,
     },
@@ -183,16 +201,69 @@ impl Message {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FreeformToolFormat {
+    pub r#type: String,
+    pub syntax: String,
+    pub definition: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ToolDefinition {
-    pub name: String,
-    #[serde(default)]
-    pub description: String,
-    pub input_schema: Value,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub output_schema: Option<Value>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub metadata: ProviderMetadata,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ToolDefinition {
+    Function {
+        name: String,
+        #[serde(default)]
+        description: String,
+        input_schema: Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output_schema: Option<Value>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        metadata: ProviderMetadata,
+    },
+    Custom {
+        name: String,
+        #[serde(default)]
+        description: String,
+        format: FreeformToolFormat,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        metadata: ProviderMetadata,
+    },
+}
+
+impl ToolDefinition {
+    pub fn function(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        input_schema: Value,
+    ) -> Self {
+        Self::Function {
+            name: name.into(),
+            description: description.into(),
+            input_schema,
+            output_schema: None,
+            metadata: ProviderMetadata::new(),
+        }
+    }
+
+    pub fn custom(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        format: FreeformToolFormat,
+    ) -> Self {
+        Self::Custom {
+            name: name.into(),
+            description: description.into(),
+            format,
+            metadata: ProviderMetadata::new(),
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Function { name, .. } | Self::Custom { name, .. } => name,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -363,7 +434,18 @@ pub enum LlmEvent {
         name: String,
         input: Value,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        raw_arguments: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         provider_executed: Option<bool>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        provider_metadata: ProviderMetadata,
+    },
+    CustomToolCall {
+        id: String,
+        name: String,
+        input: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        namespace: Option<String>,
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         provider_metadata: ProviderMetadata,
     },

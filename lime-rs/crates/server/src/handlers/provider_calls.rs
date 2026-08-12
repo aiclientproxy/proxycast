@@ -193,6 +193,11 @@ async fn collect_provider_output(
             } => output
                 .tool_calls
                 .push(CollectedToolCall { id, name, input }),
+            CanonicalLlmEvent::CustomToolCall { .. } => {
+                return Err(CurrentProviderError::invalid_request(
+                    "legacy provider call endpoint cannot expose custom tool calls",
+                ));
+            }
             CanonicalLlmEvent::Usage { usage } => output.usage = usage,
             CanonicalLlmEvent::Finish {
                 reason,
@@ -515,11 +520,13 @@ fn openai_request_to_current(
         .into_iter()
         .flat_map(|tools| tools.iter())
         .filter_map(|tool| match tool {
-            agent_protocol::openai::Tool::Function { function } => Some(CurrentProviderTool {
-                name: function.name.clone(),
-                description: function.description.clone().unwrap_or_default(),
-                input_schema: function.parameters.clone().unwrap_or_else(|| json!({})),
-            }),
+            agent_protocol::openai::Tool::Function { function } => {
+                Some(CurrentProviderTool::function(
+                    function.name.clone(),
+                    function.description.clone().unwrap_or_default(),
+                    function.parameters.clone().unwrap_or_else(|| json!({})),
+                ))
+            }
             agent_protocol::openai::Tool::WebSearch
             | agent_protocol::openai::Tool::WebSearch20250305 => None,
         })
@@ -653,10 +660,12 @@ fn anthropic_request_to_current(
         .as_ref()
         .into_iter()
         .flat_map(|tools| tools.iter())
-        .map(|tool| CurrentProviderTool {
-            name: tool.name.clone(),
-            description: tool.description.clone().unwrap_or_default(),
-            input_schema: tool.input_schema.clone().unwrap_or_else(|| json!({})),
+        .map(|tool| {
+            CurrentProviderTool::function(
+                tool.name.clone(),
+                tool.description.clone().unwrap_or_default(),
+                tool.input_schema.clone().unwrap_or_else(|| json!({})),
+            )
         })
         .collect();
     Ok(CurrentProviderRequest::new(messages)
@@ -983,6 +992,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn legacy_provider_output_rejects_custom_tool_calls() {
+        let error = match collect_provider_output(Box::pin(stream::iter(vec![Ok(
+            CanonicalLlmEvent::CustomToolCall {
+                id: "custom-call-1".to_string(),
+                name: "run_code".to_string(),
+                input: "return 42;".to_string(),
+                namespace: Some("codemode".to_string()),
+                provider_metadata: Default::default(),
+            },
+        )])))
+        .await
+        {
+            Ok(_) => panic!("legacy provider output must reject custom calls"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error.classification,
+            Some(FailureClassification::InvalidRequest)
+        );
+        assert!(error.message.contains("cannot expose custom tool calls"));
+    }
+
+    #[tokio::test]
     async fn anthropic_tool_call_does_not_restart_after_input_end() {
         let events = vec![
             Ok(CanonicalLlmEvent::ToolInputStart {
@@ -1002,6 +1034,7 @@ mod tests {
                 id: "call-1".to_string(),
                 name: "lookup".to_string(),
                 input: json!({}),
+                raw_arguments: None,
                 provider_executed: None,
                 provider_metadata: Default::default(),
             }),

@@ -269,7 +269,11 @@ async fn complete_child(core: &RuntimeCore) -> AgentTurn {
 #[tokio::test]
 async fn terminal_result_notifies_an_existing_parent_session_actor() {
     let (_temp, core, _store, root, _root_turn) = setup(ChildOutcome::Completed).await;
-    let session = core.session_loops.get_or_create(&root.session_id).await;
+    let session = core
+        .session_loops
+        .get_or_create(&root.session_id, &root.thread_id)
+        .await
+        .expect("bind parent session actor");
     let (ready_tx, ready_rx) = oneshot::channel();
     let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
     let (activity_tx, activity_rx) = oneshot::channel();

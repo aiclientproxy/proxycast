@@ -14,6 +14,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   appServerBinaryName,
+  codeModeHostBinaryName,
   resolveDevAppServerBinary,
 } from "./electron-dev-sidecar.mjs";
 import {
@@ -34,6 +35,10 @@ export const APP_SERVER_PROTOCOL_VERSION = "appserver.v0";
 
 export function appServerResourceBinaryName(platform = process.platform) {
   return appServerBinaryName(platform);
+}
+
+export function codeModeHostResourceBinaryName(platform = process.platform) {
+  return codeModeHostBinaryName(platform);
 }
 
 export function appServerResourcePlatformKey(
@@ -79,13 +84,30 @@ export function electronAppServerBinaryDestination({
   );
 }
 
+export function electronCodeModeHostBinaryDestination({
+  outputRoot = electronAppServerResourcesRoot(),
+  platform = process.platform,
+  arch = process.arch,
+} = {}) {
+  const platformKey = appServerResourcePlatformKey(platform, arch);
+  return path.resolve(
+    outputRoot,
+    "app-server",
+    platformKey,
+    codeModeHostResourceBinaryName(platform),
+  );
+}
+
 export async function buildElectronAppServerReleaseManifest({
   binaryPath,
+  codeModeHostBinaryPath,
   version,
   platform = appServerResourcePlatformKey(),
   sha256File = hashFile,
 }) {
-  const normalizedBinaryPath = path.resolve(requiredValue(binaryPath, "binaryPath"));
+  const normalizedBinaryPath = path.resolve(
+    requiredValue(binaryPath, "binaryPath"),
+  );
   const normalizedVersion = requiredValue(version, "version");
   const normalizedPlatform = requiredValue(platform, "platform");
 
@@ -97,6 +119,11 @@ export async function buildElectronAppServerReleaseManifest({
         platform: normalizedPlatform,
         url: `app-resource://app-server/${normalizedPlatform}/${path.basename(normalizedBinaryPath)}`,
         sha256: await sha256File(normalizedBinaryPath),
+        codeModeHostSha256: await sha256File(
+          path.resolve(
+            requiredValue(codeModeHostBinaryPath, "codeModeHostBinaryPath"),
+          ),
+        ),
       },
     ],
   };
@@ -108,6 +135,7 @@ export async function prepareElectronAppServerAssets({
   platform = process.platform,
   arch = process.arch,
   sourceBinary,
+  sourceCodeModeHostBinary,
   resolveBinary = resolveDevAppServerBinary,
   env = process.env,
   readPackageJson = readJsonFile,
@@ -121,9 +149,16 @@ export async function prepareElectronAppServerAssets({
   prepareRuntimeBinary = ensureElectronAppServerRuntimeBinary,
   copyRuntimeLibraries = copyElectronAppServerRuntimeLibraries,
 } = {}) {
-  const packageJson = await readPackageJson(path.resolve(repoRoot, "package.json"));
+  const packageJson = await readPackageJson(
+    path.resolve(repoRoot, "package.json"),
+  );
   const version = requiredValue(packageJson.version, "package version");
   const destination = electronAppServerBinaryDestination({
+    outputRoot,
+    platform,
+    arch,
+  });
+  const codeModeHostDestination = electronCodeModeHostBinaryDestination({
     outputRoot,
     platform,
     arch,
@@ -143,14 +178,34 @@ export async function prepareElectronAppServerAssets({
       `Electron app-server asset source must not equal packaged destination: ${destination}`,
     );
   }
+  const resolvedSourceCodeModeHostBinary = path.resolve(
+    sourceCodeModeHostBinary ??
+      path.join(
+        path.dirname(resolvedSourceBinary),
+        codeModeHostResourceBinaryName(platform),
+      ),
+  );
+  if (resolvedSourceCodeModeHostBinary === codeModeHostDestination) {
+    throw new Error(
+      `Electron code-mode-host asset source must not equal packaged destination: ${codeModeHostDestination}`,
+    );
+  }
 
   await makeDir(path.dirname(destination), { recursive: true });
   await rm(destination, { force: true });
+  await rm(codeModeHostDestination, { force: true });
   await copy(resolvedSourceBinary, destination);
+  await copy(resolvedSourceCodeModeHostBinary, codeModeHostDestination);
   await clearLaunchBlockingXattrs(destination, platform);
+  await clearLaunchBlockingXattrs(codeModeHostDestination, platform);
   const sourceStat = await getStat(resolvedSourceBinary);
+  const codeModeHostSourceStat = await getStat(
+    resolvedSourceCodeModeHostBinary,
+  );
   await changeMode(destination, sourceStat.mode);
+  await changeMode(codeModeHostDestination, codeModeHostSourceStat.mode);
   prepareRuntimeBinary({ binaryPath: destination, platform });
+  prepareRuntimeBinary({ binaryPath: codeModeHostDestination, platform });
   const runtimeLibraries = await copyRuntimeLibraries({
     repoRoot,
     platform,
@@ -163,6 +218,7 @@ export async function prepareElectronAppServerAssets({
 
   const manifest = await buildElectronAppServerReleaseManifest({
     binaryPath: destination,
+    codeModeHostBinaryPath: codeModeHostDestination,
     version,
     platform: appServerResourcePlatformKey(platform, arch),
     sha256File,
@@ -171,7 +227,9 @@ export async function prepareElectronAppServerAssets({
 
   return {
     sourceBinary: resolvedSourceBinary,
+    sourceCodeModeHostBinary: resolvedSourceCodeModeHostBinary,
     binaryPath: destination,
+    codeModeHostBinaryPath: codeModeHostDestination,
     manifestPath,
     manifest,
     runtimeLibraries,
@@ -377,7 +435,10 @@ function resolvePackagedRuntimeLibrarySource({
 }) {
   const sourceBinaryPath = String(sourceBinary || "").trim();
   if (sourceBinaryPath) {
-    const adjacentPath = path.join(path.dirname(path.resolve(sourceBinaryPath)), name);
+    const adjacentPath = path.join(
+      path.dirname(path.resolve(sourceBinaryPath)),
+      name,
+    );
     if (exists(adjacentPath)) {
       return adjacentPath;
     }

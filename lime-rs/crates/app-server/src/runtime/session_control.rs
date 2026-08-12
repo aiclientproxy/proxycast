@@ -88,7 +88,11 @@ impl RuntimeCore {
             },
         )
         .with_kind(RuntimeSessionTaskKind::Compact);
-        let session = self.session_loops.get_or_create(&actor_session_id).await;
+        let session = self
+            .session_loops
+            .get_or_create(&actor_session_id, &thread_id)
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
         let result = session
             .dispatch(RuntimeSessionOperationSubmission::new(
                 RuntimeSessionOperation::Compact {
@@ -127,6 +131,14 @@ impl RuntimeCore {
         trigger_context: Option<Value>,
     ) -> Result<RuntimeCoreOutput<ThreadCompactStartResponse>, RuntimeCoreError> {
         self.ensure_current_session_hydrated(session_id).await?;
+        let thread_id = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .get(session_id)
+            .map(|stored| stored.session.thread_id.clone())
+            .ok_or_else(|| RuntimeCoreError::SessionNotFound(session_id.to_string()))?;
         let runtime = self.clone();
         let session_id = session_id.to_string();
         let event_name = event_name.map(str::to_string);
@@ -180,7 +192,11 @@ impl RuntimeCore {
             },
         )
         .with_kind(RuntimeSessionTaskKind::Compact);
-        let session = self.session_loops.get_or_create(&actor_session_id).await;
+        let session = self
+            .session_loops
+            .get_or_create(&actor_session_id, &thread_id)
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
         let result = session
             .dispatch(RuntimeSessionOperationSubmission::new(
                 RuntimeSessionOperation::Compact {

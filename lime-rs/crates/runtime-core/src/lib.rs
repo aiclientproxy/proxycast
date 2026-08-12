@@ -11,7 +11,7 @@ pub use context_fragments::{
     ContextFragmentSource, ContextSidecarReference,
 };
 pub use llm_protocol::canonical::{
-    ContentPart, FailureClassification, FinishReason, GenerationOptions,
+    ContentPart, FailureClassification, FinishReason, FreeformToolFormat, GenerationOptions,
     LlmEvent as CanonicalLlmEvent, Message as CanonicalMessage, ModelRerouteReason,
     ModelVerification, ProviderMetadata, Request as CanonicalRequest, Role as CanonicalRole,
     ToolDefinition as CanonicalToolDefinition, ToolResultValue, Usage,

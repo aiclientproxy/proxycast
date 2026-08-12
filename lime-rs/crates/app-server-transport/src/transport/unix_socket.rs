@@ -1,4 +1,5 @@
 use super::TransportEvent;
+#[cfg(unix)]
 use crate::transport::websocket::run_websocket_connection;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
@@ -7,10 +8,14 @@ use std::path::Path;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+#[cfg(unix)]
 use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
+#[cfg(unix)]
 use tracing::error;
+#[cfg(unix)]
 use tracing::info;
+#[cfg(unix)]
 use tracing::warn;
 
 #[cfg(unix)]

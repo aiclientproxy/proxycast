@@ -1,4 +1,5 @@
 use super::actor::RuntimeSessionCommand;
+use super::resources::RuntimeSessionResources;
 use super::{
     RuntimeSessionInput, RuntimeSessionInterAgentInput, RuntimeSessionLoopError,
     RuntimeSessionOperation, RuntimeSessionOperationResult, RuntimeSessionOperationSubmission,
@@ -14,9 +15,14 @@ use tokio::sync::{mpsc, oneshot, watch};
 pub struct RuntimeSessionHandle {
     pub(super) tx: mpsc::Sender<RuntimeSessionCommand>,
     pub(super) termination: watch::Receiver<bool>,
+    pub(super) resources: Arc<RuntimeSessionResources>,
 }
 
 impl RuntimeSessionHandle {
+    pub fn thread_id(&self) -> &str {
+        self.resources.thread_id()
+    }
+
     pub async fn snapshot(&self) -> Result<RuntimeSessionSnapshot, RuntimeSessionLoopError> {
         let (reply_tx, reply_rx) = oneshot::channel();
         self.tx

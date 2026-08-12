@@ -6,14 +6,15 @@ use agent_protocol::ModelId;
 use agent_runtime::turn_executor::TurnProviderConfiguration;
 use app_server_protocol::{
     AuthKind, CapabilitySnapshot, ModelRefSource, ModelTaskKind, ModelTaskRequest, ModelTaskSource,
-    ProtocolKind, ResolvedModelRoute,
+    ProtocolKind, ResolvedModelRoute, RouteFailure, RouteFailureCategory,
 };
 use lime_agent::{
     route_protocol_from_session_provider_config, supports_direct_route,
     ModelRouteProviderConfiguration, SessionProviderConfig,
 };
 use lime_core::database::dao::api_key_provider::ProviderWithKeys;
-use model_provider::runtime_provider::RuntimeProviderAuth;
+use model_provider::provider_capabilities::ProviderCapabilities;
+use model_provider::runtime_provider::{RuntimeProviderAuth, RuntimeProviderProtocol};
 use model_provider::{ModelProviderProtocol, ModelRoute};
 use serde_json::{json, Value};
 
@@ -70,7 +71,7 @@ pub(super) fn resolved_route_from_runtime(
     credential_ref: Option<&str>,
     direct_provider_config: Option<&SessionProviderConfig>,
 ) -> ResolvedModelRoute {
-    crate::model_route_assembly::resolved_route_from_task_with_credential(
+    let mut resolved_route = crate::model_route_assembly::resolved_route_from_task_with_credential(
         task_request,
         ModelRouteSelection {
             provider_id: &selection.provider,
@@ -82,7 +83,76 @@ pub(super) fn resolved_route_from_runtime(
         provider,
         credential_ref,
         direct_provider_config.map(direct_route_config),
-    )
+    );
+    intersect_resolved_provider_capabilities(
+        task_request,
+        selection,
+        provider,
+        direct_provider_config,
+        &mut resolved_route,
+    );
+    resolved_route
+}
+
+fn intersect_resolved_provider_capabilities(
+    task_request: &ModelTaskRequest,
+    selection: &RuntimeModelSelection,
+    provider: Option<&ProviderWithKeys>,
+    direct_provider_config: Option<&SessionProviderConfig>,
+    resolved_route: &mut ResolvedModelRoute,
+) {
+    let provider_name = direct_provider_config
+        .map(|config| config.provider_name.clone())
+        .or_else(|| {
+            provider.map(|provider| provider.provider.effective_provider_type().to_string())
+        })
+        .unwrap_or_else(|| selection.provider.clone());
+    let provider_capabilities =
+        RuntimeProviderProtocol::from_route_protocol(&resolved_route.protocol)
+            .map(|protocol| {
+                ProviderCapabilities::from_resolved_route(
+                    &provider_name,
+                    protocol,
+                    resolved_route.endpoint.base_url.as_deref(),
+                )
+            })
+            .unwrap_or(ProviderCapabilities::NONE);
+
+    if provider_capabilities.custom_tools {
+        return;
+    }
+
+    let original_len = resolved_route.capability_snapshot.runtime_features.len();
+    resolved_route
+        .capability_snapshot
+        .runtime_features
+        .retain(|feature| normalize_capability(feature) != "custom_tools");
+    if resolved_route.capability_snapshot.runtime_features.len() == original_len {
+        return;
+    }
+    if resolved_route.failure.is_some() {
+        return;
+    }
+
+    let Some(capability_gap) =
+        runtime_core::route_capability_gap(task_request, &resolved_route.capability_snapshot)
+    else {
+        return;
+    };
+    resolved_route.decision.capability_gap = Some(capability_gap.clone());
+    resolved_route.failure = Some(RouteFailure {
+        category: RouteFailureCategory::CapabilityGap,
+        reason_code: "capability_gap".to_string(),
+        message: Some(format!("model capability gap: {capability_gap}")),
+        provider_id: Some(selection.provider.clone()),
+        model_id: Some(selection.model.clone()),
+        capability_gap: Some(capability_gap),
+        retryable: false,
+    });
+}
+
+fn normalize_capability(value: &str) -> String {
+    value.trim().to_ascii_lowercase().replace(['-', ' '], "_")
 }
 
 pub(super) fn model_route_from_runtime(
@@ -287,7 +357,125 @@ mod tests {
     use super::*;
     use crate::runtime_backend::tests::request_for_test;
     use app_server_protocol::RouteFailureCategory;
+    use chrono::Utc;
+    use lime_core::database::dao::api_key_provider::{
+        ApiKeyProvider, ApiProviderType, ProviderGroup,
+    };
     use serde_json::json;
+
+    fn configured_provider(
+        id: &str,
+        provider_type: ApiProviderType,
+        api_host: &str,
+    ) -> ProviderWithKeys {
+        let now = Utc::now();
+        ProviderWithKeys {
+            provider: ApiKeyProvider {
+                id: id.to_string(),
+                name: id.to_string(),
+                provider_type,
+                api_host: api_host.to_string(),
+                is_system: false,
+                group: ProviderGroup::Custom,
+                enabled: true,
+                sort_order: 0,
+                api_version: None,
+                project: None,
+                location: None,
+                region: None,
+                models: Vec::new(),
+                prompt_cache_mode: None,
+                created_at: now,
+                updated_at: now,
+            },
+            api_keys: Vec::new(),
+        }
+    }
+
+    fn resolved_custom_tool_route(
+        provider_name: &str,
+        base_url: &str,
+        protocol: ProtocolKind,
+        require_custom_tools: bool,
+    ) -> ResolvedModelRoute {
+        let selection = RuntimeModelSelection {
+            provider: "openai".to_string(),
+            model: "gpt-5.2".to_string(),
+            source: "runtime_options",
+            reasoning_effort: None,
+        };
+        let mut capabilities = vec!["tools".to_string(), "streaming".to_string()];
+        if require_custom_tools {
+            capabilities.push("custom_tools".to_string());
+        }
+        let task_request = build_model_task_request(ModelTaskRequestInput {
+            task_kind: ModelTaskKind::Chat,
+            source: ModelTaskSource::AgentTurn,
+            provider_id: Some(selection.provider.clone()),
+            model_id: Some(selection.model.clone()),
+            model_ref_source: ModelRefSource::RuntimeOptions,
+            modality_contract_key: Some("chat".to_string()),
+            routing_slot: Some("coding".to_string()),
+            task_families: vec!["chat".to_string()],
+            input_modalities: vec!["text".to_string()],
+            output_modalities: vec!["text".to_string()],
+            runtime_features: vec!["streaming".to_string()],
+            capabilities,
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            content_id: None,
+            trace_id: None,
+        });
+        let routing_payload = json!({
+            "providerReadiness": {
+                "ready": true,
+                "status": "ready"
+            },
+            "serviceModelSlot": "coding",
+            "modelRegistry": {
+                "source": "canonical",
+                "status": "matched",
+                "reasonCode": "matched_canonical_model",
+                "modelCapabilities": {
+                    "provenance": "canonical",
+                    "capabilities": {
+                        "tools": true,
+                        "streaming": true
+                    },
+                    "taskFamilies": ["chat"],
+                    "inputModalities": ["text"],
+                    "outputModalities": ["text"],
+                    "runtimeFeatures": ["custom_tools", "streaming", "tool_calling"]
+                }
+            }
+        });
+        let direct_config = SessionProviderConfig {
+            provider_name: provider_name.to_string(),
+            provider_selector: Some(provider_name.to_string()),
+            model_name: selection.model.clone(),
+            api_key: Some("test-key".to_string()),
+            base_url: Some(base_url.to_string()),
+            api_version: None,
+            credential_uuid: None,
+            reasoning_effort: None,
+            service_tier: None,
+            route_protocol: Some(protocol),
+            toolshim: false,
+            toolshim_model: None,
+            model_capabilities: None,
+            supports_websockets: false,
+        };
+
+        resolved_route_from_runtime(
+            &task_request,
+            &selection,
+            &routing_payload,
+            None,
+            None,
+            Some(&direct_config),
+        )
+    }
 
     #[test]
     fn chat_task_request_adds_vision_requirement_for_image_attachments() {
@@ -462,6 +650,136 @@ mod tests {
             route.decision.capability_gap.as_deref(),
             Some("capability_snapshot:missing")
         );
+    }
+
+    #[test]
+    fn custom_tools_route_requires_official_openai_responses_host() {
+        let route = resolved_custom_tool_route(
+            "openai",
+            "https://api.openai.com/v1",
+            ProtocolKind::OpenaiResponses,
+            true,
+        );
+
+        assert!(route.failure.is_none());
+        assert!(route
+            .capability_snapshot
+            .runtime_features
+            .contains(&"custom_tools".to_string()));
+    }
+
+    #[test]
+    fn custom_tools_route_uses_configured_provider_effective_type() {
+        let selection = RuntimeModelSelection {
+            provider: "stored-openai-responses".to_string(),
+            model: "gpt-5.2".to_string(),
+            source: "runtime_options",
+            reasoning_effort: None,
+        };
+        let task_request = build_model_task_request(ModelTaskRequestInput {
+            task_kind: ModelTaskKind::Chat,
+            source: ModelTaskSource::AgentTurn,
+            provider_id: Some(selection.provider.clone()),
+            model_id: Some(selection.model.clone()),
+            model_ref_source: ModelRefSource::RuntimeOptions,
+            modality_contract_key: Some("chat".to_string()),
+            routing_slot: Some("coding".to_string()),
+            task_families: Vec::new(),
+            input_modalities: Vec::new(),
+            output_modalities: Vec::new(),
+            runtime_features: Vec::new(),
+            capabilities: vec!["custom_tools".to_string()],
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            content_id: None,
+            trace_id: None,
+        });
+        let routing_payload = json!({
+            "providerReadiness": { "ready": true, "status": "ready" },
+            "modelRegistry": {
+                "source": "canonical",
+                "status": "matched",
+                "modelCapabilities": {
+                    "provenance": "canonical",
+                    "runtimeFeatures": ["custom_tools"]
+                }
+            }
+        });
+        let provider = configured_provider(
+            "stored-openai-responses",
+            ApiProviderType::OpenaiResponse,
+            "https://api.openai.com/v1",
+        );
+
+        let route = resolved_route_from_runtime(
+            &task_request,
+            &selection,
+            &routing_payload,
+            Some(&provider),
+            None,
+            None,
+        );
+
+        assert_eq!(route.protocol, ProtocolKind::OpenaiResponses);
+        assert!(route.failure.is_none());
+        assert!(route
+            .capability_snapshot
+            .runtime_features
+            .contains(&"custom_tools".to_string()));
+    }
+
+    #[test]
+    fn custom_tools_route_fails_closed_for_unsupported_provider_routes() {
+        for (provider_name, base_url, protocol) in [
+            (
+                "openai",
+                "https://gateway.example.com/v1",
+                ProtocolKind::OpenaiResponses,
+            ),
+            (
+                "openai",
+                "https://api.openai.com/v1",
+                ProtocolKind::OpenaiChat,
+            ),
+            (
+                "azure-openai",
+                "https://resource.openai.azure.com",
+                ProtocolKind::OpenaiResponses,
+            ),
+            (
+                "ollama",
+                "http://127.0.0.1:11434",
+                ProtocolKind::OpenaiResponses,
+            ),
+        ] {
+            let route = resolved_custom_tool_route(provider_name, base_url, protocol, true);
+            let failure = route.failure.expect("custom tools capability gap");
+
+            assert_eq!(failure.category, RouteFailureCategory::CapabilityGap);
+            assert_eq!(failure.reason_code, "capability_gap");
+            assert_eq!(
+                failure.capability_gap.as_deref(),
+                Some("capability:custom_tools")
+            );
+            assert!(!failure.retryable);
+        }
+    }
+
+    #[test]
+    fn normal_chat_does_not_require_custom_tools() {
+        let route = resolved_custom_tool_route(
+            "openai",
+            "https://gateway.example.com/v1",
+            ProtocolKind::OpenaiResponses,
+            false,
+        );
+
+        assert!(route.failure.is_none());
+        assert!(!route
+            .capability_snapshot
+            .runtime_features
+            .contains(&"custom_tools".to_string()));
     }
 
     #[test]

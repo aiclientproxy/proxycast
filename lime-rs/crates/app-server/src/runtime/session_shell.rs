@@ -151,7 +151,11 @@ impl RuntimeCore {
         )
         .with_kind(RuntimeSessionTaskKind::RunShell);
 
-        let session = self.session_loops.get_or_create(&session_id).await;
+        let session = self
+            .session_loops
+            .get_or_create(&session_id, &thread_id)
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
         let result = session
             .dispatch(RuntimeSessionOperationSubmission::new(
                 RuntimeSessionOperation::RunShell {

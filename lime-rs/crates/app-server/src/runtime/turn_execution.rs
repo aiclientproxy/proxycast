@@ -834,7 +834,11 @@ impl RuntimeCore {
             &session.session_id,
         )
         .map_err(RuntimeCoreError::Backend)?;
-        let session_loop = self.session_loops.get_or_create(&session.session_id).await;
+        let session_loop = self
+            .session_loops
+            .get_or_create(&session.session_id, &session.thread_id)
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
         let active_turn_id = session_loop
             .steer_for_turn_id_with_metadata(
                 Some(expected_turn_id),
@@ -1857,6 +1861,7 @@ impl RuntimeCore {
         provider_history: super::provider_history::ProviderTurnHistory,
     ) -> Result<SubmittedRuntimeSessionTurn, RuntimeCoreError> {
         let session_id = request.session.session_id.clone();
+        let thread_id = request.session.thread_id.clone();
         let turn_id = request.turn.turn_id.clone();
         let queue_if_busy = request.queue_if_busy;
         let user_input = request.input.clone();
@@ -1941,7 +1946,11 @@ impl RuntimeCore {
             .with_mailbox_loader(mailbox_loader)
             .with_abort(|_context| Box::pin(async {})),
         );
-        let session = self.session_loops.get_or_create(&session_id).await;
+        let session = self
+            .session_loops
+            .get_or_create(&session_id, &thread_id)
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
         let submission = match session
             .submit_user_input_with_metadata(
                 task,
@@ -2686,8 +2695,9 @@ impl RuntimeCore {
             .unwrap_or_else(|| json!({ "confirmed": request.confirmed }));
         let session = self
             .session_loops
-            .get_or_create(&request.session.session_id)
-            .await;
+            .get_or_create(&request.session.session_id, &request.session.thread_id)
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
         let result = match request.action_type {
             AgentSessionActionType::ToolConfirmation => {
                 session

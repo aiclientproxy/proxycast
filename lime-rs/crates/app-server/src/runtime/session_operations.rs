@@ -291,7 +291,11 @@ impl RuntimeCore {
                 RuntimeSessionOperation::SetMemoryMode { handler }
             }
         };
-        let session = self.session_loops.get_or_create(&session_id).await;
+        let session = self
+            .session_loops
+            .get_or_create(&session_id, &thread_id)
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
         let dispatch_result = match session
             .dispatch(RuntimeSessionOperationSubmission::new(operation))
             .await

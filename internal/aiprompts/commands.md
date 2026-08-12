@@ -193,6 +193,22 @@ Desktop 操作，不新增 Codex 不存在的 rename method。
 Office/PDF 文本提取不属于 `fs/readFile`；若产品继续需要，应在独立 current 文档能力 owner 中重建，禁止恢复旧
 `fileSystem/readFilePreview`。
 
+## Fuzzy File Search 主链
+
+Desktop Composer 项目文件补全只允许走一发式 current 链：
+
+`CharacterMention -> src/lib/api/fuzzyFileSearch.ts -> typed App Server client -> app_server_handle_json_lines -> App Server fuzzyFileSearch -> filesystem search owner`
+
+请求使用 `{ query, roots: [absoluteProjectRoot], cancellationToken }`，返回最多 50 条按 score/path 排序的相对路径、
+file/directory、file name 与 match indices。Renderer 使用稳定 cancellation token、AbortSignal 和 request version
+丢弃旧响应；选中结果只替换当前 `@token`，空格路径加引号，不创建 connector/plugin `Mention`。Electron 只转发
+现有 JSONL，不新增文件搜索 IPC、业务后端或生产 mock fallback。
+
+Codex experimental `fuzzyFileSearch/sessionStart|sessionUpdate|sessionStop` 与
+`fuzzyFileSearch/sessionUpdated|sessionCompleted` 不属于 Lime Desktop 产品面，均为
+`product-scope-excluded / forbidden-to-restore`。两个 notification 只允许 method/field-name 级 drift diagnostics，
+不得进入 current protocol manifest、Composer state、pending interaction 或兼容 wrapper。
+
 ## Browser Session 主链
 
 浏览器会话检测、连接、读回、动作与关闭只允许走：

@@ -324,6 +324,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -333,6 +338,12 @@ jobs:
           workspaces: lime-rs
           shared-key: quality-windows-shell-runtime
           cache-on-failure: true
+
+      - name: Configure sandboxed rusty_v8 artifacts
+        run: node scripts/lib/rusty-v8-artifacts.mjs --github-env
+
+      - name: Check Windows app-server and code-mode-host sidecars
+        run: cargo check --manifest-path lime-rs/Cargo.toml -p app-server --bin app-server -p tool-runtime --bin code-mode-host
 
       - name: Test Windows shell runtime fallback
         run: cargo test --manifest-path lime-rs/Cargo.toml -p lime-agent --test windows_shell_runtime -- --test-threads=1

@@ -598,7 +598,11 @@ mod tests {
         oneshot::Receiver<anyhow::Result<Value>>,
     ) {
         let registry = RuntimeSessionRegistry::default();
-        let session = registry.get_or_create(session_id).await;
+        let thread_id = format!("thread-{session_id}");
+        let session = registry
+            .get_or_create(session_id, &thread_id)
+            .await
+            .expect("bind action-required session actor");
         let (id_tx, id_rx) = oneshot::channel();
         let id_tx = Arc::new(StdMutex::new(Some(id_tx)));
         let (result_tx, result_rx) = oneshot::channel();

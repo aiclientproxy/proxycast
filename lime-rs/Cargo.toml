@@ -6,7 +6,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "1.125.0"
+version = "1.126.0"
 edition = "2021"
 authors = ["coso"]
 repository = "https://github.com/aiclientproxy/lime"
@@ -59,6 +59,8 @@ futures = "0.3"
 async-stream = "0.3"
 async-trait = "0.1"
 clap = { version = "4.5", features = ["derive"] }
+deno_core_icudata = "0.77.0"
+v8 = { version = "=150.4.0", features = ["v8_enable_sandbox"] }
 
 # 错误处理
 anyhow = "1"

@@ -1,6 +1,7 @@
 use crate::tool_call::{ToolCall, ToolEnvironment};
 use crate::tool_result_projection::NormalizedToolOutput;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -22,6 +23,16 @@ pub struct ToolLifecycleEvent {
     pub environments: Vec<ToolEnvironment>,
     pub phase: ToolLifecyclePhase,
     pub output: Option<NormalizedToolOutput>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolOutputDeltaEvent {
+    pub turn_id: String,
+    pub call_id: String,
+    pub tool_name: String,
+    pub delta: String,
+    pub output_kind: Option<String>,
+    pub metadata: HashMap<String, Value>,
 }
 
 impl ToolLifecycleEvent {
@@ -54,6 +65,13 @@ impl ToolLifecycleEvent {
 /// Host capability that publishes canonical tool lifecycle events.
 pub trait ToolLifecycleEmitter: Send + Sync {
     fn emit<'a>(&'a self, event: ToolLifecycleEvent) -> ToolLifecycleEmissionFuture<'a>;
+
+    fn emit_output_delta<'a>(
+        &'a self,
+        _event: ToolOutputDeltaEvent,
+    ) -> ToolLifecycleEmissionFuture<'a> {
+        Box::pin(async {})
+    }
 }
 
 #[cfg(test)]

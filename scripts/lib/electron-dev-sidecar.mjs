@@ -1,7 +1,14 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, watch } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  watch,
+} from "node:fs";
 import path from "node:path";
 import { ensureMacBinaryRpath } from "../prepare-sherpa-onnx-runtime.mjs";
+import { resolveRustyV8CargoEnv } from "./rusty-v8-artifacts.mjs";
 
 export const APP_SERVER_WATCH_DEBOUNCE_MS = 800;
 
@@ -9,7 +16,19 @@ export function appServerBinaryName(platform = process.platform) {
   return platform === "win32" ? "app-server.exe" : "app-server";
 }
 
+export function codeModeHostBinaryName(platform = process.platform) {
+  return platform === "win32" ? "code-mode-host.exe" : "code-mode-host";
+}
+
 export function localAppServerBinaryPath({
+  repoRoot = process.cwd(),
+  platform = process.platform,
+  targetDirectory = resolveCargoTargetDirectory({ repoRoot, platform }),
+} = {}) {
+  return path.resolve(targetDirectory, "debug", appServerBinaryName(platform));
+}
+
+export function localCodeModeHostBinaryPath({
   repoRoot = process.cwd(),
   platform = process.platform,
   targetDirectory = resolveCargoTargetDirectory({ repoRoot, platform }),
@@ -17,7 +36,7 @@ export function localAppServerBinaryPath({
   return path.resolve(
     targetDirectory,
     "debug",
-    appServerBinaryName(platform),
+    codeModeHostBinaryName(platform),
   );
 }
 
@@ -128,16 +147,26 @@ export function resolveDevAppServerBinary({
     platform,
     ...(targetDirectory ? { targetDirectory } : {}),
   });
-  const hasUsableBinary = () => isUsableBinary(binaryPath, { exists });
-  if (forceBuild || !hasUsableBinary()) {
-    build({ repoRoot, platform });
+  const codeModeHostPath = localCodeModeHostBinaryPath({
+    repoRoot,
+    platform,
+    ...(targetDirectory ? { targetDirectory } : {}),
+  });
+  const hasUsableBinaries = () =>
+    isUsableBinary(binaryPath, { exists }) &&
+    isUsableBinary(codeModeHostPath, { exists });
+  if (forceBuild || !hasUsableBinaries()) {
+    build({ repoRoot, platform, env });
   }
 
-  if (!hasUsableBinary()) {
-    throw new Error(`app-server binary was not created: ${binaryPath}`);
+  if (!hasUsableBinaries()) {
+    throw new Error(
+      `app-server sidecar binaries were not created: ${binaryPath}, ${codeModeHostPath}`,
+    );
   }
 
   prepareBinary({ binaryPath, platform });
+  prepareBinary({ binaryPath: codeModeHostPath, platform });
   return binaryPath;
 }
 
@@ -193,7 +222,8 @@ export function resolveDevAppServerBackendEnv({
   }
 
   const resolvedBackendCommand =
-    env.APP_SERVER_BACKEND_COMMAND?.trim() || String(backendCommand || "").trim();
+    env.APP_SERVER_BACKEND_COMMAND?.trim() ||
+    String(backendCommand || "").trim();
 
   return {
     APP_SERVER_BACKEND_MODE: "external",
@@ -215,26 +245,33 @@ export function cargoBuildAppServerArgs({ repoRoot = process.cwd() } = {}) {
     "app-server",
     "--bin",
     "app-server",
+    "-p",
+    "tool-runtime",
+    "--bin",
+    "code-mode-host",
   ];
 }
 
 export function buildLocalAppServer({
   repoRoot = process.cwd(),
   platform = process.platform,
+  arch = process.arch,
+  env = process.env,
   runner = spawnSync,
   prepareBinary = prepareLocalAppServerBinary,
+  resolveV8Env = resolveRustyV8CargoEnv,
 } = {}) {
   console.log("[electron-dev] building local app-server sidecar...");
   const cargoCommand = platform === "win32" ? "cargo.exe" : "cargo";
-  const result = runner(
-    cargoCommand,
-    cargoBuildAppServerArgs({ repoRoot }),
-    {
-      cwd: repoRoot,
-      stdio: "inherit",
-      shell: false,
+  const result = runner(cargoCommand, cargoBuildAppServerArgs({ repoRoot }), {
+    cwd: repoRoot,
+    env: {
+      ...env,
+      ...resolveV8Env({ env, repoRoot, platform, arch }),
     },
-  );
+    stdio: "inherit",
+    shell: false,
+  });
 
   if (result.error) {
     throw result.error;
@@ -246,18 +283,29 @@ export function buildLocalAppServer({
     binaryPath: localAppServerBinaryPath({ repoRoot, platform }),
     platform,
   });
+  prepareBinary({
+    binaryPath: localCodeModeHostBinaryPath({ repoRoot, platform }),
+    platform,
+  });
 }
 
 export function buildLocalAppServerAsync({
   repoRoot = process.cwd(),
   platform = process.platform,
+  arch = process.arch,
+  env = process.env,
   runner = spawn,
   prepareBinary = prepareLocalAppServerBinary,
+  resolveV8Env = resolveRustyV8CargoEnv,
 } = {}) {
   const cargoCommand = platform === "win32" ? "cargo.exe" : "cargo";
   return new Promise((resolve, reject) => {
     const child = runner(cargoCommand, cargoBuildAppServerArgs({ repoRoot }), {
       cwd: repoRoot,
+      env: {
+        ...env,
+        ...resolveV8Env({ env, repoRoot, platform, arch }),
+      },
       stdio: "inherit",
       shell: false,
     });
@@ -268,6 +316,10 @@ export function buildLocalAppServerAsync({
         try {
           prepareBinary({
             binaryPath: localAppServerBinaryPath({ repoRoot, platform }),
+            platform,
+          });
+          prepareBinary({
+            binaryPath: localCodeModeHostBinaryPath({ repoRoot, platform }),
             platform,
           });
         } catch (error) {
@@ -284,10 +336,7 @@ export function buildLocalAppServerAsync({
 }
 
 export function appServerWatchPaths({ repoRoot = process.cwd() } = {}) {
-  return [
-    path.resolve(repoRoot, "lime-rs"),
-    path.resolve(repoRoot, ".cargo"),
-  ];
+  return [path.resolve(repoRoot, "lime-rs"), path.resolve(repoRoot, ".cargo")];
 }
 
 export function listAppServerWatchDirectories({
@@ -408,9 +457,11 @@ export function watchAppServerSources({
         (_eventType, filename) => schedule(sourcePath, filename),
       );
     } catch (error) {
-      logger.warn(`[electron-dev] app-server recursive watcher skipped ${sourcePath}: ${
-        error instanceof Error ? error.message : String(error)
-      }`);
+      logger.warn(
+        `[electron-dev] app-server recursive watcher skipped ${sourcePath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       fallbackRoots.push(sourcePath);
     }
   }

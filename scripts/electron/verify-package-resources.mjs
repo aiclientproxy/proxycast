@@ -111,6 +111,10 @@ function binaryName(platform = process.platform) {
   return platform === "win32" ? "app-server.exe" : "app-server";
 }
 
+function codeModeHostBinaryName(platform = process.platform) {
+  return platform === "win32" ? "code-mode-host.exe" : "code-mode-host";
+}
+
 function sha256(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
@@ -145,6 +149,19 @@ function verifyResourceRoot(root, { platform, arch }) {
 
   const sidecarPath = path.join(root, "app-server", key, binaryName(platform));
   assertFile(sidecarPath, "app-server sidecar");
+  const codeModeHostPath = path.join(
+    root,
+    "app-server",
+    key,
+    codeModeHostBinaryName(platform),
+  );
+  assertFile(codeModeHostPath, "code-mode host sidecar");
+  const codeModeHostSha256 = sha256(codeModeHostPath);
+  if (artifact.codeModeHostSha256 !== codeModeHostSha256) {
+    throw new Error(
+      `code-mode host sidecar sha256 mismatch: ${codeModeHostPath}`,
+    );
+  }
   const sidecarSha256 = sha256(sidecarPath);
   const sha256Matches = artifact.sha256 === sidecarSha256;
   const signedMacSidecar =
@@ -172,6 +189,8 @@ function verifyResourceRoot(root, { platform, arch }) {
     platform: key,
     resourceRoot: root,
     sidecarPath,
+    codeModeHostPath,
+    codeModeHostSha256,
     sha256: {
       manifest: artifact.sha256,
       packaged: sidecarSha256,

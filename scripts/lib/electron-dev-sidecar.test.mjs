@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 import {
   appServerBinaryName,
   buildLocalAppServer,
+  codeModeHostBinaryName,
   isUsableAppServerBinary,
   localAppServerBinaryPath,
+  localCodeModeHostBinaryPath,
   resolveDevAppServerBackendEnv,
   resolveDevAppServerBinary,
   resolveCargoTargetDirectory,
@@ -17,6 +19,8 @@ describe("electron dev sidecar", () => {
     expect(appServerBinaryName("darwin")).toBe("app-server");
     expect(appServerBinaryName("linux")).toBe("app-server");
     expect(appServerBinaryName("win32")).toBe("app-server.exe");
+    expect(codeModeHostBinaryName("darwin")).toBe("code-mode-host");
+    expect(codeModeHostBinaryName("win32")).toBe("code-mode-host.exe");
   });
 
   it("默认解析仓库内 debug app-server 路径", () => {
@@ -27,6 +31,13 @@ describe("electron dev sidecar", () => {
         targetDirectory: path.resolve("/repo/lime/lime-rs/target"),
       }),
     ).toBe(path.resolve("/repo/lime/lime-rs/target/debug/app-server"));
+    expect(
+      localCodeModeHostBinaryPath({
+        repoRoot: "/repo/lime",
+        platform: "darwin",
+        targetDirectory: path.resolve("/repo/lime/lime-rs/target"),
+      }),
+    ).toBe(path.resolve("/repo/lime/lime-rs/target/debug/code-mode-host"));
   });
 
   it("读取仓库 cargo target-dir 配置", () => {
@@ -78,12 +89,24 @@ describe("electron dev sidecar", () => {
       prepareBinary: (...args) => prepared.push(args),
     });
 
-    expect(resolved).toBe(path.resolve("/repo/lime/lime-rs/target/debug/app-server"));
+    expect(resolved).toBe(
+      path.resolve("/repo/lime/lime-rs/target/debug/app-server"),
+    );
     expect(builds).toHaveLength(0);
     expect(prepared).toEqual([
       [
         {
-          binaryPath: path.resolve("/repo/lime/lime-rs/target/debug/app-server"),
+          binaryPath: path.resolve(
+            "/repo/lime/lime-rs/target/debug/app-server",
+          ),
+          platform: "darwin",
+        },
+      ],
+      [
+        {
+          binaryPath: path.resolve(
+            "/repo/lime/lime-rs/target/debug/code-mode-host",
+          ),
           platform: "darwin",
         },
       ],
@@ -108,12 +131,26 @@ describe("electron dev sidecar", () => {
       prepareBinary: (...args) => prepared.push(args),
     });
 
-    expect(resolved).toBe(path.resolve("/repo/lime/lime-rs/target/debug/app-server"));
-    expect(builds).toEqual([{ repoRoot: "/repo/lime", platform: "darwin" }]);
+    expect(resolved).toBe(
+      path.resolve("/repo/lime/lime-rs/target/debug/app-server"),
+    );
+    expect(builds).toEqual([
+      { repoRoot: "/repo/lime", platform: "darwin", env: {} },
+    ]);
     expect(prepared).toEqual([
       [
         {
-          binaryPath: path.resolve("/repo/lime/lime-rs/target/debug/app-server"),
+          binaryPath: path.resolve(
+            "/repo/lime/lime-rs/target/debug/app-server",
+          ),
+          platform: "darwin",
+        },
+      ],
+      [
+        {
+          binaryPath: path.resolve(
+            "/repo/lime/lime-rs/target/debug/code-mode-host",
+          ),
           platform: "darwin",
         },
       ],
@@ -129,7 +166,7 @@ describe("electron dev sidecar", () => {
         exists: () => false,
         build() {},
       }),
-    ).toThrow(/app-server binary was not created/);
+    ).toThrow(/app-server sidecar binaries were not created/);
   });
 
   it("空 app-server 文件不算可用二进制", () => {
@@ -211,17 +248,31 @@ describe("electron dev sidecar", () => {
     });
   });
 
-  it("调用 cargo build 只构建 app-server sidecar", () => {
+  it("调用 cargo build 成组构建 app-server 与 code-mode host", () => {
     const calls = [];
     const prepared = [];
     buildLocalAppServer({
       repoRoot: "/repo/lime",
       platform: "darwin",
+      arch: "arm64",
+      env: { PATH: "/bin" },
       runner(command, args, options) {
         calls.push({ command, args, options });
         return { status: 0 };
       },
       prepareBinary: (...args) => prepared.push(args),
+      resolveV8Env(options) {
+        expect(options).toEqual({
+          env: { PATH: "/bin" },
+          repoRoot: "/repo/lime",
+          platform: "darwin",
+          arch: "arm64",
+        });
+        return {
+          RUSTY_V8_ARCHIVE: "/cache/v8.a.gz",
+          RUSTY_V8_SRC_BINDING_PATH: "/cache/src_binding.rs",
+        };
+      },
     });
 
     expect(calls).toEqual([
@@ -235,9 +286,18 @@ describe("electron dev sidecar", () => {
           "app-server",
           "--bin",
           "app-server",
+          "-p",
+          "tool-runtime",
+          "--bin",
+          "code-mode-host",
         ],
         options: {
           cwd: "/repo/lime",
+          env: {
+            PATH: "/bin",
+            RUSTY_V8_ARCHIVE: "/cache/v8.a.gz",
+            RUSTY_V8_SRC_BINDING_PATH: "/cache/src_binding.rs",
+          },
           stdio: "inherit",
           shell: false,
         },
@@ -246,7 +306,17 @@ describe("electron dev sidecar", () => {
     expect(prepared).toEqual([
       [
         {
-          binaryPath: path.resolve("/repo/lime/lime-rs/target/debug/app-server"),
+          binaryPath: path.resolve(
+            "/repo/lime/lime-rs/target/debug/app-server",
+          ),
+          platform: "darwin",
+        },
+      ],
+      [
+        {
+          binaryPath: path.resolve(
+            "/repo/lime/lime-rs/target/debug/code-mode-host",
+          ),
           platform: "darwin",
         },
       ],
@@ -257,7 +327,9 @@ describe("electron dev sidecar", () => {
     expect(() =>
       buildLocalAppServer({
         repoRoot: "/repo/lime",
+        env: {},
         runner: () => ({ status: 2 }),
+        resolveV8Env: () => ({}),
       }),
     ).toThrow("cargo build app-server failed with 2");
   });
