@@ -165,6 +165,12 @@ jobs:
           cache-all-crates: true
           save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
 
+      - name: Refresh sandboxed rusty_v8 artifacts
+        shell: bash
+        run: |
+          node scripts/lib/rusty-v8-artifacts.mjs --github-env
+          cargo clean --manifest-path lime-rs/Cargo.toml -p v8
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --config.node-linker=hoisted
 

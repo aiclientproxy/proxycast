@@ -68,6 +68,45 @@ version = "150.4.0"
     );
   });
 
+  it("aligns Windows Cargo builds with the artifact static CRT", () => {
+    const repoRoot = temporaryDirectory();
+    const cacheRoot = temporaryDirectory();
+    const archive = Buffer.from("windows archive");
+    const binding = Buffer.from("windows binding");
+    const names = rustyV8ArtifactNames("x86_64-pc-windows-msvc");
+    mkdirSync(path.join(repoRoot, "lime-rs"));
+    writeFileSync(
+      path.join(repoRoot, "lime-rs", "Cargo.lock"),
+      '[[package]]\nname = "v8"\nversion = "150.4.0"\n',
+      { flag: "wx" },
+    );
+    const downloads = new Map([
+      [
+        names.checksums,
+        Buffer.from(
+          `${sha256(archive)}  ${names.archive}\n${sha256(binding)}  ${names.binding}\n`,
+        ),
+      ],
+      [names.archive, archive],
+      [names.binding, binding],
+    ]);
+
+    const env = resolveRustyV8CargoEnv({
+      env: {},
+      repoRoot,
+      platform: "win32",
+      arch: "x64",
+      cacheRoot,
+      download(url, destination) {
+        writeFileSync(destination, downloads.get(path.basename(url)));
+      },
+    });
+
+    expect(env.CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS).toBe(
+      "-C target-feature=+crt-static",
+    );
+  });
+
   it("rejects incomplete, duplicate, and path-bearing checksum manifests", () => {
     const names = ["archive.a.gz", "binding.rs"];
     const digest = "a".repeat(64);

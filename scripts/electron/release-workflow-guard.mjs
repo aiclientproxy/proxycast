@@ -318,6 +318,14 @@ function assertBuildSteps(buildJob) {
 
   const buildStep = stepByName(steps, "Build Electron app");
   const buildRun = buildStep?.run || "";
+  const rustyV8Step = stepByName(steps, "Refresh sandboxed rusty_v8 artifacts");
+  const rustyV8Run = rustyV8Step?.run || "";
+  for (const required of [
+    "scripts/lib/rusty-v8-artifacts.mjs --github-env",
+    "cargo clean --manifest-path lime-rs/Cargo.toml -p v8",
+  ]) {
+    assertIncludes(rustyV8Run, required, "rusty_v8 artifact refresh");
+  }
   const sherpaStep = stepByName(steps, "Prepare sherpa-onnx runtime");
   const sherpaRun = sherpaStep?.run || "";
   for (const required of [

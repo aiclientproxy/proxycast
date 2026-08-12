@@ -71,6 +71,19 @@ Electron 双 sidecar 资源链、协议/GUI 投影以及对应治理文档；完
   sandbox `rusty_v8` artifact 环境下，`code-mode-host` 构建成功，3 个 standalone process tests 全通过；
   `npm run typecheck`、`npm run test:contracts`（`309 checks`）、`npm run verify:app-version`、scripts governance、
   release workflow guard、YAML parse、Prettier 与 `git diff --check` 均通过。
+- 第三次公开提交 `84dc6723822e5468c51c796393fa9aaba14db0a9` 触发 Quality `31605835668` 与 Release
+  `31605860011`。Frontend Full 在批次 `32/120` 发现 harness 直接导入的 `smol-toml` 仅由 `knip` 传递安装；
+  GUI Smoke 和 macOS arm64/x64 Release 恢复了缺少 `gn_out/obj/rusty_v8` 的 Cargo 缓存指纹，导致 V8 archive
+  未重新物化；Windows 原生 `link.exe` 已正确启用，但 Codex sandbox V8 静态 CRT 与 Lime 默认动态 UCRT 混用，
+  触发 `allocator_shim_win_static.obj` 的 `LNK2005`/`LNK1169`。
+- 第三轮修复将 `smol-toml` 声明为根开发依赖；所有 sidecar/Forge V8 构建在 artifact 校验后定向执行
+  `cargo clean -p v8`，只刷新 V8 build-script 指纹；Windows MSVC 通过 artifact owner 导出的目标级
+  `target-feature=+crt-static` 对齐 Codex 已在 Windows Rust 1.95 Cargo smoke 验证的 artifact 合同，不使用
+  `/FORCE:MULTIPLE`、`/NODEFAULTLIB` 或其它链接器掩盖参数。
+- 第三轮本地复验：pnpm `9.15.9` frozen lockfile 安装通过；Frontend 失败批次 `32/120` 为 `16 files / 113 tests`
+  全通过；`rusty_v8`、Electron sidecar 与 DeepSWE adapter 定向回归为 `3 files / 44 tests` 全通过；
+  `npm run typecheck`、`npm run verify:app-version`、`npm run test:contracts`（`311 checks`）、scripts governance、
+  release workflow guard、三份 workflow YAML parse、Prettier 与 `git diff --check` 全通过。
 
 ## 待执行门禁
 

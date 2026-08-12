@@ -187,10 +187,15 @@ export function resolveRustyV8CargoEnv({
     download: bindingOverride ? null : download,
   });
 
-  return {
+  const cargoEnv = {
     RUSTY_V8_ARCHIVE: archivePath,
     RUSTY_V8_SRC_BINDING_PATH: bindingPath,
   };
+  if (target.endsWith("-pc-windows-msvc")) {
+    cargoEnv.CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS =
+      "-C target-feature=+crt-static";
+  }
+  return cargoEnv;
 }
 
 function ensureVerifiedArtifact({ filePath, expectedSha256, url, download }) {

@@ -227,6 +227,11 @@ jobs:
           shared-key: quality-gui-smoke
           cache-on-failure: true
 
+      - name: Refresh sandboxed rusty_v8 artifacts
+        run: |
+          node scripts/lib/rusty-v8-artifacts.mjs --github-env
+          cargo clean --manifest-path lime-rs/Cargo.toml -p v8
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -297,8 +302,10 @@ jobs:
           shared-key: quality-rust-full
           cache-on-failure: true
 
-      - name: Configure sandboxed rusty_v8 artifacts
-        run: node scripts/lib/rusty-v8-artifacts.mjs --github-env
+      - name: Refresh sandboxed rusty_v8 artifacts
+        run: |
+          node scripts/lib/rusty-v8-artifacts.mjs --github-env
+          cargo clean --manifest-path lime-rs/Cargo.toml -p v8
 
       - name: Prepare sherpa-onnx runtime
         shell: bash
@@ -349,8 +356,10 @@ jobs:
           shared-key: quality-windows-shell-runtime
           cache-on-failure: true
 
-      - name: Configure sandboxed rusty_v8 artifacts
-        run: node scripts/lib/rusty-v8-artifacts.mjs --github-env
+      - name: Refresh sandboxed rusty_v8 artifacts
+        run: |
+          node scripts/lib/rusty-v8-artifacts.mjs --github-env
+          cargo clean --manifest-path lime-rs/Cargo.toml -p v8
 
       - name: Build Windows app-server and code-mode-host sidecars
         run: cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host
