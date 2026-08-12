@@ -7951,6 +7951,8 @@ const checks = [
       "quality-rust-full",
       "Configure sandboxed rusty_v8 artifacts",
       "node scripts/lib/rusty-v8-artifacts.mjs --github-env",
+      "Build standalone Code Mode host",
+      "cargo build --manifest-path lime-rs/Cargo.toml -p tool-runtime --bin code-mode-host",
       "npm run test:rust",
     ],
   },
@@ -7963,7 +7965,7 @@ const checks = [
     ],
   },
   {
-    name: "Windows MSVC linker setup exports the complete SDK environment and rust-lld",
+    name: "Windows MSVC linker setup exports the complete SDK environment and native linker",
     file: "scripts/lib/windows-msvc-linker.ps1",
     snippets: [
       "VsDevCmd.bat",
@@ -7974,7 +7976,7 @@ const checks = [
       '"UCRTVersion"',
       '"WindowsSdkDir"',
       'throw "VsDevCmd.bat did not export $RequiredVariable"',
-      "rust-lld.exe",
+      '"bin\\Hostx64\\x64\\link.exe"',
       '"CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$Linker"',
     ],
     absentSnippets: ["/FORCE:MULTIPLE"],

@@ -73,15 +73,9 @@ foreach ($RequiredVariable in @("INCLUDE", "LIB", "LIBPATH", "PATH", "UCRTVersio
     }
 }
 
-$RustSysroot = (& rustc --print sysroot).Trim()
-$RustHostLine = & rustc -vV | Select-String "^host: "
-if (-not $RustHostLine) {
-    throw "rustc did not report a host target"
-}
-$RustHost = $RustHostLine.Line.Substring(6).Trim()
-$Linker = Join-Path $RustSysroot "lib\rustlib\$RustHost\bin\rust-lld.exe"
+$Linker = Join-Path $ExportedVariables["VCToolsInstallDir"] "bin\Hostx64\x64\link.exe"
 if (-not (Test-Path $Linker)) {
-    throw "rust-lld.exe not found at $Linker"
+    throw "MSVC x64 link.exe not found at $Linker"
 }
 
 Write-Output "Using Windows linker: $Linker"

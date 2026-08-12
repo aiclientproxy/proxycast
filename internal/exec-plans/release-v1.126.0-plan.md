@@ -56,6 +56,21 @@ Electron 双 sidecar 资源链、协议/GUI 投影以及对应治理文档；完
 - 修复后 Gate B：`npm run verify:gui-smoke` 通过；run id `standalone-shell-01-20260812112209-14292`，真实 Electron/preload/IPC/App Server `1.126.0`、Workbench reload、Memory settings、21 项 assertion 全通过，mock/legacy hit 均为 `0`。
 - 本地无法证明 Windows MSVC 真链接与三平台 Forge 发布；重建 `v1.126.0` 后必须监控新的 Quality/Release run 到终态，并复核 Release assets。
 - 已有 GitHub Release 的 workflow 分支会同步刷新 `target_commitish`、标题与 release notes，避免同名 tag 重建后页面元数据仍指向旧提交。
+- 第二次公开提交 `979950a989c510734094e84bb63e80d7526ad27e` 触发 Quality run `31601406178` 与 Release run `31601426048`；
+  GUI Smoke、Bridge & Contracts、Integrity、lint、typecheck 与 layer budget 已通过，但 Frontend Full 在 Linux runner 的
+  `electron/updateHost.test.ts` 被 unsupported-platform 保护提前拦截，Windows Quality/Release 则在真实链接时证明
+  `rust-lld` 与 `rusty_v8` 的 `allocator_shim_win_static.obj`/UCRT 符号不兼容；Rust Full 的 workspace test 还缺少
+  standalone `code-mode-host` 构建前置条件，导致 `337` 项通过后 3 项 process test 失败。
+- Frontend 测试现在显式固定受测 updater 平台为 macOS，并在用例后恢复 runner 平台；定向套件 `13/13` 通过。
+- Windows 继续复用 `VsDevCmd.bat` 导出的完整环境，但改用同一 `VCToolsInstallDir` 的 x64 原生 `link.exe`；不使用
+  `/FORCE:MULTIPLE`、`/NODEFAULTLIB` 或其它掩盖符号冲突的参数。下一轮 Windows runner 必须重新证明双 sidecar 与 Electron package 真链接。
+- Rust Full 在 workspace test 前显式构建 `code-mode-host`，满足 process test 的真实 standalone binary 前置条件。
+- 第二轮 CI 终态：Quality `31601406178` 为 failure（Frontend Full、Rust Full、Windows Shell Runtime 三项失败，
+  GUI Smoke、Bridge & Contracts、Integrity 成功）；Release `31601426048` 为 failure（macOS arm64/x64 成功，Windows x64 失败）。
+- 第二轮修复本地复验：CI 对应 Vitest 批次 `25/120` 为 `16 files / 128 tests` 全通过；在与 CI 相同的已校验
+  sandbox `rusty_v8` artifact 环境下，`code-mode-host` 构建成功，3 个 standalone process tests 全通过；
+  `npm run typecheck`、`npm run test:contracts`（`309 checks`）、`npm run verify:app-version`、scripts governance、
+  release workflow guard、YAML parse、Prettier 与 `git diff --check` 均通过。
 
 ## 待执行门禁
 

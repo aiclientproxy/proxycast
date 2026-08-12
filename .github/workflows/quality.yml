@@ -308,6 +308,9 @@ jobs:
           test -n "$TARGET"
           node scripts/prepare-sherpa-onnx-runtime.mjs --target "$TARGET"
 
+      - name: Build standalone Code Mode host
+        run: cargo build --manifest-path lime-rs/Cargo.toml -p tool-runtime --bin code-mode-host
+
       - name: Test Rust workspace
         env:
           TMPDIR: ${{ runner.temp }}/rust-full

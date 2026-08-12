@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   appState,
@@ -74,6 +74,8 @@ vi.mock("./electronRuntime", () => ({
 
 import { ElectronUpdateHost } from "./updateHost";
 
+const runtimePlatform = process.platform;
+
 function emitDownloadedUpdate(releaseName: string | undefined): void {
   autoUpdaterEmit(
     "update-downloaded",
@@ -87,6 +89,10 @@ function emitDownloadedUpdate(releaseName: string | undefined): void {
 
 describe("ElectronUpdateHost", () => {
   beforeEach(() => {
+    Object.defineProperty(process, "platform", {
+      configurable: true,
+      value: "darwin",
+    });
     appState.isPackaged = false;
     delete process.env.LIME_ELECTRON_ENABLE_DEV_UPDATER;
     delete process.env.LIME_ELECTRON_E2E;
@@ -96,6 +102,13 @@ describe("ElectronUpdateHost", () => {
     checkForUpdatesMock.mockReset();
     quitAndInstallMock.mockReset();
     setFeedURLMock.mockReset();
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process, "platform", {
+      configurable: true,
+      value: runtimePlatform,
+    });
   });
 
   it("开发 renderer 模式下即使宿主是 .app 也不启用 updater", async () => {
