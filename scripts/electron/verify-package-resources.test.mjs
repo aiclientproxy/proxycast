@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,6 +9,7 @@ import {
   verifyElectronRuntimeBundles,
   verifyMacAppIdentity,
   verifyMacAppSignatures,
+  verifyResourceRoot,
 } from "./verify-package-resources.mjs";
 
 const tmpRoots = [];
@@ -43,6 +45,58 @@ function createRuntimeBundleRoot({ main, preload }) {
   mkdirSync(preloadDir, { recursive: true });
   writeFileSync(path.join(mainDir, "main.js"), main);
   writeFileSync(path.join(preloadDir, "preload.cjs"), preload);
+  return root;
+}
+
+function sha256(content) {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function createResourceRoot({
+  appServer = "signed app-server",
+  codeModeHost = "signed code-mode-host",
+  manifestAppServer = "unsigned app-server",
+  manifestCodeModeHost = "unsigned code-mode-host",
+  platformKey = "darwin-arm64",
+} = {}) {
+  const root = mkdtempSync(path.join(tmpdir(), "lime-electron-resources-"));
+  tmpRoots.push(root);
+  const sidecarDir = path.join(root, "app-server", platformKey);
+  const desktopAssetsDir = path.join(root, "desktop-assets");
+  mkdirSync(sidecarDir, { recursive: true });
+  mkdirSync(desktopAssetsDir, { recursive: true });
+  const executableSuffix = platformKey.startsWith("win32-") ? ".exe" : "";
+  writeFileSync(
+    path.join(sidecarDir, `app-server${executableSuffix}`),
+    appServer,
+  );
+  writeFileSync(
+    path.join(sidecarDir, `code-mode-host${executableSuffix}`),
+    codeModeHost,
+  );
+  for (const name of [
+    "icon.png",
+    "trayTemplate.png",
+    "trayTemplate@2x.png",
+    "tray-running.png",
+    "tray-stopped.png",
+    "tray-warning.png",
+    "tray-error.png",
+  ]) {
+    writeFileSync(path.join(desktopAssetsDir, name), name);
+  }
+  writeFileSync(
+    path.join(root, "app-server.release.json"),
+    JSON.stringify({
+      artifacts: [
+        {
+          platform: platformKey,
+          sha256: sha256(manifestAppServer),
+          codeModeHostSha256: sha256(manifestCodeModeHost),
+        },
+      ],
+    }),
+  );
   return root;
 }
 
@@ -121,6 +175,103 @@ describe("verify-electron-package-resources runtime bundles", () => {
     });
 
     expect(() => verifyElectronRuntimeBundles(root)).not.toThrow();
+  });
+});
+
+describe("verify-electron-package-resources sidecar integrity", () => {
+  it("两个 sidecar 哈希一致时不调用 codesign", () => {
+    const root = createResourceRoot({
+      appServer: "app-server",
+      codeModeHost: "code-mode-host",
+      manifestAppServer: "app-server",
+      manifestCodeModeHost: "code-mode-host",
+    });
+
+    const result = verifyResourceRoot(root, {
+      platform: "darwin",
+      arch: "arm64",
+      execFileSyncImpl: () => {
+        throw new Error("unexpected codesign call");
+      },
+    });
+
+    expect(result.sha256.acceptedBecause).toBe("sha256");
+    expect(result.codeModeHostIntegrity.acceptedBecause).toBe("sha256");
+  });
+
+  it("接受两个经过严格 codesign 验证的 macOS sidecar", () => {
+    const root = createResourceRoot();
+    const calls = [];
+
+    const result = verifyResourceRoot(root, {
+      platform: "darwin",
+      arch: "arm64",
+      execFileSyncImpl: (...args) => calls.push(args),
+    });
+
+    expect(result.sha256.acceptedBecause).toBe("macos-signed-sidecar");
+    expect(result.codeModeHostIntegrity.acceptedBecause).toBe(
+      "macos-signed-sidecar",
+    );
+    expect(calls).toEqual([
+      [
+        "codesign",
+        ["--verify", "--strict", expect.stringMatching(/code-mode-host$/u)],
+        { stdio: "ignore" },
+      ],
+      [
+        "codesign",
+        ["--verify", "--strict", expect.stringMatching(/app-server$/u)],
+        { stdio: "ignore" },
+      ],
+    ]);
+  });
+
+  it("拒绝哈希变化且严格 codesign 失败的 macOS code-mode host", () => {
+    const root = createResourceRoot();
+
+    expect(() =>
+      verifyResourceRoot(root, {
+        platform: "darwin",
+        arch: "arm64",
+        execFileSyncImpl: () => {
+          throw new Error("invalid signature");
+        },
+      }),
+    ).toThrow(/code-mode host sidecar sha256 mismatch/u);
+  });
+
+  it("拒绝哈希变化且严格 codesign 失败的 macOS app-server", () => {
+    const root = createResourceRoot({
+      codeModeHost: "code-mode-host",
+      manifestCodeModeHost: "code-mode-host",
+    });
+
+    expect(() =>
+      verifyResourceRoot(root, {
+        platform: "darwin",
+        arch: "arm64",
+        execFileSyncImpl: () => {
+          throw new Error("invalid signature");
+        },
+      }),
+    ).toThrow(/app-server sidecar sha256 mismatch/u);
+  });
+
+  it("非 macOS sidecar 哈希变化时不接受签名例外", () => {
+    const root = createResourceRoot({ platformKey: "win32-x64" });
+    let codesignCalled = false;
+
+    expect(() =>
+      verifyResourceRoot(root, {
+        platform: "win32",
+        arch: "x64",
+        execFileSyncImpl: () => {
+          codesignCalled = true;
+        },
+      }),
+    ).toThrow(/code-mode host sidecar sha256 mismatch/u);
+    expect(codesignCalled).toBe(false);
   });
 });
 

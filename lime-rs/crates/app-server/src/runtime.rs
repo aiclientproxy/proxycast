@@ -128,6 +128,9 @@ pub use crate::file_checkpoint_snapshot::FileCheckpointSnapshotSaveRequest;
 pub use crate::file_checkpoint_snapshot::FileCheckpointSnapshotStore;
 pub use crate::file_checkpoint_snapshot::FilesystemFileCheckpointSnapshotStore;
 pub use crate::file_checkpoint_snapshot::NoopFileCheckpointSnapshotStore;
+use agent_runtime::{
+    code_mode::RuntimeCodeModeServiceFactory, session_loop::RuntimeSessionRegistry,
+};
 pub use app_data::AppDataSource;
 pub use app_data::AutomationManagementAppDataSource;
 pub use app_data::AutomationOverviewAppDataSource;
@@ -481,7 +484,7 @@ pub trait ExecutionBackend: Send + Sync {
 #[derive(Clone)]
 pub struct RuntimeCore {
     pub(in crate::runtime) state: Arc<Mutex<RuntimeCoreState>>,
-    pub(in crate::runtime) session_loops: agent_runtime::session_loop::RuntimeSessionRegistry,
+    pub(in crate::runtime) session_loops: RuntimeSessionRegistry,
     pub(in crate::runtime) turn_driver_completions: turn_execution::RuntimeTurnDriverCompletions,
     mailbox_trigger_flights: agent_mailbox_delivery::MailboxTriggerFlights,
     route_recovery: model_providers::RouteRecoveryCoordinator,
@@ -513,7 +516,7 @@ pub struct RuntimeCoreEventAppender {
     event_log_writer: Option<Arc<EventLogWriter>>,
     trace_event_writer: Option<Arc<TraceEventWriter>>,
     projection_store: Option<Arc<ProjectionStore>>,
-    session_loops: agent_runtime::session_loop::RuntimeSessionRegistry,
+    session_loops: RuntimeSessionRegistry,
 }
 
 #[derive(Debug, Default)]
@@ -546,12 +549,8 @@ impl Default for RuntimeCore {
 }
 
 impl RuntimeCore {
-    pub(crate) fn with_code_mode_factory(
-        mut self,
-        factory: agent_runtime::code_mode::RuntimeCodeModeServiceFactory,
-    ) -> Self {
-        self.session_loops =
-            agent_runtime::session_loop::RuntimeSessionRegistry::with_code_mode(factory);
+    pub(crate) fn with_code_mode_factory(mut self, factory: RuntimeCodeModeServiceFactory) -> Self {
+        self.session_loops = RuntimeSessionRegistry::with_code_mode(factory);
         self
     }
 
@@ -594,7 +593,7 @@ impl RuntimeCore {
     ) -> Self {
         Self {
             state: Arc::new(Mutex::new(RuntimeCoreState::default())),
-            session_loops: agent_runtime::session_loop::RuntimeSessionRegistry::default(),
+            session_loops: RuntimeSessionRegistry::default(),
             turn_driver_completions: turn_execution::RuntimeTurnDriverCompletions::default(),
             mailbox_trigger_flights: agent_mailbox_delivery::MailboxTriggerFlights::default(),
             route_recovery: model_providers::RouteRecoveryCoordinator::default(),

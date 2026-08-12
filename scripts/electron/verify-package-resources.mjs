@@ -119,9 +119,9 @@ function sha256(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
-function isMacCodeSigned(filePath) {
+function isMacCodeSigned(filePath, execFileSyncImpl = execFileSync) {
   try {
-    execFileSync("codesign", ["--verify", "--strict", filePath], {
+    execFileSyncImpl("codesign", ["--verify", "--strict", filePath], {
       stdio: "ignore",
     });
     return true;
@@ -130,13 +130,41 @@ function isMacCodeSigned(filePath) {
   }
 }
 
+function verifySidecarIntegrity(
+  filePath,
+  expectedSha256,
+  { platform, label, execFileSyncImpl = execFileSync },
+) {
+  if (!/^[a-f0-9]{64}$/u.test(expectedSha256 ?? "")) {
+    throw new Error(`${label} manifest sha256 is invalid`);
+  }
+  const packagedSha256 = sha256(filePath);
+  const sha256Matches = expectedSha256 === packagedSha256;
+  const signedMacSidecar =
+    platform === "darwin" &&
+    !sha256Matches &&
+    isMacCodeSigned(filePath, execFileSyncImpl);
+  if (!sha256Matches && !signedMacSidecar) {
+    throw new Error(`${label} sha256 mismatch: ${filePath}`);
+  }
+  return {
+    manifest: expectedSha256,
+    packaged: packagedSha256,
+    matches: sha256Matches,
+    acceptedBecause: signedMacSidecar ? "macos-signed-sidecar" : "sha256",
+  };
+}
+
 function assertFile(filePath, label) {
   if (!existsSync(filePath) || !statSync(filePath).isFile()) {
     throw new Error(`${label} is missing: ${filePath}`);
   }
 }
 
-function verifyResourceRoot(root, { platform, arch }) {
+export function verifyResourceRoot(
+  root,
+  { platform, arch, execFileSyncImpl = execFileSync },
+) {
   const manifestPath = path.join(root, "app-server.release.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
   const key = platformKey(platform, arch);
@@ -156,19 +184,20 @@ function verifyResourceRoot(root, { platform, arch }) {
     codeModeHostBinaryName(platform),
   );
   assertFile(codeModeHostPath, "code-mode host sidecar");
-  const codeModeHostSha256 = sha256(codeModeHostPath);
-  if (artifact.codeModeHostSha256 !== codeModeHostSha256) {
-    throw new Error(
-      `code-mode host sidecar sha256 mismatch: ${codeModeHostPath}`,
-    );
-  }
-  const sidecarSha256 = sha256(sidecarPath);
-  const sha256Matches = artifact.sha256 === sidecarSha256;
-  const signedMacSidecar =
-    platform === "darwin" && !sha256Matches && isMacCodeSigned(sidecarPath);
-  if (!sha256Matches && !signedMacSidecar) {
-    throw new Error(`app-server sidecar sha256 mismatch: ${sidecarPath}`);
-  }
+  const codeModeHost = verifySidecarIntegrity(
+    codeModeHostPath,
+    artifact.codeModeHostSha256,
+    {
+      platform,
+      label: "code-mode host sidecar",
+      execFileSyncImpl,
+    },
+  );
+  const appServer = verifySidecarIntegrity(sidecarPath, artifact.sha256, {
+    platform,
+    label: "app-server sidecar",
+    execFileSyncImpl,
+  });
 
   for (const name of [
     "icon.png",
@@ -190,13 +219,9 @@ function verifyResourceRoot(root, { platform, arch }) {
     resourceRoot: root,
     sidecarPath,
     codeModeHostPath,
-    codeModeHostSha256,
-    sha256: {
-      manifest: artifact.sha256,
-      packaged: sidecarSha256,
-      matches: sha256Matches,
-      acceptedBecause: signedMacSidecar ? "macos-signed-sidecar" : "sha256",
-    },
+    codeModeHostSha256: codeModeHost.packaged,
+    codeModeHostIntegrity: codeModeHost,
+    sha256: appServer,
   };
 }
 

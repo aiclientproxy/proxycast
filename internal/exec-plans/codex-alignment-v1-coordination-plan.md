@@ -5137,3 +5137,13 @@ resource verifier 校验双 binary。专项 `npm run smoke:code-mode-electron-ga
 `44203`。17 项 Gate B assertion 全通过，custom exec 两次 Responses 回采样、canonical `dynamicToolCall`、GUI final text、
 IPC trace 均成立，production mock/invoke/console/page/provider error 为零。该证据不冒充 live OpenAI 或 Windows packaged
 parity；后者由 release Windows runner 继续验证。
+
+统一本地门禁收尾：`npm run verify:local` 首轮暴露三项既存事实源偏差。`useAgentChat` provider sync 回归在发送前
+settings RPC 永久 pending，却等待 `sendMessage()` 完成后才释放 promise，形成测试自锁；测试现改为先观察 turn 未提交，
+释放门禁后再等待发送完成。DevBridge 已退役 `pluginUiRuntime/start` 按 current 通用 App Server read policy 使用
+`30000ms`，旧断言仍保留 `5000ms`，现只同步事实期望。App Server 同时直接拥有 `RuntimeProviderProtocol` 映射，违反
+`model-provider` capability owner；canonical `ProtocolKind -> RuntimeProviderProtocol -> ProviderCapabilities` 转换现统一收回
+`model-provider::ProviderCapabilities::from_route`，未放宽治理白名单，`runtime.rs` 通过复用 current imports 保持原行数预算。
+修复后 `npm test -- --resume` 从第 50 批续跑至第 120 批全部通过；随后 fresh `npm run verify:local` 全绿，覆盖 120 个
+Vitest smart batches、App Server client `303` checks、13 个 current/反向依赖 Rust crate、真实 Electron/App Server GUI
+smoke、lint、typecheck、i18n、scripts/docs/version 门禁。Rust 仅保留既有 App Server test helper `dead_code` warning。

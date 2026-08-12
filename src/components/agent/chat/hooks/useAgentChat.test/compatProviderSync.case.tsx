@@ -189,8 +189,9 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
       });
       await flushEffects();
 
+      let sendPromise: Promise<void>;
       await act(async () => {
-        await harness
+        sendPromise = harness
           .getValue()
           .sendMessage(
             "切换到同 provider 的另一个模型，但 session 还没同步完",
@@ -200,6 +201,7 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
             false,
             "react",
           );
+        await Promise.resolve();
       });
 
       expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
@@ -208,6 +210,13 @@ describe("useAgentChat 兼容接口 - provider sync", () => {
         model: nextModel,
         effort: null,
       });
+      expect(mockSubmitAgentRuntimeTurn).not.toHaveBeenCalled();
+
+      await act(async () => {
+        (resolveProviderSync as (() => void) | null)?.();
+        await sendPromise!;
+      });
+
       expect(mockSubmitAgentRuntimeTurn).toHaveBeenCalledTimes(1);
       expect(getSubmittedTurnStart()).not.toHaveProperty("provider");
       expect(getSubmittedTurnStart()).not.toHaveProperty("model");

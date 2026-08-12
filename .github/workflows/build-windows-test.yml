@@ -81,9 +81,13 @@ jobs:
           cache-dependency-path: "pnpm-lock.yaml"
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
         with:
           targets: x86_64-pc-windows-msvc
+
+      - name: Configure Windows MSVC linker
+        shell: pwsh
+        run: ./scripts/lib/windows-msvc-linker.ps1 -Target x86_64-pc-windows-msvc
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9

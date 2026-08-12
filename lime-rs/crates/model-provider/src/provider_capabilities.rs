@@ -1,4 +1,5 @@
 use crate::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
+use app_server_protocol::ProtocolKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProviderCapabilities {
@@ -25,7 +26,17 @@ impl ProviderCapabilities {
         Some(Self::from_resolved_route(provider_type, protocol, base_url))
     }
 
-    pub fn from_resolved_route(
+    pub fn from_route(
+        provider_name: &str,
+        protocol: &ProtocolKind,
+        base_url: Option<&str>,
+    ) -> Self {
+        RuntimeProviderProtocol::from_route_protocol(protocol).map_or(Self::NONE, |protocol| {
+            Self::from_resolved_route(provider_name, protocol, base_url)
+        })
+    }
+
+    fn from_resolved_route(
         provider_name: &str,
         protocol: RuntimeProviderProtocol,
         base_url: Option<&str>,
@@ -142,33 +153,33 @@ mod tests {
             Some(ProviderCapabilities::NONE)
         );
         assert_eq!(
-            ProviderCapabilities::from_resolved_route(
+            ProviderCapabilities::from_route(
                 "openai",
-                RuntimeProviderProtocol::Responses,
+                &ProtocolKind::OpenaiResponses,
                 Some("https://api.openai.com/v1"),
             ),
             expected.expect("official Responses capability")
         );
         assert_eq!(
-            ProviderCapabilities::from_resolved_route(
+            ProviderCapabilities::from_route(
                 "openai",
-                RuntimeProviderProtocol::ChatCompletions,
+                &ProtocolKind::OpenaiChat,
                 Some("https://api.openai.com/v1"),
             ),
             ProviderCapabilities::NONE
         );
         assert_eq!(
-            ProviderCapabilities::from_resolved_route(
+            ProviderCapabilities::from_route(
                 "gateway",
-                RuntimeProviderProtocol::Responses,
+                &ProtocolKind::OpenaiResponses,
                 Some("https://api.openai.com/v1"),
             ),
             ProviderCapabilities::NONE
         );
         assert_eq!(
-            ProviderCapabilities::from_resolved_route(
+            ProviderCapabilities::from_route(
                 "azure-openai",
-                RuntimeProviderProtocol::AzureResponses,
+                &ProtocolKind::OpenaiResponses,
                 Some("https://resource.openai.azure.com"),
             ),
             ProviderCapabilities::NONE

@@ -218,7 +218,7 @@ jobs:
           cache-dependency-path: "pnpm-lock.yaml"
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
@@ -257,7 +257,7 @@ jobs:
           node-version: "22"
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
@@ -288,7 +288,7 @@ jobs:
           node-version: "22"
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
@@ -296,6 +296,9 @@ jobs:
           workspaces: lime-rs
           shared-key: quality-rust-full
           cache-on-failure: true
+
+      - name: Configure sandboxed rusty_v8 artifacts
+        run: node scripts/lib/rusty-v8-artifacts.mjs --github-env
 
       - name: Prepare sherpa-onnx runtime
         shell: bash
@@ -330,7 +333,11 @@ jobs:
           node-version: "22"
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+
+      - name: Configure Windows MSVC linker
+        shell: pwsh
+        run: ./scripts/lib/windows-msvc-linker.ps1 -Target x86_64-pc-windows-msvc
 
       - name: Setup Rust cache
         uses: Swatinem/rust-cache@v2
@@ -342,8 +349,8 @@ jobs:
       - name: Configure sandboxed rusty_v8 artifacts
         run: node scripts/lib/rusty-v8-artifacts.mjs --github-env
 
-      - name: Check Windows app-server and code-mode-host sidecars
-        run: cargo check --manifest-path lime-rs/Cargo.toml -p app-server --bin app-server -p tool-runtime --bin code-mode-host
+      - name: Build Windows app-server and code-mode-host sidecars
+        run: cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host
 
       - name: Test Windows shell runtime fallback
         run: cargo test --manifest-path lime-rs/Cargo.toml -p lime-agent --test windows_shell_runtime -- --test-threads=1

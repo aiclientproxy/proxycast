@@ -7897,23 +7897,95 @@ const checks = [
     ],
   },
   {
-    name: "Windows workflows build both App Server sidecars with verified V8 inputs",
-    files: [
-      ".github/workflows/build-windows-test.yml",
-      ".github/workflows/quality.yml",
-    ],
+    name: "Windows test workflow builds both App Server sidecars with pinned Rust and shared linker inputs",
+    file: ".github/workflows/build-windows-test.yml",
     snippets: [
+      "dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0",
+      "Configure Windows MSVC linker",
+      "./scripts/lib/windows-msvc-linker.ps1 -Target x86_64-pc-windows-msvc",
       "Configure sandboxed rusty_v8 artifacts",
       "node scripts/lib/rusty-v8-artifacts.mjs --github-env",
       "code-mode-host sidecars",
     ],
   },
   {
-    name: "Windows quality explicitly checks both App Server sidecar binaries",
+    name: "Windows quality links both App Server sidecar binaries with pinned Rust and shared inputs",
     file: ".github/workflows/quality.yml",
     snippets: [
-      "Check Windows app-server and code-mode-host sidecars",
+      "dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0",
+      "Configure Windows MSVC linker",
+      "./scripts/lib/windows-msvc-linker.ps1 -Target x86_64-pc-windows-msvc",
+      "Configure sandboxed rusty_v8 artifacts",
+      "node scripts/lib/rusty-v8-artifacts.mjs --github-env",
+      "Build Windows app-server and code-mode-host sidecars",
+      "cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host",
+    ],
+    absentSnippets: [
       "cargo check --manifest-path lime-rs/Cargo.toml -p app-server --bin app-server -p tool-runtime --bin code-mode-host",
+    ],
+  },
+  {
+    name: "Release workflow uses pinned Rust and shared Windows linker inputs",
+    file: ".github/workflows/release.yml",
+    snippets: [
+      "dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0",
+      "Configure Windows MSVC linker",
+      "./scripts/lib/windows-msvc-linker.ps1 -Target x86_64-pc-windows-msvc",
+    ],
+    absentSnippets: ["dtolnay/rust-toolchain@stable"],
+  },
+  {
+    name: "Existing GitHub release is retargeted when a stable tag is rebuilt",
+    file: ".github/workflows/release.yml",
+    snippets: [
+      'TARGET_REF="${{ github.event.inputs.source_ref || github.sha }}"',
+      'gh release edit "$TAG"',
+      '--target "$TARGET_REF"',
+      '--notes-file "$NOTES_FILE"',
+    ],
+  },
+  {
+    name: "Rust Full configures sandboxed V8 artifacts before testing the workspace",
+    file: ".github/workflows/quality.yml",
+    snippets: [
+      "quality-rust-full",
+      "Configure sandboxed rusty_v8 artifacts",
+      "node scripts/lib/rusty-v8-artifacts.mjs --github-env",
+      "npm run test:rust",
+    ],
+  },
+  {
+    name: "Repository Rust toolchain stays pinned to the Windows V8 release toolchain",
+    file: "rust-toolchain.toml",
+    snippets: [
+      'channel = "1.95.0"',
+      'components = ["clippy", "rustfmt", "rust-src"]',
+    ],
+  },
+  {
+    name: "Windows MSVC linker setup exports the complete SDK environment and rust-lld",
+    file: "scripts/lib/windows-msvc-linker.ps1",
+    snippets: [
+      "VsDevCmd.bat",
+      "-arch=x64 -host_arch=x64",
+      '"INCLUDE"',
+      '"LIB"',
+      '"LIBPATH"',
+      '"UCRTVersion"',
+      '"WindowsSdkDir"',
+      'throw "VsDevCmd.bat did not export $RequiredVariable"',
+      "rust-lld.exe",
+      '"CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$Linker"',
+    ],
+    absentSnippets: ["/FORCE:MULTIPLE"],
+  },
+  {
+    name: "Rust changed-scope selection treats the root toolchain as workspace-wide",
+    file: "scripts/lib/rust-test-scope-core.mjs",
+    snippets: [
+      'relPath === "rust-toolchain.toml"',
+      'relPath === "rust-toolchain"',
+      'relPath === "lime-rs/rust-toolchain.toml"',
     ],
   },
   {

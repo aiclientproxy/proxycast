@@ -78,6 +78,7 @@ jobs:
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
+              --target "$TARGET_REF" \
               --title "Lime $TAG" \
               --notes-file "$NOTES_FILE"
             echo "Release $TAG already exists; notes refreshed"
@@ -143,9 +144,14 @@ jobs:
           cache-dependency-path: "pnpm-lock.yaml"
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
         with:
           targets: ${{ matrix.target }}
+
+      - name: Configure Windows MSVC linker
+        if: matrix.host_platform == 'win32'
+        shell: pwsh
+        run: ./scripts/lib/windows-msvc-linker.ps1 -Target x86_64-pc-windows-msvc
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
@@ -691,9 +697,14 @@ jobs:
           node-version: "22"
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
         with:
           targets: ${{ matrix.target }}
+
+      - name: Configure Windows MSVC linker
+        if: startsWith(matrix.target, 'x86_64-pc-windows-msvc')
+        shell: pwsh
+        run: ./scripts/lib/windows-msvc-linker.ps1 -Target x86_64-pc-windows-msvc
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9

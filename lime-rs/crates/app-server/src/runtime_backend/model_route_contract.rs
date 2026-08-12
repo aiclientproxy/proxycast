@@ -14,7 +14,7 @@ use lime_agent::{
 };
 use lime_core::database::dao::api_key_provider::ProviderWithKeys;
 use model_provider::provider_capabilities::ProviderCapabilities;
-use model_provider::runtime_provider::{RuntimeProviderAuth, RuntimeProviderProtocol};
+use model_provider::runtime_provider::RuntimeProviderAuth;
 use model_provider::{ModelProviderProtocol, ModelRoute};
 use serde_json::{json, Value};
 
@@ -107,16 +107,11 @@ fn intersect_resolved_provider_capabilities(
             provider.map(|provider| provider.provider.effective_provider_type().to_string())
         })
         .unwrap_or_else(|| selection.provider.clone());
-    let provider_capabilities =
-        RuntimeProviderProtocol::from_route_protocol(&resolved_route.protocol)
-            .map(|protocol| {
-                ProviderCapabilities::from_resolved_route(
-                    &provider_name,
-                    protocol,
-                    resolved_route.endpoint.base_url.as_deref(),
-                )
-            })
-            .unwrap_or(ProviderCapabilities::NONE);
+    let provider_capabilities = ProviderCapabilities::from_route(
+        &provider_name,
+        &resolved_route.protocol,
+        resolved_route.endpoint.base_url.as_deref(),
+    );
 
     if provider_capabilities.custom_tools {
         return;

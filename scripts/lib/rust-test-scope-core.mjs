@@ -27,6 +27,8 @@ function normalizeRepoPath(repoRoot, inputPath) {
 
 function isWorkspaceWideRustPath(relPath) {
   return (
+    relPath === "rust-toolchain.toml" ||
+    relPath === "rust-toolchain" ||
     relPath === "lime-rs" ||
     relPath === "lime-rs/" ||
     relPath === "lime-rs/Cargo.toml" ||
@@ -114,14 +116,14 @@ export function resolveRustPathSelection(
       continue;
     }
 
-    if (!relPath.startsWith("lime-rs")) {
-      skippedPaths.push(relPath);
-      continue;
-    }
-
     if (isWorkspaceWideRustPath(relPath)) {
       rustPaths.push(relPath);
       workspaceReasons.push(relPath);
+      continue;
+    }
+
+    if (!relPath.startsWith("lime-rs")) {
+      skippedPaths.push(relPath);
       continue;
     }
 

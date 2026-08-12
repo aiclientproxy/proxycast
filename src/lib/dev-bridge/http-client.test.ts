@@ -818,7 +818,7 @@ describe("http-client", () => {
           ],
         },
       }),
-    ).toBe(5000);
+    ).toBe(30000);
     expect(
       resolveBridgeRequestTimeoutMs("app_server_handle_json_lines", {
         request: {
