@@ -11,7 +11,6 @@ import {
 } from "./AppSidebar.testFixtures";
 import type { AgentPageParams } from "./AppSidebar.testFixtures";
 import { LIME_BRAND_LOGO_SRC } from "@/lib/branding";
-import { LAST_PROJECT_ID_KEY } from "@/components/agent/chat/hooks/agentProjectStorage";
 
 describe("AppSidebar navigation", () => {
   beforeEach(resetAppSidebarTest);
@@ -135,7 +134,7 @@ describe("AppSidebar navigation", () => {
     ).not.toBeNull();
   });
 
-  it("默认应渲染一级主导航，并将系统入口收进用户弹框", async () => {
+  it("默认应渲染一级主导航，并将辅助系统入口收进用户弹框", async () => {
     const container = mountSidebarContainer({
       currentPage: "settings",
     });
@@ -145,9 +144,10 @@ describe("AppSidebar navigation", () => {
     expect(container.textContent).toContain("新建任务");
     expect(container.textContent).not.toContain("工作台");
     expect(container.textContent).not.toContain("生成");
-    expect(container.textContent).toContain("专家");
-    expect(container.textContent).toContain("Skills");
+    expect(container.textContent).not.toContain("专家");
+    expect(container.textContent).not.toContain("Skills");
     expect(container.textContent).toContain("插件");
+    expect(container.textContent).toContain("已安排任务");
     expect(container.textContent).not.toContain("项目资料");
     expect(container.textContent).not.toContain("灵感");
     expect(container.textContent).toContain("设置");
@@ -169,7 +169,7 @@ describe("AppSidebar navigation", () => {
       '[data-testid="app-sidebar-footer-area"]',
     );
 
-    expect(mainNavButtons).toEqual(["新建任务", "专家", "Skills", "插件"]);
+    expect(mainNavButtons).toEqual(["新建任务", "已安排任务", "插件"]);
     expect(
       container.querySelector('[data-testid="app-sidebar-footer-nav"]'),
     ).toBeNull();
@@ -180,54 +180,23 @@ describe("AppSidebar navigation", () => {
     expect(getComputedStyle(footerArea as Element).paddingBottom).toBe("16px");
   });
 
-  it("专家入口应继承当前 Agent 工作区项目作用域", async () => {
+  it("已安排任务应作为一级入口打开独立任务页面", async () => {
     const onNavigate = vi.fn();
-    const container = mountSidebarContainer({
-      currentPage: "agent",
-      currentPageParams: {
-        agentEntry: "claw",
-        projectId: "project-1",
-      } as AgentPageParams,
-      onNavigate,
-    });
+    const container = mountSidebarContainer({ onNavigate });
     await flushEffects(2);
 
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('button[aria-label="专家"]')
-        ?.click();
-      await Promise.resolve();
-    });
-
-    expect(onNavigate).toHaveBeenCalledWith("experts", {
-      currentProjectId: "project-1",
-      projectId: "project-1",
-    });
-  });
-
-  it("专家入口没有活跃 Agent 项目时应使用最近项目作用域", async () => {
-    localStorage.setItem(
-      LAST_PROJECT_ID_KEY,
-      JSON.stringify("project-remembered"),
+    const button = container.querySelector<HTMLButtonElement>(
+      '[data-testid="app-sidebar-nav-automation"]',
     );
-    const onNavigate = vi.fn();
-    const container = mountSidebarContainer({
-      currentPage: "settings",
-      onNavigate,
-    });
-    await flushEffects(2);
 
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('button[aria-label="专家"]')
-        ?.click();
-      await Promise.resolve();
+    expect(button).not.toBeNull();
+    expect(button?.getAttribute("aria-label")).toBe("已安排任务");
+
+    act(() => {
+      button?.click();
     });
 
-    expect(onNavigate).toHaveBeenCalledWith("experts", {
-      currentProjectId: "project-remembered",
-      projectId: "project-remembered",
-    });
+    expect(onNavigate).toHaveBeenCalledWith("automation", undefined);
   });
 
   it("Lime 首页入口应保持在左侧栏顶部，并在 macOS 预留系统按钮安全区", async () => {

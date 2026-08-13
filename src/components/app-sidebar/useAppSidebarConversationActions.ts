@@ -193,47 +193,6 @@ export function useAppSidebarConversationActions({
     ],
   );
 
-  const navigateToSkills = useCallback(() => {
-    const targetParams = projectScopedNavigationProjectId
-      ? { creationProjectId: projectScopedNavigationProjectId }
-      : undefined;
-    navigateIfNeeded({
-      target: {
-        page: "skills",
-        rawParams: targetParams,
-        paramsKey: serializeNavigationParams(targetParams),
-      },
-      requestedNavigationTargetRef,
-      onNavigate,
-    });
-  }, [
-    onNavigate,
-    projectScopedNavigationProjectId,
-    requestedNavigationTargetRef,
-  ]);
-
-  const navigateToExperts = useCallback(() => {
-    const targetParams = projectScopedNavigationProjectId
-      ? {
-          currentProjectId: projectScopedNavigationProjectId,
-          projectId: projectScopedNavigationProjectId,
-        }
-      : undefined;
-    navigateIfNeeded({
-      target: {
-        page: "experts",
-        rawParams: targetParams,
-        paramsKey: serializeNavigationParams(targetParams),
-      },
-      requestedNavigationTargetRef,
-      onNavigate,
-    });
-  }, [
-    onNavigate,
-    projectScopedNavigationProjectId,
-    requestedNavigationTargetRef,
-  ]);
-
   const navigateToConversation = useCallback(
     (session: AgentSessionInfo) => {
       deferConversationNavigation();
@@ -515,11 +474,9 @@ export function useAppSidebarConversationActions({
     deleteConversation,
     navigateToConversation,
     navigateToConversationFromSearch,
-    navigateToExperts,
     navigateToHome,
     navigateToNewTask,
     navigateToProjectNewTask,
-    navigateToSkills,
     navigateToStandaloneConversation,
     navigateToWorkbench,
     moveSessionToSection,

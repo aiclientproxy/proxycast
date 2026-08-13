@@ -9,20 +9,32 @@ describe("sidebarNav", () => {
   it("应把主导航与底部系统入口收口为一级列表", () => {
     expect(MAIN_SIDEBAR_NAV_ITEMS.map((item) => item.label)).toEqual([
       "新建任务",
-      "专家",
-      "Skills",
+      "已安排任务",
       "插件",
     ]);
 
     expect(FOOTER_SIDEBAR_NAV_ITEMS.map((item) => item.label)).toEqual([
       "设置",
       "项目资料",
-      "持续流程",
       "消息渠道",
     ]);
     expect(FOOTER_SIDEBAR_NAV_ITEMS.map((item) => item.id)).not.toContain(
       "memory",
     );
+    expect(MAIN_SIDEBAR_NAV_ITEMS.map((item) => item.id)).not.toEqual(
+      expect.arrayContaining(["skills", "experts"]),
+    );
+  });
+
+  it("插件入口应覆盖插件、Skills 与专家三个子页面", () => {
+    const pluginsEntry = MAIN_SIDEBAR_NAV_ITEMS.find(
+      (item) => item.id === "plugins",
+    );
+
+    expect(pluginsEntry?.isActive?.("plugins")).toBe(true);
+    expect(pluginsEntry?.isActive?.("skills")).toBe(true);
+    expect(pluginsEntry?.isActive?.("experts")).toBe(true);
+    expect(pluginsEntry?.isActive?.("automation")).toBe(false);
   });
 
   it("恢复导航设置时应过滤固定系统入口和已下线 companion", () => {

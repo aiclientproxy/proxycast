@@ -1,0 +1,85 @@
+{
+  "$defs": {
+    "ScheduledTaskRunSummary": {
+      "properties": {
+        "error": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "finishedAt": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "scheduledFor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sessionId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "startedAt": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "summary": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "taskId"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "runs": {
+      "items": {
+        "$ref": "#/$defs/ScheduledTaskRunSummary"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "runs"
+  ],
+  "title": "ScheduledTaskRunListResponse",
+  "type": "object"
+}

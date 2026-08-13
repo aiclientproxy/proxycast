@@ -118,6 +118,7 @@ fn parse_args() -> anyhow::Result<CliConfig> {
 async fn build_app_server(config: &CliConfig) -> anyhow::Result<AppServer> {
     let initialized = initialize_database(config)?;
     let db = initialized.db;
+    let scheduled_task_worker_db = db.clone();
     let sidecar_store = initialized
         .storage_roots
         .as_ref()
@@ -241,6 +242,12 @@ async fn build_app_server(config: &CliConfig) -> anyhow::Result<AppServer> {
                 "failed to recover agent control spawns: {error}"
             ));
         }
+    }
+
+    if config.backend_mode == AppServerBackendMode::Runtime {
+        let _scheduled_task_worker =
+            app_server::spawn_scheduled_task_worker(scheduled_task_worker_db, runtime.clone());
+        drop(_scheduled_task_worker);
     }
 
     AppServer::with_runtime(runtime)

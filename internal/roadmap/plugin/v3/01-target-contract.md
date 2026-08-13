@@ -61,6 +61,10 @@ Lime。
 - Renderer 只消费 typed JSON-RPC projection。
 - Electron 只做 Host 能力和 JSONL 转发。
 - Right Surface 只渲染 canonical resource/result，不执行 plugin worker。
+- 左侧导航只有一个“插件”一级入口；插件目录、Skills 与专家在同一个目录型工作台中以
+  `插件 / Skills / 专家` 三个 Tab 切换，不再各占一个一级入口。
+- `plugins`、`skills`、`experts` 页面路由继续作为深链和页面参数事实源；Tab 切换复用
+  这些 current 路由，不复制页面、catalog 或状态 owner，并在 Skills/专家间保留项目作用域。
 
 ## 当前实现锚点
 

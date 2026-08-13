@@ -955,6 +955,42 @@
       "method": "review/start"
     },
     {
+      "kind": "request",
+      "method": "scheduledTask/create"
+    },
+    {
+      "kind": "request",
+      "method": "scheduledTask/delete"
+    },
+    {
+      "kind": "request",
+      "method": "scheduledTask/enabled/set"
+    },
+    {
+      "kind": "request",
+      "method": "scheduledTask/list"
+    },
+    {
+      "kind": "request",
+      "method": "scheduledTask/read"
+    },
+    {
+      "kind": "request",
+      "method": "scheduledTask/run/list"
+    },
+    {
+      "kind": "request",
+      "method": "scheduledTask/run/start"
+    },
+    {
+      "kind": "request",
+      "method": "scheduledTask/schedule/preview"
+    },
+    {
+      "kind": "request",
+      "method": "scheduledTask/update"
+    },
+    {
       "kind": "notification",
       "method": "serverRequest/resolved"
     },
@@ -2019,6 +2055,31 @@
       "RuntimeRequest",
       "RuntimeSearchMode",
       "RuntimeToolCallStrategy",
+      "ScheduledTask",
+      "ScheduledTaskCreateParams",
+      "ScheduledTaskCreateRequest",
+      "ScheduledTaskDeleteResponse",
+      "ScheduledTaskEnabledSetParams",
+      "ScheduledTaskExecution",
+      "ScheduledTaskIdParams",
+      "ScheduledTaskListParams",
+      "ScheduledTaskListResponse",
+      "ScheduledTaskNotificationPolicy",
+      "ScheduledTaskOverlapPolicy",
+      "ScheduledTaskReadResponse",
+      "ScheduledTaskRunListParams",
+      "ScheduledTaskRunListResponse",
+      "ScheduledTaskRunStartResponse",
+      "ScheduledTaskRunSummary",
+      "ScheduledTaskSchedule",
+      "ScheduledTaskSchedulePreviewParams",
+      "ScheduledTaskSchedulePreviewResponse",
+      "ScheduledTaskSummary",
+      "ScheduledTaskThreadMode",
+      "ScheduledTaskUpdateParams",
+      "ScheduledTaskUpdateRequest",
+      "ScheduledTaskWeekday",
+      "ScheduledTaskWriteResponse",
       "ServerCapabilities",
       "ServerDiagnosticsResponse",
       "ServerInfo",

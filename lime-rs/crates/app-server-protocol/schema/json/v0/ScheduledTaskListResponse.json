@@ -1,0 +1,255 @@
+{
+  "$defs": {
+    "ScheduledTaskRunSummary": {
+      "properties": {
+        "error": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "finishedAt": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "scheduledFor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sessionId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "startedAt": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "summary": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "taskId"
+      ],
+      "type": "object"
+    },
+    "ScheduledTaskSchedule": {
+      "oneOf": [
+        {
+          "properties": {
+            "days": {
+              "items": {
+                "$ref": "#/$defs/ScheduledTaskWeekday"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "intervalHours": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "minute": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "timezone": {
+              "type": "string"
+            },
+            "type": {
+              "const": "hourly",
+              "type": "string"
+            }
+          },
+          "required": [
+            "intervalHours",
+            "minute",
+            "timezone",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "time": {
+              "type": "string"
+            },
+            "timezone": {
+              "type": "string"
+            },
+            "type": {
+              "const": "daily",
+              "type": "string"
+            }
+          },
+          "required": [
+            "time",
+            "timezone",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "time": {
+              "type": "string"
+            },
+            "timezone": {
+              "type": "string"
+            },
+            "type": {
+              "const": "weekdays",
+              "type": "string"
+            }
+          },
+          "required": [
+            "time",
+            "timezone",
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "days": {
+              "items": {
+                "$ref": "#/$defs/ScheduledTaskWeekday"
+              },
+              "type": "array"
+            },
+            "time": {
+              "type": "string"
+            },
+            "timezone": {
+              "type": "string"
+            },
+            "type": {
+              "const": "weekly",
+              "type": "string"
+            }
+          },
+          "required": [
+            "days",
+            "time",
+            "timezone",
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ScheduledTaskSummary": {
+      "properties": {
+        "attention": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lastRun": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScheduledTaskRunSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextRunAt": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "schedule": {
+          "$ref": "#/$defs/ScheduledTaskSchedule"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attention",
+        "enabled",
+        "id",
+        "schedule",
+        "title"
+      ],
+      "type": "object"
+    },
+    "ScheduledTaskWeekday": {
+      "enum": [
+        "FR",
+        "MO",
+        "SA",
+        "SU",
+        "TH",
+        "TU",
+        "WE"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/ScheduledTaskSummary"
+      },
+      "type": "array"
+    },
+    "nextCursor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "items"
+  ],
+  "title": "ScheduledTaskListResponse",
+  "type": "object"
+}

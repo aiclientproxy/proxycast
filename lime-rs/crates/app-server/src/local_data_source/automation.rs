@@ -2,8 +2,9 @@ use super::data_error;
 use super::values_from_serializable_vec;
 use crate::automation_execution::{
     apply_automation_run_finished, apply_automation_run_started, build_automation_run_start,
-    next_run_for_automation_schedule, validate_automation_schedule_value, AutomationRunFailure,
-    AutomationRunFinish, AutomationRunStart,
+    build_scheduled_task_manual_run_start, next_run_for_automation_schedule,
+    validate_automation_schedule_value, AutomationRunFailure, AutomationRunFinish,
+    AutomationRunIdentity, AutomationRunStart,
 };
 use crate::RuntimeCoreError;
 mod health;
@@ -23,6 +24,7 @@ use app_server_protocol::AutomationSchedulerConfigReadResponse;
 use app_server_protocol::AutomationSchedulerConfigUpdateParams;
 use app_server_protocol::AutomationSchedulerConfigUpdateResponse;
 use app_server_protocol::AutomationSchedulerStatusResponse;
+mod scheduled_tasks;
 use chrono::Utc;
 pub(crate) use health::read_automation_health;
 use lime_core::config::load_config;
@@ -36,6 +38,11 @@ use lime_core::database::dao::agent_run::AgentRunDao;
 use lime_core::database::dao::automation_job::AutomationJob;
 use lime_core::database::dao::automation_job::AutomationJobDao;
 use lime_core::database::DbConnection;
+pub(crate) use scheduled_tasks::{
+    create_scheduled_task, delete_scheduled_task, is_scheduled_task_job, list_scheduled_task_runs,
+    list_scheduled_tasks, preview_scheduled_task_schedule, read_scheduled_task,
+    require_scheduled_task_job, set_scheduled_task_enabled, update_scheduled_task,
+};
 use serde::Deserialize;
 use serde_json::json;
 use serde_json::Value;
@@ -293,9 +300,29 @@ pub(crate) fn start_automation_job_run(
     let job = AutomationJobDao::get(&conn, &id)
         .map_err(data_error)?
         .ok_or_else(|| RuntimeCoreError::Backend(format!("自动化任务不存在: {id}")))?;
-    let mut start = build_automation_run_start(job)?;
+    let mut start = build_automation_run_start(job, None)?;
     AgentRunDao::create_run(&conn, &start.run).map_err(data_error)?;
     apply_automation_run_started(&mut start.job, &start.run);
+    AutomationJobDao::update(&conn, &start.job).map_err(data_error)?;
+    Ok(start)
+}
+
+pub(crate) fn start_scheduled_task_run_record(
+    db: &DbConnection,
+    id: String,
+    identity: Option<AutomationRunIdentity>,
+) -> Result<AutomationRunStart, RuntimeCoreError> {
+    let id = normalize_automation_job_id(&id)?;
+    let conn = database::lock_db(db).map_err(data_error)?;
+    let job = AutomationJobDao::get(&conn, &id)
+        .map_err(data_error)?
+        .ok_or_else(|| RuntimeCoreError::Backend(format!("已安排任务不存在: {id}")))?;
+    require_scheduled_task_job(&job)?;
+    let mut start = build_scheduled_task_manual_run_start(job, identity)?;
+    AgentRunDao::create_run(&conn, &start.run).map_err(data_error)?;
+    apply_automation_run_started(&mut start.job, &start.run);
+    start.ownership_started_at = start.job.running_started_at.clone();
+    start.task_revision = Some(start.job.updated_at.clone());
     AutomationJobDao::update(&conn, &start.job).map_err(data_error)?;
     Ok(start)
 }
@@ -306,7 +333,7 @@ pub(crate) fn finish_automation_job_run(
 ) -> Result<(), RuntimeCoreError> {
     let conn = database::lock_db(db).map_err(data_error)?;
     let metadata = serde_json::to_string(&finish.metadata).map_err(data_error)?;
-    AgentRunDao::finish_run(
+    let finished = AgentRunDao::finish_run(
         &conn,
         &finish.run_id,
         finish.status.clone(),
@@ -317,12 +344,27 @@ pub(crate) fn finish_automation_job_run(
         Some(metadata.as_str()),
     )
     .map_err(data_error)?;
-    let mut job = finish.job;
+    if !finished {
+        return Ok(());
+    }
+    let Some(mut job) = AutomationJobDao::get(&conn, &finish.job.id).map_err(data_error)? else {
+        return Ok(());
+    };
+    let recompute_next_run = match finish.task_revision.as_deref() {
+        Some(task_revision) => {
+            if job.running_started_at.as_deref() != finish.ownership_started_at.as_deref() {
+                return Ok(());
+            }
+            task_revision != job.updated_at
+        }
+        None => true,
+    };
     apply_automation_run_finished(
         &mut job,
         &finish.status,
         finish.finished_at,
         finish.error_message,
+        recompute_next_run,
     );
     AutomationJobDao::update(&conn, &job).map_err(data_error)?;
     Ok(())
@@ -334,7 +376,7 @@ pub(crate) fn fail_automation_job_run(
 ) -> Result<(), RuntimeCoreError> {
     let conn = database::lock_db(db).map_err(data_error)?;
     let metadata = serde_json::to_string(&failure.metadata).map_err(data_error)?;
-    if let Some(run) = failure.run.as_ref() {
+    let finished = if let Some(run) = failure.run.as_ref() {
         AgentRunDao::finish_run(
             &conn,
             &run.id,
@@ -345,14 +387,31 @@ pub(crate) fn fail_automation_job_run(
             Some(failure.error_message.as_str()),
             Some(metadata.as_str()),
         )
-        .map_err(data_error)?;
+        .map_err(data_error)?
+    } else {
+        false
+    };
+    if failure.run.is_some() && !finished {
+        return Ok(());
     }
-    let mut job = failure.job;
+    let Some(mut job) = AutomationJobDao::get(&conn, &failure.job.id).map_err(data_error)? else {
+        return Ok(());
+    };
+    let recompute_next_run = match failure.task_revision.as_deref() {
+        Some(task_revision) => {
+            if job.running_started_at.as_deref() != failure.ownership_started_at.as_deref() {
+                return Ok(());
+            }
+            task_revision != job.updated_at
+        }
+        None => true,
+    };
     apply_automation_run_finished(
         &mut job,
         &failure.status,
         failure.finished_at,
         Some(failure.error_message),
+        recompute_next_run,
     );
     AutomationJobDao::update(&conn, &job).map_err(data_error)?;
     Ok(())
@@ -478,23 +537,39 @@ fn validate_automation_payload(payload: &Value) -> Result<(), RuntimeCoreError> 
                     "自动化任务内容不能为空".to_string(),
                 ));
             }
-            for field in ["session_id", "thread_id"] {
-                let value = payload
-                    .get(field)
-                    .or_else(|| {
-                        if field == "session_id" {
-                            payload.get("sessionId")
-                        } else {
-                            payload.get("threadId")
-                        }
-                    })
+            let thread_mode = payload
+                .get("thread_mode")
+                .or_else(|| payload.get("threadMode"))
+                .and_then(Value::as_str);
+            let scheduled_continue_thread = thread_mode == Some("continue_thread")
+                && payload
+                    .get("scheduled_task_schedule")
+                    .is_some_and(|value| !value.is_null())
+                && payload
+                    .get("source_thread_id")
+                    .or_else(|| payload.get("sourceThreadId"))
                     .and_then(Value::as_str)
                     .map(str::trim)
-                    .filter(|value| !value.is_empty());
-                if value.is_none() {
-                    return Err(RuntimeCoreError::Backend(format!(
-                        "自动化任务 agent_turn payload 必须显式绑定 {field}"
-                    )));
+                    .is_some_and(|value| !value.is_empty());
+            if thread_mode != Some("new_thread") && !scheduled_continue_thread {
+                for field in ["session_id", "thread_id"] {
+                    let value = payload
+                        .get(field)
+                        .or_else(|| {
+                            if field == "session_id" {
+                                payload.get("sessionId")
+                            } else {
+                                payload.get("threadId")
+                            }
+                        })
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty());
+                    if value.is_none() {
+                        return Err(RuntimeCoreError::Backend(format!(
+                            "自动化任务 agent_turn payload 必须显式绑定 {field}"
+                        )));
+                    }
                 }
             }
             if let Some(content_id) = payload
@@ -563,5 +638,33 @@ mod tests {
         });
 
         validate_automation_payload(&payload).expect("valid automation payload");
+    }
+
+    #[test]
+    fn validate_agent_turn_payload_accepts_deferred_new_thread_lineage() {
+        let payload = json!({
+            "kind": "agent_turn",
+            "prompt": "生成摘要",
+            "thread_mode": "new_thread"
+        });
+
+        validate_automation_payload(&payload).expect("valid deferred lineage payload");
+    }
+
+    #[test]
+    fn validate_agent_turn_payload_accepts_scheduled_canonical_thread_lookup() {
+        let payload = json!({
+            "kind": "agent_turn",
+            "prompt": "生成摘要",
+            "thread_mode": "continue_thread",
+            "source_thread_id": "canonical-thread-1",
+            "scheduled_task_schedule": {
+                "type": "daily",
+                "time": "08:30",
+                "timezone": "Asia/Shanghai"
+            }
+        });
+
+        validate_automation_payload(&payload).expect("valid scheduled canonical thread lookup");
     }
 }

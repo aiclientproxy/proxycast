@@ -297,6 +297,16 @@ export const METHOD_PROJECT_MATERIAL_UPDATE = "projectMaterial/update";
 export const METHOD_PROJECT_MATERIAL_UPLOAD = "projectMaterial/upload";
 export const METHOD_PROJECT_MEMORY_READ = "projectMemory/read";
 export const METHOD_REVIEW_START = "review/start";
+export const METHOD_SCHEDULED_TASK_CREATE = "scheduledTask/create";
+export const METHOD_SCHEDULED_TASK_DELETE = "scheduledTask/delete";
+export const METHOD_SCHEDULED_TASK_ENABLED_SET = "scheduledTask/enabled/set";
+export const METHOD_SCHEDULED_TASK_LIST = "scheduledTask/list";
+export const METHOD_SCHEDULED_TASK_READ = "scheduledTask/read";
+export const METHOD_SCHEDULED_TASK_RUN_LIST = "scheduledTask/run/list";
+export const METHOD_SCHEDULED_TASK_RUN_START = "scheduledTask/run/start";
+export const METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW =
+  "scheduledTask/schedule/preview";
+export const METHOD_SCHEDULED_TASK_UPDATE = "scheduledTask/update";
 export const METHOD_SERVER_REQUEST_RESOLVED = "serverRequest/resolved";
 export const METHOD_SESSION_FILE_DELETE = "sessionFile/delete";
 export const METHOD_SESSION_FILE_GET_OR_CREATE = "sessionFile/getOrCreate";
@@ -1405,6 +1415,42 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "review/start",
+  },
+  {
+    kind: "request",
+    method: "scheduledTask/create",
+  },
+  {
+    kind: "request",
+    method: "scheduledTask/delete",
+  },
+  {
+    kind: "request",
+    method: "scheduledTask/enabled/set",
+  },
+  {
+    kind: "request",
+    method: "scheduledTask/list",
+  },
+  {
+    kind: "request",
+    method: "scheduledTask/read",
+  },
+  {
+    kind: "request",
+    method: "scheduledTask/run/list",
+  },
+  {
+    kind: "request",
+    method: "scheduledTask/run/start",
+  },
+  {
+    kind: "request",
+    method: "scheduledTask/schedule/preview",
+  },
+  {
+    kind: "request",
+    method: "scheduledTask/update",
   },
   {
     kind: "notification",
@@ -3390,6 +3436,51 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
+      method: "scheduledTask/list";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
+      method: "scheduledTask/read";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
+      method: "scheduledTask/create";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
+      method: "scheduledTask/update";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
+      method: "scheduledTask/delete";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
+      method: "scheduledTask/enabled/set";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
+      method: "scheduledTask/run/start";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
+      method: "scheduledTask/run/list";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
+      method: "scheduledTask/schedule/preview";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
       method: "mcpServer/list";
       params?: unknown;
     }
@@ -3949,6 +4040,15 @@ export type AppServerRequestMethod =
   | "projectMaterial/update"
   | "projectMaterial/upload"
   | "projectMemory/read"
+  | "scheduledTask/create"
+  | "scheduledTask/delete"
+  | "scheduledTask/enabled/set"
+  | "scheduledTask/list"
+  | "scheduledTask/read"
+  | "scheduledTask/run/list"
+  | "scheduledTask/run/start"
+  | "scheduledTask/schedule/preview"
+  | "scheduledTask/update"
   | "sessionFile/delete"
   | "sessionFile/getOrCreate"
   | "sessionFile/list"
@@ -8398,6 +8498,181 @@ export interface RuntimeRequest {
 export type RuntimeSearchMode = "auto" | "disabled" | "required";
 
 export type RuntimeToolCallStrategy = "native" | "tool_shim";
+
+export interface ScheduledTask {
+  createdAt: string;
+  enabled: boolean;
+  execution: ScheduledTaskExecution;
+  id: string;
+  lastRunSummary?: ScheduledTaskRunSummary | null;
+  nextRunAt?: null | string;
+  notificationPolicy: ScheduledTaskNotificationPolicy;
+  overlapPolicy: ScheduledTaskOverlapPolicy;
+  prompt: string;
+  schedule: ScheduledTaskSchedule;
+  title: string;
+  updatedAt: string;
+}
+
+export interface ScheduledTaskCreateParams {
+  task: ScheduledTaskCreateRequest;
+}
+
+export interface ScheduledTaskCreateRequest {
+  enabled?: boolean;
+  execution: ScheduledTaskExecution;
+  notificationPolicy?: ScheduledTaskNotificationPolicy | null;
+  overlapPolicy?: ScheduledTaskOverlapPolicy | null;
+  prompt: string;
+  schedule: ScheduledTaskSchedule;
+  title: string;
+}
+
+export interface ScheduledTaskDeleteResponse {
+  deleted: boolean;
+}
+
+export interface ScheduledTaskEnabledSetParams {
+  enabled: boolean;
+  id: string;
+}
+
+export interface ScheduledTaskExecution {
+  approvalPolicy?: unknown;
+  cwd?: null | string;
+  modelId?: null | string;
+  projectId?: null | string;
+  reasoningEffort?: null | string;
+  sandboxPolicy?: unknown;
+  sourceThreadId?: null | string;
+  threadMode: ScheduledTaskThreadMode;
+}
+
+export interface ScheduledTaskIdParams {
+  id: string;
+}
+
+export interface ScheduledTaskListParams {
+  cursor?: null | string;
+  enabled?: boolean | null;
+  limit?: number | null;
+  query?: null | string;
+}
+
+export interface ScheduledTaskListResponse {
+  items: ScheduledTaskSummary[];
+  nextCursor?: null | string;
+}
+
+export type ScheduledTaskNotificationPolicy = "all_runs" | "failures" | "none";
+
+export type ScheduledTaskOverlapPolicy = "skip_if_running";
+
+export interface ScheduledTaskReadResponse {
+  task?: ScheduledTask | null;
+}
+
+export interface ScheduledTaskRunListParams {
+  limit?: number | null;
+  taskId: string;
+}
+
+export interface ScheduledTaskRunListResponse {
+  runs: ScheduledTaskRunSummary[];
+}
+
+export interface ScheduledTaskRunStartResponse {
+  run: ScheduledTaskRunSummary;
+}
+
+export interface ScheduledTaskRunSummary {
+  error?: null | string;
+  finishedAt?: null | string;
+  id: string;
+  scheduledFor?: null | string;
+  sessionId?: null | string;
+  startedAt?: null | string;
+  status: string;
+  summary?: null | string;
+  taskId: string;
+  threadId?: null | string;
+  turnId?: null | string;
+}
+
+export type ScheduledTaskSchedule =
+  | {
+      days?: ScheduledTaskWeekday[] | null;
+      intervalHours: number;
+      minute: number;
+      timezone: string;
+      type: "hourly";
+    }
+  | {
+      time: string;
+      timezone: string;
+      type: "daily";
+    }
+  | {
+      time: string;
+      timezone: string;
+      type: "weekdays";
+    }
+  | {
+      days: ScheduledTaskWeekday[];
+      time: string;
+      timezone: string;
+      type: "weekly";
+    };
+
+export interface ScheduledTaskSchedulePreviewParams {
+  schedule: ScheduledTaskSchedule;
+}
+
+export interface ScheduledTaskSchedulePreviewResponse {
+  nextRunAt: string[];
+  warnings?: string[];
+}
+
+export interface ScheduledTaskSummary {
+  attention: boolean;
+  enabled: boolean;
+  id: string;
+  lastRun?: ScheduledTaskRunSummary | null;
+  nextRunAt?: null | string;
+  schedule: ScheduledTaskSchedule;
+  title: string;
+}
+
+export type ScheduledTaskThreadMode = "continue_thread" | "new_thread";
+
+export interface ScheduledTaskUpdateParams {
+  id: string;
+  task: ScheduledTaskUpdateRequest;
+}
+
+export interface ScheduledTaskUpdateRequest {
+  enabled?: boolean | null;
+  execution?: ScheduledTaskExecution | null;
+  notificationPolicy?: ScheduledTaskNotificationPolicy | null;
+  overlapPolicy?: ScheduledTaskOverlapPolicy | null;
+  prompt?: null | string;
+  revision?: null | string;
+  schedule?: ScheduledTaskSchedule | null;
+  title?: null | string;
+}
+
+export type ScheduledTaskWeekday =
+  | "FR"
+  | "MO"
+  | "SA"
+  | "SU"
+  | "TH"
+  | "TU"
+  | "WE";
+
+export interface ScheduledTaskWriteResponse {
+  task: ScheduledTask;
+}
 
 export interface ServerCapabilities {
   agentSession: boolean;

@@ -6,6 +6,8 @@ use app_server_protocol::BusinessObjectRef;
 use app_server_protocol::RuntimeOptions;
 use chrono::DateTime;
 use chrono::Duration;
+use chrono::LocalResult;
+use chrono::TimeZone;
 use chrono::Utc;
 use lime_core::config::TaskSchedule;
 use lime_core::database::dao::agent_run::AgentRun;
@@ -32,6 +34,13 @@ pub struct AutomationRunStart {
     pub turn_id: String,
     pub prompt: String,
     pub runtime_options: RuntimeOptions,
+    pub trigger: String,
+    pub scheduled_for: Option<String>,
+    pub claimed_at: Option<String>,
+    pub ownership_started_at: Option<String>,
+    pub task_revision: Option<String>,
+    pub catch_up: bool,
+    pub skipped_window_count: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +53,8 @@ pub struct AutomationRunFinish {
     pub error_code: Option<String>,
     pub error_message: Option<String>,
     pub metadata: Value,
+    pub ownership_started_at: Option<String>,
+    pub task_revision: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +67,24 @@ pub struct AutomationRunFailure {
     pub error_code: String,
     pub error_message: String,
     pub metadata: Value,
+    pub ownership_started_at: Option<String>,
+    pub task_revision: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AutomationRunIdentity {
+    pub session_id: String,
+    pub thread_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClaimedAutomationRun {
+    pub run_id: String,
+    pub scheduled_for: String,
+    pub claimed_at: String,
+    pub task_revision: String,
+    pub catch_up: bool,
+    pub skipped_window_count: u32,
 }
 
 impl RuntimeCore {
@@ -64,15 +93,35 @@ impl RuntimeCore {
         params: AutomationJobIdParams,
         host: RuntimeHostContext,
     ) -> Result<AutomationJobRunNowResponse, RuntimeCoreError> {
+        let start = self.start_automation_job_run(params.id.clone()).await?;
+        self.execute_started_automation_job(params.id, start, host)
+            .await
+    }
+
+    pub(crate) async fn execute_scheduled_task_now(
+        &self,
+        id: String,
+        identity: Option<AutomationRunIdentity>,
+        host: RuntimeHostContext,
+    ) -> Result<AutomationJobRunNowResponse, RuntimeCoreError> {
+        let start = self
+            .start_scheduled_task_run_record(id.clone(), identity)
+            .await?;
+        self.execute_started_automation_job(id, start, host).await
+    }
+
+    pub(crate) async fn execute_started_automation_job(
+        &self,
+        id: String,
+        start: AutomationRunStart,
+        host: RuntimeHostContext,
+    ) -> Result<AutomationJobRunNowResponse, RuntimeCoreError> {
         let started_ms = Utc::now().timestamp_millis();
-        let start = match self.start_automation_job_run(params.id.clone()).await {
-            Ok(start) => start,
-            Err(error) => return Err(error),
-        };
 
         let start_result = self.start_automation_turn(&start, host).await;
         match start_result {
             Ok(turn) => {
+                let mut finished_at = None;
                 let status = match turn.status {
                     AgentTurnStatus::Completed => Some(AgentRunStatus::Success),
                     AgentTurnStatus::Failed => Some(AgentRunStatus::Error),
@@ -80,31 +129,43 @@ impl RuntimeCore {
                     _ => None,
                 };
                 if let Some(status) = status {
+                    let terminal_at = Utc::now().to_rfc3339();
                     let finish = AutomationRunFinish {
                         job: start.job,
                         run_id: start.run.id.clone(),
                         status,
-                        finished_at: Utc::now().to_rfc3339(),
+                        finished_at: terminal_at.clone(),
                         duration_ms: Some(Utc::now().timestamp_millis().saturating_sub(started_ms)),
                         error_code: None,
                         error_message: None,
                         metadata: json!({
-                            "jobId": params.id,
+                            "jobId": id,
                             "sessionId": start.session_id,
                             "threadId": start.thread_id,
                             "turnId": turn.turn_id,
                             "turnStatus": agent_turn_status_value(turn.status),
+                            "trigger": start.trigger,
+                            "scheduledFor": start.scheduled_for,
+                            "claimedAt": start.claimed_at,
+                            "taskRevision": start.task_revision,
+                            "catchUp": start.catch_up,
+                            "skippedWindowCount": start.skipped_window_count,
                         }),
+                        ownership_started_at: start.ownership_started_at,
+                        task_revision: start.task_revision,
                     };
                     self.finish_automation_job_run(finish).await?;
+                    finished_at = Some(terminal_at);
                 }
                 Ok(AutomationJobRunNowResponse {
                     result: json!({
-                        "job_id": params.id,
+                        "job_id": id,
                         "run_id": start.run.id,
                         "session_id": start.session_id,
                         "thread_id": start.thread_id,
                         "turn_id": turn.turn_id,
+                        "started_at": start.run.started_at,
+                        "finished_at": finished_at,
                         "started": true,
                         "status": agent_turn_status_value(turn.status),
                     }),
@@ -120,11 +181,19 @@ impl RuntimeCore {
                     error_code: "automation_turn_start_failed".to_string(),
                     error_message: error.to_string(),
                     metadata: json!({
-                        "jobId": params.id,
+                        "jobId": id,
                         "sessionId": start.session_id,
                         "threadId": start.thread_id,
                         "turnId": start.turn_id,
+                        "trigger": start.trigger,
+                        "scheduledFor": start.scheduled_for,
+                        "claimedAt": start.claimed_at,
+                        "taskRevision": start.task_revision,
+                        "catchUp": start.catch_up,
+                        "skippedWindowCount": start.skipped_window_count,
                     }),
+                    ownership_started_at: start.ownership_started_at,
+                    task_revision: start.task_revision,
                 };
                 self.fail_automation_job_run(failure).await?;
                 Err(error)
@@ -151,6 +220,9 @@ impl RuntimeCore {
                     "source": AUTOMATION_SOURCE,
                     "runId": start.run.id,
                     "executionMode": start.job.execution_mode,
+                    "trigger": start.trigger,
+                    "scheduledFor": start.scheduled_for,
+                    "claimedAt": start.claimed_at,
                 })),
             }),
             locale: None,
@@ -179,21 +251,87 @@ impl RuntimeCore {
 
 pub fn build_automation_run_start(
     job: AutomationJob,
+    resolved_identity: Option<AutomationRunIdentity>,
 ) -> Result<AutomationRunStart, RuntimeCoreError> {
-    validate_automation_job_for_run(&job)?;
+    build_automation_run_start_inner(job, resolved_identity, None, false)
+}
+
+pub fn build_scheduled_task_manual_run_start(
+    job: AutomationJob,
+    resolved_identity: Option<AutomationRunIdentity>,
+) -> Result<AutomationRunStart, RuntimeCoreError> {
+    build_automation_run_start_inner(job, resolved_identity, None, true)
+}
+
+pub fn build_claimed_automation_run_start(
+    job: AutomationJob,
+    resolved_identity: Option<AutomationRunIdentity>,
+    claim: ClaimedAutomationRun,
+) -> Result<AutomationRunStart, RuntimeCoreError> {
+    build_automation_run_start_inner(job, resolved_identity, Some(claim), false)
+}
+
+fn build_automation_run_start_inner(
+    job: AutomationJob,
+    resolved_identity: Option<AutomationRunIdentity>,
+    claim: Option<ClaimedAutomationRun>,
+    allow_disabled: bool,
+) -> Result<AutomationRunStart, RuntimeCoreError> {
+    validate_automation_job_for_run(&job, claim.as_ref(), allow_disabled)?;
     let payload = job
         .payload
         .as_object()
         .ok_or_else(|| RuntimeCoreError::Backend("自动化任务 payload 必须为对象".to_string()))?;
     let prompt = string_field(payload, &["prompt"])
         .ok_or_else(|| RuntimeCoreError::Backend("自动化任务内容不能为空".to_string()))?;
-    let run_id = format!("automation-run-{}", Uuid::new_v4());
-    let session_id = required_agent_turn_payload_field(payload, &["session_id", "sessionId"])?;
-    let thread_id = required_agent_turn_payload_field(payload, &["thread_id", "threadId"])?;
+    let run_id = claim
+        .as_ref()
+        .map(|claim| claim.run_id.clone())
+        .unwrap_or_else(|| format!("automation-run-{}", Uuid::new_v4()));
+    let (session_id, thread_id) =
+        if string_field(payload, &["thread_mode", "threadMode"]).as_deref() == Some("new_thread") {
+            let lineage_id = Uuid::new_v4().to_string();
+            (
+                format!("scheduled-session-{lineage_id}"),
+                format!("scheduled-thread-{lineage_id}"),
+            )
+        } else if let Some(identity) = resolved_identity {
+            (identity.session_id, identity.thread_id)
+        } else {
+            (
+                required_agent_turn_payload_field(payload, &["session_id", "sessionId"])?,
+                required_agent_turn_payload_field(payload, &["thread_id", "threadId"])?,
+            )
+        };
     let turn_id =
         string_field(payload, &["turn_id", "turnId"]).unwrap_or_else(|| format!("turn-{run_id}"));
     let started_at = Utc::now().to_rfc3339();
-    let runtime_options = build_runtime_options(&job, &run_id, &session_id, &thread_id, &turn_id)?;
+    let trigger = claim
+        .as_ref()
+        .map(|claim| {
+            if claim.catch_up {
+                "catch_up"
+            } else {
+                "schedule"
+            }
+        })
+        .unwrap_or("manual");
+    let scheduled_for = claim.as_ref().map(|claim| claim.scheduled_for.as_str());
+    let claimed_at = claim.as_ref().map(|claim| claim.claimed_at.as_str());
+    let ownership_started_at = claim.as_ref().map(|claim| claim.claimed_at.as_str());
+    let task_revision = claim.as_ref().map(|claim| claim.task_revision.as_str());
+    let catch_up = claim.as_ref().is_some_and(|claim| claim.catch_up);
+    let skipped_window_count = claim.as_ref().map_or(0, |claim| claim.skipped_window_count);
+    let runtime_options = build_runtime_options(
+        &job,
+        &run_id,
+        &session_id,
+        &thread_id,
+        &turn_id,
+        trigger,
+        scheduled_for,
+        claimed_at,
+    )?;
     let run = AgentRun {
         id: run_id,
         source: AUTOMATION_SOURCE.to_string(),
@@ -213,6 +351,12 @@ pub fn build_automation_run_start(
                 "threadId": thread_id,
                 "turnId": turn_id,
                 "payloadKind": "agent_turn",
+                "trigger": trigger,
+                "scheduledFor": scheduled_for,
+                "claimedAt": claimed_at,
+                "taskRevision": task_revision,
+                "catchUp": catch_up,
+                "skippedWindowCount": skipped_window_count,
                 "runtimeOptions": runtime_options,
             }))
             .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?,
@@ -229,6 +373,13 @@ pub fn build_automation_run_start(
         turn_id,
         prompt,
         runtime_options,
+        trigger: trigger.to_string(),
+        scheduled_for: scheduled_for.map(ToOwned::to_owned),
+        claimed_at: claimed_at.map(ToOwned::to_owned),
+        ownership_started_at: ownership_started_at.map(ToOwned::to_owned),
+        task_revision: task_revision.map(ToOwned::to_owned),
+        catch_up,
+        skipped_window_count,
     })
 }
 
@@ -246,6 +397,7 @@ pub fn apply_automation_run_finished(
     status: &AgentRunStatus,
     finished_at: String,
     error_message: Option<String>,
+    recompute_next_run: bool,
 ) {
     job.running_started_at = None;
     job.last_finished_at = Some(finished_at.clone());
@@ -262,16 +414,19 @@ pub fn apply_automation_run_finished(
             job.last_retry_count = job.last_retry_count.saturating_add(1);
         }
         AgentRunStatus::Canceled => {}
+        AgentRunStatus::Missed => {}
         AgentRunStatus::Queued | AgentRunStatus::Running => {}
     }
-    job.next_run_at = if job.enabled {
-        next_run_for_automation_schedule(&job.schedule, Utc::now())
-            .ok()
-            .flatten()
-            .map(|value| value.to_rfc3339())
-    } else {
-        None
-    };
+    if recompute_next_run {
+        job.next_run_at = if job.enabled {
+            next_run_for_automation_schedule(&job.schedule, Utc::now())
+                .ok()
+                .flatten()
+                .map(|value| value.to_rfc3339())
+        } else {
+            None
+        };
+    }
     job.updated_at = finished_at;
 }
 
@@ -296,10 +451,7 @@ pub fn next_run_for_automation_schedule(
                 let timezone: chrono_tz::Tz = tz_str
                     .parse()
                     .map_err(|_| format!("无效的时区: {tz_str}"))?;
-                cron_schedule
-                    .after(&from.with_timezone(&timezone))
-                    .next()
-                    .map(|value| value.with_timezone(&Utc))
+                next_distinct_cron_occurrence(&cron_schedule, from, timezone)
             } else {
                 cron_schedule.after(&from).next()
             };
@@ -316,6 +468,43 @@ pub fn next_run_for_automation_schedule(
             }
         }
     }
+}
+
+fn next_distinct_cron_occurrence(
+    schedule: &cron::Schedule,
+    from: DateTime<Utc>,
+    timezone: chrono_tz::Tz,
+) -> Option<DateTime<Utc>> {
+    let local_from = from.with_timezone(&timezone).naive_local();
+    let wall_clock_cursor = Utc.from_utc_datetime(&local_from);
+    for wall_clock_occurrence in schedule.after(&wall_clock_cursor) {
+        let local_occurrence = wall_clock_occurrence.naive_utc();
+        let occurrence = match timezone.from_local_datetime(&local_occurrence) {
+            LocalResult::Single(value) => value,
+            LocalResult::Ambiguous(earlier, _) => earlier,
+            LocalResult::None => first_valid_local_time(timezone, local_occurrence)?,
+        }
+        .with_timezone(&Utc);
+        if occurrence > from {
+            return Some(occurrence);
+        }
+    }
+    None
+}
+
+fn first_valid_local_time(
+    timezone: chrono_tz::Tz,
+    missing: chrono::NaiveDateTime,
+) -> Option<DateTime<chrono_tz::Tz>> {
+    const MAX_DST_GAP_MINUTES: i64 = 26 * 60;
+    (1..=MAX_DST_GAP_MINUTES).find_map(|minutes| {
+        let candidate = missing + Duration::minutes(minutes);
+        match timezone.from_local_datetime(&candidate) {
+            LocalResult::Single(value) => Some(value),
+            LocalResult::Ambiguous(earlier, _) => Some(earlier),
+            LocalResult::None => None,
+        }
+    })
 }
 
 pub fn validate_automation_schedule_value(
@@ -356,14 +545,25 @@ pub fn validate_automation_schedule_value(
     }
 }
 
-fn validate_automation_job_for_run(job: &AutomationJob) -> Result<(), RuntimeCoreError> {
-    if !job.enabled {
+fn validate_automation_job_for_run(
+    job: &AutomationJob,
+    claim: Option<&ClaimedAutomationRun>,
+    allow_disabled: bool,
+) -> Result<(), RuntimeCoreError> {
+    if !allow_disabled && !job.enabled {
         return Err(RuntimeCoreError::Backend(format!(
             "自动化任务已禁用: {}",
             job.id
         )));
     }
-    if job.running_started_at.is_some() {
+    if let Some(claim) = claim {
+        if job.running_started_at.as_deref() != Some(claim.claimed_at.as_str()) {
+            return Err(RuntimeCoreError::Backend(format!(
+                "已安排任务 claim ownership 无效: {}",
+                job.id
+            )));
+        }
+    } else if job.running_started_at.is_some() {
         return Err(RuntimeCoreError::Backend(format!(
             "自动化任务正在运行: {}",
             job.id
@@ -401,6 +601,9 @@ fn build_runtime_options(
     session_id: &str,
     thread_id: &str,
     turn_id: &str,
+    trigger: &str,
+    scheduled_for: Option<&str>,
+    claimed_at: Option<&str>,
 ) -> Result<RuntimeOptions, RuntimeCoreError> {
     let payload = job
         .payload
@@ -482,6 +685,9 @@ fn build_runtime_options(
                 "session_id": session_id,
                 "thread_id": thread_id,
                 "turn_id": turn_id,
+                "trigger": trigger,
+                "scheduled_for": scheduled_for,
+                "claimed_at": claimed_at,
             },
             "reasoning_effort": reasoning_effort,
             "search_mode": search_mode,
@@ -730,7 +936,7 @@ mod tests {
             }
         }));
 
-        let start = build_automation_run_start(job).expect("run start");
+        let start = build_automation_run_start(job, None).expect("run start");
         let runtime_request = start
             .runtime_options
             .runtime_request
@@ -787,7 +993,7 @@ mod tests {
             "prompt": "旧浏览器自动化"
         }));
 
-        let error = build_automation_run_start(job).expect_err("should reject");
+        let error = build_automation_run_start(job, None).expect_err("should reject");
         assert!(error.to_string().contains("browser_session"));
     }
 
@@ -799,8 +1005,112 @@ mod tests {
             "session_id": "session-job-1"
         }));
 
-        let error = build_automation_run_start(job).expect_err("should reject");
+        let error = build_automation_run_start(job, None).expect_err("should reject");
         assert!(error.to_string().contains("thread_id"));
+    }
+
+    #[test]
+    fn new_thread_mode_creates_fresh_lineage_for_every_run() {
+        let job = sample_job(json!({
+            "kind": "agent_turn",
+            "prompt": "生成摘要",
+            "thread_mode": "new_thread"
+        }));
+
+        let first = build_automation_run_start(job.clone(), None).expect("first run start");
+        let second = build_automation_run_start(job, None).expect("second run start");
+
+        assert_ne!(first.session_id, second.session_id);
+        assert_ne!(first.thread_id, second.thread_id);
+        assert!(first.thread_id.starts_with("scheduled-thread-"));
+        assert!(second.thread_id.starts_with("scheduled-thread-"));
+    }
+
+    #[test]
+    fn claimed_run_reuses_run_id_and_projects_schedule_metadata() {
+        let scheduled_for = Utc::now().to_rfc3339();
+        let claimed_at = Utc::now().to_rfc3339();
+        let mut job = sample_job(json!({
+            "kind": "agent_turn",
+            "prompt": "生成摘要",
+            "thread_mode": "new_thread"
+        }));
+        job.running_started_at = Some(claimed_at.clone());
+
+        let task_revision = job.updated_at.clone();
+        let start = build_claimed_automation_run_start(
+            job,
+            None,
+            ClaimedAutomationRun {
+                run_id: "scheduled-run-task-1-window-1".to_string(),
+                scheduled_for: scheduled_for.clone(),
+                claimed_at: claimed_at.clone(),
+                task_revision,
+                catch_up: true,
+                skipped_window_count: 2,
+            },
+        )
+        .expect("claimed run start");
+        let metadata: Value =
+            serde_json::from_str(start.run.metadata.as_deref().expect("claimed run metadata"))
+                .expect("parse claimed run metadata");
+
+        assert_eq!(start.run.id, "scheduled-run-task-1-window-1");
+        assert_eq!(metadata["trigger"], "catch_up");
+        assert_eq!(metadata["scheduledFor"], scheduled_for);
+        assert_eq!(metadata["claimedAt"], claimed_at);
+        assert_eq!(metadata["catchUp"], true);
+        assert_eq!(metadata["skippedWindowCount"], 2);
+        assert_eq!(
+            start
+                .runtime_options
+                .runtime_request
+                .as_ref()
+                .and_then(|request| request.metadata.as_ref())
+                .and_then(|metadata| metadata.pointer("/harness/automation_job/run_id"))
+                .and_then(Value::as_str),
+            Some("scheduled-run-task-1-window-1")
+        );
+    }
+
+    #[test]
+    fn cron_spring_forward_shifts_missing_local_time_to_first_valid_instant() {
+        let schedule = TaskSchedule::Cron {
+            expr: "30 2 * * *".to_string(),
+            tz: Some("America/New_York".to_string()),
+        };
+        let before_gap = DateTime::parse_from_rfc3339("2026-03-07T07:30:00Z")
+            .expect("parse spring-forward cursor")
+            .with_timezone(&Utc);
+
+        let shifted = next_run_for_automation_schedule(&schedule, before_gap)
+            .expect("calculate spring-forward run")
+            .expect("spring-forward run exists");
+        assert_eq!(shifted.to_rfc3339(), "2026-03-08T07:00:00+00:00");
+        let following = next_run_for_automation_schedule(&schedule, shifted)
+            .expect("calculate post-gap run")
+            .expect("post-gap run exists");
+        assert_eq!(following.to_rfc3339(), "2026-03-09T06:30:00+00:00");
+    }
+
+    #[test]
+    fn cron_fall_back_uses_ambiguous_local_time_only_once() {
+        let schedule = TaskSchedule::Cron {
+            expr: "30 1 * * *".to_string(),
+            tz: Some("America/New_York".to_string()),
+        };
+        let before_repeat = DateTime::parse_from_rfc3339("2026-10-31T05:30:00Z")
+            .expect("parse fall-back cursor")
+            .with_timezone(&Utc);
+
+        let first = next_run_for_automation_schedule(&schedule, before_repeat)
+            .expect("calculate first ambiguous run")
+            .expect("ambiguous run exists");
+        assert_eq!(first.to_rfc3339(), "2026-11-01T05:30:00+00:00");
+        let following = next_run_for_automation_schedule(&schedule, first)
+            .expect("calculate run after repeated hour")
+            .expect("run after repeated hour exists");
+        assert_eq!(following.to_rfc3339(), "2026-11-02T06:30:00+00:00");
     }
 
     #[tokio::test]

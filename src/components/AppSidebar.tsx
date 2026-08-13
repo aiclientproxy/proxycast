@@ -2,7 +2,7 @@
  * 全局应用侧边栏
  *
  * 当前导航收口为一级主入口 + 底部用户菜单。
- * 默认只暴露主线入口；系统入口统一收进左下角用户弹窗。
+ * 业务主线入口直接显示在侧栏，账户与系统辅助入口收进左下角用户弹窗。
  */
 
 import {
@@ -844,16 +844,6 @@ export function AppSidebar({
 
     if (item.id === "workbench") {
       conversationActions.navigateToWorkbench(fallbackSessionId);
-      return;
-    }
-
-    if (item.id === "experts") {
-      conversationActions.navigateToExperts();
-      return;
-    }
-
-    if (item.id === "skills") {
-      conversationActions.navigateToSkills();
       return;
     }
 

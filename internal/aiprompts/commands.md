@@ -239,6 +239,25 @@ review transcript，也不把 Codex TUI detached/background review 伪装成 Des
 证明 preload/IPC 命中 `app_server_handle_json_lines`、`review/start` 与 backend turn identity 绑定，GUI 可见终态与
 内部 prompt 隔离，且无生产 mock fallback；不得用 TUI 或浏览器投影冒充该证据。
 
+## Scheduled Tasks 主链
+
+Desktop 已安排任务只允许走：
+
+`ScheduledTasksPage -> src/lib/api/scheduledTasks.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server scheduledTask/* -> RuntimeCore -> LocalAppDataSource automation owner -> Thread/Turn/Item + Agent Run`
+
+current method 为 `scheduledTask/list`、`scheduledTask/read`、`scheduledTask/create`、
+`scheduledTask/update`、`scheduledTask/delete`、`scheduledTask/enabled/set`、
+`scheduledTask/run/start`、`scheduledTask/run/list` 与 `scheduledTask/schedule/preview`。
+Renderer 只持有筛选、选中项和编辑表单状态；任务、next run、revision 与运行历史由 App Server read model 提供。
+`run/start` 必须经同一个 RuntimeCore execution service 创建或继续 canonical Thread，并提交真实 Turn；GUI 只在运行
+返回真实 `sessionId` 时开放恢复对话。Electron 继续只转发 JSONL，不新增任务 CRUD IPC、renderer timer 或第二调度器。
+
+当前迁移尚未完成：旧 `automationJob/*`、`automationSchedule/*`、`automationScheduler/*` 与旧设置工作台均为
+`deprecated / migration-pending`，只允许迁出，不得增长新 consumer。它们物理删除并加入回流守卫前，
+`scheduledTask/*` 不能宣称为唯一生产 method；scheduler 的原子 claim、休眠补跑、DST、通知和删除并发合同也必须按
+`internal/roadmap/task/scheduled-tasks/` 的退出条件补齐。生产路径禁止 mock fallback，测试专用 Rust backend 只能用于
+public JSON-RPC fixture。
+
 ## Host Reverse Requests, Plan And Diff Notifications
 
 `currentTime/read`、`item/permissions/requestApproval`、`item/tool/call` 使用同一 App Server server-request dispatcher：

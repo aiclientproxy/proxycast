@@ -41,6 +41,7 @@ notify.workspace = true
 runtime-core.workspace = true
 lime-skills.workspace = true
 lime-services = { workspace = true, features = ["local-sensevoice"] }
+lime-scheduler.workspace = true
 hex.workspace = true
 jsonschema.workspace = true
 opentelemetry.workspace = true

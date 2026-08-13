@@ -23,7 +23,7 @@ describe("AppSidebar Plugins", () => {
           '[data-testid="app-sidebar-main-nav"] button',
         ),
       ).map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["新建任务", "专家", "Skills", "插件"]);
+    ).toEqual(["新建任务", "已安排任务", "插件"]);
 
     act(() => {
       container
@@ -55,7 +55,7 @@ describe("AppSidebar Plugins", () => {
           '[data-testid="app-sidebar-main-nav"] button',
         ),
       ).map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["新建任务", "专家", "Skills", "插件"]);
+    ).toEqual(["新建任务", "已安排任务", "插件"]);
   });
 
   it("Plugin 变更事件不应影响侧栏聚合入口", async () => {
@@ -74,7 +74,7 @@ describe("AppSidebar Plugins", () => {
           '[data-testid="app-sidebar-main-nav"] button',
         ),
       ).map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["新建任务", "专家", "Skills", "插件"]);
+    ).toEqual(["新建任务", "已安排任务", "插件"]);
   });
 
   it("安装态读取失败不应影响静态 Plugins 聚合入口", async () => {
@@ -86,9 +86,7 @@ describe("AppSidebar Plugins", () => {
       await flushEffects(2);
 
       expect(
-        container.querySelector<HTMLButtonElement>(
-          'button[aria-label="插件"]',
-        ),
+        container.querySelector<HTMLButtonElement>('button[aria-label="插件"]'),
       ).not.toBeNull();
       expect(container.textContent).not.toContain("内容工厂");
       expect(

@@ -1,36 +1,36 @@
-## Lime v1.126.0
+## Lime v1.127.0
 
 ### 新功能
 
-- 新增 Code Mode 桌面主链：模型可通过原生 custom `exec` 与 `wait` 编排冻结的工具快照，并支持异步 cell、通知、共享 store、等待、终止与取消。
-- 引入独立 `code-mode-host` 进程，在 sandbox-enabled V8 isolate 中执行 JavaScript；App Server 只持有 process client，不在生产路径回退进程内 V8。
-- 扩展官方 OpenAI Responses custom tool lowering、模型 `tool_mode` 与 `custom_tools` capability/readiness 门禁。
+- 新增已安排任务一级工作台，支持列表与详情、创建与编辑、启停、立即运行、日程预览和运行历史。
+- 新增 9 个 `scheduledTask/*` App Server JSON-RPC method，并为 Renderer 提供生成的类型协议与 typed gateway。
+- 调度运行复用 RuntimeCore 与 canonical Thread/Turn/Item 主链，支持新对话和继续来源对话两种模式。
 
 ### 修复
 
-- 修复 provider tool call 的名称、参数类型与 JSON Schema 校验链，畸形调用在 handler 前 fail closed，并保持唯一工具生命周期终态。
-- 修复 Code Mode nested tool、notify、cell close、取消与 timeout 的跨进程关联，避免迟到回调串入后续 sampling step。
-- 修复 OpenAI Responses、Chat Completions、Anthropic、Gemini、Vertex、Azure 与 Ollama transport 的 canonical request/stream/usage 投影漂移。
+- 补齐原子 claim、24 小时窗口补跑、超窗 missed 记录、overlap 跳过和 one-shot 终态，避免重复领取或丢失运行历史。
+- 修复纽约 DST 缺失/重复小时、手动运行日程锚点、时钟回拨与暂停任务立即运行的边界行为。
+- 启动恢复会幂等终止遗留的 queued/running Agent Run，并在 canonical Turn 已有终态时复用真实结果收口。
 
 ### 优化与重构
 
-- 将 Agent session loop 收敛为 thread-owned resources/registry，统一 actor replace、interrupt、shutdown 与 active cell 清理。
-- 将 Code Mode V8 provider 限定为 host 内部 owner；dev、Electron assets 与 Windows 构建成组产出 `app-server` 和 `code-mode-host`。
-- Electron release manifest 分别记录双 sidecar SHA-256，packaged verifier 强制检查二进制存在性与完整性。
+- 已安排任务继续复用 `automation_jobs` 作为唯一任务表，运行历史统一投影自 `agent_runs`，不引入第二套持久化 owner。
+- 收敛任务中心与侧边栏导航，Renderer 只保留筛选、选中项和编辑表单状态，任务事实由 App Server read model 提供。
 
 ### 测试与质量
 
-- 增加多 provider loopback request capture，验证 endpoint、认证、canonical content、工具定义、generation lowering 与 terminal stream。
-- 增加 Code Mode protocol/process、V8 runtime、provider lowering、session lifecycle、sidecar assets 与资源完整性回归。
-- 真实 Electron Gate B 已证明 Electron、App Server 与 `code-mode-host` 为独立父子进程，并完成 custom exec 回采样、canonical Tool Item 与 GUI 可见终态。
+- 增加 Scheduled Tasks 公共 JSON-RPC、scheduler claim/recovery、RuntimeCore lineage、read model 和失败关闭回归。
+- 增加已安排任务工作台、typed gateway、导航与五语种资源的稳定测试。
+- 发布候选已通过 TypeScript typecheck、协议合同、Rust related、70 项前端定向测试与真实 Electron GUI smoke。
 
 ### 文档
 
-- 更新 Code Mode process owner、provider/tool trust boundary、双 sidecar 构建链、产品范围矩阵与执行计划。
-- 明确 remote environment、Codex TUI 与无 Desktop consumer 的 surface 不进入 Lime current 产品链。
+- 新增已安排任务的产品需求、交互、协议、运行时架构、迁移账本、验证合同和 Codex 对齐矩阵。
+- 更新全局架构与命令边界，确认 Electron 只承接 JSONL 转发，调度、CRUD 和运行状态归 App Server owner。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.126.0`。
+- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.127.0`。
+- 旧 `automationJob/*`、旧 Settings consumer、terminal notification、软删除与专项跨平台证据仍按执行计划继续收口，本版本不宣称路线图全部完成。
 
-**完整变更**: `v1.125.0` -> `v1.126.0`
+**完整变更**: `v1.126.0` -> `v1.127.0`

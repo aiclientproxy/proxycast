@@ -9,6 +9,7 @@ import type {
   SettingsPageParams,
 } from "@/types/page";
 import { SettingsTabs } from "@/types/settings";
+import { changeLimeLocale } from "@/i18n/createI18n";
 import { AppPageContent } from "./AppPageContent";
 
 const latestAgentChatProps = vi.hoisted(() => ({
@@ -106,6 +107,7 @@ interface RenderContentOptions {
   pageParams?: PageParams;
   requestedPage?: Page;
   requestedPageParams?: PageParams;
+  onNavigate?: (page: Page, params?: PageParams) => void;
   onAgentSessionChange?: (sessionId: string | null) => void;
 }
 
@@ -123,7 +125,7 @@ function renderContentWithNavigationState(options: RenderContentOptions) {
             pageParams={nextOptions.pageParams ?? {}}
             requestedPage={nextOptions.requestedPage}
             requestedPageParams={nextOptions.requestedPageParams}
-            onNavigate={vi.fn() as (page: Page) => void}
+            onNavigate={nextOptions.onNavigate ?? vi.fn()}
             onAgentHasMessagesChange={vi.fn()}
             onAgentSessionChange={nextOptions.onAgentSessionChange}
           />
@@ -173,8 +175,9 @@ async function flushEffects(times = 6) {
 }
 
 describe("AppPageContent", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    await changeLimeLocale("zh-CN");
     latestAgentChatProps.value = null;
     agentChatLifecycle.mounts = 0;
     agentChatLifecycle.unmounts = 0;
@@ -938,7 +941,7 @@ describe("AppPageContent", () => {
   });
 
   it("skills 页面应把技能草稿参数透传给 SkillsWorkspacePage", async () => {
-    renderContent("skills", {
+    const { container } = renderContent("skills", {
       initialScaffoldDraft: {
         target: "project",
         directory: "saved-skill-demo",
@@ -959,6 +962,68 @@ describe("AppPageContent", () => {
         },
         initialScaffoldRequestKey: 20260408,
       },
+    });
+    expect(
+      container.querySelector('[data-testid="plugin-workspace-tabs"]'),
+    ).not.toBeNull();
+    expect(
+      container
+        .querySelector('[data-testid="plugin-workspace-tab-skills"]')
+        ?.getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+
+  it("插件工作台应以插件、Skills、专家三个 Tab 切换现有页面", async () => {
+    const onNavigate = vi.fn();
+    const { container } = renderContentWithNavigationState({
+      currentPage: "plugins",
+      onNavigate,
+    });
+    await flushEffects();
+
+    const tabs = Array.from(
+      container.querySelectorAll(
+        '[data-testid="plugin-workspace-tabs"] [role="tab"]',
+      ),
+    );
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      "插件",
+      "Skills",
+      "专家",
+    ]);
+    expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="plugin-workspace-tab-skills"]',
+        )
+        ?.click();
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith("skills", undefined);
+  });
+
+  it("Skills 与专家 Tab 切换时应保留当前项目作用域", async () => {
+    const onNavigate = vi.fn();
+    const { container } = renderContentWithNavigationState({
+      currentPage: "skills",
+      pageParams: { creationProjectId: "project-1" },
+      onNavigate,
+    });
+    await flushEffects();
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="plugin-workspace-tab-experts"]',
+        )
+        ?.click();
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith("experts", {
+      currentProjectId: "project-1",
+      projectId: "project-1",
     });
   });
 
@@ -1035,5 +1100,4 @@ describe("AppPageContent", () => {
       },
     });
   });
-
 });

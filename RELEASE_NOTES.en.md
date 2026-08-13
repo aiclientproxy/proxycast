@@ -1,38 +1,38 @@
-## Lime v1.126.0
+## Lime v1.127.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- Added the Desktop Code Mode flow, allowing models to orchestrate frozen tool snapshots through native custom `exec` and `wait` tools with asynchronous cells, notifications, shared storage, waiting, termination, and cancellation.
-- Added a standalone `code-mode-host` process that executes JavaScript in sandbox-enabled V8 isolates; App Server only owns the process client and never falls back to in-process V8 in production.
-- Added official OpenAI Responses custom-tool lowering and model `tool_mode` plus `custom_tools` capability/readiness gates.
+- Added a top-level Scheduled Tasks workspace with list and detail views, create and edit flows, enable controls, immediate runs, schedule previews, and run history.
+- Added nine `scheduledTask/*` App Server JSON-RPC methods with generated protocol types and a typed Renderer gateway.
+- Routed scheduled execution through RuntimeCore and the canonical Thread/Turn/Item path, supporting both new conversations and continuation from explicit source conversations.
 
 ### Fixes
 
-- Fixed provider tool-call name repair, argument coercion, and JSON Schema validation so malformed calls fail closed before handlers while preserving exactly one lifecycle terminal.
-- Fixed cross-process correlation for nested Code Mode tools, notifications, cell close, cancellation, and timeouts, preventing late callbacks from leaking into later sampling steps.
-- Fixed canonical request, stream, and usage projection drift across OpenAI Responses, Chat Completions, Anthropic, Gemini, Vertex, Azure, and Ollama transports.
+- Added atomic claims, a bounded 24-hour catch-up window, missed-run records, overlap skipping, and one-shot terminal handling to prevent duplicate claims and missing run history.
+- Fixed New York DST gaps and repeated hours, manual-run schedule anchors, clock rollback behavior, and immediate runs for paused tasks.
+- Added startup recovery that terminalizes stale queued or running Agent Runs while reusing the real result when a canonical Turn is already terminal.
 
 ### Improvements and Refactoring
 
-- Converged the Agent session loop on thread-owned resources and registries, unifying actor replacement, interruption, shutdown, and active-cell cleanup.
-- Restricted the Code Mode V8 provider to the host-internal owner; dev, Electron assets, and Windows builds now produce `app-server` and `code-mode-host` together.
-- Added separate SHA-256 values for both sidecars to the Electron release manifest and made packaged verification enforce binary presence and integrity.
+- Reused `automation_jobs` as the only task table and projected run history from `agent_runs`, avoiding a second persistence owner.
+- Converged the task-center and sidebar navigation so the Renderer retains only filters, selection, and editor form state while App Server read models own task facts.
 
 ### Testing and Quality
 
-- Added loopback request capture across providers for endpoints, authentication, canonical content, tool definitions, generation lowering, and terminal streams.
-- Added regression coverage for the Code Mode protocol/process, V8 runtime, provider lowering, session lifecycle, sidecar assets, and resource integrity.
-- A real Electron Gate B now proves distinct Electron, App Server, and `code-mode-host` parent/child processes together with custom-exec resampling, canonical Tool Items, and a visible GUI terminal state.
+- Added public JSON-RPC, scheduler claim and recovery, RuntimeCore lineage, read-model, and fail-closed regression coverage for Scheduled Tasks.
+- Added stable tests for the Scheduled Tasks workspace, typed gateway, navigation, and all five bundled locales.
+- The release candidate passed TypeScript type checking, protocol contracts, Rust related tests, 70 targeted frontend tests, and a real Electron GUI smoke run.
 
 ### Documentation
 
-- Updated the Code Mode process owner, provider/tool trust boundary, dual-sidecar build path, product-scope matrix, and execution plans.
-- Clarified that remote environments, Codex TUI, and surfaces without a Desktop consumer are outside Lime's current product path.
+- Added Scheduled Tasks product requirements, interaction design, protocol and runtime architecture, migration ledger, verification contract, and Codex parity matrix.
+- Updated the global architecture and command boundaries to keep Electron as the JSONL transport host while App Server owns scheduling, CRUD, and runtime state.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.126.0`.
+- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.127.0`.
+- Legacy `automationJob/*` methods, the old Settings consumer, terminal notifications, soft deletion, and dedicated cross-platform evidence remain tracked follow-up work; this release does not claim the full roadmap is complete.
 
-**Full changes**: `v1.125.0` -> `v1.126.0`
+**Full changes**: `v1.126.0` -> `v1.127.0`

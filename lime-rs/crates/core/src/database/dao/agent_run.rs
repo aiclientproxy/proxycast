@@ -14,6 +14,7 @@ pub enum AgentRunStatus {
     Error,
     Canceled,
     Timeout,
+    Missed,
 }
 
 impl AgentRunStatus {
@@ -25,13 +26,14 @@ impl AgentRunStatus {
             Self::Error => "error",
             Self::Canceled => "canceled",
             Self::Timeout => "timeout",
+            Self::Missed => "missed",
         }
     }
 
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
-            Self::Success | Self::Error | Self::Canceled | Self::Timeout
+            Self::Success | Self::Error | Self::Canceled | Self::Timeout | Self::Missed
         )
     }
 }
@@ -47,6 +49,7 @@ impl TryFrom<&str> for AgentRunStatus {
             "error" => Ok(Self::Error),
             "canceled" => Ok(Self::Canceled),
             "timeout" => Ok(Self::Timeout),
+            "missed" => Ok(Self::Missed),
             other => Err(format!("未知执行状态: {other}")),
         }
     }
@@ -356,7 +359,7 @@ impl AgentRunDao {
                     error_code, error_message, metadata, created_at, updated_at
              FROM agent_runs
              WHERE session_id = ?1
-               AND status IN ('success', 'error', 'canceled', 'timeout')
+               AND status IN ('success', 'error', 'canceled', 'timeout', 'missed')
              ORDER BY started_at DESC
              LIMIT ?2 OFFSET ?3",
         )?;
@@ -535,16 +538,24 @@ mod tests {
         run_timeout.updated_at = run_timeout.started_at.clone();
         AgentRunDao::create_run(&conn, &run_timeout).expect("写入 run-timeout 失败");
 
+        let mut run_missed = sample_run("run-missed", AgentRunStatus::Missed);
+        run_missed.session_id = Some("session-a".to_string());
+        run_missed.started_at = "2026-03-06T14:00:00Z".to_string();
+        run_missed.created_at = run_missed.started_at.clone();
+        run_missed.updated_at = run_missed.started_at.clone();
+        AgentRunDao::create_run(&conn, &run_missed).expect("写入 run-missed 失败");
+
         let first_page = AgentRunDao::list_terminal_runs_by_session(&conn, "session-a", 2, 0)
             .expect("查询第一页终态记录失败");
         assert_eq!(first_page.len(), 2);
-        assert_eq!(first_page[0].id, "run-timeout");
-        assert_eq!(first_page[1].id, "run-error");
+        assert_eq!(first_page[0].id, "run-missed");
+        assert_eq!(first_page[1].id, "run-timeout");
 
         let second_page = AgentRunDao::list_terminal_runs_by_session(&conn, "session-a", 2, 2)
             .expect("查询第二页终态记录失败");
-        assert_eq!(second_page.len(), 1);
-        assert_eq!(second_page[0].id, "run-success");
+        assert_eq!(second_page.len(), 2);
+        assert_eq!(second_page[0].id, "run-error");
+        assert_eq!(second_page[1].id, "run-success");
     }
 
     #[test]

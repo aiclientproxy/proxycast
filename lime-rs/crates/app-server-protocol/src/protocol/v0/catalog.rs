@@ -363,6 +363,24 @@ pub enum AppServerRequestMethod {
     AutomationSchedulePreview,
     #[serde(rename = "automationSchedule/validate")]
     AutomationScheduleValidate,
+    #[serde(rename = "scheduledTask/list")]
+    ScheduledTaskList,
+    #[serde(rename = "scheduledTask/read")]
+    ScheduledTaskRead,
+    #[serde(rename = "scheduledTask/create")]
+    ScheduledTaskCreate,
+    #[serde(rename = "scheduledTask/update")]
+    ScheduledTaskUpdate,
+    #[serde(rename = "scheduledTask/delete")]
+    ScheduledTaskDelete,
+    #[serde(rename = "scheduledTask/enabled/set")]
+    ScheduledTaskEnabledSet,
+    #[serde(rename = "scheduledTask/run/start")]
+    ScheduledTaskRunStart,
+    #[serde(rename = "scheduledTask/run/list")]
+    ScheduledTaskRunList,
+    #[serde(rename = "scheduledTask/schedule/preview")]
+    ScheduledTaskSchedulePreview,
     #[serde(rename = "mcpServer/list")]
     McpServerList,
     #[serde(rename = "mcpServerStatus/list")]
@@ -686,6 +704,15 @@ impl AppServerRequestMethod {
             Self::AutomationJobRunHistory => METHOD_AUTOMATION_JOB_RUN_HISTORY,
             Self::AutomationSchedulePreview => METHOD_AUTOMATION_SCHEDULE_PREVIEW,
             Self::AutomationScheduleValidate => METHOD_AUTOMATION_SCHEDULE_VALIDATE,
+            Self::ScheduledTaskList => METHOD_SCHEDULED_TASK_LIST,
+            Self::ScheduledTaskRead => METHOD_SCHEDULED_TASK_READ,
+            Self::ScheduledTaskCreate => METHOD_SCHEDULED_TASK_CREATE,
+            Self::ScheduledTaskUpdate => METHOD_SCHEDULED_TASK_UPDATE,
+            Self::ScheduledTaskDelete => METHOD_SCHEDULED_TASK_DELETE,
+            Self::ScheduledTaskEnabledSet => METHOD_SCHEDULED_TASK_ENABLED_SET,
+            Self::ScheduledTaskRunStart => METHOD_SCHEDULED_TASK_RUN_START,
+            Self::ScheduledTaskRunList => METHOD_SCHEDULED_TASK_RUN_LIST,
+            Self::ScheduledTaskSchedulePreview => METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW,
             Self::McpServerList => METHOD_MCP_SERVER_LIST,
             Self::McpServerStatusList => METHOD_MCP_SERVER_STATUS_LIST,
             Self::McpServerCreate => METHOD_MCP_SERVER_CREATE,
@@ -946,6 +973,15 @@ impl AppServerRequestMethod {
             METHOD_AUTOMATION_JOB_RUN_HISTORY => Some(Self::AutomationJobRunHistory),
             METHOD_AUTOMATION_SCHEDULE_PREVIEW => Some(Self::AutomationSchedulePreview),
             METHOD_AUTOMATION_SCHEDULE_VALIDATE => Some(Self::AutomationScheduleValidate),
+            METHOD_SCHEDULED_TASK_LIST => Some(Self::ScheduledTaskList),
+            METHOD_SCHEDULED_TASK_READ => Some(Self::ScheduledTaskRead),
+            METHOD_SCHEDULED_TASK_CREATE => Some(Self::ScheduledTaskCreate),
+            METHOD_SCHEDULED_TASK_UPDATE => Some(Self::ScheduledTaskUpdate),
+            METHOD_SCHEDULED_TASK_DELETE => Some(Self::ScheduledTaskDelete),
+            METHOD_SCHEDULED_TASK_ENABLED_SET => Some(Self::ScheduledTaskEnabledSet),
+            METHOD_SCHEDULED_TASK_RUN_START => Some(Self::ScheduledTaskRunStart),
+            METHOD_SCHEDULED_TASK_RUN_LIST => Some(Self::ScheduledTaskRunList),
+            METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW => Some(Self::ScheduledTaskSchedulePreview),
             METHOD_MCP_SERVER_LIST => Some(Self::McpServerList),
             METHOD_MCP_SERVER_STATUS_LIST => Some(Self::McpServerStatusList),
             METHOD_MCP_SERVER_CREATE => Some(Self::McpServerCreate),
@@ -1686,6 +1722,42 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_AUTOMATION_SCHEDULE_VALIDATE,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_SCHEDULED_TASK_LIST,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_SCHEDULED_TASK_READ,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_SCHEDULED_TASK_CREATE,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_SCHEDULED_TASK_UPDATE,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_SCHEDULED_TASK_DELETE,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_SCHEDULED_TASK_ENABLED_SET,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_SCHEDULED_TASK_RUN_START,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_SCHEDULED_TASK_RUN_LIST,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {

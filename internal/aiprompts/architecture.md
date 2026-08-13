@@ -1024,6 +1024,43 @@ compat fallback 或空壳 JSON-RPC。
 不得把 Desktop Host 的完整环境（尤其凭证变量）隐式继承给 MCP 子进程。启动 deadline
 严格使用配置的 `startup_timeout`，禁止按命令类型隐式放大。
 
+### 7.3 Scheduled Tasks
+
+已安排任务属于 App Server 调度领域，产品入口、协议、持久化和 Agent 执行沿单一主链：
+
+```text
+ScheduledTasksPage
+  -> Renderer scheduledTasks typed gateway
+  -> Electron Desktop Host / app_server_handle_json_lines
+  -> App Server scheduledTask/* processor
+  -> RuntimeCore
+  -> LocalAppDataSource automation owner
+       automation_jobs（当前唯一任务表）
+       agent_runs（运行历史）
+  -> RuntimeCore thread/session + turn submission
+  -> canonical Thread / Turn / Item projection
+  -> ScheduledTasksPage history / open conversation
+```
+
+公开 surface 为 `scheduledTask/list|read|create|update|delete`、`scheduledTask/enabled/set`、
+`scheduledTask/run/start|list` 与 `scheduledTask/schedule/preview`。Schedule wire 使用
+`hourly/daily/weekdays/weekly` 和 Codex weekday `MO..SU`；这是 Lime Desktop 的产品 CRUD 扩展，不能表述为 Codex
+Desktop 已存在同构实现。任务写入继续复用 `automation_jobs`，不得新增第二张长期任务表或 Renderer store；运行历史从
+`agent_runs.source_ref=taskId` 投影。`new_thread` 每次运行产生新 lineage，`continue_thread` 必须使用显式来源 lineage；
+运行返回真实 `sessionId/threadId/turnId` 后 GUI 才能恢复 canonical 对话。
+
+Electron 只负责 JSONL 转发和未来的系统通知宿主能力，不承接 scheduler、任务 CRUD、运行状态或 timer。Renderer timer、
+生产 mock backend/fallback、browser session automation 与 SceneApp automation context 均禁止成为 current owner。旧
+`automationJob/*`、`automationSchedule/*`、`automationScheduler/*` 及旧 Settings 工作台当前分类为
+`deprecated / migration-pending`；所有 consumer 迁移并物理删除前不得把双轨描述为已清零。scheduler 原子 claim、
+missed/catch-up、sleep/wake、DST、通知、软删除及并发运行合同仍是交付阻塞，按
+`internal/roadmap/task/scheduled-tasks/` 和对应执行计划收口。
+
+Architecture impact: major; this adds the Scheduled Tasks public JSON-RPC/read-model boundary and top-level GUI workspace while
+preserving Electron as transport host and RuntimeCore/ThreadStore as the execution truth. Architecture diagram updated: this
+section and `internal/aiprompts/commands.md#scheduled-tasks-主链`. Responsible developer confirmation: confirmed for the
+v1.127.0 release by root on 2026-08-13, covering directory ownership, data flow, dependency direction, protocol boundaries, and release gates.
+
 ## 8. 命令、配置与数据边界
 
 ### 8.1 Turn 请求字段归属

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "limit": {
+      "format": "uint",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "taskId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "taskId"
+  ],
+  "title": "ScheduledTaskRunListParams",
+  "type": "object"
+}

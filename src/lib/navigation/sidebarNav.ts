@@ -1,12 +1,10 @@
 import {
-  BadgeCheck,
   BookOpen,
   Boxes,
+  CalendarClock,
   MessageCircleMore,
   Plus,
   Settings,
-  Sparkles,
-  Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { CURRENT_SIDEBAR_NAV_SCHEMA_VERSION } from "@/lib/api/appConfigTypes";
@@ -52,19 +50,11 @@ const BASE_MAIN_SIDEBAR_NAV_ITEMS: SidebarNavItemDefinition[] = [
     configurable: false,
   },
   {
-    id: "experts",
-    label: "专家",
-    icon: BadgeCheck,
-    page: "experts",
-    isActive: (currentPage) => currentPage === "experts",
-    configurable: false,
-  },
-  {
-    id: "skills",
-    label: "Skills",
-    icon: Sparkles,
-    page: "skills",
-    isActive: (currentPage) => currentPage === "skills",
+    id: "automation",
+    label: "已安排任务",
+    icon: CalendarClock,
+    page: "automation",
+    isActive: (currentPage) => currentPage === "automation",
     configurable: false,
   },
   {
@@ -72,7 +62,10 @@ const BASE_MAIN_SIDEBAR_NAV_ITEMS: SidebarNavItemDefinition[] = [
     label: "插件",
     icon: Boxes,
     page: "plugins",
-    isActive: (currentPage) => currentPage === "plugins",
+    isActive: (currentPage) =>
+      currentPage === "plugins" ||
+      currentPage === "skills" ||
+      currentPage === "experts",
     configurable: false,
   },
 ];
@@ -102,14 +95,6 @@ export const FOOTER_SIDEBAR_NAV_ITEMS: SidebarNavItemDefinition[] = [
     icon: BookOpen,
     page: "knowledge",
     isActive: (currentPage) => currentPage === "knowledge",
-    configurable: false,
-  },
-  {
-    id: "automation",
-    label: "持续流程",
-    icon: Workflow,
-    page: "automation",
-    isActive: (currentPage) => currentPage === "automation",
     configurable: false,
   },
   {

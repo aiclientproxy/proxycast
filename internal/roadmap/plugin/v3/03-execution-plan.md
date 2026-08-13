@@ -20,6 +20,39 @@ domain、MCP/Skills、Renderer gateway、清理守卫不能在同一阶段由不
 | V3-5 | `complete` | processor/core plugin manager 与孤立 storage/error | 旧 manager/build hook/DAO/schema/error 已物理删除 |
 | V3-6 | `in-progress` | parity evidence、文档、guards、全量验证 | Windows runner evidence 与 baseline lint 收口后才能 complete |
 
+## 目录 UI 收敛（2026-08-13）
+
+- `complete`：侧栏的 `Skills`、`专家` 平级入口已移除，`插件` 成为唯一目录入口。
+- `complete`：`AppPageContent` 为既有 `plugins`、`skills`、`experts` 页面增加共享
+  `插件 / Skills / 专家` Tab 壳，三套业务页面与路由参数仍由原 owner 承接。
+- `complete`：侧栏 `插件` 在三个子页面均保持激活；Skills/专家 Tab 间切换保留当前项目
+  作用域，插件 Tab 不制造额外参数。
+- `complete`：共享 Tab 条显式越过 Electron 顶部拖拽层并声明 `no-drag`，避免真实桌面中
+  可见按钮被透明拖拽区域吞掉点击；其余顶部空白仍保留窗口拖拽能力。
+- 架构影响：非重大。未改变协议、Electron/App Server 边界、RuntimeCore 或 catalog owner，
+  因此无需修改全局架构图。
+- 验证退出条件：导航定义、稳定 DOM、Tab 切换、深链参数透传、五语言、lint/typecheck、
+  GUI smoke 均有结果；环境阻塞必须显式记录。
+
+### 目录 UI 验证记录
+
+- `2026-08-13`：定向 Vitest `4 files / 38 tests` 通过，覆盖共享 Tab 的 Electron
+  `no-drag` 边界、页面切换、侧栏激活态与导航定义；定向 ESLint、Prettier 和
+  `git diff --check` 通过。
+- `2026-08-13 / Gate A`：系统 Chrome browser mirror 中，三个 Tab 的中心点
+  `elementFromPoint` 均命中对应 `BUTTON`；计算样式为 `z-index: 1001`、
+  `-webkit-app-region: no-drag`。`插件 -> Skills -> 专家 -> 插件` 实际切换通过，
+  console/page error 为 `0`。该证据只证明 Renderer 投影和命中测试。
+- `2026-08-13 / Gate B`：使用隔离 `ELECTRON_E2E_USER_DATA_DIR` 与独立 CDP 端口连接
+  真实 Electron `http://127.0.0.1:1420/?nativeStartup=1`，确认
+  `window.__LIME_ELECTRON__ === true` 且 preload invoke 可用；三个 Tab 坐标均命中对应
+  `BUTTON`，三次实际点击切换成功，console/page error 为 `0`。
+- `2026-08-13 / GUI smoke`：修复后重新构建 Renderer/Desktop Host 并运行
+  `npm run verify:gui-smoke`，结果为 `pass`；renderer、App Server、Claw shell reload 与
+  memory settings 准备态均通过。
+- 全量前端 TypeScript 校验仍受当前工作树既有测试类型漂移阻塞，本切片文件未出现在错误
+  列表中；不得据此声称全量 TypeScript 已通过。Electron host typecheck 已随 GUI smoke 通过。
+
 ## 不可跳过的删除顺序
 
 ```text

@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "ScheduledTaskThreadMode": {
+      "enum": [
+        "continue_thread",
+        "new_thread"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "approvalPolicy": true,
+    "cwd": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "modelId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "projectId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "reasoningEffort": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "sandboxPolicy": true,
+    "sourceThreadId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "threadMode": {
+      "$ref": "#/$defs/ScheduledTaskThreadMode"
+    }
+  },
+  "required": [
+    "threadMode"
+  ],
+  "title": "ScheduledTaskExecution",
+  "type": "object"
+}

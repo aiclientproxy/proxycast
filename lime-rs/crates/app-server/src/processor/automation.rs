@@ -8,6 +8,133 @@ use app_server_protocol::{
 };
 
 impl RequestProcessor {
+    pub(super) async fn handle_scheduled_task_list_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: app_server_protocol::ScheduledTaskListParams = parse_params(params)?;
+        dispatch_result(
+            self.runtime
+                .list_scheduled_tasks(params)
+                .await
+                .map_err(to_jsonrpc_error)?,
+        )
+    }
+
+    pub(super) async fn handle_scheduled_task_read_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: app_server_protocol::ScheduledTaskIdParams = parse_params(params)?;
+        dispatch_result(
+            self.runtime
+                .read_scheduled_task(params)
+                .await
+                .map_err(to_jsonrpc_error)?,
+        )
+    }
+
+    pub(super) async fn handle_scheduled_task_create_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: app_server_protocol::ScheduledTaskCreateParams = parse_params(params)?;
+        dispatch_result(
+            self.runtime
+                .create_scheduled_task(params)
+                .await
+                .map_err(to_jsonrpc_error)?,
+        )
+    }
+
+    pub(super) async fn handle_scheduled_task_update_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: app_server_protocol::ScheduledTaskUpdateParams = parse_params(params)?;
+        dispatch_result(
+            self.runtime
+                .update_scheduled_task(params)
+                .await
+                .map_err(to_jsonrpc_error)?,
+        )
+    }
+
+    pub(super) async fn handle_scheduled_task_delete_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: app_server_protocol::ScheduledTaskIdParams = parse_params(params)?;
+        dispatch_result(
+            self.runtime
+                .delete_scheduled_task(params)
+                .await
+                .map_err(to_jsonrpc_error)?,
+        )
+    }
+
+    pub(super) async fn handle_scheduled_task_enabled_set_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: app_server_protocol::ScheduledTaskEnabledSetParams = parse_params(params)?;
+        dispatch_result(
+            self.runtime
+                .set_scheduled_task_enabled(params)
+                .await
+                .map_err(to_jsonrpc_error)?,
+        )
+    }
+
+    pub(super) async fn handle_scheduled_task_run_start_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: app_server_protocol::ScheduledTaskIdParams = parse_params(params)?;
+        let host = self.runtime_host_context();
+        dispatch_result(
+            self.runtime
+                .start_scheduled_task_run(params, host)
+                .await
+                .map_err(to_jsonrpc_error)?,
+        )
+    }
+
+    pub(super) async fn handle_scheduled_task_run_list_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: app_server_protocol::ScheduledTaskRunListParams = parse_params(params)?;
+        dispatch_result(
+            self.runtime
+                .list_scheduled_task_runs(params)
+                .await
+                .map_err(to_jsonrpc_error)?,
+        )
+    }
+
+    pub(super) async fn handle_scheduled_task_schedule_preview_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: app_server_protocol::ScheduledTaskSchedulePreviewParams = parse_params(params)?;
+        dispatch_result(
+            self.runtime
+                .preview_scheduled_task_schedule(params)
+                .await
+                .map_err(to_jsonrpc_error)?,
+        )
+    }
+
     pub(super) async fn handle_automation_job_list_impl(
         &self,
     ) -> Result<RpcDispatch, JsonRpcError> {

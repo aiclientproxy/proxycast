@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "enum": [
+    "FR",
+    "MO",
+    "SA",
+    "SU",
+    "TH",
+    "TU",
+    "WE"
+  ],
+  "title": "ScheduledTaskWeekday",
+  "type": "string"
+}

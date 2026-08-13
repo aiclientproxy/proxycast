@@ -4,6 +4,7 @@
 > 更新时间：2026-04-23
 > 作用：把 Lime 的“任务层与模型层分离、成本/限额沉底、OEM 与本地多模型协同、自动与设置平衡”收敛成一套可直接指导实现的专题路线图，而不是继续散落在聊天选择器、`service_models` 设置、OEM offer 与 runtime 局部逻辑里。
 > 依赖文档：
+>
 > - `internal/aiprompts/query-loop.md`
 > - `internal/aiprompts/task-agent-taxonomy.md`
 > - `internal/aiprompts/state-history-telemetry.md`
@@ -68,6 +69,10 @@
 9. [diagrams.md](./diagrams.md)
 10. [rollout-plan.md](./rollout-plan.md)
 11. [acceptance.md](./acceptance.md)
+
+## 4.1 子路线
+
+- [已安排任务产品化路线](./scheduled-tasks/README.md)：复刻桌面端“已安排任务”的创建、管理、运行与历史体验，并把现有 `automationJob/*`、`scheduler` 和 Agent Thread/Turn/Item 主链收敛为唯一实现 owner。
 
 ## 5. 文档分工
 

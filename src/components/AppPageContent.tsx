@@ -23,6 +23,7 @@ import type { AgentBackgroundSessionRuntimeSnapshot } from "./agent/chat";
 import { AutomationPage } from "./automation";
 import { ImConfigPage } from "./channels/ImConfigPage";
 import { SettingsPageV2 } from "./settings-v2";
+import { PluginWorkspaceTabs } from "@/features/plugin/ui/PluginWorkspaceTabs";
 
 const PageWrapper = styled.div<{ $isActive: boolean }>`
   flex: 1;
@@ -90,6 +91,43 @@ interface AppPageContentProps {
   ) => void;
 }
 
+type PluginWorkspacePage = Extract<Page, "plugins" | "skills" | "experts">;
+
+function resolvePluginWorkspaceProjectId(
+  activePage: PluginWorkspacePage,
+  pageParams: PageParams,
+): string | undefined {
+  if (activePage === "skills") {
+    return (pageParams as SkillsPageParams).creationProjectId;
+  }
+  if (activePage === "experts") {
+    const expertsPageParams = pageParams as ExpertsPageParams;
+    return expertsPageParams.currentProjectId ?? expertsPageParams.projectId;
+  }
+  return undefined;
+}
+
+function buildPluginWorkspacePageParams(
+  activePage: PluginWorkspacePage,
+  pageParams: PageParams,
+  targetPage: PluginWorkspacePage,
+): PageParams | undefined {
+  const projectId = resolvePluginWorkspaceProjectId(activePage, pageParams);
+  if (!projectId) {
+    return undefined;
+  }
+  if (targetPage === "skills") {
+    return { creationProjectId: projectId } satisfies SkillsPageParams;
+  }
+  if (targetPage === "experts") {
+    return {
+      currentProjectId: projectId,
+      projectId,
+    } satisfies ExpertsPageParams;
+  }
+  return undefined;
+}
+
 export function AppPageContent({
   currentPage,
   pageParams,
@@ -103,6 +141,16 @@ export function AppPageContent({
 }: AppPageContentProps) {
   const activePage = requestedPage ?? currentPage;
   const activePageParams = requestedPageParams ?? pageParams;
+  const handlePluginWorkspaceNavigate = (targetPage: PluginWorkspacePage) => {
+    onNavigate(
+      targetPage,
+      buildPluginWorkspacePageParams(
+        activePage as PluginWorkspacePage,
+        activePageParams,
+        targetPage,
+      ),
+    );
+  };
   const handleAgentSessionChange = useCallback(
     (sessionId: string | null) => {
       const normalizedSessionId = sessionId?.trim();
@@ -232,36 +280,43 @@ export function AppPageContent({
 
   if (activePage === "skills") {
     return (
-      <div style={columnPageStyle}>
+      <PluginWorkspaceTabs
+        activePage="skills"
+        onNavigate={handlePluginWorkspaceNavigate}
+      >
         <SkillsWorkspacePage
           onNavigate={onNavigate}
           pageParams={activePageParams as SkillsPageParams}
         />
-      </div>
+      </PluginWorkspaceTabs>
     );
   }
 
   if (activePage === "plugins") {
     return (
-      <div style={columnPageStyle}>
-        <PluginsPage
-          pageParams={activePageParams as PluginsPageParams}
-        />
-      </div>
+      <PluginWorkspaceTabs
+        activePage="plugins"
+        onNavigate={handlePluginWorkspaceNavigate}
+      >
+        <PluginsPage pageParams={activePageParams as PluginsPageParams} />
+      </PluginWorkspaceTabs>
     );
   }
 
   if (activePage === "experts") {
     const expertsPageParams = activePageParams as ExpertsPageParams;
     return (
-      <div style={columnPageStyle}>
+      <PluginWorkspaceTabs
+        activePage="experts"
+        onNavigate={handlePluginWorkspaceNavigate}
+      >
         <ExpertPlazaPage
           onNavigate={onNavigate}
           currentProjectId={
             expertsPageParams.currentProjectId ?? expertsPageParams.projectId
           }
         />
-      </div>
+      </PluginWorkspaceTabs>
     );
   }
 

@@ -592,6 +592,23 @@ impl RequestProcessor {
             METHOD_AUTOMATION_SCHEDULE_VALIDATE => self
                 .handle_automation_schedule_validate_impl(params)
                 .boxed(),
+            METHOD_SCHEDULED_TASK_LIST => self.handle_scheduled_task_list_impl(params).boxed(),
+            METHOD_SCHEDULED_TASK_READ => self.handle_scheduled_task_read_impl(params).boxed(),
+            METHOD_SCHEDULED_TASK_CREATE => self.handle_scheduled_task_create_impl(params).boxed(),
+            METHOD_SCHEDULED_TASK_UPDATE => self.handle_scheduled_task_update_impl(params).boxed(),
+            METHOD_SCHEDULED_TASK_DELETE => self.handle_scheduled_task_delete_impl(params).boxed(),
+            METHOD_SCHEDULED_TASK_ENABLED_SET => {
+                self.handle_scheduled_task_enabled_set_impl(params).boxed()
+            }
+            METHOD_SCHEDULED_TASK_RUN_START => {
+                self.handle_scheduled_task_run_start_impl(params).boxed()
+            }
+            METHOD_SCHEDULED_TASK_RUN_LIST => {
+                self.handle_scheduled_task_run_list_impl(params).boxed()
+            }
+            METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW => self
+                .handle_scheduled_task_schedule_preview_impl(params)
+                .boxed(),
             METHOD_MCP_SERVER_LIST => self.handle_mcp_server_list_impl().boxed(),
             METHOD_MCP_SERVER_STATUS_LIST => self.handle_mcp_server_status_list_impl().boxed(),
             METHOD_MCP_SERVER_CREATE => self.handle_mcp_server_create_impl(params).boxed(),

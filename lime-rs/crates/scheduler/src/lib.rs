@@ -43,12 +43,18 @@
 //! # }
 //! ```
 
+pub mod claim;
 pub mod dao;
 pub mod scheduler;
 #[cfg(test)]
 mod task_context;
 pub mod types;
 
+pub use claim::{
+    AutomationOwnedRun, AutomationRunRecovery, AutomationRunRecoveryKind,
+    AutomationRunScheduleRecovery, AutomationRunTerminal, AutomationWindowClaim,
+    AutomationWindowClaimDao,
+};
 pub use dao::SchedulerDao;
 pub use scheduler::{AgentScheduler, SchedulerGovernanceConfig, SchedulerTrait};
 pub use types::{

@@ -149,8 +149,8 @@ describe("AppSidebar preferences", () => {
       '[data-testid="app-sidebar-account-menu"]',
     );
     expect(accountMenu?.textContent).toContain("设置");
-    expect(accountMenu?.textContent).toContain("持续流程");
     expect(accountMenu?.textContent).toContain("消息渠道");
+    expect(accountMenu?.textContent).not.toContain("已安排任务");
     expect(accountMenu?.textContent).not.toContain("桌宠");
   });
 
@@ -191,8 +191,8 @@ describe("AppSidebar preferences", () => {
       '[data-testid="app-sidebar-account-menu"]',
     );
     expect(accountMenu?.textContent).toContain("设置");
-    expect(accountMenu?.textContent).toContain("持续流程");
     expect(accountMenu?.textContent).toContain("消息渠道");
+    expect(accountMenu?.textContent).not.toContain("已安排任务");
     expect(accountMenu?.textContent).not.toContain("桌宠");
 
     await act(async () => {
@@ -241,7 +241,28 @@ describe("AppSidebar preferences", () => {
     expect(accountMenu?.textContent).not.toContain("桌宠");
   });
 
-  it("点击当前已激活的Skills入口时不应重复导航", async () => {
+  it.each(["plugins", "skills", "experts"] as const)(
+    "插件入口在 %s 子页面应保持激活",
+    async (currentPage) => {
+      const container = mountSidebarContainer({ currentPage });
+      await flushEffects();
+
+      const button = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="插件"]',
+      );
+
+      expect(button).not.toBeNull();
+      expect(button?.getAttribute("aria-current")).toBe("page");
+      expect(
+        container.querySelector('[data-testid="app-sidebar-nav-skills"]'),
+      ).toBeNull();
+      expect(
+        container.querySelector('[data-testid="app-sidebar-nav-experts"]'),
+      ).toBeNull();
+    },
+  );
+
+  it("从 Skills 子页面点击侧栏插件入口应回到插件 Tab", async () => {
     const onNavigate = vi.fn();
     const container = mountSidebarContainer({
       currentPage: "skills",
@@ -249,9 +270,9 @@ describe("AppSidebar preferences", () => {
     });
     await flushEffects();
 
-    const button = container.querySelector(
-      'button[aria-label="Skills"]',
-    ) as HTMLButtonElement | null;
+    const button = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="插件"]',
+    );
 
     expect(button).not.toBeNull();
     expect(button?.getAttribute("aria-current")).toBe("page");
@@ -260,34 +281,7 @@ describe("AppSidebar preferences", () => {
       button?.click();
     });
 
-    expect(onNavigate).not.toHaveBeenCalled();
-  });
-
-  it("从全局 Skills 入口进入时应带上当前工作区，避免能力草案面板丢上下文", async () => {
-    const onNavigate = vi.fn();
-    localStorage.setItem("agent_last_project_id", JSON.stringify("project-1"));
-    const container = mountSidebarContainer({
-      currentPage: "agent",
-      currentPageParams: {
-        agentEntry: "new-task",
-      } as AgentPageParams,
-      onNavigate,
-    });
-    await flushEffects();
-
-    const button = container.querySelector(
-      'button[aria-label="Skills"]',
-    ) as HTMLButtonElement | null;
-
-    expect(button).not.toBeNull();
-
-    act(() => {
-      button?.click();
-    });
-
-    expect(onNavigate).toHaveBeenCalledWith("skills", {
-      creationProjectId: "project-1",
-    });
+    expect(onNavigate).toHaveBeenCalledWith("plugins", undefined);
   });
 
   it("旧的 enabled-items 本地缓存不应再复活历史导航", async () => {
