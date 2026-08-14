@@ -22,6 +22,7 @@ pub enum SkillSource {
     Project,
     User,
     App,
+    Orchestrator,
     Other,
 }
 
@@ -31,6 +32,7 @@ pub enum SkillAuthority {
     Workspace,
     User,
     Application,
+    Orchestrator,
     External,
 }
 

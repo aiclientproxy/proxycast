@@ -34,10 +34,6 @@ pub(in crate::runtime) struct CollectingRuntimeEventSink {
 }
 
 impl CollectingRuntimeEventSink {
-    fn emitted_count(&self) -> usize {
-        self.events.len() + self.preappended_events.len()
-    }
-
     fn has_turn_terminal_event(&self) -> bool {
         self.events
             .iter()
@@ -48,48 +44,8 @@ impl CollectingRuntimeEventSink {
         self.events
     }
 
-    fn into_parts(self) -> (Vec<RuntimeEvent>, Vec<AgentEvent>) {
-        (self.events, self.preappended_events)
-    }
-
     fn take_events(&mut self) -> Vec<RuntimeEvent> {
         std::mem::take(&mut self.events)
-    }
-
-    fn ensure_turn_accepted_event(&mut self) {
-        if self
-            .events
-            .iter()
-            .any(|event| event.event_type == "turn.accepted")
-            || !self.events.iter().any(|event| {
-                matches!(
-                    event.event_type.as_str(),
-                    "turn.started" | "turn.completed" | "turn.failed" | "turn.canceled"
-                )
-            })
-        {
-            return;
-        }
-        self.events.insert(
-            0,
-            RuntimeEvent::new(
-                "turn.accepted",
-                json!({
-                    "backend": "app_server",
-                    "source": "turn/start",
-                }),
-            ),
-        );
-    }
-
-    fn emit_failure(&mut self, error: &RuntimeCoreError) -> Result<(), RuntimeCoreError> {
-        self.emit(RuntimeEvent::new(
-            "turn.failed",
-            json!({
-                "message": error.to_string(),
-                "reason": error.turn_failure_reason(),
-            }),
-        ))
     }
 }
 
@@ -207,6 +163,7 @@ enum SessionLoopEvent {
     Runtime(RuntimeEvent),
     Transient(RuntimeEvent),
     Preappended(AgentEvent),
+    PreappendedById(String),
 }
 
 struct ChannelRuntimeEventSink {
@@ -308,6 +265,14 @@ impl RuntimeEventSink for ChannelRuntimeEventSink {
     fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
         self.sender
             .send(SessionLoopEvent::Transient(event))
+            .map_err(|_| {
+                RuntimeCoreError::Backend("runtime session event receiver closed".to_string())
+            })
+    }
+
+    fn emit_preappended_by_id(&mut self, event_id: &str) -> Result<(), RuntimeCoreError> {
+        self.sender
+            .send(SessionLoopEvent::PreappendedById(event_id.to_string()))
             .map_err(|_| {
                 RuntimeCoreError::Backend("runtime session event receiver closed".to_string())
             })
@@ -437,6 +402,7 @@ pub(in crate::runtime) struct AppendingRuntimeEventSink<'a> {
     trace_event_writer: Option<Arc<TraceEventWriter>>,
     projection_store: Option<Arc<ProjectionStore>>,
     session_loops: agent_runtime::session_loop::RuntimeSessionRegistry,
+    rollout_budget: Arc<super::rollout_budget::RolloutBudget>,
     session_id: String,
     thread_id: String,
     turn_id: String,
@@ -458,6 +424,7 @@ impl<'a> AppendingRuntimeEventSink<'a> {
         trace_event_writer: Option<Arc<TraceEventWriter>>,
         projection_store: Option<Arc<ProjectionStore>>,
         session_loops: agent_runtime::session_loop::RuntimeSessionRegistry,
+        rollout_budget: Arc<super::rollout_budget::RolloutBudget>,
         session_id: String,
         thread_id: String,
         turn_id: String,
@@ -479,6 +446,7 @@ impl<'a> AppendingRuntimeEventSink<'a> {
             trace_event_writer,
             projection_store,
             session_loops,
+            rollout_budget,
             session_id,
             thread_id,
             turn_id,
@@ -500,6 +468,7 @@ impl<'a> AppendingRuntimeEventSink<'a> {
         trace_event_writer: Option<Arc<TraceEventWriter>>,
         projection_store: Option<Arc<ProjectionStore>>,
         session_loops: agent_runtime::session_loop::RuntimeSessionRegistry,
+        rollout_budget: Arc<super::rollout_budget::RolloutBudget>,
         session_id: String,
         thread_id: String,
         turn_id: String,
@@ -521,6 +490,7 @@ impl<'a> AppendingRuntimeEventSink<'a> {
             trace_event_writer,
             projection_store,
             session_loops,
+            rollout_budget,
             session_id,
             thread_id,
             turn_id,
@@ -608,6 +578,13 @@ impl RuntimeEventSink for AppendingRuntimeEventSink<'_> {
     }
 
     fn emit_preappended(&mut self, event: AgentEvent) -> Result<(), RuntimeCoreError> {
+        if self
+            .events
+            .iter()
+            .any(|existing| existing.event_id == event.event_id)
+        {
+            return Ok(());
+        }
         let is_turn_started = event.event_type == "turn.started";
         self.target.publish(event.clone())?;
         self.events.push(event);
@@ -615,6 +592,28 @@ impl RuntimeEventSink for AppendingRuntimeEventSink<'_> {
             self.flush_deferred_hub_events()?;
         }
         Ok(())
+    }
+
+    fn emit_preappended_by_id(&mut self, event_id: &str) -> Result<(), RuntimeCoreError> {
+        let event = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .get(&self.session_id)
+            .and_then(|stored| {
+                stored
+                    .events
+                    .iter()
+                    .find(|candidate| candidate.event_id == event_id)
+            })
+            .cloned()
+            .ok_or_else(|| {
+                RuntimeCoreError::Backend(format!(
+                    "preappended runtime event not found: {event_id}"
+                ))
+            })?;
+        self.emit_preappended(event)
     }
 
     fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
@@ -651,14 +650,101 @@ impl AppendingRuntimeEventSink<'_> {
         )?;
         self.message_lifecycle = next_message_lifecycle;
         for event in events.drain(..) {
+            let budget_exhausted = if event.event_type == "provider.usage" {
+                let attempt = event
+                    .payload
+                    .get("attempt")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default() as u32;
+                let usage = event.payload.get("usage").and_then(|value| {
+                    serde_json::from_value::<lime_agent::AgentTokenUsage>(value.clone()).ok()
+                });
+                if let Some(usage) = usage {
+                    Some(self.rollout_budget_record(&event, attempt, &usage)?)
+                } else {
+                    None
+                }
+            } else if event.event_type == super::rollout_budget::ROLLOUT_BUDGET_REMINDER_EVENT_TYPE
+            {
+                let reminder = super::rollout_budget::RolloutBudgetReminder {
+                    remaining_tokens: event
+                        .payload
+                        .get("remainingTokens")
+                        .and_then(Value::as_i64)
+                        .unwrap_or_default(),
+                    reminder_index: event
+                        .payload
+                        .get("reminderIndex")
+                        .and_then(Value::as_u64)
+                        .unwrap_or_default() as usize,
+                };
+                let root_thread_id = self
+                    .projection_store
+                    .as_deref()
+                    .and_then(|store| {
+                        store
+                            .read_agent_identity_sync(agent_protocol::ThreadId::new(
+                                self.thread_id.clone(),
+                            ))
+                            .ok()
+                            .flatten()
+                            .map(|identity| identity.root_thread_id.to_string())
+                    })
+                    .unwrap_or_else(|| self.thread_id.clone());
+                if let Some(window_id) = event.payload.get("windowId").and_then(Value::as_str) {
+                    self.rollout_budget.mark_reminder_delivered(
+                        &root_thread_id,
+                        &self.thread_id,
+                        window_id,
+                        &reminder,
+                    );
+                }
+                None
+            } else {
+                None
+            };
             let is_turn_started = event.event_type == "turn.started";
             self.target.publish(event.clone())?;
             self.events.push(event);
             if is_turn_started {
                 self.flush_deferred_hub_events()?;
             }
+            if budget_exhausted == Some(true) {
+                return Err(RuntimeCoreError::RolloutBudgetExhausted);
+            }
         }
         Ok(())
+    }
+
+    fn rollout_budget_record(
+        &self,
+        event: &AgentEvent,
+        attempt: u32,
+        usage: &lime_agent::AgentTokenUsage,
+    ) -> Result<bool, RuntimeCoreError> {
+        let root_thread_id = self
+            .projection_store
+            .as_deref()
+            .and_then(|store| {
+                store
+                    .read_agent_identity_sync(agent_protocol::ThreadId::new(self.thread_id.clone()))
+                    .ok()
+                    .flatten()
+                    .map(|identity| identity.root_thread_id.to_string())
+            })
+            .unwrap_or_else(|| self.thread_id.clone());
+        self.rollout_budget.record_usage(
+            &root_thread_id,
+            &self.thread_id,
+            event.turn_id.as_deref().unwrap_or(&self.turn_id),
+            event
+                .payload
+                .get("routeAttempt")
+                .and_then(Value::as_u64)
+                .unwrap_or(1) as u32,
+            attempt,
+            usage,
+        )
     }
 
     fn observe_review_output(&mut self, event: &RuntimeEvent) {
@@ -944,6 +1030,19 @@ impl RuntimeCore {
         validate_user_input(&params.input).map_err(RuntimeCoreError::InvalidRequest)?;
 
         let thread_id = self.session_snapshot(&params.session_id)?.0.thread_id;
+        let root_thread_id = self
+            .projection_store
+            .as_deref()
+            .and_then(|store| {
+                store
+                    .read_agent_identity_sync(agent_protocol::ThreadId::new(thread_id.clone()))
+                    .ok()
+                    .flatten()
+                    .map(|identity| identity.root_thread_id.to_string())
+            })
+            .unwrap_or_else(|| thread_id.clone());
+        self.ensure_rollout_budget_hydrated(&root_thread_id, &params.session_id, &thread_id)?;
+        self.rollout_budget.check_admission(&root_thread_id)?;
         if let Some(settings) = self
             .reconcile_thread_model_selection_for_turn(&thread_id, params.runtime_options.as_ref())
             .await?
@@ -1122,6 +1221,12 @@ impl RuntimeCore {
             });
         }
 
+        // Reserve only when a new child turn is about to be admitted. Existing active
+        // turns and queued mailbox input must not consume another execution slot.
+        let agent_execution_guard = self
+            .reserve_agent_execution_slot(&params.session_id, &thread_id)
+            .await?;
+
         let mut provider_input = prepared_input.provider;
         provider_input.agent_only = input_kind.is_agent_only();
         let agent_only_input_event = match input_kind {
@@ -1234,6 +1339,22 @@ impl RuntimeCore {
             queue_if_busy: params.queue_if_busy,
             skip_pre_submit_resume: params.skip_pre_submit_resume,
             agent_control_gateway: None,
+            rollout_budget_reminder_source: Some(super::rollout_budget::sampling_reminder_source(
+                super::rollout_budget::SamplingReminderSourceOptions {
+                    state: self.state.clone(),
+                    file_checkpoint_snapshot_store: self.file_checkpoint_snapshot_store.clone(),
+                    output_snapshot_store: self.output_snapshot_store.clone(),
+                    sidecar_store: self.sidecar_store.clone(),
+                    event_log_writer: self.event_log_writer.clone(),
+                    trace_event_writer: self.trace_event_writer.clone(),
+                    projection_store: self.projection_store.clone(),
+                    budget: self.rollout_budget.clone(),
+                    root_thread_id: root_thread_id.clone(),
+                    session_id: session.session_id.clone(),
+                    thread_id: thread_id.clone(),
+                    turn_id: turn.turn_id.clone(),
+                },
+            )),
         };
         let effective_runtime_options = self
             .backend
@@ -1369,6 +1490,7 @@ impl RuntimeCore {
                 self.trace_event_writer.clone(),
                 self.projection_store.clone(),
                 self.session_loops.clone(),
+                self.rollout_budget.clone(),
                 session.session_id.clone(),
                 session.thread_id.clone(),
                 turn.turn_id.clone(),
@@ -1462,10 +1584,12 @@ impl RuntimeCore {
             let session_id = session.session_id.clone();
             let turn_id = turn.turn_id.clone();
             let previous_session_for_task = previous_session.clone();
+            let agent_execution_guard = agent_execution_guard;
             let goal_continuation_host = request_host.clone();
             let pending_work_host = request_host.clone();
             let pending_work_runtime_options = request.runtime_options.clone();
             tokio::spawn(async move {
+                let _agent_execution_guard = agent_execution_guard;
                 tokio::task::yield_now().await;
                 let mut sink = sink;
                 let drive_result = runtime
@@ -1539,6 +1663,7 @@ impl RuntimeCore {
                 self.trace_event_writer.clone(),
                 self.projection_store.clone(),
                 self.session_loops.clone(),
+                self.rollout_budget.clone(),
                 session.session_id.clone(),
                 session.thread_id.clone(),
                 turn.turn_id.clone(),
@@ -1599,10 +1724,32 @@ impl RuntimeCore {
             let events = sink.into_events();
             events
         } else {
-            let mut sink = CollectingRuntimeEventSink::default();
+            let mut ignore_event = |_event: AgentEvent| Ok(());
+            let mut sink = AppendingRuntimeEventSink::new(
+                self.state.clone(),
+                self.file_checkpoint_snapshot_store.clone(),
+                self.output_snapshot_store.clone(),
+                self.sidecar_store.clone(),
+                self.event_log_writer.clone(),
+                self.trace_event_writer.clone(),
+                self.projection_store.clone(),
+                self.session_loops.clone(),
+                self.rollout_budget.clone(),
+                session.session_id.clone(),
+                session.thread_id.clone(),
+                turn.turn_id.clone(),
+                &mut ignore_event,
+            );
             if let Some(event) = agent_only_input_event {
                 sink.emit(event)?;
             }
+            sink.emit(RuntimeEvent::new(
+                "turn.accepted",
+                json!({
+                    "backend": "app_server",
+                    "source": "turn/start",
+                }),
+            ))?;
             if let Some(event) = super::expert_role_switch::runtime_event_from_request_metadata(
                 request.runtime_metadata(),
             ) {
@@ -1629,22 +1776,7 @@ impl RuntimeCore {
                 .await
             {
                 if sink.emitted_count() > 0 {
-                    sink.ensure_turn_accepted_event();
                     sink.emit_failure(&error)?;
-                    let (runtime_events, _) = sink.into_parts();
-                    if let Err(append_error) = self.append_runtime_events(
-                        &session.session_id,
-                        &session.thread_id,
-                        Some(&turn.turn_id),
-                        runtime_events,
-                    ) {
-                        self.rollback_started_turn(
-                            &session.session_id,
-                            &turn.turn_id,
-                            previous_session,
-                        );
-                        return Err(append_error);
-                    }
                     self.wake_pending_session_work_if_turn_terminal(
                         &session.session_id,
                         &turn.turn_id,
@@ -1660,27 +1792,7 @@ impl RuntimeCore {
                 }
                 return Err(error);
             }
-            sink.ensure_turn_accepted_event();
-            let (runtime_events, preappended_events) = sink.into_parts();
-            match self.append_runtime_events(
-                &session.session_id,
-                &session.thread_id,
-                Some(&turn.turn_id),
-                runtime_events,
-            ) {
-                Ok(mut backend_events) => {
-                    backend_events.extend(preappended_events);
-                    backend_events
-                }
-                Err(error) => {
-                    self.rollback_started_turn(
-                        &session.session_id,
-                        &turn.turn_id,
-                        previous_session,
-                    );
-                    return Err(error);
-                }
-            }
+            sink.into_events()
         };
         let mut events = pre_turn_events;
         events.extend(backend_events);
@@ -2000,6 +2112,9 @@ impl RuntimeCore {
                             SessionLoopEvent::Runtime(event) => sink.emit(event),
                             SessionLoopEvent::Transient(event) => sink.emit_transient(event),
                             SessionLoopEvent::Preappended(event) => sink.emit_preappended(event),
+                            SessionLoopEvent::PreappendedById(event_id) => {
+                                sink.emit_preappended_by_id(&event_id)
+                            }
                         };
                         if let Err(error) = result {
                             let _ = session.interrupt_for_turn(Some(&turn_id)).await;
@@ -2013,6 +2128,9 @@ impl RuntimeCore {
                             SessionLoopEvent::Runtime(event) => sink.emit(event)?,
                             SessionLoopEvent::Transient(event) => sink.emit_transient(event)?,
                             SessionLoopEvent::Preappended(event) => sink.emit_preappended(event)?,
+                            SessionLoopEvent::PreappendedById(event_id) => {
+                                sink.emit_preappended_by_id(&event_id)?
+                            }
                         }
                     }
                     let outcome = result.map_err(|_| {
@@ -2771,7 +2889,7 @@ impl RuntimeCore {
         turn_id: Option<&str>,
         runtime_events: Vec<RuntimeEvent>,
     ) -> Result<Vec<AgentEvent>, RuntimeCoreError> {
-        append_runtime_events_to_state(
+        let events = append_runtime_events_to_state(
             &self.state,
             self.file_checkpoint_snapshot_store.as_ref(),
             self.output_snapshot_store.as_ref(),
@@ -2784,6 +2902,159 @@ impl RuntimeCore {
             thread_id,
             turn_id,
             runtime_events,
+        )?;
+        self.record_rollout_budget_events(thread_id, turn_id, &events)?;
+        Ok(events)
+    }
+}
+
+impl RuntimeCore {
+    fn record_rollout_budget_events(
+        &self,
+        thread_id: &str,
+        fallback_turn_id: Option<&str>,
+        events: &[AgentEvent],
+    ) -> Result<(), RuntimeCoreError> {
+        if !self.rollout_budget.enabled() {
+            return Ok(());
+        }
+        let root_thread_id = self
+            .projection_store
+            .as_deref()
+            .and_then(|store| {
+                store
+                    .read_agent_identity_sync(agent_protocol::ThreadId::new(thread_id))
+                    .ok()
+                    .flatten()
+                    .map(|identity| identity.root_thread_id.to_string())
+            })
+            .unwrap_or_else(|| thread_id.to_string());
+        for event in events {
+            match event.event_type.as_str() {
+                "provider.usage" => {
+                    let Some(usage) = event.payload.get("usage") else {
+                        continue;
+                    };
+                    let usage =
+                        serde_json::from_value::<lime_agent::AgentTokenUsage>(usage.clone())
+                            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+                    let attempt = event
+                        .payload
+                        .get("attempt")
+                        .and_then(Value::as_u64)
+                        .unwrap_or_default() as u32;
+                    if self.rollout_budget.record_usage(
+                        &root_thread_id,
+                        thread_id,
+                        event
+                            .turn_id
+                            .as_deref()
+                            .or(fallback_turn_id)
+                            .unwrap_or_default(),
+                        event
+                            .payload
+                            .get("routeAttempt")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(1) as u32,
+                        attempt,
+                        &usage,
+                    )? {
+                        return Err(RuntimeCoreError::RolloutBudgetExhausted);
+                    }
+                }
+                super::rollout_budget::ROLLOUT_BUDGET_REMINDER_EVENT_TYPE => {
+                    let Some(window_id) = event.payload.get("windowId").and_then(Value::as_str)
+                    else {
+                        continue;
+                    };
+                    let Some(reminder_index) = event
+                        .payload
+                        .get("reminderIndex")
+                        .and_then(Value::as_u64)
+                        .and_then(|value| usize::try_from(value).ok())
+                    else {
+                        continue;
+                    };
+                    self.rollout_budget.mark_reminder_delivered(
+                        &root_thread_id,
+                        thread_id,
+                        window_id,
+                        &super::rollout_budget::RolloutBudgetReminder {
+                            remaining_tokens: event
+                                .payload
+                                .get("remainingTokens")
+                                .and_then(Value::as_i64)
+                                .unwrap_or_default(),
+                            reminder_index,
+                        },
+                    );
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn ensure_rollout_budget_hydrated(
+        &self,
+        root_thread_id: &str,
+        current_session_id: &str,
+        current_thread_id: &str,
+    ) -> Result<(), RuntimeCoreError> {
+        if !self.rollout_budget.needs_hydration(root_thread_id) {
+            return Ok(());
+        }
+
+        let mut thread_sessions = std::collections::BTreeMap::from([(
+            current_thread_id.to_string(),
+            current_session_id.to_string(),
+        )]);
+        if let Some(store) = self.projection_store.as_deref() {
+            let identities = store
+                .list_agent_identities_sync(agent_protocol::ThreadId::new(root_thread_id))
+                .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+            for identity in identities {
+                if let Some(thread) = store
+                    .read_thread_sync(ReadThreadParams {
+                        thread_id: identity.thread_id,
+                        include_archived: true,
+                        turns_view: ThreadTurnsView::NotLoaded,
+                    })
+                    .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?
+                {
+                    thread_sessions
+                        .insert(thread.thread_id.to_string(), thread.session_id.to_string());
+                }
+            }
+        }
+
+        let mut histories = Vec::with_capacity(thread_sessions.len());
+        for (thread_id, session_id) in thread_sessions {
+            let events = if let Some(event_log_writer) = self.event_log_writer.as_deref() {
+                event_log_writer
+                    .read_session_events(&session_id)
+                    .map_err(RuntimeCoreError::Backend)?
+                    .into_iter()
+                    .map(|record| record.event)
+                    .collect()
+            } else {
+                let state = self
+                    .state
+                    .lock()
+                    .expect("runtime core state mutex poisoned");
+                state
+                    .sessions
+                    .get(&session_id)
+                    .map(|stored| stored.events.clone())
+                    .unwrap_or_default()
+            };
+            histories.push((thread_id, events));
+        }
+        self.rollout_budget.restore_root(
+            root_thread_id,
+            histories
+                .iter()
+                .map(|(thread_id, events)| (thread_id.as_str(), events.as_slice())),
         )
     }
 }

@@ -423,6 +423,11 @@ impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
                 &self.deferred_tools,
             )
             .await;
+            let mcp_snapshot = if orchestrator_mcp_enabled(self.turn_context.as_ref()) {
+                mcp_snapshot
+            } else {
+                mcp_snapshot.without_server(lime_skills::APPS_MCP_SERVER_NAME)
+            };
             self.mcp_tool_routes.replace_from_snapshot(&mcp_snapshot);
             let (definitions, dynamic_routes) = tool_definitions(
                 &self.state,
@@ -508,6 +513,21 @@ impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
             Ok(snapshot.with_code_mode_session(session, nested_tools))
         })
     }
+}
+
+fn orchestrator_mcp_enabled(
+    turn_context: Option<&agent_protocol::turn_context::TurnContextOverride>,
+) -> bool {
+    let Some(config) = turn_context.and_then(|context| context.metadata.get("config")) else {
+        return true;
+    };
+    if config.pointer("/orchestrator/loadError").is_some() {
+        return false;
+    }
+    config
+        .pointer("/orchestrator/mcp/enabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(true)
 }
 
 #[cfg(test)]

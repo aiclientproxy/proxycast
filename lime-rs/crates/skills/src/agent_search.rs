@@ -296,6 +296,7 @@ fn scope_priority(scope: AgentSkillScope) -> u8 {
         AgentSkillScope::Project => 3,
         AgentSkillScope::User => 2,
         AgentSkillScope::App => 1,
+        AgentSkillScope::Orchestrator => 1,
         AgentSkillScope::Other => 0,
     }
 }

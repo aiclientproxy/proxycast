@@ -51,7 +51,8 @@ export async function launchExpertSkillsRuntimeFromExpertPlaza(page, options) {
   const startedAt = Date.now();
   let lastSnapshot = null;
 
-  await page.locator('[data-testid="app-sidebar-nav-experts"]').click();
+  await page.locator('[data-testid="app-sidebar-nav-plugins"]').click();
+  await page.locator('[data-testid="plugin-workspace-tab-experts"]').click();
 
   while (Date.now() - startedAt < options.timeoutMs) {
     const snapshot = await evaluatePageSnapshot(
@@ -298,12 +299,11 @@ async function clickExpertSkillPickerTrigger(page) {
         '[data-testid="expert-info-skills-runtime-action-skill-code-review"]',
       );
       const addButtons = Array.from(
-        panel?.querySelectorAll('[data-testid="expert-info-skills-add"]') ??
-          [],
+        panel?.querySelectorAll('[data-testid="expert-info-skills-add"]') ?? [],
       );
       const candidates = [mappingAction, ...addButtons].filter(Boolean);
-      const button = candidates.find((candidate) =>
-        visibleElementSnapshot(candidate).visible,
+      const button = candidates.find(
+        (candidate) => visibleElementSnapshot(candidate).visible,
       );
       if (!(button instanceof HTMLElement)) {
         return {
@@ -413,8 +413,9 @@ async function waitForExpertSkillPickerState(
           `[data-testid="${addTestId}"]`,
         );
         const candidateTestIds = Array.from(
-          dialog?.querySelectorAll('[data-testid^="expert-skill-candidate-"]') ??
-            [],
+          dialog?.querySelectorAll(
+            '[data-testid^="expert-skill-candidate-"]',
+          ) ?? [],
         )
           .map((element) => element.getAttribute("data-testid") || "")
           .filter(Boolean);
@@ -660,11 +661,11 @@ async function clickHarnessToggleForEvidenceExport(page, label, options) {
       return {
         visible: Boolean(
           element &&
-            rect &&
-            rect.width > 8 &&
-            rect.height > 8 &&
-            style?.visibility !== "hidden" &&
-            style?.display !== "none",
+          rect &&
+          rect.width > 8 &&
+          rect.height > 8 &&
+          style?.visibility !== "hidden" &&
+          style?.display !== "none",
         ),
         label:
           element?.getAttribute?.("aria-label") ||
@@ -679,9 +680,7 @@ async function clickHarnessToggleForEvidenceExport(page, label, options) {
         return buttonSnapshot.visible && match(buttonSnapshot.label);
       });
     const harnessToggle = findVisibleButtonByLabel((buttonLabel) =>
-      /打开\s*Harness|关闭\s*Harness|\bHarness\b|处理工作台/i.test(
-        buttonLabel,
-      ),
+      /打开\s*Harness|关闭\s*Harness|\bHarness\b|处理工作台/i.test(buttonLabel),
     );
     if (harnessToggle instanceof HTMLElement) {
       const fallbackLabel = visibleElementSnapshot(harnessToggle).label;

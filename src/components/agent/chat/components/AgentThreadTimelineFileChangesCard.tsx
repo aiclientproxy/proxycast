@@ -4,11 +4,12 @@ import {
   readAgentRuntimeTimelineArtifactContent,
   type AgentRuntimeTimelineArtifactContent,
 } from "@/lib/api/agentRuntime/appServerArtifactClient";
-import type {
-  FileChangeDiffLine,
-  FileChangeKind,
-  FileChangesAggregate,
-  FileChangeSummary,
+import {
+  aggregateFileChangeSummaries,
+  type FileChangeDiffLine,
+  type FileChangeKind,
+  type FileChangesAggregate,
+  type FileChangeSummary,
 } from "../utils/fileChangeSummary";
 import type { AgentThreadItem } from "../types";
 import { buildTimelinePatchContentPart } from "./messageListTimelineContentPartBuilders";
@@ -205,13 +206,7 @@ function buildFileChangeSummaries(
 }
 
 function buildAggregate(items: FileChangeEvidenceItem[]): FileChangesAggregate {
-  const files = items.flatMap(buildFileChangeSummaries);
-  return {
-    files,
-    totalAdded: files.reduce((total, file) => total + file.linesAdded, 0),
-    totalRemoved: files.reduce((total, file) => total + file.linesRemoved, 0),
-    fileCount: files.length,
-  };
+  return aggregateFileChangeSummaries(items.flatMap(buildFileChangeSummaries));
 }
 
 function resolvePatchFilePath(item: PatchItem): string {

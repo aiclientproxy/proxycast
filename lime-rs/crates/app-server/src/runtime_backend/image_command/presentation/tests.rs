@@ -57,6 +57,7 @@ fn request_for_presentation_test(
         queue_if_busy: false,
         skip_pre_submit_resume: false,
         agent_control_gateway: None,
+        rollout_budget_reminder_source: None,
     }
 }
 

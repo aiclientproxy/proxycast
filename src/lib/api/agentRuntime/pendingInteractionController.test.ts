@@ -195,6 +195,64 @@ describe("PendingInteractionController", () => {
     harness.detach();
   });
 
+  it("managed-network approval 保留 typed context 并生成统一网络事实", async () => {
+    const harness = createHarness();
+    const response = harness.dispatch(
+      METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
+      {
+        approvalId: "approval-network-1",
+        availableDecisions: ["accept", "decline"],
+        itemId: "item-command-network-1",
+        networkApprovalContext: {
+          host: "127.0.0.1",
+          protocol: "http",
+        },
+        reason: "network access requires approval",
+        startedAtMs: 2,
+        threadId: "thread-1",
+        turnId: "turn-network-1",
+      } satisfies CommandExecutionRequestApprovalParams,
+      "electron-action:network-secret-token",
+    );
+    const [interaction] = harness.controller.getSnapshot();
+
+    expect(interaction).toMatchObject({
+      kind: "approval",
+      payload: {
+        request: {
+          requestId: "approval-network-1",
+          actionType: "tool_confirmation",
+          toolName: "exec_command",
+          arguments: {
+            networkApprovalContext: {
+              host: "127.0.0.1",
+              protocol: "http",
+            },
+            network_approval: {
+              host: "127.0.0.1",
+              protocol: "http",
+            },
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(interaction)).not.toContain("electron-action:");
+
+    expect(
+      harness.controller.respond({
+        interactionId: interaction.id,
+        kind: "approval",
+        response: {
+          requestId: "approval-network-1",
+          actionType: "tool_confirmation",
+          decision: "allow_once",
+        },
+      }),
+    ).toEqual({ accepted: true });
+    await expect(response).resolves.toEqual({ decision: "accept" });
+    harness.detach();
+  });
+
   it("requestUserInput 通过同一 projection 按 question id 结构化回包", async () => {
     const harness = createHarness();
     const response = harness.dispatch(

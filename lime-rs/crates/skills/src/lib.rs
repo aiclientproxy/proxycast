@@ -13,6 +13,7 @@ mod agent_snapshot;
 mod execution_callback;
 mod lime_llm_provider;
 mod llm_provider;
+mod orchestrator;
 mod run;
 mod skill_loader;
 mod skill_matcher;
@@ -58,6 +59,12 @@ pub use execution_callback::{
 };
 pub use lime_llm_provider::LimeLlmProvider;
 pub use llm_provider::{LlmProvider, SkillError};
+pub use orchestrator::{
+    discover_orchestrator_skills, read_orchestrator_skill_resource,
+    resource_belongs_to_orchestrator_package, OrchestratorSkillDiscovery,
+    OrchestratorSkillResource, OrchestratorSkillResourceContent, OrchestratorSkillResourceGateway,
+    OrchestratorSkillResourcePage, APPS_MCP_SERVER_NAME,
+};
 pub use run::{
     interpolate_variables, requires_turn_runtime, SkillRunResult, SkillRunner, SkillStepResult,
 };

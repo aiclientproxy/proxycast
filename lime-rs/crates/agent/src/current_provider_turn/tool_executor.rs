@@ -1,40 +1,28 @@
 //! 当前 provider sampling step 的工具执行适配器。
 
 use super::{is_web_tool, mcp_step_snapshot};
-use crate::agent_tools::execution::{
-    decide_tool_execution, persisted_tool_execution_policy_from_metadata, ToolExecutionDecision,
-    ToolExecutionDecisionInput, ToolExecutionDecisionKind, ToolExecutionResolverInput,
-};
 use crate::guardian_review;
 use crate::protocol::{AgentEvent, AgentToolProgressPayload};
-use crate::request_tool_policy::{is_same_tool, RequestToolPolicy};
+use crate::request_tool_policy::RequestToolPolicy;
 use crate::runtime_state::{AgentRuntimeState, EffectivePermissionGrant};
-use agent_protocol::action_required::{tool_confirmation_action, ActionRequiredProjection};
 use agent_protocol::ThreadId;
-use agent_runtime::action_required::ActionRequiredRequest;
-use agent_runtime::session_loop::{RuntimeSessionInputHandle, RuntimeSessionResponseKind};
+use agent_runtime::session_loop::RuntimeSessionInputHandle;
 use futures::StreamExt;
-use rmcp::model::{CallToolRequestParam, CallToolResult, ErrorData, ServerNotification};
+use rmcp::model::{CallToolResult, ErrorData, ServerNotification};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
-use tool_runtime::gateway_dispatch_execution::{
-    execute_runtime_gateway_dispatch_tool, RuntimeGatewayDispatchToolRequest,
-};
-use tool_runtime::native_dispatch_execution::{
-    execute_runtime_native_dispatch_tool, RuntimeNativeDispatchToolRequest,
-};
 use tool_runtime::tool_executor::{
     RuntimeToolExecutionError, RuntimeToolExecutionFuture, RuntimeToolExecutionRequest,
     RuntimeToolExecutionResult, RuntimeToolExecutor, RuntimeToolPolicyErrorKind,
-    TOOL_APPROVAL_GRANTED_METADATA_KEY,
 };
 
-const TOOL_CONFIRMATION_TIMEOUT: Duration = Duration::from_secs(300);
 const GRANTED_PERMISSIONS_METADATA_KEY: &str = "grantedPermissions";
 const STRICT_AUTO_REVIEW_METADATA_KEY: &str = "strictAutoReview";
+
+mod orchestration;
 
 #[derive(Clone)]
 pub(super) struct CurrentTurnToolExecutor {
@@ -272,185 +260,7 @@ impl RuntimeToolExecutor for CurrentTurnToolExecutor {
                 ..request
             };
 
-            let decision = current_tool_execution_decision(request);
-            match decision.kind {
-                ToolExecutionDecisionKind::Allow => {}
-                ToolExecutionDecisionKind::RequiresApproval => {
-                    if decision.reason_code == "strict_auto_review" {
-                        run_guardian_tool_review(
-                            &self.state,
-                            &self.event_sender,
-                            request,
-                            &self.thread_id,
-                        )
-                        .await
-                        .map_err(RuntimeToolExecutionError::before_handler)?;
-                    } else {
-                        wait_for_tool_approval(
-                            &self.state,
-                            &self.event_sender,
-                            request,
-                            &self.thread_id,
-                            self.pending_input.as_ref(),
-                            &decision,
-                        )
-                        .await
-                        .map_err(RuntimeToolExecutionError::before_handler)?;
-                    }
-                }
-                ToolExecutionDecisionKind::Deny => {
-                    return Err(RuntimeToolExecutionError::new(
-                        decision.reason,
-                        Some(RuntimeToolPolicyErrorKind::PermissionDenied(
-                            decision.reason_code,
-                        )),
-                    )
-                    .before_handler());
-                }
-                ToolExecutionDecisionKind::SandboxBlocked => {
-                    return Err(RuntimeToolExecutionError::new(
-                        decision.reason,
-                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
-                            decision.reason_code,
-                        )),
-                    )
-                    .before_handler());
-                }
-            }
-
-            let mut approved_turn_context = request.turn_context.cloned();
-            if decision.kind == ToolExecutionDecisionKind::RequiresApproval {
-                approved_turn_context
-                    .get_or_insert_with(Default::default)
-                    .metadata
-                    .insert(
-                        TOOL_APPROVAL_GRANTED_METADATA_KEY.to_string(),
-                        Value::Bool(true),
-                    );
-            }
-            let request = RuntimeToolExecutionRequest {
-                turn_context: approved_turn_context.as_ref().or(request.turn_context),
-                ..request
-            };
-
-            if tool_runtime::unified_exec::is_unified_exec_tool_name(request.tool_name) {
-                let identity = request.context.tool_identity().ok_or_else(|| {
-                    RuntimeToolExecutionError::new(
-                        "unified exec requires canonical tool identity",
-                        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
-                            "unified_exec_identity_missing".to_string(),
-                        )),
-                    )
-                    .before_handler()
-                })?;
-                let gateway = self
-                    .state
-                    .live_execution_process_gateway()
-                    .await
-                    .ok_or_else(|| {
-                        RuntimeToolExecutionError::new(
-                            "unified exec process gateway is unavailable",
-                            Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
-                                "unified_exec_gateway_unavailable".to_string(),
-                            )),
-                        )
-                        .before_handler()
-                    })?;
-                return tool_runtime::unified_exec::execute_runtime_unified_exec_tool(
-                    gateway,
-                    tool_runtime::unified_exec::RuntimeUnifiedExecToolRequest {
-                        tool_name: request.tool_name,
-                        params: request.params,
-                        thread_id: self.thread_id.as_str(),
-                        working_directory: request.context.working_directory().clone(),
-                        environment: request.context.environment().clone(),
-                        tool_call_id: identity.call_id().to_string(),
-                        cancel_token: request.context.cancel_token().cloned(),
-                        turn_context: request.turn_context,
-                        granted_permissions: if permission_grant.permissions.network.is_some()
-                            || permission_grant.permissions.file_system.is_some()
-                        {
-                            Some(permission_grant.permissions)
-                        } else {
-                            None
-                        },
-                    },
-                )
-                .await;
-            }
-
-            if let Some(agent_control_gateway) = self.agent_control_gateway.as_ref() {
-                if let Some(result) = tool_runtime::agent_control::execute_agent_control_tool(
-                    agent_control_gateway.gateway(),
-                    self.thread_id.as_str(),
-                    request,
-                )
-                .await
-                {
-                    return result;
-                }
-            }
-
-            if let Some(mut result) = execute_runtime_gateway_dispatch_tool(
-                self.state.gateway_tools(),
-                RuntimeGatewayDispatchToolRequest {
-                    tool_name: request.tool_name,
-                    params: request.params,
-                    working_directory: request.context.working_directory().clone(),
-                    session_id: request.context.session_id().to_string(),
-                    cancel_token: request.context.cancel_token().cloned(),
-                    turn_context: request.turn_context,
-                },
-            )
-            .await
-            {
-                if is_same_tool(
-                    request.tool_name,
-                    tool_runtime::tool_search::TOOL_SEARCH_TOOL_NAME,
-                ) {
-                    if let Ok(result) = &mut result {
-                        self.deferred_tools
-                            .activate_from_tool_search_result(result)
-                            .await;
-                    }
-                }
-                return project_runtime_dispatch_result(result);
-            }
-
-            if let Some(result) =
-                execute_runtime_native_dispatch_tool(RuntimeNativeDispatchToolRequest {
-                    tool_name: request.tool_name,
-                    params: request.params,
-                    working_directory: request.context.working_directory().clone(),
-                    session_id: request.context.session_id().to_string(),
-                    cancel_token: request.context.cancel_token().cloned(),
-                    turn_context: request.turn_context,
-                })
-                .await
-            {
-                return project_runtime_dispatch_result(result);
-            }
-
-            let cancel_token = request_cancel_token(request.context.cancel_token());
-            let mcp_request = CallToolRequestParam {
-                name: request.tool_name.to_string().into(),
-                arguments: request.params.as_object().cloned(),
-            };
-            let mcp_scope =
-                mcp_call_scope(request).map_err(RuntimeToolExecutionError::before_handler)?;
-            let tool_id =
-                mcp_tool_id(request).map_err(RuntimeToolExecutionError::before_handler)?;
-            let mcp_route = self
-                .mcp_snapshot
-                .route_identity(request.tool_name)
-                .ok_or_else(|| mcp_identity_error("route identity"))
-                .map_err(RuntimeToolExecutionError::before_handler)?;
-            let call = self
-                .mcp_snapshot
-                .dispatch(mcp_request, mcp_scope, cancel_token)
-                .await
-                .map_err(|error| project_mcp_error(error).before_handler())?;
-            await_mcp_call(&self.event_sender, &tool_id, &mcp_route, call).await
+            orchestration::orchestrate_current_tool_execution(self, request, permission_grant).await
         })
     }
 }
@@ -724,188 +534,6 @@ fn mcp_identity_error(field: &str) -> RuntimeToolExecutionError {
     )
 }
 
-fn current_tool_execution_decision(
-    request: RuntimeToolExecutionRequest<'_>,
-) -> crate::agent_tools::execution::ToolExecutionDecision {
-    let request_metadata = request
-        .turn_context
-        .map(|context| serde_json::to_value(&context.metadata).unwrap_or(Value::Null));
-    let persisted_policy = persisted_tool_execution_policy_from_metadata(request_metadata.as_ref());
-    let mut decision = decide_tool_execution(ToolExecutionDecisionInput {
-        tool_name: request.tool_name,
-        params: request.params,
-        working_directory: request.context.working_directory(),
-        surface: "current_provider_turn",
-        auto_mode: false,
-        bypass_restrictions: false,
-        approval_policy: request
-            .turn_context
-            .and_then(|context| context.approval_policy.as_deref()),
-        requested_sandbox_policy: request
-            .turn_context
-            .and_then(|context| context.sandbox_policy.as_deref()),
-        resolver_input: ToolExecutionResolverInput {
-            persisted_policy: persisted_policy.as_ref(),
-            request_metadata: request_metadata.as_ref(),
-        },
-    });
-    let strict_auto_review = request
-        .turn_context
-        .and_then(|context| context.metadata.get(STRICT_AUTO_REVIEW_METADATA_KEY))
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    if strict_auto_review
-        && decision.kind == ToolExecutionDecisionKind::Allow
-        && tool_runtime::shell::is_shell_tool_name(request.tool_name)
-    {
-        decision.kind = ToolExecutionDecisionKind::RequiresApproval;
-        decision.reason_code = "strict_auto_review".to_string();
-        decision.reason = "permission grant requires review before shell execution".to_string();
-        decision
-            .metadata
-            .insert("strictAutoReview".to_string(), Value::Bool(true));
-    }
-    decision
-}
-
-async fn wait_for_tool_approval(
-    state: &AgentRuntimeState,
-    event_sender: &UnboundedSender<AgentEvent>,
-    request: RuntimeToolExecutionRequest<'_>,
-    thread_id: &ThreadId,
-    pending_input: Option<&RuntimeSessionInputHandle>,
-    decision: &ToolExecutionDecision,
-) -> Result<(), RuntimeToolExecutionError> {
-    let response_handle = pending_input.cloned().ok_or_else(|| {
-        RuntimeToolExecutionError::new(
-            "tool approval requires the active session response owner",
-            Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
-                "session_response_owner_missing".to_string(),
-            )),
-        )
-    })?;
-    let (scope, tool_call_id) = action_scope(request, thread_id)?;
-    let tool_name = request.tool_name.to_string();
-    let arguments = request.params.clone();
-    let prompt = decision.reason.clone();
-    let approval = tool_runtime::execution_approval::execution_approval_projection(
-        request.tool_name,
-        &decision.metadata,
-    );
-    let response = state
-        .action_required_state()
-        .request_action_and_wait_with_notification(
-            response_handle,
-            RuntimeSessionResponseKind::Approval,
-            agent_protocol::action_required::TOOL_CONFIRMATION_ACTION_TYPE,
-            Some(tool_call_id),
-            approval.available_decisions.clone(),
-            scope,
-            prompt.clone(),
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "confirmed": { "type": "boolean" }
-                },
-                "required": ["confirmed"]
-            }),
-            TOOL_CONFIRMATION_TIMEOUT,
-            {
-                let event_sender = event_sender.clone();
-                move |queued| {
-                    let projection = materialize_tool_approval_action(
-                        queued, &tool_name, &arguments, &prompt, &approval,
-                    );
-                    let _ = event_sender.send(AgentEvent::ActionRequired {
-                        request_id: projection.id,
-                        action_type: projection.action_type,
-                        data: projection.data,
-                        scope: projection.scope,
-                    });
-                }
-            },
-        )
-        .await
-        .map_err(|error| {
-            RuntimeToolExecutionError::new(
-                format!("工具审批等待失败: {error}"),
-                Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
-                    "tool_approval_wait_failed".to_string(),
-                )),
-            )
-        })?;
-
-    if response.get("confirmed").and_then(Value::as_bool) == Some(true) {
-        return Ok(());
-    }
-    Err(RuntimeToolExecutionError::new(
-        "用户拒绝工具执行",
-        Some(RuntimeToolPolicyErrorKind::PermissionDenied(
-            "tool_approval_declined".to_string(),
-        )),
-    ))
-}
-
-fn materialize_tool_approval_action(
-    queued: &ActionRequiredRequest,
-    tool_name: &str,
-    arguments: &Value,
-    prompt: &str,
-    approval: &tool_runtime::execution_approval::ExecutionApprovalProjection,
-) -> ActionRequiredProjection {
-    let mut projection = tool_confirmation_action(
-        queued.id.clone(),
-        tool_name.to_string(),
-        arguments.clone(),
-        Some(prompt.to_string()),
-        queued.scope.clone(),
-    );
-    if let Some(data) = projection.data.as_object_mut() {
-        data.insert("actionType".to_string(), queued.action_type.clone().into());
-        data.insert("toolCallId".to_string(), queued.tool_id.clone().into());
-        data.insert(
-            "availableDecisions".to_string(),
-            queued.available_decisions.clone().into(),
-        );
-        data.insert("createdAtMs".to_string(), queued.created_at_ms.into());
-        data.insert("deadlineAtMs".to_string(), queued.deadline_at_ms.into());
-        data.insert(
-            "actionKind".to_string(),
-            approval.action_kind.clone().into(),
-        );
-        data.insert(
-            "action_kind".to_string(),
-            approval.action_kind.clone().into(),
-        );
-        data.insert(
-            "toolFamily".to_string(),
-            approval.tool_family.clone().into(),
-        );
-        data.insert(
-            "tool_family".to_string(),
-            approval.tool_family.clone().into(),
-        );
-        data.insert(
-            "runtime_contract".to_string(),
-            approval.runtime_contract.clone(),
-        );
-        data.insert(
-            "contractKey".to_string(),
-            approval.contract_key.clone().into(),
-        );
-        data.insert(
-            "contract_key".to_string(),
-            approval.contract_key.clone().into(),
-        );
-        data.insert("approvalScope".to_string(), approval.approval_scope.clone());
-        data.insert(
-            "approval_scope".to_string(),
-            approval.approval_scope.clone(),
-        );
-    }
-    projection
-}
-
 pub(super) fn action_scope(
     request: RuntimeToolExecutionRequest<'_>,
     thread_id: &ThreadId,
@@ -1043,6 +671,7 @@ fn collect_text_fields(value: &Value, target: &mut Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_runtime::action_required::ActionRequiredRequest;
     use app_server_protocol::protocol::v2::GrantedPermissionProfile;
     use rmcp::model::{
         Content, NumberOrString, ProgressNotification, ProgressNotificationMethod,
@@ -1074,7 +703,7 @@ mod tests {
             deadline_at_ms: Some(2),
         };
 
-        let projection = materialize_tool_approval_action(
+        let projection = orchestration::materialize_tool_approval_action(
             &queued,
             "exec_command",
             &serde_json::json!({ "cmd": "cargo test" }),

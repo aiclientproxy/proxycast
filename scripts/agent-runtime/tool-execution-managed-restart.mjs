@@ -15,6 +15,7 @@ export async function runManagedColdRestarts({
   launchManagedElectron,
   logPrefix,
   readAgentControlDomState,
+  readRestoredDomState = readAgentControlDomState,
   restoreAgentSessionRoute,
   runtimeEnv,
   sessionId,
@@ -57,7 +58,7 @@ export async function runManagedColdRestarts({
       sessionId,
       timeoutMs,
     );
-    const restoredDom = await readAgentControlDomState({
+    const restoredDom = await readRestoredDomState({
       page: currentPage,
       sessionId,
       timeoutMs,

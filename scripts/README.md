@@ -170,6 +170,7 @@ npm run smoke:settings-memory-soul-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-archived-lifecycle-electron-fixture -- --run-id <run-id>
 npm run smoke:mcp-context7-live-electron-fixture
 npm run smoke:mcp-elicitation-gate-b
+npm run smoke:orchestrator-skills-gate-b
 ```
 
 默认入口只通过 `app_server_handle_json_lines -> App Server JSON-RPC` 验证 `mcpServer/list`、`mcpServerStatus/list`、`mcpTool/list|listForContext|search`、`mcpPrompt/list`、`mcpResource/list` 读链，并禁止旧 `mcp_*` / `get_mcp_servers` Tauri facade 作为成功证据。`--allow-write-fixture` 会创建临时 stdio MCP server 与测试 Thread，覆盖 `mcpServer/create|start|stop|delete`、`mcpServer/tool/call` 与 `mcpServer/resource/read`，并断言工具 `outputSchema` 暴露 `structuredContent`、调用结果保留 `structuredContent`。同一轮还会启动一个必然失败的 server，要求其 `mcpServer/start` 错误以 JSON-RPC error 穿过 Desktop Host 返回，同时健康 server 继续保持 running，且 tool list/call 与 resource read 均可用。
@@ -210,6 +211,8 @@ npm run smoke:mcp-elicitation-gate-b
 `npm run smoke:mcp-context7-live-electron-fixture` 是真实 Electron + 远程 Context7 live fixture：复用设置页 GUI 创建 Context7 配置，经 `app_server_handle_json_lines` 启动 server、通过 `mcpTool/search` 找到 `resolve-library-id` / `query-docs`，再创建真实 Thread 并调用 `mcpServer/tool/call` 查询 “AI Agent 是什么”。该入口会访问远程 Context7；summary 只记录 host、工具名、header 名、env var 名、content 类型 / 数量和 `isError`，不记录 key、header value 或工具正文。
 
 `npm run smoke:mcp-elicitation-gate-b` 是 server-originated elicitation 的真实 Electron Gate B：临时 localhost OpenAI-compatible provider 先请求 `mcp__<server>__release_check`，临时 stdio MCP server 在 scoped tools/call 内发出 `elicitation/create`，App Server 将其转为 typed reverse JSON-RPC，Renderer 在当前 Thread 的 Composer 上方唯一表单提交 `{ confirmed: true }`，随后断言 MCP ledger 收到 accept、provider 第二次请求获得最终文本、表单在 `serverRequest/resolved` 后关闭且没有根部 Dialog。Gate B 还要求实际接受 elicitation 的 runtime stdio 连接以 MCP `2025-06-18` 广告精确 `{"elicitation": {}}`，management 连接保持 capability absent；该入口禁止以 `mcpTool/callWithCaller`、`agentSession/action/respond`、mock backend 或 renderer mock 作为成功路径。
+
+`npm run smoke:orchestrator-skills-gate-b` 是 Orchestrator-owned Skills/MCP 的真实 Electron Gate B：隔离环境创建固定名称 `codex_apps` 和一个普通 stdio MCP server，localhost provider 严格执行 `skill_search -> read_mcp_resource -> final text`，并断言 `skill://delivery/release-notes` 只在 Turn snapshot 发现一次、`SKILL.md` 通过 session-owned MCP 精确读取一次、Thread/Turn/Item 与 GUI 最终文本一致。随后脚本经 `config/read|config/batchWrite` 写入 `orchestrator.mcp.enabled=false`，新 Thread 的 provider catalog 必须隐藏 `mcp__codex_apps__apps_ping`，同时保留并成功执行 `mcp__ordinary_fixture__ordinary_ping`。该入口使用 `APP_SERVER_BACKEND_MODE=runtime`、真实 Electron/preload/IPC/App Server 与本地确定性 fixtures，不访问正式模型，不允许 App Server mock backend、renderer mock fallback 或 legacy MCP facade 充当成功证据。
 
 新增 MCP control-plane 脚本继续进入 `scripts/mcp/` 或复用现有 `smoke:mcp-current` npm script；涉及真实 Electron Desktop Host GUI 的 MCP fixture 进入 `scripts/electron/`。共享实现仍放在领域子目录或 `scripts/lib/`。
 

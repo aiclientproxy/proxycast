@@ -519,12 +519,45 @@ export async function cancelAgentSessionTurnCurrent(
 }
 
 export async function respondAgentServerRequestCurrent(options, request) {
-  const serverRequest = await waitForPendingAppServerRequest(options, request);
+  const capturedRequest = request?.serverRequest;
+  const serverRequest =
+    capturedRequest &&
+    APP_SERVER_REQUEST_METHODS.has(capturedRequest.method) &&
+    (typeof capturedRequest.id === "string" ||
+      typeof capturedRequest.id === "number")
+      ? capturedRequest
+      : await waitForPendingAppServerRequest(options, request);
   const result = buildAppServerRequestResponse(serverRequest, request);
   return invokeDevBridge(options, APP_SERVER_HANDLE_JSON_LINES_COMMAND, {
     request: {
       lines: [`${JSON.stringify({ id: serverRequest.id, result })}\n`],
     },
+  });
+}
+
+export async function listPendingAppServerRequestsCurrent(
+  options,
+  { threadId, turnId },
+) {
+  const result = await invokeDevBridge(
+    options,
+    APP_SERVER_DRAIN_EVENTS_COMMAND,
+    { request: { includeRecent: true, limit: 500 } },
+    Math.min(options.timeoutMs, 30_000),
+  );
+  return decodeAppServerLines(result).filter((message) => {
+    if (!APP_SERVER_REQUEST_METHODS.has(message?.method)) {
+      return false;
+    }
+    const params = message?.params ?? {};
+    const requestThreadId = String(
+      params.threadId ?? params.thread_id ?? "",
+    ).trim();
+    const requestTurnId = String(params.turnId ?? params.turn_id ?? "").trim();
+    return (
+      (!threadId || requestThreadId === threadId) &&
+      (!turnId || !requestTurnId || requestTurnId === turnId)
+    );
   });
 }
 

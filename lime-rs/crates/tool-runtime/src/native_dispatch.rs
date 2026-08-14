@@ -441,12 +441,20 @@ mod tests {
 
     #[async_trait]
     impl McpResourceGateway for DefinitionOnlyMcpResourceGateway {
-        async fn list_mcp_resources(&self) -> Result<McpResourceListResponse, String> {
+        async fn list_mcp_resources(
+            &self,
+            _session_id: &str,
+            _thread_id: &str,
+            _server: Option<&str>,
+            _cursor: Option<String>,
+        ) -> Result<McpResourceListResponse, String> {
             Ok(McpResourceListResponse::default())
         }
 
         async fn read_mcp_resource(
             &self,
+            _session_id: &str,
+            _thread_id: &str,
             _params: app_server_protocol::protocol::v2::McpServerResourceReadParams,
         ) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, String>
         {

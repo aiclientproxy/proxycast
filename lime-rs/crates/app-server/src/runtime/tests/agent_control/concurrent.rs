@@ -12,6 +12,29 @@ enum ChildTerminal {
     Failed,
 }
 
+fn spawn_request(
+    session: &AgentSession,
+    turn: &AgentTurn,
+    task_name: &str,
+    call_id: &str,
+) -> AgentControlGatewayRequest {
+    AgentControlGatewayRequest {
+        caller: AgentControlCaller {
+            session_id: session.session_id.clone(),
+            thread_id: session.thread_id.clone(),
+            turn_id: turn.turn_id.clone(),
+            call_id: call_id.to_string(),
+        },
+        command: AgentControlCommand::SpawnAgent {
+            task_name: task_name.to_string(),
+            message: format!("inspect {task_name}"),
+            fork_mode: SpawnAgentForkMode::None,
+            model_overrides: SpawnAgentModelOverrides::default(),
+        },
+        cancel_token: None,
+    }
+}
+
 impl ConcurrentChildBackend {
     async fn release(&self, session_id: &str, terminal: ChildTerminal) {
         let sender = self
@@ -419,6 +442,304 @@ async fn concurrent_children_keep_mailbox_routes_and_terminal_state_isolated() {
     assert_eq!(beta_pending.len(), 1);
     assert_eq!(alpha_pending[0].content, "alpha-only");
     assert_eq!(beta_pending[0].content, "beta-only");
+}
+
+#[tokio::test]
+async fn root_tree_execution_limit_rejects_fourth_child_and_reuses_terminal_slot() {
+    let (child_started_tx, mut child_started_rx) = tokio::sync::mpsc::unbounded_channel();
+    let backend = Arc::new(ConcurrentChildBackend {
+        child_started: child_started_tx,
+        child_releases: tokio::sync::Mutex::new(HashMap::new()),
+    });
+    let temp = tempfile::tempdir().expect("tempdir");
+    let store = Arc::new(
+        ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+            .expect("projection store"),
+    );
+    let core = RuntimeCore::with_backend(backend.clone()).with_projection_store(store.clone());
+    let session = core
+        .start_session(start_params("parent-session", "parent-thread"))
+        .expect("parent")
+        .session;
+    let turn = core
+        .start_turn(
+            AgentSessionTurnStartParams {
+                session_id: session.session_id.clone(),
+                turn_id: Some("parent-turn".to_string()),
+                input: AgentInput {
+                    text: "delegate up to the root-tree limit".to_string(),
+                    attachments: Vec::new(),
+                },
+                runtime_options: None,
+                queue_if_busy: false,
+                skip_pre_submit_resume: false,
+            },
+            RuntimeHostContext::default(),
+        )
+        .await
+        .expect("parent turn")
+        .response
+        .turn;
+    let gateway =
+        core.agent_control_gateway_for_turn(&session, &turn, RuntimeHostContext::default());
+
+    for index in 1..=3 {
+        gateway
+            .gateway()
+            .execute(spawn_request(
+                &session,
+                &turn,
+                &format!("child_{index}"),
+                &format!("spawn-{index}"),
+            ))
+            .await
+            .unwrap_or_else(|error| panic!("child {index} should be admitted: {error}"));
+    }
+    let mut active_sessions = Vec::new();
+    for _ in 0..3 {
+        active_sessions.push(
+            tokio::time::timeout(Duration::from_secs(1), child_started_rx.recv())
+                .await
+                .expect("three child turns should start")
+                .expect("child start request")
+                .session
+                .session_id,
+        );
+    }
+
+    let error = gateway
+        .gateway()
+        .execute(spawn_request(
+            &session,
+            &turn,
+            "over_capacity",
+            "spawn-over-capacity",
+        ))
+        .await
+        .expect_err("fourth active child must fail closed");
+    assert_eq!(
+        error.message(),
+        "agent_limit_reached: maximum concurrent child turns is 3"
+    );
+    assert!(
+        store
+            .list_agent_identities(ThreadId::new("parent-thread"))
+            .await
+            .expect("agent identities")
+            .iter()
+            .all(|identity| identity.agent_path != "/root/over_capacity"),
+        "capacity failure must happen before a durable child is created"
+    );
+
+    let released_session = active_sessions.remove(0);
+    backend
+        .release(&released_session, ChildTerminal::Completed)
+        .await;
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            let completed = core
+                .read_session(AgentSessionReadParams {
+                    session_id: released_session.clone(),
+                    history_limit: None,
+                    history_offset: None,
+                    history_before_message_id: None,
+                })
+                .expect("released child session")
+                .turns
+                .iter()
+                .any(|turn| turn.status == AgentTurnStatus::Completed);
+            if completed {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("completed child should release its slot");
+
+    gateway
+        .gateway()
+        .execute(spawn_request(
+            &session,
+            &turn,
+            "replacement",
+            "spawn-replacement",
+        ))
+        .await
+        .expect("terminal child slot should be reusable");
+    let replacement_session = tokio::time::timeout(Duration::from_secs(1), child_started_rx.recv())
+        .await
+        .expect("replacement child should start")
+        .expect("replacement start request")
+        .session
+        .session_id;
+
+    for session_id in active_sessions
+        .into_iter()
+        .chain(std::iter::once(replacement_session))
+    {
+        backend.release(&session_id, ChildTerminal::Completed).await;
+    }
+}
+
+#[tokio::test]
+async fn completed_child_is_lru_unloaded_but_durable_and_reloadable() {
+    let (child_started_tx, mut child_started_rx) = tokio::sync::mpsc::unbounded_channel();
+    let backend = Arc::new(ConcurrentChildBackend {
+        child_started: child_started_tx,
+        child_releases: tokio::sync::Mutex::new(HashMap::new()),
+    });
+    let temp = tempfile::tempdir().expect("tempdir");
+    let store = Arc::new(
+        ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+            .expect("projection store"),
+    );
+    let core = RuntimeCore::with_backend(backend.clone()).with_projection_store(store.clone());
+    let session = core
+        .start_session(start_params("parent-session", "parent-thread"))
+        .expect("parent")
+        .session;
+    let turn = core
+        .start_turn(
+            AgentSessionTurnStartParams {
+                session_id: session.session_id.clone(),
+                turn_id: Some("parent-turn".to_string()),
+                input: AgentInput {
+                    text: "exercise resident child reload".to_string(),
+                    attachments: Vec::new(),
+                },
+                runtime_options: None,
+                queue_if_busy: false,
+                skip_pre_submit_resume: false,
+            },
+            RuntimeHostContext::default(),
+        )
+        .await
+        .expect("parent turn")
+        .response
+        .turn;
+    let gateway =
+        core.agent_control_gateway_for_turn(&session, &turn, RuntimeHostContext::default());
+
+    let mut child_sessions = Vec::new();
+    for index in 1..=3 {
+        gateway
+            .gateway()
+            .execute(spawn_request(
+                &session,
+                &turn,
+                &format!("resident_{index}"),
+                &format!("spawn-resident-{index}"),
+            ))
+            .await
+            .expect("resident child admission");
+        child_sessions.push(
+            tokio::time::timeout(Duration::from_secs(1), child_started_rx.recv())
+                .await
+                .expect("resident child should start")
+                .expect("resident child request")
+                .session
+                .session_id,
+        );
+    }
+    for child_session in &child_sessions {
+        backend
+            .release(child_session, ChildTerminal::Completed)
+            .await;
+    }
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            let all_terminal = child_sessions.iter().all(|child_session| {
+                core.read_session(AgentSessionReadParams {
+                    session_id: child_session.clone(),
+                    history_limit: None,
+                    history_offset: None,
+                    history_before_message_id: None,
+                })
+                .expect("resident child session")
+                .turns
+                .iter()
+                .any(|turn| turn.status == AgentTurnStatus::Completed)
+            });
+            if all_terminal {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("resident children should become terminal");
+
+    gateway
+        .gateway()
+        .execute(spawn_request(
+            &session,
+            &turn,
+            "resident_4",
+            "spawn-resident-4",
+        ))
+        .await
+        .expect("fourth resident should evict the oldest terminal actor");
+    let fourth_session = tokio::time::timeout(Duration::from_secs(1), child_started_rx.recv())
+        .await
+        .expect("fourth resident should start")
+        .expect("fourth resident request")
+        .session
+        .session_id;
+
+    let oldest_identity = spawned_child_identity(&store, "parent-thread", "resident_1").await;
+    assert!(
+        core.session_loops
+            .get_existing(&child_sessions[0])
+            .await
+            .is_none(),
+        "oldest terminal child actor should be unloaded"
+    );
+    assert!(
+        store
+            .read_thread(ReadThreadParams {
+                thread_id: oldest_identity.thread_id.clone(),
+                include_archived: true,
+                turns_view: ThreadTurnsView::Full,
+            })
+            .await
+            .expect("durable oldest child")
+            .is_some(),
+        "LRU unload must retain the canonical child thread"
+    );
+
+    let followup = gateway.gateway().execute(AgentControlGatewayRequest {
+        caller: AgentControlCaller {
+            session_id: session.session_id.clone(),
+            thread_id: session.thread_id.clone(),
+            turn_id: turn.turn_id.clone(),
+            call_id: "reload-oldest".to_string(),
+        },
+        command: AgentControlCommand::FollowupTask {
+            target: "resident_1".to_string(),
+            message: "run after cold reload".to_string(),
+        },
+        cancel_token: None,
+    });
+    backend
+        .release(&fourth_session, ChildTerminal::Completed)
+        .await;
+    followup.await.expect("completed cold child should reload");
+    let reloaded = tokio::time::timeout(Duration::from_secs(1), child_started_rx.recv())
+        .await
+        .expect("reloaded child should start")
+        .expect("reloaded child request");
+    assert_eq!(reloaded.session.session_id, child_sessions[0]);
+    assert!(
+        core.session_loops
+            .get_existing(&child_sessions[0])
+            .await
+            .is_some(),
+        "followup should restore the completed child actor"
+    );
+    backend
+        .release(&child_sessions[0], ChildTerminal::Completed)
+        .await;
 }
 
 #[tokio::test]

@@ -665,6 +665,15 @@ pub struct McpResourceDefinition {
     pub description: Option<String>,
     pub mime_type: Option<String>,
     pub server_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<serde_json::Value>,
+}
+
+/// MCP 资源分页结果，保留 provider 需要的 opaque cursor。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpResourcePage {
+    pub resources: Vec<McpResourceDefinition>,
+    pub next_cursor: Option<String>,
 }
 
 /// MCP 资源模板定义。

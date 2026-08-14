@@ -1004,6 +1004,28 @@ describe("AppPageContent", () => {
     expect(onNavigate).toHaveBeenCalledWith("skills", undefined);
   });
 
+  it("插件工作台切到 Skills 时应保留当前项目作用域", async () => {
+    const onNavigate = vi.fn();
+    const { container } = renderContentWithNavigationState({
+      currentPage: "plugins",
+      pageParams: { currentProjectId: "project-1" },
+      onNavigate,
+    });
+    await flushEffects();
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="plugin-workspace-tab-skills"]',
+        )
+        ?.click();
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith("skills", {
+      creationProjectId: "project-1",
+    });
+  });
+
   it("Skills 与专家 Tab 切换时应保留当前项目作用域", async () => {
     const onNavigate = vi.fn();
     const { container } = renderContentWithNavigationState({

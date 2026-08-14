@@ -16,11 +16,12 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 regex.workspace = true
 dirs.workspace = true
+url.workspace = true
 urlencoding.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-tokio.workspace = true

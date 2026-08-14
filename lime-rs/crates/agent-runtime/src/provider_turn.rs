@@ -280,6 +280,13 @@ pub enum CurrentProviderTurnEvent {
         attempt: u32,
         usage: CurrentProviderUsage,
     },
+    RolloutBudgetReminder {
+        remaining_tokens: i64,
+        reminder_index: usize,
+        window_id: String,
+        durable_event_id: String,
+        text: String,
+    },
     ServerModel {
         model: String,
     },
@@ -401,6 +408,36 @@ where
         };
 
         if !is_empty_response_retry {
+            if let Some(source) = session_config.rollout_budget_reminder_source.as_ref() {
+                let reminder = source
+                    .next_reminder()
+                    .map_err(|message| RuntimeReplyAttemptError::new(message, emitted_any))?;
+                if let Some(reminder) = reminder {
+                    let text = format!(
+                        "<rollout_budget>\nYou have {} weighted tokens left in the shared session token budget.\n</rollout_budget>",
+                        reminder.remaining_tokens
+                    );
+                    on_event(CurrentProviderTurnEvent::RolloutBudgetReminder {
+                        remaining_tokens: reminder.remaining_tokens,
+                        reminder_index: reminder.reminder_index,
+                        window_id: reminder.window_id,
+                        durable_event_id: reminder.durable_event_id,
+                        text: text.clone(),
+                    });
+                    if is_cancelled(&cancel_token) {
+                        return Ok(RuntimeReplyExecution::new(
+                            text_output,
+                            errors,
+                            emitted_any,
+                            attempts_summary(&loop_state),
+                            true,
+                        ));
+                    }
+                    initial_messages.push(CurrentProviderMessage::developer(vec![
+                        CurrentProviderContent::Text(text),
+                    ]));
+                }
+            }
             if let Some(input) = pending_input.as_ref() {
                 // Context, tool inventory and mailbox phase are captured once per sampling step.
                 // Empty-response retries reuse the same immutable step snapshot.
@@ -1145,6 +1182,18 @@ where
                 .map(provider_budget_tokens)
                 .unwrap_or_default(),
         );
+        if is_cancelled(&cancel_token) {
+            if let Some(input) = pending_input.as_ref() {
+                input.mark_finishing().await;
+            }
+            return Ok(RuntimeReplyExecution::new(
+                text_output,
+                errors,
+                emitted_any,
+                attempts_summary(&loop_state),
+                true,
+            ));
+        }
 
         let assistant_message_pushed = !assistant_content.is_empty();
         if assistant_message_pushed {
@@ -1743,6 +1792,7 @@ fn current_provider_usage(usage: Usage) -> CurrentProviderUsage {
         cache_creation_input_tokens: usage
             .cache_write_input_tokens
             .map(|value| value.min(u32::MAX as u64) as u32),
+        codex_rollout_budget_units: usage.codex_rollout_budget_units,
     }
 }
 

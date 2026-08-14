@@ -555,6 +555,49 @@ impl AgentRuntimeState {
             .await
     }
 
+    pub async fn list_mcp_resource_page(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server_name: &str,
+        cursor: Option<String>,
+    ) -> Result<lime_mcp::McpResourcePage, String> {
+        self.mcp_runtime(session_id, thread_id)
+            .await?
+            .list_resource_page(server_name, cursor)
+            .await
+    }
+
+    pub async fn has_mcp_server(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server_name: &str,
+    ) -> Result<bool, String> {
+        Ok(self
+            .mcp_runtime(session_id, thread_id)
+            .await?
+            .has_server(server_name)
+            .await)
+    }
+
+    pub async fn list_mcp_resources(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+    ) -> Result<
+        (
+            Vec<lime_mcp::McpResourceDefinition>,
+            Vec<lime_mcp::McpResourceTemplateDefinition>,
+        ),
+        String,
+    > {
+        self.mcp_runtime(session_id, thread_id)
+            .await?
+            .list_resources()
+            .await
+    }
+
     pub async fn call_mcp_tool(
         &self,
         session_id: &str,

@@ -350,6 +350,8 @@ pub struct Usage {
     pub reasoning_tokens: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_rollout_budget_units: Option<serde_json::Number>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub provider_metadata: ProviderMetadata,
 }

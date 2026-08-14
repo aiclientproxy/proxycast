@@ -9,6 +9,7 @@ use crate::MockBackend;
 use crate::RuntimeBackend;
 use crate::RuntimeCore;
 use crate::UnavailableBackend;
+use lime_core::config::load_config;
 use lime_core::database::DbConnection;
 use std::sync::Arc;
 use thiserror::Error;
@@ -94,31 +95,45 @@ impl AppServerRuntimeFactory {
 
     pub fn runtime_backend_core() -> RuntimeCore {
         let execution_process = ExecutionProcessServer::default();
-        RuntimeCore::with_backend(Arc::new(RuntimeBackend::with_execution_process_server(
-            execution_process.clone(),
-        )))
+        let runtime = RuntimeCore::with_backend(Arc::new(
+            RuntimeBackend::with_execution_process_server(execution_process.clone()),
+        ))
         .with_code_mode_factory(
             agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
         )
-        .with_execution_process_server(execution_process)
+        .with_execution_process_server(execution_process);
+        Self::inject_rollout_budget(runtime)
+    }
+
+    fn inject_rollout_budget(runtime: RuntimeCore) -> RuntimeCore {
+        match load_config()
+            .ok()
+            .and_then(|config| config.agent.rollout_budget)
+        {
+            Some(config) => runtime
+                .with_rollout_budget_config(Some(config))
+                .expect("runtime factory requires valid rollout budget config"),
+            None => runtime,
+        }
     }
 
     pub fn runtime_backend_core_with_db(db: DbConnection) -> RuntimeCore {
         let execution_process = ExecutionProcessServer::default();
-        RuntimeCore::with_backend(Arc::new(
+        let runtime = RuntimeCore::with_backend(Arc::new(
             RuntimeBackend::with_db_and_execution_process_server(db, execution_process.clone()),
         ))
         .with_code_mode_factory(
             agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
         )
-        .with_execution_process_server(execution_process)
+        .with_execution_process_server(execution_process);
+        Self::inject_rollout_budget(runtime)
     }
 
     pub fn runtime_backend_core_with_capability_source(
         capability_source: Arc<dyn CapabilitySource>,
     ) -> RuntimeCore {
         let execution_process = ExecutionProcessServer::default();
-        RuntimeCore::with_backend_and_capability_source(
+        let runtime = RuntimeCore::with_backend_and_capability_source(
             Arc::new(RuntimeBackend::with_execution_process_server(
                 execution_process.clone(),
             )),
@@ -127,7 +142,8 @@ impl AppServerRuntimeFactory {
         .with_code_mode_factory(
             agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
         )
-        .with_execution_process_server(execution_process)
+        .with_execution_process_server(execution_process);
+        Self::inject_rollout_budget(runtime)
     }
 
     pub fn runtime_backend_core_with_db_and_capability_source(
@@ -135,7 +151,7 @@ impl AppServerRuntimeFactory {
         capability_source: Arc<dyn CapabilitySource>,
     ) -> RuntimeCore {
         let execution_process = ExecutionProcessServer::default();
-        RuntimeCore::with_backend_and_capability_source(
+        let runtime = RuntimeCore::with_backend_and_capability_source(
             Arc::new(RuntimeBackend::with_db_and_execution_process_server(
                 db,
                 execution_process.clone(),
@@ -145,7 +161,8 @@ impl AppServerRuntimeFactory {
         .with_code_mode_factory(
             agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
         )
-        .with_execution_process_server(execution_process)
+        .with_execution_process_server(execution_process);
+        Self::inject_rollout_budget(runtime)
     }
 
     pub fn runtime_app_server() -> AppServer {

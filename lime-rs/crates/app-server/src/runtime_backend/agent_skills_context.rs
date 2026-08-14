@@ -7,7 +7,7 @@ use lime_skills::{
     contains_agent_skills_prompt, evaluate_agent_skill_selection_bodies,
     render_available_agent_skills, reorder_agent_skill_snapshot_for_query,
     select_agent_skills_by_name_candidates, select_explicit_agent_skills,
-    select_implicit_agent_skills, AgentSkillRenderOptions, AgentSkillSelection,
+    select_implicit_agent_skills, AgentSkillMetadata, AgentSkillRenderOptions, AgentSkillSelection,
     AgentSkillSelectionEvaluation, AgentSkillSelectionTrigger, AgentSkillSnapshot,
     DEFAULT_AGENT_SKILL_BODY_TOKEN_BUDGET,
 };
@@ -18,13 +18,14 @@ pub(super) struct AgentSkillsTurnContext {
     pub snapshot: Option<AgentSkillSnapshot>,
 }
 
-pub(super) fn agent_skills_context_for_turn_with_plugins(
+pub(super) fn agent_skills_context_for_turn_with_plugins_and_orchestrator(
     system_prompt: Option<String>,
     user_input: &str,
     metadata_values: &[&Value],
     working_dir: Option<&Path>,
     project_root: Option<&Path>,
     plugin_snapshots: &[PluginTurnSnapshot],
+    orchestrator_skills: &[AgentSkillMetadata],
 ) -> AgentSkillsTurnContext {
     if should_suppress_agent_skills_for_metadata(metadata_values) {
         return AgentSkillsTurnContext {
@@ -33,11 +34,12 @@ pub(super) fn agent_skills_context_for_turn_with_plugins(
         };
     }
 
-    let snapshot = build_agent_skill_snapshot_for_turn_with_plugins(
+    let snapshot = build_agent_skill_snapshot_for_turn_with_plugins_and_orchestrator(
         working_dir,
         project_root,
         metadata_values,
         plugin_snapshots,
+        orchestrator_skills,
     );
     let system_prompt = append_expert_skill_hints(system_prompt, metadata_values, &snapshot);
 
@@ -117,6 +119,22 @@ pub(super) fn build_agent_skill_snapshot_for_turn_with_plugins(
     metadata_values: &[&Value],
     plugin_snapshots: &[PluginTurnSnapshot],
 ) -> AgentSkillSnapshot {
+    build_agent_skill_snapshot_for_turn_with_plugins_and_orchestrator(
+        working_dir,
+        project_root,
+        metadata_values,
+        plugin_snapshots,
+        &[],
+    )
+}
+
+pub(super) fn build_agent_skill_snapshot_for_turn_with_plugins_and_orchestrator(
+    working_dir: Option<&Path>,
+    project_root: Option<&Path>,
+    metadata_values: &[&Value],
+    plugin_snapshots: &[PluginTurnSnapshot],
+    orchestrator_skills: &[AgentSkillMetadata],
+) -> AgentSkillSnapshot {
     let mut roots = agent_skill_roots_for_workspace(working_dir, project_root);
     roots.extend(
         plugin_snapshots
@@ -127,6 +145,15 @@ pub(super) fn build_agent_skill_snapshot_for_turn_with_plugins(
             }),
     );
     let mut snapshot = build_agent_skill_snapshot_from_roots(roots);
+    for skill in orchestrator_skills {
+        if snapshot.skills.iter().any(|existing| {
+            existing.authority == skill.authority
+                && existing.skill_file_path == skill.skill_file_path
+        }) {
+            continue;
+        }
+        snapshot.skills.push(skill.clone());
+    }
     let config = metadata_values
         .iter()
         .filter_map(|metadata| metadata.get("skills"))
@@ -528,12 +555,13 @@ fn append_agent_skills_context_to_system_prompt(
     working_dir: Option<&Path>,
     project_root: Option<&Path>,
 ) -> Option<String> {
-    agent_skills_context_for_turn_with_plugins(
+    agent_skills_context_for_turn_with_plugins_and_orchestrator(
         system_prompt,
         user_input,
         metadata_values,
         working_dir,
         project_root,
+        &[],
         &[],
     )
     .system_prompt
@@ -879,13 +907,14 @@ Use package workflow rules.
             mcp_server_names: Vec::new(),
         };
 
-        let context = agent_skills_context_for_turn_with_plugins(
+        let context = agent_skills_context_for_turn_with_plugins_and_orchestrator(
             Some("base".to_string()),
             "写一篇文章",
             &[],
             None,
             None,
             &[plugin_snapshot],
+            &[],
         );
         let prompt = context.system_prompt.expect("prompt");
         let snapshot = context.snapshot.expect("snapshot");
@@ -898,6 +927,60 @@ Use package workflow rules.
         assert!(!prompt.contains("<selected_skill_instructions>"));
         assert!(!prompt.contains("# Package Article Writing"));
         assert!(!prompt.contains("Use package workflow rules."));
+    }
+
+    #[test]
+    fn orchestrator_skill_enters_turn_snapshot_once_without_local_body_read() {
+        let skill: AgentSkillMetadata = serde_json::from_value(serde_json::json!({
+            "skill_id": "orchestrator:delivery:release-notes",
+            "name": "delivery:release-notes",
+            "description": "Draft source-backed release notes.",
+            "scope": "orchestrator",
+            "source": "orchestrator",
+            "authority": "orchestrator",
+            "enabled": true,
+            "interface": {
+                "display_name": "delivery:release-notes",
+                "execution_mode": "mcp_resource",
+                "provider": "codex_apps",
+                "model": null,
+                "argument_hint": null
+            },
+            "dependencies": { "tools": [] },
+            "policy": {
+                "allow_implicit_invocation": true,
+                "when_to_use": null
+            },
+            "capabilities": [],
+            "directory": "skill://delivery/release-notes",
+            "skill_file_path": "skill://delivery/release-notes/SKILL.md"
+        }))
+        .expect("orchestrator skill metadata");
+
+        let context = agent_skills_context_for_turn_with_plugins_and_orchestrator(
+            Some("base".to_string()),
+            "draft release notes",
+            &[],
+            None,
+            None,
+            &[],
+            &[skill.clone(), skill],
+        );
+        let prompt = context.system_prompt.expect("prompt");
+        let snapshot = context.snapshot.expect("snapshot");
+        let matching = snapshot
+            .skills
+            .iter()
+            .filter(|skill| skill.skill_id == "orchestrator:delivery:release-notes")
+            .collect::<Vec<_>>();
+
+        assert_eq!(matching.len(), 1);
+        assert_eq!(
+            matching[0].skill_file_path,
+            Path::new("skill://delivery/release-notes/SKILL.md")
+        );
+        assert!(prompt.contains("`delivery:release-notes`"));
+        assert!(!prompt.contains("<selected_skill_instructions>"));
     }
 
     #[test]

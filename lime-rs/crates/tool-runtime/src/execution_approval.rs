@@ -115,7 +115,9 @@ fn approval_scope_for_approval(
             "reasonCode",
         ],
     );
-    let network_host = sanitized_network_host(metadata);
+    let network_context = sanitized_network_context(metadata);
+    let network_host = network_context.as_ref().map(|context| context.host.clone());
+    let network_protocol = network_context.map(|context| context.protocol);
 
     json!({
         "contractKey": contract_key,
@@ -130,6 +132,8 @@ fn approval_scope_for_approval(
         "project_root_hash": project_root_hash,
         "networkHost": network_host.clone(),
         "network_host": network_host,
+        "networkProtocol": network_protocol.clone(),
+        "network_protocol": network_protocol,
     })
 }
 
@@ -181,25 +185,48 @@ fn stable_scope_hash(value: &str) -> String {
     format!("fnv1a64:{hash:016x}")
 }
 
-fn sanitized_network_host(metadata: &HashMap<String, Value>) -> Option<String> {
-    metadata_string(metadata, &["networkHost", "network_host"]).or_else(|| {
-        metadata_string(metadata, &["networkUrl", "network_url"])
-            .and_then(|url| sanitized_host_from_url(&url))
-    })
+struct SanitizedNetworkContext {
+    host: String,
+    protocol: String,
 }
 
-fn sanitized_host_from_url(value: &str) -> Option<String> {
+fn sanitized_network_context(metadata: &HashMap<String, Value>) -> Option<SanitizedNetworkContext> {
+    let parsed = metadata_string(metadata, &["networkUrl", "network_url"])
+        .as_deref()
+        .and_then(sanitized_network_context_from_url);
+    let host = metadata_string(metadata, &["networkHost", "network_host"])
+        .or_else(|| parsed.as_ref().map(|context| context.host.clone()))?;
+    let protocol = metadata_string(metadata, &["networkProtocol", "network_protocol"])
+        .and_then(|protocol| normalized_network_protocol(&protocol))
+        .or_else(|| parsed.map(|context| context.protocol))?;
+    Some(SanitizedNetworkContext { host, protocol })
+}
+
+fn sanitized_network_context_from_url(value: &str) -> Option<SanitizedNetworkContext> {
     let parsed = url::Url::parse(value).ok()?;
     let host = parsed.host_str()?.trim();
     if host.is_empty() {
         return None;
     }
-    let mut target = format!("{}://{}", parsed.scheme(), host);
-    if let Some(port) = parsed.port() {
-        target.push(':');
-        target.push_str(&port.to_string());
+    Some(SanitizedNetworkContext {
+        host: host.to_string(),
+        protocol: normalized_network_protocol(parsed.scheme())?,
+    })
+}
+
+fn normalized_network_protocol(value: &str) -> Option<String> {
+    match value
+        .trim()
+        .trim_end_matches(':')
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "http" => Some("http".to_string()),
+        "https" => Some("https".to_string()),
+        "socks5-tcp" | "socks5_tcp" | "socks5tcp" => Some("socks5Tcp".to_string()),
+        "socks5-udp" | "socks5_udp" | "socks5udp" => Some("socks5Udp".to_string()),
+        _ => None,
     }
-    Some(target)
 }
 
 fn metadata_string(metadata: &HashMap<String, Value>, keys: &[&str]) -> Option<String> {
@@ -261,7 +288,11 @@ mod tests {
         );
         assert_eq!(
             projection.approval_scope.get("networkHost"),
-            Some(&json!("https://example.com"))
+            Some(&json!("example.com"))
+        );
+        assert_eq!(
+            projection.approval_scope.get("networkProtocol"),
+            Some(&json!("https"))
         );
         assert!(projection.approval_scope.get("cwd").is_none());
         assert!(!projection

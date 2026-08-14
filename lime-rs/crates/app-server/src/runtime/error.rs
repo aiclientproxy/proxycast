@@ -15,12 +15,20 @@ pub enum RuntimeCoreError {
     SessionAlreadyExists(String),
     #[error("turn already active: {0}")]
     TurnAlreadyActive(String),
+    #[error("agent execution limit reached: {max_threads}")]
+    AgentLimitReached { max_threads: usize },
     #[error("capability denied: {0}")]
     CapabilityDenied(String),
     #[error("request canceled")]
     RequestCanceled,
     #[error("{0}")]
     UsageLimitExceeded(String),
+    #[error("rollout budget is exhausted")]
+    RolloutBudgetExhausted,
+    #[error("invalid provider rollout budget units")]
+    InvalidRolloutBudgetUnits,
+    #[error("invalid rollout budget config: {0}")]
+    InvalidRolloutBudgetConfig(String),
     #[error("pending route for session {session_id}: {reason_code}")]
     PendingRoute {
         session_id: String,
@@ -106,6 +114,16 @@ impl RuntimeCoreError {
                 error_codes::TURN_ALREADY_ACTIVE,
                 format!("turn already active: {turn_id}"),
             ),
+            Self::AgentLimitReached { max_threads } => JsonRpcError {
+                code: error_codes::RUNTIME_ERROR,
+                message: "agent execution capacity is exhausted".to_string(),
+                data: Some(serde_json::json!({
+                    "type": "AgentLimitReached",
+                    "reason": "agent_limit_reached",
+                    "maxThreads": max_threads,
+                    "retryable": true,
+                })),
+            },
             Self::CapabilityDenied(capability_id) => JsonRpcError::new(
                 error_codes::CAPABILITY_DENIED,
                 format!("capability denied: {capability_id}"),
@@ -152,6 +170,19 @@ impl RuntimeCoreError {
             Self::UsageLimitExceeded(message) => {
                 JsonRpcError::new(error_codes::RUNTIME_ERROR, message)
             }
+            Self::RolloutBudgetExhausted => JsonRpcError {
+                code: error_codes::RUNTIME_ERROR,
+                message: "shared rollout budget is exhausted".to_string(),
+                data: Some(serde_json::json!({"reason": "rollout_budget_exhausted", "retryable": false})),
+            },
+            Self::InvalidRolloutBudgetUnits => JsonRpcError {
+                code: error_codes::RUNTIME_ERROR,
+                message: "provider returned invalid rollout budget units".to_string(),
+                data: Some(serde_json::json!({"reason": "invalid_rollout_budget_units", "retryable": false})),
+            },
+            Self::InvalidRolloutBudgetConfig(message) => {
+                JsonRpcError::new(error_codes::INVALID_REQUEST, message)
+            }
             Self::Backend(message) => JsonRpcError::new(error_codes::RUNTIME_ERROR, message),
             Self::ActionResponse { code, request_id } => JsonRpcError {
                 code: error_codes::RUNTIME_ERROR,
@@ -166,7 +197,9 @@ impl RuntimeCoreError {
 
     pub(crate) fn turn_failure_reason(&self) -> &'static str {
         match self {
-            Self::UsageLimitExceeded(_) => "usage_limit_exceeded",
+            Self::UsageLimitExceeded(_) | Self::RolloutBudgetExhausted => "usage_limit_exceeded",
+            Self::InvalidRolloutBudgetUnits => "invalid_rollout_budget_units",
+            Self::InvalidRolloutBudgetConfig(_) => "invalid_rollout_budget_config",
             _ => "turn_error",
         }
     }

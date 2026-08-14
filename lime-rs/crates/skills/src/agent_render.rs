@@ -48,7 +48,7 @@ pub fn render_available_agent_skills(
     }
 
     let mut prompt = String::from(
-        "<skills_instructions>\n## 可用 Agent Skills\n这些条目只是轻量 metadata。需要实际使用某个 skill 时，必须先读取对应 `SKILL.md`；不要因为这里列出 skill 就默认调用 SkillTool、扩大工具权限或声称已经执行。\n",
+        "<skills_instructions>\n## 可用 Agent Skills\n这些条目只是轻量 metadata。需要实际使用本地 skill 时，必须先读取对应 `SKILL.md`；scope=orchestrator 的 `skill://` locator 必须通过 `read_mcp_resource` 从 server=`codex_apps` 读取该 URI，不能作为本地文件访问。不要因为这里列出 skill 就默认调用 SkillTool、扩大工具权限或声称已经执行。\n",
     );
     if char_len(&prompt) >= options.char_budget {
         return None;

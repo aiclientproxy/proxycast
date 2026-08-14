@@ -6,7 +6,8 @@ use crate::tool_executor::{
 };
 use lime_skills::{
     build_agent_skill_snapshot_from_workspace, search_agent_skills, AgentSkillMetadata,
-    AgentSkillSearchOptions, AgentSkillSearchResult, DEFAULT_AGENT_SKILL_SEARCH_LIMIT,
+    AgentSkillSearchOptions, AgentSkillSearchResult, AgentSkillSnapshot,
+    DEFAULT_AGENT_SKILL_SEARCH_LIMIT, SKILL_SNAPSHOT_TURN_METADATA_KEY,
 };
 use serde::Deserialize;
 use serde_json::{json, Map as JsonMap, Value};
@@ -52,10 +53,13 @@ impl RuntimeSkillSearchExecutor {
             request.context.working_directory(),
             request.turn_context,
         );
-        let snapshot = build_agent_skill_snapshot_from_workspace(
-            workspace.working_dir.as_deref(),
-            workspace.project_root.as_deref(),
-        );
+        let snapshot =
+            skill_snapshot_from_turn_context(request.turn_context).unwrap_or_else(|| {
+                build_agent_skill_snapshot_from_workspace(
+                    workspace.working_dir.as_deref(),
+                    workspace.project_root.as_deref(),
+                )
+            });
         let results = search_agent_skills(
             &snapshot,
             &input.query,
@@ -75,6 +79,21 @@ impl RuntimeSkillSearchExecutor {
             None,
             skill_search_metadata(&input.query, snapshot.skills.len(), results.len()),
         ))
+    }
+}
+
+fn skill_snapshot_from_turn_context(
+    turn_context: Option<&RuntimeToolTurnContext>,
+) -> Option<AgentSkillSnapshot> {
+    let value = turn_context?
+        .metadata
+        .get(SKILL_SNAPSHOT_TURN_METADATA_KEY)?;
+    match serde_json::from_value(value.clone()) {
+        Ok(snapshot) => Some(snapshot),
+        Err(error) => {
+            tracing::warn!(error = %error, "忽略无法解析的 skill_search turn snapshot");
+            None
+        }
     }
 }
 
@@ -247,7 +266,7 @@ fn skill_search_output(
             .iter()
             .map(skill_search_result_value)
             .collect::<Vec<_>>(),
-        "usage": "Search results are metadata only. To use a skill, select one result and let the Agent Skills selector load its SKILL.md; do not treat this search as execution approval."
+        "usage": "Search results are metadata only. Local skills use SKILL.md; scope=orchestrator skill:// locators must be read with read_mcp_resource from codex_apps. Do not treat this search as execution approval."
     })
 }
 
@@ -422,6 +441,70 @@ mod tests {
             output["projectRoot"],
             json!(project.path().canonicalize().unwrap().display().to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn search_consumes_orchestrator_skill_from_frozen_turn_snapshot() {
+        let root = TempDir::new().expect("root");
+        let context = context(root.path().to_path_buf());
+        let params = json!({ "query": "release notes" });
+        let turn_context = TurnContextOverride {
+            metadata: HashMap::from([(
+                SKILL_SNAPSHOT_TURN_METADATA_KEY.to_string(),
+                json!({
+                    "roots": [],
+                    "skills": [{
+                        "skill_id": "orchestrator:delivery:release-notes",
+                        "name": "delivery:release-notes",
+                        "description": "Draft source-backed release notes.",
+                        "scope": "orchestrator",
+                        "source": "orchestrator",
+                        "authority": "orchestrator",
+                        "enabled": true,
+                        "interface": {
+                            "display_name": "delivery:release-notes",
+                            "execution_mode": "mcp_resource",
+                            "provider": "codex_apps",
+                            "model": null,
+                            "argument_hint": null
+                        },
+                        "dependencies": { "tools": [] },
+                        "policy": {
+                            "allow_implicit_invocation": true,
+                            "when_to_use": null
+                        },
+                        "capabilities": [],
+                        "directory": "skill://delivery/release-notes",
+                        "skill_file_path": "skill://delivery/release-notes/SKILL.md"
+                    }]
+                }),
+            )]),
+            ..TurnContextOverride::default()
+        };
+
+        let result = runtime_skill_search_executor_handle()
+            .execute(RuntimeToolExecutionRequest {
+                tool_name: SKILL_SEARCH_TOOL_NAME,
+                params: &params,
+                context: &context,
+                turn_context: Some(&turn_context),
+            })
+            .await
+            .expect("orchestrator skill search");
+
+        let output: Value = serde_json::from_str(&result.output).expect("json output");
+        assert_eq!(output["snapshotSkillCount"], 1);
+        assert_eq!(output["results"][0]["scope"], "orchestrator");
+        assert_eq!(output["results"][0]["source"], "orchestrator");
+        assert_eq!(output["results"][0]["authority"], "orchestrator");
+        assert_eq!(
+            output["results"][0]["locator"]["skillFilePath"],
+            "skill://delivery/release-notes/SKILL.md"
+        );
+        assert!(output["usage"]
+            .as_str()
+            .expect("usage")
+            .contains("read_mcp_resource"));
     }
 
     #[test]

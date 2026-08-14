@@ -38,8 +38,8 @@ pub use oauth::{McpOAuthLoginHandle, McpOAuthLoginParams, McpOAuthRegistry};
 pub use tool_converter::ToolConverter;
 pub use types::{
     McpContent, McpError, McpManagerState, McpPromptArgument, McpPromptDefinition,
-    McpPromptMessage, McpPromptResult, McpResourceContent, McpResourceDefinition,
-    McpServerCapabilities, McpServerConfig, McpServerInfo, McpServerRuntimeStatus,
-    McpServerTransport, McpToolCall, McpToolDefinition, McpToolResult,
+    McpPromptMessage, McpPromptResult, McpResourceContent, McpResourceDefinition, McpResourcePage,
+    McpResourceTemplateDefinition, McpServerCapabilities, McpServerConfig, McpServerInfo,
+    McpServerRuntimeStatus, McpServerTransport, McpToolCall, McpToolDefinition, McpToolResult,
     DEFAULT_MCP_SERVER_ENVIRONMENT_ID,
 };

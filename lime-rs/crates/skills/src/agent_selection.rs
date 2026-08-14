@@ -242,6 +242,7 @@ fn scope_priority(scope: AgentSkillScope) -> u8 {
         AgentSkillScope::Project => 3,
         AgentSkillScope::User => 2,
         AgentSkillScope::App => 1,
+        AgentSkillScope::Orchestrator => 1,
         AgentSkillScope::Other => 0,
     }
 }
@@ -564,6 +565,14 @@ fn parse_skill_uri(token: &str) -> Option<PathBuf> {
     let payload = token.strip_prefix("skill://")?;
     if payload.is_empty() {
         return None;
+    }
+    if token.ends_with("SKILL.md")
+        && url::Url::parse(token)
+            .ok()
+            .and_then(|url| url.host_str().map(ToOwned::to_owned))
+            .is_some()
+    {
+        return Some(PathBuf::from(token));
     }
     let decoded = urlencoding::decode(payload).ok()?.into_owned();
     parse_skill_file_path(&decoded)

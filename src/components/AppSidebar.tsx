@@ -23,7 +23,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { AgentPageParams, Page, PageParams } from "@/types/page";
+import {
+  AgentPageParams,
+  Page,
+  PageParams,
+  PluginsPageParams,
+} from "@/types/page";
 import { SettingsTabs } from "@/types/settings";
 import {
   getConfig,
@@ -853,9 +858,24 @@ export function AppSidebar({
       return;
     }
 
+    const scopedTarget =
+      item.id === "plugins" && projectScopedNavigationProjectId
+        ? (() => {
+            const rawParams = {
+              ...(target.rawParams as PluginsPageParams | undefined),
+              currentProjectId: projectScopedNavigationProjectId,
+            } satisfies PluginsPageParams;
+            return {
+              ...target,
+              rawParams,
+              paramsKey: serializeNavigationParams(rawParams),
+            } satisfies SidebarNavigationTarget;
+          })()
+        : target;
+
     if (
       isSameSidebarNavigationTarget(
-        target,
+        scopedTarget,
         requestedNavigationTargetRef.current.page,
         requestedNavigationTargetRef.current.rawParams,
       )
@@ -863,8 +883,8 @@ export function AppSidebar({
       return;
     }
 
-    requestedNavigationTargetRef.current = target;
-    onNavigate(target.page, target.rawParams);
+    requestedNavigationTargetRef.current = scopedTarget;
+    onNavigate(scopedTarget.page, scopedTarget.rawParams);
   };
 
   const maybeWrapWithTooltip = (node: ReactElement, label: string) => {

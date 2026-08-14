@@ -46,6 +46,7 @@ mod workspace_scope_context;
 struct TestRuntimeEventSink {
     events: Vec<RuntimeEvent>,
     transient_events: Vec<RuntimeEvent>,
+    preappended_event_ids: Vec<String>,
 }
 
 impl RuntimeEventSink for TestRuntimeEventSink {
@@ -58,6 +59,40 @@ impl RuntimeEventSink for TestRuntimeEventSink {
         self.transient_events.push(event);
         Ok(())
     }
+
+    fn emit_preappended_by_id(&mut self, event_id: &str) -> Result<(), RuntimeCoreError> {
+        self.preappended_event_ids.push(event_id.to_string());
+        Ok(())
+    }
+}
+
+#[test]
+fn rollout_budget_reminder_forwards_the_preappended_canonical_event() {
+    let mut sink = TestRuntimeEventSink::default();
+    let mut coding_event_mirror = coding_events::CodingEventMirror::default();
+    let mut proposed_plan_parser = proposed_plan_parser::ProposedPlanParser::default();
+    let mut reasoning_event_state = reasoning_events::ReasoningEventState::default();
+
+    emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_soul_style(
+        &RuntimeAgentEvent::RolloutBudgetReminder {
+            remaining_tokens: 50,
+            reminder_index: 2,
+            window_id: "window-1".to_string(),
+            durable_event_id: "event-reminder-1".to_string(),
+            text: "budget reminder".to_string(),
+        },
+        &mut sink,
+        &mut coding_event_mirror,
+        &mut proposed_plan_parser,
+        &mut reasoning_event_state,
+        None,
+        None,
+    )
+    .expect("rollout budget reminder should forward its durable event");
+
+    assert!(sink.events.is_empty());
+    assert!(sink.transient_events.is_empty());
+    assert_eq!(sink.preappended_event_ids, ["event-reminder-1"]);
 }
 
 #[test]
@@ -236,6 +271,7 @@ pub(super) fn request_for_test(
         queue_if_busy: false,
         skip_pre_submit_resume: false,
         agent_control_gateway: None,
+        rollout_budget_reminder_source: None,
     }
 }
 

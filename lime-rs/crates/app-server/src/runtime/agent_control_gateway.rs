@@ -26,6 +26,7 @@ use super::agent_control_gateway_support::{
     required_agent_control_id, resolve_agent_control_path, stable_agent_control_message_id,
     validate_agent_control_task_name, ROOT_AGENT_PATH,
 };
+use super::status::{agent_turn_is_active, agent_turn_is_terminal};
 
 mod spawn_runtime_options;
 pub(super) mod spawn_tool_options;
@@ -64,6 +65,251 @@ impl AgentControlGateway for RuntimeCoreAgentControlGateway {
 }
 
 impl RuntimeCore {
+    pub(in crate::runtime) async fn reserve_agent_residency_slot(
+        &self,
+        identity: &AgentIdentity,
+        session_id: &str,
+    ) -> Result<agent_residency::AgentResidencySlot, RuntimeCoreError> {
+        if self
+            .agent_residency
+            .is_lost(identity.root_thread_id.as_str(), session_id)
+        {
+            return Err(RuntimeCoreError::SessionNotFound(
+                identity.thread_id.to_string(),
+            ));
+        }
+        let mut rejected_candidates = HashSet::new();
+        loop {
+            match self.agent_residency.reserve(
+                identity.root_thread_id.as_str(),
+                session_id,
+                identity.thread_id.as_str(),
+            ) {
+                Ok(slot) => return Ok(slot),
+                Err(Some((candidate_session_id, candidate_thread_id))) => {
+                    let candidate = (candidate_session_id.clone(), candidate_thread_id.clone());
+                    if !rejected_candidates.insert(candidate.clone()) {
+                        self.agent_residency.restore_candidate(
+                            identity.root_thread_id.as_str(),
+                            candidate_session_id,
+                            candidate_thread_id,
+                        );
+                        return Err(RuntimeCoreError::AgentLimitReached { max_threads: 3 });
+                    }
+                    let unloadable = match self
+                        .agent_residency_candidate_is_unloadable(
+                            &identity.root_thread_id,
+                            &candidate_session_id,
+                            &candidate_thread_id,
+                        )
+                        .await
+                    {
+                        Ok(unloadable) => unloadable,
+                        Err(error) => {
+                            self.agent_residency.restore_candidate(
+                                identity.root_thread_id.as_str(),
+                                candidate_session_id,
+                                candidate_thread_id,
+                            );
+                            return Err(error);
+                        }
+                    };
+                    if unloadable {
+                        let interrupted = match self.session_snapshot(&candidate_session_id) {
+                            Ok((session, _)) => session.status == AgentSessionStatus::Canceled,
+                            Err(error) => {
+                                self.agent_residency.restore_candidate(
+                                    identity.root_thread_id.as_str(),
+                                    candidate_session_id,
+                                    candidate_thread_id,
+                                );
+                                return Err(error);
+                            }
+                        };
+                        if let Err(error) = self.session_loops.shutdown(&candidate_session_id).await
+                        {
+                            tracing::warn!(
+                                session_id = %candidate_session_id,
+                                error = %error,
+                                "failed to shut down resident child before eviction"
+                            );
+                            self.agent_residency.restore_candidate(
+                                identity.root_thread_id.as_str(),
+                                candidate_session_id,
+                                candidate_thread_id,
+                            );
+                            continue;
+                        }
+                        if interrupted {
+                            self.agent_residency
+                                .mark_lost(identity.root_thread_id.as_str(), &candidate_session_id);
+                        }
+                        continue;
+                    }
+                    self.agent_residency.restore_candidate(
+                        identity.root_thread_id.as_str(),
+                        candidate_session_id,
+                        candidate_thread_id,
+                    );
+                }
+                Err(None) => {
+                    return Err(RuntimeCoreError::AgentLimitReached { max_threads: 3 });
+                }
+            }
+        }
+    }
+
+    async fn agent_residency_candidate_is_unloadable(
+        &self,
+        root_thread_id: &ThreadId,
+        session_id: &str,
+        thread_id: &str,
+    ) -> Result<bool, RuntimeCoreError> {
+        let Some(handle) = self.session_loops.get_existing(session_id).await else {
+            return Ok(true);
+        };
+        if handle.thread_id() != thread_id {
+            return Err(RuntimeCoreError::Backend(
+                "agent residency session/thread identity mismatch".to_string(),
+            ));
+        }
+        if handle
+            .snapshot()
+            .await
+            .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?
+            .active_turn_id
+            .is_some()
+        {
+            return Ok(false);
+        }
+        let (session, turns) = self.session_snapshot(session_id)?;
+        if session.thread_id != thread_id
+            || !matches!(
+                session.status,
+                AgentSessionStatus::Completed
+                    | AgentSessionStatus::Failed
+                    | AgentSessionStatus::Canceled
+            )
+            || turns.iter().any(|turn| agent_turn_is_active(turn.status))
+        {
+            return Ok(false);
+        }
+        let store = self.agent_control_store()?;
+        Ok(store
+            .list_pending_agent_mailbox_messages(
+                root_thread_id.clone(),
+                ThreadId::new(thread_id.to_string()),
+            )
+            .await
+            .map_err(agent_control_store_error)?
+            .is_empty())
+    }
+
+    pub(in crate::runtime) async fn reserve_agent_execution_slot(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+    ) -> Result<Option<agent_execution::AgentExecutionGuard>, RuntimeCoreError> {
+        if let Some(guard) = self
+            .agent_execution_limiter
+            .claim_reserved_session(session_id)
+        {
+            return Ok(Some(guard));
+        }
+        let Some(store) = self.projection_store.as_ref() else {
+            return Ok(None);
+        };
+        let Some(identity) = store
+            .read_agent_identity(ThreadId::new(thread_id.to_string()))
+            .await
+            .map_err(agent_control_store_error)?
+        else {
+            return Ok(None);
+        };
+        if identity.thread_id == identity.root_thread_id {
+            return Ok(None);
+        }
+        let terminal = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .get(session_id)
+            .is_some_and(|stored| {
+                matches!(
+                    stored.session.status,
+                    AgentSessionStatus::Completed
+                        | AgentSessionStatus::Failed
+                        | AgentSessionStatus::Canceled
+                ) && stored
+                    .turns
+                    .iter()
+                    .all(|turn| agent_turn_is_terminal(turn.status))
+            });
+        if terminal {
+            self.agent_execution_limiter.release_session(session_id);
+        }
+        self.agent_execution_limiter
+            .claim_for_session(identity.root_thread_id.as_str(), session_id)
+            .map(Some)
+            .map_err(|max_threads| RuntimeCoreError::AgentLimitReached { max_threads })
+    }
+
+    fn reserve_agent_execution_admission(
+        &self,
+        root_thread_id: &ThreadId,
+        session_id: &str,
+    ) -> Result<Option<agent_execution::AgentExecutionReservation>, RuntimeCoreError> {
+        let has_active_turn = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .get(session_id)
+            .ok_or_else(|| RuntimeCoreError::SessionNotFound(session_id.to_string()))?
+            .turns
+            .iter()
+            .any(|turn| agent_turn_is_active(turn.status));
+        if has_active_turn {
+            return Ok(None);
+        }
+        self.agent_execution_limiter
+            .reserve_for_session(root_thread_id.as_str(), session_id)
+            .map(Some)
+            .map_err(|max_threads| RuntimeCoreError::AgentLimitReached { max_threads })
+    }
+
+    fn wake_admitted_pending_session_work(
+        &self,
+        session_id: String,
+        host: RuntimeHostContext,
+        runtime_options: Option<RuntimeOptions>,
+        admission: Option<agent_execution::AgentExecutionReservation>,
+    ) {
+        let core = self.clone();
+        drop(tokio::spawn(async move {
+            let _admission = admission;
+            if let Err(error) = core
+                .process_pending_session_work_with_options(&session_id, host, runtime_options, None)
+                .await
+            {
+                if matches!(&error, RuntimeCoreError::PendingRoute { .. }) {
+                    tracing::debug!(
+                        %session_id,
+                        error = %error,
+                        "agent control admission is waiting for a route"
+                    );
+                } else {
+                    tracing::warn!(
+                        %session_id,
+                        error = %error,
+                        "agent control admission failed"
+                    );
+                }
+            }
+        }));
+    }
+
     pub(in crate::runtime) fn agent_control_gateway_for_turn(
         &self,
         session: &AgentSession,
@@ -276,6 +522,10 @@ impl RuntimeCore {
         let path = format!("{}/{}", caller.identity.agent_path, task_name);
         let child_thread_id = uuid::Uuid::now_v7().to_string();
         let child_session_id = child_thread_id.clone();
+        let admission = self
+            .agent_execution_limiter
+            .reserve_for_session(caller.identity.root_thread_id.as_str(), &child_session_id)
+            .map_err(|max_threads| RuntimeCoreError::AgentLimitReached { max_threads })?;
         let child_runtime_options = spawn_runtime_options::prepare(
             self,
             &caller.session,
@@ -363,10 +613,11 @@ impl RuntimeCore {
             })?;
             return Err(error);
         }
-        self.wake_pending_session_work(
+        self.wake_admitted_pending_session_work(
             response.session.session_id.clone(),
             host.clone(),
             child_runtime_options,
+            Some(admission),
         );
         let task_name = identity.agent_path.clone();
         Ok((
@@ -389,6 +640,14 @@ impl RuntimeCore {
         child_runtime_options: Option<RuntimeOptions>,
     ) -> Result<(serde_json::Value, ThreadId, String), RuntimeCoreError> {
         let target = self.resolve_agent_control_target(caller, &target).await?;
+        if self
+            .agent_residency
+            .is_lost(caller.identity.root_thread_id.as_str(), &target.session_id)
+        {
+            return Err(RuntimeCoreError::SessionNotFound(
+                target.thread_id.to_string(),
+            ));
+        }
         if delivery_mode == AgentMailboxDeliveryMode::TriggerTurn
             && target.thread_id == caller.identity.root_thread_id
         {
@@ -402,6 +661,16 @@ impl RuntimeCore {
         } else {
             "followup_task"
         };
+        let admission = if delivery_mode == AgentMailboxDeliveryMode::TriggerTurn {
+            self.ensure_current_session_hydrated(&target.session_id)
+                .await?;
+            self.reserve_agent_execution_admission(
+                &caller.identity.root_thread_id,
+                &target.session_id,
+            )?
+        } else {
+            None
+        };
         let message_id = self
             .append_agent_control_message(
                 caller,
@@ -412,13 +681,14 @@ impl RuntimeCore {
                 operation,
             )
             .await?;
-        if delivery_mode == AgentMailboxDeliveryMode::TriggerTurn {
+        if admission.is_some() {
             let runtime_options = self
                 .agent_control_followup_runtime_options(&target.session_id, child_runtime_options);
-            self.wake_pending_session_work(
+            self.wake_admitted_pending_session_work(
                 target.session_id.clone(),
                 host.clone(),
                 runtime_options,
+                admission,
             );
         }
         Ok((
@@ -581,6 +851,8 @@ impl RuntimeCore {
             cleanup_errors.push(format!("identity: {error}"));
         }
         if let Some(child_session_id) = child_session_id {
+            self.agent_residency
+                .forget(root_thread_id.as_str(), child_session_id);
             if let Err(error) = self.delete_agent_control_child_data(child_session_id) {
                 cleanup_errors.push(error);
             }
@@ -1074,7 +1346,12 @@ struct AgentControlListEntry {
 }
 
 fn agent_control_gateway_error(error: RuntimeCoreError) -> AgentControlGatewayError {
-    AgentControlGatewayError::new(error.to_string())
+    match error {
+        RuntimeCoreError::AgentLimitReached { max_threads } => AgentControlGatewayError::new(
+            format!("agent_limit_reached: maximum concurrent child turns is {max_threads}"),
+        ),
+        error => AgentControlGatewayError::new(error.to_string()),
+    }
 }
 
 fn agent_control_store_error(error: impl std::fmt::Display) -> RuntimeCoreError {

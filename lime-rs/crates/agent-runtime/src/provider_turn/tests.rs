@@ -144,6 +144,38 @@ impl CurrentProvider for ScriptedProvider {
     }
 }
 
+struct ScriptedRolloutBudgetReminderSource {
+    calls: Mutex<Vec<usize>>,
+    reminders: Mutex<VecDeque<Option<crate::session_config::RolloutBudgetReminder>>>,
+}
+
+impl ScriptedRolloutBudgetReminderSource {
+    fn new(reminders: Vec<Option<crate::session_config::RolloutBudgetReminder>>) -> Self {
+        Self {
+            calls: Mutex::new(Vec::new()),
+            reminders: Mutex::new(VecDeque::from(reminders)),
+        }
+    }
+}
+
+impl crate::session_config::RolloutBudgetReminderSource for ScriptedRolloutBudgetReminderSource {
+    fn next_reminder(
+        &self,
+        route_attempt: usize,
+    ) -> Result<Option<crate::session_config::RolloutBudgetReminder>, String> {
+        self.calls
+            .lock()
+            .expect("record reminder source call")
+            .push(route_attempt);
+        Ok(self
+            .reminders
+            .lock()
+            .expect("take scripted reminder")
+            .pop_front()
+            .flatten())
+    }
+}
+
 struct GatedEmptyThenRetryableErrorProvider {
     attempt: AtomicUsize,
     started: Mutex<Option<oneshot::Sender<()>>>,
@@ -902,6 +934,110 @@ fn provider_output_item_id_is_turn_and_attempt_scoped() {
 }
 
 #[tokio::test]
+async fn rollout_budget_reminder_is_reused_across_empty_response_retry() {
+    let provider = Arc::new(ScriptedProvider::new(vec![
+        vec![Ok(CanonicalLlmEvent::Finish {
+            reason: FinishReason::Stop,
+            usage: None,
+            response_id: Some("empty-response".to_string()),
+        })],
+        vec![
+            Ok(CanonicalLlmEvent::TextDelta {
+                id: "text-0".to_string(),
+                text: "done".to_string(),
+            }),
+            Ok(CanonicalLlmEvent::Finish {
+                reason: FinishReason::Stop,
+                usage: None,
+                response_id: Some("response-2".to_string()),
+            }),
+        ],
+    ]));
+    let requests = Arc::clone(&provider.requests);
+    let reminder_source = Arc::new(ScriptedRolloutBudgetReminderSource::new(vec![Some(
+        crate::session_config::RolloutBudgetReminder {
+            remaining_tokens: 50,
+            reminder_index: 2,
+            window_id: "window-1".to_string(),
+            durable_event_id: "event-reminder-1".to_string(),
+        },
+    )]));
+    let mut session_config = crate::session_config::SessionConfigBuilder::new("session-1")
+        .turn_id("turn-1")
+        .build();
+    session_config.rollout_budget_reminder_source = Some(
+        crate::session_config::RolloutBudgetReminderSourceHandle::new(reminder_source.clone())
+            .with_route_attempt(2),
+    );
+    let mut events = Vec::new();
+
+    run_current_provider_turn(
+        CurrentProviderTurnInput {
+            provider,
+            provider_trace_metadata: None,
+            session_config,
+            initial_messages: vec![CurrentProviderMessage::user(vec![
+                CurrentProviderContent::Text("hello".to_string()),
+            ])],
+            tool_step_snapshot_source: RuntimeToolStepSnapshotSourceHandle::fixed(
+                RuntimeToolStepSnapshot::new(
+                    Vec::new(),
+                    RuntimeToolExecutorHandle::new(Arc::new(EchoTool)),
+                ),
+            ),
+            hook_snapshot_source: None,
+            model_request_policy: None,
+            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            working_directory: PathBuf::from("."),
+            cancel_token: None,
+            pending_input: None,
+        },
+        |event| events.push(event),
+    )
+    .await
+    .expect("empty response retry should preserve the reminder snapshot");
+
+    assert_eq!(
+        *reminder_source.calls.lock().expect("reminder source calls"),
+        vec![2]
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(
+                event,
+                CurrentProviderTurnEvent::RolloutBudgetReminder { .. }
+            ))
+            .count(),
+        1
+    );
+    assert!(events.iter().any(|event| matches!(
+        event,
+        CurrentProviderTurnEvent::RolloutBudgetReminder {
+            remaining_tokens: 50,
+            reminder_index: 2,
+            window_id,
+            durable_event_id,
+            text,
+        } if window_id == "window-1"
+            && durable_event_id == "event-reminder-1"
+            && text.contains("50 weighted tokens left")
+    )));
+
+    let requests = requests.lock().expect("provider requests");
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0], requests[1]);
+    assert_eq!(
+        requests[0]
+            .messages
+            .iter()
+            .filter(|message| message.role == CurrentProviderRole::Developer)
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn provider_request_uses_typed_cwd_world_state_without_app_server_snapshot() {
     let provider = Arc::new(ScriptedProvider::new(vec![vec![
         Ok(CanonicalLlmEvent::TextDelta {
@@ -1562,6 +1698,7 @@ async fn each_sampling_attempt_emits_independent_provider_phase_trace() {
                     output_tokens: 4,
                     cached_input_tokens: Some(2),
                     cache_creation_input_tokens: None,
+                    codex_rollout_budget_units: None,
                 }),
             ),
             (
@@ -1576,6 +1713,7 @@ async fn each_sampling_attempt_emits_independent_provider_phase_trace() {
                     output_tokens: 6,
                     cached_input_tokens: Some(5),
                     cache_creation_input_tokens: None,
+                    codex_rollout_budget_units: None,
                 }),
             ),
         ]

@@ -79,6 +79,8 @@ current list method 为 `skills/list`，contract 是 `cwds + forceReload -> data
 
 Skill 运行时配置只允许走同一 App Server 主链：`skills/config/write` 使用 exactly-one `path/name` selector 写入 Lime 用户级 YAML `skills.config` 并返回 `effectiveEnabled`；`skills/extraRoots/set` 原子替换进程级 roots，不持久化，缺失目录按空目录处理，成功后发送 `skills/changed {}`。Renderer typed gateway 可以调用这些 current method，但不得用 `skillManagement/*`、Electron IPC 或 Codex TUI 配置路径建立第二套状态。
 
+Orchestrator-owned remote Skills 不新增 Renderer/Electron 命令，且不经过全局管理面 MCP inventory。一次真实 turn 初始化后，App Server 通过 `AgentRuntimeState[sessionId, threadId] -> McpThreadRuntime` 连接固定 `codex_apps`，以 10 秒、10 页和资源/正文边界发现 `mcp/skill`，把结果合并进同一 `AgentSkillSnapshot`；reroute 复用该快照。模型可见的 `skill_search` 只返回 metadata 与 `skill://.../SKILL.md` locator，正文必须显式调用 `read_mcp_resource(server="codex_apps", uri=...)`，不能由 Skills 或 Tool runtime 直接读取本地文件。`orchestrator.mcp=false` 只过滤 `codex_apps` catalog、tool definitions 和 dispatch route；普通 MCP 与已冻结且精确匹配的 Skills resource read 不受影响。`mcpResource/list` 的 cursor 只能与指定 `server` 一起使用，并返回 `nextCursor`；GUI 管理面仍可从全局 `McpClientManager` live read，但不能替换 in-flight snapshot。Electron 只转发 `app_server_handle_json_lines`，不得持有这套配置、discovery 或读取逻辑。
+
 ## Apps Catalog 主链
 
 Apps/connectors 只允许走同一个 Plugin catalog owner：

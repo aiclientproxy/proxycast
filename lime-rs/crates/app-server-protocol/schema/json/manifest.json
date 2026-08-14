@@ -2425,6 +2425,8 @@
       "ModelVerification",
       "ModelVerificationNotification",
       "MultiAgentVersion",
+      "NetworkApprovalContext",
+      "NetworkApprovalProtocol",
       "NonSteerableTurnKind",
       "OverriddenMetadata",
       "PatchApplyStatus",

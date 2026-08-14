@@ -191,6 +191,8 @@ export interface PluginsPageParams {
   query?: string;
   selectedPluginId?: string;
   statusFilter?: "all" | "installed";
+  /** 从项目内进入插件工作台时保留的项目作用域。 */
+  currentProjectId?: string;
 }
 
 export interface KnowledgePageParams {

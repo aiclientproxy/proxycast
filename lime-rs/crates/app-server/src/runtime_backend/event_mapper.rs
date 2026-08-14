@@ -60,6 +60,12 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
     soul_style: Option<&SoulStyleMetadata>,
     model_route_evidence: Option<&ModelRouteEvidence>,
 ) -> Result<(), RuntimeCoreError> {
+    if let RuntimeAgentEvent::RolloutBudgetReminder {
+        durable_event_id, ..
+    } = event
+    {
+        return sink.emit_preappended_by_id(durable_event_id);
+    }
     let coding_events = coding_event_mirror.process_event(event);
     let persistence_event = coding_events::runtime_event_for_persistence(event);
     for event in coding_events.before_raw {
@@ -171,19 +177,24 @@ fn emit_presentation_events(
     for mut event in
         tool_events::runtime_events_from_agent_event_with_soul_style(event, soul_style)?
     {
-        if event.event_type == "model.server_reported" {
+        if matches!(
+            event.event_type.as_str(),
+            "model.server_reported" | "provider.usage" | "provider.step"
+        ) {
             if let (Some(evidence), Some(payload)) =
                 (model_route_evidence, event.payload.as_object_mut())
             {
-                payload.insert("provider".to_string(), evidence.provider.clone().into());
-                payload.insert(
-                    "requestedModel".to_string(),
-                    evidence.requested_model.clone().into(),
-                );
-                payload.insert(
-                    "selectedModel".to_string(),
-                    evidence.selected_model.clone().into(),
-                );
+                if event.event_type == "model.server_reported" {
+                    payload.insert("provider".to_string(), evidence.provider.clone().into());
+                    payload.insert(
+                        "requestedModel".to_string(),
+                        evidence.requested_model.clone().into(),
+                    );
+                    payload.insert(
+                        "selectedModel".to_string(),
+                        evidence.selected_model.clone().into(),
+                    );
+                }
                 payload.insert("routeAttempt".to_string(), evidence.route_attempt.into());
             }
         }

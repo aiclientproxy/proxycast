@@ -623,6 +623,7 @@ fn image_command_task_created_turn_completed_includes_presentation_usage() {
         output_tokens: 0,
         cached_input_tokens: Some(1_024),
         cache_creation_input_tokens: None,
+        codex_rollout_budget_units: None,
     };
     let response = MediaTaskArtifactResponse {
         success: true,
@@ -927,5 +928,6 @@ fn request_with_metadata(metadata: Value) -> ExecutionRequest {
         queue_if_busy: false,
         skip_pre_submit_resume: false,
         agent_control_gateway: None,
+        rollout_budget_reminder_source: None,
     }
 }

@@ -2,6 +2,7 @@ use crate::manager::McpClientManager;
 use crate::types::McpError;
 use rmcp::{
     model::{
+        AnnotateAble, ListResourcesResult, PaginatedRequestParam, RawResource,
         ReadResourceRequestParam, ReadResourceResult, ResourceContents, ServerCapabilities,
         ServerInfo, SubscribeRequestParam, UnsubscribeRequestParam,
     },
@@ -27,6 +28,28 @@ impl ServerHandler for ExactTargetResourceServer {
                 .build(),
             ..Default::default()
         }
+    }
+
+    async fn list_resources(
+        &self,
+        request: Option<PaginatedRequestParam>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, rmcp::ErrorData> {
+        let page = request.and_then(|request| request.cursor);
+        let (suffix, next_cursor) = match page.as_deref() {
+            None => ("first", Some("next".to_string())),
+            Some("next") => ("second", None),
+            Some(_) => return Ok(ListResourcesResult::default()),
+        };
+        Ok(ListResourcesResult {
+            meta: None,
+            next_cursor,
+            resources: vec![RawResource::new(
+                format!("skill://{}/{suffix}", self.name),
+                suffix.to_string(),
+            )
+            .no_annotation()],
+        })
     }
 
     async fn read_resource(
@@ -113,6 +136,32 @@ async fn test_list_resource_templates_returns_empty_when_no_servers() {
     // 没有运行的服务器时，应该返回空列表
     let result = manager.list_resource_templates().await.unwrap();
     assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn list_resource_page_preserves_exact_server_cursor() {
+    let manager = McpClientManager::new(None);
+    let (_, _, server) = add_exact_target_server(&manager, "server-a").await;
+
+    let first = manager
+        .list_resource_page("server-a", None)
+        .await
+        .expect("first page");
+    assert_eq!(first.resources[0].uri, "skill://server-a/first");
+    assert_eq!(first.next_cursor.as_deref(), Some("next"));
+
+    let second = manager
+        .list_resource_page("server-a", first.next_cursor)
+        .await
+        .expect("second page");
+    assert_eq!(second.resources[0].uri, "skill://server-a/second");
+    assert!(second.next_cursor.is_none());
+
+    manager
+        .stop_server("server-a")
+        .await
+        .expect("stop server-a");
+    server.await.expect("join server-a");
 }
 
 #[tokio::test]

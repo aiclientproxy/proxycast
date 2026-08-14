@@ -23,6 +23,7 @@ import type {
   ConfirmResponse,
   Question,
 } from "../agentActionTypes";
+import { normalizeActionArguments } from "../agentActionArguments";
 import {
   getDefaultAppServerServerRequestDispatcher,
   type AppServerServerRequestDispatcher,
@@ -562,11 +563,21 @@ function commandActionFromRequest(
 ): ActionRequired {
   const requestId = params.approvalId || params.itemId;
   const command = params.command?.trim();
+  const argumentsValue =
+    command || params.networkApprovalContext
+      ? normalizeActionArguments({
+          ...(command ? { command } : {}),
+          ...(params.networkApprovalContext
+            ? { networkApprovalContext: params.networkApprovalContext }
+            : {}),
+        })
+      : undefined;
   return {
     requestId,
     actionType: "tool_confirmation",
-    toolName: command ? "exec_command" : undefined,
-    arguments: command ? { command } : undefined,
+    toolName:
+      command || params.networkApprovalContext ? "exec_command" : undefined,
+    arguments: argumentsValue,
     prompt: params.reason || command || undefined,
     scope: { threadId: params.threadId, turnId: params.turnId },
     availableDecisions: (

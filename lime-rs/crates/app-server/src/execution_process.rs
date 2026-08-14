@@ -1,4 +1,4 @@
-use app_server_protocol::protocol::v2::{GrantedPermissionProfile, ThreadBackgroundTerminal};
+use app_server_protocol::protocol::v2::ThreadBackgroundTerminal;
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
@@ -6,6 +6,10 @@ use std::sync::{Arc, Mutex};
 use tool_runtime::execution_decision::{
     decide_tool_execution, ToolExecutionDecisionInput, ToolExecutionDecisionKind,
     ToolExecutionPolicyDecisionOptions,
+};
+use tool_runtime::execution_orchestrator::{
+    RuntimeToolApprovalPolicy, RuntimeToolApprovalSource, RuntimeToolExecutionAttempt,
+    RuntimeToolSandboxPolicy,
 };
 use tool_runtime::execution_policy::{
     ToolExecutionPolicy, ToolExecutionRestrictionProfile, ToolExecutionSandboxProfile,
@@ -17,6 +21,9 @@ use tool_runtime::execution_process::{
     start_local_execution_process, ExecutionOutputDelta, ExecutionProcessSnapshot,
     LiveExecutionProcessRegistry, LocalExecutionProcessControlHandle, LocalExecutionRequest,
     LocalExecutionSandbox,
+};
+use tool_runtime::sandbox::{
+    plan_sandbox_backend, SandboxBackendPlanInput, SandboxBackendPlatform,
 };
 use tool_runtime::shell::{is_shell_tool_name, shell_command_text_from_argv};
 use tool_runtime::shell_permission::{check_shell_command_permission, ShellPermissionDecision};
@@ -81,6 +88,19 @@ pub enum ExecutionProcessError {
     Start(String),
     #[error("Execution process rejected by policy: {0}")]
     Policy(String),
+    #[error("Execution process denied by sandbox: {message}")]
+    SandboxDenied {
+        reason_code: String,
+        message: String,
+    },
+    #[error("Execution process denied managed network access: {message}")]
+    ManagedNetworkDenied {
+        reason_code: String,
+        message: String,
+        host: Option<String>,
+    },
+    #[error("Execution process was canceled: {0}")]
+    Canceled(String),
     #[error("Execution process only supports shell tools")]
     UnsupportedTool,
     #[error("Failed to prepare sandboxed execution process: {0}")]
@@ -160,36 +180,14 @@ impl ExecutionProcessServer {
                 "background terminal thread id must not be empty".to_string(),
             ));
         }
-        self.start_process_inner(Some((thread_id, display_command)), request, None)
+        self.start_process_inner(Some((thread_id, display_command)), request)
             .await
-    }
-
-    pub(crate) async fn start_thread_process_with_permissions(
-        &self,
-        thread_id: &str,
-        display_command: &str,
-        request: LiveExecutionRequest,
-        granted_permissions: Option<GrantedPermissionProfile>,
-    ) -> Result<ExecutionProcessSnapshot, ExecutionProcessError> {
-        let thread_id = thread_id.trim();
-        if thread_id.is_empty() {
-            return Err(ExecutionProcessError::Control(
-                "background terminal thread id must not be empty".to_string(),
-            ));
-        }
-        self.start_process_inner(
-            Some((thread_id, display_command)),
-            request,
-            granted_permissions,
-        )
-        .await
     }
 
     async fn start_process_inner(
         &self,
         thread_scope: Option<(&str, &str)>,
         request: LiveExecutionRequest,
-        granted_permissions: Option<GrantedPermissionProfile>,
     ) -> Result<ExecutionProcessSnapshot, ExecutionProcessError> {
         if request.command.is_empty() {
             return Err(ExecutionProcessError::EmptyCommand);
@@ -211,55 +209,30 @@ impl ExecutionProcessServer {
         let canonical_tool_name = canonical_shell_tool_name(&request.tool_name)
             .ok_or(ExecutionProcessError::UnsupportedTool)?;
         let command_text = shell_command_text_from_argv(&request.command);
-        let decision = decide_tool_execution(
-            ToolExecutionDecisionInput {
-                tool_name: canonical_tool_name,
-                params: &json!({ "command": command_text }),
-                working_directory: &working_directory,
-                surface: "execution_process",
-                auto_mode: false,
-                bypass_restrictions: false,
-                approval_policy: request.approval_policy.as_deref(),
-                requested_sandbox_policy: request.sandbox_policy.as_deref(),
-                resolver_input: ToolExecutionResolverInput {
-                    persisted_policy: None,
-                    request_metadata: request.runtime_metadata.as_ref(),
-                },
-            },
-            app_server_tool_execution_policy_options(),
-        );
-        match decision.kind {
-            ToolExecutionDecisionKind::Allow => {}
-            ToolExecutionDecisionKind::RequiresApproval
-            | ToolExecutionDecisionKind::Deny
-            | ToolExecutionDecisionKind::SandboxBlocked => {
-                return Err(ExecutionProcessError::Policy(format!(
-                    "{}: {}",
-                    decision.reason_code, decision.reason
-                )));
+        let sandbox = match request.attempt.as_ref() {
+            Some(attempt) => {
+                validate_orchestrated_attempt_identity(attempt, &request.tool_id)?;
+                if attempt.is_cancelled() {
+                    return Err(ExecutionProcessError::Canceled(
+                        "cancellation was requested before process start".to_string(),
+                    ));
+                }
+                validate_orchestrated_shell_command(
+                    canonical_tool_name,
+                    &command_text,
+                    &working_directory,
+                    attempt,
+                )?;
+                orchestrated_sandbox(attempt, request.runtime_metadata.as_ref())?
             }
-        }
-        validate_shell_execution_process_command(
-            canonical_tool_name,
-            &command_text,
-            &working_directory,
-            request.approval_policy.as_deref(),
-            request.sandbox_policy.as_deref(),
-        )
-        .map_err(ExecutionProcessError::Policy)?;
-
-        let sandbox = if decision.workspace_sandbox_backend_enforced() {
-            Some(LocalExecutionSandbox {
-                backend: decision.sandbox_backend().ok_or_else(|| {
-                    ExecutionProcessError::Sandbox(
-                        "execution decision did not identify a sandbox backend".to_string(),
-                    )
-                })?,
-                requested_policy: request.sandbox_policy.clone(),
-                granted_permissions,
-            })
-        } else {
-            None
+            None => legacy_execution_sandbox(
+                canonical_tool_name,
+                &command_text,
+                &working_directory,
+                request.approval_policy.as_deref(),
+                request.sandbox_policy.as_deref(),
+                request.runtime_metadata.as_ref(),
+            )?,
         };
         let process_id = request.process_id.clone();
         let background = thread_scope.map(|(thread_id, display_command)| BackgroundTerminalEntry {
@@ -290,6 +263,7 @@ impl ExecutionProcessServer {
                 },
             );
         }
+        let sandboxed = sandbox.is_some();
         let request = LocalExecutionRequest {
             process_id: process_id.clone(),
             tool_id: request.tool_id,
@@ -309,7 +283,14 @@ impl ExecutionProcessServer {
                 if let Ok(mut state) = self.inner.lock() {
                     state.processes.remove(&process_id);
                 }
-                return Err(ExecutionProcessError::Start(error.to_string()));
+                return Err(if sandboxed {
+                    ExecutionProcessError::SandboxDenied {
+                        reason_code: "sandbox_process_start_failed".to_string(),
+                        message: error.to_string(),
+                    }
+                } else {
+                    ExecutionProcessError::Start(error.to_string())
+                });
             }
         };
         let snapshot = handle.status();
@@ -550,6 +531,154 @@ impl ExecutionProcessServer {
             next_sequence,
         })
     }
+}
+
+fn validate_orchestrated_attempt_identity(
+    attempt: &RuntimeToolExecutionAttempt,
+    tool_id: &str,
+) -> Result<(), ExecutionProcessError> {
+    if attempt.identity().call_id() == tool_id {
+        return Ok(());
+    }
+    Err(ExecutionProcessError::Policy(format!(
+        "tool attempt call id '{}' does not match process tool id '{tool_id}'",
+        attempt.identity().call_id()
+    )))
+}
+
+fn validate_orchestrated_shell_command(
+    tool_name: &str,
+    command_text: &str,
+    working_directory: &Path,
+    attempt: &RuntimeToolExecutionAttempt,
+) -> Result<(), ExecutionProcessError> {
+    match check_shell_command_permission(tool_name, command_text, working_directory) {
+        ShellPermissionDecision::Allow => Ok(()),
+        ShellPermissionDecision::Deny(reason) => Err(ExecutionProcessError::Policy(reason)),
+        ShellPermissionDecision::RequiresConfirmation(_)
+            if attempt.approval_policy() == RuntimeToolApprovalPolicy::Never
+                || attempt.approval_source() != RuntimeToolApprovalSource::Config
+                || attempt.effective_sandbox_policy()
+                    == RuntimeToolSandboxPolicy::DangerFullAccess =>
+        {
+            Ok(())
+        }
+        ShellPermissionDecision::RequiresConfirmation(reason) => {
+            Err(ExecutionProcessError::Policy(reason))
+        }
+    }
+}
+
+fn orchestrated_sandbox(
+    attempt: &RuntimeToolExecutionAttempt,
+    runtime_metadata: Option<&serde_json::Value>,
+) -> Result<Option<LocalExecutionSandbox>, ExecutionProcessError> {
+    let effective_policy = attempt.effective_sandbox_policy();
+    if matches!(
+        effective_policy,
+        RuntimeToolSandboxPolicy::None | RuntimeToolSandboxPolicy::DangerFullAccess
+    ) {
+        return Ok(None);
+    }
+    let plan = plan_sandbox_backend(SandboxBackendPlanInput {
+        sandbox_profile: ToolExecutionSandboxProfile::WorkspaceCommand,
+        requested_policy: effective_policy.label(),
+        request_metadata: runtime_metadata,
+        bypass_restrictions: false,
+        platform: SandboxBackendPlatform::current(),
+    });
+    if plan.strict_fallback_blocks_execution() {
+        return Err(ExecutionProcessError::SandboxDenied {
+            reason_code: plan.reason_code.to_string(),
+            message: plan.reason.to_string(),
+        });
+    }
+    if let Some(host) = attempt.managed_network_host() {
+        let network_granted = attempt
+            .granted_permissions()
+            .network
+            .as_ref()
+            .and_then(|network| network.enabled)
+            .unwrap_or(false);
+        if !network_granted {
+            return Err(ExecutionProcessError::ManagedNetworkDenied {
+                reason_code: "managed_network_denied".to_string(),
+                message: format!("network access to '{host}' is blocked by managed policy"),
+                host: Some(host.to_string()),
+            });
+        }
+    }
+    if !plan.can_run_with_backend() {
+        return Ok(None);
+    }
+    Ok(Some(LocalExecutionSandbox {
+        backend: plan.backend,
+        requested_policy: effective_policy.label().map(str::to_string),
+        granted_permissions: Some(attempt.granted_permissions().clone()),
+    }))
+}
+
+fn legacy_execution_sandbox(
+    tool_name: &str,
+    command_text: &str,
+    working_directory: &Path,
+    approval_policy: Option<&str>,
+    sandbox_policy: Option<&str>,
+    runtime_metadata: Option<&serde_json::Value>,
+) -> Result<Option<LocalExecutionSandbox>, ExecutionProcessError> {
+    let decision = decide_tool_execution(
+        ToolExecutionDecisionInput {
+            tool_name,
+            params: &json!({ "command": command_text }),
+            working_directory,
+            surface: "execution_process",
+            auto_mode: false,
+            bypass_restrictions: false,
+            approval_policy,
+            requested_sandbox_policy: sandbox_policy,
+            resolver_input: ToolExecutionResolverInput {
+                persisted_policy: None,
+                request_metadata: runtime_metadata,
+            },
+        },
+        app_server_tool_execution_policy_options(),
+    );
+    match decision.kind {
+        ToolExecutionDecisionKind::Allow => {}
+        ToolExecutionDecisionKind::RequiresApproval | ToolExecutionDecisionKind::Deny => {
+            return Err(ExecutionProcessError::Policy(format!(
+                "{}: {}",
+                decision.reason_code, decision.reason
+            )));
+        }
+        ToolExecutionDecisionKind::SandboxBlocked => {
+            return Err(ExecutionProcessError::SandboxDenied {
+                reason_code: decision.reason_code,
+                message: decision.reason,
+            });
+        }
+    }
+    validate_shell_execution_process_command(
+        tool_name,
+        command_text,
+        working_directory,
+        approval_policy,
+        sandbox_policy,
+    )
+    .map_err(ExecutionProcessError::Policy)?;
+
+    if !decision.workspace_sandbox_backend_enforced() {
+        return Ok(None);
+    }
+    Ok(Some(LocalExecutionSandbox {
+        backend: decision.sandbox_backend().ok_or_else(|| {
+            ExecutionProcessError::Sandbox(
+                "execution decision did not identify a sandbox backend".to_string(),
+            )
+        })?,
+        requested_policy: sandbox_policy.map(str::to_string),
+        granted_permissions: None,
+    }))
 }
 
 pub(crate) fn decide_command_execution(

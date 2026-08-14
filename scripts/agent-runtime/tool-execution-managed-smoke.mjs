@@ -11,16 +11,35 @@ import { _electron as electron } from "playwright";
 import { resolveElectronAppServerRuntimeEnv } from "../lib/electron-app-server-assets.mjs";
 import { resolveDevAppServerBinary } from "../lib/electron-dev-sidecar.mjs";
 import {
+  AGENT_CONTROL_CAPACITY_FINAL_TEXT,
+  AGENT_CONTROL_CAPACITY_GATE_B_BATCH_ID,
   AGENT_CONTROL_FINAL_TEXT,
+  AGENT_CONTROL_RESIDENCY_FINAL_TEXT,
+  AGENT_CONTROL_RESIDENCY_GATE_B_BATCH_ID,
   PARENT_OWNED_PLACEHOLDERS,
   AGENT_CONTROL_VISIBLE_DOM_GATE_B_BATCH_ID,
   buildAgentControlVisibleDomAssertions,
+  buildAgentControlCapacityVisibleDomAssertions,
+  buildAgentControlResidencyVisibleDomAssertions,
 } from "./agent-control-visible-dom-gate-b.mjs";
+import {
+  ROLLOUT_BUDGET_FINAL_TEXT,
+  ROLLOUT_BUDGET_GATE_B_BATCH_ID,
+  buildRolloutBudgetVisibleDomAssertions,
+} from "./rollout-budget-visible-dom-gate-b.mjs";
 import {
   buildDeferredMcpVisibleDomAssertions,
   DEFERRED_MCP_TOOL_SEARCH_FINAL_TEXT,
   DEFERRED_MCP_TOOL_SEARCH_GATE_B_BATCH_ID,
 } from "./deferred-mcp-tool-search-gate-b.mjs";
+import {
+  TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_FINAL_TEXT,
+  TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_GATE_B_BATCH_ID,
+  buildToolOrchestratorManagedNetworkRetryVisibleDomAssertions,
+  TOOL_ORCHESTRATOR_SANDBOX_RETRY_FINAL_TEXT,
+  TOOL_ORCHESTRATOR_SANDBOX_RETRY_GATE_B_BATCH_ID,
+  buildToolOrchestratorSandboxRetryVisibleDomAssertions,
+} from "./tool-orchestrator-visible-dom-gate-b.mjs";
 import {
   buildSoakSummary,
   childArgsForRound,
@@ -32,7 +51,10 @@ import {
   waitForProcessIdsExit,
 } from "./tool-execution-soak-evidence.mjs";
 import { runManagedColdRestarts } from "./tool-execution-managed-restart.mjs";
-import { normalizeToolExecutionThreadReadResponse } from "./tool-execution-current-contract.mjs";
+import {
+  buildToolExecutionTurnStartParams,
+  normalizeToolExecutionThreadReadResponse,
+} from "./tool-execution-current-contract.mjs";
 import {
   cleanupToolExecutionTempRoot,
   createToolExecutionTempRuntimeEnv,
@@ -90,8 +112,23 @@ function visibleDomGateBKindFromArgs(args) {
   if (batchId === AGENT_CONTROL_VISIBLE_DOM_GATE_B_BATCH_ID) {
     return "agent-control";
   }
+  if (batchId === AGENT_CONTROL_CAPACITY_GATE_B_BATCH_ID) {
+    return "agent-capacity";
+  }
+  if (batchId === AGENT_CONTROL_RESIDENCY_GATE_B_BATCH_ID) {
+    return "agent-residency";
+  }
+  if (batchId === ROLLOUT_BUDGET_GATE_B_BATCH_ID) {
+    return "rollout-budget";
+  }
   if (batchId === DEFERRED_MCP_TOOL_SEARCH_GATE_B_BATCH_ID) {
     return "deferred-mcp";
+  }
+  if (batchId === TOOL_ORCHESTRATOR_SANDBOX_RETRY_GATE_B_BATCH_ID) {
+    return "sandbox-retry";
+  }
+  if (batchId === TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_GATE_B_BATCH_ID) {
+    return "managed-network-retry";
   }
   return null;
 }
@@ -290,7 +327,7 @@ async function waitForDomCountToDrop(page, selector, previousCount, timeoutMs) {
   );
 }
 
-async function expandHistoricalToolRows(page, timeoutMs) {
+async function materializeHistoricalTimelines(page, timeoutMs) {
   const historicalPreviewSelector =
     '[data-testid^="message-list-historical-timeline-preview:"]';
   const materializedTimelineSelector = '[data-testid="agent-thread-flow"]';
@@ -321,6 +358,10 @@ async function expandHistoricalToolRows(page, timeoutMs) {
       { timeout: Math.min(timeoutMs, 30_000) },
     );
   }
+}
+
+async function expandHistoricalToolRows(page, timeoutMs) {
+  await materializeHistoricalTimelines(page, timeoutMs);
 
   const closedProcessSelector =
     'details[data-testid*="agent-thread-block:"][data-testid$=":process"]:not([open])';
@@ -389,11 +430,35 @@ async function listTypedToolRows(page) {
         id: node.getAttribute("data-tool-call-id"),
         name: node.getAttribute("data-tool-name"),
         status: node.getAttribute("data-tool-status"),
+        text: (node.textContent || "").trim().slice(0, 500),
         visible:
           window.getComputedStyle(node).display !== "none" &&
           window.getComputedStyle(node).visibility !== "hidden" &&
           node.getBoundingClientRect().height > 0,
       })),
+    );
+}
+
+async function listFileChangeGroups(page) {
+  return await page
+    .locator('[data-testid="timeline-file-artifact-group"]')
+    .evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const card = node.querySelector(
+          '[data-testid="file-changes-summary-card"]',
+        );
+        return {
+          status: card?.getAttribute("data-file-status") || null,
+          fileRowCount: node.querySelectorAll(
+            '[data-testid="file-changes-summary-file-row"]',
+          ).length,
+          visible:
+            window.getComputedStyle(node).display !== "none" &&
+            window.getComputedStyle(node).visibility !== "hidden" &&
+            node.getBoundingClientRect().height > 0,
+          text: (node.textContent || "").trim().slice(0, 500),
+        };
+      }),
     );
 }
 
@@ -432,12 +497,17 @@ async function snapshotToolRow(row) {
   });
 }
 
-async function readAgentControlDomState({ page, sessionId, timeoutMs }) {
+async function readAgentControlDomState({
+  expectedFinalText = AGENT_CONTROL_FINAL_TEXT,
+  page,
+  sessionId,
+  timeoutMs,
+}) {
   const input = page.locator(
     `textarea[name="agent-chat-message"][data-session-id="${sessionId}"]`,
   );
   await input.waitFor({ state: "visible", timeout: timeoutMs });
-  const finalText = page.getByText(AGENT_CONTROL_FINAL_TEXT, { exact: false });
+  const finalText = page.getByText(expectedFinalText, { exact: false });
   await finalText.first().waitFor({ state: "visible", timeout: timeoutMs });
 
   await expandHistoricalToolRows(page, timeoutMs);
@@ -452,6 +522,43 @@ async function readAgentControlDomState({ page, sessionId, timeoutMs }) {
     typedToolRows: await listTypedToolRows(page),
     subagentActivityRows: await listSubagentActivityRows(page),
     finalAssistantTextVisible: await finalText.first().isVisible(),
+  };
+}
+
+async function readRolloutBudgetDomState({ page, sessionId, timeoutMs }) {
+  const input = page.locator(
+    `textarea[name="agent-chat-message"][data-session-id="${sessionId}"]`,
+  );
+  await input.waitFor({ state: "visible", timeout: timeoutMs });
+  const reply = await invokeAppServerJsonRpcRaw(page, "thread/read", {
+    threadId: sessionId,
+    includeTurns: true,
+  });
+  const thread = reply?.result?.thread ?? null;
+  if (!thread) {
+    throw new Error(
+      `预算 Gate B thread/read 未返回 canonical thread: ${JSON.stringify(reply?.error ?? null)}`,
+    );
+  }
+  const latestTurn = Array.isArray(thread.turns) ? thread.turns.at(-1) : null;
+  const bodyText = await page.evaluate(() =>
+    (document.body.textContent || "").trim().slice(-2_000),
+  );
+  const diagnostics = await readInvokeDiagnostics(page);
+  return {
+    activeSessionId: await input.getAttribute("data-session-id"),
+    typedToolRows: await listTypedToolRows(page),
+    subagentActivityRows: await listSubagentActivityRows(page),
+    finalAssistantTextVisible: bodyText.includes(ROLLOUT_BUDGET_FINAL_TEXT),
+    failureVisible:
+      bodyText.includes("rollout budget") ||
+      bodyText.includes("usage_limit_exceeded") ||
+      bodyText.includes("回合失败") ||
+      bodyText.includes("Turn failed"),
+    thread,
+    latestTurnError: latestTurn?.error ?? null,
+    appServerCalls: diagnostics.appServerCalls,
+    invokeErrorCount: diagnostics.invokeErrorCount,
   };
 }
 
@@ -777,6 +884,284 @@ async function collectDeferredMcpVisibleDomGateB({
   return { assertions, snapshot };
 }
 
+async function collectToolOrchestratorSandboxRetryVisibleDomGateB({
+  consoleErrors,
+  evidence,
+  outputPath,
+  page,
+  rendererSnapshot,
+  timeoutMs,
+}) {
+  const sessionId = String(evidence?.runtime?.sessionId || "").trim();
+  if (!sessionId) {
+    throw new Error("sandbox retry evidence 缺少 sessionId");
+  }
+  const input = page.locator(
+    `textarea[name="agent-chat-message"][data-session-id="${sessionId}"]`,
+  );
+  await input.waitFor({ state: "visible", timeout: timeoutMs });
+  const finalText = page.getByText(
+    TOOL_ORCHESTRATOR_SANDBOX_RETRY_FINAL_TEXT,
+    { exact: false },
+  );
+  await finalText.first().waitFor({ state: "visible", timeout: timeoutMs });
+  await materializeHistoricalTimelines(page, timeoutMs);
+
+  const typedToolRows = await listTypedToolRows(page);
+  const fileChangeGroups = await listFileChangeGroups(page);
+  const diagnostics = await readInvokeDiagnostics(page);
+  const screenshotPath = screenshotPathForEvidence(
+    outputPath,
+    "sandbox-retry-visible-dom",
+  );
+  fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  const snapshot = {
+    proofLevel: "Gate B",
+    claimBoundary:
+      "real Electron host/preload/App Server/runtime/read-model to one visible file-change group after typed apply_patch sandbox approval retry; localhost provider fixture, not live-provider proof",
+    url: page.url(),
+    electron: rendererSnapshot.electron === true,
+    hasInvokeBridge: rendererSnapshot.hasInvokeBridge === true,
+    supportsAppServer: rendererSnapshot.supportsAppServer === true,
+    sessionId,
+    activeSessionId: await input.getAttribute("data-session-id"),
+    typedToolRows,
+    fileChangeGroups,
+    finalAssistantTextVisible: await finalText.first().isVisible(),
+    appServerCalls: diagnostics.appServerCalls,
+    invokeErrorCount: diagnostics.invokeErrorCount,
+    consoleErrorCount: consoleErrors.length,
+    consoleErrors: consoleErrors.slice(0, 10),
+    screenshotPath: path.relative(process.cwd(), screenshotPath),
+  };
+  const assertions =
+    buildToolOrchestratorSandboxRetryVisibleDomAssertions({
+      evidence,
+      snapshot,
+    });
+  return { assertions, snapshot };
+}
+
+async function collectToolOrchestratorManagedNetworkRetryVisibleDomGateB({
+  consoleErrors,
+  evidence,
+  outputPath,
+  page,
+  rendererSnapshot,
+  timeoutMs,
+}) {
+  const sessionId = String(evidence?.runtime?.sessionId || "").trim();
+  if (!sessionId) {
+    throw new Error("managed-network retry evidence 缺少 sessionId");
+  }
+  const input = page.locator(
+    `textarea[name="agent-chat-message"][data-session-id="${sessionId}"]`,
+  );
+  await input.waitFor({ state: "visible", timeout: timeoutMs });
+  const finalText = page.getByText(
+    TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_FINAL_TEXT,
+    { exact: false },
+  );
+  await finalText.first().waitFor({ state: "visible", timeout: timeoutMs });
+  await expandHistoricalToolRows(page, timeoutMs);
+  const endpointProof = page.getByText(
+    "TOOL_ORCHESTRATOR_MANAGED_NETWORK_ENDPOINT_OK",
+    { exact: false },
+  );
+  await endpointProof.first().waitFor({ state: "visible", timeout: timeoutMs });
+
+  const typedToolRows = await listTypedToolRows(page);
+  const diagnostics = await readInvokeDiagnostics(page);
+  const screenshotPath = screenshotPathForEvidence(
+    outputPath,
+    "managed-network-retry-visible-dom",
+  );
+  fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  const snapshot = {
+    proofLevel: "Gate B",
+    claimBoundary:
+      "real Electron host/preload/App Server/runtime/read-model to one canonical exec_command identity after managed-network denial and typed network approval retry; localhost endpoint only, not live-provider proof",
+    url: page.url(),
+    electron: rendererSnapshot.electron === true,
+    hasInvokeBridge: rendererSnapshot.hasInvokeBridge === true,
+    supportsAppServer: rendererSnapshot.supportsAppServer === true,
+    sessionId,
+    activeSessionId: await input.getAttribute("data-session-id"),
+    typedToolRows,
+    endpointProofVisible: await endpointProof.first().isVisible(),
+    finalAssistantTextVisible: await finalText.first().isVisible(),
+    appServerCalls: diagnostics.appServerCalls,
+    invokeErrorCount: diagnostics.invokeErrorCount,
+    consoleErrorCount: consoleErrors.length,
+    consoleErrors: consoleErrors.slice(0, 10),
+    screenshotPath: path.relative(process.cwd(), screenshotPath),
+  };
+  const assertions =
+    buildToolOrchestratorManagedNetworkRetryVisibleDomAssertions({
+      evidence,
+      snapshot,
+    });
+  return { assertions, snapshot };
+}
+
+async function collectAgentControlCapacityVisibleDomGateB({
+  consoleErrors,
+  evidence,
+  outputPath,
+  page,
+  rendererSnapshot,
+  timeoutMs,
+}) {
+  const sessionId = String(evidence?.runtime?.sessionId || "").trim();
+  if (!sessionId) {
+    throw new Error("AgentControl capacity evidence 缺少 sessionId");
+  }
+  const domState = await readAgentControlDomState({
+    expectedFinalText: AGENT_CONTROL_CAPACITY_FINAL_TEXT,
+    page,
+    sessionId,
+    timeoutMs,
+  });
+  const diagnostics = await readInvokeDiagnostics(page);
+  const screenshotPath = screenshotPathForEvidence(
+    outputPath,
+    "capacity-visible-dom",
+  );
+  fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  const snapshot = {
+    proofLevel: "Gate B",
+    claimBoundary:
+      "real Electron host/preload/App Server/runtime/read-model to parallel AgentControl capacity rows and rejection; localhost provider fixture, not live-provider proof",
+    url: page.url(),
+    electron: rendererSnapshot.electron === true,
+    hasInvokeBridge: rendererSnapshot.hasInvokeBridge === true,
+    supportsAppServer: rendererSnapshot.supportsAppServer === true,
+    sessionId,
+    activeSessionId: domState.activeSessionId,
+    typedToolRows: domState.typedToolRows,
+    subagentActivityRows: domState.subagentActivityRows,
+    finalAssistantTextVisible: domState.finalAssistantTextVisible,
+    appServerCalls: diagnostics.appServerCalls,
+    invokeErrorCount: diagnostics.invokeErrorCount,
+    consoleErrorCount: consoleErrors.length,
+    consoleErrors: consoleErrors.slice(0, 10),
+    screenshotPath: path.relative(process.cwd(), screenshotPath),
+  };
+  const assertions = buildAgentControlCapacityVisibleDomAssertions({ snapshot });
+  return { assertions, snapshot };
+}
+
+async function collectAgentControlResidencyVisibleDomGateB({
+  coldRestart,
+  consoleErrors,
+  evidence,
+  outputPath,
+  page,
+  rendererSnapshot,
+  timeoutMs,
+}) {
+  const sessionId = String(evidence?.runtime?.sessionId || "").trim();
+  if (!sessionId) {
+    throw new Error("AgentControl residency evidence 缺少 sessionId");
+  }
+  const domState = await readAgentControlDomState({
+    expectedFinalText: AGENT_CONTROL_RESIDENCY_FINAL_TEXT,
+    page,
+    sessionId,
+    timeoutMs,
+  });
+  const diagnostics = await readInvokeDiagnostics(page);
+  const screenshotPath = screenshotPathForEvidence(
+    outputPath,
+    "residency-visible-dom",
+  );
+  fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  const snapshot = {
+    proofLevel: "Gate B",
+    claimBoundary:
+      "real Electron host/preload/App Server/runtime/read-model to terminal-slot reuse and resident LRU cold reload; localhost provider fixture, not live-provider proof",
+    url: page.url(),
+    electron: rendererSnapshot.electron === true,
+    hasInvokeBridge: rendererSnapshot.hasInvokeBridge === true,
+    supportsAppServer: rendererSnapshot.supportsAppServer === true,
+    sessionId,
+    activeSessionId: domState.activeSessionId,
+    typedToolRows: domState.typedToolRows,
+    subagentActivityRows: domState.subagentActivityRows,
+    finalAssistantTextVisible: domState.finalAssistantTextVisible,
+    residency: {
+      terminalSlotReused:
+        evidence?.assertions?.rootCreatedFourDistinctChildren === true,
+      lruColdReload:
+        evidence?.assertions?.followupTaskReloadedFirstChild === true,
+    },
+    coldRestart,
+    appServerCalls: diagnostics.appServerCalls,
+    invokeErrorCount: diagnostics.invokeErrorCount,
+    consoleErrorCount: consoleErrors.length,
+    consoleErrors: consoleErrors.slice(0, 10),
+    screenshotPath: path.relative(process.cwd(), screenshotPath),
+  };
+  const assertions = buildAgentControlResidencyVisibleDomAssertions({ snapshot });
+  return { assertions, snapshot };
+}
+
+async function collectRolloutBudgetVisibleDomGateB({
+  coldRestart,
+  consoleErrors,
+  evidence,
+  outputPath,
+  page,
+  rendererSnapshot,
+  timeoutMs,
+}) {
+  const sessionId = String(evidence?.runtime?.sessionId || "").trim();
+  if (!sessionId) {
+    throw new Error("rollout budget evidence 缺少 sessionId");
+  }
+  const domState = await readRolloutBudgetDomState({
+    page,
+    sessionId,
+    timeoutMs,
+  });
+  const screenshotPath = screenshotPathForEvidence(
+    outputPath,
+    "rollout-budget-visible-dom",
+  );
+  fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  const snapshot = {
+    proofLevel: "Gate B",
+    claimBoundary:
+      "real Electron host/preload/App Server/runtime/read-model to rollout-budget exhaustion and restart admission rejection; localhost provider fixture, not live-provider proof",
+    url: page.url(),
+    electron: rendererSnapshot.electron === true,
+    hasInvokeBridge: rendererSnapshot.hasInvokeBridge === true,
+    supportsAppServer: rendererSnapshot.supportsAppServer === true,
+    sessionId,
+    activeSessionId: domState.activeSessionId,
+    typedToolRows: domState.typedToolRows,
+    subagentActivityRows: domState.subagentActivityRows,
+    finalAssistantTextVisible: domState.finalAssistantTextVisible,
+    failureVisible: domState.failureVisible,
+    thread: domState.thread,
+    latestTurnError: domState.latestTurnError,
+    coldRestart,
+    restartRejection: coldRestart?.restartRejection ?? null,
+    appServerCalls: domState.appServerCalls,
+    invokeErrorCount: domState.invokeErrorCount,
+    consoleErrorCount: consoleErrors.length,
+    consoleErrors: consoleErrors.slice(0, 10),
+    screenshotPath: path.relative(process.cwd(), screenshotPath),
+  };
+  const assertions = buildRolloutBudgetVisibleDomAssertions({ snapshot });
+  return { assertions, snapshot };
+}
+
 async function collectAgentControlVisibleDomGateB({
   coldRestart,
   consoleErrors,
@@ -984,6 +1369,25 @@ function runChild(args, bridgeBaseUrl) {
   });
 }
 
+function writeRolloutBudgetGateConfig(runtimeEnv) {
+  const configPath = path.join(runtimeEnv.electronUserDataDir, "config.yaml");
+  fs.writeFileSync(
+    configPath,
+    [
+      "agent:",
+      "  rollout_budget:",
+      "    limit_tokens: 1",
+      "    reminder_at_remaining_tokens: []",
+      "    sampling_token_weight: 1.0",
+      "    prefill_token_weight: 1.0",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  runtimeEnv.env.LIME_CONFIG_PATH = configPath;
+  return configPath;
+}
+
 async function closeServer(server) {
   if (!server) {
     return;
@@ -1019,10 +1423,20 @@ async function main() {
   const visibleDomGateBKind = visibleDomGateBKindFromArgs(childArgs);
   const coldRestartRequested = childArgs.includes("--cold-restart");
   const soakConfig = resolveSoakConfig(childArgs);
-  if (coldRestartRequested && visibleDomGateBKind !== "agent-control") {
-    throw new Error("--cold-restart 只允许用于 agent-control-tools batch");
+  if (
+    coldRestartRequested &&
+    !["agent-control", "agent-residency", "rollout-budget"].includes(
+      visibleDomGateBKind,
+    )
+  ) {
+    throw new Error(
+      "--cold-restart 只允许用于 AgentControl 或 rollout-budget batch",
+    );
   }
-  if (visibleDomGateBKind === "agent-control" && !coldRestartRequested) {
+  if (
+    ["agent-control", "agent-residency"].includes(visibleDomGateBKind) &&
+    !coldRestartRequested
+  ) {
     throw new Error(
       "agent-control-tools visible DOM Gate B 必须显式启用 --cold-restart",
     );
@@ -1038,6 +1452,10 @@ async function main() {
     DEFAULT_EVIDENCE_OUTPUT,
   );
   const runtimeEnv = createToolExecutionTempRuntimeEnv();
+  const rolloutBudgetConfigPath =
+    visibleDomGateBKind === "rollout-budget"
+      ? writeRolloutBudgetGateConfig(runtimeEnv)
+      : null;
   const appServerBinary = resolveDevAppServerBinary({
     env: runtimeEnv.env,
     repoRoot: process.cwd(),
@@ -1135,13 +1553,18 @@ async function main() {
       let coldRestart = null;
       let preRestart = null;
       let rendererSnapshot = null;
-      if (visibleDomGateBKind === "agent-control") {
+      if (["agent-control", "agent-residency"].includes(visibleDomGateBKind)) {
+        const expectedFinalText =
+          visibleDomGateBKind === "agent-residency"
+            ? AGENT_CONTROL_RESIDENCY_FINAL_TEXT
+            : AGENT_CONTROL_FINAL_TEXT;
         rendererSnapshot = await restoreAgentSessionRoute(
           page,
           sessionId,
           timeoutMs,
         );
         const preRestartDomState = await readAgentControlDomState({
+          expectedFinalText,
           page,
           sessionId,
           timeoutMs,
@@ -1177,6 +1600,8 @@ async function main() {
           launchManagedElectron,
           logPrefix: LOG_PREFIX,
           readAgentControlDomState,
+          readRestoredDomState: (args) =>
+            readAgentControlDomState({ ...args, expectedFinalText }),
           restoreAgentSessionRoute,
           runtimeEnv,
           sessionId,
@@ -1197,6 +1622,85 @@ async function main() {
             (restart) => restart.electronProcessReplaced === true,
           ),
         };
+      } else if (visibleDomGateBKind === "rollout-budget") {
+        rendererSnapshot = await restoreAgentSessionRoute(
+          page,
+          sessionId,
+          timeoutMs,
+        );
+        const restartResult = await runManagedColdRestarts({
+          app,
+          appServerEnv,
+          bridge,
+          closeElectronApp,
+          closeServer,
+          consoleErrors,
+          count: 1,
+          initialElectronPid,
+          launchManagedElectron,
+          logPrefix: LOG_PREFIX,
+          readAgentControlDomState,
+          readRestoredDomState: readRolloutBudgetDomState,
+          restoreAgentSessionRoute,
+          runtimeEnv,
+          sessionId,
+          timeoutMs,
+        });
+        app = restartResult.app;
+        bridge = restartResult.bridge;
+        page = restartResult.page;
+        rendererSnapshot = restartResult.rendererSnapshot;
+        processSnapshots.push(...restartResult.processSnapshots);
+        restartRecords.push(...restartResult.restartRecords);
+        const restartParams = buildToolExecutionTurnStartParams({
+          clientUserMessageId: `rollout-budget-restart-${Date.now()}`,
+          message: "retry after rollout budget exhaustion",
+          model: String(evidence?.provider?.modelPreference || "lime-fixture-chat"),
+          threadId: sessionId,
+          workspaceRoot: evidence?.workspace?.root,
+        });
+        const configRead = await invokeAppServerJsonRpcRaw(page, "config/read", {
+          includeLayers: true,
+        });
+        const configuredRolloutBudget =
+          configRead?.result?.config?.agent?.rollout_budget ??
+          configRead?.result?.config?.agent?.rolloutBudget ??
+          null;
+        const runtimeConfig = {
+          configReadSucceeded: Boolean(configRead?.result?.config),
+          rolloutBudgetEnabled: Boolean(configuredRolloutBudget),
+          rolloutBudgetLimitTokens:
+            typeof configuredRolloutBudget?.limit_tokens === "number"
+              ? configuredRolloutBudget.limit_tokens
+              : typeof configuredRolloutBudget?.limitTokens === "number"
+                ? configuredRolloutBudget.limitTokens
+                : null,
+        };
+        const resumedThread = await invokeAppServerJsonRpcRaw(
+          page,
+          "thread/resume",
+          {
+            threadId: sessionId,
+            excludeTurns: true,
+          },
+        );
+        const restartRejection = await invokeAppServerJsonRpcRaw(
+          page,
+          "turn/start",
+          restartParams,
+        );
+        coldRestart = {
+          initialElectronPid,
+          restartedElectronPid: app.process().pid,
+          restartCount: restartRecords.length,
+          restarts: restartRecords,
+          electronProcessReplaced: restartRecords.every(
+            (restart) => restart.electronProcessReplaced === true,
+          ),
+          runtimeConfig,
+          resumedThread,
+          restartRejection,
+        };
       } else {
         rendererSnapshot = await restoreAgentSessionRoute(
           page,
@@ -1216,14 +1720,61 @@ async function main() {
               rendererSnapshot,
               timeoutMs,
             })
-          : await collectDeferredMcpVisibleDomGateB({
-              consoleErrors,
-              evidence,
-              outputPath,
-              page,
-              rendererSnapshot,
-              timeoutMs,
-            });
+          : visibleDomGateBKind === "agent-residency"
+            ? await collectAgentControlResidencyVisibleDomGateB({
+                coldRestart,
+                consoleErrors,
+                evidence,
+                outputPath,
+                page,
+                rendererSnapshot,
+                timeoutMs,
+              })
+          : visibleDomGateBKind === "agent-capacity"
+            ? await collectAgentControlCapacityVisibleDomGateB({
+                consoleErrors,
+                evidence,
+                outputPath,
+                page,
+                rendererSnapshot,
+                timeoutMs,
+              })
+          : visibleDomGateBKind === "sandbox-retry"
+              ? await collectToolOrchestratorSandboxRetryVisibleDomGateB({
+                  consoleErrors,
+                  evidence,
+                  outputPath,
+                  page,
+                  rendererSnapshot,
+                  timeoutMs,
+                })
+              : visibleDomGateBKind === "managed-network-retry"
+                ? await collectToolOrchestratorManagedNetworkRetryVisibleDomGateB({
+                    consoleErrors,
+                    evidence,
+                    outputPath,
+                    page,
+                    rendererSnapshot,
+                    timeoutMs,
+                  })
+              : visibleDomGateBKind === "rollout-budget"
+                ? await collectRolloutBudgetVisibleDomGateB({
+                    coldRestart,
+                    consoleErrors,
+                    evidence,
+                    outputPath,
+                    page,
+                    rendererSnapshot,
+                    timeoutMs,
+                  })
+                : await collectDeferredMcpVisibleDomGateB({
+                  consoleErrors,
+                  evidence,
+                  outputPath,
+                  page,
+                  rendererSnapshot,
+                  timeoutMs,
+                });
       const failedAssertions = Object.entries(visibleDomGateB.assertions)
         .filter(([, passed]) => passed !== true)
         .map(([name]) => name);
@@ -1233,7 +1784,17 @@ async function main() {
           : {}),
         [visibleDomGateBKind === "agent-control"
           ? "agentControlVisibleDomGateB"
-          : "visibleDomGateB"]: visibleDomGateB.snapshot,
+          : visibleDomGateBKind === "agent-residency"
+            ? "agentControlResidencyVisibleDomGateB"
+            : visibleDomGateBKind === "agent-capacity"
+            ? "agentControlCapacityVisibleDomGateB"
+            : visibleDomGateBKind === "sandbox-retry"
+              ? "toolOrchestratorSandboxRetryVisibleDomGateB"
+              : visibleDomGateBKind === "managed-network-retry"
+                ? "toolOrchestratorManagedNetworkRetryVisibleDomGateB"
+                : visibleDomGateBKind === "rollout-budget"
+                  ? "rolloutBudgetVisibleDomGateB"
+                  : "visibleDomGateB"]: visibleDomGateB.snapshot,
       };
       evidence.assertions = {
         ...(evidence.assertions && typeof evidence.assertions === "object"

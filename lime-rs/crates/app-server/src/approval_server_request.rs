@@ -3,11 +3,11 @@ use crate::AppServer;
 use app_server_protocol::protocol::v2::{
     CommandExecutionApprovalDecision, CommandExecutionRequestApprovalParams,
     CommandExecutionRequestApprovalResponse, FileChangeApprovalDecision,
-    FileChangeRequestApprovalParams, FileChangeRequestApprovalResponse, ServerNotification,
-    ServerRequestResolvedNotification, ToolRequestUserInputOption, ToolRequestUserInputParams,
-    ToolRequestUserInputQuestion, ToolRequestUserInputResponse,
-    METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL, METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL,
-    METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
+    FileChangeRequestApprovalParams, FileChangeRequestApprovalResponse, NetworkApprovalContext,
+    NetworkApprovalProtocol, ServerNotification, ServerRequestResolvedNotification,
+    ToolRequestUserInputOption, ToolRequestUserInputParams, ToolRequestUserInputQuestion,
+    ToolRequestUserInputResponse, METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
+    METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL, METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
 };
 use app_server_protocol::{
     error_codes, AgentEvent, AgentSessionActionRespondParams, AgentSessionActionScope,
@@ -341,6 +341,7 @@ fn command_approval_request(event: &AgentEvent) -> Result<Option<CommandApproval
     .ok_or_else(|| "action.required tool_confirmation has no request id".to_string())?;
     let item_id = payload_string(&event.payload, &["toolCallId", "tool_call_id"])
         .unwrap_or_else(|| request_id.clone());
+    let network_approval_context = network_approval_context(&event.payload)?;
     let command = payload_value(&event.payload, &["arguments"])
         .and_then(Value::as_object)
         .and_then(|arguments| arguments.get("command"))
@@ -375,8 +376,15 @@ fn command_approval_request(event: &AgentEvent) -> Result<Option<CommandApproval
             started_at_ms: timestamp_millis(&event.timestamp)?,
             approval_id: Some(request_id.clone()),
             reason: payload_string(&event.payload, &["prompt", "message"]),
-            command,
-            cwd: payload_string(&event.payload, &["cwd"]),
+            command: network_approval_context
+                .is_none()
+                .then_some(command)
+                .flatten(),
+            cwd: network_approval_context
+                .is_none()
+                .then(|| payload_string(&event.payload, &["cwd"]))
+                .flatten(),
+            network_approval_context,
             available_decisions,
         },
         identity: RuntimeActionIdentity {
@@ -386,6 +394,56 @@ fn command_approval_request(event: &AgentEvent) -> Result<Option<CommandApproval
             turn_id,
         },
     }))
+}
+
+fn network_approval_context(payload: &Value) -> Result<Option<NetworkApprovalContext>, String> {
+    let managed_network = payload_string(payload, &["denialKind", "denial_kind"])
+        .is_some_and(|kind| kind == "managed_network");
+    let Some(scope) =
+        payload_value(payload, &["approvalScope", "approval_scope"]).and_then(Value::as_object)
+    else {
+        return if managed_network {
+            Err("action.required managed-network approval context is incomplete".to_string())
+        } else {
+            Ok(None)
+        };
+    };
+    let host = ["networkHost", "network_host"]
+        .iter()
+        .find_map(|key| scope.get(*key))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let protocol = ["networkProtocol", "network_protocol"]
+        .iter()
+        .find_map(|key| scope.get(*key))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    match (host, protocol) {
+        (Some(host), Some(protocol)) => Ok(Some(NetworkApprovalContext {
+            host,
+            protocol: parse_network_approval_protocol(&protocol)?,
+        })),
+        _ if managed_network => {
+            Err("action.required managed-network approval context is incomplete".to_string())
+        }
+        _ => Ok(None),
+    }
+}
+
+fn parse_network_approval_protocol(value: &str) -> Result<NetworkApprovalProtocol, String> {
+    match value {
+        "http" => Ok(NetworkApprovalProtocol::Http),
+        "https" => Ok(NetworkApprovalProtocol::Https),
+        "socks5Tcp" => Ok(NetworkApprovalProtocol::Socks5Tcp),
+        "socks5Udp" => Ok(NetworkApprovalProtocol::Socks5Udp),
+        _ => Err(format!(
+            "action.required has unsupported network approval protocol: {value}"
+        )),
+    }
 }
 
 fn file_change_approval_request(
@@ -599,6 +657,7 @@ mod tests {
         assert_eq!(request.identity.request_id, "approval-1");
         assert_eq!(request.params.item_id, "item-command-1");
         assert_eq!(request.params.command.as_deref(), Some("npm test"));
+        assert_eq!(request.params.network_approval_context, None);
         assert_eq!(
             request.params.available_decisions,
             Some(vec![
@@ -608,6 +667,89 @@ mod tests {
                 CommandExecutionApprovalDecision::Cancel,
             ])
         );
+    }
+
+    #[test]
+    fn lowers_managed_network_retry_to_network_only_approval_request() {
+        let request = command_approval_request(&event(json!({
+            "requestId": "approval-network-1",
+            "actionType": "tool_confirmation",
+            "toolCallId": "item-command-network-1",
+            "prompt": "network access requires approval",
+            "arguments": { "command": "curl http://127.0.0.1:43123/proof?token=secret" },
+            "cwd": "/workspace/lime",
+            "approvalPhase": "escalation",
+            "denialKind": "managed_network",
+            "approvalScope": {
+                "networkHost": "127.0.0.1",
+                "networkProtocol": "http"
+            }
+        })))
+        .expect("valid network approval")
+        .expect("network approval request");
+
+        assert_eq!(
+            request.params.network_approval_context,
+            Some(NetworkApprovalContext {
+                host: "127.0.0.1".to_string(),
+                protocol: NetworkApprovalProtocol::Http,
+            })
+        );
+        assert_eq!(request.params.command, None);
+        assert_eq!(request.params.cwd, None);
+        let serialized =
+            serde_json::to_string(&request.params).expect("serialize network approval");
+        assert!(!serialized.contains("token=secret"));
+        assert!(!serialized.contains("approvalPhase"));
+        assert!(!serialized.contains("denialKind"));
+    }
+
+    #[test]
+    fn rejects_managed_network_approval_without_complete_typed_context() {
+        for payload in [
+            json!({
+                "requestId": "approval-network-incomplete",
+                "actionType": "tool_confirmation",
+                "toolCallId": "item-command-network-incomplete",
+                "denialKind": "managed_network",
+                "approvalScope": {
+                    "networkHost": "127.0.0.1"
+                }
+            }),
+            json!({
+                "requestId": "approval-network-missing-scope",
+                "actionType": "tool_confirmation",
+                "toolCallId": "item-command-network-missing-scope",
+                "denialKind": "managed_network"
+            }),
+        ] {
+            let error = match command_approval_request(&event(payload)) {
+                Err(error) => error,
+                Ok(_) => panic!("managed-network approval must fail closed"),
+            };
+            assert_eq!(
+                error,
+                "action.required managed-network approval context is incomplete"
+            );
+        }
+    }
+
+    #[test]
+    fn ignores_legacy_network_host_for_non_managed_approval() {
+        let request = command_approval_request(&event(json!({
+            "requestId": "approval-legacy-host",
+            "actionType": "tool_confirmation",
+            "toolCallId": "item-command-legacy-host",
+            "arguments": { "command": "npm test" },
+            "approvalScope": {
+                "networkHost": "legacy.example"
+            }
+        })))
+        .expect("legacy approval remains valid")
+        .expect("command approval");
+
+        assert_eq!(request.params.network_approval_context, None);
+        assert_eq!(request.params.command.as_deref(), Some("npm test"));
     }
 
     #[test]

@@ -184,6 +184,7 @@ mod tests {
             queue_if_busy: false,
             skip_pre_submit_resume: true,
             agent_control_gateway: None,
+            rollout_budget_reminder_source: None,
         };
         let scope = RuntimeSessionScope {
             session_id: "session-cache".to_string(),

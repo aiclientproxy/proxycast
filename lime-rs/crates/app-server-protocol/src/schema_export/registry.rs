@@ -782,6 +782,8 @@ pub(super) fn v2_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<v2::McpServerResourceReadResponse>("McpServerResourceReadResponse"),
         typed_schema::<v2::McpServerToolCallParams>("McpServerToolCallParams"),
         typed_schema::<v2::McpServerToolCallResponse>("McpServerToolCallResponse"),
+        typed_schema::<v2::NetworkApprovalProtocol>("NetworkApprovalProtocol"),
+        typed_schema::<v2::NetworkApprovalContext>("NetworkApprovalContext"),
         typed_schema::<v2::CommandExecutionApprovalDecision>("CommandExecutionApprovalDecision"),
         typed_schema::<v2::CommandExecutionRequestApprovalParams>(
             "CommandExecutionRequestApprovalParams",

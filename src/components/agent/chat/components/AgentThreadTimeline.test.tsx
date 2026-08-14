@@ -189,6 +189,33 @@ describe("AgentThreadTimeline", () => {
       ),
     ).toHaveLength(1);
   });
+  it("同一路径的 patch lifecycle 应聚合为一个文件行", () => {
+    const patch = (id: string, sequence: number, diff: string) => ({
+      ...createBaseItem(id, sequence),
+      type: "patch" as const,
+      text: "已应用补丁",
+      paths: ["src/lib.rs"],
+      file_status: "completed",
+      success: true,
+      changes: [
+        {
+          path: "src/lib.rs",
+          kind: { type: "update" },
+          diff,
+        },
+      ],
+    });
+    const container = renderTimeline([
+      patch("patch-started", 1, "@@ -1 +1 @@\n-old\n+new"),
+      patch("patch-applied", 2, "@@ -1 +1 @@\n-new\n+done"),
+    ]);
+
+    expect(
+      container.querySelectorAll(
+        '[data-testid="file-changes-summary-file-row"]',
+      ),
+    ).toHaveLength(1);
+  });
   it("多个只读 file_artifact 不应聚合成文件变更框", () => {
     const container = renderTimeline([
       createFileArtifactItem({

@@ -27,6 +27,7 @@ pub struct RuntimeToolExecutionContext {
     workspace_sandbox: Option<RuntimeWorkspaceSandboxInput>,
     environment: HashMap<String, String>,
     tool_identity: Option<RuntimeToolExecutionIdentity>,
+    execution_attempt: Option<crate::execution_orchestrator::RuntimeToolExecutionAttempt>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +62,7 @@ impl RuntimeToolExecutionContext {
             workspace_sandbox: input.workspace_sandbox,
             environment: HashMap::new(),
             tool_identity: None,
+            execution_attempt: None,
         }
     }
 
@@ -92,8 +94,22 @@ impl RuntimeToolExecutionContext {
         self.tool_identity.as_ref()
     }
 
+    pub fn execution_attempt(
+        &self,
+    ) -> Option<&crate::execution_orchestrator::RuntimeToolExecutionAttempt> {
+        self.execution_attempt.as_ref()
+    }
+
     pub fn with_tool_identity(mut self, identity: RuntimeToolExecutionIdentity) -> Self {
         self.tool_identity = Some(identity);
+        self
+    }
+
+    pub fn with_execution_attempt(
+        mut self,
+        attempt: crate::execution_orchestrator::RuntimeToolExecutionAttempt,
+    ) -> Self {
+        self.execution_attempt = Some(attempt);
         self
     }
 }
@@ -440,7 +456,13 @@ impl RuntimeToolExecutionFailure {
         let reason_code = error.policy_kind().map(|kind| match kind {
             RuntimeToolPolicyErrorKind::PermissionDenied(reason)
             | RuntimeToolPolicyErrorKind::SafetyCheckFailed(reason)
+            | RuntimeToolPolicyErrorKind::SandboxDenied(reason)
+            | RuntimeToolPolicyErrorKind::Timeout(reason)
+            | RuntimeToolPolicyErrorKind::Canceled(reason)
             | RuntimeToolPolicyErrorKind::ExecutionFailed(reason) => reason.clone(),
+            RuntimeToolPolicyErrorKind::ManagedNetworkDenied { reason_code, .. } => {
+                reason_code.clone()
+            }
         });
         let kind = match error.policy_kind() {
             Some(RuntimeToolPolicyErrorKind::PermissionDenied(_)) => {
@@ -448,6 +470,18 @@ impl RuntimeToolExecutionFailure {
             }
             Some(RuntimeToolPolicyErrorKind::SafetyCheckFailed(_)) => {
                 RuntimeToolExecutionFailureKind::SafetyCheckFailed
+            }
+            Some(RuntimeToolPolicyErrorKind::SandboxDenied(_)) => {
+                RuntimeToolExecutionFailureKind::SandboxDenied
+            }
+            Some(RuntimeToolPolicyErrorKind::ManagedNetworkDenied { .. }) => {
+                RuntimeToolExecutionFailureKind::ManagedNetworkDenied
+            }
+            Some(RuntimeToolPolicyErrorKind::Timeout(_)) => {
+                RuntimeToolExecutionFailureKind::Timeout
+            }
+            Some(RuntimeToolPolicyErrorKind::Canceled(_)) => {
+                RuntimeToolExecutionFailureKind::Canceled
             }
             Some(RuntimeToolPolicyErrorKind::ExecutionFailed(_)) | None => {
                 RuntimeToolExecutionFailureKind::ExecutionFailed
@@ -483,6 +517,10 @@ impl RuntimeToolExecutionFailure {
 pub enum RuntimeToolExecutionFailureKind {
     PermissionDenied,
     SafetyCheckFailed,
+    SandboxDenied,
+    ManagedNetworkDenied,
+    Timeout,
+    Canceled,
     ExecutionFailed,
 }
 
@@ -490,6 +528,13 @@ pub enum RuntimeToolExecutionFailureKind {
 pub enum RuntimeToolPolicyErrorKind {
     PermissionDenied(String),
     SafetyCheckFailed(String),
+    SandboxDenied(String),
+    ManagedNetworkDenied {
+        reason_code: String,
+        host: Option<String>,
+    },
+    Timeout(String),
+    Canceled(String),
     ExecutionFailed(String),
 }
 
@@ -512,13 +557,35 @@ impl RuntimeToolPolicyErrorKind {
                     reason,
                 })
             }
-            RuntimeToolPolicyErrorKind::ExecutionFailed(reason)
-                if looks_like_sandbox_block(reason) =>
-            {
+            RuntimeToolPolicyErrorKind::SandboxDenied(reason) => {
                 Some(RuntimeToolPolicyErrorClassification {
                     event_class: "sandbox.blocked",
                     failure_category: "sandbox_blocked",
-                    reason_code: "sandbox_blocked",
+                    reason_code: reason,
+                    reason,
+                })
+            }
+            RuntimeToolPolicyErrorKind::ManagedNetworkDenied { reason_code, .. } => {
+                Some(RuntimeToolPolicyErrorClassification {
+                    event_class: "network.blocked",
+                    failure_category: "managed_network_denied",
+                    reason_code,
+                    reason: reason_code,
+                })
+            }
+            RuntimeToolPolicyErrorKind::Timeout(reason) => {
+                Some(RuntimeToolPolicyErrorClassification {
+                    event_class: "tool.timed_out",
+                    failure_category: "timeout",
+                    reason_code: reason,
+                    reason,
+                })
+            }
+            RuntimeToolPolicyErrorKind::Canceled(reason) => {
+                Some(RuntimeToolPolicyErrorClassification {
+                    event_class: "tool.canceled",
+                    failure_category: "canceled",
+                    reason_code: reason,
                     reason,
                 })
             }
@@ -531,16 +598,8 @@ impl RuntimeToolPolicyErrorKind {
 pub struct RuntimeToolPolicyErrorClassification<'a> {
     pub event_class: &'static str,
     pub failure_category: &'static str,
-    pub reason_code: &'static str,
+    pub reason_code: &'a str,
     pub reason: &'a str,
-}
-
-fn looks_like_sandbox_block(reason: &str) -> bool {
-    let normalized = reason.to_ascii_lowercase();
-    normalized.contains("sandbox")
-        && (normalized.contains("block")
-            || normalized.contains("denied")
-            || normalized.contains("not permitted"))
 }
 
 #[cfg(test)]
@@ -588,6 +647,7 @@ mod tests {
         );
         assert!(context.environment().is_empty());
         assert!(context.tool_identity().is_none());
+        assert!(context.execution_attempt().is_none());
     }
 
     struct IdentityExecutor;
@@ -812,14 +872,13 @@ mod tests {
         assert_eq!(permission.failure_category, "permission_denied");
         assert_eq!(permission.reason_code, "permission_denied");
 
-        let sandbox_error =
-            RuntimeToolPolicyErrorKind::ExecutionFailed("sandbox denied file write".to_string());
+        let sandbox_error = RuntimeToolPolicyErrorKind::SandboxDenied("sandbox_denied".to_string());
         let sandbox = sandbox_error
             .classification()
             .expect("sandbox execution failure should classify");
         assert_eq!(sandbox.event_class, "sandbox.blocked");
         assert_eq!(sandbox.failure_category, "sandbox_blocked");
-        assert_eq!(sandbox.reason_code, "sandbox_blocked");
+        assert_eq!(sandbox.reason_code, "sandbox_denied");
 
         assert!(
             RuntimeToolPolicyErrorKind::ExecutionFailed("command failed".to_string())

@@ -284,6 +284,30 @@ describe("AppSidebar preferences", () => {
     expect(onNavigate).toHaveBeenCalledWith("plugins", undefined);
   });
 
+  it("从项目会话进入插件工作台应保留当前项目作用域", async () => {
+    const onNavigate = vi.fn();
+    const container = mountSidebarContainer({
+      currentPageParams: {
+        agentEntry: "claw",
+        projectId: "project-1",
+      } as AgentPageParams,
+      onNavigate,
+    });
+    await flushEffects();
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="app-sidebar-nav-plugins"]',
+        )
+        ?.click();
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith("plugins", {
+      currentProjectId: "project-1",
+    });
+  });
+
   it("旧的 enabled-items 本地缓存不应再复活历史导航", async () => {
     localStorage.setItem(
       APP_SIDEBAR_ENABLED_ITEMS_STORAGE_KEY,

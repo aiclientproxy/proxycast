@@ -1017,6 +1017,10 @@ fn responses_usage(value: &Value) -> Usage {
             .pointer("/input_tokens_details/cached_tokens")
             .and_then(Value::as_u64),
         total_tokens: number("total_tokens"),
+        codex_rollout_budget_units: value
+            .get("codex_rollout_budget_units")
+            .and_then(Value::as_number)
+            .cloned(),
         ..Usage::default()
     }
 }
@@ -1273,6 +1277,21 @@ mod tests {
         assert_eq!(
             anthropic_finish_reason("refusal"),
             FinishReason::ContentFilter
+        );
+    }
+
+    #[test]
+    fn responses_usage_preserves_codex_rollout_budget_units() {
+        let usage = responses_usage(&json!({
+            "input_tokens": 21,
+            "output_tokens": 8,
+            "total_tokens": 29,
+            "codex_rollout_budget_units": 12.75
+        }));
+
+        assert_eq!(
+            usage.codex_rollout_budget_units,
+            json!(12.75).as_number().cloned()
         );
     }
 

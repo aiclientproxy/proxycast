@@ -46,7 +46,7 @@ function canonicalToolName(item) {
         wait: "wait_agent",
       }[item.tool];
     case "commandExecution":
-      return "Bash";
+      return "exec_command";
     case "fileChange":
       return "apply_patch";
     case "imageView":
@@ -142,10 +142,12 @@ export function buildToolExecutionThreadStartParams({
 }
 
 export function buildToolExecutionTurnStartParams({
+  approvalPolicy = "never",
   clientUserMessageId,
   message,
   metadata,
   model,
+  sandboxPolicy = "danger-full-access",
   threadId,
   workspaceRoot,
 }) {
@@ -155,8 +157,8 @@ export function buildToolExecutionTurnStartParams({
     input: [{ type: "text", text: message }],
     cwd: workspaceRoot,
     runtimeWorkspaceRoots: [workspaceRoot],
-    approvalPolicy: "never",
-    sandboxPolicy: "danger-full-access",
+    approvalPolicy,
+    sandboxPolicy,
     model,
     responsesapiClientMetadata: {
       source: "smoke:agent-runtime-tool-execution",
@@ -302,9 +304,11 @@ export async function startToolExecutionTurnCurrent(
     "turn/start",
     buildToolExecutionTurnStartParams({
       clientUserMessageId: turnId,
+      approvalPolicy: runtimeRequest.approvalPolicy,
       message,
       metadata: runtimeRequest.metadata,
       model: runtimeRequest.modelPreference,
+      sandboxPolicy: runtimeRequest.sandboxPolicy,
       threadId: sessionId,
       workspaceRoot,
     }),

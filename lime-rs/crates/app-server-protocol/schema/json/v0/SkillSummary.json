@@ -4,6 +4,7 @@
       "enum": [
         "application",
         "external",
+        "orchestrator",
         "user",
         "workspace"
       ],
@@ -119,6 +120,7 @@
     "SkillSource": {
       "enum": [
         "app",
+        "orchestrator",
         "other",
         "project",
         "user"

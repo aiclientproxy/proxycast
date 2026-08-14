@@ -82,6 +82,12 @@ pub struct AgentTokenUsage {
     pub cached_input_tokens: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_creation_input_tokens: Option<u32>,
+    #[serde(
+        default,
+        rename = "codex_rollout_budget_units",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub codex_rollout_budget_units: Option<serde_json::Number>,
 }
 
 pub type AgentContextTraceStep = agent_protocol::context_trace::ContextTraceStep;
@@ -626,6 +632,19 @@ pub enum AgentEvent {
     ProviderUsage {
         attempt: u32,
         usage: AgentTokenUsage,
+    },
+
+    #[serde(rename = "rollout_budget_reminder")]
+    RolloutBudgetReminder {
+        #[serde(rename = "remainingTokens")]
+        remaining_tokens: i64,
+        #[serde(rename = "reminderIndex")]
+        reminder_index: usize,
+        #[serde(rename = "windowId")]
+        window_id: String,
+        #[serde(rename = "durableEventId")]
+        durable_event_id: String,
+        text: String,
     },
 
     #[serde(rename = "provider_step")]

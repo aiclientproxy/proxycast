@@ -298,6 +298,7 @@ pub(crate) async fn list_mcp_resources(
         resource_templates: values_from_serializable_vec(
             manager.list_resource_templates().await.map_err(mcp_error)?,
         )?,
+        next_cursor: None,
     })
 }
 

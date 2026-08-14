@@ -50,6 +50,7 @@ pub(super) async fn preflight_thread_settings_route(
         queue_if_busy: false,
         skip_pre_submit_resume: false,
         agent_control_gateway: None,
+        rollout_budget_reminder_source: None,
     };
     let route = backend.resolve_turn_route(&request).await?;
     if let Some(failure) = route.resolution.resolved_route.failure.as_ref() {

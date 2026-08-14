@@ -1,5 +1,4 @@
 use crate::execution_process::ExecutionProcessServer;
-use app_server_protocol::protocol::v2::GrantedPermissionProfile;
 use async_trait::async_trait;
 use tool_runtime::execution_process::{
     live::{
@@ -8,6 +7,7 @@ use tool_runtime::execution_process::{
     },
     ExecutionProcessSnapshot,
 };
+use tool_runtime::tool_executor::{RuntimeToolExecutionError, RuntimeToolPolicyErrorKind};
 
 #[async_trait]
 impl RuntimeLiveExecutionGateway for ExecutionProcessServer {
@@ -16,36 +16,62 @@ impl RuntimeLiveExecutionGateway for ExecutionProcessServer {
         thread_id: &str,
         display_command: &str,
         request: LiveExecutionRequest,
-        granted_permissions: Option<GrantedPermissionProfile>,
-    ) -> Result<ExecutionProcessSnapshot, String> {
-        self.start_thread_process_with_permissions(
-            thread_id,
-            display_command,
-            request,
-            granted_permissions,
-        )
-        .await
-        .map_err(|error| error.to_string())
+    ) -> Result<ExecutionProcessSnapshot, RuntimeToolExecutionError> {
+        self.start_thread_process(thread_id, display_command, request)
+            .await
+            .map_err(runtime_execution_process_error)
     }
 
-    fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), String> {
+    fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), RuntimeToolExecutionError> {
         self.write_stdin(process_id, data)
-            .map_err(|error| error.to_string())
+            .map_err(runtime_execution_process_error)
     }
 
-    fn terminate(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String> {
+    fn terminate(
+        &self,
+        process_id: &str,
+    ) -> Result<ExecutionProcessSnapshot, RuntimeToolExecutionError> {
         self.terminate(process_id)
-            .map_err(|error| error.to_string())
+            .map_err(runtime_execution_process_error)
     }
 
-    fn status(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String> {
-        self.status(process_id).map_err(|error| error.to_string())
+    fn status(
+        &self,
+        process_id: &str,
+    ) -> Result<ExecutionProcessSnapshot, RuntimeToolExecutionError> {
+        self.status(process_id)
+            .map_err(runtime_execution_process_error)
     }
 
     fn drain_output(
         &self,
         query: LiveExecutionOutputQuery,
-    ) -> Result<LiveExecutionOutputBatch, String> {
-        self.drain_output(query).map_err(|error| error.to_string())
+    ) -> Result<LiveExecutionOutputBatch, RuntimeToolExecutionError> {
+        self.drain_output(query)
+            .map_err(runtime_execution_process_error)
     }
+}
+
+fn runtime_execution_process_error(
+    error: crate::execution_process::ExecutionProcessError,
+) -> RuntimeToolExecutionError {
+    use crate::execution_process::ExecutionProcessError;
+
+    let message = error.to_string();
+    let kind = match error {
+        ExecutionProcessError::Policy(_) => RuntimeToolPolicyErrorKind::SafetyCheckFailed(
+            "execution_process_policy_denied".to_string(),
+        ),
+        ExecutionProcessError::SandboxDenied { reason_code, .. } => {
+            RuntimeToolPolicyErrorKind::SandboxDenied(reason_code)
+        }
+        ExecutionProcessError::ManagedNetworkDenied {
+            reason_code, host, ..
+        } => RuntimeToolPolicyErrorKind::ManagedNetworkDenied { reason_code, host },
+        ExecutionProcessError::Canceled(_) => {
+            RuntimeToolPolicyErrorKind::Canceled("execution_process_cancelled".to_string())
+        }
+        _ => RuntimeToolPolicyErrorKind::ExecutionFailed("execution_process".to_string()),
+    };
+    RuntimeToolExecutionError::new(message, Some(kind))
 }

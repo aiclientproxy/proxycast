@@ -413,6 +413,7 @@ fn skill_scope(scope: AgentSkillScope) -> V2SkillScope {
         AgentSkillScope::Project => V2SkillScope::Repo,
         AgentSkillScope::User => V2SkillScope::User,
         AgentSkillScope::App => V2SkillScope::System,
+        AgentSkillScope::Orchestrator => V2SkillScope::System,
         AgentSkillScope::Other => V2SkillScope::Admin,
     }
 }

@@ -188,6 +188,13 @@ export interface WorkspaceSandboxConfig {
   notify_on_fallback: boolean;
 }
 
+export interface RolloutBudgetConfig {
+  limit_tokens: number;
+  reminder_at_remaining_tokens?: number[];
+  sampling_token_weight?: number;
+  prefill_token_weight?: number;
+}
+
 export interface NativeAgentConfig {
   use_default_system_prompt?: boolean;
   custom_system_prompt?: string | null;
@@ -197,6 +204,16 @@ export interface NativeAgentConfig {
   max_tokens?: number;
   workspace_sandbox?: WorkspaceSandboxConfig;
   tool_execution?: ToolExecutionPolicyConfig;
+  rollout_budget?: RolloutBudgetConfig;
+}
+
+export interface OrchestratorFeatureConfig {
+  enabled: boolean;
+}
+
+export interface OrchestratorConfig {
+  skills: OrchestratorFeatureConfig;
+  mcp: OrchestratorFeatureConfig;
 }
 
 export interface ImageGenConfig {
@@ -322,6 +339,7 @@ export interface Config {
   user_profile?: UserProfile;
   developer?: DeveloperConfig;
   agent?: NativeAgentConfig;
+  orchestrator?: OrchestratorConfig;
   gateway?: GatewayConfig;
   channels?: ChannelsConfig;
   crash_reporting?: CrashReportingConfig;

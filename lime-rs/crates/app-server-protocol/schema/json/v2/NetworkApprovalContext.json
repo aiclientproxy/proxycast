@@ -1,0 +1,28 @@
+{
+  "$defs": {
+    "NetworkApprovalProtocol": {
+      "enum": [
+        "http",
+        "https",
+        "socks5Tcp",
+        "socks5Udp"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "host": {
+      "type": "string"
+    },
+    "protocol": {
+      "$ref": "#/$defs/NetworkApprovalProtocol"
+    }
+  },
+  "required": [
+    "host",
+    "protocol"
+  ],
+  "title": "NetworkApprovalContext",
+  "type": "object"
+}

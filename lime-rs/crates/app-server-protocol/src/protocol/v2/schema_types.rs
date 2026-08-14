@@ -84,6 +84,8 @@ pub const V2_SCHEMA_TYPE_NAMES: &[&str] = &[
     "McpServerResourceReadResponse",
     "McpServerToolCallParams",
     "McpServerToolCallResponse",
+    "NetworkApprovalProtocol",
+    "NetworkApprovalContext",
     "CommandExecutionApprovalDecision",
     "CommandExecutionRequestApprovalParams",
     "CommandExecutionRequestApprovalResponse",

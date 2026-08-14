@@ -19,6 +19,7 @@ pub(crate) mod model_route_credential;
 mod model_route_resolver;
 mod model_routing;
 mod native_tools;
+mod orchestrator_skills;
 mod permission_preflight;
 mod plan_events;
 mod proposed_plan_parser;
@@ -66,7 +67,7 @@ use request_context::{
     apply_app_server_turn_policy, direct_provider_config_from_request,
     request_tool_policy_from_request, resolve_runtime_model_selection,
     runtime_request_from_request, service_tier_from_request,
-    session_config_from_request_with_plugins, session_scope_from_request,
+    session_config_from_request_with_plugins_and_orchestrator, session_scope_from_request,
     should_use_compact_tool_surface,
 };
 use route_support::{
@@ -435,6 +436,7 @@ impl RuntimeBackend {
         let mut model_verification_emitted = false;
         let mut server_model_evidence_keys = HashSet::new();
         let mut runtime_initialized = false;
+        let mut orchestrator_skill_discovery = None;
         let (
             turn_execution,
             provider_config,
@@ -496,10 +498,29 @@ impl RuntimeBackend {
                     )
                     .await?;
                 }
+                orchestrator_skill_discovery = Some(
+                    orchestrator_skills::discover_for_turn(
+                        &self.agent_state,
+                        &session_scope.session_id,
+                        &session_scope.thread_id,
+                        config_metadata.as_ref(),
+                    )
+                    .await,
+                );
+                if let Some(discovery) = orchestrator_skill_discovery.as_ref() {
+                    for warning in &discovery.warnings {
+                        tracing::warn!(
+                            session_id = %session_scope.session_id,
+                            thread_id = %session_scope.thread_id,
+                            warning,
+                            "Orchestrator Skill discovery warning"
+                        );
+                    }
+                }
                 runtime_initialized = true;
             }
 
-            let mut session_config = session_config_from_request_with_plugins(
+            let mut session_config = session_config_from_request_with_plugins_and_orchestrator(
                 &request,
                 host_request.as_ref(),
                 &session_scope,
@@ -507,6 +528,10 @@ impl RuntimeBackend {
                 &request_tool_policy,
                 config_metadata.clone(),
                 &turn_plugin_snapshots,
+                orchestrator_skill_discovery
+                    .as_ref()
+                    .map(|discovery| discovery.skills.as_slice())
+                    .unwrap_or_default(),
             );
             session_config.tool_mode = route_resolution.tool_mode;
             session_config.supports_custom_tools = route_resolution.supports_custom_tools;
@@ -522,6 +547,11 @@ impl RuntimeBackend {
                 selected_model: selection.model.clone(),
                 route_attempt: excluded_routes.len() + 1,
             };
+            session_config.rollout_budget_reminder_source = session_config
+                .rollout_budget_reminder_source
+                .take()
+                .map(|source| source.with_route_attempt(model_route_evidence.route_attempt));
+            let event_failure_cancellation = cancellation_token.clone();
             let execution_result = run_agent_turn_with_policy(
                 &self.agent_state,
                 AgentTurnExecutionRequest {
@@ -592,6 +622,9 @@ impl RuntimeBackend {
                             Some(&model_route_evidence),
                         )
                     {
+                        if let Some(cancellation_token) = event_failure_cancellation.as_ref() {
+                            cancellation_token.cancel();
+                        }
                         emit_error = Some(error);
                     }
                 },

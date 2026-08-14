@@ -41,7 +41,7 @@ const SAFE_HTTPS_URL_POLICY: ToolExecutionPolicy = ToolExecutionPolicy {
 };
 
 const WORKSPACE_PATH_TOOLS: &[&str] = &["Read", "view_image"];
-const DEFAULT_POLICY_TOOLS: &[&str] = &[APPLY_PATCH_TOOL_NAME];
+const WORKSPACE_SANDBOX_TOOLS: &[&str] = &[APPLY_PATCH_TOOL_NAME];
 const WORKSPACE_PATH_OPTIONAL_TOOLS: &[&str] = &["Glob", "Grep"];
 const WORKSPACE_SHELL_TOOLS: &[&str] = &["exec_command"];
 const SAFE_HTTPS_URL_TOOLS: &[&str] = &["WebFetch"];
@@ -52,8 +52,11 @@ const TOOL_POLICY_RULES: &[ToolPolicyRule] = &[
         policy: WORKSPACE_PATH_POLICY,
     },
     ToolPolicyRule {
-        tool_names: DEFAULT_POLICY_TOOLS,
-        policy: DEFAULT_POLICY,
+        tool_names: WORKSPACE_SANDBOX_TOOLS,
+        policy: ToolExecutionPolicy {
+            sandbox_profile: ToolExecutionSandboxProfile::WorkspaceCommand,
+            ..DEFAULT_POLICY
+        },
     },
     ToolPolicyRule {
         tool_names: WORKSPACE_PATH_OPTIONAL_TOOLS,

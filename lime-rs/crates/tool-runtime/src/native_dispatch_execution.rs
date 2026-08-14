@@ -5,7 +5,8 @@ use crate::native_overlay::{
 };
 use crate::tool_executor::{
     turn_context_has_tool_approval, RuntimeToolExecutionContext, RuntimeToolExecutionContextInput,
-    RuntimeToolExecutionRequest, RuntimeToolTurnContext,
+    RuntimeToolExecutionError, RuntimeToolExecutionRequest, RuntimeToolExecutionResult,
+    RuntimeToolPolicyErrorKind, RuntimeToolTurnContext,
 };
 use crate::tool_result_projection::{
     runtime_tool_result_to_call_tool_result, RuntimeToolResultParts,
@@ -23,6 +24,7 @@ pub struct RuntimeNativeDispatchToolRequest<'a> {
     pub session_id: String,
     pub cancel_token: Option<CancellationToken>,
     pub turn_context: Option<&'a RuntimeToolTurnContext>,
+    pub attempt: Option<crate::execution_orchestrator::RuntimeToolExecutionAttempt>,
 }
 
 pub type RuntimeNativeDispatchToolResult = Result<CallToolResult, ErrorData>;
@@ -45,23 +47,60 @@ fn runtime_native_dispatch_error(message: impl Into<String>, handler_executed: b
 pub async fn execute_runtime_native_dispatch_tool(
     request: RuntimeNativeDispatchToolRequest<'_>,
 ) -> Option<RuntimeNativeDispatchToolResult> {
+    execute_runtime_native_dispatch_tool_typed(request)
+        .await
+        .map(|result| match result {
+            Ok(result) => Ok(runtime_tool_result_to_call_tool_result(
+                RuntimeToolResultParts {
+                    success: result.success,
+                    output: Some(result.output),
+                    error: result.error,
+                    metadata: result.metadata,
+                },
+            )),
+            Err(error) => Err(runtime_native_dispatch_error(
+                error.message().to_string(),
+                error.handler_executed(),
+            )),
+        })
+}
+
+pub async fn execute_runtime_native_dispatch_tool_typed(
+    request: RuntimeNativeDispatchToolRequest<'_>,
+) -> Option<Result<RuntimeToolExecutionResult, RuntimeToolExecutionError>> {
     let dispatch = runtime_native_dispatch();
     let canonical_tool_name = dispatch.canonical_name(request.tool_name)?.to_string();
 
-    if let Some(overlay) = runtime_native_tool_overlay_for_dispatch_name(request.tool_name) {
-        match check_runtime_native_tool_permissions(
-            overlay,
-            request.params,
-            &request.working_directory,
-            request.turn_context,
-        ) {
-            RuntimeNativePermissionDecision::Allow => {}
-            RuntimeNativePermissionDecision::Deny(message) => {
-                return Some(Err(runtime_native_dispatch_error(message, false)));
-            }
-            RuntimeNativePermissionDecision::Ask(message) => {
-                if !turn_context_has_tool_approval(request.turn_context) {
-                    return Some(Err(runtime_native_dispatch_error(message, false)));
+    let attempt_manages_apply_patch = request.attempt.is_some()
+        && canonical_tool_name == crate::apply_patch::APPLY_PATCH_TOOL_NAME;
+    if !attempt_manages_apply_patch {
+        if let Some(overlay) = runtime_native_tool_overlay_for_dispatch_name(request.tool_name) {
+            match check_runtime_native_tool_permissions(
+                overlay,
+                request.params,
+                &request.working_directory,
+                request.turn_context,
+            ) {
+                RuntimeNativePermissionDecision::Allow => {}
+                RuntimeNativePermissionDecision::Deny(message) => {
+                    return Some(Err(RuntimeToolExecutionError::new(
+                        message,
+                        Some(RuntimeToolPolicyErrorKind::PermissionDenied(
+                            "native_tool_permission_denied".to_string(),
+                        )),
+                    )
+                    .before_handler()));
+                }
+                RuntimeNativePermissionDecision::Ask(message) => {
+                    if !turn_context_has_tool_approval(request.turn_context) {
+                        return Some(Err(RuntimeToolExecutionError::new(
+                            message,
+                            Some(RuntimeToolPolicyErrorKind::PermissionDenied(
+                                "native_tool_approval_required".to_string(),
+                            )),
+                        )
+                        .before_handler()));
+                    }
                 }
             }
         }
@@ -72,41 +111,36 @@ pub async fn execute_runtime_native_dispatch_tool(
         .as_ref()
         .is_some_and(CancellationToken::is_cancelled)
     {
-        return Some(Err(runtime_native_dispatch_error(
+        return Some(Err(RuntimeToolExecutionError::new(
             "Tool execution cancelled",
-            false,
-        )));
+            Some(RuntimeToolPolicyErrorKind::Canceled(
+                "native_dispatch_cancelled".to_string(),
+            )),
+        )
+        .before_handler()));
     }
 
-    let runtime_context = RuntimeToolExecutionContext::new(RuntimeToolExecutionContextInput {
+    let mut runtime_context = RuntimeToolExecutionContext::new(RuntimeToolExecutionContextInput {
         working_directory: request.working_directory,
         session_id: request.session_id,
         cancel_token: request.cancel_token,
         workspace_sandbox: None,
     });
-    let result = runtime_native_dispatch_handle()
-        .execute(RuntimeToolExecutionRequest {
-            tool_name: &canonical_tool_name,
-            params: request.params,
-            context: &runtime_context,
-            turn_context: request.turn_context,
-        })
-        .await;
-
-    Some(match result {
-        Ok(result) => Ok(runtime_tool_result_to_call_tool_result(
-            RuntimeToolResultParts {
-                success: result.success,
-                output: Some(result.output),
-                error: result.error,
-                metadata: result.metadata,
-            },
-        )),
-        Err(error) => Err(runtime_native_dispatch_error(
-            error.message().to_string(),
-            true,
-        )),
-    })
+    if let Some(attempt) = request.attempt {
+        runtime_context = runtime_context
+            .with_tool_identity(attempt.identity().clone())
+            .with_execution_attempt(attempt);
+    }
+    Some(
+        runtime_native_dispatch_handle()
+            .execute(RuntimeToolExecutionRequest {
+                tool_name: &canonical_tool_name,
+                params: request.params,
+                context: &runtime_context,
+                turn_context: request.turn_context,
+            })
+            .await,
+    )
 }
 
 #[cfg(test)]
@@ -124,6 +158,7 @@ mod tests {
             session_id: "session-native-dispatch-1".to_string(),
             cancel_token: None,
             turn_context: None,
+            attempt: None,
         })
         .await;
 
@@ -142,6 +177,7 @@ mod tests {
             session_id: "session-native-dispatch-workspace".to_string(),
             cancel_token: None,
             turn_context: None,
+            attempt: None,
         })
         .await
         .expect("workspace tool is dispatch-backed")
@@ -165,6 +201,7 @@ mod tests {
             session_id: "session-native-dispatch-2".to_string(),
             cancel_token: Some(cancel_token),
             turn_context: None,
+            attempt: None,
         })
         .await
         .expect("sleep is dispatch-backed");

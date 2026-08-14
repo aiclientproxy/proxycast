@@ -1,9 +1,162 @@
 use super::*;
+use serde_json::Value;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use tool_runtime::execution_orchestrator::{
+    orchestrate_runtime_tool_execution, RuntimeToolApprovalFuture, RuntimeToolApprovalHandler,
+    RuntimeToolApprovalKind, RuntimeToolApprovalPolicy, RuntimeToolApprovalRequest,
+    RuntimeToolAttemptFuture, RuntimeToolAttemptRunner, RuntimeToolExecutionAttempt,
+    RuntimeToolInitialApproval, RuntimeToolOrchestrationInput, RuntimeToolSandboxPolicy,
+};
 use tool_runtime::execution_process::{
-    live::{LiveExecutionOutputBatch, LiveExecutionOutputQuery, LiveExecutionRequest},
+    live::{
+        LiveExecutionOutputBatch, LiveExecutionOutputQuery, LiveExecutionRequest,
+        RuntimeLiveExecutionGateway,
+    },
     ExecutionProcessStatus,
 };
+use tool_runtime::tool_executor::{RuntimeToolExecutionIdentity, RuntimeToolExecutionResult};
+
+#[derive(Default)]
+struct RecordingProcessApprovals {
+    calls: AtomicUsize,
+}
+
+impl RuntimeToolApprovalHandler for RecordingProcessApprovals {
+    fn approve<'a>(
+        &'a self,
+        _request: RuntimeToolApprovalRequest,
+    ) -> RuntimeToolApprovalFuture<'a> {
+        Box::pin(async move {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        })
+    }
+}
+
+struct ProcessAttemptRunner {
+    server: ExecutionProcessServer,
+    calls: AtomicUsize,
+    runtime_metadata: Option<Value>,
+}
+
+impl RuntimeToolAttemptRunner for ProcessAttemptRunner {
+    fn run<'a>(&'a self, attempt: RuntimeToolExecutionAttempt) -> RuntimeToolAttemptFuture<'a> {
+        Box::pin(async move {
+            let attempt_number = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
+            let process_id = format!("orchestrated-process-{attempt_number}");
+            let snapshot = RuntimeLiveExecutionGateway::start_process(
+                &self.server,
+                "test-thread",
+                "printf orchestrated",
+                LiveExecutionRequest {
+                    process_id,
+                    tool_id: attempt.identity().call_id().to_string(),
+                    tool_name: "exec_command".to_string(),
+                    command: shell_output_command("orchestrated"),
+                    working_directory: current_directory(),
+                    tty: false,
+                    approval_policy: Some("on-request".to_string()),
+                    sandbox_policy: attempt
+                        .effective_sandbox_policy()
+                        .label()
+                        .map(str::to_string),
+                    runtime_metadata: self.runtime_metadata.clone(),
+                    env: HashMap::new(),
+                    attempt: Some(attempt),
+                },
+            )
+            .await?;
+            Ok(RuntimeToolExecutionResult::new(
+                true,
+                snapshot.process_id,
+                None,
+                HashMap::new(),
+            ))
+        })
+    }
+}
+
+fn process_orchestration_input(
+    initial_approval: RuntimeToolInitialApproval,
+    sandbox_policy: RuntimeToolSandboxPolicy,
+    managed_network_host: Option<String>,
+    network_denial_retry_allowed: bool,
+) -> RuntimeToolOrchestrationInput {
+    RuntimeToolOrchestrationInput {
+        identity: RuntimeToolExecutionIdentity::new("orchestrated-call", "orchestrated-turn"),
+        approval_policy: RuntimeToolApprovalPolicy::OnRequest,
+        initial_approval,
+        initial_approval_reason: Some("approval required".to_string()),
+        requested_sandbox_policy: sandbox_policy,
+        effective_sandbox_policy: sandbox_policy,
+        granted_permissions: Default::default(),
+        managed_network_host,
+        strict_guardian: false,
+        explicit_sandbox_escalation: false,
+        sandbox_denial_retry_allowed: false,
+        network_denial_retry_allowed,
+        cancel_token: None,
+    }
+}
+
+#[tokio::test]
+async fn orchestrated_process_does_not_repeat_policy_approval() {
+    let approvals = RecordingProcessApprovals::default();
+    let runner = ProcessAttemptRunner {
+        server: ExecutionProcessServer::default(),
+        calls: AtomicUsize::new(0),
+        runtime_metadata: None,
+    };
+
+    let result = orchestrate_runtime_tool_execution(
+        process_orchestration_input(
+            RuntimeToolInitialApproval::Required(RuntimeToolApprovalKind::User),
+            RuntimeToolSandboxPolicy::DangerFullAccess,
+            None,
+            false,
+        ),
+        &approvals,
+        &runner,
+    )
+    .await
+    .expect("orchestrated process should start after one approval");
+
+    assert_eq!(result.output, "orchestrated-process-1");
+    assert_eq!(approvals.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(runner.calls.load(Ordering::SeqCst), 1);
+    let snapshot = wait_for_terminal_snapshot(&runner.server, "orchestrated-process-1").await;
+    assert_eq!(snapshot.status, ExecutionProcessStatus::Exited);
+}
+
+#[tokio::test]
+async fn managed_network_denial_precedes_sandbox_fallback_and_retries_with_network_grant() {
+    let approvals = RecordingProcessApprovals::default();
+    let runner = ProcessAttemptRunner {
+        server: ExecutionProcessServer::default(),
+        calls: AtomicUsize::new(0),
+        runtime_metadata: None,
+    };
+
+    let result = orchestrate_runtime_tool_execution(
+        process_orchestration_input(
+            RuntimeToolInitialApproval::NotRequired,
+            RuntimeToolSandboxPolicy::WorkspaceWrite,
+            Some("example.com".to_string()),
+            true,
+        ),
+        &approvals,
+        &runner,
+    )
+    .await
+    .expect("managed network approval should retry the process");
+
+    assert_eq!(result.output, "orchestrated-process-2");
+    assert_eq!(approvals.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(runner.calls.load(Ordering::SeqCst), 2);
+    let snapshot = wait_for_terminal_snapshot(&runner.server, "orchestrated-process-2").await;
+    assert_eq!(snapshot.status, ExecutionProcessStatus::Exited);
+}
 
 #[tokio::test]
 async fn execution_process_server_streams_output_and_status() {
@@ -27,6 +180,7 @@ async fn execution_process_server_streams_output_and_status() {
                 sandbox_policy: Some("danger-full-access".to_string()),
                 runtime_metadata: None,
                 env: HashMap::new(),
+                attempt: None,
             },
         )
         .await
@@ -64,6 +218,7 @@ async fn execution_process_output_replays_until_cursor_advances() {
                 sandbox_policy: Some("danger-full-access".to_string()),
                 runtime_metadata: None,
                 env: HashMap::new(),
+                attempt: None,
             },
         )
         .await
@@ -171,6 +326,7 @@ async fn execution_process_server_rejects_dangerous_shell_command() {
                 sandbox_policy: Some("danger-full-access".to_string()),
                 runtime_metadata: None,
                 env: HashMap::new(),
+                attempt: None,
             },
         )
         .await
@@ -200,6 +356,7 @@ async fn execution_process_server_uses_current_unsandboxed_fallback_when_backend
                 sandbox_policy: Some("workspace-write".to_string()),
                 runtime_metadata: None,
                 env: HashMap::new(),
+                attempt: None,
             },
         )
         .await
@@ -251,6 +408,7 @@ async fn execution_process_server_enforces_seatbelt_workspace_boundaries() {
                     "OUTSIDE_PATH".to_string(),
                     outside_path.to_string_lossy().to_string(),
                 )]),
+                attempt: None,
             },
         )
         .await

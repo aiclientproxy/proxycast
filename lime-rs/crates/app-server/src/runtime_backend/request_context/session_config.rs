@@ -29,7 +29,7 @@ pub(in crate::runtime_backend) fn session_config_from_request(
     request_tool_policy: &RequestToolPolicy,
     config_metadata: Option<Value>,
 ) -> AgentSessionConfig {
-    session_config_from_request_with_plugins(
+    session_config_from_request_with_plugins_and_orchestrator(
         request,
         host_request,
         scope,
@@ -37,10 +37,11 @@ pub(in crate::runtime_backend) fn session_config_from_request(
         request_tool_policy,
         config_metadata,
         &[],
+        &[],
     )
 }
 
-pub(in crate::runtime_backend) fn session_config_from_request_with_plugins(
+pub(in crate::runtime_backend) fn session_config_from_request_with_plugins_and_orchestrator(
     request: &ExecutionRequest,
     host_request: Option<&RuntimeRequest>,
     scope: &RuntimeSessionScope,
@@ -48,6 +49,7 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugins(
     request_tool_policy: &RequestToolPolicy,
     config_metadata: Option<Value>,
     plugin_snapshots: &[PluginTurnSnapshot],
+    orchestrator_skills: &[lime_skills::AgentSkillMetadata],
 ) -> AgentSessionConfig {
     let workspace_scope = request_workspace_scope(request, host_request);
     let mut metadata_values = super::super::skill_runtime_enable::request_metadata_values(request);
@@ -72,14 +74,15 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugins(
             workspace_scope.project_root.as_deref(),
         );
         let skills_context =
-            super::super::agent_skills_context::agent_skills_context_for_turn_with_plugins(
-                system_prompt,
-                &request.input.concat_text(),
-                &metadata_values,
-                workspace_scope.working_dir.as_deref(),
-                workspace_scope.project_root.as_deref(),
-                plugin_snapshots,
-            );
+            super::super::agent_skills_context::agent_skills_context_for_turn_with_plugins_and_orchestrator(
+                    system_prompt,
+                    &request.input.concat_text(),
+                    &metadata_values,
+                    workspace_scope.working_dir.as_deref(),
+                    workspace_scope.project_root.as_deref(),
+                    plugin_snapshots,
+                    orchestrator_skills,
+                );
         let system_prompt =
             append_memory_context_to_system_prompt(skills_context.system_prompt, runtime_metadata);
         let system_prompt = append_soul_context_to_system_prompt(
@@ -140,6 +143,7 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugins(
         forked_from_thread_id: request.forked_from_thread_id.clone(),
         max_turns: harness_max_provider_steps(runtime_metadata),
         provider_token_budget: harness_provider_token_budget(runtime_metadata),
+        rollout_budget_reminder_source: request.rollout_budget_reminder_source.clone(),
         system_prompt,
         turn_context,
         include_context_trace: !turn_tool_surface.uses_light_session_prompt(),

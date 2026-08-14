@@ -105,6 +105,7 @@ fn skill_scope(scope: AgentSkillScope) -> SkillDetailScope {
         AgentSkillScope::Project => SkillDetailScope::Project,
         AgentSkillScope::User => SkillDetailScope::User,
         AgentSkillScope::App => SkillDetailScope::App,
+        AgentSkillScope::Orchestrator => SkillDetailScope::App,
         AgentSkillScope::Other => SkillDetailScope::Other,
     }
 }
@@ -114,6 +115,7 @@ fn skill_source(source: AgentSkillSource) -> SkillSource {
         AgentSkillSource::Project => SkillSource::Project,
         AgentSkillSource::User => SkillSource::User,
         AgentSkillSource::App => SkillSource::App,
+        AgentSkillSource::Orchestrator => SkillSource::Orchestrator,
         AgentSkillSource::Other => SkillSource::Other,
     }
 }
@@ -123,6 +125,7 @@ fn skill_authority(authority: AgentSkillAuthority) -> SkillAuthority {
         AgentSkillAuthority::Workspace => SkillAuthority::Workspace,
         AgentSkillAuthority::User => SkillAuthority::User,
         AgentSkillAuthority::Application => SkillAuthority::Application,
+        AgentSkillAuthority::Orchestrator => SkillAuthority::Orchestrator,
         AgentSkillAuthority::External => SkillAuthority::External,
     }
 }

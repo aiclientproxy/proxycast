@@ -1,7 +1,9 @@
 mod agent_control;
 mod agent_control_gateway;
 mod agent_control_gateway_support;
+mod agent_execution;
 mod agent_mailbox_delivery;
+mod agent_residency;
 mod agent_terminal_activity;
 mod app_data;
 pub(crate) mod approval_cache;
@@ -73,6 +75,7 @@ mod projection_store;
 #[cfg(test)]
 mod projection_store_tests;
 pub(crate) mod provider_history;
+mod rollout_budget;
 #[doc(hidden)]
 pub use provider_history::ProviderTurnHistory;
 mod queued_turn_intent;
@@ -487,6 +490,9 @@ pub struct RuntimeCore {
     pub(in crate::runtime) session_loops: RuntimeSessionRegistry,
     pub(in crate::runtime) turn_driver_completions: turn_execution::RuntimeTurnDriverCompletions,
     mailbox_trigger_flights: agent_mailbox_delivery::MailboxTriggerFlights,
+    agent_execution_limiter: Arc<agent_execution::AgentExecutionLimiter>,
+    agent_residency: agent_residency::AgentResidency,
+    rollout_budget: Arc<rollout_budget::RolloutBudget>,
     route_recovery: model_providers::RouteRecoveryCoordinator,
     catalog_refresh: model_providers::CatalogRefreshCoordinator,
     backend: Arc<dyn ExecutionBackend>,
@@ -596,6 +602,11 @@ impl RuntimeCore {
             session_loops: RuntimeSessionRegistry::default(),
             turn_driver_completions: turn_execution::RuntimeTurnDriverCompletions::default(),
             mailbox_trigger_flights: agent_mailbox_delivery::MailboxTriggerFlights::default(),
+            agent_execution_limiter: Arc::new(agent_execution::AgentExecutionLimiter::new(3)),
+            agent_residency: agent_residency::AgentResidency::default(),
+            rollout_budget: Arc::new(
+                rollout_budget::RolloutBudget::new(None).expect("default rollout budget"),
+            ),
             route_recovery: model_providers::RouteRecoveryCoordinator::default(),
             catalog_refresh: model_providers::CatalogRefreshCoordinator::default(),
             backend,
@@ -617,6 +628,14 @@ impl RuntimeCore {
             app_data_source: Arc::new(NoopAppDataSource),
             execution_process_server: None,
         }
+    }
+
+    pub fn with_rollout_budget_config(
+        mut self,
+        config: Option<lime_core::config::RolloutBudgetConfig>,
+    ) -> Result<Self, RuntimeCoreError> {
+        self.rollout_budget = Arc::new(rollout_budget::RolloutBudget::new(config)?);
+        Ok(self)
     }
 
     pub(crate) fn take_event_receiver(&self) -> Option<mpsc::UnboundedReceiver<AgentEvent>> {

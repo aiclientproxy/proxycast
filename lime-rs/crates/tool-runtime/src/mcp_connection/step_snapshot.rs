@@ -84,6 +84,28 @@ impl McpStepSnapshot {
             })
     }
 
+    /// 返回排除指定 MCP server 的不可变 step snapshot。
+    pub fn without_server(&self, server_name: &str) -> Self {
+        let routes = self
+            .routes
+            .iter()
+            .filter(|(_, route)| route.server_name != server_name)
+            .map(|(name, route)| (name.clone(), route.clone()))
+            .collect::<HashMap<_, _>>();
+        let tools = self
+            .tools
+            .iter()
+            .filter(|tool| routes.contains_key(tool.name.as_ref()))
+            .cloned()
+            .collect::<Vec<_>>();
+        Self {
+            caller: self.caller.clone(),
+            generation: self.generation,
+            tools: Arc::new(tools),
+            routes: Arc::new(routes),
+        }
+    }
+
     pub async fn dispatch(
         &self,
         tool_call: CallToolRequestParam,
@@ -412,6 +434,37 @@ mod tests {
         let removed = snapshot(&registry, HashSet::new(), Duration::from_secs(1)).await;
         assert!(removed.generation() > first_generation);
         assert_eq!(first.generation(), first_generation);
+    }
+
+    #[tokio::test]
+    async fn without_server_filters_tool_definitions_and_dispatch_routes() {
+        let registry = McpConnectionRegistry::new();
+        register_named(&registry, "codex_apps", DiscoveryMode::Ready).await;
+        register_named(&registry, "docs", DiscoveryMode::Ready).await;
+        let captured = snapshot(&registry, HashSet::new(), Duration::from_secs(1)).await;
+
+        let filtered = captured.without_server("codex_apps");
+
+        assert!(filtered
+            .tools()
+            .iter()
+            .any(|tool| tool.name == "docs__search"));
+        assert!(!filtered
+            .tools()
+            .iter()
+            .any(|tool| tool.name == "codex_apps__search"));
+        assert!(filtered
+            .dispatch(
+                call("codex_apps__search"),
+                scope(),
+                CancellationToken::default(),
+            )
+            .await
+            .is_err());
+        assert!(filtered
+            .dispatch(call("docs__search"), scope(), CancellationToken::default(),)
+            .await
+            .is_ok());
     }
 
     #[tokio::test]

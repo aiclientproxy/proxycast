@@ -59,6 +59,10 @@ impl McpThreadRuntime {
         self.server_specs.clone()
     }
 
+    pub(crate) async fn has_server(&self, server_name: &str) -> bool {
+        self.manager.has_client(server_name).await
+    }
+
     pub(crate) async fn read_resource(
         &self,
         server_name: &str,
@@ -68,6 +72,39 @@ impl McpThreadRuntime {
             .read_resource(server_name, uri)
             .await
             .map_err(|error| error.to_string())
+    }
+
+    pub(crate) async fn list_resource_page(
+        &self,
+        server_name: &str,
+        cursor: Option<String>,
+    ) -> Result<lime_mcp::McpResourcePage, String> {
+        self.manager
+            .list_resource_page(server_name, cursor)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) async fn list_resources(
+        &self,
+    ) -> Result<
+        (
+            Vec<lime_mcp::McpResourceDefinition>,
+            Vec<lime_mcp::McpResourceTemplateDefinition>,
+        ),
+        String,
+    > {
+        let resources = self
+            .manager
+            .list_resources()
+            .await
+            .map_err(|error| error.to_string())?;
+        let templates = self
+            .manager
+            .list_resource_templates()
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok((resources, templates))
     }
 
     pub(crate) async fn call_tool(

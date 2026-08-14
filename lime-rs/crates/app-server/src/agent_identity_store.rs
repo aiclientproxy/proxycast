@@ -106,7 +106,7 @@ impl ProjectionStore {
         Ok(())
     }
 
-    fn list_agent_identities_sync(
+    pub(crate) fn list_agent_identities_sync(
         &self,
         root_thread_id: ThreadId,
     ) -> ThreadStoreResult<Vec<AgentIdentity>> {

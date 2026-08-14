@@ -3,6 +3,7 @@
   "enum": [
     "application",
     "external",
+    "orchestrator",
     "user",
     "workspace"
   ],

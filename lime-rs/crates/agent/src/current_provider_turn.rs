@@ -403,6 +403,23 @@ fn handle_provider_event<F>(
             },
             on_event,
         ),
+        CurrentProviderTurnEvent::RolloutBudgetReminder {
+            remaining_tokens,
+            reminder_index,
+            window_id,
+            durable_event_id,
+            text,
+        } => emit_with_artifacts(
+            artifact_events,
+            AgentEvent::RolloutBudgetReminder {
+                remaining_tokens,
+                reminder_index,
+                window_id,
+                durable_event_id,
+                text,
+            },
+            on_event,
+        ),
         CurrentProviderTurnEvent::ServerModel { model } => {
             emit_with_artifacts(artifact_events, AgentEvent::ServerModel { model }, on_event)
         }
@@ -481,6 +498,7 @@ fn project_usage(usage: model_provider::current_client::CurrentProviderUsage) ->
         output_tokens: usage.output_tokens,
         cached_input_tokens: usage.cached_input_tokens,
         cache_creation_input_tokens: usage.cache_creation_input_tokens,
+        codex_rollout_budget_units: usage.codex_rollout_budget_units,
     }
 }
 

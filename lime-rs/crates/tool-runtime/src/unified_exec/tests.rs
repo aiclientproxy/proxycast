@@ -3,6 +3,7 @@ use crate::execution_process::{
     live::{LiveExecutionOutputBatch, LiveExecutionOutputQuery, LiveExecutionRequest},
     ExecutionOutputDelta, ExecutionOutputKind, ExecutionProcessSnapshot,
 };
+use crate::tool_executor::{RuntimeToolExecutionError, RuntimeToolPolicyErrorKind};
 use async_trait::async_trait;
 
 #[cfg(target_os = "windows")]
@@ -44,10 +45,14 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
         _thread_id: &str,
         _display_command: &str,
         request: LiveExecutionRequest,
-        granted_permissions: Option<app_server_protocol::protocol::v2::GrantedPermissionProfile>,
-    ) -> Result<ExecutionProcessSnapshot, String> {
+    ) -> Result<ExecutionProcessSnapshot, RuntimeToolExecutionError> {
         self.starts.lock().unwrap().push(request.clone());
-        self.grants.lock().unwrap().push(granted_permissions);
+        self.grants.lock().unwrap().push(
+            request
+                .attempt
+                .as_ref()
+                .map(|attempt| attempt.granted_permissions().clone()),
+        );
         let command = request.command.last().cloned().unwrap_or_default();
         let running = command == "long-running";
         let initial = snapshot(&request, ExecutionProcessStatus::Running, None, "");
@@ -75,11 +80,11 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
         Ok(initial)
     }
 
-    fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), String> {
+    fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), RuntimeToolExecutionError> {
         let mut state = self.state.lock().unwrap();
         let process = state
             .get_mut(process_id)
-            .ok_or_else(|| "missing fixture process".to_string())?;
+            .ok_or_else(|| fixture_error("missing fixture process"))?;
         if data.is_empty() {
             return Ok(());
         }
@@ -105,34 +110,40 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
         Ok(())
     }
 
-    fn terminate(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String> {
+    fn terminate(
+        &self,
+        process_id: &str,
+    ) -> Result<ExecutionProcessSnapshot, RuntimeToolExecutionError> {
         let mut state = self.state.lock().unwrap();
         let process = state
             .get_mut(process_id)
-            .ok_or_else(|| "missing fixture process".to_string())?;
+            .ok_or_else(|| fixture_error("missing fixture process"))?;
         process.snapshot.status = ExecutionProcessStatus::Terminated;
         Ok(process.snapshot.clone())
     }
 
-    fn status(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String> {
+    fn status(
+        &self,
+        process_id: &str,
+    ) -> Result<ExecutionProcessSnapshot, RuntimeToolExecutionError> {
         let state = self.state.lock().unwrap();
         let process = state
             .get(process_id)
-            .ok_or_else(|| "missing fixture process".to_string())?;
+            .ok_or_else(|| fixture_error("missing fixture process"))?;
         Ok(process.snapshot.clone())
     }
 
     fn drain_output(
         &self,
         query: LiveExecutionOutputQuery,
-    ) -> Result<LiveExecutionOutputBatch, String> {
+    ) -> Result<LiveExecutionOutputBatch, RuntimeToolExecutionError> {
         let process_id = query
             .process_id
-            .ok_or_else(|| "fixture process id is required".to_string())?;
+            .ok_or_else(|| fixture_error("fixture process id is required"))?;
         let state = self.state.lock().unwrap();
         let process = state
             .get(&process_id)
-            .ok_or_else(|| "missing fixture process".to_string())?;
+            .ok_or_else(|| fixture_error("missing fixture process"))?;
         let deltas = process
             .deltas
             .iter()
@@ -152,6 +163,15 @@ impl RuntimeLiveExecutionGateway for FixtureGateway {
             next_sequence,
         })
     }
+}
+
+fn fixture_error(message: &str) -> RuntimeToolExecutionError {
+    RuntimeToolExecutionError::new(
+        message,
+        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+            "fixture_gateway".to_string(),
+        )),
+    )
 }
 
 impl FixtureGateway {
@@ -231,7 +251,7 @@ fn request<'a>(
         tool_call_id: call_id.to_string(),
         cancel_token: None,
         turn_context: None,
-        granted_permissions: None,
+        attempt: None,
     }
 }
 
@@ -294,7 +314,13 @@ async fn exec_command_forwards_grants_outside_public_runtime_metadata() {
         }),
         file_system: None,
     };
-    request.granted_permissions = Some(granted.clone());
+    request.attempt = Some(
+        crate::execution_orchestrator::test_runtime_tool_execution_attempt(
+            crate::tool_executor::RuntimeToolExecutionIdentity::new("call-granted", "turn-1"),
+            crate::execution_orchestrator::RuntimeToolSandboxPolicy::WorkspaceWrite,
+            granted.clone(),
+        ),
+    );
 
     execute_runtime_unified_exec_tool(gateway.clone(), request)
         .await

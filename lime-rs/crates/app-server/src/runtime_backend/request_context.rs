@@ -30,7 +30,7 @@ mod workspace_scope;
 
 #[cfg(test)]
 pub(super) use session_config::session_config_from_request;
-pub(super) use session_config::session_config_from_request_with_plugins;
+pub(super) use session_config::session_config_from_request_with_plugins_and_orchestrator;
 pub(super) use turn_context::turn_context_from_request;
 pub(super) use workspace_scope::request_workspace_scope;
 

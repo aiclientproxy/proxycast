@@ -371,6 +371,7 @@ impl RuntimeCore {
                         "explicitUserCommand": true,
                     })),
                     env: HashMap::new(),
+                    attempt: None,
                 },
             )
             .await

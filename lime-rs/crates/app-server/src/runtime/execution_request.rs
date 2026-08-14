@@ -19,6 +19,9 @@ pub struct ExecutionRequest {
     pub skip_pre_submit_resume: bool,
     /// Per-turn capability supplied by RuntimeCore for the current provider execution only.
     pub agent_control_gateway: Option<tool_runtime::agent_control::AgentControlGatewayHandle>,
+    /// RuntimeCore-owned sampling boundary for later reminders in the same turn.
+    pub rollout_budget_reminder_source:
+        Option<agent_runtime::session_config::RolloutBudgetReminderSourceHandle>,
 }
 
 impl ExecutionRequest {

@@ -436,6 +436,9 @@ pub struct Config {
     /// Agent Skills 用户级启停配置
     #[serde(default, skip_serializing_if = "SkillsConfig::is_default")]
     pub skills: SkillsConfig,
+    /// Orchestrator-owned Skills 与 Apps MCP 暴露开关。
+    #[serde(default, skip_serializing_if = "OrchestratorConfig::is_default")]
+    pub orchestrator: OrchestratorConfig,
     /// 实验室功能配置
     #[serde(default)]
     pub experimental: ExperimentalFeatures,
@@ -518,6 +521,38 @@ pub struct SkillConfig {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OrchestratorFeatureConfig {
+    #[serde(default = "default_orchestrator_feature_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for OrchestratorFeatureConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_orchestrator_feature_enabled(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct OrchestratorConfig {
+    #[serde(default)]
+    pub skills: OrchestratorFeatureConfig,
+    #[serde(default)]
+    pub mcp: OrchestratorFeatureConfig,
+}
+
+impl OrchestratorConfig {
+    pub fn is_default(value: &Self) -> bool {
+        value == &Self::default()
+    }
+}
+
+fn default_orchestrator_feature_enabled() -> bool {
+    true
+}
+
 /// Native Agent 配置
 ///
 /// 配置内置 Agent 的行为，包括系统提示词、工具使用规则等
@@ -592,6 +627,9 @@ pub struct NativeAgentConfig {
     /// 工具执行权限覆盖配置（默认策略之上的持久化覆盖）
     #[serde(default, skip_serializing_if = "ToolExecutionPolicyConfig::is_default")]
     pub tool_execution: ToolExecutionPolicyConfig,
+    /// root thread 与所有子 Agent 共享的 rollout token 预算。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rollout_budget: Option<RolloutBudgetConfig>,
 }
 
 fn default_use_default_prompt() -> bool {
@@ -621,7 +659,50 @@ impl Default for NativeAgentConfig {
             max_tokens: default_max_tokens(),
             workspace_sandbox: WorkspaceSandboxConfig::default(),
             tool_execution: ToolExecutionPolicyConfig::default(),
+            rollout_budget: None,
         }
+    }
+}
+
+/// Codex-compatible shared rollout budget configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RolloutBudgetConfig {
+    pub limit_tokens: i64,
+    #[serde(default)]
+    pub reminder_at_remaining_tokens: Vec<i64>,
+    #[serde(default = "default_rollout_budget_weight")]
+    pub sampling_token_weight: f64,
+    #[serde(default = "default_rollout_budget_weight")]
+    pub prefill_token_weight: f64,
+}
+
+fn default_rollout_budget_weight() -> f64 {
+    1.0
+}
+
+impl RolloutBudgetConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.limit_tokens <= 0 {
+            return Err("rollout budget limit_tokens must be positive".to_string());
+        }
+        if self
+            .reminder_at_remaining_tokens
+            .iter()
+            .any(|threshold| *threshold <= 0 || *threshold >= self.limit_tokens)
+        {
+            return Err("rollout budget reminders must be in (0, limit_tokens)".to_string());
+        }
+        if !self.sampling_token_weight.is_finite() || self.sampling_token_weight < 0.0 {
+            return Err(
+                "rollout budget sampling_token_weight must be finite and non-negative".to_string(),
+            );
+        }
+        if !self.prefill_token_weight.is_finite() || self.prefill_token_weight < 0.0 {
+            return Err(
+                "rollout budget prefill_token_weight must be finite and non-negative".to_string(),
+            );
+        }
+        Ok(())
     }
 }
 
@@ -2083,6 +2164,7 @@ impl Default for Config {
             models: ModelsConfig::default(),
             agent: NativeAgentConfig::default(),
             skills: SkillsConfig::default(),
+            orchestrator: OrchestratorConfig::default(),
             experimental: ExperimentalFeatures::default(),
             tool_calling: ToolCallingConfig::default(),
             workspace_preferences: WorkspacePreferencesConfig::default(),
@@ -2804,6 +2886,26 @@ mod unit_tests {
         );
         assert!(config.navigation.enabled_items.is_empty());
         assert!(config.agent.tool_execution.tool_overrides.is_empty());
+        assert!(config.orchestrator.skills.enabled);
+        assert!(config.orchestrator.mcp.enabled);
+    }
+
+    #[test]
+    fn orchestrator_features_default_enabled_and_preserve_partial_override() {
+        let defaults: OrchestratorConfig =
+            serde_json::from_value(serde_json::json!({})).expect("orchestrator defaults");
+        assert!(defaults.skills.enabled);
+        assert!(defaults.mcp.enabled);
+
+        let partial: OrchestratorConfig = serde_json::from_value(serde_json::json!({
+            "skills": { "enabled": false }
+        }))
+        .expect("orchestrator partial override");
+        assert!(!partial.skills.enabled);
+        assert!(partial.mcp.enabled);
+
+        let serialized = serde_json::to_value(Config::default()).expect("serialize default config");
+        assert!(serialized.get("orchestrator").is_none());
     }
 
     #[test]

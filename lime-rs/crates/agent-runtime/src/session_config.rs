@@ -1,5 +1,49 @@
 use agent_protocol::turn_context::TurnContextOverride as AgentTurnContext;
+use std::fmt;
+use std::sync::Arc;
 use tool_runtime::code_mode::RuntimeToolMode;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RolloutBudgetReminder {
+    pub remaining_tokens: i64,
+    pub reminder_index: usize,
+    pub window_id: String,
+    pub durable_event_id: String,
+}
+
+pub trait RolloutBudgetReminderSource: Send + Sync {
+    fn next_reminder(&self, route_attempt: usize) -> Result<Option<RolloutBudgetReminder>, String>;
+}
+
+#[derive(Clone)]
+pub struct RolloutBudgetReminderSourceHandle {
+    source: Arc<dyn RolloutBudgetReminderSource>,
+    route_attempt: usize,
+}
+
+impl RolloutBudgetReminderSourceHandle {
+    pub fn new(source: Arc<dyn RolloutBudgetReminderSource>) -> Self {
+        Self {
+            source,
+            route_attempt: 1,
+        }
+    }
+
+    pub fn with_route_attempt(mut self, route_attempt: usize) -> Self {
+        self.route_attempt = route_attempt.max(1);
+        self
+    }
+
+    pub fn next_reminder(&self) -> Result<Option<RolloutBudgetReminder>, String> {
+        self.source.next_reminder(self.route_attempt)
+    }
+}
+
+impl fmt::Debug for RolloutBudgetReminderSourceHandle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("RolloutBudgetReminderSourceHandle(..)")
+    }
+}
 
 pub struct AgentSessionConfigurationRequest {
     pub session_id: String,
@@ -8,6 +52,7 @@ pub struct AgentSessionConfigurationRequest {
     pub forked_from_thread_id: Option<String>,
     pub max_turns: Option<u32>,
     pub provider_token_budget: Option<u64>,
+    pub rollout_budget_reminder_source: Option<RolloutBudgetReminderSourceHandle>,
     pub system_prompt: Option<String>,
     pub turn_context: Option<AgentTurnContext>,
     pub include_context_trace: bool,
@@ -22,6 +67,7 @@ pub struct AgentSessionConfig {
     pub schedule_id: Option<String>,
     pub max_turns: Option<u32>,
     pub provider_token_budget: Option<u64>,
+    pub rollout_budget_reminder_source: Option<RolloutBudgetReminderSourceHandle>,
     pub system_prompt: Option<String>,
     pub system_prompt_override: Option<bool>,
     pub include_context_trace: Option<bool>,
@@ -39,6 +85,7 @@ pub fn build_agent_session_config(request: AgentSessionConfigurationRequest) -> 
         schedule_id: None,
         max_turns: request.max_turns,
         provider_token_budget: request.provider_token_budget,
+        rollout_budget_reminder_source: request.rollout_budget_reminder_source,
         system_prompt: request.system_prompt,
         system_prompt_override: Some(true),
         include_context_trace: Some(request.include_context_trace),
@@ -60,6 +107,7 @@ pub struct SessionConfigBuilder {
     schedule_id: Option<String>,
     max_turns: Option<u32>,
     provider_token_budget: Option<u64>,
+    rollout_budget_reminder_source: Option<RolloutBudgetReminderSourceHandle>,
     system_prompt: Option<String>,
     system_prompt_override: Option<bool>,
     include_context_trace: Option<bool>,
@@ -78,6 +126,7 @@ impl SessionConfigBuilder {
             schedule_id: None,
             max_turns: None,
             provider_token_budget: None,
+            rollout_budget_reminder_source: None,
             system_prompt: None,
             system_prompt_override: None,
             include_context_trace: None,
@@ -156,6 +205,7 @@ impl SessionConfigBuilder {
             schedule_id: self.schedule_id,
             max_turns: self.max_turns,
             provider_token_budget: self.provider_token_budget,
+            rollout_budget_reminder_source: self.rollout_budget_reminder_source,
             system_prompt: self.system_prompt,
             system_prompt_override: self.system_prompt_override,
             include_context_trace: self.include_context_trace,
@@ -179,6 +229,7 @@ mod tests {
             forked_from_thread_id: Some("thread-source".to_string()),
             max_turns: Some(2),
             provider_token_budget: Some(1_000),
+            rollout_budget_reminder_source: None,
             system_prompt: Some("system".to_string()),
             turn_context: None,
             include_context_trace: true,

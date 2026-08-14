@@ -589,6 +589,7 @@ pub struct CurrentProviderUsage {
     pub output_tokens: u32,
     pub cached_input_tokens: Option<u32>,
     pub cache_creation_input_tokens: Option<u32>,
+    pub codex_rollout_budget_units: Option<serde_json::Number>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -3,8 +3,10 @@ use crate::tool_executor::{
     RuntimeToolExecutionError, RuntimeToolExecutionRequest, RuntimeToolExecutionResult,
     RuntimeToolExecutor, RuntimeToolExecutorHandle, RuntimeToolPolicyErrorKind,
 };
+use app_server_protocol::protocol::v2::{FileSystemAccessMode, FileSystemPath};
 use patch_apply::{
-    apply_patch_to_workdir, parse_patch, AppliedPatchFileChange, ApplyPatchReport, Hunk,
+    apply_hunks_to_workdir, apply_patch_to_workdir, parse_patch, AppliedPatchFileChange,
+    ApplyPatchReport, Hunk,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -41,20 +43,55 @@ impl RuntimeApplyPatchExecutor {
             .cancel_token()
             .is_some_and(|token| token.is_cancelled())
         {
-            return Err(runtime_apply_patch_error("apply_patch cancelled"));
+            return Err(RuntimeToolExecutionError::new(
+                "apply_patch cancelled",
+                Some(RuntimeToolPolicyErrorKind::Canceled(
+                    "apply_patch_cancelled".to_string(),
+                )),
+            )
+            .before_handler());
+        }
+
+        match request.context.execution_attempt() {
+            Some(attempt) => check_runtime_apply_patch_attempt_permissions(
+                request.params,
+                request.context.working_directory(),
+                attempt,
+            )?,
+            None => check_runtime_apply_patch_permissions(
+                request.params,
+                request.context.working_directory(),
+            )?,
         }
 
         let patch = patch_text_from_params(request.params)?;
         let workdir = request.context.working_directory().clone();
         let canonical_workdir = workdir.canonicalize().unwrap_or_else(|_| workdir.clone());
+        let apply_root = request
+            .context
+            .execution_attempt()
+            .filter(|attempt| {
+                attempt.effective_sandbox_policy()
+                    == crate::execution_orchestrator::RuntimeToolSandboxPolicy::DangerFullAccess
+            })
+            .map(|_| filesystem_root(&canonical_workdir))
+            .transpose()?
+            .unwrap_or_else(|| canonical_workdir.clone());
+        let parsed =
+            parse_patch(&patch).map_err(|error| runtime_apply_patch_error(error.to_string()))?;
+        let hunks = if apply_root == canonical_workdir {
+            None
+        } else {
+            Some(resolve_hunks_for_apply(&parsed.hunks, &canonical_workdir)?)
+        };
         let patch_for_apply = patch.clone();
-        let report =
-            tokio::task::spawn_blocking(move || apply_patch_to_workdir(&patch_for_apply, workdir))
-                .await
-                .map_err(|error| {
-                    runtime_apply_patch_error(format!("apply_patch task failed: {error}"))
-                })?
-                .map_err(|error| runtime_apply_patch_error(error.to_string()))?;
+        let report = tokio::task::spawn_blocking(move || match hunks {
+            Some(hunks) => apply_hunks_to_workdir(&hunks, apply_root),
+            None => apply_patch_to_workdir(&patch_for_apply, apply_root),
+        })
+        .await
+        .map_err(|error| runtime_apply_patch_error(format!("apply_patch task failed: {error}")))?
+        .map_err(|error| runtime_apply_patch_error(error.to_string()))?;
 
         Ok(RuntimeToolExecutionResult::new(
             true,
@@ -102,16 +139,10 @@ pub fn check_runtime_apply_patch_permissions(
     params: &Value,
     workdir: &Path,
 ) -> Result<(), RuntimeToolExecutionError> {
-    let patch = patch_text_from_params(params)?;
-    let parsed = parse_patch(&patch)
-        .map_err(|error| runtime_apply_patch_permission_error(error.to_string()))?;
     let workdir = workdir
         .canonicalize()
         .unwrap_or_else(|_| workdir.to_path_buf());
-
-    for path in parsed.hunks.iter().flat_map(hunk_write_paths) {
-        let candidate = resolve_patch_path_for_permission(&workdir, &path)
-            .map_err(runtime_apply_patch_permission_error)?;
+    for candidate in resolved_patch_write_paths(params, &workdir)? {
         if !candidate.starts_with(&workdir) {
             return Err(runtime_apply_patch_permission_error(format!(
                 "Patch path '{}' must stay inside workspace '{}'",
@@ -120,8 +151,174 @@ pub fn check_runtime_apply_patch_permissions(
             )));
         }
     }
-
     Ok(())
+}
+
+fn check_runtime_apply_patch_attempt_permissions(
+    params: &Value,
+    workdir: &Path,
+    attempt: &crate::execution_orchestrator::RuntimeToolExecutionAttempt,
+) -> Result<(), RuntimeToolExecutionError> {
+    use crate::execution_orchestrator::RuntimeToolSandboxPolicy;
+
+    if attempt.is_cancelled() {
+        return Err(RuntimeToolExecutionError::new(
+            "apply_patch cancelled",
+            Some(RuntimeToolPolicyErrorKind::Canceled(
+                "apply_patch_cancelled".to_string(),
+            )),
+        )
+        .before_handler());
+    }
+    if attempt.effective_sandbox_policy() == RuntimeToolSandboxPolicy::ReadOnly {
+        return Err(runtime_apply_patch_sandbox_error(
+            "read-only sandbox denies apply_patch writes",
+        ));
+    }
+    let workdir = workdir
+        .canonicalize()
+        .unwrap_or_else(|_| workdir.to_path_buf());
+    for candidate in resolved_patch_write_paths(params, &workdir)? {
+        if candidate.starts_with(&workdir)
+            || attempt.effective_sandbox_policy() == RuntimeToolSandboxPolicy::DangerFullAccess
+            || granted_write_path(attempt.granted_permissions(), &candidate)
+        {
+            continue;
+        }
+        return Err(runtime_apply_patch_sandbox_error(format!(
+            "filesystem sandbox denies patch write to '{}'",
+            candidate.display()
+        )));
+    }
+    Ok(())
+}
+
+fn resolved_patch_write_paths(
+    params: &Value,
+    workdir: &Path,
+) -> Result<Vec<PathBuf>, RuntimeToolExecutionError> {
+    let patch = patch_text_from_params(params)?;
+    let parsed = parse_patch(&patch)
+        .map_err(|error| runtime_apply_patch_permission_error(error.to_string()))?;
+    let mut paths = Vec::new();
+    for path in parsed.hunks.iter().flat_map(hunk_write_paths) {
+        let candidate = resolve_patch_path_for_permission(&workdir, &path)
+            .map_err(runtime_apply_patch_permission_error)?;
+        paths.push(candidate);
+    }
+    Ok(paths)
+}
+
+fn resolve_hunks_for_apply(
+    hunks: &[Hunk],
+    workdir: &Path,
+) -> Result<Vec<Hunk>, RuntimeToolExecutionError> {
+    hunks
+        .iter()
+        .map(|hunk| match hunk {
+            Hunk::AddFile { path, contents } => Ok(Hunk::AddFile {
+                path: resolve_patch_path_for_permission(workdir, path)
+                    .map_err(runtime_apply_patch_error)?,
+                contents: contents.clone(),
+            }),
+            Hunk::DeleteFile { path } => Ok(Hunk::DeleteFile {
+                path: resolve_patch_path_for_permission(workdir, path)
+                    .map_err(runtime_apply_patch_error)?,
+            }),
+            Hunk::UpdateFile {
+                path,
+                move_path,
+                chunks,
+            } => Ok(Hunk::UpdateFile {
+                path: resolve_patch_path_for_permission(workdir, path)
+                    .map_err(runtime_apply_patch_error)?,
+                move_path: move_path
+                    .as_ref()
+                    .map(|path| {
+                        resolve_patch_path_for_permission(workdir, path)
+                            .map_err(runtime_apply_patch_error)
+                    })
+                    .transpose()?,
+                chunks: chunks.clone(),
+            }),
+        })
+        .collect()
+}
+
+fn filesystem_root(path: &Path) -> Result<PathBuf, RuntimeToolExecutionError> {
+    let mut root = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => root.push(prefix.as_os_str()),
+            Component::RootDir => {
+                root.push(component.as_os_str());
+                return Ok(root);
+            }
+            Component::CurDir | Component::ParentDir | Component::Normal(_) => break,
+        }
+    }
+    Err(runtime_apply_patch_error(format!(
+        "cannot resolve filesystem root for '{}'",
+        path.display()
+    )))
+}
+
+fn granted_write_path(
+    permissions: &app_server_protocol::protocol::v2::GrantedPermissionProfile,
+    candidate: &Path,
+) -> bool {
+    let Some(file_system) = permissions.file_system.as_ref() else {
+        return false;
+    };
+    let explicitly_denied = file_system
+        .entries
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .any(|entry| {
+            entry.access == FileSystemAccessMode::Deny
+                && file_system_entry_matches(&entry.path, candidate)
+        });
+    if explicitly_denied {
+        return false;
+    }
+    file_system
+        .write
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .any(|path| path_grants_candidate(Path::new(path), candidate))
+        || file_system
+            .entries
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .any(|entry| {
+                entry.access == FileSystemAccessMode::Write
+                    && file_system_entry_matches(&entry.path, candidate)
+            })
+}
+
+fn file_system_entry_matches(path: &FileSystemPath, candidate: &Path) -> bool {
+    match path {
+        FileSystemPath::Path { path } => path_grants_candidate(Path::new(path), candidate),
+        FileSystemPath::Special {
+            value:
+                app_server_protocol::protocol::v2::FileSystemSpecialPath::Unknown { path, subpath },
+        } => {
+            let root = subpath
+                .as_deref()
+                .map(|subpath| Path::new(path).join(subpath))
+                .unwrap_or_else(|| PathBuf::from(path));
+            path_grants_candidate(&root, candidate)
+        }
+        FileSystemPath::GlobPattern { .. } | FileSystemPath::Special { .. } => false,
+    }
+}
+
+fn path_grants_candidate(root: &Path, candidate: &Path) -> bool {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    candidate == root || candidate.starts_with(root)
 }
 
 fn patch_text_from_params(params: &Value) -> Result<String, RuntimeToolExecutionError> {
@@ -520,6 +717,16 @@ fn runtime_apply_patch_permission_error(message: impl Into<String>) -> RuntimeTo
         message.clone(),
         Some(RuntimeToolPolicyErrorKind::PermissionDenied(message)),
     )
+}
+
+fn runtime_apply_patch_sandbox_error(message: impl Into<String>) -> RuntimeToolExecutionError {
+    RuntimeToolExecutionError::new(
+        message,
+        Some(RuntimeToolPolicyErrorKind::SandboxDenied(
+            "apply_patch_sandbox_denied".to_string(),
+        )),
+    )
+    .before_handler()
 }
 
 #[cfg(test)]

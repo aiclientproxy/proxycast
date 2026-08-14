@@ -179,6 +179,24 @@ fn push_skill_context(
 ) {
     use model_provider::current_client::{CurrentProviderContent, CurrentProviderMessage};
 
+    if let Some(resource_uri) = selection
+        .locator
+        .skill_file_path
+        .to_str()
+        .filter(|path| path.starts_with("skill://"))
+    {
+        if !seen_paths.insert(selection.locator.skill_file_path.clone()) {
+            return;
+        }
+        messages.push(CurrentProviderMessage::user(vec![
+            CurrentProviderContent::Text(format!(
+                "<skill_resource>\n<name>{requested_name}</name>\n<server>{}</server>\n<uri>{resource_uri}</uri>\n在使用该 Skill 前，必须调用 read_mcp_resource 读取上述 server 与 URI；这是 Orchestrator resource，不是本地文件。\n</skill_resource>",
+                lime_skills::APPS_MCP_SERVER_NAME
+            )),
+        ]));
+        return;
+    }
+
     let instructions = match lime_skills::read_agent_skill_instructions(&selection.locator) {
         Ok(instructions) => instructions,
         Err(error) => {

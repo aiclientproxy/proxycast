@@ -233,6 +233,9 @@ impl RuntimeCore {
                 }
                 Ok(())
             };
+            let residency_slot = self
+                .reserve_agent_residency_slot(&identity, &session.session_id)
+                .await?;
             match self
                 .start_turn_inner(
                     TurnStartRequest {
@@ -251,7 +254,10 @@ impl RuntimeCore {
                 )
                 .await
             {
-                Ok(_) => started += 1,
+                Ok(_) => {
+                    residency_slot.commit();
+                    started += 1;
+                }
                 // An active recipient must retain its durable pending mail for a later retry.
                 Err(RuntimeCoreError::TurnAlreadyActive(_)) => break,
                 Err(error) => return Err(error),

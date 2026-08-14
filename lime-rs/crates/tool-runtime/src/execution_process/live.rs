@@ -1,11 +1,12 @@
 use super::{ExecutionOutputDelta, ExecutionProcessSnapshot};
-use app_server_protocol::protocol::v2::GrantedPermissionProfile;
+use crate::execution_orchestrator::RuntimeToolExecutionAttempt;
+use crate::tool_executor::RuntimeToolExecutionError;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct LiveExecutionRequest {
     pub process_id: String,
     pub tool_id: String,
@@ -17,6 +18,7 @@ pub struct LiveExecutionRequest {
     pub sandbox_policy: Option<String>,
     pub runtime_metadata: Option<Value>,
     pub env: HashMap<String, String>,
+    pub attempt: Option<RuntimeToolExecutionAttempt>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -41,17 +43,22 @@ pub trait RuntimeLiveExecutionGateway: Send + Sync {
         thread_id: &str,
         display_command: &str,
         request: LiveExecutionRequest,
-        granted_permissions: Option<GrantedPermissionProfile>,
-    ) -> Result<ExecutionProcessSnapshot, String>;
+    ) -> Result<ExecutionProcessSnapshot, RuntimeToolExecutionError>;
 
-    fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), String>;
+    fn write_stdin(&self, process_id: &str, data: &[u8]) -> Result<(), RuntimeToolExecutionError>;
 
-    fn terminate(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String>;
+    fn terminate(
+        &self,
+        process_id: &str,
+    ) -> Result<ExecutionProcessSnapshot, RuntimeToolExecutionError>;
 
-    fn status(&self, process_id: &str) -> Result<ExecutionProcessSnapshot, String>;
+    fn status(
+        &self,
+        process_id: &str,
+    ) -> Result<ExecutionProcessSnapshot, RuntimeToolExecutionError>;
 
     fn drain_output(
         &self,
         query: LiveExecutionOutputQuery,
-    ) -> Result<LiveExecutionOutputBatch, String>;
+    ) -> Result<LiveExecutionOutputBatch, RuntimeToolExecutionError>;
 }

@@ -38,10 +38,18 @@ struct ReadMcpResourceInput {
 
 #[async_trait]
 pub trait McpResourceGateway: Send + Sync {
-    async fn list_mcp_resources(&self) -> Result<McpResourceListResponse, String>;
+    async fn list_mcp_resources(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server: Option<&str>,
+        cursor: Option<String>,
+    ) -> Result<McpResourceListResponse, String>;
 
     async fn read_mcp_resource(
         &self,
+        session_id: &str,
+        thread_id: &str,
         params: McpServerResourceReadParams,
     ) -> Result<McpServerResourceReadResponse, String>;
 }
@@ -65,27 +73,60 @@ impl RuntimeToolExecutor for RuntimeMcpResourceExecutor {
             match request.tool_name {
                 LIST_MCP_RESOURCES_TOOL_NAME => {
                     let input = parse_list_input(request.params)?;
-                    if input
+                    let server = input
+                        .server
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty());
+                    let cursor = input
                         .cursor
                         .as_deref()
-                        .is_some_and(|value| !value.trim().is_empty())
-                    {
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(ToOwned::to_owned);
+                    if cursor.is_some() && server.is_none() {
                         return Err(RuntimeToolExecutionError::new(
-                            "cursor 暂不支持；当前 Lime MCP resource gateway 一次返回完整资源列表",
+                            "cursor 只能在指定 server 时使用",
                             Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
-                                "unsupported_mcp_resource_cursor".to_string(),
+                                "mcp_resource_cursor_requires_server".to_string(),
                             )),
                         ));
                     }
-                    let response = self.gateway.list_mcp_resources().await.map_err(|error| {
-                        RuntimeToolExecutionError::new(
-                            error,
-                            Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
-                                "mcp_resource_list_gateway_failed".to_string(),
-                            )),
-                        )
-                    })?;
-                    Ok(list_mcp_resources_result(input.server.as_deref(), response))
+                    if server == Some(lime_skills::APPS_MCP_SERVER_NAME)
+                        && !orchestrator_feature_enabled(request.turn_context, "mcp")
+                    {
+                        return Err(mcp_resource_error(
+                            "MCP server 'codex_apps' 已由 orchestrator.mcp.enabled 禁用",
+                            "orchestrator_mcp_disabled",
+                        ));
+                    }
+                    let thread_id = current_thread_id(request.turn_context)?;
+                    let mut response = self
+                        .gateway
+                        .list_mcp_resources(request.context.session_id(), thread_id, server, cursor)
+                        .await
+                        .map_err(|error| {
+                            mcp_resource_error(error, "mcp_resource_list_gateway_failed")
+                        })?;
+                    if server.is_none()
+                        && !orchestrator_feature_enabled(request.turn_context, "mcp")
+                    {
+                        response.resources = response
+                            .resources
+                            .into_iter()
+                            .filter(|value| {
+                                resource_server(value) != Some(lime_skills::APPS_MCP_SERVER_NAME)
+                            })
+                            .collect();
+                        response.resource_templates = response
+                            .resource_templates
+                            .into_iter()
+                            .filter(|value| {
+                                resource_server(value) != Some(lime_skills::APPS_MCP_SERVER_NAME)
+                            })
+                            .collect();
+                    }
+                    Ok(list_mcp_resources_result(server, response))
                 }
                 READ_MCP_RESOURCE_TOOL_NAME => {
                     let input = parse_read_input(request.params)?;
@@ -107,13 +148,27 @@ impl RuntimeToolExecutor for RuntimeMcpResourceExecutor {
                             )),
                         ));
                     }
+                    if server == lime_skills::APPS_MCP_SERVER_NAME
+                        && !orchestrator_feature_enabled(request.turn_context, "mcp")
+                        && !orchestrator_skill_resource_allowed(request.turn_context, uri)
+                    {
+                        return Err(mcp_resource_error(
+                            "MCP server 'codex_apps' 已由 orchestrator.mcp.enabled 禁用",
+                            "orchestrator_mcp_disabled",
+                        ));
+                    }
+                    let thread_id = current_thread_id(request.turn_context)?;
                     let response = self
                         .gateway
-                        .read_mcp_resource(McpServerResourceReadParams {
-                            thread_id: None,
-                            server: server.to_string(),
-                            uri: uri.to_string(),
-                        })
+                        .read_mcp_resource(
+                            request.context.session_id(),
+                            thread_id,
+                            McpServerResourceReadParams {
+                                thread_id: Some(thread_id.to_string()),
+                                server: server.to_string(),
+                                uri: uri.to_string(),
+                            },
+                        )
                         .await
                         .map_err(|error| {
                             RuntimeToolExecutionError::new(
@@ -233,6 +288,7 @@ fn list_mcp_resources_result(
         "server": server,
         "resource_count": resource_count,
         "resource_template_count": template_count,
+        "next_cursor": response.next_cursor,
     });
     let mut metadata = HashMap::new();
     metadata.insert("tool_family".to_string(), json!("mcp_resource"));
@@ -244,6 +300,74 @@ fn list_mcp_resources_result(
     }
 
     RuntimeToolExecutionResult::new(true, output.to_string(), None, metadata)
+}
+
+fn current_thread_id(
+    turn_context: Option<&crate::tool_executor::RuntimeToolTurnContext>,
+) -> Result<&str, RuntimeToolExecutionError> {
+    turn_context
+        .and_then(|context| context.metadata.get("app_server_runtime_backend"))
+        .and_then(|metadata| metadata.get("threadId"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|thread_id| !thread_id.is_empty())
+        .ok_or_else(|| {
+            mcp_resource_error(
+                "MCP resource tool requires canonical thread identity",
+                "mcp_resource_thread_identity_missing",
+            )
+        })
+}
+
+fn orchestrator_feature_enabled(
+    turn_context: Option<&crate::tool_executor::RuntimeToolTurnContext>,
+    feature: &str,
+) -> bool {
+    let Some(config) = turn_context.and_then(|context| context.metadata.get("config")) else {
+        return true;
+    };
+    if config.pointer("/orchestrator/loadError").is_some() {
+        return false;
+    }
+    config
+        .pointer(&format!("/orchestrator/{feature}/enabled"))
+        .and_then(Value::as_bool)
+        .unwrap_or(true)
+}
+
+fn orchestrator_skill_resource_allowed(
+    turn_context: Option<&crate::tool_executor::RuntimeToolTurnContext>,
+    uri: &str,
+) -> bool {
+    if !orchestrator_feature_enabled(turn_context, "skills") {
+        return false;
+    }
+    let Some(snapshot) = turn_context
+        .and_then(|context| {
+            context
+                .metadata
+                .get(lime_skills::SKILL_SNAPSHOT_TURN_METADATA_KEY)
+        })
+        .and_then(|value| {
+            serde_json::from_value::<lime_skills::AgentSkillSnapshot>(value.clone()).ok()
+        })
+    else {
+        return false;
+    };
+    snapshot.skills.iter().any(|skill| {
+        skill.enabled
+            && skill.authority == lime_skills::AgentSkillAuthority::Orchestrator
+            && skill.skill_file_path.to_str() == Some(uri)
+    })
+}
+
+fn mcp_resource_error(message: impl Into<String>, reason: &str) -> RuntimeToolExecutionError {
+    RuntimeToolExecutionError::new(
+        message,
+        Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+            reason.to_string(),
+        )),
+    )
 }
 
 fn read_mcp_resource_result(
@@ -308,7 +432,13 @@ mod tests {
 
     #[async_trait]
     impl McpResourceGateway for FakeMcpResourceGateway {
-        async fn list_mcp_resources(&self) -> Result<McpResourceListResponse, String> {
+        async fn list_mcp_resources(
+            &self,
+            _session_id: &str,
+            _thread_id: &str,
+            _server: Option<&str>,
+            _cursor: Option<String>,
+        ) -> Result<McpResourceListResponse, String> {
             Ok(McpResourceListResponse {
                 resources: vec![json!({
                     "uri": "docs://readme",
@@ -316,11 +446,14 @@ mod tests {
                     "server_name": "docs"
                 })],
                 resource_templates: Vec::new(),
+                next_cursor: None,
             })
         }
 
         async fn read_mcp_resource(
             &self,
+            _session_id: &str,
+            _thread_id: &str,
             params: McpServerResourceReadParams,
         ) -> Result<McpServerResourceReadResponse, String> {
             Ok(McpServerResourceReadResponse {
@@ -345,6 +478,72 @@ mod tests {
         })
     }
 
+    fn turn_context() -> agent_protocol::turn_context::TurnContextOverride {
+        agent_protocol::turn_context::TurnContextOverride {
+            metadata: HashMap::from([(
+                "app_server_runtime_backend".to_string(),
+                json!({"threadId": "thread-1"}),
+            )]),
+            ..Default::default()
+        }
+    }
+
+    fn orchestrator_disabled_turn_context(
+        skill_uri: Option<&str>,
+    ) -> agent_protocol::turn_context::TurnContextOverride {
+        let mut metadata = HashMap::from([
+            (
+                "app_server_runtime_backend".to_string(),
+                json!({"threadId": "thread-1"}),
+            ),
+            (
+                "config".to_string(),
+                json!({
+                    "orchestrator": {
+                        "skills": {"enabled": true},
+                        "mcp": {"enabled": false}
+                    }
+                }),
+            ),
+        ]);
+        if let Some(skill_uri) = skill_uri {
+            metadata.insert(
+                lime_skills::SKILL_SNAPSHOT_TURN_METADATA_KEY.to_string(),
+                json!({
+                    "roots": [],
+                    "skills": [{
+                        "skill_id": "orchestrator:release-notes",
+                        "name": "release-notes",
+                        "description": "Release notes",
+                        "scope": "orchestrator",
+                        "source": "orchestrator",
+                        "authority": "orchestrator",
+                        "enabled": true,
+                        "interface": {
+                            "display_name": "Release notes",
+                            "execution_mode": "mcp_resource",
+                            "provider": "codex_apps",
+                            "model": null,
+                            "argument_hint": null
+                        },
+                        "dependencies": {"tools": []},
+                        "policy": {
+                            "allow_implicit_invocation": true,
+                            "when_to_use": null
+                        },
+                        "capabilities": [],
+                        "directory": "skill://delivery/release-notes",
+                        "skill_file_path": skill_uri
+                    }]
+                }),
+            );
+        }
+        agent_protocol::turn_context::TurnContextOverride {
+            metadata,
+            ..Default::default()
+        }
+    }
+
     #[tokio::test]
     async fn list_mcp_resources_uses_gateway() {
         let handle = runtime_mcp_resource_executor_handle(Arc::new(FakeMcpResourceGateway));
@@ -354,7 +553,7 @@ mod tests {
                 tool_name: LIST_MCP_RESOURCES_TOOL_NAME,
                 params: &params,
                 context: &context(),
-                turn_context: None,
+                turn_context: Some(&turn_context()),
             })
             .await
             .expect("list resources should succeed");
@@ -376,7 +575,7 @@ mod tests {
                 tool_name: READ_MCP_RESOURCE_TOOL_NAME,
                 params: &params,
                 context: &context(),
-                turn_context: None,
+                turn_context: Some(&turn_context()),
             })
             .await
             .expect("read resource should succeed");
@@ -385,5 +584,51 @@ mod tests {
         assert_eq!(result.metadata.get("uri"), Some(&json!("docs://readme")));
         assert_eq!(result.metadata.get("server"), Some(&json!("docs")));
         assert!(result.output.contains("hello"));
+    }
+
+    #[tokio::test]
+    async fn orchestrator_mcp_gate_rejects_apps_catalog_but_allows_snapshot_skill_read() {
+        let handle = runtime_mcp_resource_executor_handle(Arc::new(FakeMcpResourceGateway));
+        let list_params = json!({"server": lime_skills::APPS_MCP_SERVER_NAME});
+        let error = handle
+            .execute(RuntimeToolExecutionRequest {
+                tool_name: LIST_MCP_RESOURCES_TOOL_NAME,
+                params: &list_params,
+                context: &context(),
+                turn_context: Some(&orchestrator_disabled_turn_context(None)),
+            })
+            .await
+            .expect_err("disabled Apps MCP catalog must fail closed");
+        assert!(error.message().contains("orchestrator.mcp.enabled"));
+
+        let uri = "skill://delivery/release-notes/SKILL.md";
+        let read_params = json!({
+            "server": lime_skills::APPS_MCP_SERVER_NAME,
+            "uri": uri
+        });
+        let result = handle
+            .execute(RuntimeToolExecutionRequest {
+                tool_name: READ_MCP_RESOURCE_TOOL_NAME,
+                params: &read_params,
+                context: &context(),
+                turn_context: Some(&orchestrator_disabled_turn_context(Some(uri))),
+            })
+            .await
+            .expect("snapshot-owned Skill resource stays readable");
+        assert!(result.success);
+
+        let other_uri = json!({
+            "server": lime_skills::APPS_MCP_SERVER_NAME,
+            "uri": "skill://delivery/other/SKILL.md"
+        });
+        assert!(handle
+            .execute(RuntimeToolExecutionRequest {
+                tool_name: READ_MCP_RESOURCE_TOOL_NAME,
+                params: &other_uri,
+                context: &context(),
+                turn_context: Some(&orchestrator_disabled_turn_context(Some(uri))),
+            })
+            .await
+            .is_err());
     }
 }

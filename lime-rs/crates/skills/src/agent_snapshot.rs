@@ -48,6 +48,7 @@ pub enum AgentSkillSource {
     Project,
     User,
     App,
+    Orchestrator,
     Other,
 }
 
@@ -57,6 +58,7 @@ impl AgentSkillSource {
             Self::Project => "project",
             Self::User => "user",
             Self::App => "app",
+            Self::Orchestrator => "orchestrator",
             Self::Other => "other",
         }
     }
@@ -68,6 +70,7 @@ pub enum AgentSkillAuthority {
     Workspace,
     User,
     Application,
+    Orchestrator,
     External,
 }
 
@@ -77,6 +80,7 @@ impl AgentSkillAuthority {
             Self::Workspace => "workspace",
             Self::User => "user",
             Self::Application => "application",
+            Self::Orchestrator => "orchestrator",
             Self::External => "external",
         }
     }
@@ -119,6 +123,7 @@ pub enum AgentSkillScope {
     Project,
     User,
     App,
+    Orchestrator,
     Other,
 }
 
@@ -417,6 +422,7 @@ impl AgentSkillScope {
             AgentSkillScope::Project => "project",
             AgentSkillScope::User => "user",
             AgentSkillScope::App => "app",
+            AgentSkillScope::Orchestrator => "orchestrator",
             AgentSkillScope::Other => "other",
         }
     }
@@ -426,6 +432,7 @@ impl AgentSkillScope {
             Self::Project => AgentSkillSource::Project,
             Self::User => AgentSkillSource::User,
             Self::App => AgentSkillSource::App,
+            Self::Orchestrator => AgentSkillSource::Orchestrator,
             Self::Other => AgentSkillSource::Other,
         }
     }
@@ -435,6 +442,7 @@ impl AgentSkillScope {
             Self::Project => AgentSkillAuthority::Workspace,
             Self::User => AgentSkillAuthority::User,
             Self::App => AgentSkillAuthority::Application,
+            Self::Orchestrator => AgentSkillAuthority::Orchestrator,
             Self::Other => AgentSkillAuthority::External,
         }
     }

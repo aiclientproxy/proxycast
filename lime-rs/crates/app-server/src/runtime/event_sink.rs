@@ -68,4 +68,11 @@ pub trait RuntimeEventSink: Send {
     fn emit_preappended(&mut self, _event: AgentEvent) -> Result<(), RuntimeCoreError> {
         Ok(())
     }
+
+    /// Forward an event that the runtime already persisted and identifies by canonical id.
+    fn emit_preappended_by_id(&mut self, event_id: &str) -> Result<(), RuntimeCoreError> {
+        Err(RuntimeCoreError::Backend(format!(
+            "runtime event sink cannot resolve preappended event: {event_id}"
+        )))
+    }
 }

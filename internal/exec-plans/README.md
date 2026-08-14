@@ -37,9 +37,11 @@
 - Lime v1.115.0 发布执行计划：`internal/exec-plans/release-v1.115.0-plan.md`
 - Lime v1.116.0 发布执行计划：`internal/exec-plans/release-v1.116.0-plan.md`
 - Lime v1.121.0 发布执行计划：`internal/exec-plans/release-v1.121.0-plan.md`
+- Lime v1.128.0 发布执行计划：`internal/exec-plans/release-v1.128.0-plan.md`
 - Codex App GUI 对齐执行计划：`internal/exec-plans/codex-app-gui-alignment-plan.md`
 - Codex 对话兼容重构：`internal/exec-plans/codex-conversation-compat-refactor-plan.md`
 - Codex 对齐 v1 并行协调：`internal/exec-plans/codex-alignment-v1-coordination-plan.md`
+- Codex Orchestrator 完整对齐：`internal/exec-plans/orchestrator-complete-alignment-plan.md`
 - Codex / Lime 存储对齐执行计划：`internal/exec-plans/codex-lime-storage-alignment-plan.md`
 - Codex / Lime 存储一一对照账本：`internal/refactor/data/03-one-to-one-storage-alignment-plan.md`
 - Refactor v2 测试体系第二期计划：`internal/exec-plans/refactor-v2-test-phase-2-plan.md`

@@ -5,7 +5,9 @@ use crate::RuntimeCoreError;
 use crate::RuntimeEvent;
 use app_server_protocol::CapabilitySnapshot;
 use lime_agent::SessionProviderConfig;
-use lime_core::config::{load_config, ToolExecutionPolicyConfig, WorkspaceSandboxConfig};
+use lime_core::config::{
+    load_config, OrchestratorConfig, ToolExecutionPolicyConfig, WorkspaceSandboxConfig,
+};
 use lime_core::database::{self, DbConnection};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -19,6 +21,9 @@ pub(crate) fn current_agent_runtime_config_metadata() -> Option<Value> {
                     "toolExecution": {
                         "loadError": error.to_string(),
                     }
+                },
+                "orchestrator": {
+                    "loadError": error.to_string(),
                 }
             }));
         }
@@ -37,8 +42,14 @@ pub(crate) fn current_agent_runtime_config_metadata() -> Option<Value> {
         );
     }
     let skills_config = (!config.skills.config.is_empty()).then(|| json!(config.skills));
+    let orchestrator_config =
+        (!OrchestratorConfig::is_default(&config.orchestrator)).then(|| json!(config.orchestrator));
     let soul_context = memory_soul_prompt_context_from_config(config.memory.soul.as_ref());
-    if agent_config.is_empty() && skills_config.is_none() && soul_context.is_none() {
+    if agent_config.is_empty()
+        && skills_config.is_none()
+        && orchestrator_config.is_none()
+        && soul_context.is_none()
+    {
         return None;
     }
 
@@ -48,6 +59,9 @@ pub(crate) fn current_agent_runtime_config_metadata() -> Option<Value> {
     }
     if let Some(skills_config) = skills_config {
         metadata.insert("skills".to_string(), skills_config);
+    }
+    if let Some(orchestrator_config) = orchestrator_config {
+        metadata.insert("orchestrator".to_string(), orchestrator_config);
     }
     if let Some(soul_context) = soul_context {
         metadata.insert(

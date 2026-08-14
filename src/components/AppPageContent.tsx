@@ -104,6 +104,9 @@ function resolvePluginWorkspaceProjectId(
     const expertsPageParams = pageParams as ExpertsPageParams;
     return expertsPageParams.currentProjectId ?? expertsPageParams.projectId;
   }
+  if (activePage === "plugins") {
+    return (pageParams as PluginsPageParams).currentProjectId;
+  }
   return undefined;
 }
 

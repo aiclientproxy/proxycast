@@ -5,6 +5,7 @@ pub mod command_semantics;
 pub mod current_time;
 pub mod execution_approval;
 pub mod execution_decision;
+pub mod execution_orchestrator;
 pub mod execution_policy;
 pub mod execution_policy_service;
 pub mod execution_process;

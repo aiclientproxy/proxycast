@@ -54,6 +54,7 @@ pub(super) async fn prepare(
         queue_if_busy: false,
         skip_pre_submit_resume: false,
         agent_control_gateway: None,
+        rollout_budget_reminder_source: None,
     };
     request.runtime_options = core.backend.effective_turn_runtime_options(&request, true);
     let prepared = core

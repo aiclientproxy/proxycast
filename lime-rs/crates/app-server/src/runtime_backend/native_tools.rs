@@ -49,7 +49,9 @@ pub(crate) async fn register_current_native_tools_if_available(
         .await
         .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
     agent_state
-        .register_mcp_resource_tools(mcp_resource_tools::mcp_resource_gateway(app_data_source))
+        .register_mcp_resource_tools(mcp_resource_tools::mcp_resource_gateway(
+            agent_state.clone(),
+        ))
         .await
         .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
     Ok(())

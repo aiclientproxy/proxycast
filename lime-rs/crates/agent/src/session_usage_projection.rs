@@ -25,6 +25,7 @@ pub(crate) fn project_token_usage_source(
         output_tokens: usage.output_tokens,
         cached_input_tokens: usage.cached_input_tokens,
         cache_creation_input_tokens: usage.cache_creation_input_tokens,
+        codex_rollout_budget_units: None,
     })
 }
 
@@ -42,6 +43,7 @@ mod tests {
                 output_tokens: 0,
                 cached_input_tokens: None,
                 cache_creation_input_tokens: Some(512),
+                codex_rollout_budget_units: None,
             })
         );
     }

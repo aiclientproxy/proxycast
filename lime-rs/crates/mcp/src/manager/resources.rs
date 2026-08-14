@@ -3,6 +3,46 @@ use crate::types::*;
 use tracing::{debug, error, info, warn};
 
 impl McpClientManager {
+    /// 获取指定运行中服务器的一页资源。
+    pub async fn list_resource_page(
+        &self,
+        server_name: &str,
+        cursor: Option<String>,
+    ) -> Result<McpResourcePage, McpError> {
+        let server_name = validate_server_name(server_name)?;
+        let clients = self.clients.read().await;
+        let wrapper = clients
+            .get(server_name)
+            .ok_or_else(|| McpError::ServerNotRunning(server_name.to_string()))?;
+        if let Some(info) = &wrapper.server_info {
+            if !info.supports_resources {
+                return Ok(McpResourcePage {
+                    resources: Vec::new(),
+                    next_cursor: None,
+                });
+            }
+        }
+        let service = wrapper
+            .running_service()
+            .ok_or_else(|| McpError::ServerNotRunning(server_name.to_string()))?;
+        let result = service
+            .list_resources(cursor.map(|cursor| rmcp::model::PaginatedRequestParam {
+                cursor: Some(cursor),
+            }))
+            .await
+            .map_err(|error| McpError::ProtocolError(error.to_string()))?;
+        Ok(McpResourcePage {
+            resources: result
+                .resources
+                .into_iter()
+                .map(|resource| {
+                    Self::convert_resource_to_definition(resource, server_name.to_string())
+                })
+                .collect(),
+            next_cursor: result.next_cursor,
+        })
+    }
+
     // ========================================================================
     // 资源管理方法
     // ========================================================================
@@ -140,6 +180,10 @@ impl McpClientManager {
             description: resource.description.clone(),
             mime_type: resource.mime_type.clone(),
             server_name,
+            meta: resource
+                .meta
+                .as_ref()
+                .map(|meta| serde_json::Value::Object(meta.0.clone())),
         }
     }
 
@@ -321,6 +365,16 @@ impl McpClientManager {
             }
         }
     }
+}
+
+fn validate_server_name(server_name: &str) -> Result<&str, McpError> {
+    let server_name = server_name.trim();
+    if server_name.is_empty() {
+        return Err(McpError::ConfigError(
+            "MCP resource server cannot be empty".to_string(),
+        ));
+    }
+    Ok(server_name)
 }
 
 fn validate_resource_target<'a>(

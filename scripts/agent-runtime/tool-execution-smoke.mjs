@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
   assertSmoke,
-  exportAgentSessionEvidencePackCurrent,
   invokeDevBridge,
   invokeAppServerMethod,
+  listPendingAppServerRequestsCurrent,
   respondAgentServerRequestCurrent,
   sleep,
   summarizeEvidencePack,
@@ -27,6 +28,22 @@ import {
   liveProviderSmokeAllowed,
 } from "../lib/live-provider-smoke-gate.mjs";
 import { startOpenAiCompatibleFixtureServer } from "../lib/openai-compatible-fixture-server.mjs";
+import {
+  AGENT_CONTROL_CAPACITY_GATE_B_BATCH_ID,
+  AGENT_CONTROL_CAPACITY_FINAL_TEXT,
+  AGENT_CONTROL_RESIDENCY_GATE_B_BATCH_ID,
+  AGENT_CONTROL_RESIDENCY_FINAL_TEXT,
+} from "./agent-control-visible-dom-gate-b.mjs";
+import { ROLLOUT_BUDGET_GATE_B_BATCH_ID } from "./rollout-budget-visible-dom-gate-b.mjs";
+import {
+  TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID,
+  TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_FINAL_TEXT,
+  TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_GATE_B_BATCH_ID,
+  TOOL_ORCHESTRATOR_SANDBOX_RETRY_CALL_ID,
+  TOOL_ORCHESTRATOR_SANDBOX_RETRY_FINAL_TEXT,
+  TOOL_ORCHESTRATOR_SANDBOX_RETRY_GATE_B_BATCH_ID,
+  extractToolOrchestratorAttemptEvidence,
+} from "./tool-orchestrator-visible-dom-gate-b.mjs";
 import {
   createToolExecutionThreadCurrent,
   provisionToolExecutionFixtureProvider,
@@ -71,10 +88,20 @@ const CONTEXT7_HEADER_NAME = "CONTEXT7_API_KEY";
 const CONTEXT7_ENV_VAR_NAME = "CONTEXT7_API_KEY";
 const CONTEXT7_LIBRARY_ID = "/openai/openai-agents-python";
 const SAFE_FILE_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep"];
-const CODING_CURRENT_TOOLS = ["Read", "apply_patch", "Glob", "Grep", "Bash"];
-const MEDIA_NOTEBOOK_SHELL_TOOLS = ["view_image", "NotebookEdit", "Bash"];
+const CODING_CURRENT_TOOLS = [
+  "Read",
+  "apply_patch",
+  "Glob",
+  "Grep",
+  "exec_command",
+];
+const MEDIA_NOTEBOOK_SHELL_TOOLS = [
+  "view_image",
+  "NotebookEdit",
+  "exec_command",
+];
 const TASK_BOARD_TOOLS = ["TaskCreate", "TaskGet", "TaskUpdate", "TaskList"];
-const BACKGROUND_TASK_TOOLS = ["Bash", "TaskOutput", "TaskStop"];
+const BACKGROUND_TASK_TOOLS = ["exec_command", "write_stdin"];
 const RUNTIME_INTROSPECTION_TOOLS = ["tool_search", "SendUserMessage"];
 const WEB_TOOLS = ["WebFetch", "WebSearch"];
 const AGENT_CONTROL_TOOLS = [
@@ -86,6 +113,8 @@ const AGENT_CONTROL_TOOLS = [
   "list_agents",
 ];
 const AGENT_CONTROL_WAIT_TIMEOUT_MS = 10_000;
+const TOOL_ORCHESTRATOR_SANDBOX_RETRY_PROOF_PATH =
+  "../orchestrator-sandbox-retry-proof.txt";
 const PLAN_WORKTREE_TOOLS = [
   "EnterPlanMode",
   "ExitPlanMode",
@@ -117,6 +146,17 @@ const BATCH_TARGET_TOOLS = {
   "runtime-introspection-tools": RUNTIME_INTROSPECTION_TOOLS,
   "web-tools": WEB_TOOLS,
   "agent-control-tools": AGENT_CONTROL_TOOLS,
+  [AGENT_CONTROL_CAPACITY_GATE_B_BATCH_ID]: ["spawn_agent"],
+  [AGENT_CONTROL_RESIDENCY_GATE_B_BATCH_ID]: [
+    "spawn_agent",
+    "wait_agent",
+    "followup_task",
+  ],
+  [ROLLOUT_BUDGET_GATE_B_BATCH_ID]: [],
+  [TOOL_ORCHESTRATOR_SANDBOX_RETRY_GATE_B_BATCH_ID]: ["apply_patch"],
+  [TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_GATE_B_BATCH_ID]: [
+    "exec_command",
+  ],
   "plan-worktree-tools": PLAN_WORKTREE_TOOLS,
   "ask-tools": ASK_TOOLS,
   "creation-task-tools": CREATION_TASK_TOOLS,
@@ -344,6 +384,42 @@ function toolCall(name, id, args) {
   };
 }
 
+async function startManagedNetworkProofServer() {
+  const hits = [];
+  const server = http.createServer((request, response) => {
+    const url = new URL(request.url || "/", "http://127.0.0.1");
+    if (request.method !== "GET" || url.pathname !== "/proof") {
+      response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      response.end("not found\n");
+      return;
+    }
+    hits.push({
+      method: request.method,
+      pathname: url.pathname,
+      queryMarker: url.searchParams.get("marker"),
+    });
+    response.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+    response.end("TOOL_ORCHESTRATOR_MANAGED_NETWORK_ENDPOINT_OK\n");
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("managed-network proof server 未返回 TCP address");
+  }
+  return {
+    hits,
+    url: `http://127.0.0.1:${address.port}/proof?marker=gate-b-query`,
+    close: () =>
+      new Promise((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  };
+}
+
 function requestTextFromFixtureContext(context) {
   return requestMessagesText(context?.body);
 }
@@ -363,19 +439,16 @@ function extractTaskBoardIdFromContext(context) {
   return taskId;
 }
 
-function extractBackgroundTaskIdFromContext(context) {
+function extractExecSessionIdFromContext(context) {
   const text = requestTextFromFixtureContext(context);
-  const metadataMatch = text.match(/"task_id"\s*:\s*"([^"]+)"/);
-  const outputMatch = text.match(
-    /Background task started with ID:\s*([^\s\n]+)/,
-  );
-  const taskId = (metadataMatch?.[1] || outputMatch?.[1] || "").trim();
-  if (!taskId) {
+  const match = text.match(/"session_id"\s*:\s*(-?\d+)/);
+  const sessionId = Number(match?.[1]);
+  if (!Number.isInteger(sessionId)) {
     throw new Error(
-      "fixture dynamic TaskOutput/TaskStop response could not parse Bash background task_id",
+      "fixture dynamic write_stdin response could not parse exec_command session_id",
     );
   }
-  return taskId;
+  return sessionId;
 }
 
 function requestToolCallNamesFromFixtureContext(context) {
@@ -445,7 +518,7 @@ function buildCodingCurrentFixtureResponses() {
     "+LIME_TOOL_EXECUTION_WRITE_OK",
     "*** End Patch",
   ].join("\n");
-  const bashScript = "console.log('LIME_TOOL_EXECUTION_TEST_OK')";
+  const shellScript = "console.log('LIME_TOOL_EXECUTION_TEST_OK')";
   return [
     toolCall("Read", "call-tool-exec-coding-read", {
       path: EDIT_RELATIVE_PATH,
@@ -464,9 +537,9 @@ function buildCodingCurrentFixtureResponses() {
       include_hidden: true,
       max_results: 20,
     }),
-    toolCall("Bash", "call-tool-exec-coding-bash", {
-      command: `node -e ${JSON.stringify(bashScript)}`,
-      timeout: 30,
+    toolCall("exec_command", "call-tool-exec-coding-command", {
+      cmd: `node -e ${JSON.stringify(shellScript)}`,
+      yield_time_ms: 30_000,
     }),
     {
       type: "text",
@@ -476,7 +549,7 @@ function buildCodingCurrentFixtureResponses() {
 }
 
 function buildMediaNotebookShellFixtureResponses({ notebookPath }) {
-  const bashScript = "console.log('LIME_TOOL_EXECUTION_BASH_OK')";
+  const shellScript = "console.log('LIME_TOOL_EXECUTION_EXEC_COMMAND_OK')";
   return [
     toolCall("view_image", "call-tool-exec-view-image", {
       path: IMAGE_RELATIVE_PATH,
@@ -489,9 +562,9 @@ function buildMediaNotebookShellFixtureResponses({ notebookPath }) {
       cell_type: "markdown",
       edit_mode: "replace",
     }),
-    toolCall("Bash", "call-tool-exec-bash", {
-      command: `node -e ${JSON.stringify(bashScript)}`,
-      timeout: 30,
+    toolCall("exec_command", "call-tool-exec-command", {
+      cmd: `node -e ${JSON.stringify(shellScript)}`,
+      yield_time_ms: 30_000,
     }),
     {
       type: "text",
@@ -534,20 +607,22 @@ function buildBackgroundTaskFixtureResponses() {
   ].join(" ");
 
   return [
-    toolCall("Bash", "call-tool-exec-background-bash", {
-      command: `node -e ${JSON.stringify(backgroundScript)}`,
-      background: true,
-      timeout: 30,
+    toolCall("exec_command", "call-tool-exec-background-command", {
+      cmd: `node -e ${JSON.stringify(backgroundScript)}`,
+      tty: true,
+      yield_time_ms: 250,
     }),
     (context) =>
-      toolCall("TaskOutput", "call-tool-exec-task-output", {
-        task_id: extractBackgroundTaskIdFromContext(context),
-        block: true,
-        timeout: 2_000,
+      toolCall("write_stdin", "call-tool-exec-background-poll", {
+        session_id: extractExecSessionIdFromContext(context),
+        chars: "",
+        "yield_time_ms": 2_000,
       }),
     (context) =>
-      toolCall("TaskStop", "call-tool-exec-task-stop", {
-        task_id: extractBackgroundTaskIdFromContext(context),
+      toolCall("write_stdin", "call-tool-exec-background-stop", {
+        session_id: extractExecSessionIdFromContext(context),
+        chars: "\u0003",
+        yield_time_ms: 2_000,
       }),
     {
       type: "text",
@@ -651,6 +726,148 @@ function buildAgentControlFixtureResponse(context) {
 
 function buildAgentControlFixtureResponses() {
   return Array.from({ length: 7 }, () => buildAgentControlFixtureResponse);
+}
+
+function buildToolOrchestratorSandboxRetryFixtureResponses() {
+  const patch = [
+    "*** Begin Patch",
+    `*** Add File: ${TOOL_ORCHESTRATOR_SANDBOX_RETRY_PROOF_PATH}`,
+    "+TOOL_ORCHESTRATOR_SANDBOX_RETRY_OK",
+    "*** End Patch",
+  ].join("\n");
+  return [
+    toolCall(
+      "apply_patch",
+      TOOL_ORCHESTRATOR_SANDBOX_RETRY_CALL_ID,
+      { patch },
+    ),
+    {
+      type: "text",
+      content: TOOL_ORCHESTRATOR_SANDBOX_RETRY_FINAL_TEXT,
+    },
+  ];
+}
+
+function buildToolOrchestratorManagedNetworkRetryFixtureResponses(state) {
+  return [
+    () => {
+      if (!state.proofUrl) {
+        throw new Error("managed-network proof URL 尚未初始化");
+      }
+      return toolCall(
+        "exec_command",
+        TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID,
+        {
+          cmd: `curl --fail --silent --show-error ${JSON.stringify(state.proofUrl)}`,
+          yield_time_ms: 30_000,
+        },
+      );
+    },
+    {
+      type: "text",
+      content: TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_FINAL_TEXT,
+    },
+  ];
+}
+
+async function buildAgentControlCapacityFixtureResponse(context) {
+  const userText = requestUserMessagesText(context?.body);
+  const calledTools = new Set(requestToolCallNamesFromFixtureContext(context));
+  if (calledTools.has("spawn_agent")) {
+    return {
+      type: "text",
+      content: AGENT_CONTROL_CAPACITY_FINAL_TEXT,
+    };
+  }
+  if (userText.includes("AGENT_RUNTIME_CAPACITY_CHILD")) {
+    // Keep all admitted children resident long enough for the fourth admission
+    // to observe the three-child root-scoped execution limit.
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    return {
+      type: "text",
+      content: "AGENT_RUNTIME_CAPACITY_CHILD_DONE",
+    };
+  }
+  return {
+    type: "tool_calls",
+    calls: [1, 2, 3, 4].map((index) => ({
+      id: `call-agent-capacity-spawn-${index}`,
+      name: "spawn_agent",
+      arguments: {
+        task_name: `capacity_child_${index}`,
+        message:
+          "Reply with AGENT_RUNTIME_CAPACITY_CHILD_DONE and do not call tools.",
+      },
+    })),
+  };
+}
+
+async function buildAgentControlResidencyFixtureResponse(context) {
+  const requestText = requestUserMessagesText(context?.body);
+  const userMessages = Array.isArray(context?.body?.messages)
+    ? context.body.messages.filter((message) => message?.role === "user")
+    : [];
+  const currentUserText = String(userMessages.at(-1)?.content || "");
+  const calledTools = requestToolCallNamesFromFixtureContext(context);
+  const spawnCount = calledTools.filter((name) => name === "spawn_agent").length;
+  const waitCount = calledTools.filter((name) => name === "wait_agent").length;
+  const followupCount = calledTools.filter(
+    (name) => name === "followup_task",
+  ).length;
+  const childMatch = currentUserText.match(
+    /AGENT_RUNTIME_RESIDENCY_CHILD_(\d)(?:_FOLLOWUP)?/,
+  );
+  const isChildRequest = Boolean(childMatch);
+  if (isChildRequest) {
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    const suffix = requestText.includes("_FOLLOWUP") ? "FOLLOWUP" : "INITIAL";
+    return {
+      type: "text",
+      content: `AGENT_RUNTIME_RESIDENCY_CHILD_${childMatch[1]}_${suffix}_DONE`,
+    };
+  }
+  if (spawnCount < 3) {
+    const index = spawnCount + 1;
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    return toolCall("spawn_agent", `call-agent-residency-spawn-${index}`, {
+      task_name: `residency_child_${index}`,
+      message:
+        `Reply with AGENT_RUNTIME_RESIDENCY_CHILD_${index}_INITIAL_DONE and do not call tools.`,
+    });
+  }
+  if (spawnCount === 3 && waitCount < 3) {
+    return toolCall("wait_agent", `call-agent-residency-wait-${waitCount + 1}`, {
+      timeout_ms: AGENT_CONTROL_WAIT_TIMEOUT_MS,
+    });
+  }
+  if (spawnCount === 3 && waitCount === 3) {
+    return toolCall("spawn_agent", "call-agent-residency-spawn-4", {
+      task_name: "residency_child_4",
+      message:
+        "Reply with AGENT_RUNTIME_RESIDENCY_CHILD_4_INITIAL_DONE and do not call tools.",
+    });
+  }
+  if (spawnCount === 4 && waitCount === 3 && followupCount === 0) {
+    return toolCall("wait_agent", "call-agent-residency-wait-4", {
+      timeout_ms: AGENT_CONTROL_WAIT_TIMEOUT_MS,
+    });
+  }
+  if (spawnCount === 4 && waitCount === 4 && followupCount === 0) {
+    return toolCall("followup_task", "call-agent-residency-followup-1", {
+      target: "residency_child_1",
+      message:
+        "Reply with AGENT_RUNTIME_RESIDENCY_CHILD_1_FOLLOWUP_DONE and do not call tools.",
+    });
+  }
+  if (spawnCount === 4 && waitCount === 4 && followupCount === 1) {
+    return toolCall("wait_agent", "call-agent-residency-wait-5", {
+      timeout_ms: AGENT_CONTROL_WAIT_TIMEOUT_MS,
+    });
+  }
+  return {
+    type: "text",
+    content: AGENT_CONTROL_RESIDENCY_FINAL_TEXT,
+  };
 }
 
 function buildPlanWorktreeFixtureResponses() {
@@ -1053,7 +1270,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
     return {
       id: "media-notebook-shell-tools",
       prompt:
-        "请从普通输入框自然语言触发媒体、notebook 和命令工具验收：查看一张 fixture 图片，编辑一个 notebook 单元格，然后运行一个输出 LIME_TOOL_EXECUTION_BASH_OK 的最小本地命令。不要使用命令入口。",
+        "请从普通输入框自然语言触发媒体、notebook 和命令工具验收：查看一张 fixture 图片，编辑一个 notebook 单元格，然后运行一个输出 LIME_TOOL_EXECUTION_EXEC_COMMAND_OK 的最小本地命令。不要使用命令入口。",
       promptNeedle: "媒体、notebook 和命令工具验收",
       targetTools: MEDIA_NOTEBOOK_SHELL_TOOLS,
       scriptedResponses: buildMediaNotebookShellFixtureResponses({
@@ -1068,13 +1285,13 @@ function buildBatchScenario(batchId, fixtureFiles) {
           notebookToolMutatedFile: notebookContent.includes(
             "# Notebook fixture updated",
           ),
-          bashToolReturnedOutput: toolOutputText.includes(
-            "LIME_TOOL_EXECUTION_BASH_OK",
+          execCommandReturnedOutput: toolOutputText.includes(
+            "LIME_TOOL_EXECUTION_EXEC_COMMAND_OK",
           ),
           evidencePackMentionsMediaNotebookShell:
             evidencePackText.includes("view_image") ||
             evidencePackText.includes("NotebookEdit") ||
-            evidencePackText.includes("LIME_TOOL_EXECUTION_BASH_OK"),
+            evidencePackText.includes("LIME_TOOL_EXECUTION_EXEC_COMMAND_OK"),
         };
       },
     };
@@ -1146,24 +1363,22 @@ function buildBatchScenario(batchId, fixtureFiles) {
     return {
       id: "background-task-tools",
       prompt:
-        "请从普通输入框自然语言触发后台任务工具验收：用 Bash 后台启动一个会持续输出 LIME_BACKGROUND_TASK_TICK 的本地命令，然后用 TaskOutput 读取同一个后台任务，再用 TaskStop 停止同一个后台任务。不要使用命令入口。",
+        "请从普通输入框自然语言触发后台任务工具验收：用 exec_command 启动一个会持续输出 LIME_BACKGROUND_TASK_TICK 的本地命令，然后用 write_stdin 读取并中断同一个会话。不要使用命令入口。",
       promptNeedle: "后台任务工具验收",
       targetTools: BACKGROUND_TASK_TOOLS,
       scriptedResponses: buildBackgroundTaskFixtureResponses(),
       buildAssertions({ evidencePackText, toolOutputText }) {
         return {
-          backgroundBashReturnedRuntimeTaskId: toolOutputText.includes(
-            "Background task started with ID:",
-          ),
-          taskOutputUsedRuntimeTaskId:
+          backgroundExecReturnedRuntimeSessionId:
+            toolOutputText.includes('"session_id"'),
+          writeStdinUsedRuntimeSessionId:
             toolOutputText.includes("LIME_BACKGROUND_TASK_TICK") ||
-            toolOutputText.includes('"retrieval_status"'),
-          taskStopUsedRuntimeTaskId: toolOutputText.includes(
-            "Successfully stopped task",
-          ),
+            evidencePackText.includes('"terminal_interaction"'),
+          writeStdinInterruptedRuntimeSession:
+            evidencePackText.includes("(interrupt)"),
           evidencePackMentionsToolExecution:
             evidencePackText.includes("LIME_BACKGROUND_TASK") ||
-            evidencePackText.includes("Background task started"),
+            evidencePackText.includes('"session_id"'),
         };
       },
     };
@@ -1270,6 +1485,279 @@ function buildBatchScenario(batchId, fixtureFiles) {
             evidencePackText.includes("spawn_agent") &&
             evidencePackText.includes("list_agents") &&
             evidencePackText.includes("interrupt_agent"),
+        };
+      },
+    };
+  }
+
+  if (batchId === AGENT_CONTROL_CAPACITY_GATE_B_BATCH_ID) {
+    return {
+      id: AGENT_CONTROL_CAPACITY_GATE_B_BATCH_ID,
+      prompt:
+        "请从普通输入框自然语言验证 Agent root execution capacity：并行创建四个子代理，确认第四个被拒绝后结束。不要使用命令入口。",
+      promptNeedle: "root execution capacity",
+      targetTools: ["spawn_agent"],
+      scriptedResponses: [buildAgentControlCapacityFixtureResponse],
+      requiresTargetToolsInInitialInventory: false,
+      // Child turns are intentionally delayed and may still be in flight when
+      // the root turn settles; the root provider request is the completion gate.
+      expectedFixtureRequestCount: 1,
+      buildAssertions({ threadRead, providerRequests }) {
+        const spawnCalls = getToolCalls(threadRead).filter(
+          (call) => toolName(call) === "spawn_agent",
+        );
+        const output = spawnCalls.map((call) => toolOutput(call)).join("\n");
+        const rejectedCallCount = spawnCalls.filter((call) =>
+          toolOutput(call).includes("agent_limit_reached"),
+        ).length;
+        const childCount = new Set(
+          spawnCalls
+            .map((call) =>
+              (toolOutput(call).match(/capacity_child_[1-4]/g) || [])[0],
+            )
+            .filter(Boolean),
+        ).size;
+        return {
+          providerReturnedFourParallelSpawnCalls:
+            providerRequests.some(
+              (request) =>
+                request.responseKind === "tool_calls" &&
+                request.responseToolName === null,
+            ),
+          rootCreatedThreeChildren: childCount === 3,
+          fourthChildRejectedByRuntimeCapacity: rejectedCallCount === 1,
+          runtimeReturnedCapacityErrorInCanonicalToolOutput:
+            output.includes("agent_limit_reached"),
+          capacityGateFinalTextVisibleInRuntime: providerRequests.some(
+            (request) => request.responseKind === "text",
+          ),
+        };
+      },
+    };
+  }
+
+  if (batchId === AGENT_CONTROL_RESIDENCY_GATE_B_BATCH_ID) {
+    return {
+      id: AGENT_CONTROL_RESIDENCY_GATE_B_BATCH_ID,
+      prompt:
+        "请从普通输入框验证 Agent resident capacity：先并行创建三个子代理并等待终态，再创建第四个子代理，最后续派第一个子代理以验证 terminal slot reuse 与 LRU cold reload。不要使用命令入口。",
+      promptNeedle: "resident capacity",
+      targetTools: ["spawn_agent", "wait_agent", "followup_task"],
+      scriptedResponses: [buildAgentControlResidencyFixtureResponse],
+      requiresTargetToolsInInitialInventory: false,
+      expectedFixtureRequestCount: 10,
+      buildAssertions({ threadRead, providerRequests }) {
+        const calls = getToolCalls(threadRead);
+        const spawnCalls = calls.filter(
+          (call) => toolName(call) === "spawn_agent",
+        );
+        const waitCalls = calls.filter(
+          (call) => toolName(call) === "wait_agent",
+        );
+        const followupCalls = calls.filter(
+          (call) => toolName(call) === "followup_task",
+        );
+        const allSpawnOutput = spawnCalls.map((call) => toolOutput(call)).join("\n");
+        const childNames = new Set(
+          [...allSpawnOutput.matchAll(/residency_child_[1-4]/g)].map(
+            (match) => match[0],
+          ),
+        );
+        return {
+          providerReturnedResidencySequence:
+            providerRequests.filter((request) => request.responseKind).length >= 10,
+          rootCreatedFourDistinctChildren:
+            spawnCalls.length === 4 && childNames.size === 4,
+          allChildrenReachedTerminalWait:
+            waitCalls.length >= 5 &&
+            waitCalls.every((call) => toolStatus(call) === "completed"),
+          followupTaskReloadedFirstChild:
+            followupCalls.length === 1 &&
+            toolStatus(followupCalls[0]) === "completed" &&
+            toolOutput(followupCalls[0]).includes("message_id"),
+          residencyFinalTextVisibleInRuntime: providerRequests.some(
+            (request) => request.responseKind === "text",
+          ),
+        };
+      },
+    };
+  }
+
+  if (batchId === ROLLOUT_BUDGET_GATE_B_BATCH_ID) {
+    return {
+      id: ROLLOUT_BUDGET_GATE_B_BATCH_ID,
+      prompt:
+        "请从普通输入框验证 shared rollout budget exhaustion，并在预算耗尽后结束当前回合。不要使用命令入口。",
+      promptNeedle: "shared rollout budget exhaustion",
+      targetTools: [],
+      scriptedResponses: [
+        {
+          type: "text",
+          content: "AGENT_RUNTIME_ROLLOUT_BUDGET_GATE_B_DONE",
+        },
+      ],
+      requiresTargetToolsInInitialInventory: false,
+      expectedFixtureRequestCount: 1,
+      buildAssertions({ threadRead, providerRequests }) {
+        const latestTurn = threadRead?.turns?.at(-1) || {};
+        const latestError = latestTurn?.error || {};
+        const errorText = JSON.stringify(latestError);
+        return {
+          providerReturnedBudgetFixtureResponse: providerRequests.some(
+            (request) => request.responseKind === "text",
+          ),
+          runtimeTurnReachedTerminalState: ["completed", "failed", "canceled"].includes(
+            String(latestTurn?.status || "").toLowerCase(),
+          ),
+          budgetAccountingProjectionPresent:
+            errorText.includes("usage_limit_exceeded") ||
+            errorText.includes("rollout budget") ||
+            String(latestTurn?.status || "").toLowerCase() === "completed",
+        };
+      },
+    };
+  }
+
+  if (batchId === TOOL_ORCHESTRATOR_SANDBOX_RETRY_GATE_B_BATCH_ID) {
+    return {
+      id: TOOL_ORCHESTRATOR_SANDBOX_RETRY_GATE_B_BATCH_ID,
+      prompt:
+        "请从普通输入框自然语言验证 tool orchestrator sandbox denial、批准与同 identity retry。不要使用命令入口。",
+      promptNeedle: "tool orchestrator sandbox denial",
+      targetTools: ["apply_patch"],
+      scriptedResponses: buildToolOrchestratorSandboxRetryFixtureResponses(),
+      requiresTargetToolsInInitialInventory: false,
+      approvalPolicy: "on-request",
+      sandboxPolicy: "workspace-write",
+      approvalToolNames: ["apply_patch"],
+      prepareAfterInventory(_options, { workspaceRoot }) {
+        return {
+          proofPath: path.resolve(
+            workspaceRoot,
+            TOOL_ORCHESTRATOR_SANDBOX_RETRY_PROOF_PATH,
+          ),
+        };
+      },
+      buildAssertions({ runtimeContext, runtimeSnapshot, threadRead }) {
+        const calls = getToolCalls(threadRead).filter(
+          (call) => toolName(call) === "apply_patch",
+        );
+        const approvalItemId = String(
+          runtimeSnapshot?.respondedRequests?.[0]?.itemId || "",
+        ).trim();
+        const providerToolIdentities = calls.filter((call) => {
+          const callId = String(call?.call_id || call?.callId || "").trim();
+          return approvalItemId && callId.endsWith(approvalItemId);
+        });
+        const proof = runtimeContext?.proofPath;
+        return {
+          sandboxRetryKeptOneCanonicalToolIdentity:
+            providerToolIdentities.length === 1 &&
+            providerToolIdentities[0]?.status === "completed",
+          sandboxRetryApprovalResponded:
+            runtimeSnapshot?.respondedRequestCount === 1,
+          sandboxRetryCompletedCanonicalTool:
+            calls[0]?.status === "completed" && calls[0]?.success !== false,
+          sandboxRetryWroteOutsideWorkspaceAfterApproval:
+            typeof proof === "string" &&
+            fs.existsSync(proof) &&
+            fs
+              .readFileSync(proof, "utf8")
+              .includes("TOOL_ORCHESTRATOR_SANDBOX_RETRY_OK"),
+        };
+      },
+    };
+  }
+
+  if (batchId === TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_GATE_B_BATCH_ID) {
+    const state = { proofUrl: null };
+    return {
+      id: TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_GATE_B_BATCH_ID,
+      prompt:
+        "请从普通输入框自然语言验证 tool orchestrator managed-network denial、typed approval 与同 identity retry。不要使用命令入口。",
+      promptNeedle: "tool orchestrator managed-network denial",
+      targetTools: ["exec_command"],
+      scriptedResponses:
+        buildToolOrchestratorManagedNetworkRetryFixtureResponses(state),
+      requiresTargetToolsInInitialInventory: false,
+      approvalPolicy: "on-request",
+      sandboxPolicy: "workspace-write",
+      approvalToolNames: ["exec_command"],
+      async prepareAfterInventory(_options, { turnMetadata }) {
+        const proof = await startManagedNetworkProofServer();
+        state.proofUrl = proof.url;
+        turnMetadata.harness.requestExecutionPolicy = {
+          toolOverrides: {
+            exec_command: {
+              warningPolicy: "none",
+            },
+          },
+          networkRules: [
+            {
+              ruleId: "managed_network_gate_b",
+              matchType: "exact",
+              target: "host",
+              pattern: "127.0.0.1",
+              riskLevel: "high",
+              reasonCode: "managed_network_gate_b",
+              reason: "Gate B localhost endpoint requires managed-network approval",
+            },
+          ],
+        };
+        return proof;
+      },
+      async cleanup(_options, runtimeContext) {
+        await runtimeContext?.close?.();
+      },
+      buildAssertions({
+        evidencePackText,
+        runtimeContext,
+        runtimeSnapshot,
+        toolAttemptEvidence,
+        sessionDetail,
+        threadRead,
+        toolOutputText,
+      }) {
+        const calls = getToolCalls(threadRead).filter(
+          (call) => toolName(call) === "exec_command",
+        );
+        const approval = runtimeSnapshot?.respondedRequests?.[0] ?? null;
+        const approvalItemId = String(approval?.itemId || "").trim();
+        const providerToolIdentities = calls.filter((call) => {
+          const callId = String(call?.call_id || call?.callId || "").trim();
+          return approvalItemId && callId.endsWith(approvalItemId);
+        });
+        const approvalText = JSON.stringify(approval || {});
+        return {
+          managedNetworkRetryKeptOneCanonicalToolIdentity:
+            providerToolIdentities.length === 1 &&
+            providerToolIdentities[0]?.status === "completed",
+          managedNetworkRetryApprovalRespondedOnce:
+            runtimeSnapshot?.respondedRequestCount === 1,
+          managedNetworkRetryUsedTypedNetworkApproval:
+            approval?.method === "item/commandExecution/requestApproval" &&
+            approval?.networkApprovalContext?.host === "127.0.0.1" &&
+            approval?.networkApprovalContext?.protocol === "http" &&
+            approval?.command == null &&
+            approval?.cwd == null,
+          managedNetworkRetryApprovalDidNotLeakUrlDetails:
+            !approvalText.includes("/proof") &&
+            !approvalText.includes("marker=gate-b-query"),
+          managedNetworkRetryRecordedTwoAttempts:
+            toolAttemptEvidence?.toolAttemptCount === 2 &&
+            toolAttemptEvidence?.toolAttemptNumber === 2 &&
+            toolAttemptEvidence?.toolEscalated === true &&
+            toolAttemptEvidence?.firstAttemptOutcome ===
+              "managed_network_denied",
+          managedNetworkRetryPreservedWorkspaceSandbox:
+            toolAttemptEvidence?.effectiveSandboxPolicy === "workspace-write",
+          managedNetworkRetryReachedRealEndpointOnce:
+            runtimeContext?.hits?.length === 1 &&
+            runtimeContext.hits[0]?.pathname === "/proof" &&
+            runtimeContext.hits[0]?.queryMarker === "gate-b-query",
+          managedNetworkRetryReturnedEndpointProof: toolOutputText.includes(
+            "TOOL_ORCHESTRATOR_MANAGED_NETWORK_ENDPOINT_OK",
+          ),
         };
       },
     };
@@ -1830,6 +2318,38 @@ function pendingRequestsFromThreadRead(threadRead) {
       : [];
 }
 
+function pendingRequestFromServer(message) {
+  const params = message?.params ?? {};
+  return {
+    id: String(
+      params.approvalId ??
+        params.approval_id ??
+        params.requestId ??
+        params.request_id ??
+        params.itemId ??
+        params.item_id ??
+        "",
+    ).trim(),
+    outerRequestId: message?.id ?? null,
+    serverRequest: message,
+    method: message?.method ?? null,
+    status: "pending",
+    scope: {
+      thread_id: params.threadId ?? params.thread_id,
+      turn_id: params.turnId ?? params.turn_id,
+    },
+    itemId: params.itemId ?? params.item_id ?? null,
+    toolName: params.toolName ?? params.tool_name ?? null,
+    approvalPhase: params.approvalPhase ?? params.approval_phase ?? null,
+    denialKind: params.denialKind ?? params.denial_kind ?? null,
+    networkHost: params.networkHost ?? params.network_host ?? null,
+    networkApprovalContext:
+      params.networkApprovalContext ?? params.network_approval_context ?? null,
+    command: params.command ?? null,
+    cwd: params.cwd ?? null,
+  };
+}
+
 function buildActionScope(sessionId, request, fallbackTurnId) {
   const scope =
     request?.scope && typeof request.scope === "object" ? request.scope : {};
@@ -1886,13 +2406,10 @@ async function respondPendingRequests(
   options,
   sessionId,
   turnId,
-  threadRead,
+  pendingRequests,
   seenRequestIds,
+  respondedRequests,
 ) {
-  const pendingRequests = pendingRequestsFromThreadRead(threadRead).filter(
-    (request) =>
-      String(request?.status || "pending").toLowerCase() === "pending",
-  );
   let respondedCount = 0;
   for (const request of pendingRequests) {
     const requestId = String(request?.id || "").trim();
@@ -1903,9 +2420,23 @@ async function respondPendingRequests(
     const userData = buildUserResponseForRequest(request);
     await respondAgentServerRequestCurrent(options, {
       requestId,
+      serverRequest: request.serverRequest,
       confirmed: true,
       userData,
       actionScope: buildActionScope(sessionId, request, turnId),
+    });
+    respondedRequests.push({
+      requestId,
+      outerRequestId: request.outerRequestId ?? null,
+      method: request.method ?? null,
+      itemId: request.itemId ?? null,
+      toolName: request.toolName ?? null,
+      approvalPhase: request.approvalPhase ?? null,
+      denialKind: request.denialKind ?? null,
+      networkHost: request.networkHost ?? null,
+      networkApprovalContext: request.networkApprovalContext ?? null,
+      command: request.command ?? null,
+      cwd: request.cwd ?? null,
     });
     respondedCount += 1;
     console.log(`${LOG_PREFIX} responded_pending_request id=${requestId}`);
@@ -1996,10 +2527,12 @@ async function waitForRuntimeCompletion(
   targetTools,
   eventName,
   turnId,
+  approvalToolNames = [],
 ) {
   const startedAt = Date.now();
   let lastSnapshot = null;
   const seenRequestIds = new Set();
+  const respondedRequests = [];
 
   while (Date.now() - startedAt < options.timeoutMs) {
     const threadRead = await readToolExecutionThreadCurrent(
@@ -2011,9 +2544,20 @@ async function waitForRuntimeCompletion(
     const sessionDetail = threadRead.session_detail;
     const matrix = buildToolExecutionMatrix(threadRead, targetTools);
     const turnObserved = runtimeTurnObserved(threadRead, fixture);
-    const pendingRequests = pendingRequestsFromThreadRead(threadRead).filter(
+    const serverRequests =
+      approvalToolNames.length > 0
+        ? await listPendingAppServerRequestsCurrent(options, {
+            threadId: threadRead?.thread_id || threadRead?.threadId,
+            turnId,
+          })
+        : [];
+    const pendingRequests = [
+      ...pendingRequestsFromThreadRead(threadRead),
+      ...serverRequests.map(pendingRequestFromServer),
+    ].filter(
       (request) =>
-        String(request?.status || "pending").toLowerCase() === "pending",
+        String(request?.status || "pending").toLowerCase() === "pending" &&
+        !seenRequestIds.has(String(request?.id || "").trim()),
     );
     lastSnapshot = {
       threadRead: summarizeThreadRead(threadRead),
@@ -2036,18 +2580,26 @@ async function waitForRuntimeCompletion(
       providerRequests: providerRequestSummaries(fixture.requests),
       turnObserved,
       pendingRequestCount: pendingRequests.length,
+      respondedRequestCount: seenRequestIds.size,
+      respondedRequests: [...respondedRequests],
       completedToolCount: matrix.filter(
         (entry) => entry.status === "completed" && entry.success !== false,
       ).length,
       matrix,
+      toolCallIdentities: getToolCalls(threadRead).map((call) => ({
+        tool: toolName(call),
+        callId: String(call?.call_id || call?.callId || "").trim(),
+        status: toolStatus(call),
+      })),
     };
 
     const pendingResponseCount = await respondPendingRequests(
       options,
       sessionId,
       turnId,
-      threadRead,
+      pendingRequests,
       seenRequestIds,
+      respondedRequests,
     );
     if (pendingResponseCount > 0 || pendingRequests.length > 0) {
       await sleep(options.intervalMs);
@@ -2171,8 +2723,8 @@ async function runSmoke(options) {
         runtimeRequest: {
           providerPreference: repositoryProvider.providerPreference,
           modelPreference: repositoryProvider.modelPreference,
-          approvalPolicy: "never",
-          sandboxPolicy: "danger-full-access",
+          approvalPolicy: scenario.approvalPolicy || "never",
+          sandboxPolicy: scenario.sandboxPolicy || "danger-full-access",
           metadata: turnMetadata,
         },
         skipPreSubmitResume: true,
@@ -2190,12 +2742,25 @@ async function runSmoke(options) {
       targetTools,
       eventName,
       turnId,
+      scenario.approvalToolNames,
     );
 
     console.log(`${LOG_PREFIX} stage=export-evidence-pack`);
-    const evidencePack = await exportAgentSessionEvidencePackCurrent(options, {
-      sessionId,
-      turnId,
+    const evidenceExport = await invokeAppServerMethod(
+      options,
+      "evidence/export",
+      {
+        sessionId,
+        turnId,
+        includeEvents: true,
+        includeArtifacts: true,
+        includeEvidencePack: true,
+      },
+    );
+    const evidencePack = evidenceExport?.evidencePack ?? null;
+    const toolAttemptEvidence = extractToolOrchestratorAttemptEvidence({
+      callId: TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID,
+      evidenceExport,
     });
 
     const providerRequests = providerRequestSummaries(providerFixtureRequests);
@@ -2283,8 +2848,12 @@ async function runSmoke(options) {
       providerRequests,
       runtimeContext,
       toolOutputText,
+      toolAttemptEvidence,
       matrix,
       newTurnProviderRequests,
+      threadRead: finalState.threadRead,
+      sessionDetail: finalState.sessionDetail,
+      runtimeSnapshot: finalState.snapshot,
     });
     const assertions = {
       fixtureProviderUsed:
@@ -2374,7 +2943,12 @@ async function runSmoke(options) {
         threadId,
         turnId,
         eventName,
+        policies: {
+          approvalPolicy: scenario.approvalPolicy || "never",
+          sandboxPolicy: scenario.sandboxPolicy || "danger-full-access",
+        },
         finalSnapshot: finalState.snapshot,
+        toolAttemptEvidence,
         newTurnIsolation,
         matrix,
         toolStageMatrix,

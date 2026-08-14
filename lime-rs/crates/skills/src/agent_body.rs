@@ -84,6 +84,16 @@ pub fn read_agent_skill_body(locator: &AgentSkillBodyLocator) -> Result<AgentSki
 pub fn read_agent_skill_instructions(
     locator: &AgentSkillBodyLocator,
 ) -> Result<AgentSkillInstructions, String> {
+    if locator
+        .skill_file_path
+        .to_str()
+        .is_some_and(|path| path.starts_with("skill://"))
+    {
+        return Err(format!(
+            "Orchestrator Agent Skill 必须通过 session MCP resource 读取: {}",
+            locator.skill_file_path.display()
+        ));
+    }
     ensure_skill_file_path(&locator.skill_file_path)?;
     let contents = std::fs::read_to_string(&locator.skill_file_path).map_err(|error| {
         format!(

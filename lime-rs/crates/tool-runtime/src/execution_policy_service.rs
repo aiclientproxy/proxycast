@@ -420,10 +420,16 @@ fn collect_runtime_execution_policy_layers<'a>(
         layers,
     );
 
-    ["runtime_options", "runtimeOptions", "metadata"]
-        .into_iter()
-        .filter_map(|key| object.get(key))
-        .for_each(|nested| collect_runtime_execution_policy_layers(nested, layers));
+    [
+        "runtime_options",
+        "runtimeOptions",
+        "runtime_request",
+        "runtimeRequest",
+        "metadata",
+    ]
+    .into_iter()
+    .filter_map(|key| object.get(key))
+    .for_each(|nested| collect_runtime_execution_policy_layers(nested, layers));
 }
 
 fn push_named_policy_layer<'a>(
@@ -454,6 +460,8 @@ fn find_persisted_tool_execution_policy_value(value: &JsonValue) -> Option<&Json
         "nativeAgent",
         "runtime_options",
         "runtimeOptions",
+        "runtime_request",
+        "runtimeRequest",
         "metadata",
     ]
     .into_iter()
@@ -817,6 +825,44 @@ mod tests {
         assert_eq!(cargo_rule.source.label(), "persisted");
         assert_eq!(npm_rule.rule_id, "request_npm_publish");
         assert_eq!(npm_rule.source.label(), "request");
+    }
+
+    #[test]
+    fn reads_request_network_rules_from_turn_context_runtime_request() {
+        let request_metadata = json!({
+            "runtime_request": {
+                "harness": {
+                    "requestExecutionPolicy": {
+                        "networkRules": [
+                            {
+                                "ruleId": "managed_network_gate_b",
+                                "matchType": "exact",
+                                "target": "host",
+                                "pattern": "127.0.0.1",
+                                "riskLevel": "high",
+                                "reasonCode": "managed_network_gate_b",
+                                "reason": "Gate B requires managed-network approval"
+                            }
+                        ]
+                    }
+                }
+            }
+        });
+
+        let rule_match = service(ToolExecutionResolverInput {
+            persisted_policy: None,
+            request_metadata: Some(&request_metadata),
+        })
+        .classify_network_access(
+            "exec_command",
+            &json!({ "cmd": "curl http://127.0.0.1:43123/proof" }),
+            Some("curl http://127.0.0.1:43123/proof"),
+        )
+        .expect("request network rule should cross the runtime_request wrapper");
+
+        assert_eq!(rule_match.rule_id, "managed_network_gate_b");
+        assert_eq!(rule_match.source.label(), "request");
+        assert_eq!(rule_match.host.as_deref(), Some("127.0.0.1"));
     }
 
     #[test]

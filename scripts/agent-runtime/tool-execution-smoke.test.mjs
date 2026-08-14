@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_CONTROL_CAPACITY_GATE_B_BATCH_ID,
   AGENT_CONTROL_FINAL_TEXT,
   AGENT_CONTROL_SUBAGENT_ACTIVITY_KINDS,
   AGENT_CONTROL_TOOL_NAMES,
@@ -20,11 +21,19 @@ import {
   findPendingAppServerRequest,
 } from "../lib/agent-runtime-smoke-core.mjs";
 import {
+  TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID,
+  buildToolOrchestratorManagedNetworkRetryVisibleDomAssertions,
+  extractToolOrchestratorAttemptEvidence,
+  TOOL_ORCHESTRATOR_SANDBOX_RETRY_CALL_ID,
+  buildToolOrchestratorSandboxRetryVisibleDomAssertions,
+} from "./tool-orchestrator-visible-dom-gate-b.mjs";
+import {
   buildToolExecutionProviderUpdateParams,
   buildToolExecutionThreadStartParams,
   buildToolExecutionTurnStartParams,
   normalizeToolExecutionThreadReadResponse,
 } from "./tool-execution-current-contract.mjs";
+import { startOpenAiCompatibleFixtureServer } from "../lib/openai-compatible-fixture-server.mjs";
 
 function readDeferredGateBSources() {
   return [
@@ -49,6 +58,49 @@ function readAgentControlGateBSources() {
 }
 
 describe("agent runtime tool execution smoke guard", () => {
+  it("fixture can emit a parallel native tool-call batch", async () => {
+    const fixture = await startOpenAiCompatibleFixtureServer({
+      scriptedResponses: [
+        {
+          type: "tool_calls",
+          calls: [
+            {
+              id: "capacity-call-1",
+              name: "spawn_agent",
+              arguments: { task_name: "child_1", message: "ready" },
+            },
+            {
+              id: "capacity-call-2",
+              name: "spawn_agent",
+              arguments: { task_name: "child_2", message: "ready" },
+            },
+          ],
+        },
+      ],
+    });
+    try {
+      const response = await fetch(`${fixture.baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "lime-fixture-chat",
+          stream: true,
+          messages: [{ role: "user", content: "capacity" }],
+          tools: [
+            { type: "function", function: { name: "spawn_agent" } },
+          ],
+        }),
+      });
+      const body = await response.text();
+      expect(response.ok).toBe(true);
+      expect(body).toContain("capacity-call-1");
+      expect(body).toContain("capacity-call-2");
+      expect(body).toContain('"name":"spawn_agent"');
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it("provisions an executable fixture route before canonical V2 thread/start", () => {
     const provider = {
       modelPreference: "lime-fixture-chat",
@@ -146,6 +198,12 @@ describe("agent runtime tool execution smoke guard", () => {
                   },
                 },
               },
+              {
+                type: "commandExecution",
+                id: "call-3",
+                status: "completed",
+                aggregatedOutput: "command ok",
+              },
             ],
           },
         ],
@@ -178,6 +236,14 @@ describe("agent runtime tool execution smoke guard", () => {
               message: "interrupted by parent",
             },
           ],
+        },
+        {
+          type: "tool_call",
+          call_id: "call-3",
+          tool_name: "exec_command",
+          status: "completed",
+          success: true,
+          output: "command ok",
         },
       ],
     });
@@ -215,6 +281,215 @@ describe("agent runtime tool execution smoke guard", () => {
     expect(request).toMatchObject({ id: "outer-current" });
     expect(buildAppServerRequestResponse(request, { confirmed: true })).toEqual(
       { decision: "accept" },
+    );
+  });
+
+  it("captured file approval envelope preserves its outer response identity", () => {
+    const request = {
+      id: "app-server-request:boot:7",
+      method: "item/fileChange/requestApproval",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        itemId: "call-apply-patch-1",
+      },
+    };
+
+    expect(buildAppServerRequestResponse(request, { confirmed: true })).toEqual(
+      { decision: "accept" },
+    );
+    expect(request.id).toBe("app-server-request:boot:7");
+  });
+
+  it("requires typed approval, one visible identity, and Electron read-model proof", () => {
+    const assertions =
+      buildToolOrchestratorSandboxRetryVisibleDomAssertions({
+        evidence: {
+          assertions: {
+            sandboxRetryKeptOneCanonicalToolIdentity: true,
+            sandboxRetryApprovalResponded: true,
+            sandboxRetryCompletedCanonicalTool: true,
+            sandboxRetryWroteOutsideWorkspaceAfterApproval: true,
+          },
+          runtime: {
+            policies: {
+              approvalPolicy: "on-request",
+              sandboxPolicy: "workspace-write",
+            },
+            finalSnapshot: {
+              respondedRequests: [
+                {
+                  itemId: TOOL_ORCHESTRATOR_SANDBOX_RETRY_CALL_ID,
+                  method: "item/fileChange/requestApproval",
+                  outerRequestId: "app-server-request:boot:7",
+                },
+              ],
+            },
+          },
+        },
+        snapshot: {
+          electron: true,
+          hasInvokeBridge: true,
+          supportsAppServer: true,
+          sessionId: "session-1",
+          activeSessionId: "session-1",
+          fileChangeGroups: [
+            {
+              fileRowCount: 1,
+              status: "completed",
+              visible: true,
+            },
+          ],
+          finalAssistantTextVisible: true,
+          appServerCalls: [
+            {
+              method: "thread/read",
+              transport: "electron-ipc",
+              status: "success",
+            },
+          ],
+          invokeErrorCount: 0,
+          consoleErrorCount: 0,
+        },
+      });
+
+    expect(Object.values(assertions).every(Boolean)).toBe(true);
+  });
+
+  it("requires typed managed-network approval and same-identity retry proof", () => {
+    const assertions =
+      buildToolOrchestratorManagedNetworkRetryVisibleDomAssertions({
+        evidence: {
+          assertions: {
+            managedNetworkRetryKeptOneCanonicalToolIdentity: true,
+            managedNetworkRetryApprovalRespondedOnce: true,
+            managedNetworkRetryUsedTypedNetworkApproval: true,
+            managedNetworkRetryRecordedTwoAttempts: true,
+            managedNetworkRetryPreservedWorkspaceSandbox: true,
+            managedNetworkRetryReachedRealEndpointOnce: true,
+          },
+          runtime: {
+            policies: {
+              approvalPolicy: "on-request",
+              sandboxPolicy: "workspace-write",
+            },
+            finalSnapshot: {
+              respondedRequests: [
+                {
+                  itemId: TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID,
+                  method: "item/commandExecution/requestApproval",
+                  outerRequestId: "app-server-request:boot:9",
+                  networkApprovalContext: {
+                    host: "127.0.0.1",
+                    protocol: "http",
+                  },
+                },
+              ],
+            },
+          },
+        },
+        snapshot: {
+          electron: true,
+          hasInvokeBridge: true,
+          supportsAppServer: true,
+          sessionId: "session-network-1",
+          activeSessionId: "session-network-1",
+          endpointProofVisible: true,
+          finalAssistantTextVisible: true,
+          appServerCalls: [
+            {
+              method: "thread/read",
+              transport: "electron-ipc",
+              status: "success",
+            },
+          ],
+          invokeErrorCount: 0,
+          consoleErrorCount: 0,
+        },
+      });
+
+    expect(Object.values(assertions).every(Boolean)).toBe(true);
+  });
+
+  it("extracts only bounded orchestrator attempt facts from canonical events", () => {
+    const evidence = extractToolOrchestratorAttemptEvidence({
+      callId: TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID,
+      evidenceExport: {
+        events: [
+          {
+            type: "item.completed",
+            payload: {
+              item: {
+                itemId: `item_${TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID}`,
+                metadata: {
+                  toolAttemptCount: 2,
+                  toolAttemptNumber: 2,
+                  toolEscalated: true,
+                  approvalSource: "user",
+                  requestedSandboxPolicy: "workspace-write",
+                  effectiveSandboxPolicy: "workspace-write",
+                  firstAttemptOutcome: "managed_network_denied",
+                  networkUrl: "http://127.0.0.1/private?secret=value",
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    expect(evidence).toEqual({
+      itemId: `item_${TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID}`,
+      toolAttemptCount: 2,
+      toolAttemptNumber: 2,
+      toolEscalated: true,
+      approvalSource: "user",
+      requestedSandboxPolicy: "workspace-write",
+      effectiveSandboxPolicy: "workspace-write",
+      firstAttemptOutcome: "managed_network_denied",
+    });
+    expect(JSON.stringify(evidence)).not.toContain("private");
+    expect(JSON.stringify(evidence)).not.toContain("secret");
+  });
+
+  it("uses Codex exec_command/write_stdin instead of retired public shell tools", () => {
+    const content = [
+      "scripts/agent-runtime/tool-execution-current-contract.mjs",
+      "scripts/agent-runtime/tool-execution-smoke.mjs",
+    ]
+      .map((filePath) => fs.readFileSync(filePath, "utf8"))
+      .join("\n");
+
+    expect(content).toContain('return "exec_command"');
+    expect(content).toContain('["exec_command", "write_stdin"]');
+    expect(content).not.toMatch(/\bBash\b|\bTaskOutput\b|\bTaskStop\b/);
+  });
+
+  it("managed-network Gate B drives the current curl classifier and host rule", () => {
+    const content = fs.readFileSync(
+      "scripts/agent-runtime/tool-execution-smoke.mjs",
+      "utf8",
+    );
+
+    expect(content).toContain("curl --fail --silent --show-error");
+    expect(content).toContain('target: "host"');
+    expect(content).toContain('pattern: "127.0.0.1"');
+    expect(content).not.toContain("node --input-type=module -e");
+
+    const managedSource = fs.readFileSync(
+      "scripts/agent-runtime/tool-execution-managed-smoke.mjs",
+      "utf8",
+    );
+    const collectorStart = managedSource.indexOf(
+      "async function collectToolOrchestratorManagedNetworkRetryVisibleDomGateB",
+    );
+    const collectorEnd = managedSource.indexOf(
+      "async function collectAgentControlCapacityVisibleDomGateB",
+      collectorStart,
+    );
+    const collector = managedSource.slice(collectorStart, collectorEnd);
+    expect(collector.indexOf("await expandHistoricalToolRows")).toBeLessThan(
+      collector.indexOf("await endpointProof.first().waitFor"),
     );
   });
 
@@ -321,6 +596,16 @@ describe("agent runtime tool execution smoke guard", () => {
     for (const activityKind of AGENT_CONTROL_SUBAGENT_ACTIVITY_KINDS) {
       expect(content).toContain(`"${activityKind}"`);
     }
+  });
+
+  it("keeps the capacity Gate B on current Electron/read-model evidence", () => {
+    const content = readAgentControlGateBSources();
+
+    expect(content).toContain(AGENT_CONTROL_CAPACITY_GATE_B_BATCH_ID);
+    expect(content).toContain("buildAgentControlCapacityVisibleDomAssertions");
+    expect(content).toContain("visibleDomAllParallelSpawnRowsPresent");
+    expect(content).toContain("visibleDomCapacityRejectionVisible");
+    expect(content).not.toContain('APP_SERVER_BACKEND_MODE: "external"');
   });
 
   it("keeps the deferred MCP Gate B on the current Electron/App Server path", () => {

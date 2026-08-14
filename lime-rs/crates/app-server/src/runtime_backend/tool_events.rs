@@ -121,6 +121,7 @@ pub(super) fn runtime_event_type_from_raw(raw_type: &str) -> &'static str {
         "guardian_warning" => "guardian.warning",
         "provider_trace" => "provider.trace",
         "provider_usage" => "provider.usage",
+        "rollout_budget_reminder" => "rollout_budget.reminder",
         "provider_step" => "provider.step",
         "provider_stream_event" => "runtime.event",
         "context_trace" => "context.trace",
@@ -342,6 +343,7 @@ mod tests {
                 output_tokens: 30,
                 cached_input_tokens: Some(20),
                 cache_creation_input_tokens: None,
+                codex_rollout_budget_units: None,
             }),
         })
         .expect("provider step should emit");
@@ -363,6 +365,7 @@ mod tests {
                 output_tokens: 30,
                 cached_input_tokens: Some(20),
                 cache_creation_input_tokens: None,
+                codex_rollout_budget_units: None,
             },
         })
         .expect("provider usage should emit");

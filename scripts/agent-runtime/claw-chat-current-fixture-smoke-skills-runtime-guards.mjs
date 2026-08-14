@@ -150,7 +150,8 @@ export function registerSkillsRuntimeSmokeGuards({
       '".lime"',
       '"registration.json"',
       "workspace-registered-skill-enable-runtime",
-      "app-sidebar-nav-skills",
+      "app-sidebar-nav-plugins",
+      "plugin-workspace-tab-skills",
       "sanitizeBackendLedgerForEvidence",
       "isIgnorableConsoleError",
       "actionableConsoleErrors",
@@ -221,6 +222,7 @@ export function registerSkillsRuntimeSmokeGuards({
       "EXPERT_SKILLS_RUNTIME_TURN_ID",
       "async function runManualEnableSkillsRuntimeTurn",
       "agent_runtime_",
+      "app-sidebar-nav-skills",
     ]);
     expectAllToContain(expect, expertRuntimeContent, [
       "reloadRendererAfterExpertPanelSkillCatalogInjection",
@@ -246,13 +248,15 @@ export function registerSkillsRuntimeSmokeGuards({
       "visibleElementSnapshot(candidate).visible",
       "导出问题证据包",
       "刷新证据包",
-      "app-sidebar-nav-experts",
+      "app-sidebar-nav-plugins",
+      "plugin-workspace-tab-experts",
       "expert-start-${EXPERT_SKILLS_RUNTIME_ID}",
       "expert-info-skills-add",
       "EXPERT_SKILLS_RUNTIME_SKILL_REF",
     ]);
     expect(expertActionsContent).not.toContain("skill:local:capability-report");
     expect(expertActionsContent).not.toContain("agent_runtime_");
+    expect(expertActionsContent).not.toContain("app-sidebar-nav-experts");
 
     expectAllToContain(expect, sessionContent, [
       "lime:skill-catalog-changed",

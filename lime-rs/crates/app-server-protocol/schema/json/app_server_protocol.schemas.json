@@ -17463,6 +17463,30 @@
             "decline"
           ],
           "type": "string"
+        },
+        "NetworkApprovalContext": {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "protocol": {
+              "$ref": "#/$defs/NetworkApprovalProtocol"
+            }
+          },
+          "required": [
+            "host",
+            "protocol"
+          ],
+          "type": "object"
+        },
+        "NetworkApprovalProtocol": {
+          "enum": [
+            "http",
+            "https",
+            "socks5Tcp",
+            "socks5Udp"
+          ],
+          "type": "string"
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -17496,6 +17520,16 @@
         },
         "itemId": {
           "type": "string"
+        },
+        "networkApprovalContext": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NetworkApprovalContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "reason": {
           "type": [
@@ -35249,6 +35283,12 @@
     "McpResourceListResponse": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "nextCursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "resourceTemplates": {
           "default": [],
           "items": true,
@@ -43330,6 +43370,45 @@
         "v2"
       ],
       "title": "MultiAgentVersion",
+      "type": "string"
+    },
+    "NetworkApprovalContext": {
+      "$defs": {
+        "NetworkApprovalProtocol": {
+          "enum": [
+            "http",
+            "https",
+            "socks5Tcp",
+            "socks5Udp"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/NetworkApprovalProtocol"
+        }
+      },
+      "required": [
+        "host",
+        "protocol"
+      ],
+      "title": "NetworkApprovalContext",
+      "type": "object"
+    },
+    "NetworkApprovalProtocol": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "http",
+        "https",
+        "socks5Tcp",
+        "socks5Udp"
+      ],
+      "title": "NetworkApprovalProtocol",
       "type": "string"
     },
     "NonSteerableTurnKind": {
@@ -61769,6 +61848,16 @@
             "itemId": {
               "type": "string"
             },
+            "networkApprovalContext": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NetworkApprovalContext"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "reason": {
               "type": [
                 "null",
@@ -62091,6 +62180,30 @@
             "threadId"
           ],
           "type": "object"
+        },
+        "NetworkApprovalContext": {
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "protocol": {
+              "$ref": "#/$defs/NetworkApprovalProtocol"
+            }
+          },
+          "required": [
+            "host",
+            "protocol"
+          ],
+          "type": "object"
+        },
+        "NetworkApprovalProtocol": {
+          "enum": [
+            "http",
+            "https",
+            "socks5Tcp",
+            "socks5Udp"
+          ],
+          "type": "string"
         },
         "PermissionsRequestApprovalParams": {
           "properties": {
@@ -62805,6 +62918,7 @@
       "enum": [
         "application",
         "external",
+        "orchestrator",
         "user",
         "workspace"
       ],
@@ -62874,6 +62988,7 @@
           "enum": [
             "application",
             "external",
+            "orchestrator",
             "user",
             "workspace"
           ],
@@ -62989,6 +63104,7 @@
         "SkillSource": {
           "enum": [
             "app",
+            "orchestrator",
             "other",
             "project",
             "user"
@@ -64049,6 +64165,7 @@
           "enum": [
             "application",
             "external",
+            "orchestrator",
             "user",
             "workspace"
           ],
@@ -64186,6 +64303,7 @@
         "SkillSource": {
           "enum": [
             "app",
+            "orchestrator",
             "other",
             "project",
             "user"
@@ -64481,6 +64599,7 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "enum": [
         "app",
+        "orchestrator",
         "other",
         "project",
         "user"
@@ -64494,6 +64613,7 @@
           "enum": [
             "application",
             "external",
+            "orchestrator",
             "user",
             "workspace"
           ],
@@ -64609,6 +64729,7 @@
         "SkillSource": {
           "enum": [
             "app",
+            "orchestrator",
             "other",
             "project",
             "user"

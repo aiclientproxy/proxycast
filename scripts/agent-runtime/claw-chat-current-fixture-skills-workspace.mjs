@@ -399,7 +399,8 @@ export async function launchSkillsRuntimeFromWorkspacePanel(
   const startedAt = Date.now();
   let lastSnapshot = null;
 
-  await page.locator('[data-testid="app-sidebar-nav-skills"]').click();
+  await page.locator('[data-testid="app-sidebar-nav-plugins"]').click();
+  await page.locator('[data-testid="plugin-workspace-tab-skills"]').click();
 
   while (Date.now() - startedAt < options.timeoutMs) {
     const snapshot = await evaluatePageSnapshot(page, () => {

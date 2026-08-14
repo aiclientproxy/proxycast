@@ -33,6 +33,7 @@ const CONFIG_ROOT_KEYS: &[&str] = &[
     "models",
     "agent",
     "skills",
+    "orchestrator",
     "experimental",
     "tool_calling",
     "workspace_preferences",
@@ -374,4 +375,28 @@ fn config_write_error(code: ConfigWriteErrorCode, message: impl Into<String>) ->
         json!({"config_write_error_code": code}),
     )
     .expect("config write error data is serializable")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn orchestrator_config_is_writable_through_current_control_plane() {
+        assert!(CONFIG_ROOT_KEYS.contains(&"orchestrator"));
+
+        let mut config = json!({});
+        apply_edit(
+            &mut config,
+            &parse_key_path("orchestrator.mcp.enabled").expect("valid key path"),
+            json!(false),
+            MergeStrategy::Replace,
+        )
+        .expect("orchestrator config edit");
+
+        assert_eq!(
+            config.pointer("/orchestrator/mcp/enabled"),
+            Some(&json!(false))
+        );
+    }
 }

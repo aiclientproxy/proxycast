@@ -82,7 +82,9 @@ pub(in crate::runtime) fn provider_turn_history_excluding_current_turn_input(
         .into_iter()
         .filter(|event| {
             event.turn_id.as_deref() != Some(turn_id)
-                || !super::turn_input_events::is_provider_input_event(event)
+                || (!super::turn_input_events::is_provider_input_event(event)
+                    && event.event_type
+                        != super::rollout_budget::ROLLOUT_BUDGET_REMINDER_EVENT_TYPE)
         })
         .collect::<Vec<_>>();
     let mut messages = replacement_history.unwrap_or_default();
@@ -398,6 +400,29 @@ where
                     .ok_or_else(|| {
                         format!(
                             "Guardian approval event {} omitted developer text",
+                            event.event_id
+                        )
+                    })?;
+                messages.push(CurrentProviderMessage::developer(vec![
+                    CurrentProviderContent::Text(text.to_string()),
+                ]));
+            }
+            super::rollout_budget::ROLLOUT_BUDGET_REMINDER_EVENT_TYPE => {
+                flush_assistant(
+                    &mut messages,
+                    &mut assistant_content,
+                    &mut assistant_text_by_item,
+                );
+                flush_tool_results(&mut messages, &mut tool_results);
+                let text = event
+                    .payload
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|text| !text.is_empty())
+                    .ok_or_else(|| {
+                        format!(
+                            "rollout budget reminder event {} omitted developer text",
                             event.event_id
                         )
                     })?;
@@ -875,6 +900,32 @@ mod tests {
             &future[0].content[..],
             [CurrentProviderContent::Text(text)] if text == "review current changes"
         ));
+    }
+
+    #[test]
+    fn rollout_budget_reminder_is_restored_only_for_future_turns() {
+        let text =
+            "<rollout_budget>\nYou have 50 weighted tokens left in the shared session token budget.\n</rollout_budget>";
+        let stored = stored_with_events(vec![event(
+            1,
+            super::super::rollout_budget::ROLLOUT_BUDGET_REMINDER_EVENT_TYPE,
+            json!({
+                "remainingTokens": 50,
+                "reminderIndex": 2,
+                "windowId": "window-1",
+                "text": text,
+            }),
+        )]);
+
+        let current = provider_history_excluding_current_turn_input(&stored, None, "turn-1")
+            .expect("current reminder history");
+        assert!(current.is_empty());
+
+        let future = provider_history_excluding_current_turn_input(&stored, None, "turn-2")
+            .expect("future reminder history");
+        assert_eq!(future.len(), 1);
+        assert_eq!(future[0].role, CurrentProviderRole::Developer);
+        assert_eq!(message_text(&future[0]), text);
     }
 
     #[test]

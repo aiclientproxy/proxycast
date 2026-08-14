@@ -5122,6 +5122,7 @@ export interface CommandExecutionRequestApprovalParams {
   command?: null | string;
   cwd?: null | string;
   itemId: string;
+  networkApprovalContext?: NetworkApprovalContext | null;
   reason?: null | string;
   startedAtMs: number;
   threadId: string;
@@ -6622,6 +6623,7 @@ export interface McpPromptMessage {
 }
 
 export interface McpResourceListResponse {
+  nextCursor?: null | string;
   resourceTemplates?: unknown[];
   resources?: unknown[];
 }
@@ -7722,6 +7724,17 @@ export interface ModelVerificationNotification {
 }
 
 export type MultiAgentVersion = "disabled" | "v1" | "v2";
+
+export interface NetworkApprovalContext {
+  host: string;
+  protocol: NetworkApprovalProtocol;
+}
+
+export type NetworkApprovalProtocol =
+  | "http"
+  | "https"
+  | "socks5Tcp"
+  | "socks5Udp";
 
 export type NonSteerableTurnKind = "compact" | "review";
 
@@ -9001,7 +9014,12 @@ export interface SessionFileUpdateMetaParams {
   title?: null | string;
 }
 
-export type SkillAuthority = "application" | "external" | "user" | "workspace";
+export type SkillAuthority =
+  | "application"
+  | "external"
+  | "orchestrator"
+  | "user"
+  | "workspace";
 
 export interface SkillDependencies {
   tools: SkillToolDependency[];
@@ -9267,7 +9285,7 @@ export interface SkillScaffoldCreateResponse {
 
 export type SkillScope = "admin" | "repo" | "system" | "user";
 
-export type SkillSource = "app" | "other" | "project" | "user";
+export type SkillSource = "app" | "orchestrator" | "other" | "project" | "user";
 
 export interface SkillSummary {
   authority: SkillAuthority;

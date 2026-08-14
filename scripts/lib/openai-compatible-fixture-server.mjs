@@ -220,48 +220,41 @@ function buildToolCall({
   };
 }
 
-function sendStreamingToolCall(response, { model, toolCall }) {
+function sendStreamingToolCalls(response, { model, toolCalls }) {
   const id = `chatcmpl-fixture-${Date.now()}`;
   response.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-cache",
     connection: "keep-alive",
   });
+  writeSse(response, buildChatChunk({
+    id,
+    model,
+    delta: {
+      role: "assistant",
+      tool_calls: toolCalls.map((toolCall, index) => ({
+        index,
+        id: toolCall.id,
+        type: "function",
+        function: {
+          name: toolCall.function.name,
+          arguments: "",
+        },
+      })),
+    },
+  }));
   writeSse(
     response,
     buildChatChunk({
       id,
       model,
       delta: {
-        role: "assistant",
-        tool_calls: [
-          {
-            index: 0,
-            id: toolCall.id,
-            type: "function",
-            function: {
-              name: toolCall.function.name,
-              arguments: "",
-            },
+        tool_calls: toolCalls.map((toolCall, index) => ({
+          index,
+          function: {
+            arguments: toolCall.function.arguments,
           },
-        ],
-      },
-    }),
-  );
-  writeSse(
-    response,
-    buildChatChunk({
-      id,
-      model,
-      delta: {
-        tool_calls: [
-          {
-            index: 0,
-            function: {
-              arguments: toolCall.function.arguments,
-            },
-          },
-        ],
+        })),
       },
     }),
   );
@@ -282,7 +275,11 @@ function sendStreamingToolCall(response, { model, toolCall }) {
   response.end();
 }
 
-function sendJsonToolCall(response, { model, toolCall }) {
+function sendStreamingToolCall(response, { model, toolCall }) {
+  sendStreamingToolCalls(response, { model, toolCalls: [toolCall] });
+}
+
+function sendJsonToolCalls(response, { model, toolCalls }) {
   jsonResponse(response, 200, {
     id: `chatcmpl-fixture-${Date.now()}`,
     object: "chat.completion",
@@ -294,7 +291,7 @@ function sendJsonToolCall(response, { model, toolCall }) {
         message: {
           role: "assistant",
           content: null,
-          tool_calls: [toolCall],
+          tool_calls: toolCalls,
         },
         finish_reason: "tool_calls",
       },
@@ -305,6 +302,10 @@ function sendJsonToolCall(response, { model, toolCall }) {
       total_tokens: 2,
     },
   });
+}
+
+function sendJsonToolCall(response, { model, toolCall }) {
+  sendJsonToolCalls(response, { model, toolCalls: [toolCall] });
 }
 
 function sendStreamingStructuredOutputToolCall(response, { model }) {
@@ -542,6 +543,29 @@ function sendScriptedChatCompletion(
       sendStreamingToolCall(response, { model, toolCall });
     } else {
       sendJsonToolCall(response, { model, toolCall });
+    }
+    return true;
+  }
+
+  if (scripted.type === "tool_calls") {
+    const toolCalls = Array.isArray(scripted.calls)
+      ? scripted.calls.map((call) => {
+          ensureScriptedToolAvailable({ ...call, type: "tool_call" }, body);
+          return buildToolCall({
+            id: call.id,
+            idPrefix: call.idPrefix,
+            name: call.name,
+            arguments: call.arguments,
+          });
+        })
+      : [];
+    if (toolCalls.length === 0) {
+      throw new Error("scripted tool_calls requires at least one call");
+    }
+    if (stream) {
+      sendStreamingToolCalls(response, { model, toolCalls });
+    } else {
+      sendJsonToolCalls(response, { model, toolCalls });
     }
     return true;
   }

@@ -1,3 +1,4 @@
+use crate::execution_orchestrator::RuntimeToolExecutionAttempt;
 use crate::execution_process::live::{
     LiveExecutionOutputQuery, LiveExecutionRequest, RuntimeLiveExecutionGateway,
 };
@@ -45,7 +46,7 @@ pub struct RuntimeUnifiedExecToolRequest<'a> {
     pub tool_call_id: String,
     pub cancel_token: Option<CancellationToken>,
     pub turn_context: Option<&'a RuntimeToolTurnContext>,
-    pub granted_permissions: Option<app_server_protocol::protocol::v2::GrantedPermissionProfile>,
+    pub attempt: Option<RuntimeToolExecutionAttempt>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -287,22 +288,35 @@ async fn execute_command(
                 command: shell_command,
                 working_directory: cwd,
                 tty: input.tty,
-                approval_policy: Some("never".to_string()),
-                sandbox_policy: effective_sandbox_policy(
-                    input.sandbox_permissions.as_deref(),
-                    request.turn_context,
-                ),
+                approval_policy: request
+                    .turn_context
+                    .and_then(|context| context.approval_policy.clone()),
+                sandbox_policy: request
+                    .attempt
+                    .as_ref()
+                    .and_then(|attempt| {
+                        attempt
+                            .effective_sandbox_policy()
+                            .label()
+                            .map(str::to_string)
+                    })
+                    .or_else(|| {
+                        effective_sandbox_policy(
+                            input.sandbox_permissions.as_deref(),
+                            request.turn_context,
+                        )
+                    }),
                 runtime_metadata: request
                     .turn_context
                     .map(|context| serde_json::to_value(context).unwrap_or(Value::Null)),
                 env: request.environment,
+                attempt: request.attempt,
             },
-            request.granted_permissions,
         )
         .await;
     if let Err(error) = start_result {
         remove_session(session_id);
-        return Err(unified_exec_error(error));
+        return Err(error);
     }
 
     let output = collect_process_output(
@@ -335,9 +349,7 @@ async fn write_stdin(
                 input.session_id, request.thread_id
             )));
         }
-        gateway
-            .write_stdin(&session.process_id, input.chars.as_bytes())
-            .map_err(unified_exec_error)?;
+        gateway.write_stdin(&session.process_id, input.chars.as_bytes())?;
     }
     let stdin_summary = terminal_interaction_summary(&input.chars);
     let output = collect_process_output(
@@ -384,14 +396,12 @@ async fn collect_process_output(
             let session = session.lock().await;
             (session.process_id.clone(), session.after_sequence)
         };
-        let drained = gateway
-            .drain_output(LiveExecutionOutputQuery {
-                process_id: Some(process_id.clone()),
-                after_sequence,
-                limit: Some(OUTPUT_DRAIN_LIMIT),
-                max_bytes: Some(OUTPUT_DRAIN_MAX_BYTES),
-            })
-            .map_err(unified_exec_error)?;
+        let drained = gateway.drain_output(LiveExecutionOutputQuery {
+            process_id: Some(process_id.clone()),
+            after_sequence,
+            limit: Some(OUTPUT_DRAIN_LIMIT),
+            max_bytes: Some(OUTPUT_DRAIN_MAX_BYTES),
+        })?;
         for delta in drained.deltas {
             output.push_str(&delta.delta);
         }
@@ -399,28 +409,45 @@ async fn collect_process_output(
             session.lock().await.after_sequence = Some(next_sequence);
         }
 
-        if cancel_token
+        let cancelled = cancel_token
             .as_ref()
-            .is_some_and(CancellationToken::is_cancelled)
-        {
+            .is_some_and(CancellationToken::is_cancelled);
+        if cancelled {
             let _ = gateway.terminate(&process_id);
         }
 
-        let snapshot = gateway.status(&process_id).map_err(unified_exec_error)?;
+        let snapshot = gateway.status(&process_id)?;
         if process_status_is_terminal(snapshot.status) {
-            let final_drain = gateway
-                .drain_output(LiveExecutionOutputQuery {
-                    process_id: Some(snapshot.process_id.clone()),
-                    after_sequence: session.lock().await.after_sequence,
-                    limit: Some(OUTPUT_DRAIN_LIMIT),
-                    max_bytes: Some(OUTPUT_DRAIN_MAX_BYTES),
-                })
-                .map_err(unified_exec_error)?;
+            let final_drain = gateway.drain_output(LiveExecutionOutputQuery {
+                process_id: Some(snapshot.process_id.clone()),
+                after_sequence: session.lock().await.after_sequence,
+                limit: Some(OUTPUT_DRAIN_LIMIT),
+                max_bytes: Some(OUTPUT_DRAIN_MAX_BYTES),
+            })?;
             for delta in final_drain.deltas {
                 output.push_str(&delta.delta);
             }
             let facts = session_facts(&session).await;
             remove_session(session_id);
+            if cancelled {
+                return Err(RuntimeToolExecutionError::new(
+                    "Tool execution cancelled",
+                    Some(RuntimeToolPolicyErrorKind::Canceled(
+                        "unified_exec_cancelled".to_string(),
+                    )),
+                ));
+            }
+            if snapshot.status == ExecutionProcessStatus::Failed {
+                let message = snapshot
+                    .failure
+                    .unwrap_or_else(|| "execution process failed".to_string());
+                return Err(RuntimeToolExecutionError::new(
+                    message,
+                    Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                        "execution_process_failed".to_string(),
+                    )),
+                ));
+            }
             return Ok(UnifiedExecCallOutput {
                 session_id: None,
                 call_id: facts.call_id,

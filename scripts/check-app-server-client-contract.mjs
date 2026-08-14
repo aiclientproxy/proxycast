@@ -8455,6 +8455,7 @@ checkRetiredAppServerAgentBackendCrate();
 checkRetiredRuntimeCoreMapperSurface();
 checkRetiredAgentRuntimeClientShells();
 checkRetiredToolWireSurface();
+checkOrchestratorHostBoundary();
 checkCanonicalRendererSequenceGate();
 checkAgentUiPackageCanonicalNaming();
 
@@ -8466,7 +8467,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`[app-server-client-contract] ok (${checks.length + 34} checks)`);
+console.log(`[app-server-client-contract] ok (${checks.length + 35} checks)`);
 
 function checkAgentUiPackageCanonicalNaming() {
   const packageManifestFiles = fs
@@ -8936,6 +8937,40 @@ function checkRetiredToolWireSurface() {
         failures.push(
           `canonical Tool consumer must not parse retired lifecycle: ${relativePath} contains ${retiredEventType}`,
         );
+      }
+    }
+  }
+}
+
+function checkOrchestratorHostBoundary() {
+  const roots = [
+    path.join(repoRoot, "electron"),
+    path.join(repoRoot, "src/lib/dev-bridge"),
+  ];
+  const forbiddenSnippets = [
+    "orchestrator.skills.enabled",
+    "orchestrator.mcp.enabled",
+    "discover_orchestrator_skills",
+    "OrchestratorSkill",
+    "codex_apps",
+  ];
+  for (const root of roots) {
+    if (!fs.existsSync(root)) continue;
+    for (const relativePath of walkSourceFiles(root)) {
+      if (
+        !/\.(?:d\.ts|ts|tsx|mjs)$/u.test(relativePath) ||
+        relativePath.includes(".test") ||
+        relativePath.includes(".spec")
+      ) {
+        continue;
+      }
+      const content = fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+      for (const snippet of forbiddenSnippets) {
+        if (content.includes(snippet)) {
+          failures.push(
+            `Orchestrator current owner must remain App Server/runtime/skills/MCP; ${relativePath} must not contain ${JSON.stringify(snippet)}`,
+          );
+        }
       }
     }
   }

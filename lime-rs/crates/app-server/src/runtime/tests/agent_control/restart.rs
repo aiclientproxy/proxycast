@@ -168,6 +168,31 @@ async fn wait_for_session_with_turn(
     .unwrap_or_else(|_| panic!("{scenario}: session {session_id} did not expose a turn"))
 }
 
+async fn wait_for_session_terminal(core: &RuntimeCore, session_id: &str, scenario: &str) {
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            match core.read_session(AgentSessionReadParams {
+                session_id: session_id.to_string(),
+                history_limit: None,
+                history_offset: None,
+                history_before_message_id: None,
+            }) {
+                Ok(response)
+                    if response.turns.iter().any(|turn| {
+                        super::super::super::status::agent_turn_is_terminal(turn.status)
+                    }) =>
+                {
+                    return;
+                }
+                Ok(_) | Err(RuntimeCoreError::SessionNotFound(_)) => tokio::task::yield_now().await,
+                Err(error) => panic!("{scenario}: {error}"),
+            }
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("{scenario}: session {session_id} did not become terminal"));
+}
+
 async fn session_id_for_thread(store: &ProjectionStore, thread_id: ThreadId) -> String {
     store
         .read_thread(ReadThreadParams {
@@ -1495,6 +1520,24 @@ async fn restart_hydrates_only_the_exact_open_child_on_demand() {
     let interrupt_session_id =
         session_id_for_thread(&store, interrupt_identity.thread_id.clone()).await;
     let closed_session_id = session_id_for_thread(&store, closed_identity.thread_id.clone()).await;
+
+    let closed_turn =
+        wait_for_session_with_turn(&core, &closed_session_id, "closed child before grandchild")
+            .await
+            .turns
+            .first()
+            .expect("closed child initial turn")
+            .clone();
+    core.cancel_turn(
+        app_server_protocol::AgentSessionTurnCancelParams {
+            session_id: closed_session_id.clone(),
+            turn_id: closed_turn.turn_id,
+        },
+        RuntimeHostContext::default(),
+    )
+    .await
+    .expect("cancel closed seed child");
+    wait_for_session_terminal(&core, &closed_session_id, "closed child before grandchild").await;
 
     let followup_before_restart =
         wait_for_session_with_turn(&core, &followup_session_id, "followup child before restart")

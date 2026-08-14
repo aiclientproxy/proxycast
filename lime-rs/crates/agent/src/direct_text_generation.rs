@@ -189,6 +189,7 @@ mod tests {
                     output_tokens: 0,
                     cached_input_tokens: Some(1_000),
                     cache_creation_input_tokens: None,
+                    codex_rollout_budget_units: None,
                 }),
             },
             &mut text,
@@ -203,6 +204,7 @@ mod tests {
                 output_tokens: 0,
                 cached_input_tokens: Some(1_000),
                 cache_creation_input_tokens: None,
+                codex_rollout_budget_units: None,
             })
         );
     }
@@ -244,6 +246,7 @@ mod tests {
                 output_tokens: 12,
                 cached_input_tokens: Some(7),
                 cache_creation_input_tokens: None,
+                codex_rollout_budget_units: None,
             })
         );
     }

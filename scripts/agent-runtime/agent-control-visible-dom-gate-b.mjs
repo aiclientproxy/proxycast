@@ -1,6 +1,14 @@
 export const AGENT_CONTROL_VISIBLE_DOM_GATE_B_BATCH_ID = "agent-control-tools";
+export const AGENT_CONTROL_CAPACITY_GATE_B_BATCH_ID =
+  "agent-control-capacity-gate-b";
+export const AGENT_CONTROL_RESIDENCY_GATE_B_BATCH_ID =
+  "agent-control-residency-gate-b";
 export const AGENT_CONTROL_FINAL_TEXT =
   "AGENT_RUNTIME_AGENT_CONTROL_TOOLS_DONE";
+export const AGENT_CONTROL_CAPACITY_FINAL_TEXT =
+  "AGENT_RUNTIME_AGENT_CAPACITY_GATE_B_DONE";
+export const AGENT_CONTROL_RESIDENCY_FINAL_TEXT =
+  "AGENT_RUNTIME_AGENT_RESIDENCY_GATE_B_DONE";
 export const AGENT_CONTROL_TOOL_NAMES = [
   "spawn_agent",
   "list_agents",
@@ -249,6 +257,109 @@ export function buildAgentControlVisibleDomAssertions({ evidence, snapshot }) {
     visibleDomRetiredTeamToolsAbsent: !typedToolRows.some((row) =>
       RETIRED_TEAM_TOOL_NAMES.has(String(row?.name || "")),
     ),
+    visibleDomFinalAssistantTextVisible:
+      snapshot?.finalAssistantTextVisible === true,
+    visibleDomInvokeErrorsClear: snapshot?.invokeErrorCount === 0,
+    visibleDomConsoleErrorsClear: snapshot?.consoleErrorCount === 0,
+  };
+}
+
+export function buildAgentControlCapacityVisibleDomAssertions({ snapshot }) {
+  const typedToolRows = Array.isArray(snapshot?.typedToolRows)
+    ? snapshot.typedToolRows
+    : [];
+  const spawnRows = typedToolRows.filter(
+    (row) => String(row?.name || "") === "spawn_agent",
+  );
+  const subagentThreadIds = new Set(
+    (Array.isArray(snapshot?.subagentActivityRows)
+      ? snapshot.subagentActivityRows
+      : []
+    )
+      .map((row) => String(row?.threadId || "").trim())
+      .filter(Boolean),
+  );
+  const appServerCalls = Array.isArray(snapshot?.appServerCalls)
+    ? snapshot.appServerCalls
+    : [];
+  return {
+    visibleDomUsesRealElectronHost:
+      snapshot?.electron === true &&
+      snapshot?.hasInvokeBridge === true &&
+      snapshot?.supportsAppServer === true,
+    visibleDomCurrentReadModelObserved: appServerCalls.some(
+      (call) =>
+        call?.method === "thread/read" &&
+        call?.transport === "electron-ipc" &&
+        call?.status === "success",
+    ),
+    visibleDomAllParallelSpawnRowsPresent: spawnRows.length >= 4,
+    visibleDomCapacityRejectionVisible: spawnRows.some(
+      (row) =>
+        String(row?.status || "").toLowerCase() === "failed" ||
+        String(row?.text || "").includes("agent_limit_reached"),
+    ),
+    visibleDomThreeChildIdentitiesVisible: subagentThreadIds.size >= 3,
+    visibleDomFinalAssistantTextVisible:
+      snapshot?.finalAssistantTextVisible === true,
+    visibleDomInvokeErrorsClear: snapshot?.invokeErrorCount === 0,
+    visibleDomConsoleErrorsClear: snapshot?.consoleErrorCount === 0,
+  };
+}
+
+export function buildAgentControlResidencyVisibleDomAssertions({ snapshot }) {
+  const typedToolRows = Array.isArray(snapshot?.typedToolRows)
+    ? snapshot.typedToolRows
+    : [];
+  const spawnRows = typedToolRows.filter(
+    (row) => String(row?.name || "") === "spawn_agent",
+  );
+  const followupRows = typedToolRows.filter(
+    (row) => String(row?.name || "") === "followup_task",
+  );
+  const activityRows = Array.isArray(snapshot?.subagentActivityRows)
+    ? snapshot.subagentActivityRows
+    : [];
+  const activityByThread = new Map();
+  for (const row of activityRows) {
+    const threadId = String(row?.threadId || "").trim();
+    if (!threadId) continue;
+    const kinds = activityByThread.get(threadId) || new Set();
+    kinds.add(String(row?.activityKind || "").trim().toLowerCase());
+    activityByThread.set(threadId, kinds);
+  }
+  const appServerCalls = Array.isArray(snapshot?.appServerCalls)
+    ? snapshot.appServerCalls
+    : [];
+  const reusedChildIdentity = [...activityByThread.values()].some(
+    (kinds) => kinds.has("started") && kinds.has("interacted"),
+  );
+  return {
+    visibleDomUsesRealElectronHost:
+      snapshot?.electron === true &&
+      snapshot?.hasInvokeBridge === true &&
+      snapshot?.supportsAppServer === true,
+    visibleDomCurrentReadModelObserved: appServerCalls.some(
+      (call) =>
+        call?.method === "thread/read" &&
+        call?.transport === "electron-ipc" &&
+        call?.status === "success",
+    ),
+    visibleDomFourChildIdentitiesVisible:
+      new Set(
+        activityRows
+          .map((row) => String(row?.threadId || "").trim())
+          .filter(Boolean),
+      ).size >= 4,
+    visibleDomTerminalSlotReused:
+      spawnRows.length >= 4 &&
+      spawnRows.every((row) => row?.status === "completed") &&
+      snapshot?.residency?.terminalSlotReused === true,
+    visibleDomLruColdReloadVisible:
+      followupRows.some((row) => row?.status === "completed") &&
+      reusedChildIdentity &&
+      snapshot?.residency?.lruColdReload === true,
+    visibleDomFollowupUsesExistingChildIdentity: reusedChildIdentity,
     visibleDomFinalAssistantTextVisible:
       snapshot?.finalAssistantTextVisible === true,
     visibleDomInvokeErrorsClear: snapshot?.invokeErrorCount === 0,
