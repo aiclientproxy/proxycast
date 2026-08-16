@@ -1,6 +1,6 @@
 # Lime v1.130.0 发布执行计划
 
-状态：release-candidate-ready-waiting-git-confirmation
+状态：released
 日期：2026-08-17
 目标版本：`1.130.0`
 目标 tag：`v1.130.0`
@@ -24,9 +24,10 @@
 
 ## 当前验证记录
 
-- v1.129.0 为当前 HEAD 与 `origin/main`，`v1.130.0` 本地和远端 tag 均不存在。
+- 发布前基线为 v1.129.0（commit `a04912c2d`），发布前 `v1.130.0` 本地和远端 tag 均不存在。
 - 版本事实源和双语 release notes 已更新；候选包含版本元数据之外的全部现有工作树改动。
-- commit、tag、push 尚未执行，等待危险操作确认；staged 摘要和 tag 状态将在确认请求前再次复核。
+- 已创建 release commit `7852f6088`（`Release v1.130.0`），并创建、推送 `v1.130.0`；`origin/main` 与远端 tag 均指向该 commit。
+- 发布提交后发现 3 个未纳入 tag 的 App Server 文件改动：`lime-rs/crates/app-server/src/runtime.rs`、`lime-rs/crates/app-server/src/runtime/skills.rs`、`lime-rs/crates/app-server/tests/skills_jsonrpc.rs`。这些改动保留在工作树中，未回滚、未纳入本版本，待后续变更单独归类。
 
 ## 门禁结果
 
@@ -39,7 +40,7 @@
 - 通过：`npm run verify:gui-smoke`；App Server 报告版本 `1.130.0`，Gate B evidence 为 `standalone-shell-01-20260816225825-49240`。
 - 通过：`npm run governance:legacy-report`。首次发现 `.lime/AGENTS.md` fallback 与治理规则冲突，已将其收敛为标准 AGENTS owner 下的受控 `compat`，更新 `internal/aiprompts/governance.md` 与 `src/lib/governance/legacySurfaceCatalog.json` 后重跑通过：扫描 2115 个源码文件，分类漂移 0、边界违规 0。
 - 已知非产品失败：两次 `npm run test:related -- ...` 均触发 Vite runner 的 `EISDIR ... /lime/electron` 缺陷；随后使用等价 `npx vitest run <files>` 验证实际测试全部通过。该 runner 缺陷不冒充产品测试失败，也不在本次候选中扩写修复范围。
-- 提交前仍需复跑 `git diff --check`、`npm run verify:app-version`，并复核 staged 内容和本地/远端 tag。
+- 提交前复跑的 `git diff --check`、`npm run verify:app-version` 均通过；staged 内容为 95 个文件，提交、tag、`main`/tag 推送及远端复核均完成。发布后 3 个未纳入文件的工作树差异 `git diff --check` 仍通过。
 
 本地不执行 Windows/macOS packaged parity、签名、公证、正式 release asset 和 CI 门禁；这些证据不在本候选中宣称完成。
 
@@ -58,4 +59,4 @@
 - `compat`：`.lime/AGENTS.md` / `.lime/AGENTS.override.md` 仅作为标准 AGENTS 发现之后的受控 fallback，由 current owner 委托，不形成第二套实现。
 - `deprecated`：本候选未新增或保留独立演进的 deprecated 能力。
 - `dead / deleted`：移除已脱离构建图的 `runtime/tests/evidence_exports.rs` 测试入口，并由治理 catalog/测试阻止旧 evidence-export 专用入口回流。
-- 当前完成度：95%。版本、release notes、候选范围、架构确认与本地质量门禁已完成；剩余 5% 是 staged 复核、用户危险操作确认、release commit、tag、`main`/tag 推送和远端复核。
+- 当前完成度：100%（v1.130.0 发布流程）。版本、release notes、候选范围、架构确认、本地质量门禁、release commit、tag、`main`/tag 推送和远端复核均完成；工作树中另有 3 个发布后未纳入改动，不影响已发布 tag，但需要后续独立处理。
