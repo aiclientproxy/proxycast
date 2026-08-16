@@ -30,6 +30,7 @@ import {
   SKILLS_RUNTIME_PROMPT,
   SKILLS_RUNTIME_QUERY,
   SKILLS_RUNTIME_SKILL_NAME,
+  summarizeSkillsRuntimeStatusEvents,
   summarizeSkillsRuntimeThreadRead,
 } from "./skills-runtime-fixture-scenario.mjs";
 export {
@@ -61,6 +62,7 @@ export {
   SKILLS_RUNTIME_PROMPT,
   SKILLS_RUNTIME_QUERY,
   SKILLS_RUNTIME_SKILL_NAME,
+  summarizeSkillsRuntimeStatusEvents,
   summarizeSkillsRuntimeThreadRead,
 };
 

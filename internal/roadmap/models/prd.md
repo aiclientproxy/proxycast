@@ -790,7 +790,7 @@ flowchart TD
 
 验收：
 
-1. `image_generation_model`、`video_generation_model` 都能解析到可执行 route；`voice_generation_model` 在没有 audio worker / RuntimeCore provider protocol mapper 前只能写入 `ModelTaskRequest` 和能力 evidence，不得伪装为已接入执行 route。
+1. `image_generation_model`、`video_generation_model`、`voice_generation_model` 与 `audio_transcription_model` 都能解析到可执行 route；音频与转写分别由 App Server `mediaTaskArtifact/audio/create`、`mediaTaskArtifact/transcription/create` worker 消费 `ResolvedModelRoute`，不得回退 metadata-only 或前端直连 provider。
 2. 显式图片模型绑定不会被聊天模型覆盖。
 3. unsupported route fail closed，不伪造 task submitted。
 

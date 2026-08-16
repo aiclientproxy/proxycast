@@ -5814,8 +5814,7 @@
         "lime-rs/crates/app-server/src/runtime/plugin_worker_runtime.rs",
         "lime-rs/crates/app-server/src/runtime/plugin_worker_runtime/response.rs",
         "lime-rs/crates/app-server/src/runtime/event_store.rs",
-        "lime-rs/crates/app-server/src/runtime/tests/artifacts.rs",
-        "lime-rs/crates/app-server/src/runtime/tests/evidence_exports.rs"
+        "lime-rs/crates/app-server/src/runtime/tests/artifacts.rs"
       ]
     },
     {
@@ -5833,8 +5832,7 @@
         "lime-rs/crates/app-server/src/file_checkpoint_snapshot.rs",
         "lime-rs/crates/app-server/src/runtime/file_checkpoint_projection.rs",
         "lime-rs/crates/app-server/src/runtime/evidence_provider.rs",
-        "lime-rs/crates/app-server/src/runtime/tests/coding_events.rs",
-        "lime-rs/crates/app-server/src/runtime/tests/evidence_exports.rs"
+        "lime-rs/crates/app-server/src/runtime/tests/coding_events.rs"
       ]
     },
     {
@@ -6614,8 +6612,8 @@
     },
     {
       "id": "rust-hardcoded-memory-path-leak",
-      "classification": "dead-candidate",
-      "description": "已零引用的 memory 相关模块硬编码 legacy memory 或 AGENTS 路径",
+      "classification": "compat",
+      "description": "legacy memory 路径不得回流；仅允许 runtime_agents 读取 .lime/AGENTS.md 作为标准 AGENTS 发现的受控 fallback",
       "patterns": [
         "~/.lime/AGENTS.md",
         "join(\".lime\").join(\"AGENTS.md\")",
@@ -6627,7 +6625,7 @@
         "lime-rs/crates/core/src/config",
         "lime-rs/crates/agent/src/prompt"
       ],
-      "allowedPaths": []
+      "allowedPaths": ["lime-rs/crates/agent/src/prompt/runtime_agents.rs"]
     },
     {
       "id": "rust-agent-legacy-global-instruction-path-leak",

@@ -110,14 +110,14 @@ function resolveMockMediaTaskProtocol(
         required_capabilities: ["text_generation", "audio_transcription"],
         routing_slot: "audio_transcription_model",
         executor_binding: {
-          executor_kind: "skill",
-          binding_key: "transcription_generate",
+          executor_kind: "app_server",
+          binding_key: "mediaTaskArtifact/transcription/create",
         },
         execution_profile: {
           profile_key: "audio_transcription_profile",
         },
         executor_adapter: {
-          adapter_key: "skill:transcription_generate",
+          adapter_key: "app_server:mediaTaskArtifact/transcription/create",
         },
         limecore_policy_refs: limecorePolicyRefs,
         limecore_policy_snapshot:

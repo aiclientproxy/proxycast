@@ -30,7 +30,7 @@ Skill roots
 | P1 选择 | 统一显式和隐式候选 | `$skill`、catalog binding、description match 进入同一 selector | 骨架已在 `agent_selection.rs` / `agent_search.rs` |
 | P2 读取 | 只读被选中的 skill | `SkillBodyReader` 读取 `SKILL.md` 与必要 references | 骨架已在 `agent_body.rs` / `agent_render.rs` |
 | P3 授权 | 执行前过 gate | session allowlist + `allowed_tools` 交集裁剪 | 骨架已在 `skill_tool_gate.rs` / `skill_runtime_enable.rs` |
-| P4 复盘 | 让使用过程可解释 | timeline / evidence 记录 selection、body read、gate、tools | 骨架已在 evidence provider 的 `skill_searches` 汇总 |
+| P4 复盘 | 让使用过程可解释 | RuntimeEvent / runtime.status / canonical read model 记录 selection、body read、gate、tools | 骨架已在 App Server current event stream 与 Thread/Turn/Item projection 汇总 |
 | P5 专家 | 专家 skills 同链路跑通 | Expert Plaza / ExpertInfoPanel `skillRefs` 进入 selector | 骨架已接入：expert refs -> selector -> body read -> gate -> evidence |
 | P6 live 验收 | 不把 fixture 证据冒充真实模型质量 | `live-gate` 只读审计 + `live-runner` 显式授权执行 / 归一化 live summary | 骨架已接入：默认阻断真实 Provider，显式授权后输出 gate 可消费 summary |
 

@@ -508,6 +508,140 @@ function readRecord(value) {
     : null;
 }
 
+function eventPayloadSkillRuntime(event) {
+  return eventPayloadRuntime(event, ["skillRuntime", "skill_runtime"]);
+}
+
+function eventPayloadRuntime(event, keys) {
+  const payload = readRecord(event?.payload);
+  const status = readRecord(payload?.status);
+  const metadata =
+    readRecord(payload?.metadata) ?? readRecord(status?.metadata);
+  for (const key of keys) {
+    const runtime = readRecord(metadata?.[key]);
+    if (runtime) {
+      return runtime;
+    }
+  }
+  return null;
+}
+
+export function summarizeSkillsRuntimeStatusEvents(
+  messages,
+  { sessionId, threadId, turnId } = {},
+) {
+  const expectedSessionId = typeof sessionId === "string" ? sessionId : null;
+  const expectedThreadId = typeof threadId === "string" ? threadId : null;
+  const expectedTurnId = typeof turnId === "string" ? turnId : null;
+  const candidateEvents = (Array.isArray(messages) ? messages : [])
+    .filter((message) => message?.method === "agentSession/event")
+    .map((message) => readRecord(message.params)?.event)
+    .map((event) => readRecord(event))
+    .filter((event) => event?.type === "runtime.status")
+    .map((event) => ({
+      eventId: event.eventId ?? event.event_id ?? null,
+      sessionId: event.sessionId ?? event.session_id ?? null,
+      threadId: event.threadId ?? event.thread_id ?? null,
+      turnId: event.turnId ?? event.turn_id ?? null,
+      runtime: eventPayloadSkillRuntime(event),
+    }));
+  const events = candidateEvents
+    .filter((event) => {
+      if (expectedSessionId && event.sessionId !== expectedSessionId) {
+        return false;
+      }
+      if (expectedThreadId && event.threadId !== expectedThreadId) {
+        return false;
+      }
+      if (expectedTurnId && event.turnId !== expectedTurnId) {
+        return false;
+      }
+      return Boolean(event.runtime);
+    })
+    .map((event) => ({
+      event,
+      runtime: event.runtime,
+    }));
+  const bodyReadIndex = events.findIndex(
+    ({ runtime }) => runtime?.event === "skill_body_read",
+  );
+  const gateIndex = events.findIndex(
+    ({ runtime }) => runtime?.event === "skill_gate_decision",
+  );
+  const gateRuntime = gateIndex >= 0 ? events[gateIndex].runtime : null;
+  const expertEvents = (Array.isArray(messages) ? messages : [])
+    .filter((message) => message?.method === "agentSession/event")
+    .map((message) => readRecord(message.params)?.event)
+    .map((event) => readRecord(event))
+    .filter((event) => event?.type === "runtime.status")
+    .map((event) => ({
+      sessionId: event.sessionId ?? event.session_id ?? null,
+      threadId: event.threadId ?? event.thread_id ?? null,
+      turnId: event.turnId ?? event.turn_id ?? null,
+      runtime: eventPayloadRuntime(event, [
+        "expertSkillsRuntime",
+        "expert_skills_runtime",
+      ]),
+    }))
+    .filter((event) => {
+      if (expectedSessionId && event.sessionId !== expectedSessionId) {
+        return false;
+      }
+      if (expectedThreadId && event.threadId !== expectedThreadId) {
+        return false;
+      }
+      if (expectedTurnId && event.turnId !== expectedTurnId) {
+        return false;
+      }
+      return Boolean(event.runtime);
+    });
+  const expertDeclaredEntry = expertEvents.find(
+    ({ runtime }) => runtime?.event === "expert_declared_skill_refs",
+  );
+  const expertSelectedEntry = expertEvents.find(
+    ({ runtime }) => runtime?.event === "expert_selected_skill",
+  );
+  const expertInvokedEntry = expertEvents.find(
+    ({ runtime }) => runtime?.event === "expert_invoked_skill",
+  );
+  const expertDeclaredRuntime = expertDeclaredEntry?.runtime ?? {};
+  const expertSelectedRuntime = expertSelectedEntry?.runtime ?? {};
+  const expertInvokedRuntime = expertInvokedEntry?.runtime ?? {};
+  const expertSkillRefs =
+    expertDeclaredRuntime.skillRefs ?? expertDeclaredRuntime.skill_refs;
+  return {
+    eventCount: events.length,
+    skillBodyReadObserved: bodyReadIndex >= 0,
+    skillGateObserved: bodyReadIndex >= 0 && gateIndex > bodyReadIndex,
+    skillBodyReadEventIndex: bodyReadIndex,
+    skillGateEventIndex: gateIndex,
+    skillGateMode: gateRuntime?.mode ?? null,
+    skillGateWorkspaceRuntimeEnable:
+      gateRuntime?.workspaceRuntimeEnable ??
+      gateRuntime?.workspace_runtime_enable ??
+      null,
+    skillGateSourceAllowlist: Array.isArray(
+      gateRuntime?.sourceAllowlist ?? gateRuntime?.source_allowlist,
+    )
+      ? gateRuntime.sourceAllowlist ?? gateRuntime.source_allowlist
+      : [],
+    expertDeclaredObserved: Boolean(expertDeclaredEntry),
+    expertSelectedObserved: Boolean(expertSelectedEntry),
+    expertInvokedObserved: Boolean(expertInvokedEntry),
+    expertDeclaredSkillRefs: Array.isArray(expertSkillRefs)
+      ? expertSkillRefs
+      : [],
+    expertSelectedSkill:
+      expertSelectedRuntime.skillName ??
+      expertSelectedRuntime.skill_name ??
+      null,
+    expertInvokedSkill:
+      expertInvokedRuntime.skillName ??
+      expertInvokedRuntime.skill_name ??
+      null,
+  };
+}
+
 export function summarizeSkillsRuntimeThreadRead(
   readModelResult,
   { searchToolCallId, skillToolCallId },

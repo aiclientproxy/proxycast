@@ -2604,8 +2604,8 @@ pub struct MemorySourcesConfig {
     pub managed_policy_path: Option<String>,
     /// 项目级记忆文件相对路径列表
     ///
-    /// 默认使用 `.lime/AGENTS.md`，仅解析当前 workspace 根目录；
-    /// 非 `.lime/` 路径仍兼容按目录层级向上查找。
+    /// 默认优先使用标准 `AGENTS.md` / `AGENTS.override.md`，缺失时回退 `.lime/AGENTS.md`；
+    /// 解析当前 workspace 根目录到工作目录的目录层级。
     #[serde(default)]
     pub project_memory_paths: Vec<String>,
     /// 项目规则目录相对路径列表（会按目录层级向上查找）

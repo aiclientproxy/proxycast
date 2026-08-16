@@ -1746,6 +1746,39 @@ async fn activity_subscription_notifies_mailbox_and_steer() {
 }
 
 #[tokio::test]
+async fn async_hook_context_targets_active_turn_then_next_turn_mailbox() {
+    let active = input_handle_with_loader(
+        Arc::new(PendingInputQueue::default()),
+        Arc::new(|| Box::pin(async { Ok(Vec::new()) })),
+    );
+    assert!(active.inject_developer_input("active context").await);
+    let active_inputs = active
+        .try_take_pending_input(false)
+        .await
+        .expect("active context");
+    assert!(matches!(
+        active_inputs.as_slice(),
+        [RuntimeSessionInput::Developer(text)] if text == "active context"
+    ));
+
+    let idle = input_handle_with_loader(
+        Arc::new(PendingInputQueue::default()),
+        Arc::new(|| Box::pin(async { Ok(Vec::new()) })),
+    );
+    idle.mark_finishing().await;
+    assert!(!idle.inject_developer_input("idle context").await);
+    idle.accept_mailbox_delivery_for_current_turn().await;
+    let idle_inputs = idle
+        .try_take_pending_input(true)
+        .await
+        .expect("idle context");
+    assert!(matches!(
+        idle_inputs.as_slice(),
+        [RuntimeSessionInput::Developer(text)] if text == "idle context"
+    ));
+}
+
+#[tokio::test]
 async fn activity_subscription_reports_pending_and_prioritizes_steer() {
     let pending_input = Arc::new(PendingInputQueue::default());
     let handle = input_handle_with_loader(

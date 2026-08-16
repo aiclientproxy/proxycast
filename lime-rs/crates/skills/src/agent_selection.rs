@@ -570,7 +570,7 @@ fn parse_skill_uri(token: &str) -> Option<PathBuf> {
         && url::Url::parse(token)
             .ok()
             .and_then(|url| url.host_str().map(ToOwned::to_owned))
-            .is_some()
+            .is_some_and(|host| !host.contains('%'))
     {
         return Some(PathBuf::from(token));
     }

@@ -1,6 +1,4 @@
 {
-  "capabilityDraft.registeredPanel.action.auditRecentRun": "최근 실행 감사",
-  "capabilityDraft.registeredPanel.action.auditRunning": "감사 중",
   "capabilityDraft.registeredPanel.action.createManagedJobDraft": "예약 실행 설정",
   "capabilityDraft.registeredPanel.action.enableRuntime": "한 번 사용해 보기",
   "capabilityDraft.registeredPanel.action.pauseManagedJob": "예약 실행 일시 중지",
@@ -102,7 +100,6 @@
   "capabilityDraft.registeredPanel.empty.loading": "저장된 스킬을 읽는 중...",
   "capabilityDraft.registeredPanel.empty.missingProject": "프로젝트를 선택하거나 열어야 그 프로젝트에 저장된 스킬을 볼 수 있습니다.",
   "capabilityDraft.registeredPanel.empty.noSkills": "현재 프로젝트에는 아직 저장된 스킬이 없습니다. “제작 중”에서 먼저 검사하고 저장하세요.",
-  "capabilityDraft.registeredPanel.error.missingAutomationSession": "최근 automation run에 연결된 session이 없어 evidence를 내보낼 수 없습니다.",
   "capabilityDraft.registeredPanel.evidence.credentialReferenceId": "Credential reference",
   "capabilityDraft.registeredPanel.evidence.endpointSource": "Endpoint",
   "capabilityDraft.registeredPanel.evidence.evidenceSchema": "Evidence schema",

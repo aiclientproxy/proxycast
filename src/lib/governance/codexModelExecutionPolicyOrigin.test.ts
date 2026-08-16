@@ -44,6 +44,13 @@ const CODEX_FIELDS_REQUIRING_SEPARATE_OWNERS = [
   "input_modalities",
 ];
 
+const CODEX_CURRENT_MODEL_INFO_FIELDS_REQUIRING_SEPARATE_OWNERS =
+  CODEX_FIELDS_REQUIRING_SEPARATE_OWNERS.filter(
+    // Current Codex fixes parallel_tool_calls=true in Prompt and no longer
+    // exposes this historical capability field on ModelInfo.
+    (field) => field !== "supports_parallel_tool_calls",
+  );
+
 function readRepoFile(path: string): string {
   return readFileSync(join(REPO_ROOT, path), "utf8");
 }
@@ -180,7 +187,7 @@ describe("Codex model execution policy origin", () => {
       codexSource,
       "ModelInfo",
     );
-    for (const field of CODEX_FIELDS_REQUIRING_SEPARATE_OWNERS) {
+    for (const field of CODEX_CURRENT_MODEL_INFO_FIELDS_REQUIRING_SEPARATE_OWNERS) {
       expect(
         codexModelInfoFields,
         `Codex ModelInfo 缺少已登记字段 ${field}`,

@@ -16,6 +16,8 @@
 
 2026-06-23 快速收口：新增 `smoke:expert-skills-live-runner` 骨架；默认 fail-fast，不触发真实模型。显式 `--allow-live-provider` 后可归一化已有 live summary，或在额外传 `--execute-live-runtime` 时通过 App Server current JSON-RPC 提交真实 Provider turn，输出可被 `smoke:expert-skills-live-gate -- --live-summary <path>` 消费的 summary。
 
+2026-08-16 current owner correction：旧 `evidence/export`、Evidence Pack provider、Harness Evidence Pack 卡片和对应前端 projection 已删除，统一归 `dead / deleted / forbidden-to-restore`。本路线图中所有旧 Evidence Pack / `observabilitySummary` 段落只保留为带日期的历史 evidence，不得作为 current owner、生产入口或验收命令。当前 Skills 复盘事实只来自 `runtime.status` side-channel、canonical `Thread/Turn/Item` read model、RuntimeEvent metadata 与真实 Electron fixture；不要恢复旧 Evidence Pack 双轨。
+
 ## 1. 结论
 
 Lime 当前不是没有 skills，而是缺少一条 Agent 回合内的 **skills discovery / selection / injection** 主链。
@@ -249,7 +251,7 @@ npm run verify:gui-smoke
 
 ## 9. 当前最值得先做的一刀
 
-P5 专家 Skills 骨架已经接入 current 主链：`expert.skillRefs -> AgentSkillSnapshot -> selector -> SKILL.md body read -> LimeSkillTool gate -> Evidence Pack`。下一刀不再从 runtime 基础设施重做，而是补专家易用性和真实质量验证。
+P5 专家 Skills 骨架已经接入 current 主链：`expert.skillRefs -> AgentSkillSnapshot -> selector -> SKILL.md body read -> LimeSkillTool gate -> runtime.status / Thread read model`。下一刀不再从 runtime 基础设施重做，而是补专家易用性和真实质量验证。
 
 当前最高杠杆缺口：
 
@@ -580,7 +582,7 @@ npm run verify:gui-smoke
 
 当前结论：
 
-1. P0-P4 的 current 主链已经具备可用闭环：`AgentSkillSnapshot` 轻量 metadata、显式 / catalog-bound / 唯一高置信选择、`SKILL.md` 按需读取、referenced files progressive disclosure、turn-scoped `LimeSkillTool` allowlist、`allowed_tools` 裁剪、telemetry / evidence 导出与 GUI Evidence Pack 投影均已接入。
+1. P0-P4 的 current 主链已经具备可用闭环：`AgentSkillSnapshot` 轻量 metadata、显式 / catalog-bound / 唯一高置信选择、`SKILL.md` 按需读取、referenced files progressive disclosure、turn-scoped `LimeSkillTool` allowlist、`allowed_tools` 裁剪、`runtime.status` telemetry 与 canonical read-model projection 均已接入；旧 Evidence Pack 导出不再是 current 能力。
 2. `SkillCatalog.entries.skillLocator` 已进入产品目录、Base Setup projection、scene launch metadata 与 App Server selector；产品入口和自然语言入口继续收敛到同一条 Agent Skills Runtime，而不是为每个 `@xxx` 或 slash skill 增加单独首刀。
 3. `LimeSkillTool` 仍保持 fail-closed；未恢复“默认暴露全部本地 Skills”，也未让生产路径回退到 mock / legacy runtime。
 4. `skill_search` 已升级为模型可主动调用的结构化 metadata search tool；它仍只返回 locator / reason，不读取 body、不写 allowlist、不代表执行授权。

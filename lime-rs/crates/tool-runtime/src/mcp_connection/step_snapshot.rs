@@ -246,6 +246,12 @@ async fn capture_connection(
                 {
                     continue;
                 }
+                let tool_supports_parallel = supports_parallel_tool_calls
+                    || tool
+                        .annotations
+                        .as_ref()
+                        .and_then(|annotations| annotations.read_only_hint)
+                        .unwrap_or(false);
                 entries.push((
                     Tool {
                         name: prefixed_name.into(),
@@ -266,7 +272,7 @@ async fn capture_connection(
                         mcp_app_resource_uri,
                         allowed_callers,
                         provenance: provenance.clone(),
-                        supports_parallel_tool_calls,
+                        supports_parallel_tool_calls: tool_supports_parallel,
                         connection: Arc::clone(&connection),
                     },
                 ));
@@ -329,7 +335,9 @@ mod tests {
     use super::*;
     use crate::mcp_connection::{McpConnection, McpConnectionError, McpConnectionRegistry};
     use async_trait::async_trait;
-    use rmcp::model::{CallToolResult, Content, JsonObject, ListToolsResult, Meta};
+    use rmcp::model::{
+        CallToolResult, Content, JsonObject, ListToolsResult, Meta, ToolAnnotations,
+    };
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::sync::Mutex;
 
@@ -589,6 +597,52 @@ mod tests {
                 plugin_id: Some("docs-plugin".to_string()),
             })
         );
+    }
+
+    #[tokio::test]
+    async fn read_only_tool_annotation_allows_parallel_execution_without_server_opt_in() {
+        let registry = McpConnectionRegistry::new();
+        let config = RuntimeExtensionConfig::new(
+            "docs",
+            "Docs tools",
+            vec!["readonly".to_string(), "mutating".to_string()],
+            false,
+            vec!["readonly".to_string(), "mutating".to_string()],
+            None,
+        );
+        let mut readonly = tool("readonly", None);
+        readonly.annotations = Some(ToolAnnotations {
+            read_only_hint: Some(true),
+            ..ToolAnnotations::default()
+        });
+        let mut mutating = tool("mutating", None);
+        mutating.annotations = Some(ToolAnnotations {
+            read_only_hint: Some(false),
+            ..ToolAnnotations::default()
+        });
+        register_connection(
+            &registry,
+            "docs",
+            config,
+            vec![readonly, mutating],
+            "docs",
+            DiscoveryMode::Ready,
+            Arc::new(AtomicUsize::new(0)),
+        )
+        .await;
+
+        let snapshot = snapshot(&registry, HashSet::new(), Duration::from_secs(1)).await;
+        assert!(snapshot.supports_parallel_tool_calls("docs__readonly"));
+        assert!(!snapshot.supports_parallel_tool_calls("docs__mutating"));
+    }
+
+    #[tokio::test]
+    async fn missing_read_only_tool_annotation_keeps_serial_default() {
+        let registry = McpConnectionRegistry::new();
+        register(&registry, vec!["search"], "docs").await;
+
+        let snapshot = snapshot(&registry, HashSet::new(), Duration::from_secs(1)).await;
+        assert!(!snapshot.supports_parallel_tool_calls("docs__search"));
     }
 
     #[tokio::test]

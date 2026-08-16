@@ -150,6 +150,14 @@ pub fn resolve_codex_home_dir() -> Option<PathBuf> {
         .or_else(|| dirs::home_dir().map(|home| home.join(CODEX_HOME_DIR_NAME)))
 }
 
+pub fn resolve_codex_agents_path() -> Option<PathBuf> {
+    resolve_codex_home_dir().map(|home| resolve_codex_agents_path_from_home(&home))
+}
+
+fn resolve_codex_agents_path_from_home(home: &Path) -> PathBuf {
+    home.join(USER_MEMORY_FILE_NAME)
+}
+
 pub fn resolve_workspace_runtime_agents_path(working_dir: &Path) -> PathBuf {
     working_dir
         .join(WORKSPACE_RUNTIME_DIR_NAME)
@@ -571,6 +579,15 @@ mod tests {
             workspace_root
                 .join(WORKSPACE_RUNTIME_DIR_NAME)
                 .join(USER_MEMORY_FILE_NAME)
+        );
+    }
+
+    #[test]
+    fn resolve_codex_agents_path_uses_codex_home_namespace() {
+        let home = Path::new("/tmp/home/.codex");
+        assert_eq!(
+            resolve_codex_agents_path_from_home(home),
+            home.join(USER_MEMORY_FILE_NAME)
         );
     }
 

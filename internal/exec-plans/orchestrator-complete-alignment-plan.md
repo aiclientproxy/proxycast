@@ -350,6 +350,20 @@ Completion standard:
   `reminder_index=0`, including when no threshold has been crossed. The rollout-budget owner tests
   pass `8/8` with this behavior.
 
+### 2026-08-16 current fixture and boundary cleanup
+
+- Skills Runtime fixture now treats `runtime.status` as an `agentSession/event` side-channel
+  observation, never as a synthetic Thread/Turn/Item. Observations are filtered by exact
+  `sessionId`/`threadId`/`turnId`, and `payload.metadata.skillRuntime` plus the
+  `expertSkillsRuntime`/`expert_skills_runtime` aliases remain fixture-only evidence inputs.
+- Manual-enable, Expert Plaza and Expert Panel flows now use the canonical `threadId` for launch,
+  restore and read-model waits. The retired standalone Skills/Experts sidebar remains absent; the
+  current Plugin workspace is the only product entry.
+- The fixture guard, current Agent Runtime smoke, GUI smoke, contracts, governance scans and full
+  Vitest run (120/120 batches) pass. No signed receipt, BoundaryAttest dependency or portable
+  attestation surface was added: pinned Codex has no such current receipt contract, and Lime keeps
+  digest/integrity evidence separate from source authenticity.
+
 #### Product-scope differences
 
 - Lime maps Codex behavior into `Electron -> App Server JSON-RPC -> RuntimeCore -> canonical

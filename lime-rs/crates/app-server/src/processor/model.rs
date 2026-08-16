@@ -9,8 +9,20 @@ use app_server_protocol::{
     ModelProviderKeyCreateParams, ModelProviderKeyDeleteParams, ModelProviderKeyUpdateParams,
     ModelProviderReadParams, ModelProviderSortOrdersUpdateParams, ModelProviderTestChatParams,
     ModelProviderTestConnectionParams, ModelProviderUiStateReadParams,
-    ModelProviderUiStateWriteParams, ModelProviderUpdateParams,
+    ModelProviderUiStateWriteParams, ModelProviderUpdateParams, METHOD_MODEL_LIST,
+    METHOD_MODEL_PREFERENCES_LIST, METHOD_MODEL_PROVIDER_ALIAS_LIST,
+    METHOD_MODEL_PROVIDER_ALIAS_READ, METHOD_MODEL_PROVIDER_CATALOG_LIST,
+    METHOD_MODEL_PROVIDER_CONFIG_EXPORT, METHOD_MODEL_PROVIDER_CONFIG_IMPORT,
+    METHOD_MODEL_PROVIDER_CREATE, METHOD_MODEL_PROVIDER_DELETE, METHOD_MODEL_PROVIDER_FETCH_MODELS,
+    METHOD_MODEL_PROVIDER_KEY_CREATE, METHOD_MODEL_PROVIDER_KEY_DELETE,
+    METHOD_MODEL_PROVIDER_KEY_UPDATE, METHOD_MODEL_PROVIDER_LIST, METHOD_MODEL_PROVIDER_READ,
+    METHOD_MODEL_PROVIDER_SORT_ORDERS_UPDATE, METHOD_MODEL_PROVIDER_TEST_CHAT,
+    METHOD_MODEL_PROVIDER_TEST_CONNECTION, METHOD_MODEL_PROVIDER_UI_STATE_READ,
+    METHOD_MODEL_PROVIDER_UI_STATE_WRITE, METHOD_MODEL_PROVIDER_UPDATE,
+    METHOD_MODEL_SYNC_STATE_READ,
 };
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use std::time::Duration;
 
 const MODEL_CATALOG_RETRY_MAX_ATTEMPTS: u32 = 5;
@@ -18,6 +30,75 @@ const MODEL_CATALOG_RETRY_BASE_DELAY: Duration = Duration::from_secs(5);
 const MODEL_CATALOG_RETRY_MAX_DELAY: Duration = Duration::from_secs(60);
 
 impl RequestProcessor {
+    pub(super) fn dispatch_model_request<'a>(
+        &'a self,
+        method: &str,
+        params: &mut Option<serde_json::Value>,
+    ) -> Option<BoxFuture<'a, Result<RpcDispatch, JsonRpcError>>> {
+        let request = match method {
+            METHOD_MODEL_LIST => self.handle_model_list_impl(params.take()).boxed(),
+            METHOD_MODEL_PREFERENCES_LIST => self.handle_model_preferences_list_impl().boxed(),
+            METHOD_MODEL_SYNC_STATE_READ => self.handle_model_sync_state_read_impl().boxed(),
+            METHOD_MODEL_PROVIDER_LIST => self.handle_model_provider_list_impl().boxed(),
+            METHOD_MODEL_PROVIDER_CATALOG_LIST => {
+                self.handle_model_provider_catalog_list_impl().boxed()
+            }
+            METHOD_MODEL_PROVIDER_READ => {
+                self.handle_model_provider_read_impl(params.take()).boxed()
+            }
+            METHOD_MODEL_PROVIDER_CREATE => self
+                .handle_model_provider_create_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_UPDATE => self
+                .handle_model_provider_update_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_DELETE => self
+                .handle_model_provider_delete_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_SORT_ORDERS_UPDATE => self
+                .handle_model_provider_sort_orders_update_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_CONFIG_EXPORT => self
+                .handle_model_provider_config_export_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_CONFIG_IMPORT => self
+                .handle_model_provider_config_import_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_TEST_CONNECTION => self
+                .handle_model_provider_test_connection_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_TEST_CHAT => self
+                .handle_model_provider_test_chat_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_FETCH_MODELS => self
+                .handle_model_provider_fetch_models_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_KEY_CREATE => self
+                .handle_model_provider_key_create_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_KEY_UPDATE => self
+                .handle_model_provider_key_update_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_KEY_DELETE => self
+                .handle_model_provider_key_delete_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_UI_STATE_READ => self
+                .handle_model_provider_ui_state_read_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_UI_STATE_WRITE => self
+                .handle_model_provider_ui_state_write_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_ALIAS_READ => self
+                .handle_model_provider_alias_read_impl(params.take())
+                .boxed(),
+            METHOD_MODEL_PROVIDER_ALIAS_LIST => {
+                self.handle_model_provider_alias_list_impl().boxed()
+            }
+            _ => return None,
+        };
+        Some(request)
+    }
+
     pub(super) async fn handle_model_list_impl(
         &self,
         params: Option<serde_json::Value>,

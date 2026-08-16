@@ -145,6 +145,9 @@ pub(super) fn responses_request(
     apply_responses_reasoning(&mut object, config, wire_shape);
     apply_text_verbosity(&mut object, wire_shape);
     apply_service_tier(&mut object, config);
+    if let Some(session_id) = responses_prompt_cache_key(config, request) {
+        object.insert("prompt_cache_key".to_string(), Value::String(session_id));
+    }
     if let Some(client_metadata) = responses_client_metadata(request) {
         object.insert(
             "client_metadata".to_string(),
@@ -152,6 +155,30 @@ pub(super) fn responses_request(
         );
     }
     Ok(Value::Object(object))
+}
+
+fn responses_prompt_cache_key(
+    config: &RuntimeProviderConfig,
+    request: &CanonicalRequest,
+) -> Option<String> {
+    let provider = config
+        .provider_name
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['-', ' '], "_");
+    if !matches!(
+        provider.as_str(),
+        "openai" | "codex" | "openai_response" | "openai_responses"
+    ) {
+        return None;
+    }
+    request
+        .metadata
+        .get(SESSION_ID_METADATA_KEY)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn responses_client_metadata(request: &CanonicalRequest) -> Option<Map<String, Value>> {
@@ -924,6 +951,28 @@ mod tests {
         )
         .expect("Responses lowering");
         assert_eq!(responses["reasoning"], json!({ "effort": "high" }));
+    }
+
+    #[test]
+    fn responses_lowering_emits_session_scoped_prompt_cache_key() {
+        let mut request = CanonicalRequest::text("gpt-5-codex", "hello");
+        request.metadata.insert(
+            SESSION_ID_METADATA_KEY.to_string(),
+            Value::String("session-1".to_string()),
+        );
+        let mut provider_config = config(Some("high"));
+        provider_config.protocol =
+            Some(crate::runtime_provider::RuntimeProviderProtocol::Responses);
+
+        let responses = responses_request(
+            &provider_config,
+            &request,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        )
+        .expect("Responses lowering");
+
+        assert_eq!(responses["prompt_cache_key"], "session-1");
     }
 
     fn request_with_tool() -> CanonicalRequest {

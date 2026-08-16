@@ -47,7 +47,7 @@
 | `image_output`          | current        | `image_generation`                                | `image_workbench`                            | 防止普通文件卡重复展示                                                                                                                                                                                                                                                            |
 | `audio_task`            | current        | `voice_generation`                                | `audio_player`                               | 后续接 execution profile / provider policy                                                                                                                                                                                                                                        |
 | `audio_output`          | current        | `voice_generation`                                | `audio_player`                               | 后续接 Provider 设置修复入口与 LimeCore offer                                                                                                                                                                                                                                     |
-| `transcript`            | partial        | `audio_transcription`                             | `document_viewer` / 后续 `transcript_viewer` | 已有 `transcription_generate` task writer、`lime-transcription-worker`、`transcript.completed/failed` 回写、媒体任务索引、聊天任务卡、可编辑校对的运行时文档 viewer、JSON/SRT/VTT 时间轴与说话人段落展示、ArtifactDocument 版本化校对稿保存、校对稿状态/差异摘要、Evidence `transcriptIndex` 与 Replay 检查；还缺更专用的逐段 transcript viewer 交互与更多 ASR adapter |
+| `transcript`            | partial        | `audio_transcription`                             | `document_viewer` / 后续 `transcript_viewer` | 已有 `transcription_generate` task writer、App Server transcription worker、`transcript.completed/failed` 回写、媒体任务索引、聊天任务卡、可编辑校对的运行时文档 viewer、JSON/SRT/VTT 时间轴与说话人段落展示、ArtifactDocument 版本化校对稿保存、校对稿状态/差异摘要、Evidence `transcriptIndex` 与 Replay 检查；还缺更专用的逐段 transcript viewer 交互与更多 ASR adapter |
 | `browser_session`       | partial        | `browser_control`                                 | `browser_replay_viewer`                      | entry binding 已回挂 registry；`snapshotIndex.browserActionIndex` 已进入 Harness evidence 面板与最小复盘 viewer，还缺权限 profile 与完整交互回放                                                                                                                                  |
 | `browser_snapshot`      | partial        | `browser_control`                                 | `browser_replay_viewer`                      | observation / screenshot 已进 evidence 索引、Harness 摘要与最小复盘 viewer；截图/DOM/network 深层展开仍需补齐                                                                                                                                                                     |
 | `pdf_extract`           | partial        | `pdf_extract`                                     | `document_viewer`                            | 还缺页码/引用恢复与专属 PDF artifact viewer                                                                                                                                                                                                                                       |
@@ -158,7 +158,9 @@ sequenceDiagram
 sequenceDiagram
     participant Entry as @转写 entry
     participant Contract as audio_transcription contract
-    participant Skill as Skill(transcription_generate)
+    participant Skill as transcription_generate entry Skill
+    participant AppServer as App Server transcription worker
+    participant Provider as model-provider openai_audio_transcription
     participant Task as transcription_generate task
     participant Transcript as transcript.pending
     participant Index as media task index
@@ -167,10 +169,13 @@ sequenceDiagram
     participant Viewer as document_viewer / transcript_viewer
 
     Entry->>Contract: harness.transcription_skill_launch + contract snapshot
-    Contract->>Skill: Agent 首刀执行转写技能
-    Skill->>Task: lime_create_transcription_task / CLI fallback
+    Contract->>Skill: Agent 首刀进入转写入口
+    Skill->>AppServer: mediaTaskArtifact/transcription/create
+    AppServer->>Task: 写入 transcription_generate task artifact
     Task-->>Transcript: payload.transcript(status=pending)
-    Task->>Transcript: lime-transcription-worker -> completed/failed
+    AppServer->>Provider: transcription request with resolved route + credentialRef
+    Provider-->>AppServer: transcript response / provider diagnostics
+    AppServer->>Transcript: worker -> completed/failed
     Task-->>Index: transcript status/path/source/language/outputFormat/errorCode
     Task-->>Evidence: transcription_task.modality_runtime_contract
     Evidence-->>Replay: transcriptIndex + failure modes

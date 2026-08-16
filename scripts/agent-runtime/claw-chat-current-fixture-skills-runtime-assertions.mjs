@@ -15,6 +15,10 @@ import {
 } from "./claw-chat-current-fixture-constants.mjs";
 import { EXPERT_PANEL_SKILLS_RUNTIME_UI_SKILL_REF } from "./claw-chat-current-fixture-expert-actions.mjs";
 
+function skillRuntimeEvidence(summary) {
+  return summary?.runtimeStatus ?? summary ?? {};
+}
+
 export function buildSkillsRuntimeScenarioAssertions({
   explicitSkillsRuntimeTurnStart,
   manualEnableRuntimeBinding,
@@ -74,9 +78,11 @@ export function buildSkillsRuntimeScenarioAssertions({
       summary.readModelSkillsRuntimeCompleted?.includesSkillTool === true &&
       summary.readModelSkillsRuntimeCompleted?.includesSkillName === true,
     readModelSkillBodyReadObserved:
-      summary.readModelSkillsRuntime?.skillBodyReadObserved === true,
+      skillRuntimeEvidence(summary.readModelSkillsRuntime)
+        .skillBodyReadObserved === true,
     readModelSkillGateObserved:
-      summary.readModelSkillsRuntime?.skillGateObserved === true,
+      skillRuntimeEvidence(summary.readModelSkillsRuntime).skillGateObserved ===
+      true,
     readModelSkillSearchObserved:
       summary.readModelSkillsRuntime?.hasSkillSearchSummary === true &&
       summary.readModelSkillsRuntime?.searchQuery === SKILLS_RUNTIME_QUERY,
@@ -118,9 +124,11 @@ export function buildSkillsRuntimeScenarioAssertions({
       summary.readModelExplicitSkillsRuntimeCompleted?.includesSkillName ===
         true,
     readModelExplicitSkillBodyReadObserved:
-      summary.readModelExplicitSkillsRuntime?.skillBodyReadObserved === true,
+      skillRuntimeEvidence(summary.readModelExplicitSkillsRuntime)
+        .skillBodyReadObserved === true,
     readModelExplicitSkillGateObserved:
-      summary.readModelExplicitSkillsRuntime?.skillGateObserved === true,
+      skillRuntimeEvidence(summary.readModelExplicitSkillsRuntime)
+        .skillGateObserved === true,
     readModelExplicitSkillSearchObserved:
       summary.readModelExplicitSkillsRuntime?.hasSkillSearchSummary ===
         true &&
@@ -194,19 +202,18 @@ export function buildSkillsRuntimeScenarioAssertions({
       summary.readModelManualEnableSkillsRuntimeCompleted?.includesSkillName ===
         true,
     readModelManualEnableSkillBodyReadObserved:
-      summary.readModelManualEnableSkillsRuntime?.skillBodyReadObserved ===
-      true,
+      skillRuntimeEvidence(summary.readModelManualEnableSkillsRuntime)
+        .skillBodyReadObserved === true,
     readModelManualEnableSkillGateObserved:
-      summary.readModelManualEnableSkillsRuntime?.skillGateObserved ===
-        true &&
-      summary.readModelManualEnableSkillsRuntime?.skillGateMode ===
-        "workspace_runtime_enable",
+      skillRuntimeEvidence(summary.readModelManualEnableSkillsRuntime)
+        .skillGateObserved === true &&
+      skillRuntimeEvidence(summary.readModelManualEnableSkillsRuntime)
+        .skillGateMode === "workspace_runtime_enable",
     readModelManualEnableWorkspaceRuntimeEnableObserved:
-      summary.readModelManualEnableSkillsRuntime
-        ?.skillGateWorkspaceRuntimeEnable === true &&
-      summary.readModelManualEnableSkillsRuntime?.skillGateSourceAllowlist?.includes(
-        SKILLS_RUNTIME_SKILL_NAME,
-      ) === true,
+      skillRuntimeEvidence(summary.readModelManualEnableSkillsRuntime)
+        .skillGateWorkspaceRuntimeEnable === true &&
+      skillRuntimeEvidence(summary.readModelManualEnableSkillsRuntime)
+        .skillGateSourceAllowlist?.includes(SKILLS_RUNTIME_SKILL_NAME) === true,
     readModelManualEnableSkillSearchObserved:
       summary.readModelManualEnableSkillsRuntime?.hasSkillSearchSummary ===
         true &&
@@ -250,21 +257,23 @@ export function buildExpertSkillsRuntimeScenarioAssertions({
             expertHarnessSkillRefs.includes(expectedExpertHarnessSkillRef) ===
               true,
           expertDeclaredSkillRefsObserved:
-            summary.readModelExpertSkillsRuntime?.expertDeclaredObserved ===
-              true &&
-            summary.readModelExpertSkillsRuntime?.expertDeclaredSkillRefs?.includes(
+            skillRuntimeEvidence(summary.readModelExpertSkillsRuntime)
+              .expertDeclaredObserved === true &&
+            skillRuntimeEvidence(
+              summary.readModelExpertSkillsRuntime,
+            ).expertDeclaredSkillRefs?.includes(
               EXPERT_SKILLS_RUNTIME_SKILL_REF,
             ) === true,
           expertSelectedSkillObserved:
-            summary.readModelExpertSkillsRuntime?.expertSelectedObserved ===
-              true &&
-            summary.readModelExpertSkillsRuntime?.expertSelectedSkill ===
-              SKILLS_RUNTIME_SKILL_NAME,
+            skillRuntimeEvidence(summary.readModelExpertSkillsRuntime)
+              .expertSelectedObserved === true &&
+            skillRuntimeEvidence(summary.readModelExpertSkillsRuntime)
+              .expertSelectedSkill === SKILLS_RUNTIME_SKILL_NAME,
           expertInvokedSkillObserved:
-            summary.readModelExpertSkillsRuntime?.expertInvokedObserved ===
-              true &&
-            summary.readModelExpertSkillsRuntime?.expertInvokedSkill ===
-              SKILLS_RUNTIME_SKILL_NAME,
+            skillRuntimeEvidence(summary.readModelExpertSkillsRuntime)
+              .expertInvokedObserved === true &&
+            skillRuntimeEvidence(summary.readModelExpertSkillsRuntime)
+              .expertInvokedSkill === SKILLS_RUNTIME_SKILL_NAME,
           guiExpertSkillsRuntimeSessionVisible:
             summary.guiExpertSkillsRuntimeSessionVisible?.hasSessionTitle ===
               true ||
@@ -290,13 +299,13 @@ export function buildExpertSkillsRuntimeScenarioAssertions({
             summary.readModelExpertSkillsRuntimeCompleted?.includesSkillName ===
               true,
           readModelExpertSkillBodyReadObserved:
-            summary.readModelExpertSkillsRuntime?.skillBodyReadObserved ===
-            true,
+            skillRuntimeEvidence(summary.readModelExpertSkillsRuntime)
+              .skillBodyReadObserved === true,
           readModelExpertSkillGateObserved:
-            summary.readModelExpertSkillsRuntime?.skillGateObserved ===
-              true &&
-            summary.readModelExpertSkillsRuntime?.skillGateMode ===
-              "selected_skills",
+            skillRuntimeEvidence(summary.readModelExpertSkillsRuntime)
+              .skillGateObserved === true &&
+            skillRuntimeEvidence(summary.readModelExpertSkillsRuntime)
+              .skillGateMode === "selected_skills",
           readModelExpertSkillSearchObserved:
             summary.readModelExpertSkillsRuntime?.hasSkillSearchSummary ===
               true &&
@@ -356,7 +365,8 @@ export function buildExpertSkillsRuntimeScenarioAssertions({
             expertPanelSkillsRuntimeTurnStart?.inputText ===
             EXPERT_SKILLS_RUNTIME_PANEL_PROMPT,
           expertPanelSkillRefsOverrideReachedBackend:
-            summary.readModelExpertPanelSkillsRuntime?.expertDeclaredSkillRefs?.includes(
+            skillRuntimeEvidence(summary.readModelExpertPanelSkillsRuntime)
+              .expertDeclaredSkillRefs?.includes(
               EXPERT_PANEL_SKILLS_RUNTIME_UI_SKILL_REF,
             ) === true,
           expertPanelReadModelCompleted:
@@ -367,13 +377,13 @@ export function buildExpertSkillsRuntimeScenarioAssertions({
               summary.readModelExpertPanelSkillsRuntimeCompleted
                 ?.includesAssistantSummary === true),
           expertPanelReadModelSkillBodyReadObserved:
-            summary.readModelExpertPanelSkillsRuntime
-              ?.skillBodyReadObserved === true,
+            skillRuntimeEvidence(summary.readModelExpertPanelSkillsRuntime)
+              .skillBodyReadObserved === true,
           expertPanelReadModelSkillGateObserved:
-            summary.readModelExpertPanelSkillsRuntime?.skillGateObserved ===
-              true &&
-            summary.readModelExpertPanelSkillsRuntime?.skillGateMode ===
-              "selected_skills",
+            skillRuntimeEvidence(summary.readModelExpertPanelSkillsRuntime)
+              .skillGateObserved === true &&
+            skillRuntimeEvidence(summary.readModelExpertPanelSkillsRuntime)
+              .skillGateMode === "selected_skills",
           expertPanelReadModelSkillSearchObserved:
             summary.readModelExpertPanelSkillsRuntime
               ?.hasSkillSearchSummary === true &&

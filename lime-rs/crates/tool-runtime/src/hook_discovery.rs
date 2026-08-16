@@ -422,13 +422,6 @@ fn append_source_hooks(
                     ));
                     continue;
                 };
-                if r#async && event_name != RuntimeHookEventName::SessionEnd {
-                    warnings.push(format!(
-                        "skipping async hook in {}: async hooks are not supported yet",
-                        source.path.display()
-                    ));
-                    continue;
-                }
                 let command = selected_command(command, command_windows);
                 if command.trim().is_empty() {
                     warnings.push(format!(
@@ -439,12 +432,6 @@ fn append_source_hooks(
                 }
                 let timeout_sec =
                     normalize_timeout(event_name, timeout_sec, &source.path, warnings);
-                if r#async {
-                    warnings.push(format!(
-                        "running async SessionEnd hook synchronously in {}",
-                        source.path.display()
-                    ));
-                }
                 let additional_context_limit = normalize_additional_context_limit(
                     event_name,
                     additional_context_limit,
@@ -493,7 +480,11 @@ fn append_source_hooks(
                         key,
                         event_name,
                         handler_type: RuntimeHookHandlerType::Command,
-                        execution_mode: RuntimeHookExecutionMode::Sync,
+                        execution_mode: if r#async {
+                            RuntimeHookExecutionMode::Async
+                        } else {
+                            RuntimeHookExecutionMode::Sync
+                        },
                         matcher: matcher.clone(),
                         command: Some(command),
                         timeout_sec,
@@ -712,6 +703,35 @@ additionalContextLimit = 4096
         );
         assert!(!hook.is_executable());
         assert!(hook.snapshot.current_hash.starts_with("sha256:"));
+    }
+
+    #[test]
+    fn discovers_async_command_with_async_execution_mode() {
+        let (home, cwd) = setup();
+        fs::write(
+            home.path().join("config.toml"),
+            r#"[hooks]
+[[hooks.PostToolUse]]
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "echo background"
+async = true
+"#,
+        )
+        .expect("write config");
+
+        let report = discover_hooks(&HookDiscoveryInput {
+            codex_home: home.path().to_path_buf(),
+            cwd: cwd.path().to_path_buf(),
+            plugins: Vec::new(),
+        });
+
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(report.hooks.len(), 1);
+        assert_eq!(
+            report.hooks[0].snapshot.execution_mode,
+            RuntimeHookExecutionMode::Async
+        );
     }
 
     #[test]

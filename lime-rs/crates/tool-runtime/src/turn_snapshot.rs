@@ -194,12 +194,6 @@ fn validate_hook_snapshots(hooks: &[RuntimeHookSnapshot]) -> Result<(), RuntimeT
                 handler_type: hook.handler_type,
             });
         }
-        if hook.execution_mode != RuntimeHookExecutionMode::Sync {
-            return Err(RuntimeTurnSnapshotError::UnsupportedHookExecutionMode {
-                key: hook.key.clone(),
-                execution_mode: hook.execution_mode,
-            });
-        }
         if !hook.source_path.is_absolute() {
             return Err(RuntimeTurnSnapshotError::RelativeHookSourcePath(
                 hook.source_path.clone(),
@@ -507,13 +501,11 @@ mod tests {
             1,
         );
         asynchronous.execution_mode = RuntimeHookExecutionMode::Async;
+        let snapshot = RuntimeTurnSnapshot::try_new(Vec::new(), vec![asynchronous])
+            .expect("async hook snapshot is valid and runs out of band");
         assert_eq!(
-            RuntimeTurnSnapshot::try_new(Vec::new(), vec![asynchronous])
-                .expect_err("async hook snapshot must fail closed"),
-            RuntimeTurnSnapshotError::UnsupportedHookExecutionMode {
-                key: "project:session_end:0:0".to_string(),
-                execution_mode: RuntimeHookExecutionMode::Async,
-            }
+            snapshot.hooks()[0].execution_mode,
+            RuntimeHookExecutionMode::Async
         );
     }
 

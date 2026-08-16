@@ -4,7 +4,7 @@ pub use crate::hook_discovery::DiscoveredHook;
 use crate::hook_lifecycle::{
     RuntimeHookEventContext, RuntimeHookHandlerReport, RuntimeHookReportFuture, RuntimeHookReporter,
 };
-use crate::turn_snapshot::{RuntimeHookEventName, RuntimeHookSnapshot};
+use crate::turn_snapshot::{RuntimeHookEventName, RuntimeHookExecutionMode, RuntimeHookSnapshot};
 use agent_protocol::hook::{HookOutputEntry, HookOutputEntryKind, HookRunStatus, HookRunSummary};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -30,9 +30,14 @@ pub trait HookLifecycleEmitter: Send + Sync {
     fn emit(&self, event: HookLifecycleEvent);
 }
 
+pub trait AsyncHookResultSink: Send + Sync {
+    fn submit(&self, run: HookRunSummary);
+}
+
 pub struct CommandHookReporter {
     hooks_by_key: HashMap<String, DiscoveredHook>,
     emitter: Arc<dyn HookLifecycleEmitter>,
+    async_result_sink: Option<Arc<dyn AsyncHookResultSink>>,
 }
 
 impl CommandHookReporter {
@@ -47,7 +52,13 @@ impl CommandHookReporter {
                 .map(|hook| (hook.snapshot.key.clone(), hook))
                 .collect(),
             emitter,
+            async_result_sink: None,
         }
+    }
+
+    pub fn with_async_result_sink(mut self, sink: Arc<dyn AsyncHookResultSink>) -> Self {
+        self.async_result_sink = Some(sink);
+        self
     }
 }
 
@@ -58,24 +69,54 @@ impl RuntimeHookReporter for CommandHookReporter {
         _event_name: RuntimeHookEventName,
         context: &'a RuntimeHookEventContext,
     ) -> RuntimeHookReportFuture<'a> {
+        let hook = self.hooks_by_key.get(&snapshot.key).cloned();
+        let emitter = Arc::clone(&self.emitter);
+        let async_result_sink = self.async_result_sink.clone();
+        let context = context.clone();
         Box::pin(async move {
-            let hook = self.hooks_by_key.get(&snapshot.key)?;
+            let hook = hook?;
             let mut run = running_summary(snapshot, context.tool_call_id.as_deref());
-            self.emitter.emit(HookLifecycleEvent {
+            emitter.emit(HookLifecycleEvent {
                 phase: HookLifecyclePhase::Started,
                 turn_id: context.turn_id.clone(),
                 run: run.clone(),
             });
 
+            if hook.snapshot.execution_mode == RuntimeHookExecutionMode::Async {
+                let turn_id = context.turn_id.clone();
+                let emitter = Arc::clone(&emitter);
+                tokio::spawn(async move {
+                    let started = Instant::now();
+                    let output = run_command_hook(&hook, &context).await;
+                    let report = limit_report_context(&hook, report_from_output(&hook, &output));
+                    run.status = status_for_report(&report);
+                    run.completed_at = Some(chrono::Utc::now().timestamp());
+                    run.duration_ms =
+                        Some(started.elapsed().as_millis().min(i64::MAX as u128) as i64);
+                    run.entries = entries_for_report(&report);
+                    emitter.emit(HookLifecycleEvent {
+                        phase: HookLifecyclePhase::Completed,
+                        turn_id,
+                        run: run.clone(),
+                    });
+                    if let Some(sink) = async_result_sink {
+                        sink.submit(run);
+                    }
+                });
+                return Some(RuntimeHookHandlerReport::Allow {
+                    additional_context: None,
+                });
+            }
+
             let started = Instant::now();
-            let output = run_command_hook(hook, context).await;
-            let report = report_from_output(hook, &output);
+            let output = run_command_hook(&hook, &context).await;
+            let report = limit_report_context(&hook, report_from_output(&hook, &output));
             let completed_at = chrono::Utc::now().timestamp();
             run.status = status_for_report(&report);
             run.completed_at = Some(completed_at);
             run.duration_ms = Some(started.elapsed().as_millis().min(i64::MAX as u128) as i64);
             run.entries = entries_for_report(&report);
-            self.emitter.emit(HookLifecycleEvent {
+            emitter.emit(HookLifecycleEvent {
                 phase: HookLifecyclePhase::Completed,
                 turn_id: context.turn_id.clone(),
                 run,
@@ -142,6 +183,23 @@ fn entries_for_report(report: &RuntimeHookHandlerReport) -> Vec<HookOutputEntry>
             additional_context: None,
         }
         | RuntimeHookHandlerReport::Rewrite { .. } => Vec::new(),
+    }
+}
+
+fn limit_report_context(
+    hook: &DiscoveredHook,
+    report: RuntimeHookHandlerReport,
+) -> RuntimeHookHandlerReport {
+    let Some(limit) = hook.snapshot.additional_context_limit else {
+        return report;
+    };
+    match report {
+        RuntimeHookHandlerReport::Allow {
+            additional_context: Some(context),
+        } => RuntimeHookHandlerReport::Allow {
+            additional_context: Some(context.chars().take(limit).collect()),
+        },
+        other => other,
     }
 }
 
@@ -577,6 +635,15 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct RecordingAsyncResultSink(Mutex<Vec<HookRunSummary>>);
+
+    impl AsyncHookResultSink for RecordingAsyncResultSink {
+        fn submit(&self, run: HookRunSummary) {
+            self.0.lock().expect("async hook results").push(run);
+        }
+    }
+
     #[tokio::test]
     async fn command_reporter_executes_and_emits_paired_lifecycle() {
         let hook = discovered(
@@ -616,5 +683,48 @@ mod tests {
             report_from_output(&hook, &output),
             RuntimeHookHandlerReport::Failed { ref reason } if reason.contains("timed out")
         ));
+    }
+
+    #[tokio::test]
+    async fn async_command_returns_immediately_and_reports_context_out_of_band() {
+        let mut hook = discovered(
+            "printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"async context\"}}'",
+            5,
+        );
+        hook.snapshot.execution_mode = RuntimeHookExecutionMode::Async;
+        let emitter = Arc::new(RecordingEmitter::default());
+        let sink = Arc::new(RecordingAsyncResultSink::default());
+        let reporter = CommandHookReporter::new(vec![hook.clone()], emitter.clone())
+            .with_async_result_sink(sink.clone());
+
+        let report = reporter
+            .report(&hook.snapshot, RuntimeHookEventName::PreToolUse, &context())
+            .await
+            .expect("async report admission");
+        assert_eq!(
+            report,
+            RuntimeHookHandlerReport::Allow {
+                additional_context: None
+            }
+        );
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if !sink.0.lock().expect("async hook results").is_empty() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("async hook result");
+        let events = emitter.0.lock().expect("events");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].phase, HookLifecyclePhase::Started);
+        assert_eq!(events[1].phase, HookLifecyclePhase::Completed);
+        assert_eq!(
+            sink.0.lock().expect("async hook results")[0].entries[0].kind,
+            HookOutputEntryKind::Context
+        );
     }
 }

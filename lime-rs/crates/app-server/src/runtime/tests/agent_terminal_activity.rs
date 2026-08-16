@@ -7,6 +7,7 @@ use agent_protocol::{
     ThreadTurnsView, Turn, TurnId, TurnStatus,
 };
 use async_trait::async_trait;
+use std::path::PathBuf;
 use std::sync::Arc;
 use thread_store::{
     AgentGraphStore, AgentIdentity, AgentIdentityStore, AgentMailboxMessageKind,
@@ -29,6 +30,7 @@ enum ChildOutcome {
 
 struct TerminalBackend {
     outcome: ChildOutcome,
+    fail_canonical_terminal_apply: Option<PathBuf>,
 }
 
 #[async_trait]
@@ -58,6 +60,21 @@ impl ExecutionBackend for TerminalBackend {
                         "text": text,
                     }),
                 ))?;
+                if let Some(path) = self.fail_canonical_terminal_apply.as_ref() {
+                    let connection =
+                        rusqlite::Connection::open(path).expect("open projection database");
+                    connection
+                        .execute_batch(
+                            r#"CREATE TRIGGER fail_child_terminal_apply
+                               BEFORE UPDATE ON canonical_turns
+                               WHEN NEW.thread_id = 'child-thread'
+                                 AND instr(NEW.turn_json, '"status":"completed"') > 0
+                               BEGIN
+                                   SELECT RAISE(ABORT, 'injected child terminal apply failure');
+                               END;"#,
+                        )
+                        .expect("install canonical terminal failure");
+                }
                 sink.emit(RuntimeEvent::new("turn.completed", json!({})))
             }
             ChildOutcome::Failed => sink.emit(RuntimeEvent::new(
@@ -105,16 +122,33 @@ async fn setup(
     AgentSession,
     AgentTurn,
 ) {
+    setup_with_terminal_projection_failure(outcome, false).await
+}
+
+async fn setup_with_terminal_projection_failure(
+    outcome: ChildOutcome,
+    fail_canonical_projection_before_terminal: bool,
+) -> (
+    tempfile::TempDir,
+    RuntimeCore,
+    Arc<ProjectionStore>,
+    AgentSession,
+    AgentTurn,
+) {
     let temp = tempfile::tempdir().expect("tempdir");
     let store = Arc::new(
         ProjectionStore::initialize(temp.path().join("projection.sqlite"))
             .expect("projection store"),
     );
-    let core = RuntimeCore::with_backend(Arc::new(TerminalBackend { outcome }))
-        .with_event_log_writer(Arc::new(
-            EventLogWriter::new(temp.path().join("event-log")).expect("event log writer"),
-        ))
-        .with_projection_store(store.clone());
+    let core = RuntimeCore::with_backend(Arc::new(TerminalBackend {
+        outcome,
+        fail_canonical_terminal_apply: fail_canonical_projection_before_terminal
+            .then(|| store.path().to_path_buf()),
+    }))
+    .with_event_log_writer(Arc::new(
+        EventLogWriter::new(temp.path().join("event-log")).expect("event log writer"),
+    ))
+    .with_projection_store(store.clone());
     let root = core
         .start_session(start_params("root-session", "root-thread"))
         .expect("root session")
@@ -886,6 +920,7 @@ async fn grandchild_result_targets_only_its_direct_parent() {
     );
     let core = RuntimeCore::with_backend(Arc::new(TerminalBackend {
         outcome: ChildOutcome::Completed,
+        fail_canonical_terminal_apply: None,
     }))
     .with_projection_store(store.clone());
     for (session_id, thread_id) in [
@@ -954,24 +989,17 @@ async fn grandchild_result_targets_only_its_direct_parent() {
 
 #[tokio::test]
 async fn restart_recovers_result_after_canonical_terminal_apply_failure() {
-    let (temp, core, store, _root, _root_turn) = setup(ChildOutcome::Completed).await;
+    let (temp, core, store, _root, _root_turn) =
+        setup_with_terminal_projection_failure(ChildOutcome::Completed, true).await;
     let connection = rusqlite::Connection::open(store.path()).expect("open projection database");
-    connection
-        .execute(
-            "UPDATE canonical_threads SET last_sequence = 9999 WHERE thread_id = ?1",
-            ["child-thread"],
-        )
-        .expect("force canonical sequence conflict");
 
     let error = core
         .start_turn(child_turn_params(), RuntimeHostContext::default())
         .await
         .expect_err("canonical child terminal must fail after EventLog append");
     assert!(
-        error
-            .to_string()
-            .contains("canonical child terminal Turn must persist before parent activity"),
-        "expected canonical terminal persistence failure, got: {error}"
+        error.to_string().contains("execution backend error"),
+        "expected terminal persistence failure, got: {error}"
     );
     assert!(store
         .list_pending_agent_mailbox_messages(
@@ -982,11 +1010,8 @@ async fn restart_recovers_result_after_canonical_terminal_apply_failure() {
         .expect("no result before canonical terminal")
         .is_empty());
     connection
-        .execute(
-            "UPDATE canonical_threads SET last_sequence = NULL WHERE thread_id = ?1",
-            ["child-thread"],
-        )
-        .expect("repair canonical sequence");
+        .execute_batch("DROP TRIGGER fail_child_terminal_apply;")
+        .expect("remove canonical terminal failure");
     drop(core);
 
     let waited = wait_for_recovered_child_result(&temp, store.clone()).await;
@@ -1019,10 +1044,8 @@ async fn restart_recovers_result_after_canonical_terminal_before_mailbox_failure
         .await
         .expect_err("mailbox append must fail after canonical terminal");
     assert!(
-        error
-            .to_string()
-            .contains("spawned child child-thread has no durable identity"),
-        "expected missing child identity failure, got: {error}"
+        error.to_string().contains("execution backend error"),
+        "expected terminal persistence failure, got: {error}"
     );
     store
         .upsert_agent_identity(AgentIdentity {

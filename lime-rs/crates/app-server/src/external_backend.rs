@@ -457,15 +457,16 @@ mod tests {
                 "item.started",
                 "message.created",
                 "item.completed",
+                "turn.accepted",
                 "item.started",
                 "message.delta",
             ]
         );
         assert_eq!(output.events[1].payload["input"][0]["type"], "text");
         assert_eq!(output.events[1].payload["input"][0]["text"], "draft");
-        assert_eq!(output.events[4].payload["backend"], "external");
-        assert_eq!(output.events[4].payload["kind"], "turnStart");
-        assert_eq!(output.events[4].payload["inputTextLength"], 5);
+        assert_eq!(output.events[5].payload["backend"], "external");
+        assert_eq!(output.events[5].payload["kind"], "turnStart");
+        assert_eq!(output.events[5].payload["inputTextLength"], 5);
     }
 
     #[tokio::test]
@@ -518,15 +519,16 @@ mod tests {
                 "item.started",
                 "message.created",
                 "item.completed",
+                "turn.accepted",
                 "item.started",
                 "message.delta",
                 "message.delta",
                 "artifact.snapshot",
             ]
         );
-        assert_eq!(output.events[4].payload["chunk"], 1);
-        assert_eq!(output.events[5].payload["chunk"], 2);
-        assert_eq!(output.events[6].payload["artifactId"], "stream-artifact");
+        assert_eq!(output.events[5].payload["chunk"], 1);
+        assert_eq!(output.events[6].payload["chunk"], 2);
+        assert_eq!(output.events[7].payload["artifactId"], "stream-artifact");
     }
 
     #[tokio::test]

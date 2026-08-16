@@ -4201,7 +4201,6 @@ describe("legacySurfaceCatalog", () => {
       "lime-rs/crates/app-server/src/runtime/plugin_worker_runtime/response.rs",
       "lime-rs/crates/app-server/src/runtime/event_store.rs",
       "lime-rs/crates/app-server/src/runtime/tests/artifacts.rs",
-      "lime-rs/crates/app-server/src/runtime/tests/evidence_exports.rs",
     ]);
   });
 
@@ -4231,7 +4230,6 @@ describe("legacySurfaceCatalog", () => {
       "lime-rs/crates/app-server/src/runtime/file_checkpoint_projection.rs",
       "lime-rs/crates/app-server/src/runtime/evidence_provider.rs",
       "lime-rs/crates/app-server/src/runtime/tests/coding_events.rs",
-      "lime-rs/crates/app-server/src/runtime/tests/evidence_exports.rs",
     ]);
   });
 

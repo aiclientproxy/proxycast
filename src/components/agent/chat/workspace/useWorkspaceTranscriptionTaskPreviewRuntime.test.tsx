@@ -219,7 +219,7 @@ function buildCompletedTranscriptionTaskIndex(): ListMediaTaskArtifactsOutput {
       snapshot_count: 1,
       contract_keys: ["audio_transcription"],
       execution_profile_keys: ["audio_transcription_profile"],
-      executor_adapter_keys: ["skill:transcription_generate"],
+      executor_adapter_keys: ["app_server:mediaTaskArtifact/transcription/create"],
       limecore_policy_refs: [
         "model_catalog",
         "provider_offer",
@@ -249,7 +249,7 @@ function buildCompletedTranscriptionTaskIndex(): ListMediaTaskArtifactsOutput {
           provider_id: "openai-asr",
           model: "gpt-4o-transcribe",
           execution_profile_key: "audio_transcription_profile",
-          executor_adapter_key: "skill:transcription_generate",
+          executor_adapter_key: "app_server:mediaTaskArtifact/transcription/create",
           limecore_policy_refs: [
             "model_catalog",
             "provider_offer",
@@ -282,7 +282,7 @@ function buildFailedTranscriptionTaskIndex(): ListMediaTaskArtifactsOutput {
       snapshot_count: 1,
       contract_keys: ["audio_transcription"],
       execution_profile_keys: ["audio_transcription_profile"],
-      executor_adapter_keys: ["skill:transcription_generate"],
+      executor_adapter_keys: ["app_server:mediaTaskArtifact/transcription/create"],
       limecore_policy_refs: [
         "model_catalog",
         "provider_offer",
@@ -312,7 +312,7 @@ function buildFailedTranscriptionTaskIndex(): ListMediaTaskArtifactsOutput {
           provider_id: "missing-provider",
           model: "gpt-4o-transcribe",
           execution_profile_key: "audio_transcription_profile",
-          executor_adapter_key: "skill:transcription_generate",
+          executor_adapter_key: "app_server:mediaTaskArtifact/transcription/create",
           limecore_policy_refs: [
             "model_catalog",
             "provider_offer",

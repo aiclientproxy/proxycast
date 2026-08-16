@@ -250,6 +250,31 @@ describe("clawstream scenario registry", () => {
       }
     }
 
+    const multiAgentBatch = registry.executionBatches.find(
+      (batch) => batch.id === "skeleton-p1-multi-agent-review",
+    );
+    expect(multiAgentBatch?.verificationCommands).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          '"lime-rs/crates/app-server/src/runtime/tests/agent_control.rs"',
+        ),
+        expect.stringContaining(
+          '"lime-rs/crates/app-server/src/runtime/canonical_thread_store/agent_graph_tests.rs"',
+        ),
+        expect.stringContaining('"lime-rs/crates/thread-store/src/agent_graph.rs"'),
+      ]),
+    );
+    expect(
+      multiAgentBatch?.verificationCommands.join("\n"),
+    ).not.toContain("runtime/tests/evidence_exports/team_facts.rs");
+    for (const currentOwnerPath of [
+      "lime-rs/crates/app-server/src/runtime/tests/agent_control.rs",
+      "lime-rs/crates/app-server/src/runtime/canonical_thread_store/agent_graph_tests.rs",
+      "lime-rs/crates/thread-store/src/agent_graph.rs",
+    ]) {
+      expect(fs.existsSync(currentOwnerPath), currentOwnerPath).toBe(true);
+    }
+
     expect(new Set(seenScenarioIds).size).toBe(seenScenarioIds.length);
     expect(seenScenarioIds).toEqual(
       registry.scenarios.map((scenario) => scenario.id),

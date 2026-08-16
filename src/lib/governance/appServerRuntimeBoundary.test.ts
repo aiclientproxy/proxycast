@@ -405,6 +405,9 @@ describe("app-server runtime boundary", () => {
       "METHOD_MCP_TOOL_CALL =>",
       "METHOD_PROCESS_SPAWN =>",
     ].filter((snippet) => mainSource.includes(snippet));
+    const returnedDispatchResponsibilities = ["METHOD_MODEL_LIST =>"].filter(
+      (snippet) => dispatchSource.includes(snippet),
+    );
     const returnedTestResponsibilities = [
       "async fn artifact_read_requires_initialized_and_returns_artifact_summaries(",
       "async fn mcp_runtime_methods_require_initialized_and_fail_closed_without_manager(",
@@ -431,6 +434,10 @@ describe("app-server runtime boundary", () => {
     expect(
       returnedMainResponsibilities,
       "JSON-RPC 分发表、MCP / git / execution process 分派和内联测试不得回流到 processor/mod.rs",
+    ).toEqual([]);
+    expect(
+      returnedDispatchResponsibilities,
+      "model command group 分派不得回流到 processor/dispatch.rs",
     ).toEqual([]);
     expect(
       returnedTestResponsibilities,

@@ -124,15 +124,15 @@ describe("modalityExecutionProfiles", () => {
     const binding = resolveModalityExecutionProfileBinding({
       contractKey: "audio_transcription",
       executorBinding: {
-        executor_kind: "skill",
-        binding_key: "transcription_generate",
+        executor_kind: "app_server",
+        binding_key: "mediaTaskArtifact/transcription/create",
       },
     });
 
     expect(binding).toEqual(
       expect.objectContaining({
         profileKey: "audio_transcription_profile",
-        executorAdapterKey: "skill:transcription_generate",
+        executorAdapterKey: "app_server:mediaTaskArtifact/transcription/create",
         executionProfile: expect.objectContaining({
           model_role_slots: ["audio_transcription_model"],
           permission_profile_keys: expect.arrayContaining([

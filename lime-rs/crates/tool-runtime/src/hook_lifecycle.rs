@@ -206,11 +206,6 @@ fn admit(
             reason: RuntimeHookFailure::UnsupportedHandler(hook.handler_type),
         });
     }
-    if hook.execution_mode != RuntimeHookExecutionMode::Sync {
-        return Err(RuntimeHookOutcome::Failed {
-            reason: RuntimeHookFailure::UnsupportedExecutionMode(hook.execution_mode),
-        });
-    }
     if hook.timeout_sec == 0 {
         return Err(RuntimeHookOutcome::Failed {
             reason: RuntimeHookFailure::InvalidTimeout,
@@ -267,6 +262,11 @@ where
     for hook in snapshot.hooks_for(event_name) {
         let outcome = match admit(hook, context) {
             Err(outcome) => outcome,
+            Ok(()) if hook.execution_mode == RuntimeHookExecutionMode::Async => {
+                RuntimeHookOutcome::Allow {
+                    additional_context: None,
+                }
+            }
             Ok(()) => outcome_from_report(report(hook)),
         };
         decisions.push(RuntimeHookDecision {
@@ -582,21 +582,23 @@ mod tests {
     }
 
     #[test]
-    fn async_execution_mode_fails_closed_like_the_snapshot_validator() {
-        // `RuntimeTurnSnapshot::try_new` 已拒绝 Async，因此该分支只能直接验证 admit，
-        // 且必须与 snapshot 同为 fail closed，不能降级成“跳过”。
+    fn async_execution_mode_is_admitted_for_out_of_band_reporting() {
         let mut background = hook("background", 0, RuntimeHookEventName::PostToolUse);
         background.execution_mode = RuntimeHookExecutionMode::Async;
 
-        assert_eq!(
-            admit(&background, &tool_context("shell")).unwrap_err(),
-            RuntimeHookOutcome::Failed {
-                reason: RuntimeHookFailure::UnsupportedExecutionMode(
-                    RuntimeHookExecutionMode::Async
-                )
-            }
+        assert!(admit(&background, &tool_context("shell")).is_ok());
+        let snapshot = RuntimeTurnSnapshot::try_new(Vec::new(), vec![background])
+            .expect("async hook is valid");
+        let evaluation = evaluate_hook_event(
+            &snapshot,
+            RuntimeHookEventName::PostToolUse,
+            &tool_context("shell"),
+            |_| {
+                panic!("async hook must not run in the synchronous evaluator");
+            },
         );
-        assert!(RuntimeTurnSnapshot::try_new(Vec::new(), vec![background]).is_err());
+        assert_eq!(evaluation.injected_context(), Vec::<String>::new());
+        assert!(!evaluation.is_blocked());
     }
 
     #[test]

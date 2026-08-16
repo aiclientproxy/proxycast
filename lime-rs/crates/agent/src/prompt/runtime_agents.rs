@@ -1,8 +1,9 @@
 //! Lime 运行时 AGENTS 指令加载
 //!
 //! 仅用于 Lime 应用运行时会话：
-//! - 全局：`app_paths::resolve_user_memory_path()`
-//! - 工作区：从项目根到当前工作目录，每层选择 `.lime/AGENTS.override.md` 或 `.lime/AGENTS.md`
+//! - 全局：优先 `CODEX_HOME/AGENTS.md`，缺失时回退 Lime 的 `~/.lime/AGENTS.md`
+//! - 工作区：从项目根到当前工作目录，优先标准 `AGENTS.override.md` / `AGENTS.md`，
+//!   缺失时回退 `.lime/AGENTS.override.md` / `.lime/AGENTS.md`
 
 use lime_core::app_paths;
 use std::collections::HashSet;
@@ -53,16 +54,18 @@ pub fn build_runtime_agents_prompt_for_project(
     working_dir: Option<&Path>,
     project_root: Option<&Path>,
 ) -> Option<String> {
-    let global_path = match app_paths::resolve_user_memory_path() {
-        Ok(path) => Some(path),
-        Err(error) => {
-            tracing::warn!(
-                "[AgentRuntime] 解析全局运行时 AGENTS 路径失败，跳过全局指令层: {}",
-                error
-            );
-            None
-        }
-    };
+    let global_path = app_paths::resolve_codex_agents_path()
+        .filter(|path| path.is_file())
+        .or_else(|| match app_paths::resolve_user_memory_path() {
+            Ok(path) => Some(path),
+            Err(error) => {
+                tracing::warn!(
+                    "[AgentRuntime] 解析全局运行时 AGENTS 路径失败，跳过全局指令层: {}",
+                    error
+                );
+                None
+            }
+        });
     let workspace_paths = working_dir
         .map(|working_dir| discover_workspace_runtime_agents_paths(working_dir, project_root))
         .unwrap_or_default();
@@ -179,21 +182,29 @@ fn discover_project_root(working_dir: &Path) -> Option<PathBuf> {
 }
 
 fn workspace_runtime_agents_candidates(dir: &Path) -> Vec<PathBuf> {
-    let runtime_dir = dir.join(".lime");
-    let override_path = runtime_dir.join(WORKSPACE_OVERRIDE_AGENTS_FILE_NAME);
-    if override_path.is_file() {
-        vec![override_path]
+    let standard_override = dir.join(WORKSPACE_OVERRIDE_AGENTS_FILE_NAME);
+    if standard_override.is_file() {
+        vec![standard_override]
+    } else if dir.join(WORKSPACE_AGENTS_FILE_NAME).is_file() {
+        vec![dir.join(WORKSPACE_AGENTS_FILE_NAME)]
     } else {
-        vec![runtime_dir.join(WORKSPACE_AGENTS_FILE_NAME)]
+        let runtime_dir = dir.join(".lime");
+        let override_path = runtime_dir.join(WORKSPACE_OVERRIDE_AGENTS_FILE_NAME);
+        if override_path.is_file() {
+            vec![override_path]
+        } else {
+            vec![runtime_dir.join(WORKSPACE_AGENTS_FILE_NAME)]
+        }
     }
 }
 
 fn workspace_scope_from_agents_path(path: &Path) -> Option<PathBuf> {
-    let runtime_dir = path.parent()?;
-    if runtime_dir.file_name()?.to_str()? != ".lime" {
-        return None;
+    let parent = path.parent()?;
+    if parent.file_name().and_then(|name| name.to_str()) == Some(".lime") {
+        parent.parent().map(PathBuf::from)
+    } else {
+        Some(parent.to_path_buf())
     }
-    runtime_dir.parent().map(PathBuf::from)
 }
 
 fn load_runtime_agents_layer(
@@ -363,6 +374,50 @@ mod tests {
     }
 
     #[test]
+    fn should_prefer_standard_agents_files_over_lime_fallback() {
+        let tmp = TempDir::new().expect("create temp dir");
+        let repo = tmp.path().join("repo");
+        let nested = repo.join("pkg");
+        fs::create_dir_all(repo.join(".lime")).expect("create root runtime dir");
+        fs::create_dir_all(nested.join(".lime")).expect("create nested runtime dir");
+        fs::write(repo.join("AGENTS.md"), "standard root").expect("write standard root");
+        fs::write(repo.join(".lime").join("AGENTS.md"), "lime root").expect("write lime root");
+        fs::write(nested.join("AGENTS.override.md"), "standard override")
+            .expect("write standard override");
+        fs::write(nested.join(".lime").join("AGENTS.md"), "lime nested")
+            .expect("write lime nested");
+
+        let paths = discover_workspace_runtime_agents_paths(&nested, Some(&repo));
+        assert_eq!(
+            paths,
+            vec![repo.join("AGENTS.md"), nested.join("AGENTS.override.md")]
+        );
+        let prompt =
+            build_runtime_agents_prompt_with_paths(None, paths.iter().map(PathBuf::as_path))
+                .expect("standard prompt");
+        assert!(prompt.contains("standard root"));
+        assert!(prompt.contains("standard override"));
+        assert!(!prompt.contains("lime root"));
+        assert!(!prompt.contains("lime nested"));
+    }
+
+    #[test]
+    fn should_use_lime_agents_when_standard_file_is_absent() {
+        let tmp = TempDir::new().expect("create temp dir");
+        let repo = tmp.path().join("repo");
+        fs::create_dir_all(repo.join(".lime")).expect("create runtime dir");
+        fs::write(repo.join(".lime").join("AGENTS.md"), "lime fallback")
+            .expect("write lime fallback");
+
+        let paths = discover_workspace_runtime_agents_paths(&repo, Some(&repo));
+        assert_eq!(paths, vec![repo.join(".lime").join("AGENTS.md")]);
+        let prompt =
+            build_runtime_agents_prompt_with_paths(None, paths.iter().map(PathBuf::as_path))
+                .expect("fallback prompt");
+        assert!(prompt.contains("lime fallback"));
+    }
+
+    #[test]
     fn empty_override_still_replaces_shared_agents_in_same_scope() {
         let tmp = TempDir::new().expect("create temp dir");
         let repo = tmp.path().join("repo");
@@ -375,7 +430,8 @@ mod tests {
         fs::write(repo.join(".lime").join("AGENTS.override.md"), "  \n")
             .expect("write empty override agents");
 
-        assert!(build_runtime_agents_prompt(Some(&repo)).is_none());
+        let paths = discover_workspace_runtime_agents_paths(&repo, Some(&repo));
+        assert!(build_runtime_agents_prompt_with_paths(None, paths).is_none());
     }
 
     #[test]

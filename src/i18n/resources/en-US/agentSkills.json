@@ -1,6 +1,4 @@
 {
-  "capabilityDraft.registeredPanel.action.auditRecentRun": "Audit latest run",
-  "capabilityDraft.registeredPanel.action.auditRunning": "Auditing",
   "capabilityDraft.registeredPanel.action.createManagedJobDraft": "Set schedule",
   "capabilityDraft.registeredPanel.action.enableRuntime": "Try once",
   "capabilityDraft.registeredPanel.action.pauseManagedJob": "Pause schedule",
@@ -102,7 +100,6 @@
   "capabilityDraft.registeredPanel.empty.loading": "Loading saved skills...",
   "capabilityDraft.registeredPanel.empty.missingProject": "Select or enter a project to view skills saved in it.",
   "capabilityDraft.registeredPanel.empty.noSkills": "This project has no saved skills yet. Check and save one from “In progress” first.",
-  "capabilityDraft.registeredPanel.error.missingAutomationSession": "The latest automation run has no linked session, so evidence cannot be exported.",
   "capabilityDraft.registeredPanel.evidence.credentialReferenceId": "Credential reference",
   "capabilityDraft.registeredPanel.evidence.endpointSource": "Endpoint",
   "capabilityDraft.registeredPanel.evidence.evidenceSchema": "Evidence schema",

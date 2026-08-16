@@ -216,5 +216,10 @@ async fn start_turn_rejects_invalid_backend_coding_payload_before_storage() {
     let read = read_session(&core, "sess_backend_coding_payload_guard");
     assert!(read.turns.is_empty());
     assert_eq!(read.session.status, AgentSessionStatus::Idle);
-    assert_eq!(event_count(&core, "sess_backend_coding_payload_guard"), 0);
+    let events = core
+        .events_for_session("sess_backend_coding_payload_guard")
+        .expect("admission events");
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[3].event_type, "turn.accepted");
+    assert_eq!(events[3].payload["backend"], "app_server");
 }

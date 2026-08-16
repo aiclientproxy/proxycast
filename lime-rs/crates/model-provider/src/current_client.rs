@@ -16,7 +16,7 @@ use crate::ModelProviderProtocol;
 use agent_protocol::ImageDetail;
 use async_stream::stream;
 use futures::future::BoxFuture;
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use reqwest::{Client, Response, StatusCode};
 pub use runtime_core::{
     CanonicalLlmEvent, FailureClassification, FinishReason, FreeformToolFormat, GenerationOptions,
@@ -665,6 +665,31 @@ pub struct CurrentProviderClient {
     websocket_server_model: Arc<Mutex<Option<String>>>,
 }
 
+/// A provider session whose Responses continuation state is isolated to one runtime Turn.
+///
+/// The underlying WebSocket connection remains owned by `CurrentProviderClient` and may be
+/// reused, but request prefixes and response ids must never leak between turns.
+#[derive(Clone)]
+pub struct CurrentProviderSession {
+    client: Arc<CurrentProviderClient>,
+    responses_continuation: Arc<Mutex<ResponsesContinuationState>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ResponsesContinuationState {
+    last_payload: Option<Value>,
+    last_response_id: Option<String>,
+}
+
+impl CurrentProviderSession {
+    pub fn new(client: Arc<CurrentProviderClient>) -> Self {
+        Self {
+            client,
+            responses_continuation: Arc::new(Mutex::new(ResponsesContinuationState::default())),
+        }
+    }
+}
+
 impl CurrentProviderClient {
     pub fn new(config: RuntimeProviderConfig) -> Result<Self, CurrentProviderError> {
         Self::new_with_health_registry(config, &CurrentProviderHealthRegistry::new())
@@ -741,6 +766,14 @@ impl CurrentProviderClient {
         &self,
         request: CurrentProviderRequest,
     ) -> Result<CurrentProviderStream, CurrentProviderError> {
+        self.stream_with_continuation(request, None).await
+    }
+
+    async fn stream_with_continuation(
+        &self,
+        request: CurrentProviderRequest,
+        continuation: Option<Arc<Mutex<ResponsesContinuationState>>>,
+    ) -> Result<CurrentProviderStream, CurrentProviderError> {
         let protocol = self.protocol()?;
         ensure_supported_protocol(&protocol)?;
         if request.contains_raw_response_items()
@@ -781,15 +814,28 @@ impl CurrentProviderClient {
         if matches!(protocol, ModelProviderProtocol::Responses)
             && self.responses_websocket_enabled()
         {
+            let full_payload = payload.clone();
+            let websocket_payload = if let Some(state) = continuation.as_ref() {
+                let state = state.lock().await;
+                incremental_responses_payload(&full_payload, &state)
+                    .unwrap_or_else(|| full_payload.clone())
+            } else {
+                full_payload.clone()
+            };
             match self
-                .send_responses_websocket(payload.clone(), &wire_shape)
+                .send_responses_websocket(websocket_payload, &wire_shape)
                 .await
             {
                 Ok(stream) => {
-                    return Ok(self.tracked_stream(
-                        self.websocket_with_http_fallback(stream, payload, wire_shape),
-                        permit,
-                    ));
+                    let stream =
+                        self.websocket_with_http_fallback(stream, full_payload.clone(), wire_shape);
+                    let stream = self.tracked_stream(stream, permit);
+                    return Ok(match continuation {
+                        Some(state) => {
+                            self.track_responses_continuation(stream, state, full_payload)
+                        }
+                        None => stream,
+                    });
                 }
                 Err(error) => {
                     self.http_fallback.store(true, Ordering::Release);
@@ -800,6 +846,7 @@ impl CurrentProviderClient {
                 }
             }
         }
+        let continuation_payload = payload.clone();
         let response = match self
             .send_stream_request(&protocol, payload, &wire_shape)
             .await
@@ -825,7 +872,33 @@ impl CurrentProviderClient {
                 Box::pin(openai_chat_sse(response))
             }
         };
-        Ok(self.tracked_stream(stream, permit))
+        let stream = self.tracked_stream(stream, permit);
+        if matches!(protocol, ModelProviderProtocol::Responses) {
+            if let Some(state) = continuation {
+                return Ok(self.track_responses_continuation(stream, state, continuation_payload));
+            }
+        }
+        Ok(stream)
+    }
+
+    fn track_responses_continuation(
+        &self,
+        mut stream: CurrentProviderStream,
+        state: Arc<Mutex<ResponsesContinuationState>>,
+        full_payload: Value,
+    ) -> CurrentProviderStream {
+        Box::pin(stream! {
+            let mut response_id = None;
+            while let Some(event) = stream.next().await {
+                if let Ok(CanonicalLlmEvent::Finish { response_id: Some(id), .. }) = &event {
+                    response_id = Some(id.clone());
+                }
+                yield event;
+            }
+            let mut state = state.lock().await;
+            state.last_payload = Some(full_payload);
+            state.last_response_id = response_id;
+        })
     }
 
     fn tracked_stream(
@@ -1229,6 +1302,67 @@ impl CurrentProvider for CurrentProviderClient {
     ) -> BoxFuture<'a, Result<CurrentProviderStream, CurrentProviderError>> {
         Box::pin(async move { CurrentProviderClient::stream(self, request).await })
     }
+}
+
+impl CurrentProvider for CurrentProviderSession {
+    fn stream<'a>(
+        &'a self,
+        request: CurrentProviderRequest,
+    ) -> BoxFuture<'a, Result<CurrentProviderStream, CurrentProviderError>> {
+        Box::pin(async move {
+            self.client
+                .stream_with_continuation(request, Some(Arc::clone(&self.responses_continuation)))
+                .await
+        })
+    }
+}
+
+fn incremental_responses_payload(
+    current: &Value,
+    state: &ResponsesContinuationState,
+) -> Option<Value> {
+    let previous = state.last_payload.as_ref()?;
+    let response_id = state.last_response_id.as_deref()?.trim();
+    if response_id.is_empty() || !responses_request_properties_match(previous, current) {
+        return None;
+    }
+
+    let previous_input = previous.get("input")?.as_array()?;
+    let current_input = current.get("input")?.as_array()?;
+    if current_input.len() < previous_input.len()
+        || !previous_input
+            .iter()
+            .zip(current_input.iter())
+            .all(|(previous, current)| previous == current)
+    {
+        return None;
+    }
+
+    let mut payload = current.as_object()?.clone();
+    payload.insert(
+        "input".to_string(),
+        Value::Array(current_input[previous_input.len()..].to_vec()),
+    );
+    payload.insert(
+        "previous_response_id".to_string(),
+        Value::String(response_id.to_string()),
+    );
+    Some(Value::Object(payload))
+}
+
+fn responses_request_properties_match(previous: &Value, current: &Value) -> bool {
+    let Some(mut previous) = previous.as_object().cloned() else {
+        return false;
+    };
+    let Some(mut current) = current.as_object().cloned() else {
+        return false;
+    };
+    previous.remove("input");
+    current.remove("input");
+    // Turn metadata may be regenerated while the model-visible request is unchanged.
+    previous.remove("client_metadata");
+    current.remove("client_metadata");
+    previous == current
 }
 
 fn circuit_open_error(error: CircuitOpen) -> CurrentProviderError {
@@ -1671,6 +1805,87 @@ mod tests {
         CurrentProviderRequest::new(vec![CurrentProviderMessage::user(vec![
             CurrentProviderContent::Text("hello".to_string()),
         ])])
+    }
+
+    fn responses_payload(input: Value) -> Value {
+        json!({
+            "model": "gpt-5-codex",
+            "instructions": "system",
+            "input": input,
+            "tools": [],
+            "reasoning": { "effort": "medium" }
+        })
+    }
+
+    #[test]
+    fn responses_incremental_payload_uses_previous_response_id_for_strict_suffix() {
+        let previous = responses_payload(json!([{"role": "user", "content": "hello"}]));
+        let current = responses_payload(json!([
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "world"}
+        ]));
+        let state = ResponsesContinuationState {
+            last_payload: Some(previous),
+            last_response_id: Some("resp-1".to_string()),
+        };
+
+        assert_eq!(
+            incremental_responses_payload(&current, &state),
+            Some(json!({
+                "model": "gpt-5-codex",
+                "instructions": "system",
+                "input": [{"role": "assistant", "content": "world"}],
+                "tools": [],
+                "reasoning": { "effort": "medium" },
+                "previous_response_id": "resp-1"
+            }))
+        );
+    }
+
+    #[test]
+    fn responses_incremental_payload_falls_back_when_request_properties_change() {
+        let previous = responses_payload(json!([{"role": "user", "content": "hello"}]));
+        let mut current = responses_payload(json!([
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "world"}
+        ]));
+        current["reasoning"] = json!({ "effort": "high" });
+        let state = ResponsesContinuationState {
+            last_payload: Some(previous),
+            last_response_id: Some("resp-1".to_string()),
+        };
+
+        assert!(incremental_responses_payload(&current, &state).is_none());
+    }
+
+    #[test]
+    fn responses_incremental_payload_falls_back_when_input_is_not_a_prefix() {
+        let previous = responses_payload(json!([{"role": "user", "content": "hello"}]));
+        let current = responses_payload(json!([
+            {"role": "user", "content": "changed"},
+            {"role": "assistant", "content": "world"}
+        ]));
+        let state = ResponsesContinuationState {
+            last_payload: Some(previous),
+            last_response_id: Some("resp-1".to_string()),
+        };
+
+        assert!(incremental_responses_payload(&current, &state).is_none());
+    }
+
+    #[test]
+    fn responses_continuation_state_is_not_shared_between_sessions() {
+        let client = Arc::new(
+            CurrentProviderClient::new(config(Some(RuntimeProviderProtocol::Responses)))
+                .expect("provider client"),
+        );
+        let first = CurrentProviderSession::new(Arc::clone(&client));
+        let second = CurrentProviderSession::new(client);
+
+        assert!(!Arc::ptr_eq(
+            &first.responses_continuation,
+            &second.responses_continuation
+        ));
     }
 
     #[test]

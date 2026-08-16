@@ -1,6 +1,6 @@
 # 多模型多模态统一运行时实现计划
 
-> 状态：in progress / audio TTS execution current
+> 状态：in progress / audio TTS + transcription execution current
 > 更新时间：2026-08-16
 > Owner：Runtime / Model Registry / App Server / Media Task 主链
 > 关联 PRD：`internal/roadmap/models/prd.md`
@@ -42,7 +42,7 @@
 - [x] 聊天 runtime 已基于 `ModelTaskRequest.requirements` 与注册表 `CapabilitySnapshot` 产出 `capability_gap`，并在 capability gap 时通过 `RouteFailure(category=capability_gap)` 阻断执行。
 - [x] 新增通用 `model_route_assembly`，把 provider / endpoint / auth / protocol / route defaults / capability snapshot / `RouteFailure` 组装从聊天模块抽出，聊天内部 `model_route_resolver` 只负责 ready candidate、registry metadata、provider record 和 evidence 编排。
 - [x] 媒体 task 创建链路在 provider record、enabled key、registry declared model 都明确时，复用 `model_route_assembly` 写入真实 `resolved_route` / `resolvedRoute`，并保留 capability gap fail-closed 语义。
-- [ ] 把 RouteResolver 从 App Server 内部模块提升为可复用 RuntimeCore resolver，并覆盖音频 / 转写 / embedding 等非 chat task 的 worker 执行；当前 `ResolvedModelRoute` 组装、route evidence bundle、decision/fallback/not_possible evidence 生成已在 RuntimeCore，App Server 只保留 provider record / readiness / registry metadata 适配；图片、Fal 视频、xAI 视频和 OpenAI-compatible 音频 worker 已消费 `resolved_route` 的 endpoint/protocol 与 durable `credentialRef`，通过 App Server media task worker 精确取凭证后进入 `model-provider` 网络边界；转写与 embedding 仍需完成 task worker / current caller 收口。
+- [ ] 把 RouteResolver 从 App Server 内部模块提升为可复用 RuntimeCore resolver，并覆盖音频 / 转写 / embedding 等非 chat task 的 worker 执行；当前 `ResolvedModelRoute` 组装、route evidence bundle、decision/fallback/not_possible evidence 生成已在 RuntimeCore，App Server 只保留 provider record / readiness / registry metadata 适配；图片、Fal 视频、xAI 视频、OpenAI-compatible 音频与转写 worker 已消费 `resolved_route` 的 endpoint/protocol 与 durable `credentialRef`，通过 App Server media task worker 精确取凭证后进入 `model-provider` 网络边界；embedding 仍需完成 current caller 收口。
 - [x] 媒体 task 创建链路在 registry 明确声明能力快照时写入 `route_failure` / `model_route_assessment`，并在 `capability_gap` 时标记任务为 blocked。
 - [x] 图片/视频 worker 消费 task payload 中的 capability/route failure 并 fail closed，不再请求 provider；只有 catalog 显式声明 `image_generation` / `video_generation` 和对应输出模态时才生成 ready execution binding。
 - [x] 拆出 `media_task_payload.rs`，让媒体 payload / `ModelTaskRequest` 构建离开超过 `1000` 行的 `media_task.rs`。
@@ -60,9 +60,10 @@
 
 - [x] 图片任务通过 RouteResolver 选择模型和协议，并由 App Server worker + media-runtime 消费 `resolved_route` / `model_route_execution` 的 direct-provider 执行绑定。
 - [x] Fal 与 xAI 视频任务通过 public `mediaTaskArtifact/video/create`、统一 catalog admission、exact credential route、App Server worker、`model-provider` transport 和 media-runtime durable artifact 进入 terminal；xAI 任务持久化 request id/status，恢复时只 poll 不重复 start。
-- [x] 音频任务通过 RouteResolver 选择 `openai_audio_speech`，由 App Server audio worker 消费 durable credential、写入 workspace 相对音频路径并完成 artifact；转写 worker 仍未接入 RuntimeCore mapper。
+- [x] 音频任务通过 RouteResolver 选择 `openai_audio_speech`，由 App Server audio worker 消费 durable credential、写入 workspace 相对音频路径并完成 artifact；转写任务通过 `openai_audio_transcription` 选择 route，由同一 media task worker 读取 workspace 音频或受控 HTTP(S) 源、写入 transcript 文件并完成 artifact。
 - [x] 图片 / 视频 media task artifact 持久化 `resolved_route`、`llm_events`、`provider_diagnostics`，同时保留 snake/camel 双字段便于 current UI / evidence 消费。
-- [ ] 转写 media task artifact 持久化 executable `resolved_route` / `llm_events` / `provider_diagnostics`；音频已具备真实 TTS worker，云端 embedding 已经委托 `model-provider`，退出条件是 transcription task worker 与 embedding current caller 完成 route 消费。
+- [x] 转写 media task artifact 持久化 executable `resolved_route` / `model_route_execution`、`llm_events` / `provider_diagnostics`；worker 使用 durable `credentialRef` 经 `model-provider` 调用 `openai_audio_transcription`，并覆盖 txt/json/srt/vtt、workspace source boundary、失败重试、stale recovery 与取消竞态。
+- [ ] 云端 embedding 已经委托 `model-provider`，退出条件是 embedding current caller 完成 route 消费并写回统一 artifact/read model。
 - [ ] 前端设置页、Agent Chat、媒体工作台统一消费 typed capabilities。
 
 ## 本轮当前刀
@@ -70,6 +71,8 @@
 本轮继续固定参考边界：`grok-build` 是多模型控制面的 primary reference；`opencode` 只补 provider wire、canonical media content 和 lowering。两者都必须翻译到 Lime current owner，不直接成为 runtime、catalog 或 GUI owner。
 
 本轮新增的候选解析 current slice：RuntimeCore 持有 typed `CandidateModelSet`，App Server 适配 configured Provider 声明模型与缓存目录；能力/任务族/输入输出模态过滤先于 OEM 偏好、连续性和成本排序，显式选择保持首位但仍由后续 capability gate fail closed。候选集合及选择依据写入 routing decision evidence。
+
+2026-08-16 继续补齐转写执行闭环：`mediaTaskArtifact/transcription/create` 已接入 App Server protocol/client、route admission、durable credential 与 `media_task_worker/transcription.rs`；worker 只接受 `openai_audio_transcription` resolved route，源文件必须 canonicalize 到 workspace 内，远程源只允许 HTTP(S)，输出路径必须为 workspace 相对路径，结果写入 txt/json/srt/vtt 并回写 transcript artifact、canonical LLM events 和 provider diagnostics。取消、失败重试与 stale recovery 沿用媒体任务 store 的 attempt 语义。转写 worker 尚未具备 provider-specific diarization lowering，`speaker_labels` 仍作为任务元数据保留，不能宣称已执行说话人分离。
 
 本轮快速完成 Phase 4 的视频媒体任务产品执行骨架，并保持图片 current 闭环：
 
@@ -79,7 +82,7 @@
 4. 图片和视频 worker 在 running / succeeded / failed 状态写入 canonical LLM event 投影，并把 provider/model/protocol/transport/credential 诊断持久化到 task payload。
 5. 只做纯协议映射，不在 mapper 里承接数据库、认证、transport 或 GUI 逻辑。
 6. App Server 保留 provider record、credential 和 readiness facade，media-runtime 只执行 App Server 已解析的 endpoint/protocol，并使用按 durable ref 精确取得的凭证。
-7. 音频只允许 `openai_audio_speech` 明确协议并由 dedicated worker 执行；本地 Whisper/SenseVoice、百度/讯飞保留各自 owner，转写 task worker 后续接入；视频只允许 Fal/xAI 明确协议，普通 OpenAI 视频声明继续 fail closed。
+7. 音频 TTS 只允许 `openai_audio_speech` 明确协议并由 dedicated worker 执行；转写只允许 `openai_audio_transcription` 明确协议并由同一 media task worker 执行；本地 Whisper/SenseVoice、百度/讯飞保留各自 owner；视频只允许 Fal/xAI 明确协议，普通 OpenAI 视频声明继续 fail closed。
 8. 通过定向 Rust 测试和全文扫描确认协议层与媒体 evidence 已经收口。
 
 这样做的主线收益是：模型输入/输出、工具调用、图片/文件 parts、provider wire body 和图片/视频任务 evidence 已经有统一协议边界；专用媒体模型不会混入 chat picker，后续新增协议只需要补 catalog capability、mapper 和 dedicated worker，不需要在 App Server、worker、前端三处重复补特判。
@@ -112,11 +115,17 @@
 - `customModels` 等可空数组依赖 schema 生成器正确保留数组 item 类型；生成器已补 `type: ["array", "null"]` 支持，后续必须由 `npm run check:protocol-types` 守住。
 - 本轮没有修改 Provider 数据库存储 schema，也没有改旧数据格式；旧 Provider / API Key 数据由投影层自动映射到 typed response，route evidence 只进入事件 / artifact payload，因此无需新增数据迁移脚本。后续若 Phase 2/4 引入新的持久化 route / model binding 字段，必须补启动期迁移或 scripts 迁移入口。
 - 当前能力门禁只在注册表明确返回能力快照时阻断；direct provider config、registry 缺失或模型没有声明任务族 / 模态 / 能力时不按未知能力失败。退出条件是 RouteResolver 具备显式的 `unknown / inferred / declared` 能力置信度，并能把用户可行动错误返回给 GUI。
-- 媒体任务写入 `model_task_request` 与 capability assessment，并只在最终 provider/model、credential-scoped metadata 与 capability snapshot 明确时为图片/视频写入 ready `resolved_route` 与 `model_route_execution`。worker 以 `media_task_worker + resolved_route_credential_ref` 校验执行绑定，按同一 durable ref 精确取 key；route-only task artifact 会执行期按同一 current 合同补齐顶层 binding。音频仍没有产品 worker；视频 current 骨架覆盖 Fal 同步响应和 xAI 异步 start/poll/terminal/recovery，live provider 证据与 GUI/history projection 仍是退出条件。
+- 媒体任务写入 `model_task_request` 与 capability assessment，并只在最终 provider/model、credential-scoped metadata 与 capability snapshot 明确时为图片/视频/音频/转写写入 ready `resolved_route` 与 `model_route_execution`。worker 以 `media_task_worker + resolved_route_credential_ref` 校验执行绑定，按同一 durable ref 精确取 key；route-only task artifact 会执行期按同一 current 合同补齐顶层 binding。视频 current 骨架覆盖 Fal 同步响应和 xAI 异步 start/poll/terminal/recovery；转写 current worker 覆盖 workspace/HTTP(S) source、txt/json/srt/vtt 输出与 stale recovery。live provider 证据与 GUI/history projection 仍是退出条件。
 - `runtime_contract` 仍是 App Server protocol 和 TS client 中的 JSON/unknown 字段，因为前端工作台、Skill launch、ImageTaskViewer 和历史 task payload 都在消费它；本轮只把 App Server 默认生成和列表投影收敛到单一模块，不做全协议 typed 化。退出条件是同步 protocol schema、TS generated/client、前端 view model、mock/fixture 后，把 `runtimeContract?: unknown` 升级为 typed display/runtime metadata DTO。
 - `runtime_backend/model_routing.rs` 仍超过 `1000` 行，本轮没有继续往里追加业务逻辑，只删除了迁移后未使用的 `service_model_slot()` helper。退出条件是后续把 profile slot 解析、readiness、payload projection 分拆成独立小模块。
 
 ## 进度日志
+
+### 2026-08-16
+
+- 转写执行链已收口到 current media task owner：`transcription/create` 通过 App Server JSON-RPC 建立 typed route admission，worker 只消费 `openai_audio_transcription` 的 `resolved_route` 与 durable credential ref；workspace source、HTTP(S) source、txt/json/srt/vtt 输出、失败重试、取消竞态和 stale recovery 均有定向覆盖。
+- 转写 artifact 与图片/视频保持同一 canonical evidence：写入 `model_route_execution`、`llm_events`、`provider_diagnostics`，不再保留独立 provider HTTP 或旧 broker 执行面。`speaker_labels` 仍只是任务元数据，未宣称 provider-specific diarization。
+- 验证：App Server transcription worker/JSON-RPC 定向测试、Rust related tests、contracts、治理扫描和全量 Vitest 120/120 批通过；embedding current caller 仍是本计划下一刀。
 
 ### 2026-07-28
 
@@ -242,4 +251,4 @@
 - 2026-06-17 23:45 CST：Phase 2 `voice_generation` 假 executor surface 继续清理。App Server 默认 voice `runtime_contract` 不再序列化 `executor_adapter` / `executor_binding`，前端 `modalityRuntimeContracts.json` 将 `voice_generation` contract lifecycle 降为 `compat` 并移除 executor binding；`resolveModalityExecutionProfileBinding` 在 metadata-only contract 下不再从 profile 自动回填 adapter。`src/lib/desktop-host/mediaTaskMocks.ts` 和音频任务索引测试也不再输出 `service_skill:voice_runtime` executor adapter key。
 - 旧数据自动迁移边界：`MediaRuntimeContractProjection` 对 `voice_generation` / `route_execution_status=metadata_only` payload 自动压制历史 executor adapter / binding 字段；旧 JSON artifact 无需重写，但 `list_media_task_artifacts.modality_runtime_contracts` 不再聚合这些假 executor 维度。
 - 守卫补强：`scripts/check-modality-runtime-contracts.mjs` 允许 metadata-only contract 不声明 executor binding，同时会从 profile 下挂 adapter 继续检查 metadata-only adapter 不能被误升为 `current` 或声明 `executor_invoked`。Warp contract schema / execution profile / implementation plan 文档同步改为“可执行 current contract 才必须声明 executor_binding”，防止旧规则逼出假执行器。
-- 2026-08-16：audio worker 补齐输出目录/写入/artifact 完成失败的 `failed` 回写，并在取消竞态下只清理 worker 自己生成的默认音频路径；`TaskArtifactPatch` 对嵌套 object 改为递归合并，避免完成状态覆盖 `audio_path` / `mime_type` 等已持久化字段。`TranscriptionGenerate` 与 `Embedding` 暂不写入 executable `model_route_execution`，直到各自的 task worker / current caller 真正消费 `resolved_route`；相关负向回流测试已补齐。`lime-media-runtime` 56 项、`app-server-protocol` 120 项、`npm run test:contracts` 与模态守卫通过；app-server 全量检查仍被本机 `rusty_v8 v150.4.0` arm64 预编译包 404 阻断。
+- 2026-08-16：audio worker 补齐输出目录/写入/artifact 完成失败的 `failed` 回写，并在取消竞态下只清理 worker 自己生成的默认音频路径；`TaskArtifactPatch` 对嵌套 object 改为递归合并，避免完成状态覆盖 `audio_path` / `mime_type` 等已持久化字段。`TranscriptionGenerate` 已由 `openai_audio_transcription` worker 消费 executable `resolved_route` / `model_route_execution`，覆盖 workspace/HTTP(S) source、txt/json/srt/vtt 输出与 stale recovery；`Embedding` 仍待 current caller 消费 `resolved_route`。相关负向回流测试、Rust related、contracts、模态守卫与全量 Vitest 已通过。

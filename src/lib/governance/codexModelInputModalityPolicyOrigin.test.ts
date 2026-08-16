@@ -122,7 +122,7 @@ describe("Codex model input modality policy origin", () => {
     ).toEqual(CODEX_MODEL_INFO_INPUT_FIELDS);
   });
 
-  it("Codex 用 input_modalities 驱动 prompt history 过滤和图片工具结果降级", () => {
+  it("Codex 用 input_modalities 驱动带 metadata 的 prompt history 媒体降级", () => {
     const historySource = readIfExists(CODEX_HISTORY_SOURCE);
     const normalizeSource = readIfExists(CODEX_NORMALIZE_SOURCE);
     if (!historySource || !normalizeSource) {
@@ -130,14 +130,24 @@ describe("Codex model input modality policy origin", () => {
     }
 
     expect(historySource).toContain(
-      "for_prompt(mut self, input_modalities: &[InputModality])",
+      "pub(crate) fn for_prompt(self, input_modalities: &[InputModality])",
     );
+    expect(historySource).toContain(
+      "self.for_prompt_annotated(input_modalities)",
+    );
+    expect(historySource).toContain("pub(crate) fn for_prompt_annotated(");
     expect(historySource).toContain("self.normalize_history(input_modalities)");
     expect(normalizeSource).toMatch(
       /fn strip_images_when_unsupported\(\s*input_modalities:/u,
     );
     expect(normalizeSource).toContain(
       "input_modalities.contains(&InputModality::Image)",
+    );
+    expect(normalizeSource).toMatch(
+      /fn strip_audio_when_unsupported\(\s*input_modalities:/u,
+    );
+    expect(normalizeSource).toContain(
+      "input_modalities.contains(&InputModality::Audio)",
     );
   });
 });

@@ -389,12 +389,12 @@ Runtime prompt 层的禁止证据：
 ### Claw `@转写` 异步任务验证
 
 1. 在 `Claw` 对话框输入 `@转写 https://example.com/interview.mp4 生成逐字稿`
-2. 确认聊天区先进入 skill 执行态，并能看到 `transcription_generate` 相关工具轨迹，而不是前端静默直接调用旧 `transcribe_audio`
-3. 确认 `@转写` 命中了 `transcription_generate` 的 current binding；如当前 binding family 是 `typed local_cli`，确认工具标题与结果摘要对应 runtime 结构化组装的 `lime task create transcription --json`；CLI 不可用时，才允许回退 `lime_create_transcription_task`
+2. 确认聊天区先进入 skill 入口态，并能看到 `mediaTaskArtifact/transcription/create` 的 App Server JSON-RPC / transcription worker 轨迹，而不是前端静默直连旧 `transcribe_audio`
+3. 确认 `@转写` 的 `audio_transcription` contract 命中 `app_server:mediaTaskArtifact/transcription/create`；`transcription_generate` 只作为入口与 task artifact 类型保留，CLI 仅是兼容提交入口，不得成为独立转写执行器
 4. 等待任务回流后，确认同一条结果只展示真实 task file 状态，不会额外再插一条前端本地伪造“转写已完成”
 5. 如果输入里没有 `source_url` / `source_path`，确认 Agent 最多只追问 1 个关键问题请求补充来源，而不是直接创建空任务或伪造完成态
 6. 刷新页面或切换会话再返回原话题，确认最近转写任务仍可从 `.lime/tasks` 恢复
-7. 如当前界面已暴露任务控制入口，确认 `get/list/retry/cancel` 仍然只经由 task file 主链，不会回流前端旧 ASR 接口
+7. 如当前界面已暴露任务控制入口，确认 `get/list/retry/cancel` 仍然只经由 App Server media task 主链，不会回流前端旧 ASR 接口
 
 ### Claw `@研报` Prompt Skill 验证
 

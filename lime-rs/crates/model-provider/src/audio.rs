@@ -405,7 +405,7 @@ fn parse_transcription_response(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| {
             audio_error(
-            "transcription_provider_empty_response",
+                "transcription_provider_empty_response",
                 "音频转写 JSON 缺少 text".to_string(),
                 false,
                 "result",

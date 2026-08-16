@@ -104,8 +104,9 @@ const FORBIDDEN_AUTOMATION_FIRST_RUNTIME_PATTERNS = [
 ] as const;
 
 const SUBAGENT_THREAD_FIRST_SURFACE_FILES = [
-  "lime-rs/crates/app-server/src/runtime/evidence_provider.rs",
-  "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/team_facts.rs",
+  "lime-rs/crates/app-server/src/runtime/agent_control_gateway.rs",
+  "lime-rs/crates/app-server/src/runtime/exports/metrics.rs",
+  "lime-rs/crates/app-server/src/runtime/read_model/canonical_items.rs",
   "src/lib/api/agentRuntime/appServerCanonicalItemReader.ts",
   "src/lib/api/agentRuntime/threadClient.ts",
   "src/components/agent/chat/AgentChatWorkspace.tsx",

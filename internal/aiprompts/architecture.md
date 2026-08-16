@@ -391,7 +391,15 @@ grok-build 对齐 `model-provider` 的 catalog/capability/readiness 与 sampling
 `llm_events` 与 `provider_diagnostics` 写回同一 task artifact；不得在 worker 或 `voice-core` 新增
 第二套 OpenAI TTS HTTP。云端 embedding 与 OpenAI-compatible Whisper transcription 同样经过
 `model-provider` wire；本地 ONNX、Whisper/SenseVoice、百度和讯飞保持各自领域 owner。转写 task
-artifact worker 尚未完成前，不得把 `TranscriptionGenerate` 标记为可执行媒体 worker。
+artifact worker 只接受 `openai_audio_transcription` `ResolvedModelRoute`，通过 durable `credentialRef`
+读取 workspace 内音频或受控 HTTP(S) 源，写入 workspace 相对的 txt/json/srt/vtt transcript artifact，
+并把 canonical `llm_events`、`provider_diagnostics`、失败重试、stale recovery 与取消竞态回写到同一媒体任务。
+`speaker_labels` 目前只作为任务元数据保留，provider-specific diarization lowering 仍未开放；embedding
+仍需接入同一 route consumer 后才能标记为完整 current caller。
+
+Architecture impact: major；本段把 `TranscriptionGenerate` 的执行 owner 从 Skill/CLI 入口收敛到 App Server
+transcription worker，同时保持 `transcription_generate` 作为入口与 task artifact 类型。Architecture diagram
+updated: this paragraph and the media/provider chain above. Responsible developer confirmation: root, 2026-08-16.
 
 模型目录控制面固定为：
 

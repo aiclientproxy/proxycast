@@ -232,7 +232,7 @@ workflow/respond
 | turn cancel 补偿事件 | `lime-rs/crates/app-server/src/runtime/plugin_worker_workflow_cancel.rs`，只服务 `agentSession/turn/cancel` adapter，不是 `workflow/cancel` current owner |
 | worker retry 补偿事件 | `lime-rs/crates/app-server/src/runtime/plugin_worker_workflow_retry.rs`，只服务 Plugin worker retry adapter，不是 `workflow/retry` current owner |
 | 图片 workflow audit | `lime-rs/crates/app-server/src/runtime_backend/image_command/mod.rs` |
-| evidence workflow ids | `lime-rs/crates/app-server/src/runtime/evidence_provider.rs` |
+| evidence workflow ids | `lime-rs/crates/app-server/src/runtime/workflow/read_model.rs` |
 | App Server event stream mapping | `src/lib/api/agentRuntime/appServerEventStream.ts`，workflow event 当前投影为 diagnostics-only `runtime_status` refresh signal，用于触发 current read model 刷新 |
 | renderer workflow control client | `src/lib/api/appServerClientMethods.ts`，暴露 `readWorkflow / cancelWorkflow / retryWorkflow / respondWorkflow`，只走 App Server current method |
 | legacy thread read model 兼容类型 | `src/lib/api/agentRuntime/types.ts`，仅保留 `workflow / workflow_runs / workflow_steps` 旧形状兼容字段；current UI 不从 `agentSession/read` 读取 workflow facts |

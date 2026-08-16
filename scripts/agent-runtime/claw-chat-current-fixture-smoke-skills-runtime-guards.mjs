@@ -16,6 +16,7 @@ import {
   SKILLS_RUNTIME_MANUAL_ENABLE_PROMPT,
   SKILLS_RUNTIME_QUERY,
   SKILLS_RUNTIME_SKILL_NAME,
+  summarizeSkillsRuntimeStatusEvents,
   summarizeSkillsRuntimeThreadRead,
 } from "./skills-runtime-fixture-scenario.mjs";
 
@@ -373,7 +374,7 @@ export function registerSkillsRuntimeSmokeGuards({
     expect(scenarioContent).not.toContain("agent_runtime_");
   });
 
-  it("summarizes Skills runtime facts from the canonical read model", () => {
+  it("summarizes Skills runtime facts from canonical items and the status side channel", () => {
     const scenario = createSkillsRuntimeFixtureScenario(
       "skills-runtime-unit-session",
     );
@@ -411,6 +412,54 @@ export function registerSkillsRuntimeSmokeGuards({
       searchQuery: SKILLS_RUNTIME_QUERY,
       invocationSkillName: SKILLS_RUNTIME_SKILL_NAME,
     });
+  });
+
+  it("keeps runtime gate evidence scoped to the current agentSession event turn", () => {
+    const scenario = createSkillsRuntimeFixtureScenario(
+      "skills-runtime-unit-session",
+    );
+    const runtimeStatus = (turnId, metadata) => ({
+      method: "agentSession/event",
+      params: {
+        event: {
+          sessionId: "skills-runtime-unit-session",
+          threadId: "skills-runtime-unit-session",
+          turnId,
+          type: "runtime.status",
+          payload: { metadata },
+        },
+      },
+    });
+
+    expect(
+      summarizeSkillsRuntimeStatusEvents(
+        [
+          runtimeStatus("skills-runtime-turn", {
+            skillRuntime: { event: "skill_body_read" },
+          }),
+          runtimeStatus("skills-runtime-turn", {
+            skillRuntime: {
+              event: "skill_gate_decision",
+              mode: "selected_skills",
+            },
+          }),
+          runtimeStatus("other-turn", {
+            skillRuntime: { event: "skill_gate_decision" },
+          }),
+        ],
+        {
+          sessionId: "skills-runtime-unit-session",
+          threadId: "skills-runtime-unit-session",
+          turnId: "skills-runtime-turn",
+        },
+      ),
+    ).toMatchObject({
+      eventCount: 2,
+      skillBodyReadObserved: true,
+      skillGateObserved: true,
+      skillGateMode: "selected_skills",
+    });
+    expect(scenario.skillToolCallId).toContain("skills-runtime-unit-session");
   });
 
   it("rejects a Skills runtime gate that precedes the skill body read", () => {

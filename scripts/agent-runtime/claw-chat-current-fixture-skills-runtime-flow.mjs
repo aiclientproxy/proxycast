@@ -91,6 +91,9 @@ export async function runSkillsRuntimeScenario({
     appServerRequests,
     SKILLS_RUNTIME_SCENARIO,
     options.sessionId,
+    readModelSkillsRuntimeCompleted.summary?.scenarioTurnIds?.[0],
+    readModelSkillsRuntimeCompleted.messages,
+    options.threadId,
   );
   result.readModelSkillsRuntime = readModelSkillsRuntime.summary;
 
@@ -126,6 +129,9 @@ export async function runSkillsRuntimeScenario({
       appServerRequests,
       SKILLS_RUNTIME_EXPLICIT_SCENARIO,
       options.sessionId,
+      readModelExplicitSkillsRuntimeCompleted.summary?.scenarioTurnIds?.[0],
+      readModelExplicitSkillsRuntimeCompleted.messages,
+      options.threadId,
     );
   result.readModelExplicitSkillsRuntime =
     readModelExplicitSkillsRuntime.summary;
@@ -192,6 +198,9 @@ export async function runSkillsRuntimeScenario({
       appServerRequests,
       SKILLS_RUNTIME_MANUAL_ENABLE_SCENARIO,
       manualEnableSkillsRuntimeSessionId,
+      readModelManualEnableSkillsRuntimeCompleted.summary?.scenarioTurnIds?.[0],
+      readModelManualEnableSkillsRuntimeCompleted.messages,
+      manualEnableSkillsRuntimeThreadId,
     );
   result.readModelManualEnableSkillsRuntime =
     readModelManualEnableSkillsRuntime.summary;
@@ -317,6 +326,9 @@ async function runPlazaOrPanelExpertSkillsRuntimeScenario({
     appServerRequests,
     EXPERT_SKILLS_RUNTIME_SCENARIO,
     expertPlazaSkillsRuntimeSessionId,
+    readModelExpertSkillsRuntimeCompleted.summary?.scenarioTurnIds?.[0],
+    readModelExpertSkillsRuntimeCompleted.messages,
+    expertPlazaSkillsRuntimeThreadId,
   );
   result.readModelExpertSkillsRuntime =
     readModelExpertSkillsRuntime.summary;
@@ -465,6 +477,9 @@ async function runExpertPanelSkillsRuntimeFollowup({
       appServerRequests,
       EXPERT_PANEL_SKILLS_RUNTIME_SCENARIO,
       expertPanelSkillsRuntimeSessionId,
+      readModelExpertPanelSkillsRuntimeCompleted.summary?.scenarioTurnIds?.[0],
+      readModelExpertPanelSkillsRuntimeCompleted.messages,
+      expertPanelSkillsRuntimeThreadId,
     );
   result.readModelExpertPanelSkillsRuntime =
     readModelExpertPanelSkillsRuntime.summary;

@@ -332,7 +332,7 @@ describe("modalityRuntimeContracts", () => {
     );
   });
 
-  it("audio_transcription contract 应提供 Skill(transcription_generate) 底层运行字段与上层入口绑定", () => {
+  it("audio_transcription contract 应提供 App Server transcription worker 运行字段与上层入口绑定", () => {
     const contract = resolveAudioTranscriptionRuntimeContractBinding();
 
     expect(contract).toMatchObject({
@@ -343,8 +343,8 @@ describe("modalityRuntimeContracts", () => {
         contract_key: "audio_transcription",
         routing_slot: "audio_transcription_model",
         executor_binding: expect.objectContaining({
-          executor_kind: "skill",
-          binding_key: "transcription_generate",
+          executor_kind: "app_server",
+          binding_key: "mediaTaskArtifact/transcription/create",
         }),
       }),
     });

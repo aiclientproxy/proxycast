@@ -104,10 +104,10 @@ export const PROCESSOR_TESTS_MAIN =
   "lime-rs/crates/app-server/src/processor/tests.rs";
 export const PROCESSOR_SPLIT_MODULES = [
   "lime-rs/crates/app-server/src/processor/dispatch.rs",
+  "lime-rs/crates/app-server/src/processor/model.rs",
   "lime-rs/crates/app-server/src/processor/thread_resume_context.rs",
   "lime-rs/crates/app-server/src/processor/tests/artifact.rs",
   "lime-rs/crates/app-server/src/processor/tests/capability.rs",
-  "lime-rs/crates/app-server/src/processor/tests/evidence.rs",
   "lime-rs/crates/app-server/src/processor/tests/mcp.rs",
   "lime-rs/crates/app-server/src/processor/tests/project_git.rs",
   "lime-rs/crates/app-server/src/processor/tests/right_surface.rs",
@@ -195,6 +195,7 @@ export const ALLOWED_EXTERNAL_BACKEND_LAUNCH_FILES = new Set([
   "scripts/agent-runtime/claw-image-live-smoke.test.mjs",
   "scripts/agent-runtime/reopen-running-turn-cdp-gate.mjs",
   "scripts/agent-runtime/reopen-running-turn-cdp-gate.test.mjs",
+  "scripts/agent-runtime/tool-execution-smoke.test.mjs",
   "scripts/app-server/external-backend-smoke.mjs",
   "scripts/app-server/packaged-external-backend-failure-smoke.mjs",
   "scripts/check-app-server-client-contract.mjs",

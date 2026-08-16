@@ -997,13 +997,13 @@ fn create_transcription_task(args: TranscriptionGenerateArgs) -> Result<Value, M
                 "required_capabilities": AUDIO_TRANSCRIPTION_REQUIRED_CAPABILITIES,
                 "routing_slot": AUDIO_TRANSCRIPTION_ROUTING_SLOT,
                 "executor_binding": {
-                    "executor_kind": "skill",
-                    "binding_key": "transcription_generate"
+                    "executor_kind": "app_server",
+                    "binding_key": "mediaTaskArtifact/transcription/create"
                 },
                 "truth_source": ["transcript_artifact", "runtime_timeline_event"],
                 "artifact_kinds": ["transcript"],
                 "viewer_surface": ["transcript_viewer", "document_viewer"],
-                "owner_surface": "agent_runtime"
+                "owner_surface": "app_server_runtime"
             },
             "requested_target": "transcript",
             "transcript": transcript,

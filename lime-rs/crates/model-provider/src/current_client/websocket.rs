@@ -173,7 +173,7 @@ fn activate_fallback(state: &AtomicBool, message: String) -> CurrentProviderErro
 #[cfg(test)]
 mod tests {
     use super::super::{
-        CurrentProviderClient, CurrentProviderContent, CurrentProviderMessage,
+        CurrentProvider, CurrentProviderClient, CurrentProviderContent, CurrentProviderMessage,
         CurrentProviderRequest,
     };
     use super::websocket_request;
@@ -290,5 +290,95 @@ mod tests {
         assert!(requests
             .iter()
             .all(|request| request["type"] == "response.create"));
+    }
+
+    #[tokio::test]
+    async fn provider_session_sends_incremental_suffix_after_response_completion() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind continuation fixture");
+        let address = listener.local_addr().expect("continuation fixture address");
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let server_requests = Arc::clone(&requests);
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept websocket request");
+            let mut socket = tokio_tungstenite::accept_async(stream)
+                .await
+                .expect("websocket handshake");
+            for index in 1..=2 {
+                let request = socket
+                    .next()
+                    .await
+                    .expect("websocket request")
+                    .expect("valid websocket request");
+                let Message::Text(request) = request else {
+                    panic!("expected text request");
+                };
+                server_requests
+                    .lock()
+                    .expect("record websocket request")
+                    .push(
+                        serde_json::from_str::<serde_json::Value>(&request).expect("request json"),
+                    );
+                socket
+                    .send(Message::Text(
+                        json!({
+                            "type": "response.completed",
+                            "response": { "id": format!("resp-ws-{index}"), "output": [] }
+                        })
+                        .to_string(),
+                    ))
+                    .await
+                    .expect("send websocket response");
+            }
+        });
+        let client = CurrentProviderClient::new(RuntimeProviderConfig {
+            provider_name: "openai".to_string(),
+            provider_selector: Some("openai".to_string()),
+            model_name: "gpt-5.4".to_string(),
+            api_key: Some("test-key".to_string()),
+            auth: crate::runtime_provider::RuntimeProviderAuth::ApiKey,
+            base_url: Some(format!("http://{address}")),
+            api_version: None,
+            credential_uuid: "credential-1".to_string(),
+            reasoning_effort: None,
+            service_tier: None,
+            protocol: Some(RuntimeProviderProtocol::Responses),
+            supports_websockets: true,
+            toolshim: false,
+            toolshim_model: None,
+        })
+        .expect("provider client");
+        let session = super::super::CurrentProviderSession::new(Arc::new(client));
+
+        let first = CurrentProviderRequest::new(vec![CurrentProviderMessage::user(vec![
+            CurrentProviderContent::Text("hello".to_string()),
+        ])]);
+        CurrentProvider::stream(&session, first)
+            .await
+            .expect("first websocket stream")
+            .collect::<Vec<_>>()
+            .await;
+
+        let second = CurrentProviderRequest::new(vec![
+            CurrentProviderMessage::user(vec![CurrentProviderContent::Text("hello".to_string())]),
+            CurrentProviderMessage::assistant(vec![CurrentProviderContent::Text(
+                "world".to_string(),
+            )]),
+        ]);
+        CurrentProvider::stream(&session, second)
+            .await
+            .expect("incremental websocket stream")
+            .collect::<Vec<_>>()
+            .await;
+
+        server.await.expect("continuation fixture");
+        let requests = requests.lock().expect("websocket requests");
+        assert_eq!(requests.len(), 2);
+        assert!(requests[0].get("previous_response_id").is_none());
+        assert_eq!(requests[0]["input"].as_array().map(Vec::len), Some(1));
+        assert_eq!(requests[1]["previous_response_id"], "resp-ws-1");
+        assert_eq!(requests[1]["input"].as_array().map(Vec::len), Some(1));
+        assert_eq!(requests[1]["input"][0]["role"], "assistant");
     }
 }

@@ -199,7 +199,7 @@
         "updated_at"
       ],
       "current_contracts": ["audio_transcription"],
-      "notes": "audio_transcription 的 transcript 领域产物；当前已由 transcription_generate task 写入 transcript.pending，并由 lime-transcription-worker 回写 transcript.completed/failed，再通过媒体任务索引恢复到聊天任务卡和 .lime/runtime/transcription-generate 运行时文档；运行时文档会读取 transcript_path 文本内容供复制校对，并从 JSON/SRT/VTT 解析时间轴与说话人段落表；保存校对稿时只写回同一 ArtifactDocument 新版本与 transcriptCorrection metadata，不改写原始 ASR 输出，并在 viewer 中展示校对稿状态与 transcriptCorrectionDiffSummary；Evidence transcriptIndex 与 Replay 检查继续消费同一事实源，不能由 generic_file 冒充。"
+      "notes": "audio_transcription 的 transcript 领域产物；当前已由 transcription_generate task 写入 transcript.pending，并由 App Server transcription worker 回写 transcript.completed/failed，再通过媒体任务索引恢复到聊天任务卡和 .lime/runtime/transcription-generate 运行时文档；运行时文档会读取 transcript_path 文本内容供复制校对，并从 JSON/SRT/VTT 解析时间轴与说话人段落表；保存校对稿时只写回同一 ArtifactDocument 新版本与 transcriptCorrection metadata，不改写原始 ASR 输出，并在 viewer 中展示校对稿状态与 transcriptCorrectionDiffSummary；Evidence transcriptIndex 与 Replay 检查继续消费同一事实源，不能由 generic_file 冒充。"
     },
     {
       "kind": "browser_session",

@@ -242,7 +242,7 @@
         "request_user_input"
       ],
       "executor_adapter_keys": [
-        "skill:transcription_generate"
+        "app_server:mediaTaskArtifact/transcription/create"
       ],
       "artifact_policy": {
         "write_mode": "domain_task_artifact",
@@ -282,7 +282,7 @@
         "provider_id",
         "model"
       ],
-      "notes": "转写 profile 固定消费 transcription_generate task 与 transcriptIndex，不允许 frontend ASR 或 generic_file transcript 旁路。"
+      "notes": "转写 profile 由 App Server transcription worker 执行 openai_audio_transcription route，固定消费 transcription_generate task 与 transcriptIndex，不允许 frontend ASR 或 generic_file transcript 旁路。"
     },
     {
       "profile_key": "web_research_profile",
@@ -579,16 +579,16 @@
       "notes": "App Server audio worker 消费 openai_audio_speech ResolvedModelRoute，并通过 model-provider 写入音频 artifact。"
     },
     {
-      "adapter_key": "skill:transcription_generate",
+      "adapter_key": "app_server:mediaTaskArtifact/transcription/create",
       "lifecycle": "current",
-      "executor_kind": "skill",
-      "binding_key": "transcription_generate",
+      "executor_kind": "app_server",
+      "binding_key": "mediaTaskArtifact/transcription/create",
       "supported_contracts": [
         "audio_transcription"
       ],
       "supports_progress": true,
       "supports_cancel": true,
-      "supports_resume": false,
+      "supports_resume": true,
       "supports_artifact": true,
       "artifact_output_kinds": [
         "transcript"
@@ -607,6 +607,7 @@
       "failure_mapping": [
         "permission_denied",
         "capability_gap",
+        "provider_error",
         "file_unavailable",
         "executor_error"
       ],
@@ -615,7 +616,7 @@
         "executor_invoked",
         "artifact_written"
       ],
-      "notes": "Transcription Skill 写 transcription_generate task 与 transcript，不允许 frontend ASR 旁路。"
+      "notes": "App Server transcription worker 消费 openai_audio_transcription ResolvedModelRoute，通过 model-provider 写 transcript artifact，并支持失败重试与 stale recovery。"
     },
     {
       "adapter_key": "skill:research",

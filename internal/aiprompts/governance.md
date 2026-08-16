@@ -15,6 +15,8 @@ Agent 产品主链固定为：
 
 其中 provider request/lowering 归 `model-provider`，工具定义、权限和执行归 `tool-runtime`，回合编排归 `agent-runtime` 与 App Server，持久化/read model 归 App Server、`thread-store` 与 repository。Electron 只负责 desktop host，不成为第二套 runtime。
 
+运行时项目指令的 current 入口是标准 `CODEX_HOME/AGENTS.md` 与项目层 `AGENTS.md` / `AGENTS.override.md`；`lime-rs/crates/agent/src/prompt/runtime_agents.rs` 可继续读取 `.lime/AGENTS.md` / `.lime/AGENTS.override.md` 作为只委托旧文件位置的 `compat` fallback。该 fallback 不得扩散到其它 owner，也不得承接新语义。
+
 `lime-providers`（原 workspace crate `crates/providers`）已完成消费者迁移并物理删除，
 当前分类为 `dead / deleted / forbidden-to-restore`。它只能出现在历史 evidence 与负向
 回流守卫；不得恢复 workspace 成员、依赖、catalog、fixture 或兼容包装。未知

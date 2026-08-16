@@ -22,6 +22,7 @@ import {
   PLAN_PROMPT,
   PLAN_STEPS,
   SKILLS_RUNTIME_SCENARIO,
+  summarizeSkillsRuntimeStatusEvents,
   summarizeSkillsRuntimeThreadRead,
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
@@ -181,6 +182,7 @@ export async function waitForSessionReadSkillsRuntimeCompleted(
   const startedAt = Date.now();
   let lastRead = null;
   let lastSummary = null;
+  const runtimeStatusMessages = [];
   while (Date.now() - startedAt < options.timeoutMs) {
     const read = await invokeAppServerFromPage(
       page,
@@ -192,6 +194,7 @@ export async function waitForSessionReadSkillsRuntimeCompleted(
       requestLog,
     );
     lastRead = read.result;
+    runtimeStatusMessages.push(...(read.messages ?? []));
     lastSummary = summarizeSkillsRuntimeReadModel(lastRead, scenario);
     if (
       lastSummary.includesPrompt === true &&
@@ -204,6 +207,7 @@ export async function waitForSessionReadSkillsRuntimeCompleted(
       return {
         readModel: lastRead,
         summary: lastSummary,
+        messages: runtimeStatusMessages,
       };
     }
     await sleep(options.intervalMs);
@@ -438,24 +442,40 @@ export async function readSkillsRuntimeThread(
   requestLog,
   scenario = SKILLS_RUNTIME_SCENARIO,
   sessionId,
+  turnId,
+  initialMessages = [],
+  threadId = sessionId,
 ) {
   const canonicalSessionId = sessionId?.trim();
   if (!canonicalSessionId) {
     throw new Error("Claw fixture 缺少 canonical sessionId");
   }
+  const canonicalThreadId = threadId?.trim() || canonicalSessionId;
   const readResult = await invokeAppServerFromPage(
     page,
     APP_SERVER_METHOD_SESSION_READ,
     {
-      threadId: canonicalSessionId,
+      threadId: canonicalThreadId,
       includeTurns: true,
     },
     requestLog,
   );
+  const drained = await drainAppServerEventsFromPage(page, 200);
+  const runtimeStatus = summarizeSkillsRuntimeStatusEvents(
+    [...initialMessages, ...readResult.messages, ...drained.messages],
+    {
+      sessionId: canonicalSessionId,
+      threadId: canonicalThreadId,
+      turnId,
+    },
+  );
   return {
     result: readResult.result,
     summary: sanitizeJson(
-      summarizeSkillsRuntimeThreadRead(readResult.result, scenario),
+      {
+        ...summarizeSkillsRuntimeThreadRead(readResult.result, scenario),
+        runtimeStatus,
+      },
     ),
   };
 }

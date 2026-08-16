@@ -43,7 +43,7 @@ expert.skillRefs
 10. `needs_registration` 专家恢复动作已能带目标进入 Skills 用户安装页，预填搜索词，并生成项目级 scaffold 草稿自动打开创建表单。
 11. 项目级 `skillLocal/scaffold/create` 会同步写 `.lime/registration.json`，生成后的 Skill 可被 `workspaceSkillBindings/list` 投影为 `ready_for_manual_enable`；Skills 工作台创建成功后会刷新已保存技能和 binding readiness；仍不会自动注入 Query Loop 或运行时工具面。
 12. `needs_mapping / blocked` 专家恢复动作已具备 UI 骨架：`needs_mapping` 打开“补齐技能目录映射”选择器，`blocked` 打开“替换当前技能引用”选择器，两者都能用已安装 / 目录可识别技能替换问题引用并进入下一轮运行准备。
-13. 专家 Skills deterministic 产品闭环已进入 `smoke:agent-runtime-current-fixture` 聚合回归：Expert Plaza 点击、ExpertInfoPanel 修改 skillRefs、下一轮继承 override、`skill_search -> SKILL.md body read -> Skill gate -> Skill invocation`、Harness GUI 导出 Evidence Pack、专家面板复盘均有 Electron fixture 证据。
+13. 专家 Skills deterministic 产品闭环已进入 `smoke:agent-runtime-current-fixture` 聚合回归：Expert Plaza 点击、ExpertInfoPanel 修改 skillRefs、下一轮继承 override、`skill_search -> SKILL.md body read -> Skill gate -> Skill invocation`、`runtime.status` side-channel 与 canonical Thread/Turn/Item read-model 复盘均有 Electron fixture 证据；旧 Harness Evidence Pack 导出不再是 current 验收项。
 14. `smoke:expert-skills-live-gate` 已作为只读证据门禁落地：默认审计 deterministic summary，缺少显式 live Provider summary 时返回 `pending_live_provider`，不调用真实模型，也不把 fixture 证据误报为 live 验收完成。
 15. `smoke:expert-skills-live-runner` 已作为 live Provider 验收骨架落地：默认 fail-fast；显式授权后可归一化已有 live summary，或在 `--execute-live-runtime` 下通过 App Server current JSON-RPC 提交真实 Provider turn，并输出可被 live gate 消费的 summary。
 

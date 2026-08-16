@@ -264,7 +264,7 @@
         "npm --prefix \"packages/agent-runtime-projection\" run build && node --test \"packages/agent-runtime-projection/tests/multiAgentItemTaxonomy.test.mjs\"",
         "npm --prefix \"packages/agent-runtime-projection\" run build && node --test \"packages/agent-runtime-projection/tests/multiAgentToolSchema.test.mjs\"",
         "npm run test:related -- \"src/lib/api/agentRuntime/appServerCanonicalItemReader.ts\" \"src/components/agent/chat/projection/threadItemProjection.ts\" \"src/components/agent/chat/projection/agentUiSubagentsViewModel.ts\" \"src/components/agent/chat/workspace/useWorkspaceTeamRuntime.ts\"",
-        "npm run test:rust:related -- \"lime-rs/crates/app-server/src/runtime/tests/evidence_exports/team_facts.rs\" \"lime-rs/crates/thread-store/src/agent_graph.rs\"",
+        "npm run test:rust:related -- \"lime-rs/crates/app-server/src/runtime/tests/agent_control.rs\" \"lime-rs/crates/app-server/src/runtime/canonical_thread_store/agent_graph_tests.rs\" \"lime-rs/crates/thread-store/src/agent_graph.rs\"",
         "npm run smoke:claw-chat-current-fixture -- --scenario multi-agent-team --timeout-ms 180000"
       ],
       "scenarioIds": [

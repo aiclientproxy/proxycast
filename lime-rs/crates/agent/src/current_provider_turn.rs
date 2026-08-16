@@ -137,11 +137,13 @@ where
         session_config.turn_context.clone(),
         working_directory.clone(),
         agent_event_sender.clone(),
+        pending_input.clone(),
+        cancel_token.clone(),
     );
 
     let turn_future = run_current_provider_turn(
         CurrentProviderTurnInput {
-            provider: provider.client(),
+            provider: Arc::new(provider.session()),
             provider_trace_metadata: Some(provider_trace_metadata),
             session_config,
             initial_messages,

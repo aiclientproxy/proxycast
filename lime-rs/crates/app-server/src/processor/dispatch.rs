@@ -65,7 +65,12 @@ impl RequestProcessor {
                 error: JsonRpcError::new(error_codes::REQUEST_CANCELLED, "request canceled"),
             })]);
         }
-        let result = match method {
+        let mut params = params;
+        let result =
+            if let Some(request) = self.dispatch_model_request(method, &mut params) {
+                request.await
+            } else {
+                match method {
             METHOD_INITIALIZE if is_transport_request => {
                 ready(self.handle_transport_initialize(params)).boxed()
             }
@@ -718,56 +723,6 @@ impl RequestProcessor {
             v2::METHOD_CONFIG_READ => self.handle_config_read_impl(params).boxed(),
             v2::METHOD_CONFIG_VALUE_WRITE => self.handle_config_value_write_impl(params).boxed(),
             v2::METHOD_CONFIG_BATCH_WRITE => self.handle_config_batch_write_impl(params).boxed(),
-            METHOD_MODEL_LIST => self.handle_model_list_impl(params).boxed(),
-            METHOD_MODEL_PREFERENCES_LIST => self.handle_model_preferences_list_impl().boxed(),
-            METHOD_MODEL_SYNC_STATE_READ => self.handle_model_sync_state_read_impl().boxed(),
-            METHOD_MODEL_PROVIDER_LIST => self.handle_model_provider_list_impl().boxed(),
-            METHOD_MODEL_PROVIDER_CATALOG_LIST => {
-                self.handle_model_provider_catalog_list_impl().boxed()
-            }
-            METHOD_MODEL_PROVIDER_READ => self.handle_model_provider_read_impl(params).boxed(),
-            METHOD_MODEL_PROVIDER_CREATE => self.handle_model_provider_create_impl(params).boxed(),
-            METHOD_MODEL_PROVIDER_UPDATE => self.handle_model_provider_update_impl(params).boxed(),
-            METHOD_MODEL_PROVIDER_DELETE => self.handle_model_provider_delete_impl(params).boxed(),
-            METHOD_MODEL_PROVIDER_SORT_ORDERS_UPDATE => self
-                .handle_model_provider_sort_orders_update_impl(params)
-                .boxed(),
-            METHOD_MODEL_PROVIDER_CONFIG_EXPORT => self
-                .handle_model_provider_config_export_impl(params)
-                .boxed(),
-            METHOD_MODEL_PROVIDER_CONFIG_IMPORT => self
-                .handle_model_provider_config_import_impl(params)
-                .boxed(),
-            METHOD_MODEL_PROVIDER_TEST_CONNECTION => self
-                .handle_model_provider_test_connection_impl(params)
-                .boxed(),
-            METHOD_MODEL_PROVIDER_TEST_CHAT => {
-                self.handle_model_provider_test_chat_impl(params).boxed()
-            }
-            METHOD_MODEL_PROVIDER_FETCH_MODELS => {
-                self.handle_model_provider_fetch_models_impl(params).boxed()
-            }
-            METHOD_MODEL_PROVIDER_KEY_CREATE => {
-                self.handle_model_provider_key_create_impl(params).boxed()
-            }
-            METHOD_MODEL_PROVIDER_KEY_UPDATE => {
-                self.handle_model_provider_key_update_impl(params).boxed()
-            }
-            METHOD_MODEL_PROVIDER_KEY_DELETE => {
-                self.handle_model_provider_key_delete_impl(params).boxed()
-            }
-            METHOD_MODEL_PROVIDER_UI_STATE_READ => self
-                .handle_model_provider_ui_state_read_impl(params)
-                .boxed(),
-            METHOD_MODEL_PROVIDER_UI_STATE_WRITE => self
-                .handle_model_provider_ui_state_write_impl(params)
-                .boxed(),
-            METHOD_MODEL_PROVIDER_ALIAS_READ => {
-                self.handle_model_provider_alias_read_impl(params).boxed()
-            }
-            METHOD_MODEL_PROVIDER_ALIAS_LIST => {
-                self.handle_model_provider_alias_list_impl().boxed()
-            }
             METHOD_CONNECT_DEEP_LINK_RESOLVE => {
                 self.handle_connect_deep_link_resolve_impl(params).boxed()
             }
@@ -807,8 +762,9 @@ impl RequestProcessor {
                 format!("method not found: {method}"),
             )))
             .boxed(),
-        }
-        .await;
+            }
+            .await
+            };
 
         self.clear_request_cancel_state(&id);
         response::into_messages(id, result)

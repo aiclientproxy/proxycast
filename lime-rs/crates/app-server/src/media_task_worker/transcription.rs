@@ -256,14 +256,16 @@ async fn read_audio_source(
     payload: &Value,
 ) -> Result<(Vec<u8>, String, String), AudioProviderError> {
     if let Some(source_path) = read_string(payload, &["source_path", "sourcePath"]) {
-        let workspace_root = tokio::fs::canonicalize(workspace_root).await.map_err(|error| {
-            audio_worker_error(
-                "transcription_source_unavailable",
-                format!("解析 workspace 根目录失败: {error}"),
-                false,
-                "input",
-            )
-        })?;
+        let workspace_root = tokio::fs::canonicalize(workspace_root)
+            .await
+            .map_err(|error| {
+                audio_worker_error(
+                    "transcription_source_unavailable",
+                    format!("解析 workspace 根目录失败: {error}"),
+                    false,
+                    "input",
+                )
+            })?;
         let candidate = PathBuf::from(&source_path);
         let candidate = if candidate.is_absolute() {
             candidate
@@ -525,12 +527,7 @@ fn mark_transcription_start_failed_with_code(
     mark_transcription_failed(
         workspace_root,
         task_id,
-        audio_worker_error(
-            code,
-            message,
-            false,
-            "worker_start",
-        ),
+        audio_worker_error(code, message, false, "worker_start"),
     )
 }
 
@@ -793,12 +790,10 @@ mod tests {
             .await
             .expect("write source");
 
-        let (bytes, filename, mime_type) = read_audio_source(
-            workspace.path(),
-            &json!({"source_path": "interview.wav"}),
-        )
-        .await
-        .expect("workspace source");
+        let (bytes, filename, mime_type) =
+            read_audio_source(workspace.path(), &json!({"source_path": "interview.wav"}))
+                .await
+                .expect("workspace source");
         assert_eq!(bytes, b"audio");
         assert_eq!(filename, "interview.wav");
         assert_eq!(mime_type, "audio/wav");

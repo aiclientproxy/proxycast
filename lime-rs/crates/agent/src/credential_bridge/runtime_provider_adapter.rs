@@ -1,5 +1,6 @@
 use model_provider::current_client::{
     CurrentProviderClient, CurrentProviderError, CurrentProviderHealthRegistry,
+    CurrentProviderSession,
 };
 use model_provider::provider_stream::RuntimeReplyProviderHandle;
 use model_provider::runtime_provider::RuntimeProviderConfig;
@@ -14,6 +15,10 @@ pub(crate) struct ConfiguredReplyProvider {
 impl ConfiguredReplyProvider {
     pub(crate) fn client(&self) -> Arc<CurrentProviderClient> {
         Arc::clone(&self.client)
+    }
+
+    pub(crate) fn session(&self) -> CurrentProviderSession {
+        CurrentProviderSession::new(Arc::clone(&self.client))
     }
 
     pub(crate) fn runtime_handle(&self) -> &RuntimeReplyProviderHandle {

@@ -285,8 +285,8 @@ async fn mock_backend_emits_public_runtime_event() {
         events[0].payload["item"]["ordinal"]
     );
     assert_eq!(events[3].event_type, "turn.accepted");
-    assert_eq!(events[3].payload["backend"], "mock");
-    assert_eq!(events[3].payload["clientName"], "test-client");
+    assert_eq!(events[3].payload["backend"], "app_server");
+    assert_eq!(events[3].payload["source"], "turn/start");
 }
 
 #[tokio::test]
@@ -1849,10 +1849,12 @@ async fn unavailable_backend_rejects_turn_without_persisting_fake_turn() {
         .expect("read session");
     assert_eq!(read.session.status, AgentSessionStatus::Idle);
     assert!(read.turns.is_empty());
-    assert!(core
+    let events = core
         .events_for_session("sess_unavailable")
-        .unwrap()
-        .is_empty());
+        .expect("admission events");
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[3].event_type, "turn.accepted");
+    assert_eq!(events[3].payload["backend"], "app_server");
 }
 
 #[tokio::test]

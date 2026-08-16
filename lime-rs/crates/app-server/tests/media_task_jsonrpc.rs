@@ -594,7 +594,11 @@ async fn image_task_complete_writes_data_url_sidecar_via_jsonrpc() {
 
 #[tokio::test]
 async fn image_task_complete_rejects_wrong_task_type() {
-    let app = media_task_app_server().await;
+    let app = build_media_task_app_server(|db| {
+        insert_image_provider_with_key(db, "provider-image", "gpt-image-test");
+        insert_audio_provider_with_key(db, "provider-audio", "tts-test");
+    })
+    .await;
     initialize_server(&app.server, 1, "media-task-image-complete-wrong-type-test").await;
 
     let created = request(
@@ -604,7 +608,9 @@ async fn image_task_complete_rejects_wrong_task_type() {
         json!({
             "projectRootPath": app.workspace_root,
             "sourceText": "给春日咖啡活动生成一段播报",
-            "voice": "narrator"
+            "voice": "narrator",
+            "providerId": "provider-audio",
+            "model": "tts-test"
         }),
     )
     .await;
@@ -1031,6 +1037,52 @@ fn insert_image_provider_with_key(db: &DbConnection, provider_id: &str, model: &
     let conn = lock_db(db).expect("lock product db");
     ApiKeyProviderDao::insert_provider(&conn, &provider).expect("insert image provider");
     ApiKeyProviderDao::insert_api_key(&conn, &key).expect("insert image provider api key");
+}
+
+fn insert_audio_provider_with_key(db: &DbConnection, provider_id: &str, model: &str) {
+    let now = Utc::now();
+    let provider = ApiKeyProvider {
+        id: provider_id.to_string(),
+        name: provider_id.to_string(),
+        provider_type: ApiProviderType::Openai,
+        api_host: "http://127.0.0.1:9/v1".to_string(),
+        is_system: false,
+        group: ProviderGroup::Custom,
+        enabled: true,
+        sort_order: 1,
+        api_version: None,
+        project: None,
+        location: None,
+        region: None,
+        models: vec![ProviderModelConfig {
+            id: model.to_string(),
+            display_name: None,
+            capability: Some(ProviderModelCapability {
+                task_families: vec![ModelTaskFamily::TextToSpeech],
+                input_modalities: vec![ModelModality::Text],
+                output_modalities: vec![ModelModality::Audio],
+                runtime_features: Vec::new(),
+                capabilities: ModelCapabilities::default(),
+            }),
+        }],
+        prompt_cache_mode: None,
+        created_at: now,
+        updated_at: now,
+    };
+    let key = ApiKeyEntry {
+        id: format!("{provider_id}-key"),
+        provider_id: provider_id.to_string(),
+        api_key_encrypted: ApiKeyProviderService::new().encrypt_api_key("test-key"),
+        alias: None,
+        enabled: true,
+        usage_count: 0,
+        error_count: 0,
+        last_used_at: None,
+        created_at: now,
+    };
+    let conn = lock_db(db).expect("lock audio provider db");
+    ApiKeyProviderDao::insert_provider(&conn, &provider).expect("insert audio provider");
+    ApiKeyProviderDao::insert_api_key(&conn, &key).expect("insert audio provider api key");
 }
 
 fn insert_chat_provider_with_key(db: &DbConnection, provider_id: &str, model: &str) {

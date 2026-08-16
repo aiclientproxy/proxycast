@@ -110,7 +110,7 @@ session overview
 
 - App Server current 事实源为 `runtime/status.rs::SessionRuntimeState`。
 - `read_model.rs`、`projection_store.rs`、`session_lifecycle.rs` 均消费同一个 `resolve_agent_session_runtime_state(...)` / `resolve_session_runtime_state(...)`。
-- `evidence_provider.rs` 与 `exports/*` 也必须消费同一投影，避免 handoff / evidence 把 stale running 继续判成 `in_progress`。
+- `runtime/exports/*` 也必须消费同一投影，避免 handoff / replay / analysis / review export 把 stale running 继续判成 `in_progress`。
 - 前端 `threadReadActivity.ts`、`unfinishedSessionProjection.ts`、`agentStreamResumeBinding.ts`、`AgentChatWorkspace.tsx` 只消费 read model / overview 投影；`isSending / activeStream` 只能作为当前 renderer 交互态。
 
 固定规则：

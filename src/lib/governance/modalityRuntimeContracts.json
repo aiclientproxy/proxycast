@@ -550,16 +550,17 @@
       ],
       "routing_slot": "audio_transcription_model",
       "executor_binding": {
-        "executor_kind": "skill",
-        "binding_key": "transcription_generate",
-        "current_path": "Runtime contract -> Skill(transcription_generate) -> transcription task file / transcript artifact",
+        "executor_kind": "app_server",
+        "binding_key": "mediaTaskArtifact/transcription/create",
+        "current_path": "Runtime contract -> App Server transcription worker -> model-provider openai_audio_transcription -> transcript artifact",
         "supports_progress": true,
         "supports_cancel": true,
-        "supports_resume": false,
+        "supports_resume": true,
         "supports_artifact": true,
         "failure_mapping": [
           "permission_denied",
           "capability_gap",
+          "provider_error",
           "file_unavailable",
           "executor_error"
         ]
@@ -591,7 +592,7 @@
           "web_search_before_transcription_skill"
         ]
       },
-      "owner_surface": "agent_runtime",
+      "owner_surface": "app_server_runtime",
       "bound_entries": [
         {
           "entry_key": "at_transcription_command",

@@ -1,6 +1,4 @@
 {
-  "capabilityDraft.registeredPanel.action.auditRecentRun": "审计最近运行",
-  "capabilityDraft.registeredPanel.action.auditRunning": "正在审计",
   "capabilityDraft.registeredPanel.action.createManagedJobDraft": "设置定时运行",
   "capabilityDraft.registeredPanel.action.enableRuntime": "试用一次",
   "capabilityDraft.registeredPanel.action.pauseManagedJob": "暂停定时运行",
@@ -102,7 +100,6 @@
   "capabilityDraft.registeredPanel.empty.loading": "正在读取已保存技能...",
   "capabilityDraft.registeredPanel.empty.missingProject": "选择或进入一个项目后，才能查看这个项目里保存的技能。",
   "capabilityDraft.registeredPanel.empty.noSkills": "当前项目还没有已保存技能。先在“正在制作”里检查并保存一个。",
-  "capabilityDraft.registeredPanel.error.missingAutomationSession": "最近 automation run 没有关联 session，无法导出 evidence。",
   "capabilityDraft.registeredPanel.evidence.credentialReferenceId": "凭证引用",
   "capabilityDraft.registeredPanel.evidence.endpointSource": "Endpoint",
   "capabilityDraft.registeredPanel.evidence.evidenceSchema": "证据 Schema",

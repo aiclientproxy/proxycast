@@ -1,6 +1,4 @@
 {
-  "capabilityDraft.registeredPanel.action.auditRecentRun": "直近の実行を監査",
-  "capabilityDraft.registeredPanel.action.auditRunning": "監査中",
   "capabilityDraft.registeredPanel.action.createManagedJobDraft": "定期実行を設定",
   "capabilityDraft.registeredPanel.action.enableRuntime": "一度試す",
   "capabilityDraft.registeredPanel.action.pauseManagedJob": "定期実行を一時停止",
@@ -102,7 +100,6 @@
   "capabilityDraft.registeredPanel.empty.loading": "保存済みスキルを読み込み中...",
   "capabilityDraft.registeredPanel.empty.missingProject": "プロジェクトを選択または開くと、そのプロジェクトに保存されたスキルを確認できます。",
   "capabilityDraft.registeredPanel.empty.noSkills": "このプロジェクトにはまだ保存済みスキルがありません。「作成中」でチェックして保存してください。",
-  "capabilityDraft.registeredPanel.error.missingAutomationSession": "直近の automation run に session が紐付いていないため、evidence をエクスポートできません。",
   "capabilityDraft.registeredPanel.evidence.credentialReferenceId": "Credential reference",
   "capabilityDraft.registeredPanel.evidence.endpointSource": "Endpoint",
   "capabilityDraft.registeredPanel.evidence.evidenceSchema": "Evidence schema",

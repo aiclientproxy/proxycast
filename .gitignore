@@ -64,6 +64,7 @@ internal/exec-plans/*
 !internal/exec-plans/claw-trace-system-implementation-plan.md
 !internal/exec-plans/devlime-codex-claude-alignment-gap-list.md
 !internal/exec-plans/codex-alignment-v1-coordination-plan.md
+!internal/exec-plans/codex-runtime-gap-alignment-plan.md
 !internal/exec-plans/orchestrator-complete-alignment-plan.md
 !internal/exec-plans/app-server-implementation-plan.md
 !internal/exec-plans/production-command-current-migration-plan.md
@@ -240,6 +241,9 @@ internal/tech/
 !internal/tech/
 internal/tech/*
 !internal/tech/model-platform-architecture.md
+!internal/tech/lime-agent-harness-architecture.mmd
+!internal/tech/lime-agent-harness-architecture.svg
+!internal/tech/lime-agent-harness-architecture.png
 !internal/tech/plugin/
 !internal/tech/plugin/*.md
 !internal/tech/harness/

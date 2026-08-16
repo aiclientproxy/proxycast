@@ -22,7 +22,7 @@ Project / Workspace
 
 ### current
 
-- App Server `agentSession/*` current 主链。
+- App Server JSON-RPC Thread/Turn/Item current 主链；仍在 catalog 中的 `agentSession/start`、`agentSession/turn/start` 仅作为受控 task bridge，`agentSession/event` 只允许明确 allowlist 的 raw side-channel。
 - `Project / Workspace -> Thread / Session -> Turn / Item` 作为唯一运行事实源。
 - workspace / global memory store。
 - 专家、Skill、插件来源只进入 session / turn / item / evidence metadata。
@@ -282,7 +282,7 @@ npm run test:rust:related -- lime-rs/crates/app-server lime-rs/crates/core
 - P2-C Automation 执行验证记录：
   - 通过：`cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server automation_execution`，4 个自动化执行测试通过。
 - P2-D Skills evidence/export 证据复核：
-  - 盘点结论：Skills runtime enable 的 current 链路已经具备后端导出证据。前端 `workspace_skill_runtime_enable` harness metadata 进入 App Server `skill_runtime_enable` gate，SkillTool 结果 metadata 被 `runtime/evidence_provider/observability.rs` 汇总为 `skill_invocations`，completion audit 写入 `workspaceSkillToolCallCount` 与 `requiredEvidence.workspaceSkillToolCall`。
+  - 盘点结论：Skills runtime enable 的 current 链路由 canonical Thread/Turn/Item 与受控 fixture evidence 证明。前端 `workspace_skill_runtime_enable` harness metadata 进入 App Server `skill_runtime_enable` gate，SkillTool 结果 metadata 进入 current read-model/evidence projection；不得恢复已删除的 evidence provider facade。
   - 复用既有 Rust 测试 `export_evidence_records_skill_invocation_from_tool_metadata`，该测试通过 `export_evidence(session_id, turn_id, include_evidence_pack=true)` 证明 workspace skill invocation 能进入 Evidence Pack，而不是停留在 Skills 工作台或私有 skill history。
 - P2-D Skills evidence/export 验证记录：
   - 通过：`cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server export_evidence_records_skill_invocation_from_tool_metadata`，1 个 evidence export 定向测试通过。
@@ -320,14 +320,13 @@ npm run test:rust:related -- lime-rs/crates/app-server lime-rs/crates/core
   - 原 P3-A 34 个 Renderer 测试和 14 个 Rust 测试只保留为当时历史验证记录，不能作为当前产品证明；current 回归见 S4ad-S4ah 与 S6k-S6x evidence。
 - P3-B Team facts evidence/export 第一刀：
   - 盘点结论：App Server `evidence/export` 的 Basic Evidence Pack 是 P3 后端证据 current owner；前端 Agent UI projection 和 child session 兼容上下文不能替代后端导出事实。
-  - `runtime/evidence_provider.rs` 增加 `team_facts` observability summary，从现有 `AgentEvent` 汇总 `team.changed / task.changed / agent.* / agent.handoff / worker.notification / subagent.activity`，输出 parent session、child session、thread、turn、handoff、worker notification、review lane、team phase 和 source event ids。
-  - 新增 `runtime/tests/evidence_exports/team_facts.rs`，构造 parent session/thread/turn 下的 team roster、task capsule、handoff、worker notification、review lane 和 worker result artifact，导出 Evidence Pack 后断言 raw events、artifact 和 `observability_summary.team_facts` 均可追溯到同一 parent Thread。
-  - `projectThreadFirstBoundary.test.ts` 扩展 P3 守卫，要求 current P3 surface 包含 App Server `team_facts` evidence summary 和对应 evidence export 测试，防止多 Agent 团队事实只停留在前端 projection。
+  - 历史 `runtime/evidence_provider.rs` / `runtime/tests/evidence_exports/team_facts.rs` 方案已删除，不再作为 current owner 或正向测试入口。current 多 Agent 团队事实由 `runtime/tests/agent_control.rs`、`runtime/tests/agent_control/*`、`runtime/canonical_thread_store/agent_graph_tests.rs`、`runtime/tests/agent_mailbox_delivery.rs` 与 `thread-store/src/agent_graph.rs` 的 canonical Thread/Turn/Item、AgentGraph、AgentIdentity 和 mailbox 测试承接。
+  - `projectThreadFirstBoundary.test.ts` 的 P3 守卫已迁到 `runtime/agent_control_gateway.rs`、`runtime/read_model/canonical_items.rs` 与 `runtime/exports/metrics.rs`，防止 team facts 回到 evidence provider 或前端 projection-only 路径。
 - P3-B Team facts GUI recovery correction：
   - `restoredTeamFactsProjection`、`useTeamWorkspaceRuntime` 与 `useWorkspaceTeamSessionRuntime` 已随第二套 Team runtime 删除；禁止从 child session sidecar 重新灌 Agent UI projection store。
   - cold/live GUI 现在只消费 ThreadStore-backed `agentSession/read`、canonical SubAgent Item 与 `thread/list` child roster；重启恢复不得再合成 `subagent_status_changed`。
 - P3-B 后端 evidence 验证记录：
-  - 通过：`cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server export_evidence_pack_includes_multi_agent_team_facts`，1 个 Team facts evidence/export 定向测试通过。
+  - current 验证：AgentControl、canonical agent graph、mailbox delivery 与 thread-store graph 定向测试通过；旧 `export_evidence_pack_includes_multi_agent_team_facts` 仅保留为历史 evidence，不再作为 current 门禁。
 - P3-B GUI 恢复验证记录：原 3 文件 / 13 测试对应已删除实现，不再作为 current 门禁；当前使用 canonical SubAgent focused tests、AgentControl visible DOM Gate B 与 Team runtime boundary negative guard。
 - P3-B historical correction / canonical Multi-Agent evidence：
   - 旧 `multi-agent-team` scenario 只是在 external fixture backend 伪造 `subagent_status_changed`、`team.changed`、`task.changed`、`agent.handoff`、`agent.completed` 与 `worker.notification`，不能证明 RuntimeCore AgentControl、durable graph/mailbox 或 canonical SubAgent Item，因此已判 `dead / deleted / forbidden-to-restore`。

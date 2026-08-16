@@ -513,6 +513,17 @@ impl RuntimeSessionInputHandle {
             .unwrap_or_default()
     }
 
+    /// 将后台运行时结果作为开发者上下文送入当前回合；若回合已结束，则缓存到下一回合。
+    pub async fn inject_developer_input(&self, text: impl Into<String>) -> bool {
+        let input = RuntimeSessionInput::Developer(text.into());
+        if self.push_steer(vec![input.clone()]).await {
+            true
+        } else {
+            self.pending_input.enqueue_mailbox(input).await;
+            false
+        }
+    }
+
     pub async fn try_take_pending_input(
         &self,
         accept_mailbox: bool,
@@ -773,6 +784,15 @@ impl PendingInputQueue {
     pub(super) async fn notify_mailbox_activity(&self) {
         let mut state = self.state.lock().await;
         state.mailbox_generation = state.mailbox_generation.saturating_add(1);
+        drop(state);
+        self.publish_activity(RuntimeSessionInputActivity::Mailbox);
+    }
+
+    async fn enqueue_mailbox(&self, input: RuntimeSessionInput) {
+        let mut state = self.state.lock().await;
+        state.mailbox_generation = state.mailbox_generation.saturating_add(1);
+        let generation = state.mailbox_generation;
+        state.mailbox.push_back((generation, input));
         drop(state);
         self.publish_activity(RuntimeSessionInputActivity::Mailbox);
     }

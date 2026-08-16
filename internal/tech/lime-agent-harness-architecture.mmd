@@ -1,0 +1,144 @@
+%% Lime current architecture. Source of truth for the rendered SVG.
+%% Product chain: Renderer -> Desktop Host -> App Server -> RuntimeCore -> projection -> GUI.
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "PingFang SC, Microsoft YaHei, SF Pro Display, sans-serif",
+    "fontSize": "16px",
+    "primaryTextColor": "#16324f",
+    "lineColor": "#7a8794",
+    "clusterBkg": "#f8fafc",
+    "clusterBorder": "#94a3b8"
+  },
+  "flowchart": {
+    "htmlLabels": true,
+    "curve": "linear",
+    "nodeSpacing": 24,
+    "rankSpacing": 42,
+    "padding": 12,
+    "useMaxWidth": false
+  }
+}}%%
+flowchart TB
+    TITLE["<div style='width:900px;text-align:center'>Lime Agent Harness 架构<br/><span style='font-size:14px;font-weight:500;color:#64748b'>Electron Desktop Host · App Server JSON-RPC · RuntimeCore 驱动 · Thread / Turn / Item 为事实源</span></div>"]
+
+    subgraph ENTRY["① 入口与宿主：所有产品入口都进入同一条 current 链"]
+        direction LR
+        GUI["Lime GUI<br/><span>React Renderer · Chat · Workbench · Settings</span>"]
+        HOST["Electron Desktop Host<br/><span>preload · IPC 白名单 · sidecar 生命周期</span>"]
+        CLI["lime-cli / App Server Client<br/><span>JSONL / stdio · typed client</span>"]
+        EXT["Apps · Plugins · Skills · Hooks<br/><span>catalog · MCP · tool definitions</span>"]
+        PROVIDERS["Model Providers<br/><span>OpenAI · Anthropic · Gemini · Grok · Kimi · DeepSeek</span>"]
+    end
+
+    subgraph CONTRACT["② 跨层合同：typed schema、JSON-RPC、catalog 与能力边界"]
+        direction LR
+        BRIDGE["Desktop bridge<br/><span>safeInvoke · safeListen · app_server_handle_json_lines</span>"]
+        RPC["App Server JSON-RPC<br/><span>initialize · thread/start · turn/start · notifications</span>"]
+        PROTOCOL["Protocol / UI contracts<br/><span>agent-protocol · app-server-protocol · projection DTO</span>"]
+        CATALOG["Capability catalog<br/><span>model readiness · tool permission · MCP / Skills / Hooks</span>"]
+    end
+
+    subgraph RUNTIME["③ App Server 插件容器：每个领域都有唯一 owner，不在 Electron 复制业务后端"]
+        direction LR
+        AGENT_RUNTIME["agent-runtime<br/><span>session actor · queue · cancel · action-required · stream</span>"]
+        AGENT["agent<br/><span>provider turn · session facade · business orchestration</span>"]
+        CORE["runtime-core<br/><span>model route · context fragments · message / media parts</span>"]
+        MODEL["model-provider<br/><span>catalog · canonical content · lowering · retry / stream</span>"]
+        TOOLS["tool-runtime<br/><span>tool registry · permission · sandbox · MCP · hooks · process</span>"]
+        THREAD["thread-store<br/><span>canonical Thread / Turn / Item · history · graph · mailbox</span>"]
+    end
+
+    subgraph LOOP["④ Agent Loop：一次 turn 的可恢复生命周期"]
+        direction LR
+        INPUT["claim input<br/><span>UserInput / review / compact / steer</span>"]
+        CONTEXT["assemble context<br/><span>session snapshot · prompt · tools · media refs</span>"]
+        REQUEST["model request<br/><span>canonical request → model-provider</span>"]
+        STREAM["stream events<br/><span>provider events → RuntimeEvent</span>"]
+        EXECUTE["tool execute<br/><span>approval · sandbox · MCP · local process</span>"]
+        APPEND["append facts<br/><span>EventLog → Thread / Turn / Item</span>"]
+        TERMINAL["next step / terminal<br/><span>continue · steer · completed · failed · canceled</span>"]
+    end
+
+    subgraph SEAM["⑤ Capability Seam：Definition / Provider / Consumer 三角"]
+        direction LR
+        EXEC["执行<br/><span>shell · terminal · subprocess · code mode</span>"]
+        FILES["文件 / 代码<br/><span>fs · patch · document preview · artifacts</span>"]
+        WEB["网络 / 知识<br/><span>web search · MCP · knowledge · embedding</span>"]
+        ORCH["协作 / 编排<br/><span>subagent · scheduler · jobs · automation</span>"]
+        GOVERN["治理<br/><span>approval · sandbox · hooks · compaction · plan / goal</span>"]
+        MEDIA["多模态<br/><span>image · video · audio · sidecar</span>"]
+    end
+
+    subgraph DATA["⑥ Data Plane：模型可见之前先落 canonical 事实，GUI 只读投影"]
+        direction LR
+        EVENTLOG["RuntimeEvent / EventLog<br/><span>有序 lifecycle · terminal · diagnostics</span>"]
+        STORE["ThreadStore + ProjectionStore<br/><span>rollout JSONL · state / history / projection SQLite</span>"]
+        READ["App Server read model<br/><span>thread/read · list · search · turns/items/list</span>"]
+        VIEW["Renderer projection / GUI<br/><span>timeline · tool cards · approvals · history · notifications</span>"]
+        SIDECAR["SidecarStore<br/><span>图片 / 视频 / 文件引用 · sha256 · MIME</span>"]
+    end
+
+    SANDBOX["Sandbox + Permission<br/><span>read-only · workspace-write · danger-full-access</span>"]
+    RULE["无特权内核 · 每一步都可记录 · 生产路径禁止 mock fallback"]
+
+    GUI --> HOST --> BRIDGE --> RPC
+    CLI --> RPC
+    EXT --> PROTOCOL
+    PROVIDERS --> MODEL
+    RPC --> PROTOCOL --> AGENT_RUNTIME
+    CATALOG --> MODEL
+    CATALOG --> TOOLS
+    AGENT_RUNTIME --> AGENT --> CORE
+    CORE --> MODEL
+    AGENT_RUNTIME --> TOOLS
+    AGENT_RUNTIME --> THREAD
+
+    AGENT_RUNTIME --> INPUT
+    INPUT --> CONTEXT --> REQUEST --> STREAM --> EXECUTE --> APPEND --> TERMINAL
+    TERMINAL -."下一 step / 新 turn".-> CONTEXT
+    STREAM -."provider stream".-> MODEL
+    EXECUTE -."tool lifecycle".-> TOOLS
+    APPEND -."canonical append".-> THREAD
+
+    TOOLS --> EXEC
+    TOOLS --> FILES
+    TOOLS --> WEB
+    AGENT_RUNTIME --> ORCH
+    TOOLS --> GOVERN
+    CORE --> MEDIA
+
+    APPEND --> EVENTLOG --> STORE --> READ --> VIEW
+    CORE -."sidecar ref".-> SIDECAR -."typed media part".-> STORE
+    TOOLS -."permission gate".-> SANDBOX
+    GOVERN -."enforce".-> SANDBOX
+    RULE -."guardrail".-> STORE
+
+    classDef title fill:#ffffff,stroke:#ffffff,color:#102a43,font-size:27px,font-weight:800;
+    classDef entry fill:#e8f1ff,stroke:#3977db,color:#173b73,stroke-width:2px;
+    classDef contract fill:#e8f7ed,stroke:#3caf55,color:#14532d,stroke-width:2px;
+    classDef runtime fill:#fff4df,stroke:#ef8a00,color:#7c3b00,stroke-width:2px;
+    classDef loop fill:#f3e6f8,stroke:#a22ac9,color:#5b1682,stroke-width:2px;
+    classDef seam fill:#e4f8fa,stroke:#0ea5b7,color:#075985,stroke-width:2px;
+    classDef data fill:#fde8f0,stroke:#ee2b72,color:#9f1239,stroke-width:2px;
+    classDef guard fill:#26343b,stroke:#26343b,color:#ffffff,stroke-width:2px;
+    classDef rule fill:#fff9db,stroke:#e5b800,color:#765400,stroke-width:1.5px;
+
+    class TITLE title;
+    class GUI,HOST,CLI,EXT,PROVIDERS entry;
+    class BRIDGE,RPC,PROTOCOL,CATALOG contract;
+    class AGENT_RUNTIME,AGENT,CORE,MODEL,TOOLS,THREAD runtime;
+    class INPUT,CONTEXT,REQUEST,STREAM,EXECUTE,APPEND,TERMINAL loop;
+    class EXEC,FILES,WEB,ORCH,GOVERN,MEDIA seam;
+    class EVENTLOG,STORE,READ,VIEW,SIDECAR data;
+    class SANDBOX guard;
+    class RULE rule;
+
+    style ENTRY fill:#f7fbff,stroke:#3977db,stroke-width:2px
+    style CONTRACT fill:#f0fbf2,stroke:#3caf55,stroke-width:2px
+    style RUNTIME fill:#fffaf0,stroke:#ef8a00,stroke-width:2px,stroke-dasharray: 6 4
+    style LOOP fill:#fbf4fd,stroke:#a22ac9,stroke-width:2px
+    style SEAM fill:#f2fcfd,stroke:#0ea5b7,stroke-width:2px
+    style DATA fill:#fff5f8,stroke:#ee2b72,stroke-width:2px
+
+    linkStyle default stroke:#7a8794,stroke-width:1.5px;
