@@ -13,7 +13,6 @@ import {
   listPendingAppServerRequestsCurrent,
   respondAgentServerRequestCurrent,
   sleep,
-  summarizeEvidencePack,
   summarizeThreadRead,
   threadSettled,
   waitForHealth,
@@ -1219,7 +1218,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
         await cleanupContext7AgentTurnServer(options, context);
       },
       buildAssertions({
-        evidencePackText,
+        readModelText,
         providerRequests,
         runtimeContext,
         toolOutputText,
@@ -1251,10 +1250,10 @@ function buildBatchScenario(batchId, fixtureFiles) {
             toolOutputText.includes(queryDocsToolName) &&
             !toolOutputText.includes('"isError":true') &&
             !toolOutputText.includes('"is_error":true'),
-          evidencePackMentionsContext7ToolSearch:
-            evidencePackText.includes(queryDocsToolName) ||
+          readModelMentionsContext7ToolSearch:
+            readModelText.includes(queryDocsToolName) ||
             toolOutputText.includes(queryDocsToolName) ||
-            evidencePackText.includes(
+            readModelText.includes(
               "AGENT_RUNTIME_MCP_CONTEXT7_TOOLSEARCH_DONE",
             ),
           agentTurnAutostartedContext7:
@@ -1276,7 +1275,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
       scriptedResponses: buildMediaNotebookShellFixtureResponses({
         notebookPath: fixtureFiles.notebookPath,
       }),
-      buildAssertions({ evidencePackText, fixtureFiles, toolOutputText }) {
+      buildAssertions({ readModelText, fixtureFiles, toolOutputText }) {
         const notebookContent = readTextIfExists(fixtureFiles.notebookPath);
         return {
           viewImageReturnedMetadata:
@@ -1288,10 +1287,10 @@ function buildBatchScenario(batchId, fixtureFiles) {
           execCommandReturnedOutput: toolOutputText.includes(
             "LIME_TOOL_EXECUTION_EXEC_COMMAND_OK",
           ),
-          evidencePackMentionsMediaNotebookShell:
-            evidencePackText.includes("view_image") ||
-            evidencePackText.includes("NotebookEdit") ||
-            evidencePackText.includes("LIME_TOOL_EXECUTION_EXEC_COMMAND_OK"),
+          readModelMentionsMediaNotebookShell:
+            readModelText.includes("view_image") ||
+            readModelText.includes("NotebookEdit") ||
+            readModelText.includes("LIME_TOOL_EXECUTION_EXEC_COMMAND_OK"),
         };
       },
     };
@@ -1308,7 +1307,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
       deferScriptedToolCallsUntilAvailable: true,
       expectedFixtureRequestCount: 2,
       scriptedResponses: buildCodingCurrentFixtureResponses(),
-      buildAssertions({ evidencePackText, fixtureFiles, toolOutputText }) {
+      buildAssertions({ readModelText, fixtureFiles, toolOutputText }) {
         const editContent = readTextIfExists(fixtureFiles.editPath);
         const writeContent = readTextIfExists(fixtureFiles.writePath);
         return {
@@ -1326,10 +1325,10 @@ function buildBatchScenario(batchId, fixtureFiles) {
           bashToolReturnedOutput: toolOutputText.includes(
             "LIME_TOOL_EXECUTION_TEST_OK",
           ),
-          evidencePackMentionsCodingExecution:
-            evidencePackText.includes("apply_patch") ||
-            evidencePackText.includes("LIME_TOOL_EXECUTION_TEST_OK") ||
-            evidencePackText.includes("LIME_TOOL_EXECUTION_WRITE_OK"),
+          readModelMentionsCodingExecution:
+            readModelText.includes("apply_patch") ||
+            readModelText.includes("LIME_TOOL_EXECUTION_TEST_OK") ||
+            readModelText.includes("LIME_TOOL_EXECUTION_WRITE_OK"),
         };
       },
     };
@@ -1343,17 +1342,17 @@ function buildBatchScenario(batchId, fixtureFiles) {
       promptNeedle: "任务板工具验收",
       targetTools: TASK_BOARD_TOOLS,
       scriptedResponses: buildTaskBoardFixtureResponses(),
-      buildAssertions({ evidencePackText, toolOutputText }) {
+      buildAssertions({ readModelText, toolOutputText }) {
         return {
           taskToolsReturnedTask: toolOutputText.includes("Tool execution task"),
           taskUpdateCompleted:
             toolOutputText.includes('"status": "completed"') ||
             toolOutputText.includes('"status":"completed"') ||
             toolOutputText.includes("completed"),
-          evidencePackMentionsTaskBoard:
-            evidencePackText.includes("Tool execution task") ||
-            evidencePackText.includes("TaskCreate") ||
-            evidencePackText.includes("TaskUpdate"),
+          readModelMentionsTaskBoard:
+            readModelText.includes("Tool execution task") ||
+            readModelText.includes("TaskCreate") ||
+            readModelText.includes("TaskUpdate"),
         };
       },
     };
@@ -1367,18 +1366,18 @@ function buildBatchScenario(batchId, fixtureFiles) {
       promptNeedle: "后台任务工具验收",
       targetTools: BACKGROUND_TASK_TOOLS,
       scriptedResponses: buildBackgroundTaskFixtureResponses(),
-      buildAssertions({ evidencePackText, toolOutputText }) {
+      buildAssertions({ readModelText, toolOutputText }) {
         return {
           backgroundExecReturnedRuntimeSessionId:
             toolOutputText.includes('"session_id"'),
           writeStdinUsedRuntimeSessionId:
             toolOutputText.includes("LIME_BACKGROUND_TASK_TICK") ||
-            evidencePackText.includes('"terminal_interaction"'),
+            readModelText.includes('"terminal_interaction"'),
           writeStdinInterruptedRuntimeSession:
-            evidencePackText.includes("(interrupt)"),
-          evidencePackMentionsToolExecution:
-            evidencePackText.includes("LIME_BACKGROUND_TASK") ||
-            evidencePackText.includes('"session_id"'),
+            readModelText.includes("(interrupt)"),
+          readModelMentionsToolExecution:
+            readModelText.includes("LIME_BACKGROUND_TASK") ||
+            readModelText.includes('"session_id"'),
         };
       },
     };
@@ -1392,7 +1391,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
       promptNeedle: "运行时自检工具验收",
       targetTools: RUNTIME_INTROSPECTION_TOOLS,
       scriptedResponses: buildRuntimeIntrospectionFixtureResponses(),
-      buildAssertions({ evidencePackText, toolOutputText }) {
+      buildAssertions({ readModelText, toolOutputText }) {
         return {
           toolSearchReturnedToolSurface:
             toolOutputText.includes('"tools"') ||
@@ -1400,11 +1399,11 @@ function buildBatchScenario(batchId, fixtureFiles) {
           sendUserMessageDelivered: toolOutputText.includes(
             "Message delivered to user",
           ),
-          evidencePackMentionsRuntimeIntrospection:
-            evidencePackText.includes(
+          readModelMentionsRuntimeIntrospection:
+            readModelText.includes(
               "LIME_TOOL_EXECUTION_SEND_USER_MESSAGE_OK",
             ) ||
-            evidencePackText.includes("runtime-introspection-tools") ||
+            readModelText.includes("runtime-introspection-tools") ||
             (toolOutputText.includes(
               "LIME_TOOL_EXECUTION_SEND_USER_MESSAGE_OK",
             ) &&
@@ -1426,7 +1425,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
         web_search_enabled: true,
         webSearchEnabled: true,
       },
-      buildAssertions({ evidencePackText, toolOutputText }) {
+      buildAssertions({ readModelText, toolOutputText }) {
         return {
           webFetchReturnedExampleDomain:
             toolOutputText.includes("Example Domain") ||
@@ -1434,9 +1433,9 @@ function buildBatchScenario(batchId, fixtureFiles) {
           webSearchReturnedQuery:
             toolOutputText.includes("Lime runtime tool smoke example domain") ||
             toolOutputText.includes("example.com"),
-          evidencePackMentionsWebExecution:
-            evidencePackText.includes("WebFetch") ||
-            evidencePackText.includes("WebSearch"),
+          readModelMentionsWebExecution:
+            readModelText.includes("WebFetch") ||
+            readModelText.includes("WebSearch"),
         };
       },
     };
@@ -1451,7 +1450,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
       targetTools: AGENT_CONTROL_TOOLS,
       scriptedResponses: buildAgentControlFixtureResponses(),
       requiresTargetToolsInInitialInventory: false,
-      buildAssertions({ evidencePackText, toolOutputText, matrix }) {
+      buildAssertions({ readModelText, toolOutputText, matrix }) {
         const waitAgent = matrix.find((entry) => entry.tool === "wait_agent");
         const waitAgentHasTerminalState = waitAgent?.agentStates?.some(
           (state) =>
@@ -1481,10 +1480,10 @@ function buildBatchScenario(batchId, fixtureFiles) {
             waitAgent?.status === "completed" &&
             waitAgent.success !== false &&
             waitAgentHasTerminalState === true,
-          evidencePackMentionsCurrentAgentControl:
-            evidencePackText.includes("spawn_agent") &&
-            evidencePackText.includes("list_agents") &&
-            evidencePackText.includes("interrupt_agent"),
+          readModelMentionsCurrentAgentControl:
+            readModelText.includes("spawn_agent") &&
+            readModelText.includes("list_agents") &&
+            readModelText.includes("interrupt_agent"),
         };
       },
     };
@@ -1710,7 +1709,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
         await runtimeContext?.close?.();
       },
       buildAssertions({
-        evidencePackText,
+        readModelText,
         runtimeContext,
         runtimeSnapshot,
         toolAttemptEvidence,
@@ -1771,7 +1770,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
       promptNeedle: "计划和 worktree 工具验收",
       targetTools: PLAN_WORKTREE_TOOLS,
       scriptedResponses: buildPlanWorktreeFixtureResponses(),
-      buildAssertions({ evidencePackText, toolOutputText }) {
+      buildAssertions({ readModelText, toolOutputText }) {
         return {
           planModeEntered:
             toolOutputText.includes("plan mode") ||
@@ -1788,10 +1787,10 @@ function buildBatchScenario(batchId, fixtureFiles) {
             toolOutputText.includes("ExitWorktree") ||
             toolOutputText.includes("remove") ||
             toolOutputText.includes("removed"),
-          evidencePackMentionsPlanWorktree:
-            evidencePackText.includes("EnterPlanMode") ||
-            evidencePackText.includes("EnterWorktree") ||
-            evidencePackText.includes("plan-worktree-tools"),
+          readModelMentionsPlanWorktree:
+            readModelText.includes("EnterPlanMode") ||
+            readModelText.includes("EnterWorktree") ||
+            readModelText.includes("plan-worktree-tools"),
         };
       },
     };
@@ -1805,16 +1804,16 @@ function buildBatchScenario(batchId, fixtureFiles) {
       promptNeedle: "request_user_input 工具验收",
       targetTools: ASK_TOOLS,
       scriptedResponses: buildAskFixtureResponses(),
-      buildAssertions({ evidencePackText, toolOutputText }) {
+      buildAssertions({ readModelText, toolOutputText }) {
         return {
           askUserQuestionResolved:
             toolOutputText.includes("User has answered your questions") ||
             toolOutputText.includes("Continue"),
-          evidencePackMentionsAsk:
-            evidencePackText.includes("request_user_input") ||
-            evidencePackText.includes("ask-tools"),
+          readModelMentionsAsk:
+            readModelText.includes("request_user_input") ||
+            readModelText.includes("ask-tools"),
           evidencePackDoesNotMentionAskUserQuestion:
-            !evidencePackText.includes("AskUserQuestion"),
+            !readModelText.includes("AskUserQuestion"),
         };
       },
     };
@@ -1830,7 +1829,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
       scriptedResponses: buildCreationTaskFixtureResponses({
         audioPath: fixtureFiles.audioPath,
       }),
-      buildAssertions({ evidencePackText, toolOutputText }) {
+      buildAssertions({ readModelText, toolOutputText }) {
         return {
           creationToolsCreatedTaskArtifact:
             toolOutputText.includes("LIME_TOOL_EXECUTION_AUDIO_TASK_OK") ||
@@ -1840,9 +1839,9 @@ function buildBatchScenario(batchId, fixtureFiles) {
             toolOutputText.includes(FIXTURE_ROOT) ||
             toolOutputText.includes("output") ||
             toolOutputText.includes("projectId"),
-          evidencePackMentionsCreationTools:
-            evidencePackText.includes("lime_create_audio_generation_task") ||
-            evidencePackText.includes("creation-task-tools"),
+          readModelMentionsCreationTools:
+            readModelText.includes("lime_create_audio_generation_task") ||
+            readModelText.includes("creation-task-tools"),
         };
       },
     };
@@ -1856,7 +1855,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
       promptNeedle: "MCP 资源工具验收",
       targetTools: MCP_RESOURCE_TOOLS,
       scriptedResponses: buildMcpResourceFixtureResponses(),
-      buildAssertions({ evidencePackText, toolOutputText }) {
+      buildAssertions({ readModelText, toolOutputText }) {
         return {
           mcpListExecuted:
             toolOutputText.includes("ListMcpResourcesTool") ||
@@ -1866,10 +1865,10 @@ function buildBatchScenario(batchId, fixtureFiles) {
             toolOutputText.includes("lime-tool-smoke-missing-server") ||
             toolOutputText.includes("MCP") ||
             toolOutputText.includes("resource"),
-          evidencePackMentionsMcpResourceTools:
-            evidencePackText.includes("ReadMcpResourceTool") ||
-            evidencePackText.includes("ListMcpResourcesTool") ||
-            evidencePackText.includes("mcp-resource-tools"),
+          readModelMentionsMcpResourceTools:
+            readModelText.includes("ReadMcpResourceTool") ||
+            readModelText.includes("ListMcpResourcesTool") ||
+            readModelText.includes("mcp-resource-tools"),
         };
       },
     };
@@ -1883,15 +1882,15 @@ function buildBatchScenario(batchId, fixtureFiles) {
       promptNeedle: "Skill 工具验收",
       targetTools: SKILL_TOOLS,
       scriptedResponses: buildSkillFixtureResponses(),
-      buildAssertions({ evidencePackText, toolOutputText }) {
+      buildAssertions({ readModelText, toolOutputText }) {
         return {
           skillToolAttempted:
             toolOutputText.includes("Skill") ||
             toolOutputText.includes("lime-tool-smoke-missing-skill") ||
             toolOutputText.includes("LIME_TOOL_EXECUTION_SKILL_OK"),
-          evidencePackMentionsSkillTool:
-            evidencePackText.includes("Skill") ||
-            evidencePackText.includes("skill-tools"),
+          readModelMentionsSkillTool:
+            readModelText.includes("Skill") ||
+            readModelText.includes("skill-tools"),
         };
       },
     };
@@ -1904,7 +1903,7 @@ function buildBatchScenario(batchId, fixtureFiles) {
     promptNeedle: "本地文件工具验收",
     targetTools: SAFE_FILE_TOOLS,
     scriptedResponses: buildSafeFileFixtureResponses(),
-    buildAssertions({ evidencePackText, fixtureFiles, toolOutputText }) {
+    buildAssertions({ readModelText, fixtureFiles, toolOutputText }) {
       const editContent = readTextIfExists(fixtureFiles.editPath);
       const writeContent = readTextIfExists(fixtureFiles.writePath);
       return {
@@ -1919,9 +1918,9 @@ function buildBatchScenario(batchId, fixtureFiles) {
           toolOutputText.includes("edit-target.txt") ||
           toolOutputText.includes("write-target.txt") ||
           toolOutputText.includes("search-target.txt"),
-        evidencePackMentionsToolExecution:
-          evidencePackText.includes("LIME_TOOL_EXECUTION_MARKER") ||
-          evidencePackText.includes("LIME_TOOL_EXECUTION_WRITE_OK"),
+        readModelMentionsToolExecution:
+          readModelText.includes("LIME_TOOL_EXECUTION_MARKER") ||
+          readModelText.includes("LIME_TOOL_EXECUTION_WRITE_OK"),
       };
     },
   };
@@ -2115,9 +2114,9 @@ function allTargetToolsCompleted(matrix) {
   );
 }
 
-function evidencePackToolPresence(evidencePackText, targetTools) {
+function readModelToolPresence(readModelText, targetTools) {
   return Object.fromEntries(
-    targetTools.map((tool) => [tool, evidencePackText.includes(tool)]),
+    targetTools.map((tool) => [tool, readModelText.includes(tool)]),
   );
 }
 
@@ -2745,22 +2744,9 @@ async function runSmoke(options) {
       scenario.approvalToolNames,
     );
 
-    console.log(`${LOG_PREFIX} stage=export-evidence-pack`);
-    const evidenceExport = await invokeAppServerMethod(
-      options,
-      "evidence/export",
-      {
-        sessionId,
-        turnId,
-        includeEvents: true,
-        includeArtifacts: true,
-        includeEvidencePack: true,
-      },
-    );
-    const evidencePack = evidenceExport?.evidencePack ?? null;
     const toolAttemptEvidence = extractToolOrchestratorAttemptEvidence({
       callId: TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID,
-      evidenceExport,
+      threadRead: finalState.threadRead,
     });
 
     const providerRequests = providerRequestSummaries(providerFixtureRequests);
@@ -2820,9 +2806,9 @@ async function runSmoke(options) {
       providerFixtureRequests[0]?.body,
     );
     const detailText = JSON.stringify(finalState.sessionDetail || {});
-    const evidencePackText = JSON.stringify(evidencePack || {});
-    const evidenceToolPresence = evidencePackToolPresence(
-      evidencePackText,
+    const readModelText = JSON.stringify(finalState.threadRead || {});
+    const evidenceToolPresence = readModelToolPresence(
+      readModelText,
       targetTools,
     );
     const toolStageMatrix = buildToolStageMatrix({
@@ -2843,7 +2829,7 @@ async function runSmoke(options) {
       })
       .join("\n");
     const scenarioAssertions = scenario.buildAssertions({
-      evidencePackText,
+      readModelText,
       fixtureFiles,
       providerRequests,
       runtimeContext,
@@ -2875,7 +2861,7 @@ async function runSmoke(options) {
       currentThreadProjectionObserved:
         detailText.includes('"canonicalThread"') &&
         Array.isArray(finalState.sessionDetail?.turns),
-      evidencePackExported: Boolean(evidencePack),
+      threadReadObserved: Boolean(finalState.threadRead),
       ...scenarioAssertions,
     };
 
@@ -2896,9 +2882,9 @@ async function runSmoke(options) {
         verifiesProviderRequestTools: true,
         verifiesRuntimeInventoryTools: true,
         verifiesRuntimeToolExecution: true,
-        verifiesEvidencePack: true,
+        verifiesCanonicalThreadFacts: true,
         usesAppServerToolInventoryCurrent: true,
-        usesAppServerEvidenceExportCurrent: true,
+        usesAppServerThreadReadCurrent: true,
         batchId: scenario.id,
         targetTools,
         initialInventoryTargetTools: inventoryTargetTools,
@@ -2962,7 +2948,18 @@ async function runSmoke(options) {
         notebookPath: NOTEBOOK_RELATIVE_PATH,
         audioPath: AUDIO_RELATIVE_PATH,
       },
-      evidencePack: summarizeEvidencePack(evidencePack),
+      threadFacts: {
+        threadId:
+          finalState.threadRead?.thread_id ??
+          finalState.threadRead?.threadId ??
+          null,
+        turnCount: Array.isArray(finalState.threadRead?.turns)
+          ? finalState.threadRead.turns.length
+          : 0,
+        itemCount: Array.isArray(finalState.threadRead?.thread_items)
+          ? finalState.threadRead.thread_items.length
+          : 0,
+      },
       assertions,
       failedAssertions,
     };

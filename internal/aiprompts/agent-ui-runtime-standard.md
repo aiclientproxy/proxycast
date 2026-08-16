@@ -23,7 +23,7 @@ App Server JSON-RPC current methods
 
 | 包 | 分类 | 拥有的事实 | 禁止承接 |
 | --- | --- | --- | --- |
-| `@limecloud/agent-runtime-client` | current runtime facade | `agentSession/turn/start`、`agentSession/turn/cancel`、`agentSession/action/respond`、`agentSession/read`、`evidence/export`、`agentSession/event` 的 TypeScript facade；browser-safe 子路径 `@limecloud/agent-runtime-client/sessionGateway` 提供 `createAgentRuntimeClientFromSessionGateway(...)`，把已有 App Server session gateway 适配为标准 lifecycle client | 新 JSON-RPC method、Electron IPC、legacy command、mock fallback、独立 `readTask` 协议、宿主业务 session 创建 |
+| `@limecloud/agent-runtime-client` | current runtime facade | `agentSession/turn/start`、`agentSession/turn/cancel`、`agentSession/action/respond`、`agentSession/read`、`agentSession/event` 的 TypeScript facade；browser-safe 子路径 `@limecloud/agent-runtime-client/sessionGateway` 提供 `createAgentRuntimeClientFromSessionGateway(...)`，把已有 App Server session gateway 适配为标准 lifecycle client。运行时事实统一从 canonical Thread/Turn/Item read model 读取 | 新 JSON-RPC method、Electron IPC、legacy command、mock fallback、独立 `readTask` 协议、宿主业务 session 创建 |
 | `@limecloud/agent-ui-contracts` | current 类型事实源 | execution event、Agent UI adapter event、message parts、process timeline、execution graph、Subagents、projection state、projector interface | 投影逻辑、React 组件、JSON-RPC client、session store、业务对象 |
 | `@limecloud/agent-runtime-projection` | current headless projection | event store index、scope selector、latest selector、summary selector、read model、`projectAgentUiState`、`createAgentUiProjector`、`buildAgentUiSubagentsModel` | React、DOM、i18n hook、App Server client、Electron bridge、mock、宿主业务路径 |
 | `@limecloud/agent-runtime-ui` | current React primitives | `AgentUiProjectionState` 的标准渲染组件、message parts、timeline、execution graph、Subagents、tool/action/artifact/evidence 事实展示、action intent callbacks | JSON-RPC 订阅、session 持久化、业务路由、全局主题、Prompt/知识库/素材/审核业务壳 |
@@ -179,7 +179,7 @@ projection store 或 Desktop facade。
 
 标准 UI 必须支持多 action controls。`AgentRuntimeEventProjection.action` 保持兼容单按钮读取，
 `AgentRuntimeEventProjection.actions` 承接 approve / reject / answer / retry / stop 等多按钮 intent；
-`agent-runtime-ui` 只能渲染这些 intent 并回调宿主，不得自行解释业务结果。
+`agent-runtime-ui` 只能渲染这些 intent 并回调宿主，不得自行解释业务结果。导出、回放和审核只消费 canonical Thread/Turn/Item facts，不得在 UI 层创建签名回执或独立 transcript。
 
 ## App Server 与 Runtime 配合
 
@@ -189,7 +189,7 @@ Agent Runtime 后端事实源是 App Server JSON-RPC current 主链：
 - action lifecycle：`agentSession/action/respond`
 - read model：`agentSession/read`
 - events：`agentSession/event`
-- evidence：`evidence/export`
+- facts：canonical Thread/Turn/Item read model 与 direct lifecycle notifications
 
 Electron 只作为 Desktop Host bridge 和 sidecar lifecycle host。新增 runtime 能力不得落到 legacy desktop facade；旧 `agent_runtime_*` 只允许作为 retired guard、历史 evidence、test-only fixture 或退场对象。
 

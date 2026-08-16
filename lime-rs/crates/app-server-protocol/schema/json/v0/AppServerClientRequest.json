@@ -191,25 +191,6 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
-          "const": "evidence/export",
-          "type": "string"
-        },
-        "params": {
-          "default": null
-        }
-      },
-      "required": [
-        "id",
-        "method"
-      ],
-      "type": "object"
-    },
-    {
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/RequestId"
-        },
-        "method": {
           "const": "agentSession/handoffBundle/export",
           "type": "string"
         },
@@ -1560,6 +1541,25 @@
         },
         "method": {
           "const": "mediaTaskArtifact/audio/create",
+          "type": "string"
+        },
+        "params": {
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "method"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "mediaTaskArtifact/transcription/create",
           "type": "string"
         },
         "params": {

@@ -20,8 +20,6 @@ export {
   type AppServerMessageTransport,
   type AppServerRequestOptions,
   type AppServerRequestResult,
-  type EvidenceExportParams,
-  type EvidenceExportResponse,
   type StructuredOutputContract,
 } from "@limecloud/app-server-client";
 

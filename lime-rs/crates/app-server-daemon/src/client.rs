@@ -109,7 +109,6 @@ mod tests {
                         agent_session: true,
                         capability_discovery: true,
                         artifact: true,
-                        evidence: true,
                         workspace: true,
                     },
                 },

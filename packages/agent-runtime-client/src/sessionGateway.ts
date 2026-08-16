@@ -25,8 +25,6 @@ import {
   TurnSteerResponse,
   AppServerRequestOptions,
   AppServerRequestResult,
-  EvidenceExportParams,
-  EvidenceExportResponse,
   JsonRpcMessage,
   JsonRpcError,
   RequestId,
@@ -96,10 +94,6 @@ export type AgentRuntimeSessionGateway = {
   >;
   respondServerRequest?<T>(id: RequestId, result: T): void;
   rejectServerRequest?(id: RequestId, error: JsonRpcError): void;
-  exportEvidence?: AgentRuntimeGatewayMethod<
-    EvidenceExportParams,
-    EvidenceExportResponse
-  >;
   nextEvent?(timeoutMs?: number): Promise<AgentRuntimeNotification>;
   drainEvents?(limit?: number): Promise<JsonRpcMessage[]>;
 };
@@ -162,13 +156,6 @@ export function createAgentRuntimeClientFromSessionGateway(
       }
       gateway.rejectServerRequest(id, error);
     },
-    exportEvidence: (params, options) =>
-      callOptionalAgentRuntimeSessionGateway(
-        gateway.exportEvidence,
-        "exportEvidence",
-        params,
-        options,
-      ),
     subscribeLifecycleEvents(listener) {
       return eventRouter.subscribeLifecycle(listener);
     },

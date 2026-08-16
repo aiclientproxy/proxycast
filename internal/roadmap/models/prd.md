@@ -3,7 +3,7 @@
 > 状态：current planning source
 > 更新时间：2026-06-17
 > Owner：Lime Runtime / Model Registry / App Server / Media Task 主链
-> 参考项目：`/Users/coso/Documents/dev/rust/codex`、本地多协议 LLM runtime 参考实现
+> 参考项目：`/Users/coso/Documents/dev/rust/codex`、`/Users/coso/Documents/dev/rust/grok-build`、`/Users/coso/Documents/dev/js/opencode`
 > 关联主链：App Server JSON-RPC、RuntimeCore、`lime-rs/crates/core/src/models/model_registry.rs`、`ModelRegistryService`、media task artifact、Agent adapter
 
 ## 1. 背景
@@ -47,9 +47,13 @@ Codex 的价值不在多协议扩展，而在工程治理：
 - 借 Codex 的 runtime discipline、auth/account/continuation、session/turn lifecycle。
 - 不借 Codex 的单 Responses wire protocol 假设。
 
-### 2.2 多协议 LLM runtime 可借鉴点
+### 2.2 grok-build 是多模型控制面主参考
 
-本地多协议 LLM runtime 更适合作为 Lime 多模型抽象参考。核心思想是把协议语义和部署信息拆开：
+`grok-build` 不是 Lime 的运行时 owner，但它是多模型控制面的 primary reference。模型目录、默认模型、刷新与缓存、模型切换、能力/ready 过滤、候选选择、fallback、retry 和 circuit breaker 都按其控制面语义对照，再落到 Lime 的 `ModelRegistryService`、RuntimeCore 和 `model-provider`。显式模型锁定、OEM managed 约束与 fail-closed 能力校验优先于自动策略。
+
+### 2.3 OpenCode 只补 provider wire 与多模态 lowering
+
+OpenCode 不是 Lime 的多模型控制面主参考，也不成为 catalog、session 或 GUI owner。它只用于 provider wire 的 endpoint/auth/framing、canonical content、typed media parts、OpenAI/Anthropic/Gemini/Bedrock lowering 和 normalized stream reducer。核心思想是把协议语义和部署信息拆开：
 
 ```text
 Protocol

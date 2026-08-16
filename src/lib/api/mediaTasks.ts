@@ -1,6 +1,7 @@
 import {
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_AUDIO_COMPLETE,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE,
+  APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_CANCEL,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_GET,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_IMAGE_COMPLETE,
@@ -15,6 +16,7 @@ import type {
   CreateAudioGenerationTaskArtifactRequest,
   CreateImageGenerationTaskArtifactRequest,
   CreateVideoGenerationTaskArtifactRequest,
+  CreateTranscriptionTaskArtifactRequest,
   ListMediaTaskArtifactsOutput,
   ListMediaTaskArtifactsRequest,
   MediaTaskArtifactOutput,
@@ -24,6 +26,7 @@ import type {
 export {
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_AUDIO_COMPLETE,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE,
+  APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_CANCEL,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_GET,
   APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_IMAGE_COMPLETE,
@@ -51,6 +54,14 @@ export async function createVideoGenerationTaskArtifact(
 ): Promise<MediaTaskArtifactOutput> {
   return (await createAppServerClient().createVideoMediaTaskArtifact(request))
     .result as MediaTaskArtifactOutput;
+}
+
+export async function createTranscriptionTaskArtifact(
+  request: CreateTranscriptionTaskArtifactRequest,
+): Promise<MediaTaskArtifactOutput> {
+  return (
+    await createAppServerClient().createTranscriptionMediaTaskArtifact(request)
+  ).result as MediaTaskArtifactOutput;
 }
 
 export async function completeImageGenerationTaskArtifact(

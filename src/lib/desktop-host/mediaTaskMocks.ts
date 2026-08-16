@@ -145,9 +145,11 @@ function resolveMockMediaTaskProtocol(
         modality: "audio",
         required_capabilities: ["text_generation", "voice_generation"],
         routing_slot: "voice_generation_model",
-        route_execution_status: "metadata_only",
-        route_execution_exit_condition:
-          "audio worker or RuntimeCore provider protocol mapper consumes ResolvedModelRoute and writes model_route_execution for voice_generation",
+        route_execution_status: "executable",
+        executor_binding: {
+          executor_kind: "app_server",
+          binding_key: "mediaTaskArtifact/audio/create",
+        },
         execution_profile: {
           profile_key: "voice_generation_profile",
         },

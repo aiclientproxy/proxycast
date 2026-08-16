@@ -35,7 +35,10 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
 use super::voice_config_service;
-use voice_core::asr_client::{AsrClient, BaiduClient, OpenAIWhisperClient, XunfeiClient};
+use model_provider::audio::{
+    execute_transcription, AudioProviderConfig, TranscriptionProviderRequest,
+};
+use voice_core::asr_client::{AsrClient, BaiduClient, XunfeiClient};
 use voice_core::types::AudioData;
 
 #[cfg(feature = "local-sensevoice")]
@@ -360,20 +363,38 @@ impl AsrService {
         let config = credential.openai_config.as_ref().ok_or("OpenAI 配置缺失")?;
         let audio = Self::build_audio_data(audio_data, sample_rate)?;
 
-        let mut client = OpenAIWhisperClient::new(config.api_key.clone());
-        if let Some(base_url) = config.base_url.clone() {
-            client = client.with_host(base_url);
-        }
-        if !credential.language.is_empty() {
-            client = client.with_language(credential.language.clone());
-        }
+        let endpoint = Self::openai_transcription_endpoint(config.base_url.as_deref());
+        let output = execute_transcription(
+            &AudioProviderConfig::with_endpoint(endpoint, config.api_key.clone()),
+            &TranscriptionProviderRequest {
+                model_id: "whisper-1".to_string(),
+                audio: audio.to_wav_bytes(),
+                filename: "audio.wav".to_string(),
+                mime_type: "audio/wav".to_string(),
+                language: (!credential.language.is_empty()).then(|| credential.language.clone()),
+                prompt: None,
+                response_format: Some("json".to_string()),
+            },
+        )
+        .await
+        .map_err(|error| format!("OpenAI Whisper 识别失败: {}: {}", error.code, error.message))?;
 
-        let result = client
-            .transcribe(&audio)
-            .await
-            .map_err(|e| format!("OpenAI Whisper 识别失败: {e}"))?;
+        Ok(output.text)
+    }
 
-        Ok(result.text)
+    fn openai_transcription_endpoint(base_url: Option<&str>) -> String {
+        let base = base_url
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("https://api.openai.com/v1")
+            .trim_end_matches('/');
+        if base.ends_with("/audio/transcriptions") {
+            base.to_string()
+        } else if base.ends_with("/v1") {
+            format!("{base}/audio/transcriptions")
+        } else {
+            format!("{base}/v1/audio/transcriptions")
+        }
     }
 
     /// 百度语音识别

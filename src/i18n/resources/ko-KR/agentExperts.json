@@ -118,10 +118,5 @@
   "agentExperts.info.skills.timeline.invocationRunning": "실행 중",
   "agentExperts.info.skills.timeline.invocationCompleted": "완료",
   "agentExperts.info.skills.timeline.invocationFailed": "실패",
-  "agentExperts.info.skills.timeline.invocationUnknown": "확인 필요",
-  "agentExperts.info.skills.evidence.title": "증거 패키지 회고",
-  "agentExperts.info.skills.evidence.counts": "검색 {{searchCount}}회 · 실행 {{invocationCount}}회",
-  "agentExperts.info.skills.evidence.exportedAt": "최근 내보내기 {{exportedAt}}",
-  "agentExperts.info.skills.evidence.latestSkill": "최근 스킬 {{skillName}}",
-  "agentExperts.info.skills.evidence.knownGaps": "알려진 격차 {{count}}개"
+  "agentExperts.info.skills.timeline.invocationUnknown": "확인 필요"
 }

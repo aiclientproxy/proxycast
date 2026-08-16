@@ -16,7 +16,7 @@ import {
   SKILLS_RUNTIME_MANUAL_ENABLE_PROMPT,
   SKILLS_RUNTIME_QUERY,
   SKILLS_RUNTIME_SKILL_NAME,
-  summarizeSkillsRuntimeEvidenceExport,
+  summarizeSkillsRuntimeThreadRead,
 } from "./skills-runtime-fixture-scenario.mjs";
 
 function readSkillsRuntimeFixtureScenario() {
@@ -48,24 +48,41 @@ function expectAllNotToContain(expect, content, fragments) {
   for (const fragment of fragments) expect(content).not.toContain(fragment);
 }
 
-function canonicalToolCompletedEvent(
+function canonicalToolCompletedItem(
   toolCallId,
-  { eventTypeKey = "type", callIdKey = "call_id" } = {},
+  { callIdKey = "call_id" } = {},
 ) {
   return {
-    [eventTypeKey]: "item.completed",
+    itemId: toolCallId,
+    type: "tool",
+    status: "completed",
     payload: {
-      item: {
-        itemId: toolCallId,
-        kind: "tool",
-        status: "completed",
-        payload: {
-          type: "tool",
-          [callIdKey]: toolCallId,
-        },
-        metadata: {},
-      },
+      type: "tool",
+      [callIdKey]: toolCallId,
     },
+    metadata: {},
+  };
+}
+
+function canonicalRuntimeItem(itemId, metadata) {
+  return {
+    itemId,
+    type: "status",
+    status: "completed",
+    payload: { type: "runtime.status" },
+    metadata,
+  };
+}
+
+function canonicalReadModel(items) {
+  const turnItems = Array.isArray(items[0]) ? items : [items];
+  return {
+    turns: turnItems.map((currentItems, index) => ({
+        turnId: "skills-runtime-read-model-turn",
+        status: "completed",
+        items: currentItems,
+        ordinal: index,
+      })),
   };
 }
 
@@ -77,7 +94,7 @@ export function registerSkillsRuntimeSmokeGuards({
   readExpertActionsScript,
   readGuiActionsScript,
 }) {
-  it("covers Skills runtime search, on-demand body load, gate, and Evidence Pack in the real Electron fixture", () => {
+  it("covers Skills runtime search, on-demand body load, gate, and thread/read facts in the real Electron fixture", () => {
     const content = readSmokeScript();
     const backendScriptContent = readBackendScript();
     const scenarioContent = readSkillsRuntimeFixtureScenario();
@@ -135,8 +152,6 @@ export function registerSkillsRuntimeSmokeGuards({
       "expertPanelSkillPickerOpened",
       "expertPanelSkillAdded",
       "expertPanelAddedSkillVisible",
-      "expertPanelEvidencePackGuiExport",
-      "expertPanelEvidencePackExportedFromHarnessPanel",
       "expertPanelSkillRefsOverrideReachedBackend",
       "waitForBackendLedgerTurnStartContaining",
       "launchSkillsRuntimeFromWorkspacePanel",
@@ -158,8 +173,8 @@ export function registerSkillsRuntimeSmokeGuards({
       "workspaceSkillRuntimeEnable",
       "SKILLS_RUNTIME_QUERY",
       "SKILLS_RUNTIME_SKILL_NAME",
-      '"evidence/export"',
-      "includeEvidencePack: true",
+      '"thread/read"',
+      "includeTurns: true",
       "waitForGuiSkillsRuntimeCompleted",
       "verifySkillsChangedCatalogRefresh",
       "verify-skills-changed-catalog-refresh",
@@ -181,20 +196,18 @@ export function registerSkillsRuntimeSmokeGuards({
       "waitForSessionReadSkillsRuntimeCompleted",
       "summarizeSkillsRuntimeReadModel",
       "readModelTurnTerminal",
-      "exportSkillsRuntimeEvidencePack",
-      "summarizeSkillsRuntimeEvidenceExport",
+      "readSkillsRuntimeThread",
+      "summarizeSkillsRuntimeThreadRead",
       "skillsRuntimePromptReachedBackend",
       "readModelSkillSearchObserved",
       "readModelSkillInvocationObserved",
-      "evidenceSkillBodyReadObserved",
-      "evidenceSkillGateObserved",
-      "evidencePackSkillSearchObserved",
-      "evidencePackSkillInvocationObserved",
+      "readModelSkillBodyReadObserved",
+      "readModelSkillGateObserved",
       "skillSearchBeforeSkillInvocation",
       "explicitSkillsRuntimePromptReachedBackend",
       "guiExplicitSkillsRuntimeInputSubmitted",
       "readModelExplicitSkillSearchObserved",
-      "evidenceExplicitSkillBodyReadObserved",
+      "readModelExplicitSkillBodyReadObserved",
       "explicitSkillSearchBeforeSkillInvocation",
       "manualEnableSkillsRuntimePromptReachedBackend",
       "manualEnableSkillsRuntimeMetadataReachedBackend",
@@ -208,12 +221,12 @@ export function registerSkillsRuntimeSmokeGuards({
       "expertDeclaredSkillRefsObserved",
       "expertSelectedSkillObserved",
       "expertInvokedSkillObserved",
-      "evidencePackExpertSkillSearchObserved",
-      "evidencePackExpertSkillInvocationObserved",
+      "readModelExpertSkillSearchObserved",
+      "readModelExpertSkillInvocationObserved",
       "expertSkillSearchBeforeSkillInvocation",
       "guiManualEnableSkillsRuntimeCompleted",
       "readModelManualEnableSkillSearchObserved",
-      "evidenceManualEnableWorkspaceRuntimeEnableObserved",
+      "readModelManualEnableWorkspaceRuntimeEnableObserved",
       "manualEnableSkillSearchBeforeSkillInvocation",
       "SKILLS_RUNTIME_ASSERTION_KEYS",
     ]);
@@ -243,11 +256,8 @@ export function registerSkillsRuntimeSmokeGuards({
       "setExpertSkillPickerQuery",
       "pickerSearch",
       "waitForExpertPanelAddedSkill",
-      "exportExpertPanelEvidencePackFromHarnessPanel",
       "missing-visible-trigger",
       "visibleElementSnapshot(candidate).visible",
-      "导出问题证据包",
-      "刷新证据包",
       "app-sidebar-nav-plugins",
       "plugin-workspace-tab-experts",
       "expert-start-${EXPERT_SKILLS_RUNTIME_ID}",
@@ -257,6 +267,11 @@ export function registerSkillsRuntimeSmokeGuards({
     expect(expertActionsContent).not.toContain("skill:local:capability-report");
     expect(expertActionsContent).not.toContain("agent_runtime_");
     expect(expertActionsContent).not.toContain("app-sidebar-nav-experts");
+    expectAllNotToContain(expect, expertActionsContent, [
+      "exportExpertPanelEvidencePackFromHarnessPanel",
+      "导出问题证据包",
+      "刷新证据包",
+    ]);
 
     expectAllToContain(expect, sessionContent, [
       "lime:skill-catalog-changed",
@@ -317,7 +332,7 @@ export function registerSkillsRuntimeSmokeGuards({
       "expertDeclaredObserved",
       "expertSelectedObserved",
       "expertInvokedObserved",
-      "export function summarizeSkillsRuntimeEvidenceExport",
+      "export function summarizeSkillsRuntimeThreadRead",
     ]);
     for (const assertionKey of EXPERT_PLAZA_SKILLS_RUNTIME_ASSERTION_KEYS) {
       expect(content).toContain(assertionKey);
@@ -358,68 +373,26 @@ export function registerSkillsRuntimeSmokeGuards({
     expect(scenarioContent).not.toContain("agent_runtime_");
   });
 
-  it("summarizes Skills runtime evidence with mixed camelCase and snake_case fields", () => {
+  it("summarizes Skills runtime facts from the canonical read model", () => {
     const scenario = createSkillsRuntimeFixtureScenario(
       "skills-runtime-unit-session",
     );
-    const evidenceExportResult = {
-      evidencePack: {
-        observability_summary: {
-          skillSearches: [
-            {
-              query: SKILLS_RUNTIME_QUERY,
-              tool_call_id: scenario.searchToolCallId,
-            },
-          ],
-          skill_invocations: [
-            {
-              skill_name: SKILLS_RUNTIME_SKILL_NAME,
-              toolCallId: scenario.skillToolCallId,
-              workspaceSkillRuntimeEnable: {
-                source: "manual_session_enable",
-                authorization_scope: "session",
-              },
-            },
-          ],
-        },
-      },
-      events: [
-        canonicalToolCompletedEvent(scenario.searchToolCallId, {
-          eventTypeKey: "event_type",
-          callIdKey: "callId",
-        }),
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: {
-              skillRuntime: {
-                event: "skill_body_read",
-              },
-            },
-          },
-        },
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: {
-              skill_runtime: {
-                event: "skill_gate_decision",
-                mode: "selected_skills",
-              },
-            },
-          },
-        },
-        canonicalToolCompletedEvent(scenario.skillToolCallId, {
-          eventTypeKey: "eventType",
-        }),
-      ],
-    };
+    const readModelResult = canonicalReadModel([
+      canonicalToolCompletedItem(scenario.searchToolCallId),
+      canonicalRuntimeItem("skill-body-read", {
+        skillRuntime: { event: "skill_body_read" },
+      }),
+      canonicalRuntimeItem("skill-gate", {
+        skillRuntime: { event: "skill_gate_decision", mode: "selected_skills" },
+      }),
+      canonicalToolCompletedItem(scenario.skillToolCallId),
+    ]);
 
     expect(
-      summarizeSkillsRuntimeEvidenceExport(evidenceExportResult, scenario),
+      summarizeSkillsRuntimeThreadRead(readModelResult, scenario),
     ).toMatchObject({
-      hasEvidencePack: true,
-      eventCount: 4,
+      hasThreadRead: true,
+      itemCount: 4,
       skillSearchCount: 1,
       skillInvocationCount: 1,
       hasSkillSearchSummary: true,
@@ -440,48 +413,23 @@ export function registerSkillsRuntimeSmokeGuards({
     });
   });
 
-  it("rejects Skills runtime gate evidence that precedes the skill body read", () => {
+  it("rejects a Skills runtime gate that precedes the skill body read", () => {
     const scenario = createSkillsRuntimeFixtureScenario(
       "skills-runtime-unit-session",
     );
-    const evidenceExportResult = {
-      evidencePack: {
-        observabilitySummary: {
-          skillSearches: [
-            {
-              query: SKILLS_RUNTIME_QUERY,
-              toolCallId: scenario.searchToolCallId,
-            },
-          ],
-          skillInvocations: [
-            {
-              skillName: SKILLS_RUNTIME_SKILL_NAME,
-              toolCallId: scenario.skillToolCallId,
-              workspaceSkillRuntimeEnable: { source: "manual_session_enable" },
-            },
-          ],
-        },
-      },
-      events: [
-        canonicalToolCompletedEvent(scenario.searchToolCallId),
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: { skillRuntime: { event: "skill_gate_decision" } },
-          },
-        },
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: { skillRuntime: { event: "skill_body_read" } },
-          },
-        },
-        canonicalToolCompletedEvent(scenario.skillToolCallId),
-      ],
-    };
+    const readModelResult = canonicalReadModel([
+      canonicalToolCompletedItem(scenario.searchToolCallId),
+      canonicalRuntimeItem("skill-gate", {
+        skillRuntime: { event: "skill_gate_decision" },
+      }),
+      canonicalRuntimeItem("skill-body-read", {
+        skillRuntime: { event: "skill_body_read" },
+      }),
+      canonicalToolCompletedItem(scenario.skillToolCallId),
+    ]);
 
     expect(
-      summarizeSkillsRuntimeEvidenceExport(evidenceExportResult, scenario),
+      summarizeSkillsRuntimeThreadRead(readModelResult, scenario),
     ).toMatchObject({
       skillBodyReadObserved: true,
       skillGateObserved: false,
@@ -499,50 +447,25 @@ export function registerSkillsRuntimeSmokeGuards({
       "skills-runtime-unit-session",
       { variant: "explicit" },
     );
-    const evidenceExportResult = {
-      evidencePack: {
-        observabilitySummary: {
-          skillSearches: [
-            {
-              query: SKILLS_RUNTIME_QUERY,
-              toolCallId: natural.searchToolCallId,
-            },
-            {
-              query: SKILLS_RUNTIME_QUERY,
-              toolCallId: explicit.searchToolCallId,
-            },
-          ],
-          skillInvocations: [
-            {
-              skillName: SKILLS_RUNTIME_SKILL_NAME,
-              toolCallId: natural.skillToolCallId,
-              workspaceSkillRuntimeEnable: { source: "manual_session_enable" },
-            },
-          ],
-        },
-      },
-      events: [
-        canonicalToolCompletedEvent(natural.searchToolCallId),
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: { skillRuntime: { event: "skill_body_read" } },
-          },
-        },
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: { skillRuntime: { event: "skill_gate_decision" } },
-          },
-        },
-        canonicalToolCompletedEvent(natural.skillToolCallId),
-        canonicalToolCompletedEvent(explicit.searchToolCallId),
-        canonicalToolCompletedEvent(explicit.skillToolCallId),
+    const readModelResult = canonicalReadModel([
+      [
+        canonicalToolCompletedItem(natural.searchToolCallId),
+        canonicalRuntimeItem("skill-body-read", {
+          skillRuntime: { event: "skill_body_read" },
+        }),
+        canonicalRuntimeItem("skill-gate", {
+          skillRuntime: { event: "skill_gate_decision" },
+        }),
+        canonicalToolCompletedItem(natural.skillToolCallId),
       ],
-    };
+      [
+        canonicalToolCompletedItem(explicit.searchToolCallId),
+        canonicalToolCompletedItem(explicit.skillToolCallId),
+      ],
+    ]);
 
     expect(
-      summarizeSkillsRuntimeEvidenceExport(evidenceExportResult, natural),
+      summarizeSkillsRuntimeThreadRead(readModelResult, natural),
     ).toMatchObject({
       skillBodyReadObserved: true,
       skillGateObserved: true,
@@ -550,10 +473,10 @@ export function registerSkillsRuntimeSmokeGuards({
       skillSearchBeforeSkillInvocation: true,
     });
     expect(
-      summarizeSkillsRuntimeEvidenceExport(evidenceExportResult, explicit),
+      summarizeSkillsRuntimeThreadRead(readModelResult, explicit),
     ).toMatchObject({
       hasSkillSearchSummary: true,
-      hasSkillInvocationSummary: false,
+      hasSkillInvocationSummary: true,
       skillBodyReadObserved: false,
       skillGateObserved: false,
       skillSearchBeforeSkillInvocation: true,
@@ -564,51 +487,24 @@ export function registerSkillsRuntimeSmokeGuards({
     const scenario = createManualEnableSkillsRuntimeFixtureScenario(
       "skills-runtime-unit-session",
     );
-    const evidenceExportResult = {
-      evidencePack: {
-        observabilitySummary: {
-          skillSearches: [
-            {
-              query: SKILLS_RUNTIME_QUERY,
-              toolCallId: scenario.searchToolCallId,
-            },
-          ],
-          skillInvocations: [
-            {
-              skillName: SKILLS_RUNTIME_SKILL_NAME,
-              toolCallId: scenario.skillToolCallId,
-              workspaceSkillRuntimeEnable: { source: "manual_session_enable" },
-            },
-          ],
+    const readModelResult = canonicalReadModel([
+      canonicalToolCompletedItem(scenario.searchToolCallId),
+      canonicalRuntimeItem("skill-body-read", {
+        skillRuntime: { event: "skill_body_read" },
+      }),
+      canonicalRuntimeItem("skill-gate", {
+        skillRuntime: {
+          event: "skill_gate_decision",
+          mode: "workspace_runtime_enable",
+          workspaceRuntimeEnable: true,
+          sourceAllowlist: [SKILLS_RUNTIME_SKILL_NAME],
         },
-      },
-      events: [
-        canonicalToolCompletedEvent(scenario.searchToolCallId),
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: { skillRuntime: { event: "skill_body_read" } },
-          },
-        },
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: {
-              skill_runtime: {
-                event: "skill_gate_decision",
-                mode: "workspace_runtime_enable",
-                workspace_runtime_enable: true,
-                source_allowlist: [SKILLS_RUNTIME_SKILL_NAME],
-              },
-            },
-          },
-        },
-        canonicalToolCompletedEvent(scenario.skillToolCallId),
-      ],
-    };
+      }),
+      canonicalToolCompletedItem(scenario.skillToolCallId),
+    ]);
 
     expect(
-      summarizeSkillsRuntimeEvidenceExport(evidenceExportResult, scenario),
+      summarizeSkillsRuntimeThreadRead(readModelResult, scenario),
     ).toMatchObject({
       hasSkillSearchSummary: true,
       hasSkillInvocationSummary: true,
@@ -628,94 +524,40 @@ export function registerSkillsRuntimeSmokeGuards({
     const scenario = createExpertSkillsRuntimeFixtureScenario(
       "expert-skills-runtime-unit-session",
     );
-    const evidenceExportResult = {
-      evidencePack: {
-        observability_summary: {
-          skill_searches: [
-            {
-              query: SKILLS_RUNTIME_QUERY,
-              toolCallId: scenario.searchToolCallId,
-            },
-          ],
-          skillInvocations: [
-            {
-              skill_name: SKILLS_RUNTIME_SKILL_NAME,
-              tool_call_id: scenario.skillToolCallId,
-              workspace_skill_runtime_enable: {
-                source: "manual_session_enable",
-              },
-            },
-          ],
+    const readModelResult = canonicalReadModel([
+      canonicalRuntimeItem("expert-declared", {
+        expertSkillsRuntime: {
+          event: "expert_declared_skill_refs",
+          skillRefs: [EXPERT_SKILLS_RUNTIME_SKILL_REF],
         },
-      },
-      events: [
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: {
-              expertSkillsRuntime: {
-                event: "expert_declared_skill_refs",
-                skillRefs: [EXPERT_SKILLS_RUNTIME_SKILL_REF],
-              },
-            },
-          },
+      }),
+      canonicalToolCompletedItem(scenario.searchToolCallId),
+      canonicalRuntimeItem("skill-body-read", {
+        skillRuntime: { event: "skill_body_read" },
+      }),
+      canonicalRuntimeItem("skill-gate", {
+        skillRuntime: { event: "skill_gate_decision", mode: "selected_skills" },
+      }),
+      canonicalRuntimeItem("expert-selected", {
+        expertSkillsRuntime: {
+          event: "expert_selected_skill",
+          skillName: SKILLS_RUNTIME_SKILL_NAME,
         },
-        canonicalToolCompletedEvent(scenario.searchToolCallId, {
-          eventTypeKey: "event_type",
-        }),
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: {
-              skillRuntime: { event: "skill_body_read" },
-            },
-          },
+      }),
+      canonicalToolCompletedItem(scenario.skillToolCallId),
+      canonicalRuntimeItem("expert-invoked", {
+        expertSkillsRuntime: {
+          event: "expert_invoked_skill",
+          skillName: SKILLS_RUNTIME_SKILL_NAME,
         },
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: {
-              skill_runtime: {
-                event: "skill_gate_decision",
-                mode: "selected_skills",
-              },
-            },
-          },
-        },
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: {
-              expert_skills_runtime: {
-                event: "expert_selected_skill",
-                skill_name: SKILLS_RUNTIME_SKILL_NAME,
-              },
-            },
-          },
-        },
-        canonicalToolCompletedEvent(scenario.skillToolCallId, {
-          eventTypeKey: "eventType",
-          callIdKey: "callId",
-        }),
-        {
-          type: "runtime.status",
-          payload: {
-            metadata: {
-              expertSkillsRuntime: {
-                event: "expert_invoked_skill",
-                skillName: SKILLS_RUNTIME_SKILL_NAME,
-              },
-            },
-          },
-        },
-      ],
-    };
+      }),
+    ]);
 
     expect(
-      summarizeSkillsRuntimeEvidenceExport(evidenceExportResult, scenario),
+      summarizeSkillsRuntimeThreadRead(readModelResult, scenario),
     ).toMatchObject({
-      hasEvidencePack: true,
-      eventCount: 7,
+      hasThreadRead: true,
+      itemCount: 7,
       hasSkillSearchSummary: true,
       hasSkillInvocationSummary: true,
       skillBodyReadObserved: true,
@@ -754,7 +596,7 @@ export function registerSkillsRuntimeSmokeGuards({
       "Claw Expert Panel Skills Runtime override Electron fixture",
       '"expert-panel-skills-runtime"',
       "claw-chat-current-fixture-expert-panel-skills-runtime-regression",
-      "ExpertInfoPanel 调整 skillRefs 后下一轮继承同一 Skills Runtime 闭环并展示 Evidence Pack 复盘 Electron fixture",
+      "ExpertInfoPanel 调整 skillRefs 后下一轮继承同一 Skills Runtime 闭环并由 thread/read + App Server canonical read model 复盘 Electron fixture",
       'LIME_ALLOW_LIVE_PROVIDER_SMOKE: "0"',
       'LIME_REAL_API_TEST: "0"',
     ]);

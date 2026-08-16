@@ -157,14 +157,14 @@
         "npm run smoke:agent-runtime-current-fixture",
         "npm run test:rust:related -- lime-rs/crates/app-server/src/runtime_backend/coding_events.rs lime-rs/crates/app-server/src/runtime/event_store.rs lime-rs/crates/tool-runtime/src/native_overlay.rs"
       ],
-      "goal": "验证 Lime coding 的确定性主链走 Codex-first Thread/Turn/Item、App Server JSON-RPC、tool lifecycle、workspace diff、Evidence Pack 和 replay/regression；DeepSWE v2 作为独立 L7 coding eval 补充能力评估，不替代本场景，也不得回退 Agent compat 工具面。",
-      "verifier": "必须看到 agentSession/turn/start、Read/apply_patch/Glob/Grep/Bash provider request、真实工具执行结果、patch/file 产物、command output、coding event projection、Evidence Pack 导出和失败晋升 replay/regression 的证据；deterministic fixture 必须声明 liveProviderUsed=false，不能伪装成外部 benchmark pass。",
+      "goal": "验证 Lime coding 的确定性主链走 Codex-first Thread/Turn/Item、App Server JSON-RPC、tool lifecycle、workspace diff、canonical read model 和 replay/regression；DeepSWE v2 作为独立 L7 coding eval 补充能力评估，不替代本场景，也不得回退 Agent compat 工具面。",
+      "verifier": "必须看到 agentSession/turn/start、Read/apply_patch/Glob/Grep/Bash provider request、真实工具执行结果、patch/file 产物、command output、coding event projection、agentSession/read/thread/read/thread/items/list/artifact/read canonical facts 和失败晋升 replay/regression 的证据；deterministic fixture 必须声明 liveProviderUsed=false，不能伪装成外部 benchmark pass。",
       "evidenceRequired": [
         "provider tool request includes Read/apply_patch/Glob/Grep/Bash",
         "runtime transcript with tool request/result/error recovery",
         "patch/file artifact, command output, and workspace diff or file checkpoint diff",
         "coding lifecycle events for command/apply_patch/file_changed/test output",
-        "App Server Evidence Pack from evidence/export",
+        "App Server canonical read model from agentSession/read and thread/read",
         "replay/regression promotion record for any fixed coding failure",
         "GUI session owner / isolation statement",
         "liveProviderUsed=false statement for deterministic fixture"

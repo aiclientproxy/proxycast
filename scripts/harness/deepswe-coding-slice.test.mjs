@@ -42,10 +42,8 @@ describe("DeepSWE coding slice v2", () => {
         maxProviderSteps: 32,
         tokenBudget: 500_000,
         tokenFormula: "max(0,input_tokens-cached_input_tokens)+output_tokens",
-        evidenceIntervalMs: 30_000,
         enforcementOwner:
           "agent-runtime reply loop before tool execution and next sampling",
-        adapterFallback: "token evidence polling for timeout races only",
       },
       requiredEvidence: {
         agent: [

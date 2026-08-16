@@ -127,7 +127,6 @@ impl RequestProcessor {
             v2::METHOD_COMMAND_EXEC_TERMINATE => self
                 .handle_command_exec_terminate_impl(params, connection_request_id.clone())
                 .boxed(),
-            METHOD_EVIDENCE_EXPORT => self.handle_evidence_export(params).boxed(),
             METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT => {
                 self.handle_handoff_bundle_export(params).boxed()
             }
@@ -365,6 +364,9 @@ impl RequestProcessor {
                 .boxed(),
             METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE => self
                 .handle_media_task_artifact_audio_create_impl(params)
+                .boxed(),
+            METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE => self
+                .handle_media_task_artifact_transcription_create_impl(params)
                 .boxed(),
             METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE => self
                 .handle_media_task_artifact_video_create_impl(params)

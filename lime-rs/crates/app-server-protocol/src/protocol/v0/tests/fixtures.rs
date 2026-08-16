@@ -64,7 +64,6 @@ fn initialize_response_matches_protocol_fixture_shape() {
                     agent_session: true,
                     capability_discovery: true,
                     artifact: true,
-                    evidence: true,
                     workspace: true,
                 },
             },
@@ -91,7 +90,6 @@ fn initialize_response_matches_protocol_fixture_shape() {
                     "agentSession": true,
                     "capabilityDiscovery": true,
                     "artifact": true,
-                    "evidence": true,
                     "workspace": true
                 }
             }
@@ -253,191 +251,6 @@ fn artifact_summary_content_status_matches_protocol_fixture_shape() {
             "contentStatus": "available",
             "metadata": {
                 "version": 2
-            }
-        })
-    );
-}
-
-#[test]
-fn evidence_export_request_matches_protocol_fixture_shape() {
-    let value = serde_json::to_value(JsonRpcRequest::new(
-        RequestId::Integer(7),
-        METHOD_EVIDENCE_EXPORT,
-        Some(
-            serde_json::to_value(EvidenceExportParams {
-                session_id: "sess_1".to_string(),
-                turn_id: Some("turn_1".to_string()),
-                include_events: Some(true),
-                include_artifacts: Some(true),
-                include_evidence_pack: Some(true),
-            })
-            .expect("serialize params"),
-        ),
-    ))
-    .expect("serialize request");
-
-    assert_eq!(
-        value,
-        json!({
-            "id": 7,
-            "method": "evidence/export",
-            "params": {
-                "sessionId": "sess_1",
-                "turnId": "turn_1",
-                "includeEvents": true,
-                "includeArtifacts": true,
-                "includeEvidencePack": true
-            }
-        })
-    );
-}
-
-#[test]
-fn evidence_export_response_matches_protocol_fixture_shape() {
-    let value = serde_json::to_value(EvidenceExportResponse {
-        session: AgentSession {
-            session_id: "sess_1".to_string(),
-            thread_id: "thread_1".to_string(),
-            app_id: "content-studio".to_string(),
-            workspace_id: Some("workspace-main".to_string()),
-            business_object_ref: None,
-            status: AgentSessionStatus::Running,
-            created_at: "2026-06-05T00:00:00.000Z".to_string(),
-            updated_at: "2026-06-05T00:00:01.000Z".to_string(),
-        },
-        turns: vec![AgentTurn {
-            turn_id: "turn_1".to_string(),
-            session_id: "sess_1".to_string(),
-            thread_id: "thread_1".to_string(),
-            status: AgentTurnStatus::Accepted,
-            started_at: Some("2026-06-05T00:00:01.000Z".to_string()),
-            completed_at: None,
-        }],
-        events: vec![AgentEvent {
-            event_id: "evt_1".to_string(),
-            sequence: 1,
-            session_id: "sess_1".to_string(),
-            thread_id: Some("thread_1".to_string()),
-            turn_id: Some("turn_1".to_string()),
-            event_type: "artifact.snapshot".to_string(),
-            timestamp: "2026-06-05T00:00:01.000Z".to_string(),
-            payload: json!({
-                "artifactId": "artifact-report",
-                "path": ".app-server/artifacts/report.md"
-            }),
-        }],
-        artifacts: vec![ArtifactSummary {
-            artifact_ref: "artifact-report".to_string(),
-            event_id: "evt_1".to_string(),
-            sequence: 1,
-            turn_id: Some("turn_1".to_string()),
-            artifact_id: Some("artifact-report".to_string()),
-            path: Some(".app-server/artifacts/report.md".to_string()),
-            title: None,
-            kind: None,
-            status: None,
-            content: None,
-            content_status: ArtifactContentStatus::NotRequested,
-            metadata: None,
-        }],
-        exported_at: "2026-06-05T00:00:02.000Z".to_string(),
-        evidence_pack: Some(EvidencePackSummary {
-            pack_relative_root: ".lime/harness/sessions/sess_1/evidence".to_string(),
-            pack_absolute_root: Some(
-                "/workspace/.lime/harness/sessions/sess_1/evidence".to_string(),
-            ),
-            exported_at: "2026-06-05T00:00:03.000Z".to_string(),
-            thread_status: "running".to_string(),
-            latest_turn_status: Some("accepted".to_string()),
-            turn_count: 1,
-            item_count: 3,
-            pending_request_count: 0,
-            queued_turn_count: 0,
-            recent_artifact_count: 1,
-            known_gaps: vec!["gui_smoke_not_run".to_string()],
-            observability_summary: Some(json!({
-                "schema_version": "runtime-evidence-pack.v1"
-            })),
-            completion_audit_summary: Some(json!({
-                "decision": "in_progress"
-            })),
-            artifacts: vec![EvidencePackArtifact {
-                kind: "summary".to_string(),
-                title: "Evidence Summary".to_string(),
-                relative_path: ".lime/harness/sessions/sess_1/evidence/summary.md".to_string(),
-                absolute_path: None,
-                bytes: 128,
-            }],
-        }),
-    })
-    .expect("serialize evidence export response");
-
-    assert_eq!(
-        value,
-        json!({
-            "session": {
-                "sessionId": "sess_1",
-                "threadId": "thread_1",
-                "appId": "content-studio",
-                "workspaceId": "workspace-main",
-                "status": "running",
-                "createdAt": "2026-06-05T00:00:00.000Z",
-                "updatedAt": "2026-06-05T00:00:01.000Z"
-            },
-            "turns": [{
-                "turnId": "turn_1",
-                "sessionId": "sess_1",
-                "threadId": "thread_1",
-                "status": "accepted",
-                "startedAt": "2026-06-05T00:00:01.000Z"
-            }],
-            "events": [{
-                "eventId": "evt_1",
-                "sequence": 1,
-                "sessionId": "sess_1",
-                "threadId": "thread_1",
-                "turnId": "turn_1",
-                "type": "artifact.snapshot",
-                "timestamp": "2026-06-05T00:00:01.000Z",
-                "payload": {
-                    "artifactId": "artifact-report",
-                    "path": ".app-server/artifacts/report.md"
-                }
-            }],
-            "artifacts": [{
-                "artifactRef": "artifact-report",
-                "eventId": "evt_1",
-                "sequence": 1,
-                "turnId": "turn_1",
-                "artifactId": "artifact-report",
-                "path": ".app-server/artifacts/report.md",
-                "contentStatus": "notRequested"
-            }],
-            "exportedAt": "2026-06-05T00:00:02.000Z",
-            "evidencePack": {
-                "packRelativeRoot": ".lime/harness/sessions/sess_1/evidence",
-                "packAbsoluteRoot": "/workspace/.lime/harness/sessions/sess_1/evidence",
-                "exportedAt": "2026-06-05T00:00:03.000Z",
-                "threadStatus": "running",
-                "latestTurnStatus": "accepted",
-                "turnCount": 1,
-                "itemCount": 3,
-                "pendingRequestCount": 0,
-                "queuedTurnCount": 0,
-                "recentArtifactCount": 1,
-                "knownGaps": ["gui_smoke_not_run"],
-                "observabilitySummary": {
-                    "schema_version": "runtime-evidence-pack.v1"
-                },
-                "completionAuditSummary": {
-                    "decision": "in_progress"
-                },
-                "artifacts": [{
-                    "kind": "summary",
-                    "title": "Evidence Summary",
-                    "relativePath": ".lime/harness/sessions/sess_1/evidence/summary.md",
-                    "bytes": 128
-                }]
             }
         })
     );

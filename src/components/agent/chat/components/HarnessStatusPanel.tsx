@@ -20,7 +20,6 @@ import type { HarnessStatusPanelProps } from "./HarnessStatusPanelTypes";
 import { type AgentTranslation } from "./HarnessStatusPanelPrimitives";
 import type { HarnessSectionKey } from "./HarnessStatusSectionFrame";
 import { useHarnessPreviewDialog } from "./useHarnessPreviewDialog";
-import { useHarnessEvidencePackExport } from "./useHarnessEvidencePackExport";
 import {
   buildRuntimeFactSummary,
   buildRuntimeTaskPresentation,
@@ -132,8 +131,6 @@ export function HarnessStatusPanel({
     handleRevealPath,
     handleOpenPath,
   } = previewModel;
-  const evidencePackExport = useHarnessEvidencePackExport(currentSessionId);
-  const { evidencePack } = evidencePackExport;
   const agentUiProjectionFilter = useMemo<AgentUiProjectionScopeFilter | null>(
     () => (currentSessionId ? { sessionId: currentSessionId } : null),
     [currentSessionId],
@@ -169,7 +166,6 @@ export function HarnessStatusPanel({
     setExpanded((value) => !value);
   }, []);
 
-  const hasHandoffSection = Boolean(currentSessionId);
   const runtimeTaskPresentation = useMemo(
     () => buildRuntimeTaskPresentation(harnessState.runtimeStatus),
     [harnessState.runtimeStatus],
@@ -256,7 +252,6 @@ export function HarnessStatusPanel({
         environment,
         fileChangeReviewEntriesLength: fileChangeReviewEntries.length,
         hasAgentUiProjectionSection,
-        hasHandoffSection,
         hasToolInventorySection,
         harnessState,
         realTeamSummary,
@@ -267,13 +262,13 @@ export function HarnessStatusPanel({
           summary: threadReliabilitySummary.summary,
         },
         fileReviewTitle,
+        runtimeFactSummary,
       }),
     [
       environment,
       fileChangeReviewEntries.length,
       fileReviewTitle,
       hasAgentUiProjectionSection,
-      hasHandoffSection,
       hasToolInventorySection,
       harnessState,
       realTeamSummary,
@@ -281,6 +276,7 @@ export function HarnessStatusPanel({
       threadReliabilitySummary.shouldRender,
       threadReliabilitySummary.statusLabel,
       threadReliabilitySummary.summary,
+      runtimeFactSummary,
     ],
   );
 
@@ -295,9 +291,8 @@ export function HarnessStatusPanel({
           summaryValue: fileReviewSummaryValue,
           emptyHint: fileReviewEmptyHint,
         },
-        evidencePack,
+        runtimeFactSummary,
         hasAgentUiProjectionSection,
-        hasHandoffSection,
         hasToolInventorySection,
         harnessState,
         realTeamSummary,
@@ -321,9 +316,7 @@ export function HarnessStatusPanel({
       fileReviewEmptyHint,
       fileReviewSummaryValue,
       fileReviewTitle,
-      evidencePack,
       hasAgentUiProjectionSection,
-      hasHandoffSection,
       hasToolInventorySection,
       harnessState,
       realTeamSummary,
@@ -333,6 +326,7 @@ export function HarnessStatusPanel({
       threadReliabilitySummary.shouldRender,
       threadReliabilitySummary.statusLabel,
       threadReliabilitySummary.summary,
+      runtimeFactSummary,
       toolInventory,
       toolInventoryError,
       toolInventoryLoading,
@@ -361,15 +355,12 @@ export function HarnessStatusPanel({
             agentUiProjectionSummary,
             canInterrupt,
             canonicalChildren,
-            currentSessionId,
             currentTurnId,
             diagnosticRuntimeContext,
             environment,
             fileReviewState,
             handleOpenExternalLink,
-            evidencePackExport,
             hasAgentUiProjectionSection,
-            hasHandoffSection,
             harnessState,
             messages,
             onInterruptCurrentTurn,
@@ -408,15 +399,12 @@ export function HarnessStatusPanel({
       agentUiProjectionSummary,
       canInterrupt,
       canonicalChildren,
-      currentSessionId,
       currentTurnId,
       diagnosticRuntimeContext,
       environment,
       fileReviewState,
       handleOpenExternalLink,
-      evidencePackExport,
       hasAgentUiProjectionSection,
-      hasHandoffSection,
       harnessState,
       isDetailsExpanded,
       messages,

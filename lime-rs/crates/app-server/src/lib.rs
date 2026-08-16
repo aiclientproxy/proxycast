@@ -80,10 +80,6 @@ pub use app_server_protocol::ArtifactSummary;
 pub use app_server_protocol::CapabilityDescriptor;
 pub use app_server_protocol::CapabilityListParams;
 pub use app_server_protocol::CapabilityListResponse;
-pub use app_server_protocol::EvidenceExportParams;
-pub use app_server_protocol::EvidenceExportResponse;
-pub use app_server_protocol::EvidencePackArtifact;
-pub use app_server_protocol::EvidencePackSummary;
 use app_server_protocol::InitializeParams;
 use app_server_protocol::JsonRpcError;
 pub use app_server_protocol::JsonRpcMessage;
@@ -102,7 +98,6 @@ pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT;
 pub use app_server_protocol::METHOD_ARTIFACT_READ;
 pub use app_server_protocol::METHOD_CAPABILITY_LIST;
-pub use app_server_protocol::METHOD_EVIDENCE_EXPORT;
 pub use app_server_protocol::METHOD_INITIALIZE;
 pub use app_server_protocol::METHOD_INITIALIZED;
 pub use app_server_protocol::METHOD_THREAD_READ;
@@ -155,15 +150,12 @@ pub use runtime::ArtifactContentProvider;
 pub use runtime::ArtifactContentRequest;
 pub use runtime::AutomationManagementAppDataSource;
 pub use runtime::AutomationOverviewAppDataSource;
-pub use runtime::BasicEvidenceExportProvider;
 pub use runtime::CancelExecutionRequest;
 pub use runtime::ConnectAppDataSource;
 pub use runtime::DiagnosticsAppDataSource;
 pub use runtime::DynamicToolRespondRequest;
 pub use runtime::EventLogRecord;
 pub use runtime::EventLogWriter;
-pub use runtime::EvidenceExportProvider;
-pub use runtime::EvidencePackRequest;
 pub use runtime::ExecutionBackend;
 pub use runtime::ExecutionRequest;
 pub use runtime::FileCheckpointSnapshotReadRequest;
@@ -183,7 +175,6 @@ pub use runtime::MockBackend;
 pub use runtime::ModelCatalogQuery;
 pub use runtime::ModelProviderAppDataSource;
 pub use runtime::NoopAppDataSource;
-pub use runtime::NoopEvidenceExportProvider;
 pub use runtime::NoopFileCheckpointSnapshotStore;
 pub use runtime::NoopOutputSnapshotStore;
 pub use runtime::OutputSnapshotReadRequest;
@@ -2940,17 +2931,11 @@ mod tests {
             )),
         )
         .await;
-        let (thread_id, session_id) = match next_json_message(&mut output_lines).await {
-            JsonRpcMessage::Response(response) => (
-                response.result["thread"]["id"]
-                    .as_str()
-                    .expect("thread id")
-                    .to_string(),
-                response.result["thread"]["sessionId"]
-                    .as_str()
-                    .expect("session id")
-                    .to_string(),
-            ),
+        let thread_id = match next_json_message(&mut output_lines).await {
+            JsonRpcMessage::Response(response) => response.result["thread"]["id"]
+                .as_str()
+                .expect("thread id")
+                .to_string(),
             other => panic!("expected thread response, got {other:?}"),
         };
 
@@ -3010,10 +2995,8 @@ mod tests {
             .as_array()
             .expect("thread data array");
         assert!(
-            sessions
-                .iter()
-                .any(|session| session["sessionId"] == session_id),
-            "running session should be listed while backend waits"
+            sessions.iter().any(|thread| thread["id"] == thread_id),
+            "running thread should be listed while backend waits"
         );
 
         std::fs::write(&trigger_path, b"continue").expect("release backend output");
@@ -3110,17 +3093,11 @@ mod tests {
             )),
         )
         .await;
-        let (thread_id, session_id) = match next_json_message(&mut output_lines).await {
-            JsonRpcMessage::Response(response) => (
-                response.result["thread"]["id"]
-                    .as_str()
-                    .expect("thread id")
-                    .to_string(),
-                response.result["thread"]["sessionId"]
-                    .as_str()
-                    .expect("session id")
-                    .to_string(),
-            ),
+        let thread_id = match next_json_message(&mut output_lines).await {
+            JsonRpcMessage::Response(response) => response.result["thread"]["id"]
+                .as_str()
+                .expect("thread id")
+                .to_string(),
             other => panic!("expected thread response, got {other:?}"),
         };
 
@@ -3163,49 +3140,6 @@ mod tests {
             assert_eq!(params["turn"]["status"], "failed");
             break;
         }
-
-        write_json_message(
-            &mut input_client,
-            JsonRpcMessage::Request(JsonRpcRequest::new(
-                RequestId::Integer(4),
-                METHOD_EVIDENCE_EXPORT,
-                Some(json!({
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "includeEvents": true,
-                    "includeArtifacts": true
-                })),
-            )),
-        )
-        .await;
-        let evidence = next_json_response_result(&mut output_lines, RequestId::Integer(4)).await;
-        assert_eq!(evidence["session"]["sessionId"], session_id);
-        assert_eq!(evidence["turns"][0]["turnId"], turn_id);
-        let events = evidence["events"].as_array().expect("events");
-        let message_created_index = events
-            .iter()
-            .position(|event| event["type"] == "message.created")
-            .expect("message.created event");
-        let message_delta_index = events
-            .iter()
-            .position(|event| event["type"] == "message.delta")
-            .expect("message.delta event");
-        let turn_failed_index = events
-            .iter()
-            .position(|event| event["type"] == "turn.failed")
-            .expect("turn.failed event");
-        assert!(
-            message_created_index < message_delta_index && message_delta_index < turn_failed_index,
-            "stored event order should preserve created -> delta -> failed: {events:?}"
-        );
-        assert!(events[turn_failed_index]["payload"]["message"]
-            .as_str()
-            .expect("evidence failure message")
-            .contains("external backend crashed after partial output"));
-        assert!(evidence["artifacts"]
-            .as_array()
-            .expect("artifacts")
-            .is_empty());
 
         drop(input_client);
         runner.await.expect("runner join").expect("runner result");

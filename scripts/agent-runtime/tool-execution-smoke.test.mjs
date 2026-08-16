@@ -411,15 +411,14 @@ describe("agent runtime tool execution smoke guard", () => {
     expect(Object.values(assertions).every(Boolean)).toBe(true);
   });
 
-  it("extracts only bounded orchestrator attempt facts from canonical events", () => {
+  it("extracts only bounded orchestrator attempt facts from canonical thread items", () => {
     const evidence = extractToolOrchestratorAttemptEvidence({
       callId: TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID,
-      evidenceExport: {
-        events: [
+      threadRead: {
+        turns: [
           {
-            type: "item.completed",
-            payload: {
-              item: {
+            items: [
+              {
                 itemId: `item_${TOOL_ORCHESTRATOR_MANAGED_NETWORK_RETRY_CALL_ID}`,
                 metadata: {
                   toolAttemptCount: 2,
@@ -432,7 +431,7 @@ describe("agent runtime tool execution smoke guard", () => {
                   networkUrl: "http://127.0.0.1/private?secret=value",
                 },
               },
-            },
+            ],
           },
         ],
       },
@@ -659,7 +658,7 @@ describe("agent runtime tool execution smoke guard", () => {
     });
     const assertions = buildDeferredMcpToolSearchAssertions({
       deferredToolName,
-      evidencePackText: deferredToolName,
+      readModelText: deferredToolName,
       providerRequests: [
         { toolNames: ["tool_search"] },
         { toolNames: ["tool_search", deferredToolName] },

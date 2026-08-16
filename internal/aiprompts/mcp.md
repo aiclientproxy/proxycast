@@ -111,7 +111,7 @@ MCP runtime 工具命名唯一事实源：
 - `mcpResource/subscribe` / `mcpResource/unsubscribe` 使用 MCP 标准 resource subscription。
 - 标准通知 `notifications/resources/list_changed` 与 `notifications/resources/updated` 通过 `mcp:resources_updated` / `mcp:resource_updated` 事件刷新 GUI。
 - GUI resource preview 必须截断大文本、只展示 image/blob 摘要，不能把完整 base64 或大正文压进 DOM。
-- `ReadMcpResourceTool` 的 grounding 进入 evidence/export 的 `observability_summary.mcp_resource_reads`，只记录 server、URI 摘要、mime、content refs 等可回放元数据，不复制 resource 正文或 blob。
+- `ReadMcpResourceTool` 的 grounding 进入 canonical read model 的 diagnostics facts，只记录 server、URI 摘要、mime、content refs 等可回放元数据，不复制 resource 正文或 blob。
 
 ## 校验入口
 

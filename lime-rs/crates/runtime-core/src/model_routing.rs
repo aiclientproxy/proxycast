@@ -9,12 +9,14 @@ pub use payload::{
     routing_not_possible_payload_with_attempts,
 };
 pub use profile_slots::{
-    resolve_model_routing_for_candidate, resolve_ready_model_routing,
+    oem_routing_policy_from_metadata, resolve_model_routing_for_candidate,
+    resolve_ready_model_routing, resolve_ready_model_routing_with_candidate_set,
     resolve_ready_model_routing_with_exclusions, selection_from_profile_model_slot,
 };
 pub use types::{
-    ModelRouteExclusion, ModelRoutingDecision, ProfileModelSlot, ProviderReadiness, RoutingAttempt,
-    RoutingResolution, RuntimeModelSelection,
+    CandidateModel, CandidateModelSet, CandidateRequirements, ModelRouteExclusion,
+    ModelRoutingDecision, OemRoutingMode, OemRoutingPolicy, ProfileModelSlot, ProviderReadiness,
+    RoutingAttempt, RoutingResolution, RuntimeModelSelection,
 };
 
 pub const PROFILE_MODEL_SLOT_SOURCE: &str = "profile_model_slot";

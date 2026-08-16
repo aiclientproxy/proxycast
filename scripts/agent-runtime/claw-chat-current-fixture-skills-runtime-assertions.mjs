@@ -73,19 +73,19 @@ export function buildSkillsRuntimeScenarioAssertions({
     readModelSkillInvocationObserved:
       summary.readModelSkillsRuntimeCompleted?.includesSkillTool === true &&
       summary.readModelSkillsRuntimeCompleted?.includesSkillName === true,
-    evidenceSkillBodyReadObserved:
-      summary.evidencePackSkillsRuntime?.skillBodyReadObserved === true,
-    evidenceSkillGateObserved:
-      summary.evidencePackSkillsRuntime?.skillGateObserved === true,
-    evidencePackSkillSearchObserved:
-      summary.evidencePackSkillsRuntime?.hasSkillSearchSummary === true &&
-      summary.evidencePackSkillsRuntime?.searchQuery === SKILLS_RUNTIME_QUERY,
-    evidencePackSkillInvocationObserved:
-      summary.evidencePackSkillsRuntime?.hasSkillInvocationSummary === true &&
-      summary.evidencePackSkillsRuntime?.invocationSkillName ===
+    readModelSkillBodyReadObserved:
+      summary.readModelSkillsRuntime?.skillBodyReadObserved === true,
+    readModelSkillGateObserved:
+      summary.readModelSkillsRuntime?.skillGateObserved === true,
+    readModelSkillSearchObserved:
+      summary.readModelSkillsRuntime?.hasSkillSearchSummary === true &&
+      summary.readModelSkillsRuntime?.searchQuery === SKILLS_RUNTIME_QUERY,
+    readModelSkillInvocationObserved:
+      summary.readModelSkillsRuntime?.hasSkillInvocationSummary === true &&
+      summary.readModelSkillsRuntime?.invocationSkillName ===
         SKILLS_RUNTIME_SKILL_NAME,
     skillSearchBeforeSkillInvocation:
-      summary.evidencePackSkillsRuntime?.skillSearchBeforeSkillInvocation ===
+      summary.readModelSkillsRuntime?.skillSearchBeforeSkillInvocation ===
       true,
     explicitSkillsRuntimePromptReachedBackend:
       explicitSkillsRuntimeTurnStart?.inputText ===
@@ -117,22 +117,22 @@ export function buildSkillsRuntimeScenarioAssertions({
         true &&
       summary.readModelExplicitSkillsRuntimeCompleted?.includesSkillName ===
         true,
-    evidenceExplicitSkillBodyReadObserved:
-      summary.evidencePackExplicitSkillsRuntime?.skillBodyReadObserved === true,
-    evidenceExplicitSkillGateObserved:
-      summary.evidencePackExplicitSkillsRuntime?.skillGateObserved === true,
-    evidencePackExplicitSkillSearchObserved:
-      summary.evidencePackExplicitSkillsRuntime?.hasSkillSearchSummary ===
+    readModelExplicitSkillBodyReadObserved:
+      summary.readModelExplicitSkillsRuntime?.skillBodyReadObserved === true,
+    readModelExplicitSkillGateObserved:
+      summary.readModelExplicitSkillsRuntime?.skillGateObserved === true,
+    readModelExplicitSkillSearchObserved:
+      summary.readModelExplicitSkillsRuntime?.hasSkillSearchSummary ===
         true &&
-      summary.evidencePackExplicitSkillsRuntime?.searchQuery ===
+      summary.readModelExplicitSkillsRuntime?.searchQuery ===
         SKILLS_RUNTIME_QUERY,
-    evidencePackExplicitSkillInvocationObserved:
-      summary.evidencePackExplicitSkillsRuntime?.hasSkillInvocationSummary ===
+    readModelExplicitSkillInvocationObserved:
+      summary.readModelExplicitSkillsRuntime?.hasSkillInvocationSummary ===
         true &&
-      summary.evidencePackExplicitSkillsRuntime?.invocationSkillName ===
+      summary.readModelExplicitSkillsRuntime?.invocationSkillName ===
         SKILLS_RUNTIME_SKILL_NAME,
     explicitSkillSearchBeforeSkillInvocation:
-      summary.evidencePackExplicitSkillsRuntime
+      summary.readModelExplicitSkillsRuntime
         ?.skillSearchBeforeSkillInvocation === true,
     manualEnableSkillsRuntimePromptReachedBackend:
       manualEnableSkillsRuntimeTurnStart?.inputText ===
@@ -193,32 +193,32 @@ export function buildSkillsRuntimeScenarioAssertions({
         true &&
       summary.readModelManualEnableSkillsRuntimeCompleted?.includesSkillName ===
         true,
-    evidenceManualEnableSkillBodyReadObserved:
-      summary.evidencePackManualEnableSkillsRuntime?.skillBodyReadObserved ===
+    readModelManualEnableSkillBodyReadObserved:
+      summary.readModelManualEnableSkillsRuntime?.skillBodyReadObserved ===
       true,
-    evidenceManualEnableSkillGateObserved:
-      summary.evidencePackManualEnableSkillsRuntime?.skillGateObserved ===
+    readModelManualEnableSkillGateObserved:
+      summary.readModelManualEnableSkillsRuntime?.skillGateObserved ===
         true &&
-      summary.evidencePackManualEnableSkillsRuntime?.skillGateMode ===
+      summary.readModelManualEnableSkillsRuntime?.skillGateMode ===
         "workspace_runtime_enable",
-    evidenceManualEnableWorkspaceRuntimeEnableObserved:
-      summary.evidencePackManualEnableSkillsRuntime
+    readModelManualEnableWorkspaceRuntimeEnableObserved:
+      summary.readModelManualEnableSkillsRuntime
         ?.skillGateWorkspaceRuntimeEnable === true &&
-      summary.evidencePackManualEnableSkillsRuntime?.skillGateSourceAllowlist?.includes(
+      summary.readModelManualEnableSkillsRuntime?.skillGateSourceAllowlist?.includes(
         SKILLS_RUNTIME_SKILL_NAME,
       ) === true,
-    evidencePackManualEnableSkillSearchObserved:
-      summary.evidencePackManualEnableSkillsRuntime?.hasSkillSearchSummary ===
+    readModelManualEnableSkillSearchObserved:
+      summary.readModelManualEnableSkillsRuntime?.hasSkillSearchSummary ===
         true &&
-      summary.evidencePackManualEnableSkillsRuntime?.searchQuery ===
+      summary.readModelManualEnableSkillsRuntime?.searchQuery ===
         SKILLS_RUNTIME_QUERY,
-    evidencePackManualEnableSkillInvocationObserved:
-      summary.evidencePackManualEnableSkillsRuntime
+    readModelManualEnableSkillInvocationObserved:
+      summary.readModelManualEnableSkillsRuntime
         ?.hasSkillInvocationSummary === true &&
-      summary.evidencePackManualEnableSkillsRuntime?.invocationSkillName ===
+      summary.readModelManualEnableSkillsRuntime?.invocationSkillName ===
         SKILLS_RUNTIME_SKILL_NAME,
     manualEnableSkillSearchBeforeSkillInvocation:
-      summary.evidencePackManualEnableSkillsRuntime
+      summary.readModelManualEnableSkillsRuntime
         ?.skillSearchBeforeSkillInvocation === true,
   };
 }
@@ -250,20 +250,20 @@ export function buildExpertSkillsRuntimeScenarioAssertions({
             expertHarnessSkillRefs.includes(expectedExpertHarnessSkillRef) ===
               true,
           expertDeclaredSkillRefsObserved:
-            summary.evidencePackExpertSkillsRuntime?.expertDeclaredObserved ===
+            summary.readModelExpertSkillsRuntime?.expertDeclaredObserved ===
               true &&
-            summary.evidencePackExpertSkillsRuntime?.expertDeclaredSkillRefs?.includes(
+            summary.readModelExpertSkillsRuntime?.expertDeclaredSkillRefs?.includes(
               EXPERT_SKILLS_RUNTIME_SKILL_REF,
             ) === true,
           expertSelectedSkillObserved:
-            summary.evidencePackExpertSkillsRuntime?.expertSelectedObserved ===
+            summary.readModelExpertSkillsRuntime?.expertSelectedObserved ===
               true &&
-            summary.evidencePackExpertSkillsRuntime?.expertSelectedSkill ===
+            summary.readModelExpertSkillsRuntime?.expertSelectedSkill ===
               SKILLS_RUNTIME_SKILL_NAME,
           expertInvokedSkillObserved:
-            summary.evidencePackExpertSkillsRuntime?.expertInvokedObserved ===
+            summary.readModelExpertSkillsRuntime?.expertInvokedObserved ===
               true &&
-            summary.evidencePackExpertSkillsRuntime?.expertInvokedSkill ===
+            summary.readModelExpertSkillsRuntime?.expertInvokedSkill ===
               SKILLS_RUNTIME_SKILL_NAME,
           guiExpertSkillsRuntimeSessionVisible:
             summary.guiExpertSkillsRuntimeSessionVisible?.hasSessionTitle ===
@@ -289,26 +289,26 @@ export function buildExpertSkillsRuntimeScenarioAssertions({
               true &&
             summary.readModelExpertSkillsRuntimeCompleted?.includesSkillName ===
               true,
-          evidenceExpertSkillBodyReadObserved:
-            summary.evidencePackExpertSkillsRuntime?.skillBodyReadObserved ===
+          readModelExpertSkillBodyReadObserved:
+            summary.readModelExpertSkillsRuntime?.skillBodyReadObserved ===
             true,
-          evidenceExpertSkillGateObserved:
-            summary.evidencePackExpertSkillsRuntime?.skillGateObserved ===
+          readModelExpertSkillGateObserved:
+            summary.readModelExpertSkillsRuntime?.skillGateObserved ===
               true &&
-            summary.evidencePackExpertSkillsRuntime?.skillGateMode ===
+            summary.readModelExpertSkillsRuntime?.skillGateMode ===
               "selected_skills",
-          evidencePackExpertSkillSearchObserved:
-            summary.evidencePackExpertSkillsRuntime?.hasSkillSearchSummary ===
+          readModelExpertSkillSearchObserved:
+            summary.readModelExpertSkillsRuntime?.hasSkillSearchSummary ===
               true &&
-            summary.evidencePackExpertSkillsRuntime?.searchQuery ===
+            summary.readModelExpertSkillsRuntime?.searchQuery ===
               SKILLS_RUNTIME_QUERY,
-          evidencePackExpertSkillInvocationObserved:
-            summary.evidencePackExpertSkillsRuntime
+          readModelExpertSkillInvocationObserved:
+            summary.readModelExpertSkillsRuntime
               ?.hasSkillInvocationSummary === true &&
-            summary.evidencePackExpertSkillsRuntime?.invocationSkillName ===
+            summary.readModelExpertSkillsRuntime?.invocationSkillName ===
               SKILLS_RUNTIME_SKILL_NAME,
           expertSkillSearchBeforeSkillInvocation:
-            summary.evidencePackExpertSkillsRuntime
+            summary.readModelExpertSkillsRuntime
               ?.skillSearchBeforeSkillInvocation === true,
         }),
     ...(isExpertPlazaSkillsRuntimeScenario || isExpertPanelSkillsRuntimeScenario
@@ -356,7 +356,7 @@ export function buildExpertSkillsRuntimeScenarioAssertions({
             expertPanelSkillsRuntimeTurnStart?.inputText ===
             EXPERT_SKILLS_RUNTIME_PANEL_PROMPT,
           expertPanelSkillRefsOverrideReachedBackend:
-            summary.evidencePackExpertPanelSkillsRuntime?.expertDeclaredSkillRefs?.includes(
+            summary.readModelExpertPanelSkillsRuntime?.expertDeclaredSkillRefs?.includes(
               EXPERT_PANEL_SKILLS_RUNTIME_UI_SKILL_REF,
             ) === true,
           expertPanelReadModelCompleted:
@@ -366,32 +366,27 @@ export function buildExpertSkillsRuntimeScenarioAssertions({
               ?.includesAssistantDone === true ||
               summary.readModelExpertPanelSkillsRuntimeCompleted
                 ?.includesAssistantSummary === true),
-          expertPanelEvidenceSkillBodyReadObserved:
-            summary.evidencePackExpertPanelSkillsRuntime
+          expertPanelReadModelSkillBodyReadObserved:
+            summary.readModelExpertPanelSkillsRuntime
               ?.skillBodyReadObserved === true,
-          expertPanelEvidenceSkillGateObserved:
-            summary.evidencePackExpertPanelSkillsRuntime?.skillGateObserved ===
+          expertPanelReadModelSkillGateObserved:
+            summary.readModelExpertPanelSkillsRuntime?.skillGateObserved ===
               true &&
-            summary.evidencePackExpertPanelSkillsRuntime?.skillGateMode ===
+            summary.readModelExpertPanelSkillsRuntime?.skillGateMode ===
               "selected_skills",
-          expertPanelEvidenceSkillSearchObserved:
-            summary.evidencePackExpertPanelSkillsRuntime
+          expertPanelReadModelSkillSearchObserved:
+            summary.readModelExpertPanelSkillsRuntime
               ?.hasSkillSearchSummary === true &&
-            summary.evidencePackExpertPanelSkillsRuntime?.searchQuery ===
+            summary.readModelExpertPanelSkillsRuntime?.searchQuery ===
               SKILLS_RUNTIME_QUERY,
-          expertPanelEvidenceSkillInvocationObserved:
-            summary.evidencePackExpertPanelSkillsRuntime
+          expertPanelReadModelSkillInvocationObserved:
+            summary.readModelExpertPanelSkillsRuntime
               ?.hasSkillInvocationSummary === true &&
-            summary.evidencePackExpertPanelSkillsRuntime
+            summary.readModelExpertPanelSkillsRuntime
               ?.invocationSkillName === SKILLS_RUNTIME_SKILL_NAME,
           expertPanelSkillSearchBeforeSkillInvocation:
-            summary.evidencePackExpertPanelSkillsRuntime
+            summary.readModelExpertPanelSkillsRuntime
               ?.skillSearchBeforeSkillInvocation === true,
-          expertPanelEvidencePackExportedFromHarnessPanel:
-            summary.expertPanelEvidencePackGuiExport?.clicked?.clicked ===
-              true &&
-            summary.expertPanelEvidencePackGuiExport?.exported
-              ?.hasExportedPack === true,
         }
       : {}),
   };

@@ -37,7 +37,6 @@ import {
   APP_SERVER_METHOD_THREAD_RESUME,
   APP_SERVER_METHOD_AGENT_SESSION_TOOL_INVENTORY_READ,
   APP_SERVER_METHOD_TURN_START,
-  APP_SERVER_METHOD_EVIDENCE_EXPORT,
 } from "./appServer";
 import {
   generateAgentRuntimeTitleResult,
@@ -50,7 +49,6 @@ import {
 } from "./agentProtocolOps";
 import {
   exportAgentRuntimeAnalysisHandoff,
-  exportAgentRuntimeEvidencePack,
   exportAgentRuntimeHandoffBundle,
   exportAgentRuntimeReplayCase,
   exportAgentRuntimeReviewDecisionTemplate,
@@ -847,100 +845,6 @@ describe("Agent API 治理护栏", () => {
         sessionId: "session-runtime-3",
       },
     );
-  });
-
-  it("exportAgentRuntimeEvidencePack 应经 Electron IPC 调 App Server evidence/export", async () => {
-    mockAppServerResponse({
-      session: {
-        sessionId: "session-runtime-4",
-        threadId: "thread-runtime-4",
-        appId: "desktop",
-        workspaceId: "workspace-runtime-4",
-        status: "running",
-        createdAt: "2026-06-06T00:00:00.000Z",
-        updatedAt: "2026-06-06T00:00:03.000Z",
-      },
-      turns: [],
-      events: [],
-      artifacts: [],
-      exportedAt: "2026-06-06T00:00:04.000Z",
-      evidencePack: {
-        packRelativeRoot: ".lime/harness/sessions/session-runtime-4/evidence",
-        packAbsoluteRoot:
-          "/tmp/workspace-4/.lime/harness/sessions/session-runtime-4/evidence",
-        exportedAt: "2026-06-06T00:00:05.000Z",
-        threadStatus: "running",
-        latestTurnStatus: "running",
-        turnCount: 2,
-        itemCount: 6,
-        pendingRequestCount: 1,
-        queuedTurnCount: 1,
-        recentArtifactCount: 2,
-        knownGaps: ["request telemetry unavailable"],
-        completionAuditSummary: {
-          source: "runtime_evidence_pack_completion_audit",
-          decision: "completed",
-          ownerRunCount: 1,
-          requiredEvidence: {
-            automationOwner: true,
-            workspaceSkillToolCall: true,
-            artifactOrTimeline: true,
-            controlledGetEvidence: true,
-          },
-          blockingReasons: [],
-        },
-        artifacts: [
-          {
-            kind: "summary",
-            title: "问题摘要",
-            relativePath:
-              ".lime/harness/sessions/session-runtime-4/evidence/summary.md",
-            absolutePath:
-              "/tmp/workspace-4/.lime/harness/sessions/session-runtime-4/evidence/summary.md",
-            bytes: 256,
-          },
-        ],
-      },
-    });
-
-    await expect(
-      exportAgentRuntimeEvidencePack("session-runtime-4"),
-    ).resolves.toMatchObject({
-      session_id: "session-runtime-4",
-      thread_id: "thread-runtime-4",
-      workspace_id: "workspace-runtime-4",
-      workspace_root: "/tmp/workspace-4",
-      pack_relative_root: ".lime/harness/sessions/session-runtime-4/evidence",
-      pack_absolute_root:
-        "/tmp/workspace-4/.lime/harness/sessions/session-runtime-4/evidence",
-      thread_status: "running",
-      turn_count: 2,
-      known_gaps: ["request telemetry unavailable"],
-      completion_audit_summary: expect.objectContaining({
-        decision: "completed",
-        owner_run_count: 1,
-        required_evidence: expect.objectContaining({
-          automation_owner: true,
-          workspace_skill_tool_call: true,
-          artifact_or_timeline: true,
-          controlled_get_evidence: true,
-        }),
-      }),
-      artifacts: [
-        expect.objectContaining({
-          kind: "summary",
-          relative_path:
-            ".lime/harness/sessions/session-runtime-4/evidence/summary.md",
-        }),
-      ],
-    });
-
-    expectAppServerRequest(1, APP_SERVER_METHOD_EVIDENCE_EXPORT, {
-      sessionId: "session-runtime-4",
-      includeEvents: true,
-      includeArtifacts: true,
-      includeEvidencePack: true,
-    });
   });
 
   it("exportAgentRuntimeAnalysisHandoff 应兼容 camelCase / snake_case 并经 App Server 导出", async () => {

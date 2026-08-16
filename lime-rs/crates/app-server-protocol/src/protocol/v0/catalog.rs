@@ -73,8 +73,6 @@ pub enum AppServerRequestMethod {
     ProjectGitBranchCreate,
     #[serde(rename = "projectGit/worktree/create")]
     ProjectGitWorktreeCreate,
-    #[serde(rename = "evidence/export")]
-    EvidenceExport,
     #[serde(rename = "agentSession/handoffBundle/export")]
     AgentSessionHandoffBundleExport,
     #[serde(rename = "agentSession/replayCase/export")]
@@ -219,6 +217,8 @@ pub enum AppServerRequestMethod {
     MediaTaskArtifactImageCreate,
     #[serde(rename = "mediaTaskArtifact/audio/create")]
     MediaTaskArtifactAudioCreate,
+    #[serde(rename = "mediaTaskArtifact/transcription/create")]
+    MediaTaskArtifactTranscriptionCreate,
     #[serde(rename = "mediaTaskArtifact/video/create")]
     MediaTaskArtifactVideoCreate,
     #[serde(rename = "mediaTaskArtifact/image/complete")]
@@ -549,7 +549,6 @@ impl AppServerRequestMethod {
             Self::ProjectGitBranchCheckout => METHOD_PROJECT_GIT_BRANCH_CHECKOUT,
             Self::ProjectGitBranchCreate => METHOD_PROJECT_GIT_BRANCH_CREATE,
             Self::ProjectGitWorktreeCreate => METHOD_PROJECT_GIT_WORKTREE_CREATE,
-            Self::EvidenceExport => METHOD_EVIDENCE_EXPORT,
             Self::AgentSessionHandoffBundleExport => METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT,
             Self::AgentSessionReplayCaseExport => METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT,
             Self::AgentSessionAnalysisHandoffExport => METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT,
@@ -624,6 +623,9 @@ impl AppServerRequestMethod {
             Self::GatewayTunnelSyncWebhookUrl => METHOD_GATEWAY_TUNNEL_SYNC_WEBHOOK_URL,
             Self::MediaTaskArtifactImageCreate => METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE,
             Self::MediaTaskArtifactAudioCreate => METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE,
+            Self::MediaTaskArtifactTranscriptionCreate => {
+                METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE
+            }
             Self::MediaTaskArtifactVideoCreate => METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE,
             Self::MediaTaskArtifactImageComplete => METHOD_MEDIA_TASK_ARTIFACT_IMAGE_COMPLETE,
             Self::MediaTaskArtifactAudioComplete => METHOD_MEDIA_TASK_ARTIFACT_AUDIO_COMPLETE,
@@ -804,7 +806,6 @@ impl AppServerRequestMethod {
             METHOD_PROJECT_GIT_BRANCH_CHECKOUT => Some(Self::ProjectGitBranchCheckout),
             METHOD_PROJECT_GIT_BRANCH_CREATE => Some(Self::ProjectGitBranchCreate),
             METHOD_PROJECT_GIT_WORKTREE_CREATE => Some(Self::ProjectGitWorktreeCreate),
-            METHOD_EVIDENCE_EXPORT => Some(Self::EvidenceExport),
             METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT => {
                 Some(Self::AgentSessionHandoffBundleExport)
             }
@@ -887,6 +888,9 @@ impl AppServerRequestMethod {
             METHOD_GATEWAY_TUNNEL_SYNC_WEBHOOK_URL => Some(Self::GatewayTunnelSyncWebhookUrl),
             METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE => Some(Self::MediaTaskArtifactImageCreate),
             METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE => Some(Self::MediaTaskArtifactAudioCreate),
+            METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE => {
+                Some(Self::MediaTaskArtifactTranscriptionCreate)
+            }
             METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE => Some(Self::MediaTaskArtifactVideoCreate),
             METHOD_MEDIA_TASK_ARTIFACT_IMAGE_COMPLETE => Some(Self::MediaTaskArtifactImageComplete),
             METHOD_MEDIA_TASK_ARTIFACT_AUDIO_COMPLETE => Some(Self::MediaTaskArtifactAudioComplete),
@@ -1138,10 +1142,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_PROJECT_GIT_WORKTREE_CREATE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_EVIDENCE_EXPORT,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {
@@ -1430,6 +1430,10 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE,
+        kind: AppServerMethodKind::Request,
+    },
+    AppServerMethodSpec {
+        method: METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {

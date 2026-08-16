@@ -2,7 +2,9 @@
 //!
 //! 提供文本向量化功能，用于语义搜索
 
-use reqwest::Client;
+use model_provider::embedding::{
+    execute_embeddings, EmbeddingProviderConfig, EmbeddingProviderRequest,
+};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "local-onnx")]
 use std::collections::HashMap;
@@ -10,6 +12,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 #[cfg(feature = "local-onnx")]
 use std::sync::{Mutex, OnceLock};
+#[cfg(feature = "local-onnx")]
 use std::time::Duration;
 
 #[cfg(feature = "local-onnx")]
@@ -413,63 +416,27 @@ pub async fn get_embedding_with_base_url(
         model
     );
 
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
-
     let model = model.unwrap_or("text-embedding-3-small");
-
-    let req = EmbeddingRequest {
-        input: text.to_string(),
-        model: Some(model.to_string()),
-    };
-
     let url = build_embeddings_url(base_url);
-
     tracing::debug!("[嵌入服务] 发送请求到: {}", url);
-
-    let resp = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {api_key}"))
-        .json(&req)
-        .send()
-        .await
-        .map_err(|e| format!("请求失败: {e}"))?;
-
-    tracing::debug!("[嵌入服务] 响应状态: {}", resp.status());
-
-    if resp.status() != 200 {
-        let status = resp.status();
-        let error_text = resp
-            .text()
-            .await
-            .unwrap_or_else(|e| format!("读取错误响应失败: {e}"));
-
-        tracing::error!("[嵌入服务] API 错误: {} - {}", status, error_text);
-
-        return Err(format!("API 错误: {status} - {error_text}"));
-    }
-
-    let body = resp
-        .text()
-        .await
-        .map_err(|e| format!("读取响应体失败: {e}"))?;
-
-    tracing::debug!("[嵌入服务] 响应体长度: {} bytes", body.len());
-
-    let response: EmbeddingResponse =
-        serde_json::from_str(&body).map_err(|e| format!("JSON 解析失败: {e}"))?;
-
-    if response.data.is_empty() {
-        return Err("API 返回数据为空".to_string());
-    }
-
-    let embedding = &response.data[0].embedding;
-
+    let output = execute_embeddings(
+        &EmbeddingProviderConfig::with_endpoint(url, api_key),
+        &EmbeddingProviderRequest {
+            model_id: model.to_string(),
+            inputs: vec![text.to_string()],
+            dimensions: None,
+            encoding_format: Some("float".to_string()),
+        },
+    )
+    .await
+    .map_err(|error| format!("{}: {}", error.code, error.message))?;
+    let embedding = output
+        .embeddings
+        .into_iter()
+        .next()
+        .ok_or_else(|| "embedding_result_empty: API 返回数据为空".to_string())?;
     tracing::debug!("[嵌入服务] 向量维度: {}", embedding.len());
-
-    Ok(embedding.clone())
+    Ok(embedding)
 }
 
 fn build_embeddings_url(base_url: Option<&str>) -> String {

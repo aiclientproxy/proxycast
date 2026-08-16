@@ -47,7 +47,7 @@ Task automation
    yes -> 用 @limecloud/agent-runtime-client/sessionGateway。
    no  -> 继续看 3。
 
-3. 你是否已经拿到了 agentSession/read、direct v2 lifecycle notifications 或 executionEvents？
+3. 你是否已经拿到了 thread/read、direct v2 lifecycle notifications 或 executionEvents？
    yes -> 用 @limecloud/agent-runtime-projection。
    还要 React 标准组件 -> 再加 @limecloud/agent-runtime-ui。
 
@@ -65,7 +65,7 @@ Task automation
 | 包 | 安装 | 主要入口 | 典型 owner | 用在什么场景 | 不要用来做什么 | 关键导出 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `@limecloud/app-server-client` | `npm install @limecloud/app-server-client` | `@limecloud/app-server-client` | Electron main / Node host / platform host | App Server JSON-RPC、stdio sidecar、manifest / sha256 / resources、`agentSession/*` transport、event router | React UI、renderer bundle、业务 session store、provider key 策略 | `AppServerClient`、`AppServerConnection`、`AppServerAgentEventRouter`、`startPackagedAppServerSidecar`、`createAgentRuntimeClient` |
-| `@limecloud/agent-runtime-client` | `npm install @limecloud/agent-runtime-client` | 根入口、`./sessionGateway` | runtime gateway owner / renderer adapter | 标准 Agent Runtime facade：`startTurn`、`readThread`、`respondAction`、`cancelTurn`、`exportEvidence`、event subscription | 新 JSON-RPC 协议、Electron IPC、projection、React、mock fallback | `createAgentRuntimeClient`、`createAgentRuntimeClientFromSessionGateway`、event pipeline / verifier |
+| `@limecloud/agent-runtime-client` | `npm install @limecloud/agent-runtime-client` | 根入口、`./sessionGateway` | runtime gateway owner / renderer adapter | 标准 Agent Runtime facade：`startTurn`、`readThread`、`respondAction`、`cancelTurn`、event subscription | 新 JSON-RPC 协议、Electron IPC、projection、React、mock fallback、Lime-only evidence export | `createAgentRuntimeClient`、`createAgentRuntimeClientFromSessionGateway`、event pipeline / verifier |
 | `@limecloud/agent-ui-contracts` | `npm install @limecloud/agent-ui-contracts` | `@limecloud/agent-ui-contracts` | contracts / adapter / tests | 共享 Agent UI event、runtime read model、message、timeline、graph、Subagents、fixtures、validation 类型 | 投影逻辑、React 组件、App Server client | `AgentRuntimeExecutionEvent`、`AgentUiProjectionState`、`agentUiConformanceFixtures`、`validateRuntimeEvent` |
 | `@limecloud/agent-runtime-projection` | `npm install @limecloud/agent-runtime-projection` | `@limecloud/agent-runtime-projection` | frontend adapter / store selector | `executionEvents` -> messages、timeline、graph、actions、tools、artifacts、evidence、summary、Subagents | transport、React 渲染、业务文案、session 持久化 | `projectAgentUiState`、`projectAgentRuntimeReadModel`、`replayAppServerFacts`、`projectAgentUiStateFromSessionSnapshot` |
 | `@limecloud/agent-runtime-ui` | `npm install @limecloud/agent-runtime-ui` | `@limecloud/agent-runtime-ui` | React App presentation layer | 渲染 `AgentUiProjectionState`、消息部件、过程时间线、执行图、action / artifact / evidence / subagents primitives | 调用 App Server、管理 store、打开业务页面、全局主题和产品文案 | `AgentUiProjectionView`、`UIMessagePartsView`、`ProcessTimelineView`、`ExecutionGraphView`、`RuntimeFactsPanel` |
@@ -82,8 +82,7 @@ Product App business context
   -> AgentRuntimeClient / host bridge
   -> App Server agentSession/*
   -> RuntimeCore / provider store / tools
-  -> direct v2 Thread/Turn/Item + agentSession/read + evidence/export
-  -> (optional) allowlisted agentSession/event raw side-channel
+  -> direct v2 Thread/Turn/Item + thread/read
   -> projection
   -> UI
 ```
@@ -147,7 +146,6 @@ const runtime = createAgentRuntimeClientFromSessionGateway({
   readSession: (params, options) => appServerGateway.readSession(params, options),
   cancelTurn: (params, options) => appServerGateway.cancelTurn(params, options),
   respondAction: (params, options) => appServerGateway.respondAction(params, options),
-  exportEvidence: (params, options) => appServerGateway.exportEvidence(params, options),
   nextEvent: (timeoutMs) => appServerGateway.nextEvent(timeoutMs),
 });
 ```
@@ -207,7 +205,7 @@ await hostBridge.invoke("lime.agent", payload);
 
 ### 4. 把 App Server facts 投影成标准 React UI
 
-适合已有 `agentSession/read`、direct v2 lifecycle、`evidence/export` 的 App；如果还存在 provider/media 等显式 raw side-channel，再把它作为补充 facts 输入。先 replay / projection，再渲染 UI primitives。
+适合已有 `thread/read`、direct v2 lifecycle 的 App；如果还存在 provider/media 或 Lime-only evidence export 等显式 raw side-channel，再把它作为补充 facts 输入，不要把它混入标准 runtime facade。先 replay / projection，再渲染 UI primitives。
 
 ```tsx
 import {
@@ -219,7 +217,6 @@ import { AgentUiProjectionView } from "@limecloud/agent-runtime-ui";
 const replay = replayAppServerFacts({
   readModel,
   events: drainedAgentSessionEvents,
-  evidenceExport,
 });
 
 const state = projectAgentUiState({
@@ -296,8 +293,7 @@ Content Studio agents
   -> app-server --backend runtime --data-dir
   -> provider store
   -> LLM / tools
-  -> direct v2 Thread/Turn/Item + artifact.snapshot
-  -> (optional) allowlisted agentSession/event raw side-channel
+  -> direct v2 Thread/Turn/Item + artifact/read
   -> projection / UI
 ```
 

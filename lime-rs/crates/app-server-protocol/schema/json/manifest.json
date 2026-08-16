@@ -276,10 +276,6 @@
     },
     {
       "kind": "request",
-      "method": "evidence/export"
-    },
-    {
-      "kind": "request",
       "method": "experimentalFeature/enablement/set"
     },
     {
@@ -685,6 +681,10 @@
     {
       "kind": "request",
       "method": "mediaTaskArtifact/list"
+    },
+    {
+      "kind": "request",
+      "method": "mediaTaskArtifact/transcription/create"
     },
     {
       "kind": "request",
@@ -1847,10 +1847,6 @@
       "DiagnosticsTraceSummary",
       "EndpointInfo",
       "EndpointKind",
-      "EvidenceExportParams",
-      "EvidenceExportResponse",
-      "EvidencePackArtifact",
-      "EvidencePackSummary",
       "FramingKind",
       "GalleryMaterial",
       "GalleryMaterialDeleteResponse",
@@ -1939,6 +1935,7 @@
       "MediaTaskArtifactListResponse",
       "MediaTaskArtifactLookupParams",
       "MediaTaskArtifactResponse",
+      "MediaTaskArtifactTranscriptionCreateParams",
       "MediaTaskArtifactVideoCreateParams",
       "MemoryStoreAddNoteParams",
       "MemoryStoreAddNoteResponse",

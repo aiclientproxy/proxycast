@@ -1158,6 +1158,12 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
+      name: "createTranscriptionMediaTaskArtifact",
+      method: protocol.METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
+      kind: "request",
+      params: "required",
+    },
+    {
       name: "createVideoMediaTaskArtifact",
       method: protocol.METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE,
       kind: "request",
@@ -1490,12 +1496,6 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
     {
       name: "createProjectGitWorktree",
       method: protocol.METHOD_PROJECT_GIT_WORKTREE_CREATE,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "exportEvidence",
-      method: protocol.METHOD_EVIDENCE_EXPORT,
       kind: "request",
       params: "required",
     },

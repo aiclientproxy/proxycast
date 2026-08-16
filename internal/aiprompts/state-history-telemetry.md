@@ -5,11 +5,13 @@
 本文件定义 Lime 当前 `State / History / Telemetry` 的唯一主链，主要回答：
 
 - 哪些路径负责持久会话历史、线程稳定读模型、pending request / outcome / incident 投影
-- `SessionDetail`、`AgentRuntimeThreadReadModel`、`RequestLog`、App Server `evidence/export` / `agentSession/*/export`、`history-record` 分别属于哪一层
+- `SessionDetail`、`AgentRuntimeThreadReadModel`、`RequestLog`、App Server canonical read model、derived exports、`history-record` 分别属于哪一层
 - 哪些页面、报表和导出只是消费这条主链，而不是继续定义另一套“真实线程状态”
 - 哪些旧专题计划、原始遥测浏览面或旧 observability 语义只能作为附属层或退场面
 
 它是 **当前 session / thread / turn / request / evidence / history 边界的 current 文档**，不是某个专题计划，也不是单独的 harness 或 reliability 页面说明。
+
+Codex 不提供 portable signed receipt、逐项 artifact 签名或可离线验证的 trust chain；Lime 的 derived exports 只消费 canonical read model，不得继续扩展为签名回执系统。
 
 ## 什么时候先读
 
@@ -19,7 +21,7 @@
 - 调整 `SessionDetail`、`AgentRuntimeSessionDetail`、`AgentRuntimeThreadReadModel`
 - 调整 `build_pending_requests(...)`、`build_last_outcome(...)`、`build_incidents(...)`
 - 调整 request correlation headers、`RequestLog`、`requestTelemetry`
-- 调整 App Server `evidence/export`、`agentSession/handoffBundle/export`、`agentSession/replayCase/export`、`agentSession/analysisHandoff/export`、`agentSession/reviewDecisionTemplate/export`、`agentSession/reviewDecision/save`
+- 调整 App Server canonical read model 或 handoff/replay/analysis/review exports
 - 调整 `scripts/harness/eval-history-record.mjs`、cleanup/dashboard、`HarnessStatusPanel.tsx`、`AgentThreadReliabilityPanel.tsx`
 - 讨论“状态模型”“可靠性”“证据链”“历史窗口”这几个词时，发现大家已经在混用不同层的语言
 
@@ -36,14 +38,18 @@
 1. `SessionDetail` 是当前会话、回合、时间线 item 的唯一持久读模型入口。
 2. `AgentRuntimeThreadReadModel` 是当前线程状态、pending request、最近 outcome、active incident 的唯一稳定线程读模型。
 3. `RequestLog` 只有在带上 `session/thread/turn/pending/queued/subagent` 关联键后，才算当前线程的 request telemetry 事实源。
-4. App Server `evidence/export` 与 `agentSession/*/export` / `agentSession/reviewDecision/save` 是当前交接、证据、回放、分析、审核的唯一派生导出链。
+4. App Server canonical read model 是所有 handoff/replay/analysis/review 派生导出的唯一输入；导出不是 Codex current 事实源，也不能承载 portable signed receipt。
 5. `history-record / trend / cleanup / dashboard` 与 GUI 面板都是下游消费层，不允许反向定义 session 或 thread 真相。
+
+Codex 对齐补充：`HarnessStatusPanel` 运行时事实区直接消费 `AgentRuntimeThreadReadModel`
+的 Thread/Turn/Item、pending request、artifact 和 evidence ref 投影；它不再通过
+canonical read model 获取状态，也不展示导出目录或签名含义。
 
 固定规则只有一句：
 
 **后续新增状态、历史或遥测能力时，只允许接到 `SessionDetail -> AgentRuntimeThreadReadModel -> RequestLog -> export/history` 这组 current 边界；不允许再造并列状态真相。**
 
-补充迁移边界：会话详情读取 current surface 是 App Server `agentSession/read`；`agent_runtime_get_session` 已退为 `dead / retired guard-only`，不得重新接回生产入口、DevBridge truth、mock priority 或 generated manifest。旧 `agent_runtime_get_thread_read` 与 `agent_runtime_export_*` 只允许作为受控迁移面、retired guard 或历史 evidence，不得承接新业务事实；current 读模型 / 导出必须走 App Server `agentSession/read`、`evidence/export` 与 `agentSession/*/export`。`lime-rs/src/commands/**` 已删除，不是新增状态、历史或遥测实现目录；新增状态投影、request telemetry、evidence / replay / review 能力应进入 App Server / RuntimeCore / services / `lime-rs/crates/agent`。旧 telemetry Tauri wrapper 已删除，不得恢复 stub 或 compat wrapper。
+补充迁移边界：会话详情读取 current surface 是 App Server `agentSession/read`；`agent_runtime_get_session` 已退为 `dead / retired guard-only`，不得重新接回生产入口、DevBridge truth、mock priority 或 generated manifest。旧 `agent_runtime_get_thread_read` 与 `agent_runtime_export_*` 只允许作为受控迁移面、retired guard 或历史 evidence，不得承接新业务事实；current 读模型必须走 App Server `agentSession/read` / `thread/read`。`lime-rs/src/commands/**` 已删除，不是新增状态、历史或遥测实现目录；新增状态投影、request telemetry、replay / review 能力应进入 App Server / RuntimeCore / services / `lime-rs/crates/agent`。旧 telemetry Tauri wrapper 已删除，不得恢复 stub 或 compat wrapper。
 
 补充边界：
 
@@ -84,12 +90,12 @@
 1. 从 `SessionDetail` 派生 pending request、最近 outcome、active incident。
 2. 把派生结果同步到线程 reliability 投影表，再回读成稳定线程状态。
 3. 统一组装线程状态、interrupt 状态、queued turn、diagnostics、latest compaction boundary。
-4. 让 App Server `agentSession/read` 与所有 current `evidence/export` / `agentSession/*/export` 共享同一份线程读模型加载前奏。
+4. 让 App Server `agentSession/read` / `thread/read` 成为所有 Lime derived exports 的共享输入。
 
 固定规则：
 
 - 新的线程健康信号、等待态、重放态，优先落在 App Server / RuntimeCore read model owner，不要先写到面板局部推断逻辑里。
-- `agentSession/read` 与 `evidence/export` / `agentSession/*/export` 必须复用同一套 `SessionDetail + queued_turns + projection` 组合，不允许各写各的 thread loader。
+- `agentSession/read` / `thread/read` 与 Lime derived exports 必须复用同一套 `SessionDetail + queued_turns + projection` 组合，不允许各写各的 thread loader。
 - `AgentRuntimeSessionDetail` 是“会话详情 + 稳定线程读模型”的组合返回，不是另一套事实源。
 
 ### 3. 请求关联键与 request telemetry 事实源
@@ -102,7 +108,7 @@
 
 1. 从请求头把 `session_id / thread_id / turn_id / pending_request_id / queued_turn_id / subagent_session_id` 注入 `RequestContext.metadata`。
 2. 在请求完成后记录统一 `RequestLog`，保留 provider、model、status、duration、token、credential 与上述关联键。
-3. 让 evidence pack 可以按会话与线程真实 join 到 request telemetry 摘要。
+3. 让 downstream diagnostics 可以按会话与线程真实 join 到 request telemetry 摘要。
 
 固定规则：
 
@@ -113,19 +119,13 @@
 ### 4. 证据、交接与审核派生链
 
 - `lime-rs/crates/app-server/src/runtime/exports.rs`
-- `lime-rs/crates/app-server/src/runtime/evidence_provider.rs`
-- App Server methods:
-  - `evidence/export`
-  - `agentSession/handoffBundle/export`
-  - `agentSession/replayCase/export`
-  - `agentSession/analysisHandoff/export`
-  - `agentSession/reviewDecisionTemplate/export`
-  - `agentSession/reviewDecision/save`
+- `lime-rs/crates/app-server/src/runtime/exports.rs`
+- App Server canonical read model and derived handoff/replay/analysis/review export methods
 
 当前这里负责：
 
 1. 统一复用 `load_runtime_export_context(...)` 拿到 `SessionDetail + AgentRuntimeThreadReadModel + workspace_root`。
-2. 导出 handoff bundle、evidence pack、replay case、analysis handoff、review decision 模板与保存结果。
+2. 导出 handoff bundle、replay case、analysis handoff、review decision 模板与保存结果。
 3. 把 request telemetry、verification outcomes、recent artifacts、timeline snapshot、review actions 作为下游派生链的共同输入。
 
 固定规则：
@@ -175,13 +175,13 @@
 - `lime-rs/crates/agent/src/session_store.rs`
 - App Server `agentSession/read`
 - App Server `agentSession/action/replay`
-- App Server `evidence/export` 与 `agentSession/*/export`
+- App Server canonical read model 与 derived handoff/replay/analysis/review exports
 - RuntimeCore read model / export modules
 - `lime-rs/crates/server/src/handlers/api.rs`
 - `lime-rs/crates/server/src/lib.rs`
 - `lime-rs/crates/infra/src/telemetry/types.rs`
 - `lime-rs/crates/app-server/src/runtime/exports.rs`
-- `lime-rs/crates/app-server/src/runtime/evidence_provider.rs`
+- `lime-rs/crates/app-server/src/runtime/exports.rs`
 - `scripts/harness/eval-history-record.mjs`
 - `scripts/lib/harness-verification-facts.mjs`
 - `src/components/agent/chat/components/HarnessStatusPanel.tsx`
@@ -192,7 +192,7 @@
 - 会话与时间线历史看 `SessionDetail`
 - 线程稳定状态看 `AgentRuntimeThreadReadModel`
 - request telemetry 看带关联键的 `RequestLog`
-- 交接、证据、回放、分析、审核看 App Server `evidence/export` 与 `agentSession/*/export`
+- 交接、回放、分析、审核看 App Server canonical read model 与 derived exports
 - 历史窗口、cleanup 与 dashboard 只作为下游派生层
 
 ### `compat`
@@ -251,7 +251,7 @@
 - 解释会话与历史回放时，回到 `SessionDetail`
 - 解释线程当前能否继续、在等什么、最近为什么失败时，回到 `AgentRuntimeThreadReadModel`
 - 解释 request telemetry 时，回到带关联键的 `RequestLog`
-- 解释 evidence / replay / analysis / review / handoff 时，回到 App Server `evidence/export` 与 `agentSession/*/export`
+- 解释 replay / analysis / review / handoff 时，回到 App Server canonical read model 与 derived exports
 - 解释历史窗口、cleanup、dashboard 时，回到 `history-record + harness-verification-facts`
 
 这样后续再做 reliability、history、review 或 operator 视图时，就不会继续在“状态模型”“线程读模型”“证据链”“遥测控制台”之间横跳排期语言。

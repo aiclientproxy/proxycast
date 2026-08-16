@@ -26,6 +26,59 @@ export function HarnessRuntimeFactsSection({
       registerRef={registerSectionRef}
     >
       <div className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/80 px-4 py-4">
+        <div className="grid min-w-0 gap-2 text-xs text-muted-foreground [grid-template-columns:repeat(auto-fit,minmax(min(100%,9rem),1fr))]">
+          <div>
+            <span className="font-medium text-foreground">
+              {agentText("agentChat.harness.runtimeFacts.thread", "线程")}
+            </span>
+            <span className="ml-1 break-all font-mono text-foreground">
+              {runtimeFactSummary.threadId}
+            </span>
+          </div>
+          <div>
+            <span className="font-medium text-foreground">
+              {agentText("agentChat.harness.runtimeFacts.status", "状态")}
+            </span>
+            <span className="ml-1 text-foreground">
+              {runtimeFactSummary.status ?? "unknown"}
+            </span>
+          </div>
+          <div>
+            <span className="font-medium text-foreground">
+              {agentText(
+                "agentChat.harness.runtimeFacts.turnItem",
+                "Turn / Item",
+              )}
+            </span>
+            <span className="ml-1 font-mono text-foreground">
+              {runtimeFactSummary.turnCount} / {runtimeFactSummary.itemCount}
+            </span>
+          </div>
+          <div>
+            <span className="font-medium text-foreground">
+              {agentText(
+                "agentChat.harness.runtimeFacts.pendingRequests",
+                "待处理请求",
+              )}
+            </span>
+            <span className="ml-1 font-mono text-foreground">
+              {runtimeFactSummary.pendingRequestCount}
+            </span>
+          </div>
+          <div>
+            <span className="font-medium text-foreground">
+              {agentText(
+                "agentChat.harness.runtimeFacts.artifactEvidenceRefs",
+                "Artifact / Evidence ref",
+              )}
+            </span>
+            <span className="ml-1 font-mono text-foreground">
+              {runtimeFactSummary.artifactCount} /{" "}
+              {runtimeFactSummary.evidenceRefCount}
+            </span>
+          </div>
+        </div>
+
         {runtimeFactSummary.decisionReason ? (
           <div className="text-sm text-slate-700">
             <span className="font-medium text-foreground">

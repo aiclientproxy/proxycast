@@ -1,18 +1,11 @@
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
-import type {
-  AgentRuntimeEvidenceBrowserActionIndex,
-  AgentRuntimeEvidencePack,
-} from "@/lib/api/agentRuntime/evidenceTypes";
 import type { Artifact } from "@/lib/artifact/types";
 import {
   openPathWithDefaultApp,
   revealPathInFinder,
 } from "@/lib/api/fileSystem";
-import {
-  buildBrowserReplayArtifact,
-  getFileName,
-} from "./harnessStatusPanelViewModel";
+import { getFileName } from "./harnessStatusPanelViewModel";
 
 export interface HarnessFilePreviewResult {
   artifactId?: string;
@@ -157,25 +150,6 @@ export function useHarnessPreviewDialog({
     [onLoadFilePreview],
   );
 
-  const openBrowserReplayPreview = useCallback(
-    (
-      pack: AgentRuntimeEvidencePack,
-      index: AgentRuntimeEvidenceBrowserActionIndex,
-    ) => {
-      setPreviewDialog({
-        open: true,
-        title: "Browser Assist 复盘",
-        description:
-          "来自 evidence browserActionIndex 的 browser_session / browser_snapshot 复盘。",
-        displayName: "browser_replay_viewer",
-        artifact: buildBrowserReplayArtifact(pack, index),
-        isBinary: false,
-        loading: false,
-      });
-    },
-    [],
-  );
-
   const handleOpenFile = useCallback(() => {
     if (!onOpenFile || !previewDialog.content?.trim()) {
       return;
@@ -277,7 +251,6 @@ export function useHarnessPreviewDialog({
     previewDialog,
     handlePreviewOpenChange,
     openPreview,
-    openBrowserReplayPreview,
     handleOpenFile,
     handleCopyPath,
     handleCopyContent,

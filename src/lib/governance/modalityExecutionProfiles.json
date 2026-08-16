@@ -170,7 +170,7 @@
     },
     {
       "profile_key": "voice_generation_profile",
-      "lifecycle": "compat",
+      "lifecycle": "current",
       "supported_contracts": [
         "voice_generation"
       ],
@@ -184,7 +184,7 @@
         "request_user_input"
       ],
       "executor_adapter_keys": [
-        "service_skill:voice_runtime"
+        "app_server:mediaTaskArtifact/audio/create"
       ],
       "artifact_policy": {
         "write_mode": "domain_task_artifact",
@@ -205,12 +205,13 @@
       "fallback_behavior": [
         "surface_provider_unconfigured",
         "surface_capability_gap",
-        "do_not_fallback_to_legacy_tts_test_command",
-        "metadata_only_until_audio_worker_consumes_resolved_route"
+        "do_not_fallback_to_legacy_tts_test_command"
       ],
       "evidence_events": [
         "runtime_identity_bound",
-        "execution_profile_decision"
+        "execution_profile_decision",
+        "executor_invoked",
+        "artifact_written"
       ],
       "audit_fields": [
         "session_id",
@@ -222,7 +223,7 @@
         "model",
         "audio_output_status"
       ],
-      "notes": "配音 profile 当前只保留 GUI / Skill 元数据与 audio_task 草稿索引，不代表可执行音频 worker。退出条件是 audio worker 或 RuntimeCore provider protocol mapper 消费 ResolvedModelRoute 并写入 model_route_execution 后再恢复 current。"
+      "notes": "配音 profile 由 App Server audio worker 执行 openai_audio_speech route，并将音频 artifact 与 provider diagnostics 写回 task。"
     },
     {
       "profile_key": "audio_transcription_profile",
@@ -460,6 +461,7 @@
       "failure_mapping": [
         "permission_denied",
         "capability_gap",
+        "provider_error",
         "executor_error"
       ],
       "evidence_events": [
@@ -539,16 +541,16 @@
       "notes": "PDF Skill 保留真实文件读取证据，页码/引用 viewer 后续继续补。"
     },
     {
-      "adapter_key": "service_skill:voice_runtime",
-      "lifecycle": "compat",
-      "executor_kind": "service_skill",
-      "binding_key": "voice_runtime",
+      "adapter_key": "app_server:mediaTaskArtifact/audio/create",
+      "lifecycle": "current",
+      "executor_kind": "app_server",
+      "binding_key": "mediaTaskArtifact/audio/create",
       "supported_contracts": [
         "voice_generation"
       ],
       "supports_progress": true,
       "supports_cancel": true,
-      "supports_resume": false,
+      "supports_resume": true,
       "supports_artifact": true,
       "artifact_output_kinds": [
         "audio_task",
@@ -566,12 +568,15 @@
       "failure_mapping": [
         "permission_denied",
         "capability_gap",
+        "provider_error",
         "executor_error"
       ],
       "evidence_events": [
-        "execution_profile_decision"
+        "execution_profile_decision",
+        "executor_invoked",
+        "artifact_written"
       ],
-      "notes": "Voice runtime adapter 当前只是 service scene 元数据绑定，不代表已存在可执行音频 worker；恢复 current 的退出条件是消费 ResolvedModelRoute 并写入 model_route_execution。"
+      "notes": "App Server audio worker 消费 openai_audio_speech ResolvedModelRoute，并通过 model-provider 写入音频 artifact。"
     },
     {
       "adapter_key": "skill:transcription_generate",

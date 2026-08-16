@@ -4,13 +4,13 @@ import {
   type AgentRuntimeTransportDeps,
 } from "./transport";
 import type { AppServerSessionRpcClient } from "./appServerSessionClient";
-import type { AgentRuntimeEvidenceExportAppServerClient } from "./exportClient";
+import type { AgentRuntimeExportAppServerClient } from "./exportClient";
 import type { AgentRuntimeWorkspaceSkillBindingsAppServerClient } from "./inventoryClient";
 import type { AgentRuntimeThreadClientDeps } from "./threadClient";
 export type AgentRuntimeAppServerClient =
   AgentRuntimeThreadClientDeps["appServerClient"] &
     AppServerSessionRpcClient &
-    AgentRuntimeEvidenceExportAppServerClient &
+    AgentRuntimeExportAppServerClient &
     AgentRuntimeWorkspaceSkillBindingsAppServerClient;
 export interface AgentRuntimeClientDeps extends AgentRuntimeTransportDeps {
   bridgeInvoke?: AgentRuntimeBridgeInvoke;
@@ -118,9 +118,6 @@ export declare function createAgentRuntimeClient({
     sessionId: string,
     options?: import("./exportClient").AgentRuntimeExportOptions,
   ) => Promise<import("./evidenceTypes").AgentRuntimeAnalysisHandoff>;
-  exportAgentRuntimeEvidencePack: (
-    sessionId: string,
-  ) => Promise<import("./evidenceTypes").AgentRuntimeEvidencePack>;
   exportAgentRuntimeHandoffBundle: (
     sessionId: string,
     options?: import("./exportClient").AgentRuntimeExportOptions,

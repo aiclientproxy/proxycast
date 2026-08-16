@@ -222,46 +222,6 @@ async function main() {
       "artifact ref",
     );
 
-    const evidenceResult = await connection.exportEvidence(
-      {
-        sessionId,
-        turnId,
-        includeEvents: true,
-        includeArtifacts: true,
-      },
-      { timeoutMs: 5_000 },
-    );
-    assertEqual(
-      evidenceResult.result.session.sessionId,
-      sessionId,
-      "evidence session id",
-    );
-    if (
-      !evidenceResult.result.events.some(
-        (event) => event.type === "message.delta",
-      )
-    ) {
-      throw new Error(
-        "evidence export is missing external message.delta event",
-      );
-    }
-    if (
-      !evidenceResult.result.events.some(
-        (event) => event.type === "turn.completed",
-      )
-    ) {
-      throw new Error(
-        "evidence export is missing external turn.completed event",
-      );
-    }
-    if (
-      !evidenceResult.result.artifacts.some(
-        (artifact) => artifact.artifactRef === "content-draft-smoke",
-      )
-    ) {
-      throw new Error("evidence export is missing external artifact summary");
-    }
-
     console.log(
       [
         "[smoke:app-server-external-backend] ok",
@@ -273,7 +233,6 @@ async function main() {
         `readSession=${readResult.result.session.sessionId}`,
         `readTurns=${readTurns.length}`,
         `readTurnStatus=${readTurn.status}`,
-        `evidenceEvents=${evidenceResult.result.events.length}`,
         `artifacts=${artifactResult.result.artifacts.length}`,
       ].join(" "),
     );

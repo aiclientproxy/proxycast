@@ -1,6 +1,6 @@
 use app_server_protocol::{
     MediaTaskArtifactAudioCreateParams, MediaTaskArtifactImageCreateParams,
-    MediaTaskArtifactVideoCreateParams,
+    MediaTaskArtifactTranscriptionCreateParams, MediaTaskArtifactVideoCreateParams,
 };
 use serde_json::{json, Value};
 
@@ -67,6 +67,30 @@ pub(super) fn build_video_idempotency_key(params: &MediaTaskArtifactVideoCreateP
         "outputPath": params.output_path,
     });
     format!("app-server:media:video:{:x}", sha256_json(&seed))
+}
+
+pub(super) fn build_transcription_idempotency_key(
+    params: &MediaTaskArtifactTranscriptionCreateParams,
+) -> String {
+    let seed = json!({
+        "kind": "transcription",
+        "projectRootPath": params.project_root_path,
+        "prompt": params.prompt,
+        "sourcePath": params.source_path,
+        "sourceUrl": params.source_url,
+        "language": params.language,
+        "outputFormat": params.output_format,
+        "speakerLabels": params.speaker_labels,
+        "timestamps": params.timestamps,
+        "providerId": params.provider_id,
+        "model": params.model,
+        "sessionId": params.session_id,
+        "threadId": params.thread_id,
+        "turnId": params.turn_id,
+        "contentId": params.content_id,
+        "outputPath": params.output_path,
+    });
+    format!("app-server:media:transcription:{:x}", sha256_json(&seed))
 }
 
 fn sha256_json(value: &Value) -> sha2::digest::Output<sha2::Sha256> {

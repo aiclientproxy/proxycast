@@ -359,16 +359,6 @@ describe("Project / Thread-first boundary", () => {
       "子代理 / Team 只能作为 parent Thread 的执行层事实；不得恢复独立子代理历史列表或子代理会话一级入口",
     ).toEqual([]);
 
-    const evidenceProviderSource = readFileSync(
-      repoPath("lime-rs/crates/app-server/src/runtime/evidence_provider.rs"),
-      "utf8",
-    );
-    const teamFactsEvidenceTestSource = readFileSync(
-      repoPath(
-        "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/team_facts.rs",
-      ),
-      "utf8",
-    );
     const workspaceSource = readFileSync(
       repoPath(
         "src/components/agent/chat/workspace/useAgentChatWorkspaceSetupRuntime.ts",
@@ -407,12 +397,6 @@ describe("Project / Thread-first boundary", () => {
       repoPath("src/components/agent/chat/projection/teamControlProjection.ts"),
       "utf8",
     );
-    expect(evidenceProviderSource).toContain('"team_facts": team_facts');
-    expect(evidenceProviderSource).toContain("fn team_facts_summary");
-    expect(teamFactsEvidenceTestSource).toContain(
-      "export_evidence_pack_includes_multi_agent_team_facts",
-    );
-    expect(teamFactsEvidenceTestSource).toContain("parentThreadIds");
     expect(workspaceSource).toContain(
       "useWorkspaceSubagentNavigationRuntime({",
     );

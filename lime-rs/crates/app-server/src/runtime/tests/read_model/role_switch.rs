@@ -42,7 +42,7 @@ impl ExecutionBackend for ExpertRoleSwitchBackend {
 }
 
 #[tokio::test]
-async fn read_session_projects_thread_expert_role_switch_metadata_into_items_and_evidence() {
+async fn read_session_projects_thread_expert_role_switch_metadata_into_items() {
     let core = RuntimeCore::with_backend(Arc::new(ExpertRoleSwitchBackend));
     core.start_session(AgentSessionStartParams {
         session_id: Some("sess_expert_role_switch".to_string()),
@@ -131,26 +131,4 @@ async fn read_session_projects_thread_expert_role_switch_metadata_into_items_and
         role_switch_item["metadata"]["harness"]["expert"]["expert_id"].as_str(),
         Some("copywriter")
     );
-
-    let evidence = core
-        .export_evidence(EvidenceExportParams {
-            session_id: "sess_expert_role_switch".to_string(),
-            turn_id: Some("turn_expert_role_switch".to_string()),
-            include_events: Some(true),
-            include_artifacts: Some(false),
-            include_evidence_pack: Some(true),
-        })
-        .await
-        .expect("export evidence");
-    let role_switch_event = evidence
-        .events
-        .iter()
-        .find(|event| event.event_type == "expert.profile_switch.completed")
-        .expect("role switch evidence event");
-
-    assert_eq!(
-        role_switch_event.payload["metadata"]["harness"]["expert_role_switch"]["next_expert_id"],
-        "copywriter"
-    );
-    assert!(evidence.evidence_pack.expect("evidence pack").item_count >= 5);
 }

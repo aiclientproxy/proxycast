@@ -1,5 +1,4 @@
 import type {
-  AgentRuntimeEvidencePack,
   AgentRuntimeHandoffBundle,
   AgentRuntimeAnalysisHandoff,
   AgentRuntimeReplayCase,
@@ -12,9 +11,6 @@ export declare function normalizeAnalysisHandoff(
 export declare function normalizeHandoffBundle(
   value: unknown,
 ): AgentRuntimeHandoffBundle;
-export declare function normalizeEvidencePack(
-  value: unknown,
-): AgentRuntimeEvidencePack;
 export declare function normalizeReplayCase(
   value: unknown,
 ): AgentRuntimeReplayCase;

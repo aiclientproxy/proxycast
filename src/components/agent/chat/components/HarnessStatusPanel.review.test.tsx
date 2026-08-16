@@ -22,10 +22,9 @@ describe("HarnessStatusPanel review", () => {
       },
     });
 
-    expect(document.body.textContent).toContain("问题证据包");
     expect(
       document.body.querySelector('button[aria-label="导出问题证据包"]'),
-    ).not.toBeNull();
+    ).toBeNull();
     expect(
       document.body.querySelector('button[aria-label="导出人工审核记录"]'),
     ).toBeNull();

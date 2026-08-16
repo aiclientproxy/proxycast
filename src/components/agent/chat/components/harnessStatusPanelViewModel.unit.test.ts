@@ -731,6 +731,13 @@ describe("harnessStatusPanelViewModel", () => {
         },
       }),
     ).toEqual({
+      threadId: "thread-1",
+      status: null,
+      turnCount: 0,
+      itemCount: 0,
+      pendingRequestCount: 0,
+      artifactCount: 0,
+      evidenceRefCount: 0,
       decisionReason: "优先使用低延迟模型",
       fallbackChain: ["openai:gpt-5.4", "openai:gpt-5.4-mini"],
       oemPolicy: {
@@ -751,7 +758,18 @@ describe("harnessStatusPanelViewModel", () => {
       decisionReason: "运行时摘要回退",
       fallbackChain: ["local:model"],
     });
-    expect(buildRuntimeFactSummary({ thread_id: "thread-empty" })).toBeNull();
+    expect(buildRuntimeFactSummary({ thread_id: "thread-empty" })).toEqual({
+      threadId: "thread-empty",
+      status: null,
+      turnCount: 0,
+      itemCount: 0,
+      pendingRequestCount: 0,
+      artifactCount: 0,
+      evidenceRefCount: 0,
+      decisionReason: null,
+      fallbackChain: [],
+      oemPolicy: null,
+    });
   });
 
   it("应格式化工具库存和执行策略展示标签", () => {

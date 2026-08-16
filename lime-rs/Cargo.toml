@@ -6,7 +6,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "1.128.0"
+version = "1.129.0"
 edition = "2021"
 authors = ["coso"]
 repository = "https://github.com/aiclientproxy/lime"
@@ -82,7 +82,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["limit", "cors", "timeout"] }
 
 # HTTP 客户端
-reqwest = { version = "0.12", features = ["json", "stream", "gzip", "brotli", "deflate"] }
+reqwest = { version = "0.12", features = ["json", "stream", "multipart", "gzip", "brotli", "deflate"] }
 httpdate = "1"
 
 # 数据库

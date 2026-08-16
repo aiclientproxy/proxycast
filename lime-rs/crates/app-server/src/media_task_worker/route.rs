@@ -6,6 +6,7 @@ use lime_media_runtime::{
     VIDEO_TASK_RUNNER_WORKER_ID,
 };
 use lime_services::api_key_provider_service::ApiKeyProviderService;
+use model_provider::audio::AudioProviderConfig;
 use serde_json::Value;
 use std::path::Path;
 
@@ -67,6 +68,187 @@ pub(super) fn image_generation_runner_config_from_resolved_route(
         api_key,
         request_body_format,
     }))
+}
+
+pub(super) struct AudioSpeechRunnerConfig {
+    pub(super) provider: AudioProviderConfig,
+    pub(super) provider_id: String,
+    pub(super) model_id: String,
+}
+
+pub(super) struct AudioTranscriptionRunnerConfig {
+    pub(super) provider: AudioProviderConfig,
+    pub(super) provider_id: String,
+    pub(super) model_id: String,
+}
+
+pub(super) fn audio_transcription_runner_config_from_resolved_route(
+    workspace_root: &Path,
+    task_id: &str,
+    context: &MediaTaskWorkerContext,
+) -> Result<Option<AudioTranscriptionRunnerConfig>, String> {
+    let task = lime_media_runtime::load_task_output(workspace_root, task_id, None)
+        .map_err(|error| error.to_string())?;
+    let Some(route) = task.record.payload.get("resolved_route") else {
+        return Ok(None);
+    };
+    if route_failure_present(&task.record.payload) {
+        return Ok(None);
+    }
+    let Some(provider_id) = route_model_ref_string(route, &["providerId", "provider_id"]) else {
+        return Ok(None);
+    };
+    let Some(model_id) = route_model_ref_string(route, &["modelId", "model_id"]) else {
+        return Ok(None);
+    };
+    let protocol = read_value_string(route, &["protocol"]);
+    if protocol.as_deref() != Some("openai_audio_transcription") {
+        return Ok(None);
+    }
+    let Some(base_url) = route
+        .get("endpoint")
+        .and_then(|endpoint| read_value_string(endpoint, &["baseUrl", "base_url"]))
+    else {
+        return Ok(None);
+    };
+    let api_key_service = ApiKeyProviderService::new();
+    let credential = route_credential_from_resolved_route(
+        route,
+        &context.db,
+        &api_key_service,
+        &provider_id,
+        "音频转写",
+    )?;
+    record_credential_usage(
+        &context.db,
+        &api_key_service,
+        &provider_id,
+        credential.key_id.as_deref(),
+    );
+    let endpoint = audio_transcription_endpoint_from_base(&base_url);
+    patch_task_artifact(
+        workspace_root,
+        task_id,
+        None,
+        TaskArtifactPatch {
+            payload_patch: Some(serde_json::json!({
+                "provider_id": provider_id,
+                "model": model_id,
+                "executor_mode": "openai_audio_transcription",
+                "audio_transcription_endpoint": endpoint,
+            })),
+            ..TaskArtifactPatch::default()
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(Some(AudioTranscriptionRunnerConfig {
+        provider: AudioProviderConfig {
+            endpoint,
+            api_key: credential.api_key,
+            auth_header: credential.auth_header,
+            auth_prefix: credential.auth_prefix,
+            timeout: std::time::Duration::from_secs(300),
+        },
+        provider_id,
+        model_id,
+    }))
+}
+
+fn audio_transcription_endpoint_from_base(base_url: &str) -> String {
+    let normalized = base_url.trim().trim_end_matches('/');
+    if normalized.ends_with("/audio/transcriptions") {
+        normalized.to_string()
+    } else if normalized.ends_with("/v1") {
+        format!("{normalized}/audio/transcriptions")
+    } else {
+        format!("{normalized}/v1/audio/transcriptions")
+    }
+}
+
+pub(super) fn audio_speech_runner_config_from_resolved_route(
+    workspace_root: &Path,
+    task_id: &str,
+    context: &MediaTaskWorkerContext,
+) -> Result<Option<AudioSpeechRunnerConfig>, String> {
+    let task = lime_media_runtime::load_task_output(workspace_root, task_id, None)
+        .map_err(|error| error.to_string())?;
+    let Some(route) = task.record.payload.get("resolved_route") else {
+        return Ok(None);
+    };
+    if route_failure_present(&task.record.payload) {
+        return Ok(None);
+    }
+    let Some(provider_id) = route_model_ref_string(route, &["providerId", "provider_id"]) else {
+        return Ok(None);
+    };
+    let Some(model_id) = route_model_ref_string(route, &["modelId", "model_id"]) else {
+        return Ok(None);
+    };
+    let protocol = read_value_string(route, &["protocol"]);
+    if protocol.as_deref() != Some("openai_audio_speech") {
+        return Ok(None);
+    }
+    let Some(base_url) = route
+        .get("endpoint")
+        .and_then(|endpoint| read_value_string(endpoint, &["baseUrl", "base_url"]))
+    else {
+        return Ok(None);
+    };
+    let credential = route_credential_from_resolved_route(
+        route,
+        &context.db,
+        &ApiKeyProviderService::new(),
+        &provider_id,
+        "语音合成",
+    )?;
+    let endpoint = audio_speech_endpoint_from_base(&base_url);
+    let api_key = credential.api_key;
+    let auth_header = credential.auth_header;
+    let auth_prefix = credential.auth_prefix;
+    let api_key_service = ApiKeyProviderService::new();
+    record_credential_usage(
+        &context.db,
+        &api_key_service,
+        &provider_id,
+        credential.key_id.as_deref(),
+    );
+    patch_task_artifact(
+        workspace_root,
+        task_id,
+        None,
+        TaskArtifactPatch {
+            payload_patch: Some(serde_json::json!({
+                "provider_id": provider_id,
+                "model": model_id,
+                "executor_mode": "openai_audio_speech",
+                "audio_endpoint": endpoint,
+            })),
+            ..TaskArtifactPatch::default()
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(Some(AudioSpeechRunnerConfig {
+        provider: AudioProviderConfig {
+            endpoint,
+            api_key,
+            auth_header,
+            auth_prefix,
+            timeout: std::time::Duration::from_secs(300),
+        },
+        provider_id,
+        model_id,
+    }))
+}
+
+fn audio_speech_endpoint_from_base(base_url: &str) -> String {
+    let normalized = base_url.trim().trim_end_matches('/');
+    if normalized.ends_with("/audio/speech") {
+        normalized.to_string()
+    } else if normalized.ends_with("/v1") {
+        format!("{normalized}/audio/speech")
+    } else {
+        format!("{normalized}/v1/audio/speech")
+    }
 }
 
 pub(super) fn video_generation_runner_config_from_resolved_route(

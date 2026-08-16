@@ -9,7 +9,7 @@
 - 暴露 `AgentRuntimeClient` 标准接口。
 - 暴露 `createAgentRuntimeClient(...)` 工厂。
 - 暴露 browser-safe 子路径 `@limecloud/agent-runtime-client/sessionGateway`，用于把已有 App Server session gateway 适配为标准 runtime client。
-- 委托 App Server current methods：`turn/start`、`turn/steer`、`turn/interrupt`、`thread/read`、`agentSession/action/respond`、`evidence/export`。
+- 委托 App Server current methods：`turn/start`、`turn/steer`、`turn/interrupt`、`thread/read`、`agentSession/action/respond`；运行时事实统一从 canonical Thread/Turn/Item read model 读取。
 - 订阅并分发 direct v2 Thread / Turn / Item notifications；不接受 `agentSession/event` raw side-channel。
 
 这个包不负责：
@@ -84,7 +84,6 @@ const thread = await runtime.readThread({
 | `cancelTurn(params, options?)`     | `turn/interrupt`             | cancel response          | 失败直接向上抛出，不本地假设已取消。                    |
 | `respondAction(params, options?)`  | `agentSession/action/respond` | action response          | 不乐观改 pending action，等待 runtime facts。           |
 | `readThread(params, options?)`     | `thread/read`                | Thread read model        | 供 projection hydration / repair 使用，建议 `includeTurns: true`。 |
-| `exportEvidence(params, options?)` | `evidence/export`             | evidence export response | 缺 surface 时 fail closed，不伪造空 evidence。          |
 | `subscribeLifecycleEvents(listener)` | direct v2 notifications    | unsubscribe handle       | 分发 Thread / Turn / Item lifecycle 与 message delta。   |
 | `subscribeSignalEvents(listener)`    | direct v2 `error`          | unsubscribe handle       | 分发 retry/terminal error signal，不进入 lifecycle verifier。 |
 | `dispatchEvent(message)`           | local event router            | boolean                  | 用于现有 gateway 把 JSON-RPC notification 喂给 client。 |
@@ -102,14 +101,13 @@ startTurn
   -> readThread for hydration or repair
   -> respondAction / cancelTurn when user intent occurs
   -> direct v2 Turn / Item terminal notifications
-  -> exportEvidence when host needs replay / review package
 ```
 
 client 只传递 lifecycle intent 和 facts，不维护 tool 状态机、subagent lineage、Provider 参数或 UI 完成态。
 
 ## Browser-Safe Session Gateway
 
-Renderer 宿主如果已经有自己的 App Server gateway，应从 browser-safe 子路径导入 session gateway 适配器，避免把根入口中的 Node 侧 sidecar / stdio client 打进前端包。该适配器仍返回标准 `AgentRuntimeClient`，覆盖 turn lifecycle、`readThread`、`exportEvidence`、`subscribeLifecycleEvents`、`subscribeSignalEvents`、`dispatchEvent` 和 `nextEvent`；宿主缺少 evidence 或 event source 时会 fail closed，不会静默回退 mock。
+Renderer 宿主如果已经有自己的 App Server gateway，应从 browser-safe 子路径导入 session gateway 适配器，避免把根入口中的 Node 侧 sidecar / stdio client 打进前端包。该适配器仍返回标准 `AgentRuntimeClient`，覆盖 turn lifecycle、`readThread`、`subscribeLifecycleEvents`、`subscribeSignalEvents`、`dispatchEvent` 和 `nextEvent`；宿主缺少 event source 时会 fail closed，不会静默回退 mock。
 
 `createAgentRuntimeClientFromSessionGateway(...)` 只适配现有 session gateway，
 不会创建第二套 transport、lifecycle state 或兼容协议。
@@ -127,8 +125,6 @@ const runtime = createAgentRuntimeClientFromSessionGateway({
   cancelTurn: (params, options) => appServerClient.cancelTurn(params, options),
   respondAction: (params, options) =>
     appServerClient.respondAction(params, options),
-  exportEvidence: (params, options) =>
-    appServerClient.exportEvidence(params, options),
   nextEvent: (timeoutMs) => appServerClient.nextEvent(timeoutMs),
 });
 ```
@@ -182,7 +178,6 @@ Product App business context
 
 - bridge / network error：fail closed，提示运行时不可用。
 - App Server error：保留原始 request result 或抛错，不转换成 UI 成功态。
-- `exportEvidence` 未实现：按宿主能力缺失处理，不伪造空 evidence。
 - event source 未实现：`nextEvent` 抛错，宿主可改用 read model hydration。
 - action response 失败：保留 pending action，由宿主提示重试。
 
@@ -202,7 +197,6 @@ Product App business context
 
 - lifecycle：`startTurn -> steerTurn / readThread -> cancelTurn / respondAction` 均委托 gateway。
 - events：`subscribeLifecycleEvents` 只接收 direct v2 Thread / Turn / Item 与 message delta；`subscribeSignalEvents` 独立接收 typed `error`，不进入 lifecycle pipeline；raw channel 一律拒绝。
-- evidence：`exportEvidence` 有实现时委托，没有实现时 fail closed。
 - errors：transport error 原样传播，不切 mock。
 - bundle：`@limecloud/agent-runtime-client/sessionGateway` dist 不包含 Node builtin 或 sidecar/stdio 模块；只允许依赖 browser-safe App Server entry。
 

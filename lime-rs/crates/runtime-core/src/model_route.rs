@@ -94,8 +94,8 @@ pub fn resolved_route_from_task(
         Some(route_failure(&selection, readiness))
     } else {
         unresolved_registry_failure
-            .or(unsupported_protocol_failure)
             .or_else(|| capability_gap.map(|gap| capability_route_failure(&selection, gap)))
+            .or(unsupported_protocol_failure)
     };
 
     ResolvedModelRoute {
@@ -241,6 +241,35 @@ fn resolve_protocol(
         return ProtocolKind::XaiVideo;
     }
 
+    if task_request.task_kind == ModelTaskKind::VoiceGenerate
+        && route_has_any_runtime_feature(
+            capability_snapshot,
+            &["audio_speech", "speech", "text_to_speech", "tts"],
+        )
+    {
+        return ProtocolKind::OpenaiAudioSpeech;
+    }
+
+    if task_request.task_kind == ModelTaskKind::TranscriptionGenerate
+        && route_has_any_runtime_feature(
+            capability_snapshot,
+            &[
+                "audio_transcription",
+                "transcription",
+                "speech_to_text",
+                "stt",
+            ],
+        )
+    {
+        return ProtocolKind::OpenaiAudioTranscription;
+    }
+
+    if task_request.task_kind == ModelTaskKind::Embedding
+        && route_has_any_runtime_feature(capability_snapshot, &["embeddings", "embedding"])
+    {
+        return ProtocolKind::OpenaiEmbeddings;
+    }
+
     if route_has_runtime_feature(capability_snapshot, "responses_api") {
         return ProtocolKind::OpenaiResponses;
     }
@@ -276,6 +305,15 @@ fn protocol_from_provider_type(provider_type: &str) -> ProtocolKind {
         Some("aws_bedrock") | Some("bedrock") => ProtocolKind::BedrockConverse,
         Some("ollama") => ProtocolKind::OpenaiResponses,
         Some("fal") => ProtocolKind::Fal,
+        Some("openai_audio_speech") | Some("audio_speech") | Some("tts") => {
+            ProtocolKind::OpenaiAudioSpeech
+        }
+        Some("openai_audio_transcription") | Some("audio_transcription") | Some("stt") => {
+            ProtocolKind::OpenaiAudioTranscription
+        }
+        Some("openai_embeddings") | Some("embeddings") | Some("embedding") => {
+            ProtocolKind::OpenaiEmbeddings
+        }
         Some("azure") | Some("azure_openai") => ProtocolKind::OpenaiResponses,
         Some("openai") | Some("newapi") | Some("new_api") | Some("gateway") => {
             ProtocolKind::OpenaiChat
@@ -288,6 +326,12 @@ fn route_has_runtime_feature(snapshot: &CapabilitySnapshot, feature: &str) -> bo
     normalize_string_values(&snapshot.runtime_features)
         .iter()
         .any(|value| value == feature)
+}
+
+fn route_has_any_runtime_feature(snapshot: &CapabilitySnapshot, features: &[&str]) -> bool {
+    features
+        .iter()
+        .any(|feature| route_has_runtime_feature(snapshot, feature))
 }
 
 fn normalize_string_values(values: &[String]) -> Vec<String> {
@@ -324,6 +368,15 @@ pub fn protocol_from_provider_name(provider: &str) -> ProtocolKind {
         Some("aws_bedrock") | Some("bedrock") => ProtocolKind::BedrockConverse,
         Some("ollama") => ProtocolKind::OpenaiResponses,
         Some("fal") => ProtocolKind::Fal,
+        Some("openai_audio_speech") | Some("audio_speech") | Some("tts") => {
+            ProtocolKind::OpenaiAudioSpeech
+        }
+        Some("openai_audio_transcription") | Some("audio_transcription") | Some("stt") => {
+            ProtocolKind::OpenaiAudioTranscription
+        }
+        Some("openai_embeddings") | Some("embeddings") | Some("embedding") => {
+            ProtocolKind::OpenaiEmbeddings
+        }
         Some("azure") | Some("azure_openai") => ProtocolKind::OpenaiResponses,
         Some("openai") | Some("newapi") | Some("new_api") | Some("gateway") => {
             ProtocolKind::OpenaiChat
@@ -493,15 +546,9 @@ fn capability_snapshot(routing_payload: &Value) -> CapabilitySnapshot {
 
 fn routing_decision(routing_payload: &Value) -> RoutingDecision {
     let fallback_chain = string_array_field(routing_payload, &["fallbackChain", "fallback_chain"]);
-    let routing_attempts = routing_payload
-        .get("routingAttempts")
-        .or_else(|| routing_payload.get("routing_attempts"))
-        .and_then(Value::as_array)
-        .map(|items| items.len() as u32)
-        .unwrap_or(0);
     RoutingDecision {
         routing_mode: string_field(routing_payload, &["routingMode", "routing_mode"])
-            .unwrap_or_else(|| "profile_slot".to_string()),
+            .unwrap_or_else(|| "single_candidate".to_string()),
         decision_source: string_field(routing_payload, &["decisionSource", "decision_source"])
             .unwrap_or_else(|| "runtime_selection".to_string()),
         decision_reason: string_field(routing_payload, &["decisionReason", "decision_reason"])
@@ -512,11 +559,12 @@ fn routing_decision(routing_payload: &Value) -> RoutingDecision {
             &["serviceModelSlot", "service_model_slot"],
         ),
         fallback_chain,
-        candidate_count: if routing_attempts > 0 {
-            routing_attempts
-        } else {
-            1
-        },
+        candidate_count: routing_payload
+            .get("candidateCount")
+            .or_else(|| routing_payload.get("candidate_count"))
+            .and_then(Value::as_u64)
+            .map(|count| count.min(u32::MAX as u64) as u32)
+            .unwrap_or(1),
         capability_gap: string_field(routing_payload, &["capabilityGap", "capability_gap"]),
     }
 }
@@ -585,8 +633,22 @@ fn protocol_supported_for_task(task_kind: ModelTaskKind, protocol: &ProtocolKind
         ModelTaskKind::VideoGenerate => {
             matches!(protocol, ProtocolKind::Fal | ProtocolKind::XaiVideo)
         }
-        // Media tasks have dedicated lowerings and are validated by their own execution owner.
-        _ => true,
+        ModelTaskKind::ImageGenerate | ModelTaskKind::ImageEdit => matches!(
+            protocol,
+            ProtocolKind::OpenaiImages
+                | ProtocolKind::OpenaiResponses
+                | ProtocolKind::CodexResponses
+                | ProtocolKind::GeminiGenerateContent
+                | ProtocolKind::Fal
+        ),
+        ModelTaskKind::VoiceGenerate => matches!(protocol, ProtocolKind::OpenaiAudioSpeech),
+        ModelTaskKind::TranscriptionGenerate => {
+            matches!(protocol, ProtocolKind::OpenaiAudioTranscription)
+        }
+        ModelTaskKind::Embedding => matches!(protocol, ProtocolKind::OpenaiEmbeddings),
+        // These task families still have no current model-provider wire lowering. Do
+        // not allow a generic chat protocol to masquerade as an executor.
+        ModelTaskKind::Rerank | ModelTaskKind::Moderation => false,
     }
 }
 
@@ -661,7 +723,12 @@ fn model_registry(routing_payload: &Value) -> Option<&Value> {
 
 fn framing_for_protocol(protocol: &ProtocolKind) -> FramingKind {
     match protocol {
-        ProtocolKind::Fal | ProtocolKind::XaiVideo | ProtocolKind::Unknown => FramingKind::Json,
+        ProtocolKind::Fal
+        | ProtocolKind::XaiVideo
+        | ProtocolKind::OpenaiAudioSpeech
+        | ProtocolKind::OpenaiAudioTranscription
+        | ProtocolKind::OpenaiEmbeddings
+        | ProtocolKind::Unknown => FramingKind::Json,
         _ => FramingKind::Sse,
     }
 }
@@ -1758,6 +1825,9 @@ mod tests {
                     "openai/gpt-4.1-mini".to_string(),
                 ],
                 profile_slots: Vec::new(),
+                candidate_count: 2,
+                candidate_set: crate::model_routing::CandidateModelSet::default(),
+                oem_policy: crate::model_routing::OemRoutingPolicy::default(),
             },
             readiness: crate::model_routing::ProviderReadiness::provider_store_ready(
                 Some("openai".to_string()),
@@ -1886,5 +1956,110 @@ mod tests {
             Some(2)
         );
         assert!(payloads.not_possible_payload.is_none());
+    }
+
+    #[test]
+    fn image_generation_on_chat_protocol_fails_closed() {
+        let task_request = build_model_task_request(ModelTaskRequestInput {
+            task_kind: ModelTaskKind::ImageGenerate,
+            source: ModelTaskSource::MediaTaskArtifact,
+            provider_id: Some("openai".to_string()),
+            model_id: Some("image-without-images-api".to_string()),
+            model_ref_source: ModelRefSource::Task,
+            modality_contract_key: Some("image_generation".to_string()),
+            routing_slot: Some("image_generation_model".to_string()),
+            task_families: vec!["image_generation".to_string()],
+            input_modalities: vec!["text".to_string()],
+            output_modalities: vec!["image".to_string()],
+            runtime_features: Vec::new(),
+            capabilities: vec!["image_generation".to_string()],
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            content_id: None,
+            trace_id: None,
+        });
+        let route = resolved_route_from_task(
+            &task_request,
+            ModelRouteSelection {
+                provider_id: "openai",
+                model_id: "image-without-images-api",
+                model_ref_source: ModelRefSource::Task,
+                reasoning_effort: None,
+            },
+            &json!({
+                "providerReadiness": {"ready": true},
+                "modelRegistry": {
+                    "source": "api",
+                    "status": "matched",
+                    "modelCapabilities": {
+                        "provenance": "provider_explicit",
+                        "taskFamilies": ["image_generation"],
+                        "inputModalities": ["text"],
+                        "outputModalities": ["image"]
+                    }
+                }
+            }),
+            None,
+            None,
+        );
+
+        assert_eq!(route.protocol, ProtocolKind::OpenaiChat);
+        assert_eq!(
+            route.failure.as_ref().map(|failure| &failure.category),
+            Some(&RouteFailureCategory::UnsupportedProtocol)
+        );
+    }
+
+    #[test]
+    fn audio_task_without_audio_lowering_fails_closed() {
+        let task_request = build_model_task_request(ModelTaskRequestInput {
+            task_kind: ModelTaskKind::VoiceGenerate,
+            source: ModelTaskSource::MediaTaskArtifact,
+            provider_id: Some("openai".to_string()),
+            model_id: Some("tts-1".to_string()),
+            model_ref_source: ModelRefSource::Task,
+            modality_contract_key: Some("voice_generation".to_string()),
+            routing_slot: Some("voice_generation_model".to_string()),
+            task_families: vec!["text_to_speech".to_string()],
+            input_modalities: vec!["text".to_string()],
+            output_modalities: vec!["audio".to_string()],
+            runtime_features: Vec::new(),
+            capabilities: vec!["voice_generation".to_string()],
+            session_id: None,
+            thread_id: None,
+            turn_id: None,
+            content_id: None,
+            trace_id: None,
+        });
+        let route = resolved_route_from_task(
+            &task_request,
+            ModelRouteSelection {
+                provider_id: "openai",
+                model_id: "tts-1",
+                model_ref_source: ModelRefSource::Task,
+                reasoning_effort: None,
+            },
+            &json!({
+                "providerReadiness": {"ready": true},
+                "modelRegistry": {
+                    "source": "api",
+                    "status": "matched",
+                    "modelCapabilities": {
+                        "provenance": "provider_explicit",
+                        "taskFamilies": ["text_to_speech"],
+                        "inputModalities": ["text"],
+                        "outputModalities": ["audio"]
+                    }
+                }
+            }),
+            None,
+            None,
+        );
+
+        assert_eq!(
+            route.failure.map(|failure| failure.reason_code),
+            Some("unsupported_protocol".to_string())
+        );
     }
 }

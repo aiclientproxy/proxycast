@@ -9,9 +9,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
+mod audio;
 mod route;
 mod scheduler;
+mod transcription;
 mod video;
+pub(crate) use audio::spawn_audio_task_worker_for_created_task;
 use route::image_generation_runner_config_from_resolved_route;
 use scheduler::should_execute_pending_image_task;
 #[cfg(test)]
@@ -23,6 +26,7 @@ use scheduler::{
 pub(crate) use scheduler::{
     spawn_media_task_worker_scheduler, spawn_pending_image_task_workers_for_workspace,
 };
+pub(crate) use transcription::spawn_transcription_task_worker_for_created_task;
 pub(crate) use video::spawn_video_task_worker_for_created_task;
 use video::{
     should_execute_pending_video_task, should_recover_stale_running_video_task,

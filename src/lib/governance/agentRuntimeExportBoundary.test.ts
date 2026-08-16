@@ -6,6 +6,10 @@ import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = process.cwd();
 const EXPORT_CLIENT_SOURCE = "src/lib/api/agentRuntime/exportClient.ts";
+const CURRENT_HARNESS_PANEL_SOURCE =
+  "src/components/agent/chat/components/HarnessStatusPanel.tsx";
+const REGISTERED_SKILLS_PANEL_SOURCE =
+  "src/features/capability-drafts/components/WorkspaceRegisteredSkillsPanel.tsx";
 const PRODUCTION_SCAN_ROOTS = ["src", "packages"];
 const SOURCE_EXTENSIONS = new Set([
   ".js",
@@ -15,8 +19,6 @@ const SOURCE_EXTENSIONS = new Set([
   ".ts",
   ".tsx",
 ]);
-const LEGACY_AGENT_RUNTIME_EXPORT_COMMAND =
-  /\bagent_runtime_export_[a-z0-9_]+\b/u;
 
 function readRepoFile(path: string): string {
   return readFileSync(join(REPO_ROOT, path), "utf8");
@@ -106,35 +108,41 @@ function assertInOrder(source: string, snippets: string[]): void {
 }
 
 describe("Agent runtime export boundary", () => {
-  it("evidence export 应固定走 App Server evidence/export 并进入严格 projection", () => {
-    const source = readRepoFile(EXPORT_CLIENT_SOURCE);
-    const functionBody = extractFunctionBody(
-      source,
-      "exportAgentRuntimeEvidencePack",
-    );
+  it("Codex 对齐的 GUI surface 不得重新触发 Lime 派生 evidence export", () => {
+    for (const path of [
+      CURRENT_HARNESS_PANEL_SOURCE,
+      REGISTERED_SKILLS_PANEL_SOURCE,
+    ]) {
+      const source = readRepoFile(path);
+      expect(source, path).not.toContain("exportAgentRuntimeEvidencePack");
+      expect(source, path).not.toContain("evidence/export");
+    }
+  });
 
-    expect(functionBody).not.toBe("");
-    assertInOrder(functionBody, [
-      "appServerClient.exportEvidence({",
-      "sessionId: normalizedSessionId",
-      "includeEvents: true",
-      "includeArtifacts: true",
-      "includeEvidencePack: true",
-    ]);
-    expect(functionBody).toMatch(
-      /projectAppServerEvidenceExportToRuntimeEvidencePack\s*\(\s*response\.result\s*\)/u,
-    );
-    expect(functionBody).not.toMatch(LEGACY_AGENT_RUNTIME_EXPORT_COMMAND);
-    expect(functionBody).not.toContain("normalizeEvidencePack(");
+  it("删除后的 renderer Evidence Pack facade 不得回流", () => {
+    for (const path of [
+      EXPORT_CLIENT_SOURCE,
+      "src/lib/api/agentRuntime/exportClient.d.ts",
+      "src/lib/api/agentRuntime/normalizers.ts",
+      "src/lib/api/agentRuntime/normalizers.d.ts",
+    ]) {
+      const source = readRepoFile(path);
+      expect(source, path).not.toContain("exportAgentRuntimeEvidencePack");
+      expect(source, path).not.toContain("AgentRuntimeEvidencePack");
+      expect(source, path).not.toContain("normalizeEvidencePack");
+      expect(source, path).not.toContain(
+        "projectAppServerEvidenceExportToRuntimeEvidencePack",
+      );
+    }
   });
 
   it("派生导出必须校验返回制品仍属于请求 session", () => {
     const source = readRepoFile(EXPORT_CLIENT_SOURCE);
 
     expect(source).toContain("function assertRuntimeExportSessionCorrelation");
-    expect(countOccurrences(source, "assertRuntimeExportSessionCorrelation(")).toBe(
-      6,
-    );
+    expect(
+      countOccurrences(source, "assertRuntimeExportSessionCorrelation("),
+    ).toBe(6);
 
     for (const [functionName, methodName] of [
       [
@@ -180,7 +188,9 @@ describe("Agent runtime export boundary", () => {
       }))
       .filter(({ path }) => isProductionSource(path))
       .flatMap(({ path, source }) => {
-        const matches = [...source.matchAll(/agent_runtime_export_[a-z0-9_]+/gu)];
+        const matches = [
+          ...source.matchAll(/agent_runtime_export_[a-z0-9_]+/gu),
+        ];
         return matches.map((match) => `${path}: ${match[0]}`);
       });
 

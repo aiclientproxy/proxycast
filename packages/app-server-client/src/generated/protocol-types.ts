@@ -91,7 +91,6 @@ export const METHOD_DIAGNOSTICS_WINDOWS_STARTUP_READ =
   "diagnostics/windowsStartup/read";
 export const METHOD_DISCORD_CHANNEL_PROBE = "discordChannel/probe";
 export const METHOD_ERROR = "error";
-export const METHOD_EVIDENCE_EXPORT = "evidence/export";
 export const METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET =
   "experimentalFeature/enablement/set";
 export const METHOD_EXPERIMENTAL_FEATURE_LIST = "experimentalFeature/list";
@@ -224,6 +223,8 @@ export const METHOD_MEDIA_TASK_ARTIFACT_IMAGE_COMPLETE =
 export const METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE =
   "mediaTaskArtifact/image/create";
 export const METHOD_MEDIA_TASK_ARTIFACT_LIST = "mediaTaskArtifact/list";
+export const METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE =
+  "mediaTaskArtifact/transcription/create";
 export const METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE =
   "mediaTaskArtifact/video/create";
 export const METHOD_MEMORY_RESET = "memory/reset";
@@ -738,10 +739,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
-    method: "evidence/export",
-  },
-  {
-    kind: "request",
     method: "experimentalFeature/enablement/set",
   },
   {
@@ -1147,6 +1144,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "mediaTaskArtifact/list",
+  },
+  {
+    kind: "request",
+    method: "mediaTaskArtifact/transcription/create",
   },
   {
     kind: "request",
@@ -2711,11 +2712,6 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
-      method: "evidence/export";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
       method: "agentSession/handoffBundle/export";
       params?: unknown;
     }
@@ -3072,6 +3068,11 @@ export type AppServerClientRequest =
   | {
       id: number | string;
       method: "mediaTaskArtifact/audio/create";
+      params?: unknown;
+    }
+  | {
+      id: number | string;
+      method: "mediaTaskArtifact/transcription/create";
       params?: unknown;
     }
   | {
@@ -3933,7 +3934,6 @@ export type AppServerRequestMethod =
   | "diagnostics/trace/read"
   | "diagnostics/windowsStartup/read"
   | "discordChannel/probe"
-  | "evidence/export"
   | "feishuChannel/probe"
   | "galleryMaterial/get"
   | "galleryMaterial/listByImageCategory"
@@ -3994,6 +3994,7 @@ export type AppServerRequestMethod =
   | "mediaTaskArtifact/image/complete"
   | "mediaTaskArtifact/image/create"
   | "mediaTaskArtifact/list"
+  | "mediaTaskArtifact/transcription/create"
   | "mediaTaskArtifact/video/create"
   | "memoryStore/addNote"
   | "memoryStore/consolidate"
@@ -5726,48 +5727,6 @@ export interface ErrorNotification {
   willRetry: boolean;
 }
 
-export interface EvidenceExportParams {
-  includeArtifacts?: boolean | null;
-  includeEvents?: boolean | null;
-  includeEvidencePack?: boolean | null;
-  sessionId: string;
-  turnId?: null | string;
-}
-
-export interface EvidenceExportResponse {
-  artifacts?: ArtifactSummary[];
-  events?: AgentEvent[];
-  evidencePack?: EvidencePackSummary | null;
-  exportedAt: string;
-  session: AgentSession;
-  turns?: AgentTurn[];
-}
-
-export interface EvidencePackArtifact {
-  absolutePath?: null | string;
-  bytes: number;
-  kind: string;
-  relativePath: string;
-  title: string;
-}
-
-export interface EvidencePackSummary {
-  artifacts?: EvidencePackArtifact[];
-  completionAuditSummary?: unknown;
-  exportedAt: string;
-  itemCount: number;
-  knownGaps?: string[];
-  latestTurnStatus?: null | string;
-  observabilitySummary?: unknown;
-  packAbsoluteRoot?: null | string;
-  packRelativeRoot: string;
-  pendingRequestCount: number;
-  queuedTurnCount: number;
-  recentArtifactCount: number;
-  threadStatus: string;
-  turnCount: number;
-}
-
 export interface ExperimentalFeature {
   announcement?: null | string;
   defaultEnabled: boolean;
@@ -6999,6 +6958,34 @@ export interface MediaTaskArtifactResponse {
   task_family?: string;
   task_id: string;
   task_type: string;
+}
+
+export interface MediaTaskArtifactTranscriptionCreateParams {
+  contentId?: null | string;
+  entrySource?: null | string;
+  language?: null | string;
+  modality?: null | string;
+  modalityContractKey?: null | string;
+  model?: null | string;
+  outputFormat?: null | string;
+  outputPath?: null | string;
+  projectId?: null | string;
+  projectRootPath: string;
+  prompt?: null | string;
+  providerId?: null | string;
+  rawText?: null | string;
+  requestedTarget?: null | string;
+  requiredCapabilities?: string[];
+  routingSlot?: null | string;
+  runtimeContract?: unknown;
+  sessionId?: null | string;
+  sourcePath?: null | string;
+  sourceUrl?: null | string;
+  speakerLabels?: boolean | null;
+  threadId?: null | string;
+  timestamps?: boolean | null;
+  title?: null | string;
+  turnId?: null | string;
 }
 
 export interface MediaTaskArtifactVideoCreateParams {
@@ -8287,7 +8274,10 @@ export type ProtocolKind =
   | "codex_responses"
   | "fal"
   | "gemini_generate_content"
+  | "openai_audio_speech"
+  | "openai_audio_transcription"
   | "openai_chat"
+  | "openai_embeddings"
   | "openai_images"
   | "openai_responses"
   | "unknown"
@@ -8691,7 +8681,6 @@ export interface ServerCapabilities {
   agentSession: boolean;
   artifact: boolean;
   capabilityDiscovery: boolean;
-  evidence: boolean;
   workspace: boolean;
 }
 

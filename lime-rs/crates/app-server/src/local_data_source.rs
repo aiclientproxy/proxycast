@@ -144,6 +144,7 @@ use app_server_protocol::MediaTaskArtifactListParams;
 use app_server_protocol::MediaTaskArtifactListResponse;
 use app_server_protocol::MediaTaskArtifactLookupParams;
 use app_server_protocol::MediaTaskArtifactResponse;
+use app_server_protocol::MediaTaskArtifactTranscriptionCreateParams;
 use app_server_protocol::MediaTaskArtifactVideoCreateParams;
 use app_server_protocol::MemoryStoreAddNoteParams;
 use app_server_protocol::MemoryStoreAddNoteResponse;

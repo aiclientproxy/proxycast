@@ -16,7 +16,6 @@ const APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE = "thread/settings/update";
 const APP_SERVER_METHOD_THREAD_READ = "thread/read";
 const APP_SERVER_METHOD_TURN_START = "turn/start";
 const APP_SERVER_METHOD_TURN_INTERRUPT = "turn/interrupt";
-const APP_SERVER_METHOD_EVIDENCE_EXPORT = "evidence/export";
 const APP_SERVER_REQUEST_METHODS = new Set([
   "item/commandExecution/requestApproval",
   "item/fileChange/requestApproval",
@@ -417,24 +416,6 @@ export async function updateAgentThreadSettingsCurrent(
   );
 }
 
-export async function exportAgentSessionEvidencePackCurrent(
-  options,
-  { sessionId, turnId },
-) {
-  const response = await invokeAppServerMethod(
-    options,
-    APP_SERVER_METHOD_EVIDENCE_EXPORT,
-    compactRecord({
-      sessionId,
-      turnId,
-      includeEvents: true,
-      includeArtifacts: true,
-      includeEvidencePack: true,
-    }),
-  );
-  return response?.evidencePack || null;
-}
-
 export async function readAgentSessionDetailCurrent(
   options,
   sessionId,
@@ -698,26 +679,6 @@ export function summarizeThreadRead(threadRead) {
     turnCount: Array.isArray(threadRead?.turns) ? threadRead.turns.length : 0,
     queuedTurnCount: queuedTurns.length,
     pendingRequestCount: pendingRequests.length,
-  };
-}
-
-export function summarizeEvidencePack(pack) {
-  if (!pack) {
-    return null;
-  }
-  return {
-    sessionId: pack.session_id || pack.sessionId || null,
-    threadId: pack.thread_id || pack.threadId || null,
-    threadStatus: pack.thread_status || pack.threadStatus || null,
-    latestTurnStatus: pack.latest_turn_status || pack.latestTurnStatus || null,
-    turnCount: pack.turn_count ?? pack.turnCount ?? null,
-    itemCount: pack.item_count ?? pack.itemCount ?? null,
-    pendingRequestCount:
-      pack.pending_request_count ?? pack.pendingRequestCount ?? null,
-    queuedTurnCount: pack.queued_turn_count ?? pack.queuedTurnCount ?? null,
-    knownGaps: pack.known_gaps || pack.knownGaps || [],
-    completionAuditSummary:
-      pack.completion_audit_summary || pack.completionAuditSummary || null,
   };
 }
 

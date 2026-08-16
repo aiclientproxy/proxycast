@@ -12,6 +12,7 @@ mod mcp_bridges;
 mod mcp_resource_tools;
 mod memory_tools;
 mod mention_selection;
+mod model_candidate_set;
 mod model_capability;
 mod model_registry_metadata;
 mod model_route_contract;

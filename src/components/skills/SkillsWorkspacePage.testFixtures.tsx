@@ -41,9 +41,7 @@ const hoisted = vi.hoisted(() => ({
     listRegisteredSkills: vi.fn(),
     listWorkspaceSkillBindings: vi.fn(),
     getAutomationJobs: vi.fn(),
-    getAutomationRunHistory: vi.fn(),
     updateAutomationJob: vi.fn(),
-    exportAgentRuntimeEvidencePack: vi.fn(),
     serviceSkills: [] as ServiceSkillHomeItem[],
     officialMarketplaceSkills: [] as SkillMarketplaceItem[],
     officialMarketplaceError: null as string | null,
@@ -167,15 +165,8 @@ vi.mock("@/lib/api/agentRuntime/inventoryClient", () => ({
     mocks.listWorkspaceSkillBindings(...args),
 }));
 
-vi.mock("@/lib/api/agentRuntime/exportClient", () => ({
-  exportAgentRuntimeEvidencePack: (...args: unknown[]) =>
-    mocks.exportAgentRuntimeEvidencePack(...args),
-}));
-
 vi.mock("@/lib/api/automation", () => ({
   getAutomationJobs: (...args: unknown[]) => mocks.getAutomationJobs(...args),
-  getAutomationRunHistory: (...args: unknown[]) =>
-    mocks.getAutomationRunHistory(...args),
   updateAutomationJob: (...args: unknown[]) =>
     mocks.updateAutomationJob(...args),
 }));
@@ -684,14 +675,8 @@ export function useSkillsWorkspacePageTestLifecycle() {
     mocks.listWorkspaceSkillBindings.mockResolvedValue({ bindings: [] });
     mocks.getAutomationJobs.mockReset();
     mocks.getAutomationJobs.mockResolvedValue([]);
-    mocks.getAutomationRunHistory.mockReset();
-    mocks.getAutomationRunHistory.mockResolvedValue([]);
     mocks.updateAutomationJob.mockReset();
     mocks.updateAutomationJob.mockResolvedValue({});
-    mocks.exportAgentRuntimeEvidencePack.mockReset();
-    mocks.exportAgentRuntimeEvidencePack.mockResolvedValue({
-      completion_audit_summary: undefined,
-    });
     window.localStorage.clear();
   });
 

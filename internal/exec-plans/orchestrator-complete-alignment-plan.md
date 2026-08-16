@@ -1,10 +1,10 @@
 # Codex Orchestrator Complete Alignment Plan
 
-> Status: active; major implementation aligned, strict budget prompt parity and dedicated product evidence remain
+> Status: active; implementation and strict prompt parity aligned, one dedicated product evidence gap remains
 > Owner: root
 > Started: 2026-08-13
 > Upstream baseline: `/Users/coso/Documents/dev/rust/codex` at `95aada11c4150e4ba28d6279c50f0995c1d93e5a`
-> Current phase: Phase E aggregate gates and pinned-baseline re-audit complete; sandbox and managed-network retry Gate B proofs are closed, with one prompt-semantic gap and one product proof gap remaining
+> Current phase: Phase E aggregate gates and pinned-baseline re-audit complete; strict prompt semantics and sandbox/managed-network retry Gate B proofs are closed, with one product proof gap remaining
 
 ## 1. Objective
 
@@ -67,13 +67,13 @@ Current exclusions:
 | Tool approval and sandbox orchestration | `core/src/tools/orchestrator.rs` | `tool-runtime` + current provider turn | Satisfied: `RuntimeToolExecutionAttempt` owns approval, sandbox, grants, cancellation and typed denial; `.lime/qc/gui-evidence/orchestrator-sandbox-retry-gate-b.json` proves a real Electron/runtime `workspace-write` denial -> typed file-change approval -> same provider identity retry -> completed visible file-change group | Keep the dedicated sandbox retry Gate B and owner tests green |
 | Managed-network denial approval | Tool orchestrator + network approval | `tool-runtime` + App Server execution process | Satisfied: host-aware typed denial is independently approved and retried with the same identity; `.lime/qc/gui-evidence/orchestrator-managed-network-retry-gate-b.json` proves real Electron/runtime `managed_network_denied` -> Codex-exact `networkApprovalContext` approval -> same-item retry while preserving `workspace-write` -> one endpoint hit -> completed visible `exec_command` row | Keep the dedicated managed-network retry Gate B and owner/App Server tests green |
 | Multi-Agent six-tool V2 surface | `tools/handlers/multi_agents_v2/**` | `tool-runtime::agent_control` + App Server gateway | Satisfied: `.lime/qc/agent-runtime-tool-execution-smoke.json` is a real Electron/current-chain cold-restart Gate B with all six tools and `39/39` assertions | Keep exact schemas/semantics and the six-tool Gate B green |
-| Root-tree execution capacity | `agent/control/execution.rs` | App Server RuntimeCore | `current`: three child slots per root, atomic reserve/claim/release, root isolation and terminal reuse; fresh related owner/runtime tests pass inside the `52/52` AgentControl group; `.lime/qc/gui-evidence/orchestrator-agent-capacity-gate-b.json` is a real Electron/runtime Gate B with four parallel `spawn_agent` calls, three admitted children and one visible failed fourth row carrying canonical capacity denial | Keep the capacity Gate B green and add terminal-slot-reuse evidence |
-| V2 resident-agent capacity | `agent/control/residency.rs` | App Server RuntimeCore + session loop | `current`: three resident children per root, deterministic idle LRU eviction, exact cold reload and interrupted/lost tombstones; fresh related owner/runtime tests pass inside the `52/52` AgentControl group | Add a real Electron/runtime idle-LRU eviction and exact-target cold-reload Gate B |
-| Rollout budget | `rollout_budget.rs` + AgentControl | agent-runtime/App Server | Core accounting is `current`: typed config, root-shared attempt deltas, provider units, canonical reminder persistence, exhaustion/cancellation, restart and window semantics; fresh owner tests pass `8/8`. Strict Codex prompt parity still differs before the first threshold: Codex emits the current remainder on the initial request, while Lime intentionally suppresses that reminder until a threshold is crossed (`rollout_budget.rs` test). | Decide and test initial-remainder prompt parity, then add real Electron/runtime shared exhaustion, cancellation and restart-rejection evidence |
+| Root-tree execution capacity | `agent/control/execution.rs` | App Server RuntimeCore | `current`: three child slots per root, atomic reserve/claim/release, root isolation and terminal reuse; fresh related owner/runtime tests pass inside the `52/52` AgentControl group; `.lime/qc/gui-evidence/orchestrator-agent-capacity-gate-b.json` proves capacity denial and `.lime/qc/gui-evidence/orchestrator-agent-residency-gate-b.json` proves terminal-slot reuse | Keep both dedicated Gate B proofs green |
+| V2 resident-agent capacity | `agent/control/residency.rs` | App Server RuntimeCore + session loop | `current`: three resident children per root, deterministic idle LRU eviction, exact cold reload and interrupted/lost tombstones; fresh related owner/runtime tests pass inside the `52/52` AgentControl group; `.lime/qc/gui-evidence/orchestrator-agent-residency-gate-b.json` proves idle LRU eviction, exact-target cold reload and restart identity | Keep the residency Gate B green |
+| Rollout budget | `rollout_budget.rs` + AgentControl | agent-runtime/App Server | Core accounting is `current`: typed config, root-shared attempt deltas, provider units, canonical reminder persistence, initial remainder reminder, exhaustion/cancellation, restart and window semantics; fresh owner tests pass `8/8`; `.lime/qc/gui-evidence/orchestrator-rollout-budget-gate-b.json` proves shared exhaustion and restart rejection. | Add a dedicated cancellation/accounting Gate B |
 | Orchestrator Skills source | `ext/skills/src/provider/orchestrator.rs` | `skills` + App Server | `current`: bounded paginated discovery/read through session MCP resource owner; `ORCHESTRATOR-01` proves one frozen discovery, exact resource read, provider history and GUI final state | Satisfied; keep the dedicated Gate B and owner tests green |
 | Orchestrator Skills config | `Config.orchestrator_skills_enabled` | App Server config owner | `current`: `orchestrator.skills.enabled`, default=true, load failure fail closed, typed Rust/TS config; current config control plane read/write proved by `ORCHESTRATOR-01` | Satisfied; keep config schema/control-plane tests and Gate B green |
 | Orchestrator MCP config/access | `Config.orchestrator_mcp_enabled` | App Server config + MCP runtime | `current`: `orchestrator.mcp.enabled`; `ORCHESTRATOR-01` proves exact `codex_apps` definition/dispatch gate while ordinary MCP remains model-visible and executable | Satisfied; keep disabled-boundary Gate B and dispatch tests green |
-| GUI/read-model proof | Codex public Thread items + client surfaces | ThreadStore + Renderer | Six-tool AgentControl cold restart, execution-capacity rejection, sandbox retry, managed-network retry and `ORCHESTRATOR-01` have direct current-chain Electron/read-model/GUI evidence; all use deterministic local providers and zero production mock/legacy fallback | Keep those proofs green and add terminal reuse/residency plus rollout-budget evidence |
+| GUI/read-model proof | Codex public Thread items + client surfaces | ThreadStore + Renderer | Six-tool AgentControl cold restart, execution-capacity rejection, terminal reuse/residency, rollout-budget exhaustion/restart rejection, sandbox retry, managed-network retry and `ORCHESTRATOR-01` have direct current-chain Electron/read-model/GUI evidence; all use deterministic local providers and zero production mock/legacy fallback | Keep those proofs green and add the budget cancellation/accounting Gate B |
 
 No row can be marked complete from a code search alone. Each row needs focused tests and the
 appropriate product evidence.
@@ -345,11 +345,10 @@ Completion standard:
   cancellation Gate B remains open; the existing current-chain cancel-then-continue fixture and
   RuntimeCore cancellation owner tests cover the transport/runtime cancellation contract but do
   not claim budget-specific cancellation accounting.
-- Strict pinned-Codex budget prompt parity is also not yet complete. Codex's
-  `pending_reminder` returns the current remainder at reminder index zero for a new request,
-  while Lime's `pending_reminder` returns `None` until the first configured threshold is crossed.
-  This is a model-visible behavior difference, separate from the already passing exhaustion and
-  restart-admission Gate B.
+- Strict pinned-Codex budget prompt parity is now complete. The follow-up parity fix removed Lime's
+  pre-threshold short circuit: the initial request returns the current remainder with
+  `reminder_index=0`, including when no threshold has been crossed. The rollout-budget owner tests
+  pass `8/8` with this behavior.
 
 #### Product-scope differences
 
@@ -442,7 +441,6 @@ Completion standard:
   Electron/runtime evidence covers execution-capacity rejection, terminal-slot reuse/resident LRU
   cold reload, rollout-budget exhaustion/restart rejection, sandbox retry and managed-network
   denial/approval/same-identity retry. The plan stays active only for a budget-specific
-  cancellation/accounting Gate B and strict initial-remainder prompt parity. The cancellation item
-  is an evidence gap, while initial-remainder behavior is a small implementation decision; neither
-  is a permission blocker. The local Rust rebuild is currently limited by the unavailable
+  cancellation/accounting Gate B; the remaining item is an evidence gap, not a known accounting
+  implementation failure. The local Rust rebuild is currently limited by the unavailable
   `rusty_v8` v150.4.0 prebuilt archive.

@@ -8,7 +8,6 @@ import {
 } from "@/lib/api/appServer";
 import { getLimeI18n } from "@/i18n/createI18n";
 import { normalizeLocale } from "@/i18n/locales";
-import { projectAppServerEvidenceExportToRuntimeEvidencePack } from "./appServerEvidenceExportProjection";
 import {
   normalizeAnalysisHandoff,
   normalizeHandoffBundle,
@@ -18,7 +17,6 @@ import {
 import type {
   AgentRuntimeAnalysisHandoff,
   AgentRuntimeAnalysisArtifact,
-  AgentRuntimeEvidencePack,
   AgentRuntimeHandoffArtifact,
   AgentRuntimeHandoffBundle,
   AgentRuntimeReplayArtifact,
@@ -28,9 +26,8 @@ import type {
   AgentRuntimeSaveReviewDecisionRequest,
 } from "./evidenceTypes";
 
-export type AgentRuntimeEvidenceExportAppServerClient = Pick<
+export type AgentRuntimeExportAppServerClient = Pick<
   AppServerClient,
-  | "exportEvidence"
   | "exportHandoffBundle"
   | "exportReplayCase"
   | "exportAnalysisHandoff"
@@ -39,7 +36,7 @@ export type AgentRuntimeEvidenceExportAppServerClient = Pick<
 >;
 
 export interface AgentRuntimeExportClientDeps {
-  appServerClient?: AgentRuntimeEvidenceExportAppServerClient;
+  appServerClient?: AgentRuntimeExportAppServerClient;
 }
 
 export interface AgentRuntimeExportOptions {
@@ -491,23 +488,6 @@ export function createExportClient({
     return normalizeReviewDecisionTemplate(result);
   }
 
-  async function exportAgentRuntimeEvidencePack(
-    sessionId: string,
-  ): Promise<AgentRuntimeEvidencePack> {
-    const normalizedSessionId = sessionId.trim();
-    if (!normalizedSessionId) {
-      throw new Error("sessionId is required to export App Server evidence");
-    }
-
-    const response = await appServerClient.exportEvidence({
-      sessionId: normalizedSessionId,
-      includeEvents: true,
-      includeArtifacts: true,
-      includeEvidencePack: true,
-    });
-    return projectAppServerEvidenceExportToRuntimeEvidencePack(response.result);
-  }
-
   async function exportAgentRuntimeReplayCase(
     sessionId: string,
     options?: AgentRuntimeExportOptions,
@@ -543,7 +523,6 @@ export function createExportClient({
 
   return {
     exportAgentRuntimeAnalysisHandoff,
-    exportAgentRuntimeEvidencePack,
     exportAgentRuntimeHandoffBundle,
     exportAgentRuntimeReplayCase,
     exportAgentRuntimeReviewDecisionTemplate,
@@ -553,7 +532,6 @@ export function createExportClient({
 
 export const {
   exportAgentRuntimeAnalysisHandoff,
-  exportAgentRuntimeEvidencePack,
   exportAgentRuntimeHandoffBundle,
   exportAgentRuntimeReplayCase,
   exportAgentRuntimeReviewDecisionTemplate,

@@ -20,6 +20,7 @@
     },
     "requestAttestation": {
       "default": false,
+      "description": "Opt into Codex-compatible `attestation/generate` requests for the\nupstream `x-oai-attestation` header. Lime currently rejects this\ncapability because its Desktop Host has no token producer.",
       "type": "boolean"
     }
   },

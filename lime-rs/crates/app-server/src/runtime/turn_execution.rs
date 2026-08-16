@@ -1696,6 +1696,7 @@ impl RuntimeCore {
                     }),
                 ))?;
             }
+            let backend_event_start = sink.emitted_count();
             if let Err(error) = self
                 .execute_backend_via_session_loop(
                     request.clone(),
@@ -1704,7 +1705,7 @@ impl RuntimeCore {
                 )
                 .await
             {
-                if sink.emitted_count() > 0 {
+                if sink.emitted_count() > backend_event_start {
                     sink.emit_failure(&error)?;
                     self.wake_pending_session_work_if_turn_terminal(
                         &session.session_id,
@@ -1767,6 +1768,7 @@ impl RuntimeCore {
                     }),
                 ))?;
             }
+            let backend_event_start = sink.emitted_count();
             if let Err(error) = self
                 .execute_backend_via_session_loop(
                     request.clone(),
@@ -1775,7 +1777,7 @@ impl RuntimeCore {
                 )
                 .await
             {
-                if sink.emitted_count() > 0 {
+                if sink.emitted_count() > backend_event_start {
                     sink.emit_failure(&error)?;
                     self.wake_pending_session_work_if_turn_terminal(
                         &session.session_id,

@@ -1,5 +1,7 @@
+pub mod audio;
 pub mod canonical;
 pub mod current_client;
+pub mod embedding;
 pub mod http;
 pub mod lowering;
 pub mod provider_capabilities;

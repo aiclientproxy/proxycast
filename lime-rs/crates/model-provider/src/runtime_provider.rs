@@ -38,6 +38,9 @@ impl RuntimeProviderProtocol {
             ProtocolKind::GeminiGenerateContent => Some(Self::GeminiGenerateContent),
             ProtocolKind::VertexGemini => Some(Self::VertexGemini),
             ProtocolKind::OpenaiImages
+            | ProtocolKind::OpenaiAudioSpeech
+            | ProtocolKind::OpenaiAudioTranscription
+            | ProtocolKind::OpenaiEmbeddings
             | ProtocolKind::Fal
             | ProtocolKind::XaiVideo
             | ProtocolKind::BedrockConverse

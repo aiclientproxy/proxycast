@@ -20,6 +20,15 @@ impl RuntimeCore {
             .await
     }
 
+    pub async fn create_transcription_media_task_artifact(
+        &self,
+        params: MediaTaskArtifactTranscriptionCreateParams,
+    ) -> Result<MediaTaskArtifactResponse, RuntimeCoreError> {
+        self.app_data_source
+            .create_transcription_media_task_artifact(params)
+            .await
+    }
+
     pub async fn create_video_media_task_artifact(
         &self,
         params: MediaTaskArtifactVideoCreateParams,

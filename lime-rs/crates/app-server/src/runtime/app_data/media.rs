@@ -22,6 +22,13 @@ pub trait MediaAppDataSource: Send + Sync {
         Err(unavailable("mediaTaskArtifact/audio/create"))
     }
 
+    async fn create_transcription_media_task_artifact(
+        &self,
+        _params: MediaTaskArtifactTranscriptionCreateParams,
+    ) -> Result<MediaTaskArtifactResponse, RuntimeCoreError> {
+        Err(unavailable("mediaTaskArtifact/transcription/create"))
+    }
+
     async fn create_video_media_task_artifact(
         &self,
         _params: MediaTaskArtifactVideoCreateParams,

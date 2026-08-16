@@ -90,31 +90,34 @@ describe("modalityExecutionProfiles", () => {
     );
   });
 
-  it("voice_generation profile 在 audio worker 接入前只能作为 metadata-only compat", () => {
+  it("voice_generation profile 应指向 current App Server audio worker", () => {
     const binding = resolveVoiceGenerationRuntimeContractBinding();
 
     expect(binding.runtimeContract).toEqual(
       expect.objectContaining({
-        route_execution_status: "metadata_only",
-        route_execution_exit_condition: expect.stringContaining(
-          "model_route_execution",
-        ),
+        route_execution_status: "executable",
       }),
     );
     expect(binding.executionProfile).toEqual(
       expect.objectContaining({
-        lifecycle: "compat",
+        lifecycle: "current",
         profile_key: "voice_generation_profile",
         fallback_behavior: expect.arrayContaining([
-          "metadata_only_until_audio_worker_consumes_resolved_route",
+          "do_not_fallback_to_legacy_tts_test_command",
         ]),
       }),
     );
     expect(binding.executionProfile?.fallback_behavior).toEqual(
       expect.arrayContaining(["do_not_fallback_to_legacy_tts_test_command"]),
     );
-    expect(binding.executorAdapterKey).toBeUndefined();
-    expect(binding.executorAdapter).toBeUndefined();
+    expect(binding.executorAdapterKey).toBe(
+      "app_server:mediaTaskArtifact/audio/create",
+    );
+    expect(binding.executorAdapter).toMatchObject({
+      executor_kind: "app_server",
+      binding_key: "mediaTaskArtifact/audio/create",
+      lifecycle: "current",
+    });
   });
 
   it("直接 resolver 应按 contract key 返回同一份 profile 绑定", () => {

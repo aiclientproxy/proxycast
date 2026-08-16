@@ -40,17 +40,6 @@ pub(super) fn paginate_artifact_summaries(
     )
 }
 
-pub(super) fn events_for_turn(events: &[AgentEvent], turn_id: Option<&str>) -> Vec<AgentEvent> {
-    events
-        .iter()
-        .filter(|event| match turn_id {
-            Some(turn_id) => event.turn_id.as_deref() == Some(turn_id),
-            None => true,
-        })
-        .cloned()
-        .collect()
-}
-
 pub(super) fn artifact_summaries_for_turn(
     events: &[AgentEvent],
     turn_id: Option<&str>,

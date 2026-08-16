@@ -262,6 +262,100 @@ pub struct MediaTaskArtifactAudioCreateParams {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct MediaTaskArtifactTranscriptionCreateParams {
+    pub project_root_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "raw_text")]
+    pub raw_text: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "source_path"
+    )]
+    pub source_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "source_url")]
+    pub source_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "output_format"
+    )]
+    pub output_format: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "speaker_labels"
+    )]
+    pub speaker_labels: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamps: Option<bool>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "provider_id"
+    )]
+    pub provider_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "session_id")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "thread_id")]
+    pub thread_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "turn_id")]
+    pub turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "project_id")]
+    pub project_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "content_id")]
+    pub content_id: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "entry_source"
+    )]
+    pub entry_source: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "modality_contract_key"
+    )]
+    pub modality_contract_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modality: Option<String>,
+    #[serde(default, alias = "required_capabilities")]
+    pub required_capabilities: Vec<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "routing_slot"
+    )]
+    pub routing_slot: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "runtime_contract"
+    )]
+    pub runtime_contract: Option<serde_json::Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "requested_target"
+    )]
+    pub requested_target: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "output_path"
+    )]
+    pub output_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct MediaTaskArtifactVideoCreateParams {
     pub project_root_path: String,
     pub prompt: String,

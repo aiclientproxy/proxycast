@@ -26,9 +26,6 @@
         "capabilityDiscovery": {
           "type": "boolean"
         },
-        "evidence": {
-          "type": "boolean"
-        },
         "workspace": {
           "type": "boolean"
         }
@@ -37,7 +34,6 @@
         "agentSession",
         "artifact",
         "capabilityDiscovery",
-        "evidence",
         "workspace"
       ],
       "type": "object"

@@ -8,6 +8,8 @@
 
 本文只做事实源导航，不替代各标准本体。新增标准或调整归属时，先更新本文，再更新对应 PRD / roadmap / aiprompts 文档。
 
+Codex 是 Lime Agent runtime 的唯一实现参考。本文列出的 Agent Evidence、in-toto、SLSA、PROV 等内容只保留为外部或历史参考，不得成为 current runtime owner，也不得驱动 portable signed receipt、签名 artifact 或新的 trust protocol。
+
 ## 分层原则
 
 | 层级 | 目标 | 放在哪里 | 判断标准 |

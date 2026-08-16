@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import * as projection from "../dist/index.js";
 import {
   projectAppServerEventsToExecutionEvents,
   projectAppServerSessionReadToExecutionEvents,
@@ -8,6 +9,13 @@ import {
 } from "../dist/index.js";
 
 const timestamp = "2026-06-10T00:00:00.000Z";
+
+test("App Server projection exposes only canonical read-model and lifecycle inputs", () => {
+  assert.equal(
+    "projectAppServerEvidenceExportToExecutionEvents" in projection,
+    false,
+  );
+});
 
 test("App Server events replay into standard projection surfaces", () => {
   const result = replayAppServerFacts({
@@ -118,79 +126,6 @@ test("App Server read model hydrates snapshot and turn lifecycle facts", () => {
     ),
     true,
   );
-});
-
-test("App Server evidence export projects artifacts, evidence pack and deduped events", () => {
-  const duplicatedEvent = appServerEvent("evt-message", 1, "message.delta", {
-    text: "导出文本",
-  });
-  const result = replayAppServerFacts({
-    events: [duplicatedEvent],
-    evidenceExport: {
-      session: {
-        sessionId: "session-1",
-        threadId: "thread-1",
-        status: "completed",
-        updatedAt: timestamp,
-      },
-      turns: [
-        {
-          turnId: "turn-1",
-          status: "completed",
-          completedAt: timestamp,
-        },
-      ],
-      events: [duplicatedEvent],
-      artifacts: [
-        {
-          artifactRef: "artifact-document:req-1",
-          eventId: "evt-artifact",
-          sequence: 8,
-          turnId: "turn-1",
-          artifactId: "artifact-1",
-          path: "draft.md",
-          title: "Draft",
-          contentStatus: "notRequested",
-        },
-      ],
-      exportedAt: "2026-06-10T00:00:03.000Z",
-      evidencePack: {
-        packRelativeRoot: ".lime/harness/sessions/session-1",
-        exportedAt: "2026-06-10T00:00:03.000Z",
-        threadStatus: "completed",
-        latestTurnStatus: "completed",
-        turnCount: 1,
-        itemCount: 2,
-        pendingRequestCount: 0,
-        queuedTurnCount: 0,
-        recentArtifactCount: 1,
-        knownGaps: [],
-        artifacts: [
-          {
-            kind: "markdown",
-            title: "Summary",
-            relativePath: "summary.md",
-            bytes: 128,
-          },
-        ],
-      },
-    },
-  });
-
-  assert.equal(
-    result.events.filter((event) => event.id === "appserver:evt-message")
-      .length,
-    1,
-  );
-  assert.deepEqual(
-    result.state.artifacts.map((artifact) => artifact.id),
-    ["artifact-document:req-1"],
-  );
-  assert.deepEqual(
-    result.state.evidence.map((evidence) => evidence.id),
-    [".lime/harness/sessions/session-1"],
-  );
-  assert.equal(result.state.hydration.eventCount, result.events.length);
 });
 
 test("App Server event adapter keeps projection package runtime-client free", () => {

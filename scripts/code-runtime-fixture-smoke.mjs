@@ -9,7 +9,6 @@ import {
   assertSmoke,
   invokeDevBridge,
   sleep,
-  summarizeEvidencePack,
   summarizeThreadRead,
   threadSettled,
   waitForHealth,
@@ -46,7 +45,6 @@ const APP_SERVER_METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST =
   "agentSession/fileCheckpoint/list";
 const APP_SERVER_METHOD_AGENT_SESSION_FILE_CHECKPOINT_DIFF =
   "agentSession/fileCheckpoint/diff";
-const APP_SERVER_METHOD_EVIDENCE_EXPORT = "evidence/export";
 const FIXTURE_RELATIVE_PATH = ".lime/qc/code-runtime-fixture/src/greeting.ts";
 const INITIAL_CONTENT = [
   "export function greeting() {",
@@ -69,7 +67,7 @@ Lime Code Runtime Fixture Smoke
 
 用途:
   通过 localhost fixture 验证自然语言工具请求默认进入 current Agent Runtime，
-  并完成 Read/Write/Bash、文件落盘、checkpoint/diff/evidence pack 的离线闭环。
+  并完成 Read/Write/Bash、文件落盘和 checkpoint/diff 的离线闭环。
 
 用法:
   npm run smoke:code-runtime-fixture
@@ -502,27 +500,6 @@ function appServerThreadReadFromSessionRead(readResult) {
   };
 }
 
-function appServerEvidenceSummary(evidenceExport) {
-  if (!evidenceExport) {
-    return null;
-  }
-  const events = Array.isArray(evidenceExport.events)
-    ? evidenceExport.events
-    : [];
-  const artifacts = Array.isArray(evidenceExport.artifacts)
-    ? evidenceExport.artifacts
-    : [];
-  const turns = Array.isArray(evidenceExport.turns) ? evidenceExport.turns : [];
-  return {
-    sessionId: evidenceExport.session?.sessionId || null,
-    exportedAt: evidenceExport.exportedAt || null,
-    turnCount: turns.length,
-    eventCount: events.length,
-    artifactCount: artifacts.length,
-    evidencePack: summarizeEvidencePack(evidenceExport.evidencePack),
-  };
-}
-
 function buildRuntimeRequest({ fixture, turnId, workspaceId }) {
   return {
     providerConfig: fixture.provider.providerConfig,
@@ -751,28 +728,13 @@ async function runSmoke(options) {
     );
     const checkpointDiff = checkpointDiffResult.result;
 
-    console.log(`${LOG_PREFIX} stage=export-evidence`);
-    const evidenceExportResult = await invokeAppServer(
-      options,
-      APP_SERVER_METHOD_EVIDENCE_EXPORT,
-      {
-        sessionId,
-        turnId,
-        includeEvents: true,
-        includeArtifacts: true,
-        includeEvidencePack: true,
-      },
-      30_000,
-    );
-    const evidenceExport = evidenceExportResult.result;
-
     const finalContent = fs.readFileSync(targetPath, "utf8");
     const fixtureBodyText = requestBodyText(fixture.requests);
     const firstRequestText = requestMessagesText(fixture.requests[0]?.body);
     const detailText = JSON.stringify(finalState.sessionDetail || {});
     const threadReadText = JSON.stringify(finalState.threadRead || {});
     const sessionReadText = JSON.stringify(finalState.sessionRead || {});
-    const evidenceExportText = JSON.stringify(evidenceExport || {});
+    const threadFactsText = `${JSON.stringify(finalState.threadRead || {})}\n${JSON.stringify(finalState.sessionDetail || {})}`;
     const checkpointDiffText = JSON.stringify(checkpointDiff || {});
     const assertions = {
       appServerJsonRpcSubmitTurn:
@@ -780,8 +742,9 @@ async function runSmoke(options) {
         turnResult.result?.turn?.turnId === turnId,
       appServerSessionReadObserved:
         finalState.sessionRead?.session?.sessionId === sessionId,
-      appServerEvidenceExportObserved:
-        evidenceExport?.session?.sessionId === sessionId,
+      appServerThreadReadObserved:
+        finalState.threadRead?.session_id === sessionId ||
+        finalState.sessionRead?.session?.sessionId === sessionId,
       fixtureProviderUsed: fixtureChatRequestCount(fixture.requests) >= 4,
       naturalLanguageWithoutAtCode:
         firstRequestText.includes("Hello Lime Runtime") &&
@@ -799,15 +762,15 @@ async function runSmoke(options) {
       readToolObserved:
         valueContains(finalState.sessionDetail, "Read") ||
         sessionReadText.includes("Read") ||
-        evidenceExportText.includes("Read"),
+        threadFactsText.includes("Read"),
       writeToolObserved:
         valueContains(finalState.sessionDetail, "Write") ||
         sessionReadText.includes("Write") ||
-        evidenceExportText.includes("Write"),
+        threadFactsText.includes("Write"),
       bashToolObserved:
         valueContains(finalState.sessionDetail, "Bash") ||
         sessionReadText.includes("Bash") ||
-        evidenceExportText.includes("Bash"),
+        threadFactsText.includes("Bash"),
       workspaceFileUpdated: finalContent.includes("Hello Lime Runtime"),
       checkpointCreated:
         Number(
@@ -817,8 +780,8 @@ async function runSmoke(options) {
         ) > 0,
       checkpointDiffAvailable:
         checkpointDiffContainsExpectedChange(checkpointDiff),
-      evidenceExported: Boolean(evidenceExport),
-      evidenceMentionsCodeFile: evidenceExportText.includes(
+      threadReadObserved: Boolean(finalState.threadRead),
+      threadFactsMentionCodeFile: threadFactsText.includes(
         FIXTURE_RELATIVE_PATH,
       ),
     };
@@ -836,7 +799,7 @@ async function runSmoke(options) {
       coverage: {
         usesAppServerJsonRpcSubmitTurn: true,
         usesAppServerSessionRead: true,
-        usesAppServerEvidenceExport: true,
+        usesAppServerThreadRead: true,
         usesAppServerFileCheckpointCurrent: true,
         usesDefaultReactExecutionStrategy: true,
         usesLocalhostFixtureProvider: true,
@@ -844,7 +807,7 @@ async function runSmoke(options) {
         verifiesReadWriteBashTools: true,
         verifiesWorkspaceFileMutation: true,
         verifiesCheckpointDiff: true,
-        verifiesEvidenceExport: true,
+        verifiesCanonicalThreadFacts: true,
       },
       devBridge: {
         healthStatus: health?.status || null,
@@ -868,7 +831,15 @@ async function runSmoke(options) {
         checkpointId,
         checkpointDiff,
       },
-      evidenceExport: appServerEvidenceSummary(evidenceExport),
+      threadFacts: {
+        sessionId: finalState.threadRead?.session_id ?? sessionId,
+        turnCount: Array.isArray(finalState.threadRead?.turns)
+          ? finalState.threadRead.turns.length
+          : 0,
+        itemCount: Array.isArray(finalState.sessionDetail?.items)
+          ? finalState.sessionDetail.items.length
+          : 0,
+      },
       assertions,
     };
 

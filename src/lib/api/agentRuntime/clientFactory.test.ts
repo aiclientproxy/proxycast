@@ -316,44 +316,6 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
       messages: [],
       notifications: [],
     }),
-    exportEvidence: vi.fn().mockResolvedValue({
-      id: 1,
-      result: {
-        session: {
-          sessionId: "session-1",
-          threadId: "thread-1",
-          appId: "agent-chat",
-          status: "running",
-          createdAt: "2026-06-06T00:00:00.000Z",
-          updatedAt: "2026-06-06T00:00:03.000Z",
-        },
-        turns: [],
-        events: [],
-        artifacts: [],
-        exportedAt: "2026-06-06T00:00:04.000Z",
-        evidencePack: {
-          packRelativeRoot: ".lime/harness/sessions/session-1/evidence",
-          packAbsoluteRoot:
-            "/tmp/work/.lime/harness/sessions/session-1/evidence",
-          exportedAt: "2026-06-06T00:00:05.000Z",
-          threadStatus: "running",
-          latestTurnStatus: "accepted",
-          turnCount: 2,
-          itemCount: 6,
-          pendingRequestCount: 1,
-          queuedTurnCount: 0,
-          recentArtifactCount: 1,
-          knownGaps: [],
-          artifacts: [],
-        },
-      },
-      response: {
-        id: 1,
-        result: {},
-      },
-      messages: [],
-      notifications: [],
-    }),
     exportHandoffBundle: vi.fn().mockResolvedValue({
       id: 1,
       result: {
@@ -849,32 +811,6 @@ describe("agentRuntime clientFactory", () => {
       appServerClient.listAgentSessionFileCheckpoints,
     ).toHaveBeenCalledWith({
       sessionId: "session-1",
-    });
-    expect(bridgeInvoke).not.toHaveBeenCalled();
-  });
-
-  it("evidence pack export 应走 App Server client，不复用 legacy bridgeInvoke", async () => {
-    const appServerClient = appServerClientMock();
-    const bridgeInvoke = vi.fn();
-    const client = createAgentRuntimeClient({
-      appServerClient,
-      bridgeInvoke,
-      isAppServerTurnLifecycleAvailable: () => true,
-    });
-
-    await expect(
-      client.exportAgentRuntimeEvidencePack("session-1"),
-    ).resolves.toMatchObject({
-      session_id: "session-1",
-      thread_id: "thread-1",
-      pack_relative_root: ".lime/harness/sessions/session-1/evidence",
-    });
-
-    expect(appServerClient.exportEvidence).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      includeEvents: true,
-      includeArtifacts: true,
-      includeEvidencePack: true,
     });
     expect(bridgeInvoke).not.toHaveBeenCalled();
   });

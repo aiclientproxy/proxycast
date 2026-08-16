@@ -326,7 +326,7 @@ export async function runDeferredMcpNewTurnIsolation({
 
 export function buildDeferredMcpToolSearchAssertions({
   deferredToolName,
-  evidencePackText,
+  readModelText,
   providerRequests,
   runtimeContext,
   toolOutputText,
@@ -360,8 +360,8 @@ export function buildDeferredMcpToolSearchAssertions({
       newTurnProviderRequests.every(
         (request) => !request.toolNames.includes(deferredToolName),
       ),
-    evidencePackMentionsDeferredMcpTool:
-      evidencePackText.includes(deferredToolName) ||
+    readModelMentionsDeferredMcpTool:
+      readModelText.includes(deferredToolName) ||
       toolOutputText.includes("LIME_DEFERRED_MCP_TOOL_OK"),
   };
 }

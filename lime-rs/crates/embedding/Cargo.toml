@@ -11,6 +11,7 @@ local-onnx = ["dep:dirs", "dep:fastembed"]
 [dependencies]
 # HTTP 客户端
 reqwest = { version = "0.12", features = ["blocking", "json"] }
+model-provider.workspace = true
 
 # 序列化
 serde = { version = "1", features = ["derive"] }

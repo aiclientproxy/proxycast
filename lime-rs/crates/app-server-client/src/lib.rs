@@ -129,7 +129,6 @@ pub use app_server_protocol::DiagnosticsMetricConfig;
 pub use app_server_protocol::DiagnosticsRequestDedupDiagnostics;
 pub use app_server_protocol::DiagnosticsResponseCacheDiagnostics;
 pub use app_server_protocol::DiagnosticsTelemetrySummary;
-pub use app_server_protocol::EvidenceExportParams;
 pub use app_server_protocol::GatewayChannelStatusParams;
 pub use app_server_protocol::GatewayChannelStatusResponse;
 pub use app_server_protocol::GatewayTunnelCloudflaredInstallParams;
@@ -322,7 +321,6 @@ pub use app_server_protocol::METHOD_DIAGNOSTICS_LOG_STORAGE_READ;
 pub use app_server_protocol::METHOD_DIAGNOSTICS_SERVER_READ;
 pub use app_server_protocol::METHOD_DIAGNOSTICS_SUPPORT_BUNDLE_EXPORT;
 pub use app_server_protocol::METHOD_DIAGNOSTICS_WINDOWS_STARTUP_READ;
-pub use app_server_protocol::METHOD_EVIDENCE_EXPORT;
 pub use app_server_protocol::METHOD_GATEWAY_CHANNEL_STATUS;
 pub use app_server_protocol::METHOD_GATEWAY_TUNNEL_CLOUDFLARED_DETECT;
 pub use app_server_protocol::METHOD_GATEWAY_TUNNEL_CLOUDFLARED_INSTALL;
@@ -1564,13 +1562,6 @@ impl AppServerClient {
         self.typed_request(typed::unwatch(params))
     }
 
-    pub fn export_evidence(
-        &mut self,
-        params: EvidenceExportParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::export_evidence(params))
-    }
-
     pub fn export_handoff_bundle(
         &mut self,
         params: AgentSessionHandoffBundleExportParams,
@@ -2508,10 +2499,6 @@ pub mod typed {
 
     pub fn unwatch(params: FsUnwatchParams) -> TypedRequest<FsUnwatchParams> {
         TypedRequest::new(METHOD_FS_UNWATCH, params)
-    }
-
-    pub fn export_evidence(params: EvidenceExportParams) -> TypedRequest<EvidenceExportParams> {
-        TypedRequest::new(METHOD_EVIDENCE_EXPORT, params)
     }
 
     pub fn export_handoff_bundle(
@@ -4474,34 +4461,6 @@ mod tests {
     }
 
     #[test]
-    fn export_evidence_preserves_scope_and_stable_method() {
-        let mut client = AppServerClient::new();
-
-        let request = client
-            .export_evidence(EvidenceExportParams {
-                session_id: "sess_1".to_string(),
-                turn_id: Some("turn_1".to_string()),
-                include_events: Some(true),
-                include_artifacts: Some(false),
-                include_evidence_pack: Some(false),
-            })
-            .expect("request");
-
-        assert_eq!(request.id, RequestId::Integer(1));
-        assert_eq!(request.method, METHOD_EVIDENCE_EXPORT);
-        assert_eq!(
-            request.params.expect("params"),
-            json!({
-                "sessionId": "sess_1",
-                "turnId": "turn_1",
-                "includeEvents": true,
-                "includeArtifacts": false,
-                "includeEvidencePack": false,
-            })
-        );
-    }
-
-    #[test]
     fn export_handoff_bundle_preserves_scope_and_stable_method() {
         let mut client = AppServerClient::new();
 
@@ -4893,7 +4852,6 @@ mod tests {
         assert!(methods.contains(&METHOD_FS_COPY));
         assert!(methods.contains(&METHOD_FS_WATCH));
         assert!(methods.contains(&METHOD_FS_UNWATCH));
-        assert!(methods.contains(&METHOD_EVIDENCE_EXPORT));
         assert!(methods.contains(&METHOD_TURN_START));
         assert!(methods.contains(&METHOD_WORKSPACE_LIST));
         assert!(methods.contains(&METHOD_WORKSPACE_READ));
@@ -4949,7 +4907,6 @@ mod tests {
         assert!(is_app_server_request_method(METHOD_FS_COPY));
         assert!(is_app_server_request_method(METHOD_FS_WATCH));
         assert!(is_app_server_request_method(METHOD_FS_UNWATCH));
-        assert!(is_app_server_request_method(METHOD_EVIDENCE_EXPORT));
         assert!(is_app_server_request_method(METHOD_WORKSPACE_LIST));
         assert!(is_app_server_request_method(
             METHOD_WORKSPACE_RIGHT_SURFACE_REQUEST

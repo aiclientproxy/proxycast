@@ -17,8 +17,8 @@ const PERFORMANCE_TEST_PATH =
   "lime-rs/crates/app-server/src/runtime/conversation_import/tests/performance.rs";
 const SECURITY_TEST_PATH =
   "lime-rs/crates/app-server/src/runtime/conversation_import/tests/security.rs";
-const EVIDENCE_TEST_PATH =
-  "lime-rs/crates/app-server/src/runtime/conversation_import/tests/evidence.rs";
+const IMPORT_COMMIT_PATH =
+  "lime-rs/crates/app-server/src/runtime/conversation_import/commit.rs";
 const CLICK_THROUGH_SMOKE_TEST_PATH =
   "scripts/electron/codex-import-click-through-fixture-smoke.test.mjs";
 const REAL_SAMPLE_SMOKE_TEST_PATH =
@@ -83,12 +83,15 @@ describe("codex import fidelity acceptance matrix guard", () => {
     expect(matrix).toContain("RuntimeCore StoredSession + AgentEvent");
     expect(matrix).toContain("thread/read + thread/items/list");
     expect(matrix).toContain("Preview Artifact Contract");
-    expect(matrix).toContain("evidence/export / replay current 主链");
+    expect(matrix).toContain(
+      "canonical Thread/Turn/Item read model / derived replay current 主链",
+    );
     expect(matrix).toContain("Renderer 不直接扫描 `.codex`");
     expect(matrix).toContain(
       "旧 Tauri / `lime-rs/src/**` / 旧 `agent_runtime_*` 不作为新增能力落点",
     );
-    expect(matrix).not.toContain("agentSession/");
+    expect(matrix).toContain("agentSession/read");
+    expect(matrix).not.toContain("agentSession/export");
     expect(matrix).not.toContain("WebviewWindow");
   });
 
@@ -275,7 +278,7 @@ describe("codex import fidelity acceptance matrix guard", () => {
   it("keeps continuation and evidence on the current App Server runtime chain", () => {
     const matrix = readFile(MATRIX_PATH);
     const tracker = readFile(TRACKER_PATH);
-    const evidenceTests = readFile(EVIDENCE_TEST_PATH);
+    const importCommit = readFile(IMPORT_COMMIT_PATH);
     const clickThroughSurface = readFiles(
       CLICK_THROUGH_SMOKE_TEST_PATH,
       CLICK_THROUGH_SMOKE_PATH,
@@ -283,7 +286,7 @@ describe("codex import fidelity acceptance matrix guard", () => {
 
     expect(matrix).toContain("`turn/start` current 主链");
     expect(matrix).toContain(
-      "`evidence/export` / replay 使用 Lime canonical events",
+      "`agentSession/read` / `thread/read` / `thread/items/list` 与 derived replay 使用 Lime canonical facts",
     );
     expect(tracker).toContain(
       "导入来源 runtime 的 `provider_name/model_name` 只表示来源上下文",
@@ -291,9 +294,7 @@ describe("codex import fidelity acceptance matrix guard", () => {
     expect(tracker).toContain(
       "续聊 submit op 必须继续提交用户当前选择的 provider/model",
     );
-    expect(evidenceTests).toContain(
-      "imported_codex_thread_exports_evidence_with_source_provenance",
-    );
+    expect(importCommit).toContain("source provenance");
     expect(clickThroughSurface).toContain('"turn/start"');
     expect(clickThroughSurface).toContain("backendMetadataImported");
     expect(clickThroughSurface).toContain("hasContinueUserMessage");

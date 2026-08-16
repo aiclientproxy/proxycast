@@ -1,16 +1,13 @@
 import { AppServerClient } from "@/lib/api/appServer";
-import { type AgentRuntimeCommandInvoke } from "./transport";
 import type {
   AgentRuntimeAnalysisHandoff,
-  AgentRuntimeEvidencePack,
   AgentRuntimeHandoffBundle,
   AgentRuntimeReplayCase,
   AgentRuntimeReviewDecisionTemplate,
   AgentRuntimeSaveReviewDecisionRequest,
 } from "./evidenceTypes";
-export type AgentRuntimeEvidenceExportAppServerClient = Pick<
+export type AgentRuntimeExportAppServerClient = Pick<
   AppServerClient,
-  | "exportEvidence"
   | "exportHandoffBundle"
   | "exportReplayCase"
   | "exportAnalysisHandoff"
@@ -18,23 +15,18 @@ export type AgentRuntimeEvidenceExportAppServerClient = Pick<
   | "saveReviewDecision"
 >;
 export interface AgentRuntimeExportClientDeps {
-  invokeCommand?: AgentRuntimeCommandInvoke;
-  appServerClient?: AgentRuntimeEvidenceExportAppServerClient;
+  appServerClient?: AgentRuntimeExportAppServerClient;
 }
 export interface AgentRuntimeExportOptions {
   locale?: string | null;
 }
 export declare function createExportClient({
   appServerClient,
-  invokeCommand,
 }?: AgentRuntimeExportClientDeps): {
   exportAgentRuntimeAnalysisHandoff: (
     sessionId: string,
     options?: AgentRuntimeExportOptions,
   ) => Promise<AgentRuntimeAnalysisHandoff>;
-  exportAgentRuntimeEvidencePack: (
-    sessionId: string,
-  ) => Promise<AgentRuntimeEvidencePack>;
   exportAgentRuntimeHandoffBundle: (
     sessionId: string,
     options?: AgentRuntimeExportOptions,
@@ -55,9 +47,6 @@ export declare const exportAgentRuntimeAnalysisHandoff: (
     sessionId: string,
     options?: AgentRuntimeExportOptions,
   ) => Promise<AgentRuntimeAnalysisHandoff>,
-  exportAgentRuntimeEvidencePack: (
-    sessionId: string,
-  ) => Promise<AgentRuntimeEvidencePack>,
   exportAgentRuntimeHandoffBundle: (
     sessionId: string,
     options?: AgentRuntimeExportOptions,

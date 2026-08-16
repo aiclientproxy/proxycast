@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "contentId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "entrySource": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "language": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "modality": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "modalityContractKey": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "model": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "outputFormat": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "outputPath": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "projectId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "projectRootPath": {
+      "type": "string"
+    },
+    "prompt": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "providerId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "rawText": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "requestedTarget": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "requiredCapabilities": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "routingSlot": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "runtimeContract": true,
+    "sessionId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "sourcePath": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "sourceUrl": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "speakerLabels": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "threadId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "timestamps": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "title": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "turnId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "projectRootPath"
+  ],
+  "title": "MediaTaskArtifactTranscriptionCreateParams",
+  "type": "object"
+}

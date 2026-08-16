@@ -410,9 +410,6 @@ impl RolloutBudget {
             .iter()
             .filter(|threshold| remaining <= **threshold)
             .count();
-        if index == 0 {
-            return None;
-        }
         let key = ReminderKey {
             root_thread_id: root_thread_id.to_string(),
             thread_id: thread_id.to_string(),
@@ -559,10 +556,16 @@ mod tests {
     }
 
     #[test]
-    fn reminder_is_absent_before_the_first_threshold() {
+    fn reminder_includes_initial_remainder_before_the_first_threshold() {
         let budget = RolloutBudget::new(Some(config())).expect("valid config");
 
-        assert!(budget.pending_reminder("tree", "root", "window").is_none());
+        assert_eq!(
+            budget.pending_reminder("tree", "root", "window"),
+            Some(RolloutBudgetReminder {
+                remaining_tokens: 100,
+                reminder_index: 0,
+            })
+        );
     }
 
     #[test]
@@ -600,9 +603,13 @@ mod tests {
                 reminder_index: 1,
             })
         );
-        assert!(budget
-            .pending_reminder("tree-b", "root-b", "window-b")
-            .is_none());
+        assert_eq!(
+            budget.pending_reminder("tree-b", "root-b", "window-b"),
+            Some(RolloutBudgetReminder {
+                remaining_tokens: 100,
+                reminder_index: 0,
+            })
+        );
     }
 
     #[test]

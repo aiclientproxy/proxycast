@@ -72,7 +72,6 @@ use app_server_protocol::CapabilityListParams;
 use app_server_protocol::ChannelProbeParams;
 use app_server_protocol::ClientInfo;
 use app_server_protocol::ClientNotification;
-use app_server_protocol::EvidenceExportParams;
 use app_server_protocol::InitializeParams;
 use app_server_protocol::InitializeResponse;
 use app_server_protocol::JsonRpcError;
@@ -476,20 +475,6 @@ impl RequestProcessor {
 
     // project_git handlers 已提取到 processor/project_git.rs
 
-    async fn handle_evidence_export(
-        &self,
-        params: Option<serde_json::Value>,
-    ) -> Result<RpcDispatch, JsonRpcError> {
-        self.ensure_initialized()?;
-        let params: EvidenceExportParams = parse_params(params)?;
-        let response = self
-            .runtime
-            .export_evidence(params)
-            .await
-            .map_err(to_jsonrpc_error)?;
-        dispatch_result(response)
-    }
-
     async fn handle_handoff_bundle_export(
         &self,
         params: Option<serde_json::Value>,
@@ -594,6 +579,7 @@ impl RequestProcessor {
         params: Option<serde_json::Value>,
         allow_existing_process_initialization: bool,
     ) -> Result<serde_json::Value, JsonRpcError> {
+        reject_unsupported_initialize_capabilities(params.as_ref())?;
         let params: InitializeParams = parse_params(params)?;
         crate::agent_ui_event_schema::warm_validators().map_err(|error| {
             JsonRpcError::new(
@@ -628,7 +614,6 @@ impl RequestProcessor {
                 agent_session: true,
                 capability_discovery: true,
                 artifact: true,
-                evidence: true,
                 workspace: false,
             },
         })
@@ -691,6 +676,38 @@ where
             format!("invalid params: {error}"),
         )
     })
+}
+
+fn reject_unsupported_initialize_capabilities(
+    params: Option<&serde_json::Value>,
+) -> Result<(), JsonRpcError> {
+    let Some(capabilities) = params
+        .and_then(serde_json::Value::as_object)
+        .and_then(|params| params.get("capabilities"))
+        .and_then(serde_json::Value::as_object)
+    else {
+        return Ok(());
+    };
+
+    let Some(request_attestation) = capabilities.get("requestAttestation") else {
+        return Ok(());
+    };
+
+    let Some(request_attestation) = request_attestation.as_bool() else {
+        return Err(JsonRpcError::new(
+            error_codes::INVALID_PARAMS,
+            "capabilities.requestAttestation must be a boolean",
+        ));
+    };
+
+    if request_attestation {
+        return Err(JsonRpcError::new(
+            error_codes::INVALID_PARAMS,
+            "capabilities.requestAttestation is unsupported: Lime has no Codex Desktop Host attestation producer",
+        ));
+    }
+
+    Ok(())
 }
 
 fn serialize_result(value: impl Serialize) -> Result<serde_json::Value, JsonRpcError> {

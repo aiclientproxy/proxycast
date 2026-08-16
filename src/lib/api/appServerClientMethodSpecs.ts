@@ -177,11 +177,6 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
-    name: "exportEvidence",
-    method: constants.APP_SERVER_METHOD_EVIDENCE_EXPORT,
-    params: "required",
-  },
-  {
     name: "exportHandoffBundle",
     method: constants.APP_SERVER_METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT,
     params: "required",
@@ -630,6 +625,11 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
   {
     name: "createAudioMediaTaskArtifact",
     method: constants.APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE,
+    params: "required",
+  },
+  {
+    name: "createTranscriptionMediaTaskArtifact",
+    method: constants.APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
     params: "required",
   },
   {

@@ -132,7 +132,6 @@ const {
   METHOD_CONVERSATION_IMPORT_SOURCE_SCAN,
   METHOD_CONVERSATION_IMPORT_THREAD_COMMIT,
   METHOD_CONVERSATION_IMPORT_THREAD_PREVIEW,
-  METHOD_EVIDENCE_EXPORT,
   METHOD_FS_COPY,
   METHOD_FS_CREATE_DIRECTORY,
   METHOD_FS_GET_METADATA,
@@ -2603,16 +2602,9 @@ test("builds connect deep link requests with current methods", () => {
   });
 });
 
-test("builds evidence export requests with optional scope flags and runtime export requests", () => {
+test("builds derived export requests", () => {
   const client = new AppServerClient();
 
-  const evidence = client.exportEvidence({
-    sessionId: "sess_1",
-    turnId: "turn_1",
-    includeEvents: true,
-    includeArtifacts: false,
-    includeEvidencePack: false,
-  });
   const handoff = client.exportHandoffBundle({
     sessionId: "sess_1",
     locale: "zh-CN",
@@ -2640,33 +2632,24 @@ test("builds evidence export requests with optional scope flags and runtime expo
     notes: "",
   });
 
-  assert.equal(evidence.id, 1);
-  assert.equal(evidence.method, METHOD_EVIDENCE_EXPORT);
-  assert.deepEqual(evidence.params, {
-    sessionId: "sess_1",
-    turnId: "turn_1",
-    includeEvents: true,
-    includeArtifacts: false,
-    includeEvidencePack: false,
-  });
-  assert.equal(handoff.id, 2);
+  assert.equal(handoff.id, 1);
   assert.equal(handoff.method, METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT);
   assert.deepEqual(handoff.params, {
     sessionId: "sess_1",
     locale: "zh-CN",
   });
-  assert.equal(replay.id, 3);
+  assert.equal(replay.id, 2);
   assert.equal(replay.method, METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT);
   assert.deepEqual(replay.params, {
     sessionId: "sess_1",
     locale: "en-US",
   });
-  assert.equal(analysis.id, 4);
+  assert.equal(analysis.id, 3);
   assert.equal(analysis.method, METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT);
   assert.deepEqual(analysis.params, {
     sessionId: "sess_1",
   });
-  assert.equal(review.id, 5);
+  assert.equal(review.id, 4);
   assert.equal(
     review.method,
     METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT,
@@ -2674,7 +2657,7 @@ test("builds evidence export requests with optional scope flags and runtime expo
   assert.deepEqual(review.params, {
     sessionId: "sess_1",
   });
-  assert.equal(save.id, 6);
+  assert.equal(save.id, 5);
   assert.equal(save.method, METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE);
   assert.deepEqual(save.params, {
     sessionId: "sess_1",
@@ -3522,11 +3505,6 @@ test("agent runtime client facade delegates to current App Server methods", asyn
     threadId: "thread_external",
     turnId: "turn-1",
   });
-  const evidence = await runtime.exportEvidence({
-    sessionId: "sess_external",
-    includeEvents: true,
-  });
-
   assert.deepEqual(
     sent.map((message) => message.method),
     [
@@ -3535,13 +3513,11 @@ test("agent runtime client facade delegates to current App Server methods", asyn
       METHOD_TURN_STEER,
       METHOD_AGENT_SESSION_ACTION_RESPOND,
       METHOD_TURN_INTERRUPT,
-      METHOD_EVIDENCE_EXPORT,
     ],
   );
   assert.equal(start.result.turn.id, "turn-1");
   assert.equal(read.result.thread.sessionId, "sess_external");
   assert.equal(steer.result.turnId, "turn-1");
-  assert.equal(evidence.result.exportedAt, "2026-06-04T00:00:03Z");
 });
 
 test("agent runtime client facade subscribes to direct lifecycle notifications", async () => {
@@ -4094,132 +4070,6 @@ test("connection wraps exact fs responses", async () => {
   assert.deepEqual(copyResult.result, {});
   assert.equal(watchResult.result.path, "/workspace");
   assert.deepEqual(unwatchResult.result, {});
-});
-
-test("connection wraps evidence export response", async () => {
-  const sent = [];
-  const inbound = [
-    {
-      id: 1,
-      result: {
-        session: {
-          sessionId: "sess_1",
-          threadId: "thread_1",
-          appId: "content-studio",
-          status: "running",
-          createdAt: "2026-06-05T00:00:00.000Z",
-          updatedAt: "2026-06-05T00:00:01.000Z",
-        },
-        turns: [
-          {
-            turnId: "turn_1",
-            sessionId: "sess_1",
-            threadId: "thread_1",
-            status: "accepted",
-          },
-        ],
-        events: [
-          {
-            eventId: "evt-1",
-            sequence: 1,
-            sessionId: "sess_1",
-            threadId: "thread_1",
-            turnId: "turn_1",
-            type: "message.delta",
-            timestamp: "2026-06-05T00:00:01.000Z",
-            payload: {
-              text: "draft",
-            },
-          },
-        ],
-        artifacts: [
-          {
-            artifactRef: "artifact-document:req-1",
-            eventId: "evt-2",
-            sequence: 2,
-            turnId: "turn_1",
-            artifactId: "req-1",
-            path: ".lime/artifacts/report.md",
-            contentStatus: "notRequested",
-          },
-        ],
-        exportedAt: "2026-06-05T00:00:02.000Z",
-        evidencePack: {
-          packRelativeRoot: ".lime/harness/sessions/sess_1/evidence",
-          packAbsoluteRoot: "/workspace/.lime/harness/sessions/sess_1/evidence",
-          exportedAt: "2026-06-05T00:00:03.000Z",
-          threadStatus: "running",
-          latestTurnStatus: "accepted",
-          turnCount: 1,
-          itemCount: 3,
-          pendingRequestCount: 0,
-          queuedTurnCount: 0,
-          recentArtifactCount: 1,
-          knownGaps: ["gui_smoke_not_run"],
-          observabilitySummary: {
-            schema_version: "runtime-evidence-pack.v1",
-          },
-          completionAuditSummary: {
-            decision: "in_progress",
-          },
-          artifacts: [
-            {
-              kind: "summary",
-              title: "Evidence Summary",
-              relativePath: ".lime/harness/sessions/sess_1/evidence/summary.md",
-              bytes: 128,
-            },
-          ],
-        },
-      },
-    },
-  ];
-  const connection = new AppServerConnection({
-    send(message) {
-      sent.push(message);
-    },
-    async nextMessage() {
-      const message = inbound.shift();
-      if (!message) {
-        throw new Error("empty transport");
-      }
-      return message;
-    },
-  });
-
-  const result = await connection.exportEvidence({
-    sessionId: "sess_1",
-    turnId: "turn_1",
-    includeEvents: true,
-    includeArtifacts: true,
-    includeEvidencePack: true,
-  });
-
-  assert.equal(sent[0].method, METHOD_EVIDENCE_EXPORT);
-  assert.deepEqual(sent[0].params, {
-    sessionId: "sess_1",
-    turnId: "turn_1",
-    includeEvents: true,
-    includeArtifacts: true,
-    includeEvidencePack: true,
-  });
-  assert.equal(result.result.session.sessionId, "sess_1");
-  assert.equal(result.result.turns[0].turnId, "turn_1");
-  assert.equal(result.result.events[0].type, "message.delta");
-  assert.equal(
-    result.result.artifacts[0].artifactRef,
-    "artifact-document:req-1",
-  );
-  assert.equal(result.result.artifacts[0].contentStatus, "notRequested");
-  assert.equal(result.result.exportedAt, "2026-06-05T00:00:02.000Z");
-  assert.equal(result.result.threadStatus, undefined);
-  assert.equal(result.result.evidencePack.threadStatus, "running");
-  assert.equal(result.result.evidencePack.latestTurnStatus, "accepted");
-  assert.equal(
-    result.result.evidencePack.completionAuditSummary.decision,
-    "in_progress",
-  );
-  assert.equal(result.result.evidencePack.artifacts[0].bytes, 128);
 });
 
 test("connection wraps handoff bundle export response", async () => {
@@ -5710,7 +5560,6 @@ test("consumes checked-in Rust protocol schema manifest", async () => {
 
   assert.doesNotThrow(() => assertCompatibleProtocolSchemaManifest(manifest));
   assert.ok(manifest.schemas.v0.includes("AgentSessionTurnStartParams"));
-  assert.ok(manifest.schemas.v0.includes("EvidenceExportResponse"));
   assert.ok(
     manifest.schemas.v0.includes("AgentSessionHandoffBundleExportParams"),
   );

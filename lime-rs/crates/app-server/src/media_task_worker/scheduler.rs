@@ -1,7 +1,16 @@
 use super::{
+    audio::{
+        list_audio_tasks_for_workspace, mark_stale_running_audio_task_failed_for_retry,
+        spawn_audio_task_worker_for_existing_task, AUDIO_TASK_RUNNER_WORKER_ID,
+    },
     mark_stale_running_image_task_failed_for_retry, should_execute_pending_video_task,
     should_recover_stale_running_video_task, spawn_image_task_worker_for_existing_task,
-    spawn_video_task_worker_for_existing_task, MediaTaskWorkerContext,
+    spawn_video_task_worker_for_existing_task,
+    transcription::{
+        list_transcription_tasks_for_workspace, spawn_transcription_task_worker_for_existing_task,
+        TRANSCRIPTION_TASK_RUNNER_WORKER_ID,
+    },
+    MediaTaskWorkerContext,
 };
 use app_server_protocol::{
     MediaTaskArtifactListParams, MediaTaskArtifactLookupParams, MediaTaskArtifactResponse,
@@ -15,9 +24,12 @@ use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
 
 const IMAGE_TASK_WORKER_MAX_RECOVERY_RETRIES: u64 = 1;
+const AUDIO_TASK_WORKER_MAX_RECOVERY_RETRIES: u64 = 1;
+const TRANSCRIPTION_TASK_WORKER_MAX_RECOVERY_RETRIES: u64 = 1;
 const IMAGE_TASK_WORKER_DEFAULT_SCAN_INTERVAL_SECS: u64 = 30;
 const IMAGE_TASK_WORKER_DEFAULT_SCAN_LIMIT_PER_WORKSPACE: usize = 8;
 pub(super) const IMAGE_TASK_WORKER_STALE_RUNNING_SECS: i64 = 10 * 60;
+pub(super) const TRANSCRIPTION_TASK_WORKER_STALE_RUNNING_SECS: i64 = 10 * 60;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MediaTaskWorkerSchedulerConfig {
@@ -112,8 +124,256 @@ pub(super) fn spawn_pending_media_task_workers_for_registered_workspaces(
                 );
             }
         }
+        match spawn_pending_audio_task_workers_for_workspace(
+            &workspace_root,
+            Some(per_workspace_limit),
+            context.clone(),
+        ) {
+            Ok(mut workspace_handles) => handles.append(&mut workspace_handles),
+            Err(error) => {
+                tracing::warn!(
+                    workspace_root = %workspace_root.display(),
+                    error = %error,
+                    "failed to scan audio tasks for workspace"
+                );
+            }
+        }
+        match spawn_pending_transcription_task_workers_for_workspace(
+            &workspace_root,
+            Some(per_workspace_limit),
+            context.clone(),
+        ) {
+            Ok(mut workspace_handles) => handles.append(&mut workspace_handles),
+            Err(error) => {
+                tracing::warn!(
+                    workspace_root = %workspace_root.display(),
+                    error = %error,
+                    "failed to scan transcription tasks for workspace"
+                );
+            }
+        }
     }
     Ok(handles)
+}
+
+pub(crate) fn spawn_pending_audio_task_workers_for_workspace(
+    workspace_root: impl AsRef<Path>,
+    limit: Option<usize>,
+    context: MediaTaskWorkerContext,
+) -> Result<Vec<JoinHandle<Result<MediaTaskOutput, String>>>, String> {
+    let workspace_root = workspace_root.as_ref();
+    let tasks = list_audio_tasks_for_workspace(workspace_root, limit)?;
+    let mut handles = Vec::new();
+    for task in tasks {
+        if let Some(handle) =
+            spawn_audio_task_worker_for_existing_task(workspace_root, &task, context.clone())
+        {
+            handles.push(handle);
+            continue;
+        }
+        if should_recover_stale_running_audio_task(&task, Utc::now()) {
+            mark_stale_running_audio_task_failed_for_retry(workspace_root, &task.task_id)?;
+            if let Some(retried) =
+                retry_failed_audio_task_for_worker(workspace_root, &task.task_id)?
+            {
+                if let Some(handle) = spawn_audio_task_worker_for_existing_task(
+                    workspace_root,
+                    &retried,
+                    context.clone(),
+                ) {
+                    handles.push(handle);
+                }
+            }
+            continue;
+        }
+        if should_retry_failed_audio_task(&task) {
+            if let Some(retried) =
+                retry_failed_audio_task_for_worker(workspace_root, &task.task_id)?
+            {
+                if let Some(handle) = spawn_audio_task_worker_for_existing_task(
+                    workspace_root,
+                    &retried,
+                    context.clone(),
+                ) {
+                    handles.push(handle);
+                }
+            }
+        }
+    }
+    Ok(handles)
+}
+
+pub(crate) fn spawn_pending_transcription_task_workers_for_workspace(
+    workspace_root: impl AsRef<Path>,
+    limit: Option<usize>,
+    context: MediaTaskWorkerContext,
+) -> Result<Vec<JoinHandle<Result<MediaTaskOutput, String>>>, String> {
+    let workspace_root = workspace_root.as_ref();
+    let tasks = list_transcription_tasks_for_workspace(workspace_root, limit)?;
+    let mut handles = Vec::new();
+    for task in tasks {
+        if let Some(handle) = spawn_transcription_task_worker_for_existing_task(
+            workspace_root,
+            &task,
+            context.clone(),
+        ) {
+            handles.push(handle);
+            continue;
+        }
+        if should_recover_stale_running_transcription_task(&task, Utc::now()) {
+            mark_stale_running_transcription_task_failed_for_retry(workspace_root, &task.task_id)?;
+            if let Some(retried) =
+                retry_failed_transcription_task_for_worker(workspace_root, &task.task_id)?
+            {
+                if let Some(handle) = spawn_transcription_task_worker_for_existing_task(
+                    workspace_root,
+                    &retried,
+                    context.clone(),
+                ) {
+                    handles.push(handle);
+                }
+            }
+            continue;
+        }
+        if should_retry_failed_transcription_task(&task) {
+            if let Some(retried) =
+                retry_failed_transcription_task_for_worker(workspace_root, &task.task_id)?
+            {
+                if let Some(handle) = spawn_transcription_task_worker_for_existing_task(
+                    workspace_root,
+                    &retried,
+                    context.clone(),
+                ) {
+                    handles.push(handle);
+                }
+            }
+        }
+    }
+    Ok(handles)
+}
+
+fn retry_failed_transcription_task_for_worker(
+    workspace_root: &Path,
+    task_ref: &str,
+) -> Result<Option<MediaTaskArtifactResponse>, String> {
+    let current = crate::media_task::get_media_task_artifact(MediaTaskArtifactLookupParams {
+        project_root_path: workspace_root.to_string_lossy().to_string(),
+        task_ref: task_ref.to_string(),
+    })?;
+    if !should_retry_failed_transcription_task(&current) {
+        return Ok(None);
+    }
+    crate::media_task::retry_media_task_artifact(MediaTaskArtifactLookupParams {
+        project_root_path: workspace_root.to_string_lossy().to_string(),
+        task_ref: task_ref.to_string(),
+    })
+    .map(Some)
+}
+
+fn should_retry_failed_transcription_task(task: &MediaTaskArtifactResponse) -> bool {
+    task.task_type == MediaTaskType::TranscriptionGenerate.as_str()
+        && task.normalized_status == "failed"
+        && task
+            .record
+            .get("last_error")
+            .and_then(|value| value.get("retryable"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        && task
+            .record
+            .get("retry_count")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0)
+            < TRANSCRIPTION_TASK_WORKER_MAX_RECOVERY_RETRIES
+}
+
+fn should_recover_stale_running_transcription_task(
+    task: &MediaTaskArtifactResponse,
+    now: DateTime<Utc>,
+) -> bool {
+    task.task_type == MediaTaskType::TranscriptionGenerate.as_str()
+        && task.normalized_status == "running"
+        && current_attempt_worker_id(task).as_deref() == Some(TRANSCRIPTION_TASK_RUNNER_WORKER_ID)
+        && running_started_at(task).is_some_and(|started_at| {
+            now.signed_duration_since(started_at)
+                >= Duration::seconds(TRANSCRIPTION_TASK_WORKER_STALE_RUNNING_SECS)
+        })
+}
+
+fn mark_stale_running_transcription_task_failed_for_retry(
+    workspace_root: &Path,
+    task_id: &str,
+) -> Result<MediaTaskOutput, String> {
+    let error = lime_media_runtime::TaskErrorRecord {
+        code: "transcription_worker_stale_running_recovered".to_string(),
+        message: "转写 worker 运行租约已过期，正在恢复任务。".to_string(),
+        retryable: true,
+        stage: Some("worker_recovery".to_string()),
+        provider_code: None,
+        occurred_at: Some(Utc::now().to_rfc3339()),
+    };
+    crate::media_task::get_media_task_artifact(MediaTaskArtifactLookupParams {
+        project_root_path: workspace_root.to_string_lossy().to_string(),
+        task_ref: task_id.to_string(),
+    })?;
+    lime_media_runtime::patch_task_artifact(
+        workspace_root,
+        task_id,
+        None,
+        lime_media_runtime::TaskArtifactPatch {
+            status: Some("failed".to_string()),
+            last_error: Some(Some(error)),
+            ..Default::default()
+        },
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn retry_failed_audio_task_for_worker(
+    workspace_root: &Path,
+    task_ref: &str,
+) -> Result<Option<MediaTaskArtifactResponse>, String> {
+    let current = crate::media_task::get_media_task_artifact(MediaTaskArtifactLookupParams {
+        project_root_path: workspace_root.to_string_lossy().to_string(),
+        task_ref: task_ref.to_string(),
+    })?;
+    if !should_retry_failed_audio_task(&current) {
+        return Ok(None);
+    }
+    crate::media_task::retry_media_task_artifact(MediaTaskArtifactLookupParams {
+        project_root_path: workspace_root.to_string_lossy().to_string(),
+        task_ref: task_ref.to_string(),
+    })
+    .map(Some)
+}
+
+fn should_retry_failed_audio_task(task: &MediaTaskArtifactResponse) -> bool {
+    task.task_type == MediaTaskType::AudioGenerate.as_str()
+        && task.normalized_status == "failed"
+        && task
+            .record
+            .get("last_error")
+            .and_then(|value| value.get("retryable"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        && task
+            .record
+            .get("retry_count")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0)
+            < AUDIO_TASK_WORKER_MAX_RECOVERY_RETRIES
+}
+
+fn should_recover_stale_running_audio_task(
+    task: &MediaTaskArtifactResponse,
+    now: DateTime<Utc>,
+) -> bool {
+    task.task_type == MediaTaskType::AudioGenerate.as_str()
+        && task.normalized_status == "running"
+        && current_attempt_worker_id(task).as_deref() == Some(AUDIO_TASK_RUNNER_WORKER_ID)
+        && running_started_at(task).is_some_and(|started_at| {
+            now.signed_duration_since(started_at) >= Duration::seconds(10 * 60)
+        })
 }
 
 fn list_registered_workspace_roots(

@@ -27,19 +27,12 @@ function optionalString(value) {
 
 export function extractToolOrchestratorAttemptEvidence({
   callId,
-  evidenceExport,
+  threadRead,
 }) {
-  const events = Array.isArray(evidenceExport?.events)
-    ? evidenceExport.events
-    : [];
-  for (const event of [...events].reverse()) {
-    const eventType = String(
-      event?.type ?? event?.eventType ?? event?.event_type ?? "",
-    );
-    if (eventType !== "item.completed") {
-      continue;
-    }
-    const item = record(record(event?.payload)?.item);
+  const items = (Array.isArray(threadRead?.turns) ? threadRead.turns : [])
+    .flatMap((turn) => (Array.isArray(turn?.items) ? turn.items : []))
+    .reverse();
+  for (const item of items) {
     const itemId = String(item?.itemId ?? item?.item_id ?? item?.id ?? "");
     if (!itemId || !itemId.endsWith(callId)) {
       continue;

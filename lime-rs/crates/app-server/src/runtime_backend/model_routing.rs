@@ -7,7 +7,7 @@ use lime_core::database::DbConnection;
 use lime_services::api_key_provider_service::ApiKeyProviderService;
 use lime_services::model_registry_service::ModelRegistryService;
 use runtime_core::{
-    resolve_ready_model_routing_with_exclusions, ModelRouteExclusion, ModelRoutingDecision,
+    resolve_ready_model_routing_with_candidate_set, ModelRouteExclusion, ModelRoutingDecision,
     ProviderReadiness, RoutingAttempt, RoutingResolution,
 };
 use serde_json::Value;
@@ -36,9 +36,11 @@ pub(super) fn resolve_ready_routing(
     if let Some(config) = direct_provider_config {
         return Ok(resolve_direct_routing(&metadata_values, selection, config));
     }
-    resolve_ready_model_routing_with_exclusions(
+    let candidate_set = super::model_candidate_set::build(db, service, request, selection)?;
+    resolve_ready_model_routing_with_candidate_set(
         &metadata_values,
         selection,
+        &candidate_set,
         excluded_routes,
         |candidate| resolve_provider_readiness(db, service, candidate, None),
     )

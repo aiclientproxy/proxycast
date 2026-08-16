@@ -52,14 +52,6 @@ function forkLineageInput(overrides = {}) {
         parentTitle: "Saved user message",
       },
     ],
-    evidenceExports: [
-      {
-        threadId: "thread-fork",
-        forkedFromId: "thread-parent",
-        forkedAtTurnId: "turn-1",
-        parentItemIds: ["item-user-1"],
-      },
-    ],
     sourceRolloutUnchanged: true,
     ...overrides,
   };
@@ -149,14 +141,6 @@ test("thread fork lineage at lastTurnId keeps only the terminal prefix", () => {
           forkedAtTurnId: "turn-2",
         },
       ],
-      evidenceExports: [
-        {
-          threadId: "thread-fork",
-          forkedFromId: "thread-parent",
-          forkedAtTurnId: "turn-2",
-          parentItemIds: ["item-1", "item-2"],
-        },
-      ],
     }),
   );
 
@@ -240,12 +224,11 @@ test("thread fork lineage fails when lastTurnId suffix leaks into the fork", () 
   );
 });
 
-test("thread fork lineage requires sidebar, history and evidence surfaces", () => {
+test("thread fork lineage requires sidebar and history surfaces", () => {
   const snapshot = extractCodexThreadForkLineageSnapshot(
     forkLineageInput({
       sidebarEntries: [],
       historyEvents: [],
-      evidenceExports: [],
       renderedPlainThread: true,
     }),
   );
@@ -256,7 +239,6 @@ test("thread fork lineage requires sidebar, history and evidence surfaces", () =
     [
       "sidebar_lineage_missing",
       "history_lineage_missing",
-      "evidence_lineage_missing",
       "fork_rendered_as_plain_thread",
     ],
   );
@@ -274,14 +256,6 @@ test("thread fork lineage fails if source rollout mutates or parent item ids are
         },
       },
       parentItemIds: [],
-      evidenceExports: [
-        {
-          threadId: "thread-fork",
-          forkedFromId: "thread-parent",
-          forkedAtTurnId: "turn-1",
-          parentItemIds: [],
-        },
-      ],
       sourceRolloutUnchanged: false,
     }),
   );

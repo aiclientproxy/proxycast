@@ -70,7 +70,7 @@ pub(crate) struct ReviewExportCopy {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RolloutSummaryCopy {
-    pub(crate) export_evidence_heading: &'static str,
+    pub(crate) runtime_facts_heading: &'static str,
     pub(crate) candidate_memory_heading: &'static str,
     pub(crate) review_before_promoting: &'static str,
     pub(crate) pending_work_label: &'static str,
@@ -245,7 +245,7 @@ fn zh_cn_copy() -> RuntimeExportCopy {
             ],
         },
         rollout: RolloutSummaryCopy {
-            export_evidence_heading: "导出证据",
+            runtime_facts_heading: "运行时事实",
             candidate_memory_heading: "候选记忆",
             review_before_promoting: "提升为长期记忆前，先审查该导出目录。",
             pending_work_label: "仍有未完成工作",
@@ -325,7 +325,7 @@ fn zh_tw_copy() -> RuntimeExportCopy {
             ],
         },
         rollout: RolloutSummaryCopy {
-            export_evidence_heading: "匯出證據",
+            runtime_facts_heading: "執行時事實",
             candidate_memory_heading: "候選記憶",
             review_before_promoting: "提升為長期記憶前，先審查該匯出目錄。",
             pending_work_label: "仍有未完成工作",
@@ -404,7 +404,7 @@ fn en_us_copy() -> RuntimeExportCopy {
             ],
         },
         rollout: RolloutSummaryCopy {
-            export_evidence_heading: "Export Evidence",
+            runtime_facts_heading: "Runtime Facts",
             candidate_memory_heading: "Candidate Memory",
             review_before_promoting: "Review this export root before promoting it into long-term memory.",
             pending_work_label: "Pending work remains",
@@ -481,7 +481,7 @@ fn ja_jp_copy() -> RuntimeExportCopy {
             ],
         },
         rollout: RolloutSummaryCopy {
-            export_evidence_heading: "エクスポート証跡",
+            runtime_facts_heading: "ランタイム事実",
             candidate_memory_heading: "候補メモリー",
             review_before_promoting: "長期メモリーに昇格する前に、このエクスポートルートを確認してください。",
             pending_work_label: "未完了の作業があります",
@@ -558,7 +558,7 @@ fn ko_kr_copy() -> RuntimeExportCopy {
             ],
         },
         rollout: RolloutSummaryCopy {
-            export_evidence_heading: "내보낸 증거",
+            runtime_facts_heading: "런타임 사실",
             candidate_memory_heading: "후보 메모리",
             review_before_promoting: "장기 메모리로 승격하기 전에 이 내보내기 루트를 검토하세요.",
             pending_work_label: "남은 작업",

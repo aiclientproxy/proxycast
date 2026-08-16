@@ -36,10 +36,8 @@ export const SKILLS_RUNTIME_ASSERTION_KEYS = [
   "readModelSkillsRuntimeCompleted",
   "readModelSkillSearchObserved",
   "readModelSkillInvocationObserved",
-  "evidenceSkillBodyReadObserved",
-  "evidenceSkillGateObserved",
-  "evidencePackSkillSearchObserved",
-  "evidencePackSkillInvocationObserved",
+  "readModelSkillBodyReadObserved",
+  "readModelSkillGateObserved",
   "skillSearchBeforeSkillInvocation",
   "explicitSkillsRuntimePromptReachedBackend",
   "guiExplicitSkillsRuntimeInputSubmitted",
@@ -47,10 +45,8 @@ export const SKILLS_RUNTIME_ASSERTION_KEYS = [
   "readModelExplicitSkillsRuntimeCompleted",
   "readModelExplicitSkillSearchObserved",
   "readModelExplicitSkillInvocationObserved",
-  "evidenceExplicitSkillBodyReadObserved",
-  "evidenceExplicitSkillGateObserved",
-  "evidencePackExplicitSkillSearchObserved",
-  "evidencePackExplicitSkillInvocationObserved",
+  "readModelExplicitSkillBodyReadObserved",
+  "readModelExplicitSkillGateObserved",
   "explicitSkillSearchBeforeSkillInvocation",
   "manualEnableSkillsRuntimePromptReachedBackend",
   "manualEnableSkillsRuntimeMetadataReachedBackend",
@@ -61,11 +57,9 @@ export const SKILLS_RUNTIME_ASSERTION_KEYS = [
   "readModelManualEnableSkillsRuntimeCompleted",
   "readModelManualEnableSkillSearchObserved",
   "readModelManualEnableSkillInvocationObserved",
-  "evidenceManualEnableSkillBodyReadObserved",
-  "evidenceManualEnableSkillGateObserved",
-  "evidenceManualEnableWorkspaceRuntimeEnableObserved",
-  "evidencePackManualEnableSkillSearchObserved",
-  "evidencePackManualEnableSkillInvocationObserved",
+  "readModelManualEnableSkillBodyReadObserved",
+  "readModelManualEnableSkillGateObserved",
+  "readModelManualEnableWorkspaceRuntimeEnableObserved",
   "manualEnableSkillSearchBeforeSkillInvocation",
 ];
 export const EXPERT_SKILLS_RUNTIME_ASSERTION_KEYS = [
@@ -78,10 +72,8 @@ export const EXPERT_SKILLS_RUNTIME_ASSERTION_KEYS = [
   "readModelExpertSkillsRuntimeCompleted",
   "readModelExpertSkillSearchObserved",
   "readModelExpertSkillInvocationObserved",
-  "evidenceExpertSkillBodyReadObserved",
-  "evidenceExpertSkillGateObserved",
-  "evidencePackExpertSkillSearchObserved",
-  "evidencePackExpertSkillInvocationObserved",
+  "readModelExpertSkillBodyReadObserved",
+  "readModelExpertSkillGateObserved",
   "expertSkillSearchBeforeSkillInvocation",
 ];
 export const EXPERT_PLAZA_SKILLS_RUNTIME_ASSERTION_KEYS = [
@@ -96,12 +88,11 @@ export const EXPERT_PANEL_SKILLS_RUNTIME_ASSERTION_KEYS = [
   "expertPanelSecondTurnPromptReachedBackend",
   "expertPanelSkillRefsOverrideReachedBackend",
   "expertPanelReadModelCompleted",
-  "expertPanelEvidenceSkillBodyReadObserved",
-  "expertPanelEvidenceSkillGateObserved",
-  "expertPanelEvidenceSkillSearchObserved",
-  "expertPanelEvidenceSkillInvocationObserved",
+  "expertPanelReadModelSkillBodyReadObserved",
+  "expertPanelReadModelSkillGateObserved",
+  "expertPanelReadModelSkillSearchObserved",
+  "expertPanelReadModelSkillInvocationObserved",
   "expertPanelSkillSearchBeforeSkillInvocation",
-  "expertPanelEvidencePackExportedFromHarnessPanel",
 ];
 
 export function createSkillsRuntimeFixtureScenario(sessionId, options = {}) {
@@ -517,244 +508,167 @@ function readRecord(value) {
     : null;
 }
 
-function collectEvidenceExportEvents(evidenceExportResult) {
-  return Array.isArray(evidenceExportResult?.events)
-    ? evidenceExportResult.events
-    : [];
-}
-
-function evidenceExportEventType(event) {
-  return String(event?.eventType ?? event?.event_type ?? event?.type ?? "");
-}
-
-function evidenceExportEventPayload(event) {
-  return readRecord(event?.payload) ?? {};
-}
-
-function evidenceExportEventItem(event) {
-  return readRecord(evidenceExportEventPayload(event).item);
-}
-
-function evidenceExportPayloadMetadata(event) {
-  const payload = evidenceExportEventPayload(event);
-  return (
-    readRecord(evidenceExportEventItem(event)?.metadata) ??
-    readRecord(payload.metadata) ??
-    {}
-  );
-}
-
-function evidenceExportEventToolCallId(event) {
-  const payload = evidenceExportEventPayload(event);
-  const item = evidenceExportEventItem(event);
-  const itemPayload = readRecord(item?.payload) ?? {};
-  return String(
-    itemPayload.call_id ??
-      itemPayload.callId ??
-      item?.itemId ??
-      item?.item_id ??
-      payload.toolCallId ??
-      payload.tool_call_id ??
-      payload.toolId ??
-      payload.tool_id ??
-      payload.id ??
-      "",
-  );
-}
-
-function evidenceExportEventHasSkillRuntimeEvent(event, runtimeEvent) {
-  const metadata = evidenceExportPayloadMetadata(event);
-  const skillRuntime =
-    readRecord(metadata.skillRuntime) ??
-    readRecord(metadata.skill_runtime) ??
-    {};
-  return String(skillRuntime.event ?? "") === runtimeEvent;
-}
-
-function evidenceExportEventHasExpertRuntimeEvent(event, runtimeEvent) {
-  const metadata = evidenceExportPayloadMetadata(event);
-  const expertRuntime =
-    readRecord(metadata.expertSkillsRuntime) ??
-    readRecord(metadata.expert_skills_runtime) ??
-    {};
-  return String(expertRuntime.event ?? "") === runtimeEvent;
-}
-
-function evidenceExportEventExpertRuntime(event) {
-  const metadata = evidenceExportPayloadMetadata(event);
-  return (
-    readRecord(metadata.expertSkillsRuntime) ??
-    readRecord(metadata.expert_skills_runtime) ??
-    {}
-  );
-}
-
-function evidenceExportEventSkillRuntime(event) {
-  const metadata = evidenceExportPayloadMetadata(event);
-  return (
-    readRecord(metadata.skillRuntime) ??
-    readRecord(metadata.skill_runtime) ??
-    {}
-  );
-}
-
-export function summarizeSkillsRuntimeEvidenceExport(
-  evidenceExportResult,
+export function summarizeSkillsRuntimeThreadRead(
+  readModelResult,
   { searchToolCallId, skillToolCallId },
 ) {
-  const evidencePack = evidenceExportResult?.evidencePack;
-  const observabilitySummary =
-    evidencePack?.observabilitySummary ??
-    evidencePack?.observability_summary ??
-    {};
-  const skillSearches = Array.isArray(
-    observabilitySummary.skillSearches ?? observabilitySummary.skill_searches,
-  )
-    ? (observabilitySummary.skillSearches ??
-      observabilitySummary.skill_searches)
-    : [];
-  const skillInvocations = Array.isArray(
-    observabilitySummary.skillInvocations ??
-      observabilitySummary.skill_invocations,
-  )
-    ? (observabilitySummary.skillInvocations ??
-      observabilitySummary.skill_invocations)
-    : [];
-  const events = collectEvidenceExportEvents(evidenceExportResult);
-  const skillSearchEventIndex = events.findIndex(
-    (event) =>
-      evidenceExportEventType(event) === "item.completed" &&
-      evidenceExportEventToolCallId(event) === searchToolCallId,
-  );
-  const skillInvocationEventIndex = events.findIndex(
-    (event) =>
-      evidenceExportEventType(event) === "item.completed" &&
-      evidenceExportEventToolCallId(event) === skillToolCallId,
-  );
-  const eventBelongsToCurrentSkillInvocation = (_event, eventIndex) =>
-    skillSearchEventIndex >= 0 &&
-    skillInvocationEventIndex >= 0 &&
-    eventIndex > skillSearchEventIndex &&
-    eventIndex < skillInvocationEventIndex;
-  const skillBodyReadEventIndex = events.findIndex(
-    (event, eventIndex) =>
-      eventBelongsToCurrentSkillInvocation(event, eventIndex) &&
-      evidenceExportEventHasSkillRuntimeEvent(event, "skill_body_read"),
-  );
-  const skillGateEventIndex = events.findIndex(
-    (event, eventIndex) =>
-      eventBelongsToCurrentSkillInvocation(event, eventIndex) &&
-      evidenceExportEventHasSkillRuntimeEvent(event, "skill_gate_decision"),
-  );
-  const skillGateEvent =
-    skillGateEventIndex >= 0 ? events[skillGateEventIndex] : null;
-  const skillBodyReadBeforeGate =
-    skillBodyReadEventIndex >= 0 &&
-    skillGateEventIndex > skillBodyReadEventIndex;
-  const skillGateRuntime = skillGateEvent
-    ? evidenceExportEventSkillRuntime(skillGateEvent)
-    : {};
-  const expertDeclaredEventIndex = events.findIndex((event) =>
-    evidenceExportEventHasExpertRuntimeEvent(
-      event,
-      "expert_declared_skill_refs",
-    ),
-  );
-  const expertSelectedEventIndex = events.findIndex((event) =>
-    evidenceExportEventHasExpertRuntimeEvent(event, "expert_selected_skill"),
-  );
-  const expertInvokedEventIndex = events.findIndex((event) =>
-    evidenceExportEventHasExpertRuntimeEvent(event, "expert_invoked_skill"),
-  );
-  const expertDeclaredRuntime =
-    expertDeclaredEventIndex >= 0
-      ? evidenceExportEventExpertRuntime(events[expertDeclaredEventIndex])
-      : {};
-  const expertSelectedRuntime =
-    expertSelectedEventIndex >= 0
-      ? evidenceExportEventExpertRuntime(events[expertSelectedEventIndex])
-      : {};
-  const expertInvokedRuntime =
-    expertInvokedEventIndex >= 0
-      ? evidenceExportEventExpertRuntime(events[expertInvokedEventIndex])
-      : {};
-  const skillGateSourceAllowlist =
-    skillGateRuntime.sourceAllowlist ?? skillGateRuntime.source_allowlist;
-  const hasSkillSearchSummary = skillSearches.some((entry) => {
-    const query = entry?.query;
-    const toolCallId = entry?.toolCallId ?? entry?.tool_call_id;
-    return query === SKILLS_RUNTIME_QUERY && toolCallId === searchToolCallId;
-  });
-  const hasSkillInvocationSummary = skillInvocations.some((entry) => {
-    const skillName = entry?.skillName ?? entry?.skill_name;
-    const toolCallId = entry?.toolCallId ?? entry?.tool_call_id;
-    const runtimeEnable =
-      entry?.workspaceSkillRuntimeEnable ??
-      entry?.workspace_skill_runtime_enable;
+  const canonicalTurns = Array.isArray(readModelResult?.thread?.turns)
+    ? readModelResult.thread.turns
+    : Array.isArray(readModelResult?.turns)
+      ? readModelResult.turns
+      : Array.isArray(readModelResult?.detail?.turns)
+        ? readModelResult.detail.turns
+        : null;
+  const matchingTurn = canonicalTurns?.find((turn) => {
+    const items = Array.isArray(turn?.items) ? turn.items : [];
+    const serialized = JSON.stringify(items);
     return (
-      skillName === SKILLS_RUNTIME_SKILL_NAME &&
-      toolCallId === skillToolCallId &&
-      runtimeEnable &&
-      typeof runtimeEnable === "object"
+      serialized.includes(searchToolCallId) ||
+      serialized.includes(skillToolCallId)
     );
   });
-  const matchingInvocation = skillInvocations.find((entry) => {
-    const skillName = entry?.skillName ?? entry?.skill_name;
-    const toolCallId = entry?.toolCallId ?? entry?.tool_call_id;
-    return (
-      skillName === SKILLS_RUNTIME_SKILL_NAME && toolCallId === skillToolCallId
+  const canonicalItems = matchingTurn
+    ? Array.isArray(matchingTurn.items)
+      ? matchingTurn.items
+      : []
+    : canonicalTurns
+      ? canonicalTurns.flatMap((turn) =>
+          Array.isArray(turn?.items) ? turn.items : [],
+        )
+      : [];
+  if (canonicalTurns) {
+    const itemText = canonicalItems.map((item) => JSON.stringify(item)).join("\n");
+    const skillSearchEventIndex = canonicalItems.findIndex((item) =>
+      JSON.stringify(item).includes(searchToolCallId),
     );
-  });
+    const skillInvocationEventIndex = canonicalItems.findIndex((item) =>
+      JSON.stringify(item).includes(skillToolCallId),
+    );
+    const searchObserved = skillSearchEventIndex >= 0;
+    const invocationObserved = skillInvocationEventIndex >= 0;
+    const skillBodyReadObserved =
+      itemText.includes("skill_body_read") ||
+      itemText.includes("skillBodyRead") ||
+      itemText.includes("SKILL.md");
+    const runtimeMetadata = canonicalItems
+      .map((item, index) => ({
+        index,
+        metadata:
+          readRecord(item?.metadata) ?? readRecord(item?.payload?.metadata),
+      }))
+      .filter((entry) => entry.metadata);
+    const skillRuntimeEntries = runtimeMetadata
+      .map(({ index, metadata }) => ({
+        index,
+        runtime:
+          readRecord(metadata.skillRuntime) ??
+          readRecord(metadata.skill_runtime),
+      }))
+      .filter((entry) => entry.runtime);
+    const expertRuntimeEntries = runtimeMetadata
+      .map(({ index, metadata }) => ({
+        index,
+        runtime:
+          readRecord(metadata.expertSkillsRuntime) ??
+          readRecord(metadata.expert_skills_runtime),
+      }))
+      .filter((entry) => entry.runtime);
+    const skillBodyReadEntry = skillRuntimeEntries.find(
+      ({ runtime }) => runtime.event === "skill_body_read",
+    );
+    const skillGateEntry = skillRuntimeEntries.find(
+      ({ runtime }) => runtime.event === "skill_gate_decision",
+    );
+    const skillBodyReadEventIndex = skillBodyReadEntry?.index ?? -1;
+    const skillGateEventIndex = skillGateEntry?.index ?? -1;
+    const skillBodyReadBeforeGate =
+      skillBodyReadEventIndex >= 0 &&
+      skillGateEventIndex > skillBodyReadEventIndex;
+    const skillGateRuntime = skillGateEntry?.runtime ?? {};
+    const expertDeclaredEntry = expertRuntimeEntries.find(
+      ({ runtime }) => runtime.event === "expert_declared_skill_refs",
+    );
+    const expertSelectedEntry = expertRuntimeEntries.find(
+      ({ runtime }) => runtime.event === "expert_selected_skill",
+    );
+    const expertInvokedEntry = expertRuntimeEntries.find(
+      ({ runtime }) => runtime.event === "expert_invoked_skill",
+    );
+    const expertDeclaredRuntime = expertDeclaredEntry?.runtime ?? {};
+    const expertSelectedRuntime = expertSelectedEntry?.runtime ?? {};
+    const expertInvokedRuntime = expertInvokedEntry?.runtime ?? {};
+    const skillRefs =
+      expertDeclaredRuntime.skillRefs ?? expertDeclaredRuntime.skill_refs;
+    return {
+      hasThreadRead: true,
+      itemCount: canonicalItems.length,
+      skillSearchCount: searchObserved ? 1 : 0,
+      skillInvocationCount: invocationObserved ? 1 : 0,
+      hasSkillSearchSummary: searchObserved,
+      hasSkillInvocationSummary: invocationObserved,
+      skillBodyReadObserved,
+      skillBodyReadBeforeGate,
+      skillGateObserved: skillBodyReadBeforeGate,
+      skillGateMode: skillGateRuntime.mode ?? null,
+      skillGateWorkspaceRuntimeEnable:
+        skillGateRuntime.workspaceRuntimeEnable ??
+        skillGateRuntime.workspace_runtime_enable ??
+        null,
+      skillGateSourceAllowlist: Array.isArray(
+        skillGateRuntime.sourceAllowlist ?? skillGateRuntime.source_allowlist,
+      )
+        ? skillGateRuntime.sourceAllowlist ?? skillGateRuntime.source_allowlist
+        : [],
+      skillSearchEventIndex,
+      skillBodyReadEventIndex,
+      skillGateEventIndex,
+      skillInvocationEventIndex,
+      expertDeclaredObserved: Boolean(expertDeclaredEntry),
+      expertSelectedObserved: Boolean(expertSelectedEntry),
+      expertInvokedObserved: Boolean(expertInvokedEntry),
+      expertDeclaredSkillRefs: Array.isArray(skillRefs) ? skillRefs : [],
+      expertSelectedSkill:
+        expertSelectedRuntime.skillName ??
+        expertSelectedRuntime.skill_name ??
+        null,
+      expertInvokedSkill:
+        expertInvokedRuntime.skillName ??
+        expertInvokedRuntime.skill_name ??
+        null,
+      skillSearchBeforeSkillInvocation:
+        skillSearchEventIndex >= 0 &&
+        skillInvocationEventIndex >= 0 &&
+        skillSearchEventIndex < skillInvocationEventIndex,
+      searchQuery: searchObserved ? SKILLS_RUNTIME_QUERY : null,
+      invocationSkillName: invocationObserved ? SKILLS_RUNTIME_SKILL_NAME : null,
+    };
+  }
 
   return {
-    hasEvidencePack: Boolean(evidencePack),
-    eventCount: events.length,
-    skillSearchCount: skillSearches.length,
-    skillInvocationCount: skillInvocations.length,
-    hasSkillSearchSummary,
-    hasSkillInvocationSummary,
-    skillBodyReadObserved: skillBodyReadEventIndex >= 0,
-    skillGateObserved: skillBodyReadBeforeGate,
-    skillBodyReadBeforeGate,
-    skillGateMode: skillGateRuntime.mode ?? null,
-    skillGateWorkspaceRuntimeEnable:
-      skillGateRuntime.workspaceRuntimeEnable ??
-      skillGateRuntime.workspace_runtime_enable ??
-      null,
-    skillGateSourceAllowlist: Array.isArray(skillGateSourceAllowlist)
-      ? skillGateSourceAllowlist
-      : [],
-    skillSearchEventIndex,
-    skillBodyReadEventIndex,
-    skillGateEventIndex,
-    skillInvocationEventIndex,
-    expertDeclaredObserved: expertDeclaredEventIndex >= 0,
-    expertSelectedObserved: expertSelectedEventIndex >= 0,
-    expertInvokedObserved: expertInvokedEventIndex >= 0,
-    expertDeclaredSkillRefs: Array.isArray(
-      expertDeclaredRuntime.skillRefs ?? expertDeclaredRuntime.skill_refs,
-    )
-      ? (expertDeclaredRuntime.skillRefs ?? expertDeclaredRuntime.skill_refs)
-      : [],
-    expertSelectedSkill:
-      expertSelectedRuntime.skillName ??
-      expertSelectedRuntime.skill_name ??
-      null,
-    expertInvokedSkill:
-      expertInvokedRuntime.skillName ?? expertInvokedRuntime.skill_name ?? null,
-    skillSearchBeforeSkillInvocation:
-      skillSearchEventIndex >= 0 &&
-      skillInvocationEventIndex >= 0 &&
-      skillSearchEventIndex < skillInvocationEventIndex,
-    searchQuery:
-      skillSearches.find((entry) => {
-        const toolCallId = entry?.toolCallId ?? entry?.tool_call_id;
-        return (
-          entry?.query === SKILLS_RUNTIME_QUERY &&
-          toolCallId === searchToolCallId
-        );
-      })?.query ?? null,
-    invocationSkillName:
-      matchingInvocation?.skillName ?? matchingInvocation?.skill_name ?? null,
+    hasThreadRead: false,
+    itemCount: 0,
+    skillSearchCount: 0,
+    skillInvocationCount: 0,
+    hasSkillSearchSummary: false,
+    hasSkillInvocationSummary: false,
+    skillBodyReadObserved: false,
+    skillGateObserved: false,
+    skillBodyReadBeforeGate: false,
+    skillGateMode: null,
+    skillGateWorkspaceRuntimeEnable: null,
+    skillGateSourceAllowlist: [],
+    skillSearchEventIndex: -1,
+    skillBodyReadEventIndex: -1,
+    skillGateEventIndex: -1,
+    skillInvocationEventIndex: -1,
+    expertDeclaredObserved: false,
+    expertSelectedObserved: false,
+    expertInvokedObserved: false,
+    expertDeclaredSkillRefs: [],
+    expertSelectedSkill: null,
+    expertInvokedSkill: null,
+    skillSearchBeforeSkillInvocation: false,
+    searchQuery: null,
+    invocationSkillName: null,
   };
 }

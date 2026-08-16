@@ -2,7 +2,6 @@ use crate::execution_process::ExecutionProcessServer;
 use crate::AppServer;
 use crate::ArtifactContentProvider;
 use crate::CapabilitySource;
-use crate::EvidenceExportProvider;
 use crate::ExternalBackend;
 use crate::ExternalBackendConfig;
 use crate::MockBackend;
@@ -191,19 +190,6 @@ impl AppServerRuntimeFactory {
             Arc::new(MockBackend),
             capability_source,
             artifact_content_provider,
-        )
-    }
-
-    pub fn mock_runtime_core_with_sources_and_evidence_export_provider(
-        capability_source: Arc<dyn CapabilitySource>,
-        artifact_content_provider: Arc<dyn ArtifactContentProvider>,
-        evidence_export_provider: Arc<dyn EvidenceExportProvider>,
-    ) -> RuntimeCore {
-        RuntimeCore::with_backend_capability_source_artifact_content_provider_and_evidence_export_provider(
-            Arc::new(MockBackend),
-            capability_source,
-            artifact_content_provider,
-            evidence_export_provider,
         )
     }
 

@@ -10,11 +10,9 @@ import { changeLimeLocale } from "@/i18n/createI18n";
 import { HarnessStatusPanel } from "./HarnessStatusPanel";
 import type { HarnessSessionState } from "../utils/harnessState";
 import { clearAgentUiProjectionEvents } from "../projection/conversationProjectionStore";
-import { clearHarnessEvidencePackStore } from "./harnessEvidencePackStore";
 
 const {
   exportAgentRuntimeAnalysisHandoffMock,
-  exportAgentRuntimeEvidencePackMock,
   exportAgentRuntimeHandoffBundleMock,
   exportAgentRuntimeReplayCaseMock,
   exportAgentRuntimeReviewDecisionTemplateMock,
@@ -23,7 +21,6 @@ const {
   mockToast,
 } = vi.hoisted(() => ({
   exportAgentRuntimeAnalysisHandoffMock: vi.fn(),
-  exportAgentRuntimeEvidencePackMock: vi.fn(),
   exportAgentRuntimeHandoffBundleMock: vi.fn(),
   exportAgentRuntimeReplayCaseMock: vi.fn(),
   exportAgentRuntimeReviewDecisionTemplateMock: vi.fn(),
@@ -40,7 +37,6 @@ const {
 export function getHarnessPanelTestMocks() {
   return {
     exportAgentRuntimeAnalysisHandoffMock,
-    exportAgentRuntimeEvidencePackMock,
     exportAgentRuntimeHandoffBundleMock,
     exportAgentRuntimeReplayCaseMock,
     exportAgentRuntimeReviewDecisionTemplateMock,
@@ -57,7 +53,6 @@ vi.mock("@/lib/api/agentRuntime/exportClient", async () => {
   return {
     ...actual,
     exportAgentRuntimeAnalysisHandoff: exportAgentRuntimeAnalysisHandoffMock,
-    exportAgentRuntimeEvidencePack: exportAgentRuntimeEvidencePackMock,
     exportAgentRuntimeHandoffBundle: exportAgentRuntimeHandoffBundleMock,
     exportAgentRuntimeReplayCase: exportAgentRuntimeReplayCaseMock,
     exportAgentRuntimeReviewDecisionTemplate:
@@ -643,6 +638,5 @@ afterEach(() => {
     value: originalWindowOpen,
   });
   clearAgentUiProjectionEvents();
-  clearHarnessEvidencePackStore();
   vi.clearAllMocks();
 });

@@ -13,8 +13,6 @@ const SKILLS_EVIDENCE_CURRENT_OWNER_SOURCES = [
   "src/features/capability-drafts/components/WorkspaceRegisteredSkillsPanel.audit.test.tsx",
   "src/features/capability-drafts/components/WorkspaceRegisteredSkillsPanel.runtime.test.tsx",
   "src/lib/agentRuntime/harnessVerificationPresentation.ts",
-  "src/lib/agentRuntime/modalityTaskIndexPresentation.ts",
-  "src/lib/agentRuntime/modalityTaskIndexPresentation.test.ts",
   "src/components/skills/SkillsWorkspacePage.tsx",
   "src/components/skills/SkillsWorkspacePageView.tsx",
   "src/components/skills/workspaceSkillRuntimeLaunch.ts",
@@ -46,11 +44,6 @@ describe("skills and evidence current owner boundary", () => {
         "src/features/capability-drafts/components/WorkspaceRegisteredSkillsPanel.tsx",
       ),
     ).toContain('from "@/lib/api/agentRuntime/inventoryClient"');
-    expect(
-      readSource(
-        "src/features/capability-drafts/components/WorkspaceRegisteredSkillsPanel.tsx",
-      ),
-    ).toContain('from "@/lib/api/agentRuntime/exportClient"');
     expect(
       readSource("src/components/skills/SkillsWorkspacePage.tsx"),
     ).toContain('from "@/lib/api/agentRuntime/toolInventoryTypes"');

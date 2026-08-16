@@ -23,7 +23,6 @@ import {
   resolveProviderPreference,
   sleep,
   startAgentSessionTurnCurrent,
-  summarizeEvidencePack,
   summarizeThreadRead,
   threadSettled,
   updateAgentThreadSettingsCurrent,
@@ -51,7 +50,6 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const DEFAULT_INTERVAL_MS = 1_000;
 const DEFAULT_SETTLED_GRACE_MS = 30_000;
 const LOG_PREFIX = "[smoke:expert-skills-live-runner]";
-const APP_SERVER_METHOD_EVIDENCE_EXPORT = "evidence/export";
 const LIVE_SKILL_DIRECTORY = "capability-report";
 const LIVE_SKILL_SOURCE_DRAFT_ID = "capdraft-live-capability-report";
 const LIVE_SKILL_VERIFICATION_REPORT_ID = "capver-live-capability-report";
@@ -65,10 +63,8 @@ const CORE_ASSERTION_KEYS = [
   "readModelExpertSkillsRuntimeCompleted",
   "readModelExpertSkillSearchObserved",
   "readModelExpertSkillInvocationObserved",
-  "evidenceExpertSkillBodyReadObserved",
-  "evidenceExpertSkillGateObserved",
-  "evidencePackExpertSkillSearchObserved",
-  "evidencePackExpertSkillInvocationObserved",
+  "readModelExpertSkillBodyReadObserved",
+  "readModelExpertSkillGateObserved",
   "expertSkillSearchBeforeSkillInvocation",
 ];
 
@@ -250,7 +246,7 @@ function toolRecordPayload(record) {
 
 function toolRecordName(record) {
   const payload = toolRecordPayload(record);
-  return pickString(payload, ["toolName", "tool_name", "name"]);
+  return pickString(payload, ["toolName", "tool_name", "tool", "name"]);
 }
 
 function toolRecordMetadata(record) {
@@ -348,19 +344,6 @@ function providerFailureMessage(threadRead) {
     ]) ||
     ""
   );
-}
-
-async function exportAgentSessionEvidenceCurrent(
-  options,
-  { sessionId, turnId },
-) {
-  return invokeAppServerMethod(options, APP_SERVER_METHOD_EVIDENCE_EXPORT, {
-    sessionId,
-    turnId,
-    includeEvents: true,
-    includeArtifacts: true,
-    includeEvidencePack: true,
-  });
 }
 
 function writeLiveSkillFileIfMissing(skillFilePath) {
@@ -473,21 +456,13 @@ export function buildLiveRuntimeSummary({
   provider,
   model,
   threadRead,
-  evidencePack,
-  evidenceExport,
   sessionId,
   turnId,
   workspaceSkill,
 }) {
   const threadText = jsonText(threadRead);
-  const evidenceText = jsonText(evidencePack);
-  const evidenceExportText = jsonText(evidenceExport);
-  const combinedText = `${threadText}\n${evidenceText}\n${evidenceExportText}`;
-  const toolMarkers = collectStructuredToolMarkers(
-    threadRead,
-    evidencePack,
-    evidenceExport,
-  );
+  const combinedText = threadText;
+  const toolMarkers = collectStructuredToolMarkers(threadRead);
   const searchIndex = toolMarkers.findIndex(
     (marker) => marker.kind === "skill_search",
   );
@@ -533,10 +508,8 @@ export function buildLiveRuntimeSummary({
     readModelExpertSkillsRuntimeCompleted: threadCompleted(threadRead),
     readModelExpertSkillSearchObserved: skillSearchCount > 0,
     readModelExpertSkillInvocationObserved: skillInvocationCount > 0,
-    evidenceExpertSkillBodyReadObserved: skillBodyReadObserved,
-    evidenceExpertSkillGateObserved: skillGateObserved,
-    evidencePackExpertSkillSearchObserved: skillSearchCount > 0,
-    evidencePackExpertSkillInvocationObserved: skillInvocationCount > 0,
+    readModelExpertSkillBodyReadObserved: skillBodyReadObserved,
+    readModelExpertSkillGateObserved: skillGateObserved,
     expertSkillSearchBeforeSkillInvocation: skillSearchBeforeSkillInvocation,
   };
   const ok = CORE_ASSERTION_KEYS.every((key) => assertions[key] === true);
@@ -557,19 +530,14 @@ export function buildLiveRuntimeSummary({
       sessionId,
       turnId,
       thread: summarizeThreadRead(threadRead),
-      evidencePack: summarizeEvidencePack(evidencePack),
-      evidenceExport: evidenceExport
-        ? {
-            eventCount: Array.isArray(evidenceExport.events)
-              ? evidenceExport.events.length
-              : Array.isArray(evidenceExport.agentEvents)
-                ? evidenceExport.agentEvents.length
-                : null,
-            artifactCount: Array.isArray(evidenceExport.artifacts)
-              ? evidenceExport.artifacts.length
-              : null,
-          }
-        : null,
+      threadFacts: {
+        turnCount: Array.isArray(threadRead?.turns)
+          ? threadRead.turns.length
+          : 0,
+        itemCount: Array.isArray(threadRead?.detail?.items)
+          ? threadRead.detail.items.length
+          : 0,
+      },
       providerFailureMessage: providerFailureMessage(threadRead) || null,
       workspaceSkill: workspaceSkill
         ? {
@@ -582,8 +550,8 @@ export function buildLiveRuntimeSummary({
           }
         : null,
     },
-    evidencePackExpertSkillsRuntime: {
-      hasEvidencePack: Boolean(evidencePack),
+    readModelExpertSkillsRuntime: {
+      hasThreadRead: Boolean(threadRead),
       skillSearchCount,
       skillInvocationCount,
       skillBodyReadObserved,
@@ -683,18 +651,10 @@ async function executeLiveRuntime(options) {
   });
 
   const threadRead = await waitForRuntimeCompletion(options, sessionId);
-  const evidenceExport = await exportAgentSessionEvidenceCurrent(options, {
-    sessionId,
-    turnId,
-  });
-  const evidencePack =
-    evidenceExport?.evidencePack ?? evidenceExport?.evidence_pack ?? null;
   return buildLiveRuntimeSummary({
     provider: provider.providerPreference,
     model: provider.modelPreference,
     threadRead,
-    evidencePack,
-    evidenceExport,
     sessionId,
     turnId,
     workspaceSkill,

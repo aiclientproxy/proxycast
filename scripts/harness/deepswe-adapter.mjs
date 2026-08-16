@@ -38,7 +38,6 @@ function parseArgs(argv) {
     appServerDataDir: process.env.LIME_DEEPSWE_APP_SERVER_DATA_DIR || "",
     containerBin: "docker",
     healthUrl: "http://127.0.0.1:3030/health",
-    evidenceIntervalMs: 30_000,
     intervalMs: 2_000,
     invokeUrl: "http://127.0.0.1:3030/invoke",
     logPrefix: "[harness:deepswe]",
@@ -83,7 +82,6 @@ function parseArgs(argv) {
       ["--app-server-bin", "appServerBin"],
       ["--app-server-data-dir", "appServerDataDir"],
       ["--health-url", "healthUrl"],
-      ["--evidence-interval-ms", "evidenceIntervalMs"],
       ["--interval-ms", "intervalMs"],
       ["--invoke-url", "invokeUrl"],
       ["--manifest", "manifestPath"],
@@ -111,7 +109,6 @@ function parseArgs(argv) {
     throw new Error(`unknown argument: ${arg}`);
   }
   options.intervalMs = Number(options.intervalMs);
-  options.evidenceIntervalMs = Number(options.evidenceIntervalMs);
   options.maxOutputTokens =
     options.maxOutputTokens == null ? null : Number(options.maxOutputTokens);
   options.maxProviderSteps = Number(options.maxProviderSteps);
@@ -135,12 +132,6 @@ function parseArgs(argv) {
   }
   if (!Number.isFinite(options.intervalMs) || options.intervalMs < 100) {
     throw new Error("--interval-ms must be >= 100");
-  }
-  if (
-    !Number.isFinite(options.evidenceIntervalMs) ||
-    options.evidenceIntervalMs < options.intervalMs
-  ) {
-    throw new Error("--evidence-interval-ms must be >= --interval-ms");
   }
   if (
     !Number.isSafeInteger(options.maxProviderSteps) ||
@@ -182,7 +173,6 @@ Options:
   --enable-thinking BOOL    Override thinking for this run: true or false
   --max-provider-steps N    Stop after N completed provider steps, default: 32
   --token-budget N          Non-cached input plus output token budget, default: 500000
-  --evidence-interval-ms N  Budget evidence polling interval, default: 30000
   --allow-live-provider    Required before a real model turn
   --transport MODE         App Server transport: dev-bridge or stdio
   --app-server-bin PATH    App Server binary for stdio transport
@@ -220,7 +210,6 @@ function runContextBase(options, runId, task) {
         "thread/settings/update",
         "turn/start",
         "thread/read",
-        "evidence/export",
       ],
       verifier: "Pier separate verifier with patch replay",
       transport: options.transport,
@@ -232,10 +221,8 @@ function runContextBase(options, runId, task) {
         maxProviderSteps: options.maxProviderSteps,
         tokenBudget: options.tokenBudget,
         tokenFormula: "max(0,input_tokens-cached_input_tokens)+output_tokens",
-        evidenceIntervalMs: options.evidenceIntervalMs,
         enforcementOwner:
           "agent-runtime reply loop before tool execution and next sampling",
-        adapterFallback: "token evidence polling for timeout races only",
       },
       generationControls: {
         maxOutputTokens: options.maxOutputTokens,

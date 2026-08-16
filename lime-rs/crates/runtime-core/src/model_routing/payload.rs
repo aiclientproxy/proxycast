@@ -21,9 +21,10 @@ pub fn routing_decision_payload(
         .requested_model
         .clone()
         .unwrap_or_else(|| selected_model.clone());
+    let routing_mode = routing_mode(routing.candidate_count);
     let routing_decision = json!({
-        "routingMode": "profile_slot",
-        "routing_mode": "profile_slot",
+        "routingMode": routing_mode,
+        "routing_mode": routing_mode,
         "decisionSource": selection.source,
         "decision_source": selection.source,
         "decisionReason": routing.decision_reason,
@@ -42,6 +43,12 @@ pub fn routing_decision_payload(
         "requested_model": requested_model,
         "fallbackChain": routing.fallback_chain,
         "fallback_chain": routing.fallback_chain,
+        "candidateCount": routing.candidate_count,
+        "candidate_count": routing.candidate_count,
+        "candidateModelSet": routing.candidate_set.to_payload(),
+        "candidate_model_set": routing.candidate_set.to_payload(),
+        "oemPolicy": routing.oem_policy.to_payload(),
+        "oem_policy": routing.oem_policy.to_payload(),
         "requiredCapabilities": &required_capabilities,
         "required_capabilities": &required_capabilities,
         "modelRegistry": model_registry_payload,
@@ -66,6 +73,8 @@ pub fn routing_decision_payload(
         "decision_source": selection.source,
         "decisionReason": routing.decision_reason,
         "decision_reason": routing.decision_reason,
+        "routingMode": routing_mode,
+        "routing_mode": routing_mode,
         "settingsSource": routing.settings_source,
         "settings_source": routing.settings_source,
         "serviceModelSlot": routing.service_model_slot,
@@ -80,6 +89,12 @@ pub fn routing_decision_payload(
         "requested_model": requested_model,
         "fallbackChain": routing.fallback_chain,
         "fallback_chain": routing.fallback_chain,
+        "candidateCount": routing.candidate_count,
+        "candidate_count": routing.candidate_count,
+        "candidateModelSet": routing.candidate_set.to_payload(),
+        "candidate_model_set": routing.candidate_set.to_payload(),
+        "oemPolicy": routing.oem_policy.to_payload(),
+        "oem_policy": routing.oem_policy.to_payload(),
         "requiredCapabilities": &required_capabilities,
         "required_capabilities": &required_capabilities,
     })
@@ -176,6 +191,9 @@ pub fn routing_not_possible_payload(
                 Value::String(reason_code.to_string()),
             );
         }
+        if !readiness.ready {
+            set_routing_candidate_state(object, 0);
+        }
     }
     payload
 }
@@ -198,8 +216,49 @@ pub fn routing_not_possible_payload_with_attempts(
             "routing_attempts".to_string(),
             routing_attempts_payload(attempted),
         );
+        let ready_count = attempted
+            .iter()
+            .filter(|attempt| attempt.readiness.ready && attempt.runtime_failure.is_none())
+            .count() as u32;
+        set_routing_candidate_state(object, ready_count);
     }
     payload
+}
+
+fn routing_mode(candidate_count: u32) -> &'static str {
+    match candidate_count {
+        0 => "no_candidate",
+        1 => "single_candidate",
+        _ => "multi_candidate",
+    }
+}
+
+fn set_routing_candidate_state(object: &mut serde_json::Map<String, Value>, candidate_count: u32) {
+    let mode = routing_mode(candidate_count);
+    object.insert("routingMode".to_string(), Value::String(mode.to_string()));
+    object.insert("routing_mode".to_string(), Value::String(mode.to_string()));
+    object.insert(
+        "candidateCount".to_string(),
+        Value::Number(candidate_count.into()),
+    );
+    object.insert(
+        "candidate_count".to_string(),
+        Value::Number(candidate_count.into()),
+    );
+    for key in ["routingDecision", "routing_decision"] {
+        if let Some(Value::Object(decision)) = object.get_mut(key) {
+            decision.insert("routingMode".to_string(), Value::String(mode.to_string()));
+            decision.insert("routing_mode".to_string(), Value::String(mode.to_string()));
+            decision.insert(
+                "candidateCount".to_string(),
+                Value::Number(candidate_count.into()),
+            );
+            decision.insert(
+                "candidate_count".to_string(),
+                Value::Number(candidate_count.into()),
+            );
+        }
+    }
 }
 
 fn model_slot_payload(

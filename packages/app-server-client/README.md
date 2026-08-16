@@ -22,7 +22,7 @@ Current scope:
 - resolve or reject typed reverse `serverRequest` messages by their outer JSON-RPC
   request id; missing response wiring fails closed;
 - use `AgentRuntimeClient` as the standard facade for runtime turn, action,
-  thread read, evidence export, and event subscription flows.
+  thread read, and event subscription flows.
 
 Session archive semantics:
 
@@ -99,10 +99,6 @@ const thread = await runtime.readThread({
   includeTurns: true,
 });
 
-await runtime.exportEvidence({
-  sessionId: thread.result.thread.sessionId,
-  includeEvents: true,
-});
 ```
 
 `AgentRuntimeClient` is a facade over the current App Server JSON-RPC methods.
@@ -119,8 +115,10 @@ from thread or turn metadata, and do not fall back to `agentSession/action/respo
 
 This package does not import Lime Rust crates, Tauri commands, Agent DTOs, or
 renderer UI code. Electron apps should use it from main / preload boundaries and
-project events into their own renderer state.
+project events into their own renderer state. Runtime facts are read from the
+canonical App Server read model and artifact methods; the retired Lime-only
+evidence export surface is not available on this client.
 
 Sidecar `backendMode: "mock"` is test-only. Production hosts must use `runtime`,
 `external`, or fail closed; they must not treat the mock backend as a fallback
-for Agent Runtime, evidence export, or renderer UI flows.
+for Agent Runtime or renderer UI flows.

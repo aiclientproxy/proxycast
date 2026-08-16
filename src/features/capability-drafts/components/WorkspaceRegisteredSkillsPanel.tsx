@@ -8,13 +8,11 @@ import {
   type CapabilityDraftVerificationEvidence,
   type WorkspaceRegisteredSkillRecord,
 } from "@/lib/api/capabilityDrafts";
-import { exportAgentRuntimeEvidencePack } from "@/lib/api/agentRuntime/exportClient";
 import { listWorkspaceSkillBindings } from "@/lib/api/agentRuntime/inventoryClient";
 import type { AgentRuntimeCompletionAuditSummary } from "@/lib/api/agentRuntime/evidenceTypes";
 import type { AgentRuntimeWorkspaceSkillBinding } from "@/lib/api/agentRuntime/toolInventoryTypes";
 import {
   getAutomationJobs,
-  getAutomationRunHistory,
   updateAutomationJob,
   type AutomationJobRecord,
 } from "@/lib/api/automation";
@@ -322,10 +320,8 @@ function WorkspaceRegisteredSkillCard({
   binding,
   managedAutomationJobs,
   managedAutomationUpdatingJobId,
-  completionAuditAuditingDirectory,
   completionAuditSummary,
   onToggleManagedAutomationJob,
-  onAuditManagedAutomationJob,
   onEnableRuntime,
   onCreateManagedAutomationDraft,
 }: {
@@ -333,15 +329,10 @@ function WorkspaceRegisteredSkillCard({
   binding?: AgentRuntimeWorkspaceSkillBinding;
   managedAutomationJobs: AutomationJobRecord[];
   managedAutomationUpdatingJobId?: string | null;
-  completionAuditAuditingDirectory?: string | null;
   completionAuditSummary?: AgentRuntimeCompletionAuditSummary;
   onToggleManagedAutomationJob?: (
     job: AutomationJobRecord,
     enabled: boolean,
-  ) => void;
-  onAuditManagedAutomationJob?: (
-    directory: string,
-    job: AutomationJobRecord,
   ) => void;
   onEnableRuntime?: (binding: AgentRuntimeWorkspaceSkillBinding) => void;
   onCreateManagedAutomationDraft?: (
@@ -752,11 +743,6 @@ function WorkspaceRegisteredSkillCard({
       managedAutomationCopy,
     );
   const [managedAutomationJob] = managedAutomationJobs;
-  const canAuditManagedAutomationJob = Boolean(
-    managedAutomationJob?.last_run_at ||
-    managedAutomationJob?.last_finished_at ||
-    managedAutomationJob?.last_status,
-  );
   const userPermissionSummary = summarizePermissionForUser(skill, {
     defaultReadonly: t(
       "capabilityDraft.registeredPanel.user.permission.defaultReadonly",
@@ -818,8 +804,6 @@ function WorkspaceRegisteredSkillCard({
   );
   const managedAutomationUpdating =
     managedAutomationJob?.id === managedAutomationUpdatingJobId;
-  const completionAuditAuditing =
-    completionAuditAuditingDirectory === skill.directory;
   const preflightGate = skill.registration.verificationGates?.find(
     (gate) => gate.checkId === READONLY_HTTP_PREFLIGHT_CHECK_ID,
   );
@@ -1674,34 +1658,6 @@ function WorkspaceRegisteredSkillCard({
                   )}
             </Button>
           ) : null}
-          {managedAutomationJob && onAuditManagedAutomationJob ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="h-8 rounded-2xl px-3 text-[12px] text-emerald-700 hover:bg-emerald-50 disabled:text-slate-400"
-              disabled={
-                completionAuditAuditing || !canAuditManagedAutomationJob
-              }
-              onClick={() =>
-                onAuditManagedAutomationJob(
-                  skill.directory,
-                  managedAutomationJob,
-                )
-              }
-              data-testid="workspace-registered-agent-completion-audit"
-            >
-              {completionAuditAuditing
-                ? t(
-                    "capabilityDraft.registeredPanel.action.auditRunning",
-                    "正在检查",
-                  )
-                : t(
-                    "capabilityDraft.registeredPanel.action.auditRecentRun",
-                    "检查最近结果",
-                  )}
-            </Button>
-          ) : null}
           <Button
             type="button"
             size="sm"
@@ -1745,13 +1701,6 @@ export function WorkspaceRegisteredSkillsPanel({
   );
   const [managedAutomationUpdatingJobId, setManagedAutomationUpdatingJobId] =
     useState<string | null>(null);
-  const [completionAuditSummaries, setCompletionAuditSummaries] = useState<
-    Record<string, AgentRuntimeCompletionAuditSummary | undefined>
-  >({});
-  const [
-    completionAuditAuditingDirectory,
-    setCompletionAuditAuditingDirectory,
-  ] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const normalizedWorkspaceRoot = workspaceRoot?.trim() || null;
@@ -1883,35 +1832,6 @@ export function WorkspaceRegisteredSkillsPanel({
     },
     [],
   );
-  const handleAuditManagedAutomationJob = useCallback(
-    async (directory: string, job: AutomationJobRecord) => {
-      setCompletionAuditAuditingDirectory(directory);
-      setError(null);
-      try {
-        const runs = await getAutomationRunHistory(job.id, 5);
-        const sessionId = runs.find((run) => run.session_id)?.session_id;
-        if (!sessionId) {
-          setError(
-            t(
-              "capabilityDraft.registeredPanel.error.missingAutomationSession",
-              "还没有可检查的运行结果。请先试用一次，或开启定时运行后等待它完成。",
-            ),
-          );
-          return;
-        }
-        const evidencePack = await exportAgentRuntimeEvidencePack(sessionId);
-        setCompletionAuditSummaries((previous) => ({
-          ...previous,
-          [directory]: evidencePack.completion_audit_summary,
-        }));
-      } catch (auditError) {
-        setError(String(auditError));
-      } finally {
-        setCompletionAuditAuditingDirectory(null);
-      }
-    },
-    [t],
-  );
   const effectiveError = projectError || error;
   const isBusy = projectPending || loading;
   if (
@@ -2016,15 +1936,10 @@ export function WorkspaceRegisteredSkillsPanel({
                 managedAutomationJobsByDirectory.get(skill.directory) ?? []
               }
               managedAutomationUpdatingJobId={managedAutomationUpdatingJobId}
-              completionAuditAuditingDirectory={
-                completionAuditAuditingDirectory
-              }
               completionAuditSummary={
-                completionAuditSummaries[skill.directory] ??
                 completionAuditSummariesByDirectory?.[skill.directory]
               }
               onToggleManagedAutomationJob={handleToggleManagedAutomationJob}
-              onAuditManagedAutomationJob={handleAuditManagedAutomationJob}
               onEnableRuntime={onEnableRuntime}
               onCreateManagedAutomationDraft={onCreateManagedAutomationDraft}
             />

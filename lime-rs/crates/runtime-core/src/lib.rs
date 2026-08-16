@@ -23,10 +23,11 @@ pub use model_route::{
 };
 pub use model_routing::{
     resolve_model_routing_for_candidate, resolve_ready_model_routing,
-    resolve_ready_model_routing_with_exclusions, routing_decision_payload,
-    routing_fallback_applied_payload, routing_not_possible_payload,
-    routing_not_possible_payload_with_attempts, selection_from_profile_model_slot,
-    ModelRouteExclusion, ModelRoutingDecision, ProfileModelSlot, ProviderReadiness, RoutingAttempt,
+    resolve_ready_model_routing_with_candidate_set, resolve_ready_model_routing_with_exclusions,
+    routing_decision_payload, routing_fallback_applied_payload, routing_not_possible_payload,
+    routing_not_possible_payload_with_attempts, selection_from_profile_model_slot, CandidateModel,
+    CandidateModelSet, CandidateRequirements, ModelRouteExclusion, ModelRoutingDecision,
+    OemRoutingMode, OemRoutingPolicy, ProfileModelSlot, ProviderReadiness, RoutingAttempt,
     RoutingResolution, RuntimeModelSelection, PROFILE_MODEL_SLOT_SOURCE,
 };
 pub use model_task::{

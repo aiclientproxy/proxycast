@@ -96,6 +96,54 @@ fn task_artifact_mutations_keep_single_parseable_json_file() {
 }
 
 #[test]
+fn payload_patch_merges_nested_objects_without_dropping_existing_fields() {
+    let temp_dir = tempfile::tempdir().expect("create temp dir");
+    let output = write_task_artifact(
+        temp_dir.path(),
+        TaskType::AudioGenerate,
+        None,
+        serde_json::json!({
+            "audio_output": {
+                "kind": "audio_output",
+                "audio_path": ".lime/media/audio/task.mp3",
+                "mime_type": "audio/mpeg"
+            }
+        }),
+        TaskWriteOptions::default(),
+    )
+    .expect("write audio task");
+
+    patch_task_artifact(
+        temp_dir.path(),
+        &output.task_id,
+        None,
+        TaskArtifactPatch {
+            payload_patch: Some(serde_json::json!({
+                "audio_output": {
+                    "status": "completed"
+                }
+            })),
+            ..TaskArtifactPatch::default()
+        },
+    )
+    .expect("patch nested payload");
+
+    let patched = load_task_output(temp_dir.path(), &output.task_id, None).expect("load task");
+    assert_eq!(
+        patched.record.payload.pointer("/audio_output/status"),
+        Some(&serde_json::json!("completed"))
+    );
+    assert_eq!(
+        patched.record.payload.pointer("/audio_output/audio_path"),
+        Some(&serde_json::json!(".lime/media/audio/task.mp3"))
+    );
+    assert_eq!(
+        patched.record.payload.pointer("/audio_output/mime_type"),
+        Some(&serde_json::json!("audio/mpeg"))
+    );
+}
+
+#[test]
 fn write_media_task_artifact_rejects_parent_dir_escape() {
     let temp_dir = tempfile::tempdir().expect("create temp dir");
     let error = write_media_task_artifact(

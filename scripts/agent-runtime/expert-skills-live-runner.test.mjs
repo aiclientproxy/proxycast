@@ -23,10 +23,8 @@ const CORE_ASSERTIONS = {
   readModelExpertSkillsRuntimeCompleted: true,
   readModelExpertSkillSearchObserved: true,
   readModelExpertSkillInvocationObserved: true,
-  evidenceExpertSkillBodyReadObserved: true,
-  evidenceExpertSkillGateObserved: true,
-  evidencePackExpertSkillSearchObserved: true,
-  evidencePackExpertSkillInvocationObserved: true,
+  readModelExpertSkillBodyReadObserved: true,
+  readModelExpertSkillGateObserved: true,
   expertSkillSearchBeforeSkillInvocation: true,
 };
 
@@ -34,12 +32,11 @@ const PANEL_ASSERTIONS = {
   expertPanelSecondTurnPromptReachedBackend: true,
   expertPanelSkillRefsOverrideReachedBackend: true,
   expertPanelReadModelCompleted: true,
-  expertPanelEvidenceSkillBodyReadObserved: true,
-  expertPanelEvidenceSkillGateObserved: true,
-  expertPanelEvidenceSkillSearchObserved: true,
-  expertPanelEvidenceSkillInvocationObserved: true,
+  expertPanelReadModelSkillBodyReadObserved: true,
+  expertPanelReadModelSkillGateObserved: true,
+  expertPanelReadModelSkillSearchObserved: true,
+  expertPanelReadModelSkillInvocationObserved: true,
   expertPanelSkillSearchBeforeSkillInvocation: true,
-  expertPanelEvidencePackExportedFromHarnessPanel: true,
 };
 
 async function withTempDir(callback) {
@@ -54,8 +51,8 @@ async function withTempDir(callback) {
 function writeSummary(dir, fileName, overrides = {}) {
   const {
     assertions,
-    evidencePackExpertPanelSkillsRuntime,
-    evidencePackExpertSkillsRuntime,
+    readModelExpertPanelSkillsRuntime,
+    readModelExpertSkillsRuntime,
     ...summaryOverrides
   } = overrides;
   const summary = {
@@ -69,8 +66,8 @@ function writeSummary(dir, fileName, overrides = {}) {
       ...PANEL_ASSERTIONS,
       ...(assertions ?? {}),
     },
-    evidencePackExpertPanelSkillsRuntime: {
-      hasEvidencePack: true,
+    readModelExpertPanelSkillsRuntime: {
+      hasThreadRead: true,
       skillSearchCount: 1,
       skillInvocationCount: 1,
       skillBodyReadObserved: true,
@@ -79,9 +76,9 @@ function writeSummary(dir, fileName, overrides = {}) {
       expertSelectedObserved: true,
       expertInvokedObserved: true,
       skillSearchBeforeSkillInvocation: true,
-      ...(evidencePackExpertPanelSkillsRuntime ?? {}),
+      ...(readModelExpertPanelSkillsRuntime ?? {}),
     },
-    evidencePackExpertSkillsRuntime,
+    readModelExpertSkillsRuntime,
     ...summaryOverrides,
   };
   const filePath = path.join(dir, fileName);
@@ -209,20 +206,12 @@ describe("expert skills live runner", () => {
           ],
         },
       },
-      evidencePack: {
-        artifacts: [
-          {
-            content:
-              "expert_binding skill:capability-report skill_body_read SKILL.md skill_gate_decision skill_search selected capability-report skill_invocation capability-report",
-          },
-        ],
-      },
     });
 
     expect(summary.assertions.expertSkillSearchBeforeSkillInvocation).toBe(
       true,
     );
-    expect(summary.evidencePackExpertSkillsRuntime).toMatchObject({
+    expect(summary.readModelExpertSkillsRuntime).toMatchObject({
       skillSearchBeforeSkillInvocation: true,
       skillSearchCount: expect.any(Number),
       skillInvocationCount: expect.any(Number),
@@ -244,17 +233,6 @@ describe("expert skills live runner", () => {
         },
         turns: [{ status: "failed" }],
         tool_calls: [],
-      },
-      evidencePack: {
-        completionAuditSummary: {
-          workspaceSkillToolCallCount: 0,
-        },
-        artifacts: [
-          {
-            content:
-              "free text mentioning skill_search and skill_invocation should not count as structured tool evidence",
-          },
-        ],
       },
     });
 

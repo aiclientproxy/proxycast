@@ -3,13 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { changeLimeLocale } from "@/i18n/createI18n";
 import type { AgentThreadItem } from "../types";
-import type { AgentRuntimeEvidencePack } from "@/lib/api/agentRuntime/evidenceTypes";
 import type { AgentRuntimeWorkspaceSkillBinding } from "@/lib/api/agentRuntime/toolInventoryTypes";
 import type { Skill } from "@/lib/api/skills";
-import {
-  clearHarnessEvidencePackStore,
-  recordHarnessEvidencePack,
-} from "../components/harnessEvidencePackStore";
 import { ExpertInfoPanel } from "./ExpertInfoPanel";
 import type { ExpertSkillsManageOptions } from "./ExpertSkillsSection";
 
@@ -212,57 +207,6 @@ const SKILL_INVOCATION_THREAD_ITEM: AgentThreadItem = {
   },
 };
 
-const SKILL_EVIDENCE_PACK: AgentRuntimeEvidencePack = {
-  session_id: "session-expert",
-  thread_id: "thread-expert",
-  workspace_id: "workspace-expert",
-  workspace_root: "/tmp/workspace-expert",
-  pack_relative_root: ".lime/harness/sessions/session-expert/evidence",
-  pack_absolute_root: "/tmp/workspace-expert/.lime/harness/evidence",
-  exported_at: "2026-06-21T00:00:05.000Z",
-  thread_status: "completed",
-  latest_turn_status: "completed",
-  turn_count: 1,
-  item_count: 5,
-  pending_request_count: 0,
-  queued_turn_count: 0,
-  recent_artifact_count: 0,
-  known_gaps: ["缺少人工复核截图"],
-  observability_summary: {
-    known_gaps: [],
-    signal_coverage: [],
-    skill_invocations: [
-      {
-        event: "skill_invocation",
-        skill_name: "project:capability-report",
-        status: "completed",
-        source_event_id: "skill-invocation",
-        source_event_type: "tool_call",
-        turn_id: "turn-expert",
-        tool_call_id: "skill-invocation",
-        workspace_skill_runtime_enable: {
-          source: "manual_session_enable",
-          bindings: [{ skill: "project:capability-report" }],
-        },
-      },
-    ],
-    skill_searches: [
-      {
-        event: "skill_search",
-        query: "capability report",
-        result_count: 1,
-        status: "completed",
-        source_event_id: "skill-search",
-        source_event_type: "turn_summary",
-        turn_id: "turn-expert",
-      },
-    ],
-    mcp_tool_results: [],
-    mcp_resource_reads: [],
-  },
-  artifacts: [],
-};
-
 function createRequestMetadata(skillRefs: string[]) {
   return {
     ...REQUEST_METADATA,
@@ -363,13 +307,11 @@ describe("ExpertInfoPanel", () => {
       });
       mounted.container.remove();
     }
-    clearHarnessEvidencePackStore();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
 
   it("应支持从右侧专家面板为当前 Agent 添加技能", async () => {
-    recordHarnessEvidencePack(SKILL_EVIDENCE_PACK);
     const { container, onSkillRefsChange } = renderPanel();
     await flushEffects();
 
@@ -426,22 +368,6 @@ describe("ExpertInfoPanel", () => {
     expect(runtimeTimeline?.textContent).toContain("运行启用 1 个绑定");
     expect(runtimeTimeline?.textContent).toContain("授权放行");
     expect(runtimeTimeline?.textContent).toContain("执行完成");
-    const evidenceSummary = container.querySelector(
-      '[data-testid="expert-info-skills-evidence-summary"]',
-    );
-    expect(evidenceSummary?.textContent).toContain("证据包复盘");
-    expect(evidenceSummary?.textContent).toContain("检索 1 次 · 执行 1 次");
-    expect(evidenceSummary?.textContent).toContain(
-      "最近技能 project:capability-report",
-    );
-    expect(evidenceSummary?.textContent).toContain("运行启用");
-    expect(evidenceSummary?.textContent).toContain("手动会话");
-    expect(evidenceSummary?.textContent).toContain("1 个绑定");
-    expect(evidenceSummary?.textContent).toContain("1 个已知缺口");
-    expect(evidenceSummary?.textContent).not.toContain(
-      "workspace_skill_runtime_enable",
-    );
-
     const addButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="expert-info-skills-add"]',
     );

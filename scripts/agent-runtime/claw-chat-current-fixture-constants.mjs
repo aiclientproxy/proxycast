@@ -30,7 +30,7 @@ import {
   SKILLS_RUNTIME_PROMPT,
   SKILLS_RUNTIME_QUERY,
   SKILLS_RUNTIME_SKILL_NAME,
-  summarizeSkillsRuntimeEvidenceExport,
+  summarizeSkillsRuntimeThreadRead,
 } from "./skills-runtime-fixture-scenario.mjs";
 export {
   buildExpertSkillsRuntimeCatalog,
@@ -61,7 +61,7 @@ export {
   SKILLS_RUNTIME_PROMPT,
   SKILLS_RUNTIME_QUERY,
   SKILLS_RUNTIME_SKILL_NAME,
-  summarizeSkillsRuntimeEvidenceExport,
+  summarizeSkillsRuntimeThreadRead,
 };
 
 export const DEFAULTS = {
@@ -114,7 +114,6 @@ export const APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_GET =
   "mediaTaskArtifact/get";
 export const APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_LIST =
   "mediaTaskArtifact/list";
-export const APP_SERVER_METHOD_EVIDENCE_EXPORT = "evidence/export";
 export const APP_SERVER_METHOD_DIAGNOSTICS_TRACE_LIST =
   "diagnostics/trace/list";
 export const APP_SERVER_METHOD_DIAGNOSTICS_TRACE_READ =

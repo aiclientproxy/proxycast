@@ -124,7 +124,7 @@ package 只在至少两个独立 consumer 需要稳定边界时创建。单一 R
 | `app-server-client`      | Rust client。                                                                                     |
 | `app-server-test-client` | 测试专用 protocol client。                                                                        |
 | `app-server-daemon`      | sidecar/daemon 生命周期。                                                                         |
-| `app-server`             | request dispatch、RuntimeCore、host context、ProjectionStore、evidence/export、领域 data source。 |
+| `app-server`             | request dispatch、RuntimeCore、host context、ProjectionStore、canonical read model、领域 data source。 |
 
 App Server 是 Renderer、Electron、CLI、Plugin 与 runtime 的唯一跨应用业务协议入口。它可以做 transport、鉴权/初始化、请求编排、host context、projection 和 repository 接线；不能持有 provider-specific wire payload 或把工具实现复制进 handler。
 
@@ -385,17 +385,30 @@ Codex method parity 恢复第二套 Thread lifecycle、SDP 通道或 Renderer �
 grok-build 对齐 `model-provider` 的 catalog/capability/readiness 与 sampling/lowering，再由
 `voice-core` / `media-runtime` 承接领域执行和 artifact 生命周期。
 
+当前媒体执行边界进一步收口：`app-server` 的 audio task worker 只接受 RuntimeCore 解析出的
+`openai_audio_speech` `ResolvedModelRoute`，通过 durable `credentialRef` 取凭证后调用
+`model-provider::audio`，将结果写入 workspace 内相对音频路径，并把 `audio_output`、`result`、
+`llm_events` 与 `provider_diagnostics` 写回同一 task artifact；不得在 worker 或 `voice-core` 新增
+第二套 OpenAI TTS HTTP。云端 embedding 与 OpenAI-compatible Whisper transcription 同样经过
+`model-provider` wire；本地 ONNX、Whisper/SenseVoice、百度和讯飞保持各自领域 owner。转写 task
+artifact worker 尚未完成前，不得把 `TranscriptionGenerate` 标记为可执行媒体 worker。
+
 模型目录控制面固定为：
 
 ```text
 provider config + configured-provider readiness + ModelRegistry metadata
   -> AppDataSource provider-scoped ProviderModelCatalog
+  -> RuntimeCore CandidateModelSet (task/capability/modality/status/cost/limit/continuity facts)
   -> RuntimeCore model/list Codex v2 picker fields + authoritative catalog snapshot
   -> Renderer typed gateway / Electron recovery projection
 ```
 
 `ProviderModelCatalog` 是 App Server 内部 read projection，不是第二个 provider network owner；
-provider wire、capability 与执行 route 仍只归 `model-provider`。public `model/list` 必须保持 Codex
+`CandidateModelSet` 是当前 turn 的控制面候选事实，不是全量 catalog，也不承接 provider HTTP；它由
+RuntimeCore 持有，App Server 只适配 configured Provider 声明模型和缓存目录。能力/任务族/模态过滤先于
+OEM 偏好、连续性与成本排序，显式模型锁定保持首位但仍经过 capability gate。provider wire、capability
+与执行 route 仍只归 `model-provider`，其控制面语义按 grok-build 对照，wire/lowering 只按 OpenCode 补充。
+public `model/list` 必须保持 Codex
 v2 的 request、分页和 picker 字段：`{ cursor?, limit?, includeHidden? } -> { data, nextCursor }`。Lime 的
 `Model` 在保留 Codex picker/reasoning/input-modality 字段外，追加 `providerId`、`capabilitySnapshot`、
 `contextWindow` 与 `maxOutputTokens`，使 GUI 与 RuntimeCore route 使用同一份 typed catalog fact。多 provider
@@ -707,7 +720,7 @@ AgentControl child route 必须继承 parent Turn 已解析后的有效 runtime 
 
 `wait_agent` 的 canonical storage payload 继续是 `CollabAgentToolCall::Wait`，但 GUI presentation 必须是 `tool_call` + `tool_name=wait_agent`；它不是 SubAgent activity。只有 distinct `ThreadItemPayload::SubAgent` 才能投影 Started/Interacted/Interrupted 三值和 child Thread identity。AgentControl Gate B 必须同时看到六个 completed typed Tool row、三类 canonical SubAgent activity、v2 `thread/read` 的 `electron-ipc` trace、零 invoke/console error 与真实 Electron 页面；localhost provider fixture 不能冒充 live-provider proof。
 
-Provider history、context compaction 与 evidence/export 也属于 canonical Tool 的生产 consumer：它们只允许从 nested `ThreadItemPayload::{Tool,McpToolCall,CollabAgentToolCall}` 读取 call identity、ItemStatus、arguments、metadata、structured output、output reference 与 MCP server identity。非 lifecycle 的领域 side-channel 可以按显式 allowlist 保留，但 raw `tool.started/result/failed/completed` 不得影响 transcript、摘要、统计、browser evidence 或 artifact 提取，只能存在于入口拒绝守卫、负向测试和历史 evidence。
+Provider history、context compaction 与 canonical read model 也属于 canonical Tool 的生产 consumer：它们只允许从 nested `ThreadItemPayload::{Tool,McpToolCall,CollabAgentToolCall}` 读取 call identity、ItemStatus、arguments、metadata、structured output、output reference 与 MCP server identity。非 lifecycle 的领域 side-channel 可以按显式 allowlist 保留，但 raw `tool.started/result/failed/completed` 不得影响 transcript、摘要、统计、browser evidence 或 artifact 提取，只能存在于入口拒绝守卫、负向测试和历史 evidence。
 
 Context compaction 只重写 model-visible provider history，不删除或改写 durable EventLog、Thread/Turn/Item read model。`context.compaction.completed` 的最新 `tailStartTurnId` 是唯一 provider transcript 边界：`session_context_compaction.v2` summary 只接续该 tail 之前被移除的 turn，tail 及后续 turn 继续从 canonical events 原样投影，本轮 user input 仍由 execution request 单独追加。找不到有效 tail event 时必须 fail open 为完整历史，禁止静默丢 turn。artifact policy 必须分别声明 `durableHistoryRewrite=false` 与 `providerHistoryRewrite=true`；不得恢复“只注入摘要但仍发送全部旧历史”的双份上下文。
 
@@ -746,7 +759,7 @@ Renderer
   -> model-provider and tool-runtime
   -> RuntimeEvent
   -> ProjectionStore / thread-store
-  -> canonical Thread/Turn/Item read model + notifications + evidence/export
+  -> canonical Thread/Turn/Item read model + notifications + derived exports
   -> Renderer projection / GUI
 ```
 
@@ -927,7 +940,7 @@ direct notification 主链已把 Codex v2 lifecycle 与流式 Item method 纳入
 - deprecated raw `action.required` 边界只能透传 runtime `data.availableDecisions`，不得在 App Server 或 Renderer 固定补一套按钮列表；退出条件是 GUI 分别消费 canonical Item 与其独立 typed server request，二者不得互相降级。
 - canonical event log 的 gap、regression、equal-sequence divergence、malformed/unterminated tail 必须在 App Server repair 边界 fail-closed；只有可审计的尾部损坏允许按 `last_valid_offset` 截断并重建 ProjectionStore。
 - canonical Item append 必须遵循 raw rollout append + metadata patch contract；ThreadStore apply 失败时 notification/mailbox ack 不得发生，restart/repair 从连续有效 durable tail 和 raw rollout 重建。
-- Evidence、replay、analysis、review 与 GUI 从 App Server `evidence/export`、v2 read model 和 notification 消费同一事实源。
+- Evidence refs、replay、analysis、review 与 GUI 从 App Server v2 read model 和 notification 消费同一 canonical 事实源；derived exports 只做下游投影，不提供 portable signed receipt。
 
 #### 7.1.1 Renderer ConversationProjection 与 direct TurnTimeline
 
@@ -1223,7 +1236,7 @@ model-provider / tool-runtime -> protocol and low-level utilities only
 2. 改变 Renderer、Electron、App Server、RuntimeCore、provider、tool 或 Thread/Turn/Item 的职责/依赖方向。
 3. 新增或替换 JSON-RPC transport、初始化握手、跨层 method、schema、event 或 read model。
 4. 改变 provider protocol/lowering、工具权限/执行、MCP/Skill 注入或媒体 part 的唯一 owner。
-5. 改变 session/thread/turn/item 持久化、ProjectionStore、evidence/export、replay 或历史恢复事实源。
+5. 改变 session/thread/turn/item 持久化、ProjectionStore、canonical read model、replay 或历史恢复事实源。
 6. 改变主窗口/独立窗口路由、Electron Host 模式、Forge 打包/更新链或跨宿主产品入口。
 7. 改变 Gate A/Gate B 证据等级、GUI 交付门槛或生产 mock 边界。
 

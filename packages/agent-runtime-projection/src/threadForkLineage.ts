@@ -24,7 +24,6 @@ export type AgentUiThreadForkLineageIssueCode =
   | "parent_item_ids_missing"
   | "sidebar_lineage_missing"
   | "history_lineage_missing"
-  | "evidence_lineage_missing"
   | "source_rollout_mutated"
   | "fork_rendered_as_plain_thread"
   | "parent_thread_id_confused_with_forked_from_id";
@@ -45,7 +44,6 @@ export interface AgentUiThreadForkLineageProjectionInput {
   parentItemIds?: unknown;
   sidebarEntries?: unknown;
   historyEvents?: unknown;
-  evidenceExports?: unknown;
   sourceRolloutUnchanged?: boolean | null;
   renderedPlainThread?: boolean | null;
   timestamp?: string | null;
@@ -77,7 +75,6 @@ export interface AgentUiThreadForkLineageSnapshot {
   sourceTurnOrder: string[];
   sidebarLineage: AgentUiLineageSurfaceSnapshot;
   historyLineage: AgentUiLineageSurfaceSnapshot;
-  evidenceLineage: AgentUiLineageSurfaceSnapshot;
   sourceRolloutUnchanged?: boolean;
   renderedPlainThread: boolean;
   lineageComplete: boolean;
@@ -290,23 +287,20 @@ function validateSnapshot(
       issue(
         "parent_item_ids_missing",
         "$.forkResponse.thread.turns[].items",
-        "Fork lineage must retain parent item ids for evidence and history replay.",
+        "Fork lineage must retain parent item ids for history replay.",
       ),
     );
   }
   for (const [surface, lineage] of [
     ["sidebar", snapshot.sidebarLineage],
     ["history", snapshot.historyLineage],
-    ["evidence", snapshot.evidenceLineage],
   ] as const) {
     if (!lineage.present || lineage.forkedFromId !== snapshot.sourceThreadId) {
       issues.push(
         issue(
           surface === "sidebar"
             ? "sidebar_lineage_missing"
-            : surface === "history"
-              ? "history_lineage_missing"
-              : "evidence_lineage_missing",
+            : "history_lineage_missing",
           `$.${surface}`,
           `${surface} surface must expose fork lineage for the forked thread.`,
         ),
@@ -372,7 +366,6 @@ export function extractCodexThreadForkLineageSnapshot(
     sourceTurnOrder: idList(input.sourceTurnOrder),
     sidebarLineage: firstSurfaceLineage(recordArray(input.sidebarEntries), forkThreadId),
     historyLineage: firstSurfaceLineage(recordArray(input.historyEvents), forkThreadId),
-    evidenceLineage: firstSurfaceLineage(recordArray(input.evidenceExports), forkThreadId),
     sourceRolloutUnchanged: sourceRolloutUnchanged(input),
     renderedPlainThread: Boolean(input.renderedPlainThread),
     lineageComplete: false,

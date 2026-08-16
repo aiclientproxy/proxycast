@@ -14,7 +14,6 @@ import {
 } from "./threadGoalCopy";
 import type { useHarnessActivityModel } from "./useHarnessActivityModel";
 import type { useHarnessFileReviewState } from "./useHarnessFileReviewState";
-import type { useHarnessEvidencePackExport } from "./useHarnessEvidencePackExport";
 import type { useHarnessPreviewDialog } from "./useHarnessPreviewDialog";
 import type { useHarnessToolInventoryModel } from "./useHarnessToolInventoryModel";
 import type {
@@ -25,7 +24,6 @@ import type {
 
 type ActivityModel = ReturnType<typeof useHarnessActivityModel>;
 type FileReviewState = ReturnType<typeof useHarnessFileReviewState>;
-type EvidencePackExport = ReturnType<typeof useHarnessEvidencePackExport>;
 type PreviewModel = ReturnType<typeof useHarnessPreviewDialog>;
 type ToolInventoryModel = ReturnType<typeof useHarnessToolInventoryModel>;
 type ThreadReliabilityView = ReturnType<typeof buildThreadReliabilityView>;
@@ -35,15 +33,12 @@ interface BuildHarnessStatusPanelSectionModelsInput {
   agentUiProjectionSummary: AgentUiProjectionSummary;
   canInterrupt: boolean;
   canonicalChildren: NonNullable<HarnessStatusPanelProps["canonicalChildren"]>;
-  currentSessionId: string | null;
   currentTurnId: HarnessStatusPanelProps["currentTurnId"];
   diagnosticRuntimeContext: HarnessStatusPanelProps["diagnosticRuntimeContext"];
   environment: HarnessStatusPanelProps["environment"];
   fileReviewState: FileReviewState;
   handleOpenExternalLink: (url: string) => void | Promise<void>;
-  evidencePackExport: EvidencePackExport;
   hasAgentUiProjectionSection: boolean;
-  hasHandoffSection: boolean;
   harnessState: HarnessStatusPanelProps["harnessState"];
   messages: NonNullable<HarnessStatusPanelProps["messages"]>;
   onInterruptCurrentTurn: HarnessStatusPanelProps["onInterruptCurrentTurn"];
@@ -84,15 +79,12 @@ export function buildHarnessStatusPanelSectionModels({
   agentUiProjectionSummary,
   canInterrupt,
   canonicalChildren,
-  currentSessionId,
   currentTurnId,
   diagnosticRuntimeContext,
   environment,
   fileReviewState,
   handleOpenExternalLink,
-  evidencePackExport,
   hasAgentUiProjectionSection,
-  hasHandoffSection,
   harnessState,
   messages,
   onInterruptCurrentTurn,
@@ -168,14 +160,7 @@ export function buildHarnessStatusPanelSectionModels({
     toolInventorySourceStats,
     toolInventoryWarnings,
   } = toolInventoryModel;
-  const {
-    evidenceExportError,
-    evidenceExporting,
-    evidencePack,
-    handleExportEvidencePack,
-  } = evidencePackExport;
-  const { handleOpenPathValue, openBrowserReplayPreview, openPreview } =
-    previewModel;
+  const { handleOpenPathValue, openPreview } = previewModel;
 
   return {
     registerSectionRef,
@@ -186,19 +171,6 @@ export function buildHarnessStatusPanelSectionModels({
           registerSectionRef,
         }
       : null,
-    handoffSectionProps:
-      hasHandoffSection && currentSessionId
-        ? {
-            evidencePack,
-            evidenceExporting,
-            evidenceExportError,
-            registerSectionRef,
-            handleExportEvidencePack,
-            handleOpenPathValue,
-            openPreview,
-            openBrowserReplayPreview,
-          }
-        : null,
     objectiveSection:
       threadRead?.thread_id &&
       (!threadGoal || threadGoal.threadId === threadRead.thread_id)

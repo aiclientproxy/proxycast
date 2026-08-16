@@ -95,10 +95,6 @@ export type AppServerProjectGitWorktreeCreateParams =
   protocol.ProjectGitWorktreeCreateParams;
 export type AppServerProjectGitWorktreeCreateResponse =
   protocol.ProjectGitWorktreeCreateResponse;
-export type AppServerEvidenceExportParams = protocol.EvidenceExportParams;
-export type AppServerEvidenceExportResponse = protocol.EvidenceExportResponse;
-export type AppServerEvidencePackSummary = protocol.EvidencePackSummary;
-export type AppServerEvidencePackArtifact = protocol.EvidencePackArtifact;
 export type AppServerAgentSessionHandoffBundleExportParams =
   protocol.AgentSessionHandoffBundleExportParams;
 export type AppServerAgentSessionHandoffBundleExportResponse =
@@ -413,6 +409,8 @@ export type AppServerMediaTaskArtifactImageCreateParams =
   protocol.MediaTaskArtifactImageCreateParams;
 export type AppServerMediaTaskArtifactAudioCreateParams =
   protocol.MediaTaskArtifactAudioCreateParams;
+export type AppServerMediaTaskArtifactTranscriptionCreateParams =
+  protocol.MediaTaskArtifactTranscriptionCreateParams;
 export type AppServerMediaTaskArtifactVideoCreateParams =
   protocol.MediaTaskArtifactVideoCreateParams;
 export type AppServerMediaTaskArtifactImageCompleteParams =

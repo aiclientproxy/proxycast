@@ -445,7 +445,7 @@ pub(super) fn build_rollout_summary_candidate_markdown(
         copy.rollout_opening(&read.session.session_id, export_kind)
     );
     let _ = writeln!(content);
-    let _ = writeln!(content, "## {}", copy.rollout.export_evidence_heading);
+    let _ = writeln!(content, "## {}", copy.rollout.runtime_facts_heading);
     let _ = writeln!(content, "- sessionId: `{}`", read.session.session_id);
     let _ = writeln!(content, "- threadId: `{}`", read.session.thread_id);
     let _ = writeln!(content, "- exportKind: `{export_kind}`");

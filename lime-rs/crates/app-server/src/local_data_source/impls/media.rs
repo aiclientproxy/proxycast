@@ -37,7 +37,44 @@ impl MediaAppDataSource for LocalAppDataSource {
         &self,
         params: MediaTaskArtifactAudioCreateParams,
     ) -> Result<MediaTaskArtifactResponse, RuntimeCoreError> {
-        media_tasks::create_audio_media_task_artifact(params).map_err(data_error)
+        let route_assessment = media_tasks::assess_audio_route(
+            &self.db,
+            &self.api_key_provider_service,
+            &self.model_registry_service,
+            &params,
+        )
+        .await
+        .map_err(data_error)?;
+        let response = media_tasks::create_audio_media_task_artifact(params, route_assessment)
+            .map_err(data_error)?;
+        let _ = crate::media_task_worker::spawn_audio_task_worker_for_created_task(
+            &response,
+            crate::media_task_worker::MediaTaskWorkerContext::new(self.db.clone())
+                .with_sidecar_store(self.sidecar_store.clone()),
+        );
+        Ok(response)
+    }
+
+    async fn create_transcription_media_task_artifact(
+        &self,
+        params: MediaTaskArtifactTranscriptionCreateParams,
+    ) -> Result<MediaTaskArtifactResponse, RuntimeCoreError> {
+        let route_assessment = media_tasks::assess_transcription_route(
+            &self.db,
+            &self.api_key_provider_service,
+            &self.model_registry_service,
+            &params,
+        )
+        .await
+        .map_err(data_error)?;
+        let response =
+            media_tasks::create_transcription_media_task_artifact(params, route_assessment)
+                .map_err(data_error)?;
+        let _ = crate::media_task_worker::spawn_transcription_task_worker_for_created_task(
+            &response,
+            crate::media_task_worker::MediaTaskWorkerContext::new(self.db.clone()),
+        );
+        Ok(response)
     }
 
     async fn create_video_media_task_artifact(

@@ -492,6 +492,9 @@ export interface AppServerClient {
   createAudioMediaTaskArtifact(
     params: protocol.MediaTaskArtifactAudioCreateParams,
   ): protocol.JsonRpcRequest;
+  createTranscriptionMediaTaskArtifact(
+    params: protocol.MediaTaskArtifactTranscriptionCreateParams,
+  ): protocol.JsonRpcRequest;
   createVideoMediaTaskArtifact(
     params: protocol.MediaTaskArtifactVideoCreateParams,
   ): protocol.JsonRpcRequest;
@@ -635,9 +638,6 @@ export interface AppServerClient {
   ): protocol.JsonRpcRequest;
   createProjectGitWorktree(
     params: protocol.ProjectGitWorktreeCreateParams,
-  ): protocol.JsonRpcRequest;
-  exportEvidence(
-    params: protocol.EvidenceExportParams,
   ): protocol.JsonRpcRequest;
   exportHandoffBundle(
     params: protocol.AgentSessionHandoffBundleExportParams,

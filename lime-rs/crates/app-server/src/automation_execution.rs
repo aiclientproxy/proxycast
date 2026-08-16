@@ -832,7 +832,7 @@ mod tests {
     use crate::LocalAppDataSource;
     use crate::RuntimeEvent;
     use crate::RuntimeEventSink;
-    use app_server_protocol::EvidenceExportParams;
+    use app_server_protocol::AgentSessionReadParams;
     use lime_core::config::AutomationExecutionMode;
     use lime_core::config::DeliveryConfig;
     use lime_core::database;
@@ -1266,25 +1266,30 @@ mod tests {
             .and_then(Value::as_str)
             .expect("response turn_id")
             .to_string();
-        let evidence_response = core
-            .export_evidence(EvidenceExportParams {
+        let read = core
+            .read_session(AgentSessionReadParams {
                 session_id: "session-job-1".to_string(),
-                turn_id: Some(response_turn_id.clone()),
-                include_events: Some(true),
-                include_artifacts: Some(true),
-                include_evidence_pack: Some(true),
+                history_limit: None,
+                history_offset: None,
+                history_before_message_id: None,
             })
-            .await
-            .expect("export automation evidence");
-        assert_eq!(evidence_response.session.session_id, "session-job-1");
-        assert_eq!(evidence_response.session.thread_id, "thread-job-1");
-        assert!(evidence_response.events.iter().any(|event| {
-            event.event_type == "message.delta"
-                && event.thread_id.as_deref() == Some("thread-job-1")
-                && event.turn_id.as_deref() == Some(response_turn_id.as_str())
+            .expect("read automation session");
+        assert_eq!(read.session.session_id, "session-job-1");
+        assert_eq!(read.session.thread_id, "thread-job-1");
+        assert!(read
+            .turns
+            .iter()
+            .any(|turn| turn.turn_id == response_turn_id));
+        let detail = read.detail.expect("automation session detail");
+        assert!(detail["messages"].as_array().is_some_and(|messages| {
+            messages.iter().any(|message| {
+                message["content"].as_array().is_some_and(|content| {
+                    content
+                        .iter()
+                        .any(|part| part["text"] == "自动化任务已完成")
+                })
+            })
         }));
-        let evidence_pack = evidence_response.evidence_pack.expect("evidence pack");
-        assert_eq!(evidence_pack.turn_count, 1);
 
         let conn = database::lock_db(&db).expect("lock db");
         let updated_job = AutomationJobDao::get(&conn, "job-1")

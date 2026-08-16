@@ -118,10 +118,5 @@
   "agentExperts.info.skills.timeline.invocationRunning": "Running",
   "agentExperts.info.skills.timeline.invocationCompleted": "Completed",
   "agentExperts.info.skills.timeline.invocationFailed": "Failed",
-  "agentExperts.info.skills.timeline.invocationUnknown": "Needs confirmation",
-  "agentExperts.info.skills.evidence.title": "Evidence pack recap",
-  "agentExperts.info.skills.evidence.counts": "{{searchCount}} search(es) · {{invocationCount}} run(s)",
-  "agentExperts.info.skills.evidence.exportedAt": "Last exported {{exportedAt}}",
-  "agentExperts.info.skills.evidence.latestSkill": "Latest skill {{skillName}}",
-  "agentExperts.info.skills.evidence.knownGaps": "{{count}} known gap(s)"
+  "agentExperts.info.skills.timeline.invocationUnknown": "Needs confirmation"
 }

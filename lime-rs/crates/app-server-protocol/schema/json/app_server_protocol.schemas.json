@@ -4609,25 +4609,6 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
-              "const": "evidence/export",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
               "const": "agentSession/handoffBundle/export",
               "type": "string"
             },
@@ -5978,6 +5959,25 @@
             },
             "method": {
               "const": "mediaTaskArtifact/audio/create",
+              "type": "string"
+            },
+            "params": {
+              "default": null
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "mediaTaskArtifact/transcription/create",
               "type": "string"
             },
             "params": {
@@ -9128,7 +9128,6 @@
         "diagnostics/trace/read",
         "diagnostics/windowsStartup/read",
         "discordChannel/probe",
-        "evidence/export",
         "feishuChannel/probe",
         "galleryMaterial/get",
         "galleryMaterial/listByImageCategory",
@@ -9189,6 +9188,7 @@
         "mediaTaskArtifact/image/complete",
         "mediaTaskArtifact/image/create",
         "mediaTaskArtifact/list",
+        "mediaTaskArtifact/transcription/create",
         "mediaTaskArtifact/video/create",
         "memoryStore/addNote",
         "memoryStore/consolidate",
@@ -24651,598 +24651,6 @@
       "title": "ErrorNotification",
       "type": "object"
     },
-    "EvidenceExportParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "includeArtifacts": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "includeEvents": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "includeEvidencePack": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "sessionId": {
-          "type": "string"
-        },
-        "turnId": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "required": [
-        "sessionId"
-      ],
-      "title": "EvidenceExportParams",
-      "type": "object"
-    },
-    "EvidenceExportResponse": {
-      "$defs": {
-        "AgentEvent": {
-          "properties": {
-            "eventId": {
-              "type": "string"
-            },
-            "payload": true,
-            "sequence": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "sessionId": {
-              "type": "string"
-            },
-            "threadId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "timestamp": {
-              "type": "string"
-            },
-            "turnId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "type": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "eventId",
-            "payload",
-            "sequence",
-            "sessionId",
-            "timestamp",
-            "type"
-          ],
-          "type": "object"
-        },
-        "AgentSession": {
-          "properties": {
-            "appId": {
-              "type": "string"
-            },
-            "businessObjectRef": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/BusinessObjectRef"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "createdAt": {
-              "type": "string"
-            },
-            "sessionId": {
-              "type": "string"
-            },
-            "status": {
-              "$ref": "#/$defs/AgentSessionStatus"
-            },
-            "threadId": {
-              "type": "string"
-            },
-            "updatedAt": {
-              "type": "string"
-            },
-            "workspaceId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            }
-          },
-          "required": [
-            "appId",
-            "createdAt",
-            "sessionId",
-            "status",
-            "threadId",
-            "updatedAt"
-          ],
-          "type": "object"
-        },
-        "AgentSessionStatus": {
-          "enum": [
-            "canceled",
-            "completed",
-            "failed",
-            "idle",
-            "running",
-            "waitingAction"
-          ],
-          "type": "string"
-        },
-        "AgentTurn": {
-          "properties": {
-            "completedAt": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "sessionId": {
-              "type": "string"
-            },
-            "startedAt": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "status": {
-              "$ref": "#/$defs/AgentTurnStatus"
-            },
-            "threadId": {
-              "type": "string"
-            },
-            "turnId": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "sessionId",
-            "status",
-            "threadId",
-            "turnId"
-          ],
-          "type": "object"
-        },
-        "AgentTurnStatus": {
-          "enum": [
-            "accepted",
-            "canceled",
-            "completed",
-            "failed",
-            "queued",
-            "running",
-            "waitingAction"
-          ],
-          "type": "string"
-        },
-        "ArtifactContentStatus": {
-          "enum": [
-            "available",
-            "notRequested",
-            "unavailable"
-          ],
-          "type": "string"
-        },
-        "ArtifactSummary": {
-          "properties": {
-            "artifactId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "artifactRef": {
-              "type": "string"
-            },
-            "content": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "contentStatus": {
-              "$ref": "#/$defs/ArtifactContentStatus",
-              "default": "notRequested"
-            },
-            "eventId": {
-              "type": "string"
-            },
-            "kind": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "metadata": true,
-            "path": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "sequence": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "status": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "title": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "turnId": {
-              "type": [
-                "null",
-                "string"
-              ]
-            }
-          },
-          "required": [
-            "artifactRef",
-            "eventId",
-            "sequence"
-          ],
-          "type": "object"
-        },
-        "BusinessObjectRef": {
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "metadata": true,
-            "title": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "uri": {
-              "type": [
-                "null",
-                "string"
-              ]
-            }
-          },
-          "required": [
-            "id",
-            "kind"
-          ],
-          "type": "object"
-        },
-        "EvidencePackArtifact": {
-          "properties": {
-            "absolutePath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "bytes": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "relativePath": {
-              "type": "string"
-            },
-            "title": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "bytes",
-            "kind",
-            "relativePath",
-            "title"
-          ],
-          "type": "object"
-        },
-        "EvidencePackSummary": {
-          "properties": {
-            "artifacts": {
-              "default": [],
-              "items": {
-                "$ref": "#/$defs/EvidencePackArtifact"
-              },
-              "type": "array"
-            },
-            "completionAuditSummary": true,
-            "exportedAt": {
-              "type": "string"
-            },
-            "itemCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "knownGaps": {
-              "default": [],
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "latestTurnStatus": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "observabilitySummary": true,
-            "packAbsoluteRoot": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "packRelativeRoot": {
-              "type": "string"
-            },
-            "pendingRequestCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "queuedTurnCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "recentArtifactCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "threadStatus": {
-              "type": "string"
-            },
-            "turnCount": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "exportedAt",
-            "itemCount",
-            "packRelativeRoot",
-            "pendingRequestCount",
-            "queuedTurnCount",
-            "recentArtifactCount",
-            "threadStatus",
-            "turnCount"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "artifacts": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/ArtifactSummary"
-          },
-          "type": "array"
-        },
-        "events": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/AgentEvent"
-          },
-          "type": "array"
-        },
-        "evidencePack": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/EvidencePackSummary"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "exportedAt": {
-          "type": "string"
-        },
-        "session": {
-          "$ref": "#/$defs/AgentSession"
-        },
-        "turns": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/AgentTurn"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "exportedAt",
-        "session"
-      ],
-      "title": "EvidenceExportResponse",
-      "type": "object"
-    },
-    "EvidencePackArtifact": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "absolutePath": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "bytes": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "relativePath": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "bytes",
-        "kind",
-        "relativePath",
-        "title"
-      ],
-      "title": "EvidencePackArtifact",
-      "type": "object"
-    },
-    "EvidencePackSummary": {
-      "$defs": {
-        "EvidencePackArtifact": {
-          "properties": {
-            "absolutePath": {
-              "type": [
-                "null",
-                "string"
-              ]
-            },
-            "bytes": {
-              "format": "uint",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "relativePath": {
-              "type": "string"
-            },
-            "title": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "bytes",
-            "kind",
-            "relativePath",
-            "title"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "artifacts": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/EvidencePackArtifact"
-          },
-          "type": "array"
-        },
-        "completionAuditSummary": true,
-        "exportedAt": {
-          "type": "string"
-        },
-        "itemCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "knownGaps": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "latestTurnStatus": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "observabilitySummary": true,
-        "packAbsoluteRoot": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "packRelativeRoot": {
-          "type": "string"
-        },
-        "pendingRequestCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "queuedTurnCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "recentArtifactCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "threadStatus": {
-          "type": "string"
-        },
-        "turnCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "exportedAt",
-        "itemCount",
-        "packRelativeRoot",
-        "pendingRequestCount",
-        "queuedTurnCount",
-        "recentArtifactCount",
-        "threadStatus",
-        "turnCount"
-      ],
-      "title": "EvidencePackSummary",
-      "type": "object"
-    },
     "ExperimentalFeature": {
       "$defs": {
         "ExperimentalFeatureStage": {
@@ -29963,6 +29371,7 @@
         },
         "requestAttestation": {
           "default": false,
+          "description": "Opt into Codex-compatible `attestation/generate` requests for the\nupstream `x-oai-attestation` header. Lime currently rejects this\ncapability because its Desktop Host has no token producer.",
           "type": "boolean"
         }
       },
@@ -30068,9 +29477,6 @@
             "capabilityDiscovery": {
               "type": "boolean"
             },
-            "evidence": {
-              "type": "boolean"
-            },
             "workspace": {
               "type": "boolean"
             }
@@ -30079,7 +29485,6 @@
             "agentSession",
             "artifact",
             "capabilityDiscovery",
-            "evidence",
             "workspace"
           ],
           "type": "object"
@@ -37175,6 +36580,159 @@
         "task_type"
       ],
       "title": "MediaTaskArtifactResponse",
+      "type": "object"
+    },
+    "MediaTaskArtifactTranscriptionCreateParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "contentId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "entrySource": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "language": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "modality": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "modalityContractKey": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "model": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "outputFormat": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "outputPath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "projectId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "projectRootPath": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "providerId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "rawText": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "requestedTarget": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "requiredCapabilities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "routingSlot": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "runtimeContract": true,
+        "sessionId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourcePath": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "sourceUrl": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "speakerLabels": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "timestamps": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "projectRootPath"
+      ],
+      "title": "MediaTaskArtifactTranscriptionCreateParams",
       "type": "object"
     },
     "MediaTaskArtifactVideoCreateParams": {
@@ -48931,7 +48489,10 @@
         "codex_responses",
         "fal",
         "gemini_generate_content",
+        "openai_audio_speech",
+        "openai_audio_transcription",
         "openai_chat",
+        "openai_embeddings",
         "openai_images",
         "openai_responses",
         "unknown",
@@ -50016,7 +49577,10 @@
             "codex_responses",
             "fal",
             "gemini_generate_content",
+            "openai_audio_speech",
+            "openai_audio_transcription",
             "openai_chat",
+            "openai_embeddings",
             "openai_images",
             "openai_responses",
             "unknown",
@@ -56454,9 +56018,6 @@
         "capabilityDiscovery": {
           "type": "boolean"
         },
-        "evidence": {
-          "type": "boolean"
-        },
         "workspace": {
           "type": "boolean"
         }
@@ -56465,7 +56026,6 @@
         "agentSession",
         "artifact",
         "capabilityDiscovery",
-        "evidence",
         "workspace"
       ],
       "title": "ServerCapabilities",
@@ -115058,7 +114618,6 @@
               "diagnostics/trace/read",
               "diagnostics/windowsStartup/read",
               "discordChannel/probe",
-              "evidence/export",
               "experimentalFeature/enablement/set",
               "experimentalFeature/list",
               "feishuChannel/probe",
@@ -115135,6 +114694,7 @@
               "mediaTaskArtifact/image/complete",
               "mediaTaskArtifact/image/create",
               "mediaTaskArtifact/list",
+              "mediaTaskArtifact/transcription/create",
               "mediaTaskArtifact/video/create",
               "memory/reset",
               "memoryStore/addNote",

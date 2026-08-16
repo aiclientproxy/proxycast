@@ -1,8 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::*;
-
 pub const PROTOCOL_VERSION: &str = "appserver.v0";
 pub const SERVER_NAME: &str = "app-server";
 pub const RUNTIME_CAPABILITY_MANIFEST_SCHEMA_VERSION: &str =
@@ -67,7 +65,6 @@ pub struct ServerCapabilities {
     pub agent_session: bool,
     pub capability_discovery: bool,
     pub artifact: bool,
-    pub evidence: bool,
     pub workspace: bool,
 }
 
@@ -195,71 +192,6 @@ pub struct ArtifactReadResponse {
     pub artifacts: Vec<ArtifactSummary>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EvidenceExportParams {
-    pub session_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub turn_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub include_events: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub include_artifacts: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub include_evidence_pack: Option<bool>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EvidenceExportResponse {
-    pub session: AgentSession,
-    #[serde(default)]
-    pub turns: Vec<AgentTurn>,
-    #[serde(default)]
-    pub events: Vec<AgentEvent>,
-    #[serde(default)]
-    pub artifacts: Vec<ArtifactSummary>,
-    pub exported_at: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub evidence_pack: Option<EvidencePackSummary>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EvidencePackSummary {
-    pub pack_relative_root: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pack_absolute_root: Option<String>,
-    pub exported_at: String,
-    pub thread_status: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub latest_turn_status: Option<String>,
-    pub turn_count: usize,
-    pub item_count: usize,
-    pub pending_request_count: usize,
-    pub queued_turn_count: usize,
-    pub recent_artifact_count: usize,
-    #[serde(default)]
-    pub known_gaps: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub observability_summary: Option<serde_json::Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub completion_audit_summary: Option<serde_json::Value>,
-    #[serde(default)]
-    pub artifacts: Vec<EvidencePackArtifact>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EvidencePackArtifact {
-    pub kind: String,
-    pub title: String,
-    pub relative_path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub absolute_path: Option<String>,
-    pub bytes: usize,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

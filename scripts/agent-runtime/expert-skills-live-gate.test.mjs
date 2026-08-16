@@ -17,10 +17,8 @@ const CORE_ASSERTIONS = {
   readModelExpertSkillsRuntimeCompleted: true,
   readModelExpertSkillSearchObserved: true,
   readModelExpertSkillInvocationObserved: true,
-  evidenceExpertSkillBodyReadObserved: true,
-  evidenceExpertSkillGateObserved: true,
-  evidencePackExpertSkillSearchObserved: true,
-  evidencePackExpertSkillInvocationObserved: true,
+  readModelExpertSkillBodyReadObserved: true,
+  readModelExpertSkillGateObserved: true,
   expertSkillSearchBeforeSkillInvocation: true,
 };
 
@@ -28,17 +26,19 @@ const PANEL_ASSERTIONS = {
   expertPanelSecondTurnPromptReachedBackend: true,
   expertPanelSkillRefsOverrideReachedBackend: true,
   expertPanelReadModelCompleted: true,
-  expertPanelEvidenceSkillBodyReadObserved: true,
-  expertPanelEvidenceSkillGateObserved: true,
-  expertPanelEvidenceSkillSearchObserved: true,
-  expertPanelEvidenceSkillInvocationObserved: true,
+  expertPanelReadModelSkillBodyReadObserved: true,
+  expertPanelReadModelSkillGateObserved: true,
+  expertPanelReadModelSkillSearchObserved: true,
+  expertPanelReadModelSkillInvocationObserved: true,
   expertPanelSkillSearchBeforeSkillInvocation: true,
-  expertPanelEvidencePackExportedFromHarnessPanel: true,
 };
 
 function writeSummary(root, name, overrides = {}) {
-  const { assertions, evidencePackExpertPanelSkillsRuntime, ...summaryOverrides } =
-    overrides;
+  const {
+    assertions,
+    readModelExpertPanelSkillsRuntime,
+    ...summaryOverrides
+  } = overrides;
   const summary = {
     ok: true,
     scenario: "expert-panel-skills-runtime",
@@ -50,8 +50,8 @@ function writeSummary(root, name, overrides = {}) {
       ...PANEL_ASSERTIONS,
       ...(assertions ?? {}),
     },
-    evidencePackExpertPanelSkillsRuntime: {
-      hasEvidencePack: true,
+    readModelExpertPanelSkillsRuntime: {
+      hasThreadRead: true,
       skillSearchCount: 1,
       skillInvocationCount: 1,
       skillBodyReadObserved: true,
@@ -60,7 +60,7 @@ function writeSummary(root, name, overrides = {}) {
       expertSelectedObserved: true,
       expertInvokedObserved: true,
       skillSearchBeforeSkillInvocation: true,
-      ...(evidencePackExpertPanelSkillsRuntime ?? {}),
+      ...(readModelExpertPanelSkillsRuntime ?? {}),
     },
     ...summaryOverrides,
   };

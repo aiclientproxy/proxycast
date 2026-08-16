@@ -344,36 +344,10 @@ function isAppServerMessageTimeout(error) {
   return /timed out waiting for app-server message after \d+ms/i.test(message);
 }
 
-function eventType(event) {
-  return normalizeString(event?.type || event?.eventType);
-}
-
 function normalizedStringArray(value) {
   return Array.isArray(value)
     ? [...new Set(value.map(normalizeString).filter(Boolean))].sort()
     : [];
-}
-
-function providerRequestToolSnapshots(events) {
-  return events
-    .filter((event) => eventType(event) === "provider.request.started")
-    .map((event) => {
-      const payload = isRecord(event?.payload) ? event.payload : {};
-      const runtimeEvent = isRecord(payload.runtimeEvent)
-        ? payload.runtimeEvent
-        : payload;
-      return {
-        sequence: nonNegativeInteger(event?.sequence),
-        timestamp: normalizeString(event?.timestamp) || null,
-        attempt: positiveInteger(runtimeEvent?.attempt),
-        toolNames: normalizedStringArray(
-          runtimeEvent?.tool_names ??
-            runtimeEvent?.toolNames ??
-            payload?.tool_names ??
-            payload?.toolNames,
-        ),
-      };
-    });
 }
 
 function providerStepUsage(payload) {
@@ -426,57 +400,167 @@ function providerStepUsage(payload) {
   };
 }
 
-export function providerStepsFromEvidence(
-  evidenceExport,
+function currentTurns(currentFacts) {
+  const candidates = [
+    currentFacts?.threadRead?.turns,
+    currentFacts?.threadRead?.thread?.turns,
+    currentFacts?.sessionRead?.detail?.thread_read?.turns,
+    currentFacts?.sessionRead?.detail?.threadRead?.turns,
+    currentFacts?.sessionRead?.detail?.turns,
+    currentFacts?.sessionRead?.turns,
+  ];
+  return candidates.find(Array.isArray) || [];
+}
+
+function currentItems(currentFacts) {
+  const turns = currentTurns(currentFacts);
+  const turnItems = turns.flatMap((turn) =>
+    Array.isArray(turn?.items) ? turn.items : [],
+  );
+  const candidates = [
+    ...turnItems,
+    ...(Array.isArray(currentFacts?.threadRead?.thread_items)
+      ? currentFacts.threadRead.thread_items
+      : []),
+    ...(Array.isArray(currentFacts?.threadRead?.threadItems)
+      ? currentFacts.threadRead.threadItems
+      : []),
+    ...(Array.isArray(currentFacts?.sessionRead?.detail?.thread_read?.thread_items)
+      ? currentFacts.sessionRead.detail.thread_read.thread_items
+      : []),
+    ...(Array.isArray(currentFacts?.sessionRead?.detail?.items)
+      ? currentFacts.sessionRead.detail.items
+      : []),
+    ...(Array.isArray(currentFacts?.sessionRead?.items)
+      ? currentFacts.sessionRead.items
+      : []),
+  ];
+  const seen = new Set();
+  return candidates.filter((item) => {
+    const id = normalizeString(item?.id || item?.item_id || item?.itemId);
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function currentProviderStepRecords(currentFacts) {
+  const records = [];
+  const add = (value) => {
+    if (Array.isArray(value)) records.push(...value.filter(isRecord));
+    else if (isRecord(value)) records.push(value);
+  };
+  const threadRead = currentFacts?.threadRead;
+  const detail = currentFacts?.sessionRead?.detail;
+  const readModels = [
+    threadRead,
+    threadRead?.diagnostics,
+    threadRead?.runtime_summary,
+    threadRead?.runtimeSummary,
+    detail?.thread_read,
+    detail?.threadRead,
+    detail?.diagnostics,
+    detail?.runtime_summary,
+    detail?.runtimeSummary,
+  ];
+  for (const record of readModels) {
+    add(record?.provider_steps ?? record?.providerSteps);
+  }
+  for (const turn of currentTurns(currentFacts)) {
+    add(turn?.provider_steps ?? turn?.providerSteps);
+    add(turn?.metadata?.provider_steps ?? turn?.metadata?.providerSteps);
+  }
+  for (const item of currentItems(currentFacts)) {
+    const metadata = isRecord(item?.metadata) ? item.metadata : {};
+    add(metadata.provider_steps ?? metadata.providerSteps);
+    add(metadata.provider_step ?? metadata.providerStep);
+  }
+  return records;
+}
+
+function currentUsage(currentFacts) {
+  const detail = currentFacts?.sessionRead?.detail;
+  const threadRead = currentFacts?.threadRead;
+  const turn = currentTurns(currentFacts).find(
+    (candidate) =>
+      normalizeString(candidate?.id || candidate?.turn_id || candidate?.turnId) ===
+      normalizeString(currentFacts?.turnId),
+  );
+  return (
+    turn?.usage ||
+    threadRead?.diagnostics?.latest_turn_usage ||
+    threadRead?.diagnostics?.latestTurnUsage ||
+    threadRead?.runtime_summary?.latest_turn_usage ||
+    threadRead?.runtimeSummary?.latestTurnUsage ||
+    detail?.thread_read?.diagnostics?.latest_turn_usage ||
+    detail?.thread_read?.diagnostics?.latestTurnUsage ||
+    detail?.runtime_summary?.latest_turn_usage ||
+    detail?.runtime_summary?.latestTurnUsage ||
+    null
+  );
+}
+
+function providerStepRecord(record, index, toolNames) {
+  const runtimeEvent = isRecord(record?.runtimeEvent)
+    ? record.runtimeEvent
+    : record;
+  const usage = providerStepUsage(runtimeEvent);
+  return {
+    sequence: nonNegativeInteger(
+      runtimeEvent?.sequence ?? runtimeEvent?.ordinal,
+    ),
+    timestamp: normalizeString(
+      runtimeEvent?.timestamp ?? runtimeEvent?.updatedAt ?? runtimeEvent?.updated_at,
+    ) || null,
+    attempt: positiveInteger(runtimeEvent?.attempt) ?? index + 1,
+    completed:
+      runtimeEvent?.completed === true ||
+      /^(completed|succeeded|success|stop)$/i.test(
+        normalizeString(runtimeEvent?.status ?? runtimeEvent?.finishReason),
+      ),
+    finishReason:
+      normalizeString(
+        runtimeEvent?.finish_reason ?? runtimeEvent?.finishReason,
+      ) || null,
+    output: {
+      textChars:
+        nonNegativeInteger(
+          runtimeEvent?.text_output_chars ?? runtimeEvent?.textOutputChars,
+        ) ?? 0,
+      reasoningChars:
+        nonNegativeInteger(
+          runtimeEvent?.reasoning_output_chars ??
+            runtimeEvent?.reasoningOutputChars,
+        ) ?? 0,
+      toolCalls:
+        nonNegativeInteger(
+          runtimeEvent?.tool_call_count ?? runtimeEvent?.toolCallCount,
+        ) ?? 0,
+    },
+    toolNames: normalizedStringArray(
+      runtimeEvent?.tool_names ??
+        runtimeEvent?.toolNames ??
+        runtimeEvent?.tools ??
+        toolNames,
+    ),
+    usage,
+  };
+}
+
+export function providerStepsFromCurrentFacts(
+  currentFacts,
   { maxProviderSteps = null, tokenBudget = null } = {},
 ) {
   const stepLimit = positiveInteger(maxProviderSteps);
   const tokenLimit = positiveInteger(tokenBudget);
-  const events = Array.isArray(evidenceExport?.events)
-    ? evidenceExport.events
-    : [];
-  const toolSnapshots = providerRequestToolSnapshots(events);
-  const toolNamesByAttempt = new Map(
-    toolSnapshots
-      .filter((snapshot) => snapshot.attempt != null)
-      .map((snapshot) => [snapshot.attempt, snapshot.toolNames]),
+  const itemToolNames = currentItems(currentFacts)
+    .filter((item) => item?.kind === "tool" || TOOL_ITEM_TYPES.has(item?.type))
+    .map((item) => item?.name || item?.tool_name || item?.payload?.name)
+    .filter(Boolean);
+  const steps = currentProviderStepRecords(currentFacts).map((record, index) =>
+    providerStepRecord(record, index, itemToolNames),
   );
-  const steps = events
-    .filter((event) => eventType(event) === "provider.step")
-    .map((event) => {
-      const payload = isRecord(event?.payload) ? event.payload : {};
-      const runtimeEvent = isRecord(payload.runtimeEvent)
-        ? payload.runtimeEvent
-        : payload;
-      return {
-        sequence: nonNegativeInteger(event?.sequence),
-        timestamp: normalizeString(event?.timestamp) || null,
-        attempt: positiveInteger(runtimeEvent?.attempt),
-        completed: runtimeEvent?.completed === true,
-        finishReason:
-          normalizeString(
-            runtimeEvent?.finish_reason ?? runtimeEvent?.finishReason,
-          ) || null,
-        output: {
-          textChars:
-            nonNegativeInteger(
-              runtimeEvent?.text_output_chars ?? runtimeEvent?.textOutputChars,
-            ) ?? 0,
-          reasoningChars:
-            nonNegativeInteger(
-              runtimeEvent?.reasoning_output_chars ??
-                runtimeEvent?.reasoningOutputChars,
-            ) ?? 0,
-          toolCalls:
-            nonNegativeInteger(
-              runtimeEvent?.tool_call_count ?? runtimeEvent?.toolCallCount,
-            ) ?? 0,
-        },
-        toolNames:
-          toolNamesByAttempt.get(positiveInteger(runtimeEvent?.attempt)) ?? [],
-        usage: providerStepUsage(payload),
-      };
-    });
   const usage = steps.reduce(
     (total, step) => {
       if (!step.usage) {
@@ -499,6 +583,15 @@ export function providerStepsFromEvidence(
       budgetTokens: 0,
     },
   );
+  const fallbackUsage = providerStepUsage({ usage: currentUsage(currentFacts) });
+  if (steps.length === 0 && fallbackUsage) {
+    usage.stepsWithUsage = 0;
+    usage.inputTokens = fallbackUsage.inputTokens;
+    usage.outputTokens = fallbackUsage.outputTokens;
+    usage.cachedInputTokens = fallbackUsage.cachedInputTokens;
+    usage.cacheCreationInputTokens = fallbackUsage.cacheCreationInputTokens;
+    usage.budgetTokens = fallbackUsage.budgetTokens;
+  }
   const reasons = [];
   if (stepLimit != null && steps.length >= stepLimit) {
     reasons.push("provider_steps");
@@ -506,6 +599,12 @@ export function providerStepsFromEvidence(
   if (tokenLimit != null && usage.budgetTokens >= tokenLimit) {
     reasons.push("token_budget");
   }
+  const toolSnapshots = steps.map((step) => ({
+    sequence: step.sequence,
+    timestamp: step.timestamp,
+    attempt: step.attempt,
+    toolNames: step.toolNames,
+  }));
   const snapshotsWithTools = toolSnapshots.filter(
     (snapshot) => snapshot.toolNames.length > 0,
   );
@@ -558,13 +657,8 @@ export function providerStepsFromEvidence(
   };
 }
 
-function toolLifecycleFromEvidence(sessionRead, evidenceExport) {
-  const items = Array.isArray(sessionRead?.detail?.items)
-    ? sessionRead.detail.items
-    : Array.isArray(sessionRead?.items)
-      ? sessionRead.items
-      : [];
-  const toolItems = items.filter((item) => {
+function toolLifecycleFromCurrentFacts(currentFacts) {
+  const toolItems = currentItems(currentFacts).filter((item) => {
     const itemType = normalizeString(item?.type);
     const payloadType = normalizeString(item?.payload?.type);
     return (
@@ -573,51 +667,35 @@ function toolLifecycleFromEvidence(sessionRead, evidenceExport) {
       TOOL_ITEM_TYPES.has(payloadType)
     );
   });
-  const events = Array.isArray(evidenceExport?.events)
-    ? evidenceExport.events.filter((event) =>
-        /tool|command|patch|approval|sandbox/i.test(
-          `${event?.type || ""} ${event?.eventType || ""}`,
-        ),
-      )
-    : [];
   return {
     schemaVersion: "deepswe-tool-lifecycle-v1",
     itemCount: toolItems.length,
-    eventCount: events.length,
     items: toolItems,
-    events,
   };
 }
 
-function trajectoryFromEvidence({
+function trajectoryFromCurrentFacts({
   sessionId,
   turnId,
-  sessionRead,
-  evidenceExport,
+  currentFacts,
   providerSteps,
 }) {
+  const turns = currentTurns(currentFacts);
   return {
     schemaVersion: "deepswe-current-chain-trajectory-v1",
     sessionId,
     turnId,
     generatedAt: new Date().toISOString(),
-    events: Array.isArray(evidenceExport?.events) ? evidenceExport.events : [],
-    items: Array.isArray(sessionRead?.detail?.items)
-      ? sessionRead.detail.items
-      : [],
+    turns,
+    items: currentItems(currentFacts),
     usage:
       providerSteps?.stepCount > 0
         ? providerSteps.usage
-        : evidenceExport?.usage ||
-          evidenceExport?.evidencePack?.usage ||
-          sessionRead?.detail?.usage ||
-          null,
+        : currentUsage(currentFacts),
   };
 }
 
-async function writeCurrentChainEvidence({
-  rpc,
-  options,
+async function writeCurrentChainFacts({
   runDir,
   sessionId,
   turnId,
@@ -627,20 +705,7 @@ async function writeCurrentChainEvidence({
   startTurnError,
   budgets,
 }) {
-  let evidenceExport = null;
-  let evidenceExportError = "";
-  try {
-    evidenceExport = await rpc.invoke(options, "evidence/export", {
-      sessionId,
-      turnId,
-      includeEvents: true,
-      includeArtifacts: true,
-      includeEvidencePack: true,
-    });
-  } catch (error) {
-    evidenceExportError =
-      error instanceof Error ? error.message : String(error || "unknown");
-  }
+  const currentFacts = { sessionId, turnId, sessionRead, threadRead };
   const capture = {
     status: captureStatus,
     startTurnError:
@@ -649,9 +714,8 @@ async function writeCurrentChainEvidence({
         : startTurnError
           ? String(startTurnError)
           : null,
-    evidenceExportError: evidenceExportError || null,
   };
-  const providerSteps = providerStepsFromEvidence(evidenceExport, budgets);
+  const providerSteps = providerStepsFromCurrentFacts(currentFacts, budgets);
   writeJson(path.join(runDir, "thread-turn-item.json"), {
     schemaVersion: "deepswe-thread-turn-item-v1",
     sessionId,
@@ -662,63 +726,45 @@ async function writeCurrentChainEvidence({
   });
   writeJson(
     path.join(runDir, "trajectory.json"),
-    trajectoryFromEvidence({
+    trajectoryFromCurrentFacts({
       sessionId,
       turnId,
-      sessionRead,
-      evidenceExport,
+      currentFacts,
       providerSteps,
     }),
   );
   writeJson(path.join(runDir, "provider-steps.json"), providerSteps);
   writeJson(
     path.join(runDir, "tool-lifecycle.json"),
-    toolLifecycleFromEvidence(sessionRead, evidenceExport),
+    toolLifecycleFromCurrentFacts(currentFacts),
   );
-  writeJson(path.join(runDir, "app-server-evidence.json"), {
-    schemaVersion: "deepswe-app-server-evidence-v1",
+  writeJson(path.join(runDir, "app-server-facts.json"), {
+    schemaVersion: "deepswe-app-server-facts-v1",
     capture,
-    evidence: evidenceExport,
+    facts: currentFacts,
   });
-  return { evidenceExport, evidenceExportError, providerSteps };
+  return { currentFacts, providerSteps };
 }
 
-export function terminalMessageFromEvidence(evidenceExport, turnId) {
-  const events = Array.isArray(evidenceExport?.events)
-    ? evidenceExport.events
-    : [];
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    const eventType = normalizeString(event?.type || event?.eventType);
-    if (
-      !/^turn\.(?:failed|interrupted|cancelled|canceled|aborted)$/.test(
-        eventType,
-      )
-    ) {
-      continue;
-    }
-    const eventTurnId = normalizeString(
-      event?.turnId ||
-        event?.turn_id ||
-        event?.payload?.turnId ||
-        event?.payload?.turn_id,
-    );
-    if (eventTurnId && eventTurnId !== turnId) {
-      continue;
-    }
-    const message = normalizeString(
-      event?.payload?.message ||
-        event?.payload?.error?.message ||
-        event?.payload?.error ||
-        event?.message ||
-        event?.error?.message ||
-        event?.error,
-    );
-    if (message) {
-      return message;
-    }
-  }
-  return "";
+export function terminalMessageFromCurrentFacts(currentFacts, turnId) {
+  const turn = currentTurns(currentFacts).find(
+    (candidate) =>
+      normalizeString(candidate?.id || candidate?.turn_id || candidate?.turnId) ===
+      normalizeString(turnId),
+  );
+  const diagnostics =
+    currentFacts?.threadRead?.diagnostics ||
+    currentFacts?.sessionRead?.detail?.thread_read?.diagnostics ||
+    currentFacts?.sessionRead?.detail?.diagnostics ||
+    {};
+  return normalizeString(
+    turn?.error?.message ||
+      turn?.error ||
+      turn?.failure?.message ||
+      turn?.failure ||
+      diagnostics.latest_turn_error_message ||
+      diagnostics.latestTurnErrorMessage,
+  );
 }
 
 export function currentChainFromError(error) {
@@ -783,10 +829,6 @@ export async function runCurrentChainTask({
   };
   const hasGenerationOverrides =
     generation.max_output_tokens != null || generation.enable_thinking != null;
-  const evidenceIntervalMs = Math.max(
-    positiveInteger(options.evidenceIntervalMs) ?? 30_000,
-    positiveInteger(options.intervalMs) ?? 100,
-  );
   await rpc.waitForHealth(options);
   const workspaceResponse = await rpc.invoke(options, "workspace/ensure", {
     name: `DeepSWE ${task.id}`,
@@ -887,8 +929,6 @@ export async function runCurrentChainTask({
   let threadRead = null;
   let turn = null;
   let budgetCancellation = null;
-  let budgetEvidenceError = "";
-  let nextBudgetEvidenceAt = pollStartedAt;
   while (Date.now() - pollStartedAt < options.timeoutMs) {
     [sessionRead, threadRead] = await Promise.all([
       rpc.invoke(options, "thread/read", {
@@ -903,36 +943,6 @@ export async function runCurrentChainTask({
     }
     if (startTurnSettled && startTurnError) {
       break;
-    }
-    if (
-      !budgetCancellation &&
-      budgets.tokenBudget != null &&
-      Date.now() >= nextBudgetEvidenceAt
-    ) {
-      nextBudgetEvidenceAt = Date.now() + evidenceIntervalMs;
-      try {
-        const evidence = await rpc.invoke(options, "evidence/export", {
-          sessionId,
-          turnId,
-          includeEvents: true,
-          includeArtifacts: false,
-          includeEvidencePack: false,
-        });
-        const providerSteps = providerStepsFromEvidence(evidence, budgets);
-        if (providerSteps.budgets.reasons.includes("token_budget")) {
-          const requestedAt = new Date().toISOString();
-          await rpc.cancelTurn(options, { sessionId, turnId });
-          budgetCancellation = {
-            requestedAt,
-            reasons: ["token_budget"],
-            stepCount: providerSteps.stepCount,
-            usage: providerSteps.usage,
-          };
-        }
-      } catch (error) {
-        budgetEvidenceError =
-          error instanceof Error ? error.message : String(error || "unknown");
-      }
     }
     await rpc.sleep(options.intervalMs);
   }
@@ -980,9 +990,7 @@ export async function runCurrentChainTask({
       error: cancellationError,
     };
   }
-  const evidenceCapture = await writeCurrentChainEvidence({
-    rpc,
-    options,
+  const factsCapture = await writeCurrentChainFacts({
     runDir,
     sessionId,
     turnId,
@@ -992,18 +1000,7 @@ export async function runCurrentChainTask({
     startTurnError,
     budgets,
   });
-  if (
-    !budgetCancellation &&
-    evidenceCapture.providerSteps?.budgets?.reasons?.includes("token_budget")
-  ) {
-    budgetCancellation = {
-      requestedAt: null,
-      reasons: ["token_budget"],
-      stepCount: evidenceCapture.providerSteps.stepCount,
-      usage: evidenceCapture.providerSteps.usage,
-    };
-  }
-  const stepExhaustion = providerStepExhaustion(evidenceCapture.providerSteps);
+  const stepExhaustion = providerStepExhaustion(factsCapture.providerSteps);
   const finishedAt = new Date().toISOString();
   if (timeoutReason || !terminal) {
     let message;
@@ -1043,11 +1040,10 @@ export async function runCurrentChainTask({
       startedAt,
       finishedAt,
       terminalMessage: message,
-      evidenceCapture: terminal ? "terminal" : "partial",
-      providerSteps: evidenceCapture.providerSteps,
+      factsCapture: terminal ? "terminal" : "partial",
+      providerSteps: factsCapture.providerSteps,
       budgetCancellation,
       timeoutCancellation,
-      budgetEvidenceError: budgetEvidenceError || null,
     };
     throw error;
   }
@@ -1075,13 +1071,12 @@ export async function runCurrentChainTask({
         turn?.failure?.message ||
         turn?.failure ||
         turn?.message ||
-        terminalMessageFromEvidence(evidenceCapture.evidenceExport, turnId),
+        terminalMessageFromCurrentFacts(factsCapture.currentFacts, turnId),
     ),
-    evidenceCapture: "terminal",
-    providerSteps: evidenceCapture.providerSteps,
+    factsCapture: "terminal",
+    providerSteps: factsCapture.providerSteps,
     budgetCancellation,
     providerStepExhaustion: stepExhaustion,
-    budgetEvidenceError: budgetEvidenceError || null,
   };
 }
 

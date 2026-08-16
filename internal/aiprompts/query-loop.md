@@ -32,7 +32,7 @@
 
 当前 Lime 的 Query Loop 统一按下面这条链理解：
 
-`agentSession/turn/start -> RuntimeCore turn_execution -> RuntimeBackend -> TurnInputEnvelope -> runtime_queue -> stream_reply_once -> timeline / artifact / memory -> agentSession/read thread_read -> evidence/export / agentSession/*/export`
+`agentSession/turn/start -> RuntimeCore turn_execution -> RuntimeBackend -> TurnInputEnvelope -> runtime_queue -> stream_reply_once -> timeline / artifact / memory -> agentSession/read thread_read -> Lime evidence/replay/review projections`
 
 这条主链意味着：
 
@@ -199,19 +199,19 @@
 
 - App Server exact `thread/compact/start`：params 为 `{ threadId }`，立即返回 `{}`；压缩进度通过标准 `turn/*`、`item/*` lifecycle 投影
 - App Server `agentSession/read`
-- App Server `evidence/export`
-- App Server `agentSession/handoffBundle/export`
-- App Server `agentSession/replayCase/export`
-- App Server `agentSession/analysisHandoff/export`
-- App Server `agentSession/reviewDecisionTemplate/export`
-- App Server `agentSession/reviewDecision/save`
+- canonical Thread/Turn/Item read model 与 artifact/read
+- Lime App Server `agentSession/handoffBundle/export` 派生扩展
+- Lime App Server `agentSession/replayCase/export` 派生扩展
+- Lime App Server `agentSession/analysisHandoff/export` 派生扩展
+- Lime App Server `agentSession/reviewDecisionTemplate/export` 派生扩展
+- Lime App Server `agentSession/reviewDecision/save` 派生扩展
 
 固定规则：
 
 - 自动压缩与手动压缩都属于同一 runtime 主链
 - 手动压缩不保留旧 session-scoped RPC alias、双发或 fallback
 - `thread_read` 是稳定读模型，不重新定义提交逻辑
-- `evidence / replay / review` 必须消费 runtime facts，不允许自己拼第二份 Query Loop 真相
+- `evidence / replay / review` 是 Lime 派生投影，必须消费 runtime facts，不允许自己拼第二份 Query Loop 真相，也不得声称提供 Codex 没有的 portable signed receipt。
 
 ## 专项场景如何挂回主链
 
@@ -251,7 +251,7 @@
 - `lime-rs/crates/agent` 工具 catalog / request tool policy
 - App Server `agentSession/read`
 - App Server `thread/compact/start`
-- App Server `evidence/export` 与 `agentSession/*/export`
+- App Server canonical read model 与 handoff/replay/analysis/review 导出
 
 ### `compat`
 

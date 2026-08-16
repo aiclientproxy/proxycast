@@ -4,15 +4,18 @@ use serde_json::{json, Value};
 pub(crate) const IMAGE_GENERATION_CONTRACT_KEY: &str = "image_generation";
 pub(crate) const VIDEO_GENERATION_CONTRACT_KEY: &str = "video_generation";
 pub(crate) const VOICE_GENERATION_CONTRACT_KEY: &str = "voice_generation";
+pub(crate) const AUDIO_TRANSCRIPTION_CONTRACT_KEY: &str = "audio_transcription";
 pub(crate) const IMAGE_GENERATION_ROUTING_SLOT: &str = "image_generation_model";
 pub(crate) const VIDEO_GENERATION_ROUTING_SLOT: &str = "video_generation_model";
 pub(crate) const VOICE_GENERATION_ROUTING_SLOT: &str = "voice_generation_model";
+pub(crate) const AUDIO_TRANSCRIPTION_ROUTING_SLOT: &str = "audio_transcription_model";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MediaRuntimeContractKind {
     ImageGeneration,
     VideoGeneration,
     VoiceGeneration,
+    AudioTranscription,
 }
 
 pub(crate) fn runtime_contract_or_default(
@@ -100,11 +103,10 @@ pub(crate) fn runtime_contract_projection_from_payload(
 }
 
 fn is_metadata_only_contract(
-    contract_key: Option<&str>,
+    _contract_key: Option<&str>,
     route_execution_status: Option<&str>,
 ) -> bool {
     route_execution_status == Some("metadata_only")
-        || contract_key == Some(VOICE_GENERATION_CONTRACT_KEY)
 }
 
 fn default_runtime_contract(kind: MediaRuntimeContractKind) -> Value {
@@ -190,12 +192,21 @@ impl From<MediaRuntimeContractKind> for RuntimeContractSpec {
                 routing_slot: VOICE_GENERATION_ROUTING_SLOT,
                 required_capability: "voice_generation",
                 execution_profile_key: "voice_generation_profile",
-                executor_adapter_key: None,
-                executor_binding_key: None,
-                route_execution_status: "metadata_only",
-                route_execution_exit_condition: Some(
-                    "audio worker or RuntimeCore provider protocol mapper consumes ResolvedModelRoute and writes model_route_execution for voice_generation",
-                ),
+                executor_adapter_key: Some("app_server:mediaTaskArtifact/audio/create"),
+                executor_binding_key: Some("mediaTaskArtifact/audio/create"),
+                route_execution_status: "executable",
+                route_execution_exit_condition: None,
+            },
+            MediaRuntimeContractKind::AudioTranscription => Self {
+                contract_key: AUDIO_TRANSCRIPTION_CONTRACT_KEY,
+                modality: "audio",
+                routing_slot: AUDIO_TRANSCRIPTION_ROUTING_SLOT,
+                required_capability: "audio_transcription",
+                execution_profile_key: "audio_transcription_profile",
+                executor_adapter_key: Some("app_server:mediaTaskArtifact/transcription/create"),
+                executor_binding_key: Some("mediaTaskArtifact/transcription/create"),
+                route_execution_status: "executable",
+                route_execution_exit_condition: None,
             },
         }
     }
@@ -312,7 +323,7 @@ mod tests {
     }
 
     #[test]
-    fn default_voice_contract_is_metadata_only_until_audio_route_exec_lands() {
+    fn default_voice_contract_is_executable() {
         let contract = runtime_contract_or_default(None, MediaRuntimeContractKind::VoiceGeneration);
 
         assert_eq!(
@@ -325,16 +336,17 @@ mod tests {
         );
         assert_eq!(
             contract["route_execution_status"].as_str(),
-            Some("metadata_only")
+            Some("executable")
         );
-        assert!(contract.get("executor_adapter").is_none());
-        assert!(contract.get("executor_binding").is_none());
         assert_eq!(
-            contract["route_execution_exit_condition"].as_str(),
-            Some(
-                "audio worker or RuntimeCore provider protocol mapper consumes ResolvedModelRoute and writes model_route_execution for voice_generation"
-            )
+            contract["executor_adapter"]["adapter_key"].as_str(),
+            Some("app_server:mediaTaskArtifact/audio/create")
         );
+        assert_eq!(
+            contract["executor_binding"]["binding_key"].as_str(),
+            Some("mediaTaskArtifact/audio/create")
+        );
+        assert!(contract.get("route_execution_exit_condition").is_none());
         assert!(contract.get("resolved_route").is_none());
         assert!(contract.get("model_route_execution").is_none());
     }

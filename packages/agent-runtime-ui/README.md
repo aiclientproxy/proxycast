@@ -87,7 +87,6 @@ import { replayAppServerFacts } from "@limecloud/agent-runtime-projection";
 const replay = replayAppServerFacts({
   readModel,
   events,
-  evidenceExport,
 });
 
 <AgentUiProjectionView

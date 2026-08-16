@@ -4,7 +4,6 @@ import { HarnessActivitySections } from "./HarnessActivitySections";
 import { HarnessActiveWritesSection } from "./HarnessActiveWritesSection";
 import { ThreadGoalPanel } from "./ThreadGoalPanel";
 import { HarnessFileReviewSection } from "./HarnessFileReviewSection";
-import { HarnessHandoffExportSection } from "./HarnessHandoffExportSection";
 import { HarnessOutputSignalsSection } from "./HarnessOutputSignalsSection";
 import {
   HarnessAgentUiProjectionSection,
@@ -55,9 +54,6 @@ export interface HarnessStatusPanelSectionsProps {
   runtimeTaskSectionProps: ComponentProps<
     typeof HarnessRuntimeTaskSection
   > | null;
-  handoffSectionProps: ComponentProps<
-    typeof HarnessHandoffExportSection
-  > | null;
   objectiveSection: HarnessObjectiveSectionModel | null;
   reliabilitySection: HarnessReliabilitySectionModel;
   fileReviewSection: HarnessFileReviewSectionModel | null;
@@ -76,7 +72,6 @@ export interface HarnessStatusPanelSectionsProps {
 export function HarnessStatusPanelSections({
   registerSectionRef,
   runtimeTaskSectionProps,
-  handoffSectionProps,
   objectiveSection,
   reliabilitySection,
   fileReviewSection,
@@ -91,10 +86,6 @@ export function HarnessStatusPanelSections({
     <>
       {runtimeTaskSectionProps ? (
         <HarnessRuntimeTaskSection {...runtimeTaskSectionProps} />
-      ) : null}
-
-      {handoffSectionProps ? (
-        <HarnessHandoffExportSection {...handoffSectionProps} />
       ) : null}
 
       {objectiveSection ? (

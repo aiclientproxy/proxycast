@@ -5703,7 +5703,7 @@
     {
       "id": "rust-agent-messages-product-read-fallback-leak",
       "classification": "deprecated",
-      "description": "agent_messages 不保留长期产品读取 fallback；thread/read、evidence/export、usage 统计和 GUI read 必须走 JSONL Event Log + Projection DB / Telemetry DB，旧表只允许 migration/backfill/export 输入",
+      "description": "agent_messages 不保留长期产品读取 fallback；thread/read、usage 统计和 GUI read 必须走 JSONL Event Log + Projection DB / Telemetry DB，旧表只允许 migration/backfill/export 输入",
       "patterns": [
         "FROM agent_messages",
         "JOIN agent_messages",

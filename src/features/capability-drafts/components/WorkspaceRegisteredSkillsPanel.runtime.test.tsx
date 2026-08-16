@@ -2,13 +2,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { capabilityDraftsApi } from "@/lib/api/capabilityDrafts";
-import { exportAgentRuntimeEvidencePack } from "@/lib/api/agentRuntime/exportClient";
 import { listWorkspaceSkillBindings } from "@/lib/api/agentRuntime/inventoryClient";
-import {
-  getAutomationJobs,
-  getAutomationRunHistory,
-  updateAutomationJob,
-} from "@/lib/api/automation";
+import { getAutomationJobs, updateAutomationJob } from "@/lib/api/automation";
 import {
   clearAgentUiProjectionEvents,
   conversationProjectionStore,
@@ -50,17 +45,12 @@ vi.mock("@/lib/api/capabilityDrafts", () => ({
   },
 }));
 
-vi.mock("@/lib/api/agentRuntime/exportClient", () => ({
-  exportAgentRuntimeEvidencePack: vi.fn(),
-}));
-
 vi.mock("@/lib/api/agentRuntime/inventoryClient", () => ({
   listWorkspaceSkillBindings: vi.fn(),
 }));
 
 vi.mock("@/lib/api/automation", () => ({
   getAutomationJobs: vi.fn(),
-  getAutomationRunHistory: vi.fn(),
   updateAutomationJob: vi.fn(),
 }));
 
@@ -95,9 +85,7 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
     vi.mocked(listWorkspaceSkillBindings).mockReset();
     vi.mocked(getAutomationJobs).mockReset();
     vi.mocked(getAutomationJobs).mockResolvedValue([]);
-    vi.mocked(getAutomationRunHistory).mockReset();
     vi.mocked(updateAutomationJob).mockReset();
-    vi.mocked(exportAgentRuntimeEvidencePack).mockReset();
     clearAgentUiProjectionEvents();
     vi.mocked(listWorkspaceSkillBindings).mockResolvedValue({
       request: {
@@ -423,55 +411,6 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
       enabled: true,
       last_status: "success",
     } as any);
-    vi.mocked(getAutomationRunHistory).mockResolvedValueOnce([
-      {
-        id: "run-1",
-        source: "automation",
-        source_ref: "job-1",
-        session_id: "session-1",
-        status: "success",
-        started_at: "2026-05-06T10:00:00Z",
-        finished_at: "2026-05-06T10:01:00Z",
-        duration_ms: 60_000,
-        error_code: null,
-        error_message: null,
-        metadata: null,
-        created_at: "2026-05-06T10:00:00Z",
-        updated_at: "2026-05-06T10:01:00Z",
-      },
-    ]);
-    vi.mocked(exportAgentRuntimeEvidencePack).mockResolvedValueOnce({
-      session_id: "session-1",
-      thread_id: "thread-1",
-      workspace_root: "/tmp/work",
-      pack_relative_root: ".lime/harness/sessions/session-1/evidence",
-      pack_absolute_root: "/tmp/work/.lime/harness/sessions/session-1/evidence",
-      exported_at: "2026-05-06T10:02:00Z",
-      thread_status: "completed",
-      turn_count: 1,
-      item_count: 3,
-      pending_request_count: 0,
-      queued_turn_count: 0,
-      recent_artifact_count: 1,
-      known_gaps: [],
-      completion_audit_summary: {
-        source: "runtime_evidence_pack_completion_audit",
-        decision: "completed",
-        owner_run_count: 1,
-        successful_owner_run_count: 1,
-        workspace_skill_tool_call_count: 1,
-        artifact_count: 1,
-        owner_audit_statuses: ["audit_input_ready"],
-        required_evidence: {
-          automation_owner: true,
-          workspace_skill_tool_call: true,
-          artifact_or_timeline: true,
-        },
-        blocking_reasons: [],
-        notes: [],
-      },
-      artifacts: [],
-    } as any);
 
     const { container } = renderPanel({
       workspaceRoot: "/tmp/work",
@@ -488,9 +427,6 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
     ) as HTMLButtonElement | null;
     const toggleButton = container.querySelector(
       '[data-testid="workspace-registered-agent-managed-automation-toggle"]',
-    ) as HTMLButtonElement | null;
-    const auditButton = container.querySelector(
-      '[data-testid="workspace-registered-agent-completion-audit"]',
     ) as HTMLButtonElement | null;
     expect(managedButton).toBeTruthy();
     expect(managedButton?.disabled).toBe(false);
@@ -511,7 +447,11 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
     ).toHaveLength(1);
     expect(toggleButton).toBeTruthy();
     expect(toggleButton?.textContent).toContain("开启定时运行");
-    expect(auditButton).toBeTruthy();
+    expect(
+      container.querySelector(
+        '[data-testid="workspace-registered-agent-completion-audit"]',
+      ),
+    ).toBeNull();
 
     await act(async () => {
       managedButton?.click();
@@ -539,32 +479,16 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
     });
     expect(container.textContent).toContain("Managed Job：已启用");
 
-    await act(async () => {
-      auditButton?.click();
-      await Promise.resolve();
-    });
-
-    expect(getAutomationRunHistory).toHaveBeenCalledWith("job-1", 5);
-    expect(exportAgentRuntimeEvidencePack).toHaveBeenCalledWith("session-1");
-    expect(container.textContent).toContain("completion audit completed");
-    expect(container.textContent).toContain(
-      "项目助手：已准备好保存（capability-report）",
-    );
-    expect(container.textContent).toContain("共享：可在当前项目内共享");
-    expect(container.textContent).toContain(
-      "团队可见性：当前项目成员可以使用这条技能。",
-    );
-
     const envelopeButton = container.querySelector(
       '[data-testid="workspace-registered-agent-envelope-action"]',
     ) as HTMLButtonElement | null;
-    expect(envelopeButton?.disabled).toBe(false);
+    expect(envelopeButton?.disabled).toBe(true);
 
     await act(async () => {
       envelopeButton?.click();
       await Promise.resolve();
     });
 
-    expect(onCreateManagedAutomationDraft).toHaveBeenCalledTimes(2);
+    expect(onCreateManagedAutomationDraft).toHaveBeenCalledTimes(1);
   });
 });

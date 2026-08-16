@@ -55,62 +55,15 @@ export interface AppServerAgentEventFact {
   payload?: unknown;
 }
 
-export interface AppServerArtifactSummaryFact {
-  artifactRef?: string;
-  eventId?: string;
-  sequence?: number;
-  turnId?: string;
-  artifactId?: string;
-  path?: string;
-  title?: string;
-  kind?: string;
-  status?: string;
-  contentStatus?: string;
-  metadata?: unknown;
-}
-
-export interface AppServerEvidencePackSummaryFact {
-  packRelativeRoot?: string;
-  packAbsoluteRoot?: string;
-  exportedAt?: string;
-  threadStatus?: string;
-  latestTurnStatus?: string;
-  turnCount?: number;
-  itemCount?: number;
-  pendingRequestCount?: number;
-  queuedTurnCount?: number;
-  recentArtifactCount?: number;
-  knownGaps?: string[];
-  artifacts?: AppServerEvidencePackArtifactFact[];
-}
-
-export interface AppServerEvidencePackArtifactFact {
-  kind?: string;
-  title?: string;
-  relativePath?: string;
-  absolutePath?: string;
-  bytes?: number;
-}
-
 export interface AppServerSessionReadFacts {
   session: AppServerAgentSessionFact;
   turns?: AppServerAgentTurnFact[];
   detail?: unknown;
 }
 
-export interface AppServerEvidenceExportFacts {
-  session: AppServerAgentSessionFact;
-  turns?: AppServerAgentTurnFact[];
-  events?: AppServerAgentEventFact[];
-  artifacts?: AppServerArtifactSummaryFact[];
-  exportedAt?: string;
-  evidencePack?: AppServerEvidencePackSummaryFact;
-}
-
 export interface AppServerFactsReplayInput {
   readModel?: AppServerSessionReadFacts;
   events?: AppServerAgentEventFact[];
-  evidenceExport?: AppServerEvidenceExportFacts;
   sourceCount?: number;
 }
 
@@ -173,30 +126,6 @@ export function projectAppServerSessionReadToExecutionEvents(
   return dedupeExecutionEvents(events);
 }
 
-export function projectAppServerEvidenceExportToExecutionEvents(
-  exportFacts: AppServerEvidenceExportFacts,
-): AgentRuntimeExecutionEvent[] {
-  const events = [
-    ...projectAppServerEventsToExecutionEvents(exportFacts.events),
-    ...projectAppServerSessionReadToExecutionEvents({
-      session: exportFacts.session,
-      turns: exportFacts.turns,
-    }),
-    ...projectAppServerArtifactsToExecutionEvents(
-      exportFacts.artifacts,
-      exportFacts.session,
-      exportFacts.exportedAt,
-    ),
-    ...projectAppServerEvidencePackToExecutionEvents(
-      exportFacts.evidencePack,
-      exportFacts.session,
-      exportFacts.exportedAt,
-    ),
-  ];
-
-  return dedupeExecutionEvents(events);
-}
-
 export function replayAppServerFacts(
   input: AppServerFactsReplayInput,
 ): AppServerFactsProjectionResult {
@@ -206,9 +135,6 @@ export function replayAppServerFacts(
       ? projectAppServerSessionReadToExecutionEvents(input.readModel)
       : []),
     ...projectAppServerEventsToExecutionEvents(input.events),
-    ...(input.evidenceExport
-      ? projectAppServerEvidenceExportToExecutionEvents(input.evidenceExport)
-      : []),
   ];
   const dedupedEvents = dedupeExecutionEvents(events).sort(compareEvents);
 
@@ -431,87 +357,6 @@ function projectAppServerTurnToExecutionEvent(
       defaultTimestamp(),
     completedAt: turn.completedAt,
   } satisfies AgentRuntimeExecutionEvent);
-}
-
-function projectAppServerArtifactsToExecutionEvents(
-  artifacts: readonly AppServerArtifactSummaryFact[] | undefined,
-  session: AppServerAgentSessionFact,
-  exportedAt: string | undefined,
-): AgentRuntimeExecutionEvent[] {
-  return (artifacts ?? [])
-    .filter((artifact) => definedString(artifact.artifactRef))
-    .map((artifact) =>
-      compactProjectionFields({
-        id: `appserver:artifact:${artifact.artifactRef}`,
-        schemaVersion: "lime-runtime-event/v0.1",
-        kind: "draft",
-        owner: "artifact",
-        status: artifact.status === "failed" ? "failed" : "completed",
-        eventClass: "artifact.changed",
-        runtimeId: "app-server",
-        threadId: session.threadId,
-        turnId: artifact.turnId,
-        artifactId: artifact.artifactId ?? artifact.artifactRef,
-        artifactRefs: normalizeRefs([artifact.artifactRef]),
-        sequence: artifact.sequence,
-        title: artifact.title ?? "Artifact changed",
-        detail: artifact.path ?? artifact.kind,
-        payload: compactProjectionFields({
-          artifactRef: artifact.artifactRef,
-          path: artifact.path,
-          kind: artifact.kind,
-          contentStatus: artifact.contentStatus,
-          sourceEventId: artifact.eventId,
-          metadata: artifact.metadata,
-        }),
-        createdAt: exportedAt ?? defaultTimestamp(),
-        completedAt: exportedAt,
-      } satisfies AgentRuntimeExecutionEvent),
-    );
-}
-
-function projectAppServerEvidencePackToExecutionEvents(
-  evidencePack: AppServerEvidencePackSummaryFact | undefined,
-  session: AppServerAgentSessionFact,
-  exportedAt: string | undefined,
-): AgentRuntimeExecutionEvent[] {
-  const packRoot = definedString(evidencePack?.packRelativeRoot);
-  if (!packRoot) {
-    return [];
-  }
-
-  return [
-    compactProjectionFields({
-      id: `appserver:evidence:${packRoot}`,
-      schemaVersion: "lime-runtime-event/v0.1",
-      kind: "evidence",
-      owner: "evidence",
-      status: "completed",
-      eventClass: "evidence.changed",
-      runtimeId: "app-server",
-      threadId: session.threadId,
-      evidenceId: packRoot,
-      evidenceRefs: [packRoot],
-      title: "Evidence pack exported",
-      detail: packRoot,
-      payload: compactProjectionFields({
-        packRelativeRoot: evidencePack?.packRelativeRoot,
-        packAbsoluteRoot: evidencePack?.packAbsoluteRoot,
-        exportedAt: evidencePack?.exportedAt ?? exportedAt,
-        threadStatus: evidencePack?.threadStatus,
-        latestTurnStatus: evidencePack?.latestTurnStatus,
-        turnCount: evidencePack?.turnCount,
-        itemCount: evidencePack?.itemCount,
-        pendingRequestCount: evidencePack?.pendingRequestCount,
-        queuedTurnCount: evidencePack?.queuedTurnCount,
-        recentArtifactCount: evidencePack?.recentArtifactCount,
-        knownGaps: evidencePack?.knownGaps,
-        artifacts: evidencePack?.artifacts,
-      }),
-      createdAt: evidencePack?.exportedAt ?? exportedAt ?? defaultTimestamp(),
-      completedAt: evidencePack?.exportedAt ?? exportedAt,
-    } satisfies AgentRuntimeExecutionEvent),
-  ];
 }
 
 function normalizeEventClass(type: string): string {

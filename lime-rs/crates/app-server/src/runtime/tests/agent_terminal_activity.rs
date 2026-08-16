@@ -967,9 +967,12 @@ async fn restart_recovers_result_after_canonical_terminal_apply_failure() {
         .start_turn(child_turn_params(), RuntimeHostContext::default())
         .await
         .expect_err("canonical child terminal must fail after EventLog append");
-    assert!(error
-        .to_string()
-        .contains("canonical child terminal Turn must persist before parent activity"));
+    assert!(
+        error
+            .to_string()
+            .contains("canonical child terminal Turn must persist before parent activity"),
+        "expected canonical terminal persistence failure, got: {error}"
+    );
     assert!(store
         .list_pending_agent_mailbox_messages(
             ThreadId::new("root-thread"),
@@ -1015,9 +1018,12 @@ async fn restart_recovers_result_after_canonical_terminal_before_mailbox_failure
         .start_turn(child_turn_params(), RuntimeHostContext::default())
         .await
         .expect_err("mailbox append must fail after canonical terminal");
-    assert!(error
-        .to_string()
-        .contains("spawned child child-thread has no durable identity"));
+    assert!(
+        error
+            .to_string()
+            .contains("spawned child child-thread has no durable identity"),
+        "expected missing child identity failure, got: {error}"
+    );
     store
         .upsert_agent_identity(AgentIdentity {
             root_thread_id: ThreadId::new("root-thread"),

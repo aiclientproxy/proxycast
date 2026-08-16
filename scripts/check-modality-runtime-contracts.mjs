@@ -10,16 +10,6 @@ const CAPABILITY_MATRIX_PATH =
 const ARTIFACT_GRAPH_PATH = "src/lib/governance/modalityArtifactGraph.json";
 const EXECUTION_PROFILE_PATH =
   "src/lib/governance/modalityExecutionProfiles.json";
-const TASK_INDEX_PRESENTATION_PATH =
-  "src/lib/agentRuntime/modalityTaskIndexPresentation.ts";
-const HARNESS_TASK_INDEX_SECTION_PATH =
-  "src/components/agent/chat/components/HarnessTaskIndexSection.tsx";
-const HARNESS_STATUS_PANEL_PATH =
-  "src/components/agent/chat/components/HarnessStatusPanel.tsx";
-const HARNESS_HANDOFF_EXPORT_SECTION_PATH =
-  "src/components/agent/chat/components/HarnessHandoffExportSection.tsx";
-const HARNESS_EVIDENCE_PACK_CARD_PATH =
-  "src/components/agent/chat/components/HarnessEvidencePackCard.tsx";
 const REQUIRED_DOCS = [
   "internal/roadmap/warp/runtime-fact-map.md",
   "internal/roadmap/warp/contract-schema.md",
@@ -30,12 +20,6 @@ const REQUIRED_DOCS = [
   "internal/roadmap/warp/task-index-inventory.md",
   "internal/roadmap/warp/evolution-guide.md",
 ];
-const REQUIRED_TASK_INDEX_PRESENTATION_EXPORTS = [
-  "buildModalityTaskIndexFacets",
-  "buildModalityTaskIndexRows",
-  "filterModalityTaskIndexRows",
-];
-
 const LIFECYCLES = new Set(["current", "compat", "deprecated", "dead"]);
 const MODALITIES = new Set([
   "text",
@@ -118,12 +102,14 @@ const EXECUTOR_KINDS = new Set([
   "gateway",
   "scene_cloud",
   "local_cli",
+  "app_server",
   "workflow",
 ]);
 const FAILURE_REASONS = new Set([
   "permission_denied",
   "capability_gap",
   "executor_error",
+  "provider_error",
   "observation_unavailable",
   "file_unavailable",
   "source_unavailable",
@@ -1490,100 +1476,12 @@ function validateRequiredDocs() {
   });
 }
 
-function readRequiredTextFile(errors, filePath) {
-  const absolutePath = path.resolve(process.cwd(), filePath);
-  if (!fs.existsSync(absolutePath)) {
-    errors.push(`required task index source file is missing: ${filePath}`);
-    return "";
-  }
-  return fs.readFileSync(absolutePath, "utf8");
-}
-
-function validateTaskIndexPresentationGuard() {
-  const errors = [];
-  const presentationSource = readRequiredTextFile(
-    errors,
-    TASK_INDEX_PRESENTATION_PATH,
-  );
-  const sectionSource = readRequiredTextFile(
-    errors,
-    HARNESS_TASK_INDEX_SECTION_PATH,
-  );
-  const panelSource = readRequiredTextFile(errors, HARNESS_STATUS_PANEL_PATH);
-  const handoffSectionSource = readRequiredTextFile(
-    errors,
-    HARNESS_HANDOFF_EXPORT_SECTION_PATH,
-  );
-  const evidencePackCardSource = readRequiredTextFile(
-    errors,
-    HARNESS_EVIDENCE_PACK_CARD_PATH,
-  );
-
-  for (const exportName of REQUIRED_TASK_INDEX_PRESENTATION_EXPORTS) {
-    pushIf(
-      errors,
-      !presentationSource.includes(`export function ${exportName}`),
-      `${TASK_INDEX_PRESENTATION_PATH} must export ${exportName} as the Phase 8 taskIndex query fact source`,
-    );
-    pushIf(
-      errors,
-      !sectionSource.includes(exportName),
-      `${HARNESS_TASK_INDEX_SECTION_PATH} must consume ${exportName} instead of rebuilding taskIndex UI state`,
-    );
-  }
-
-  pushIf(
-    errors,
-    !sectionSource.includes(
-      'from "@/lib/agentRuntime/modalityTaskIndexPresentation"',
-    ),
-    `${HARNESS_TASK_INDEX_SECTION_PATH} must import the shared taskIndex presentation helpers`,
-  );
-  pushIf(
-    errors,
-    !sectionSource.includes('t("agentChat.harness.taskIndex.list.title")'),
-    `${HARNESS_TASK_INDEX_SECTION_PATH} must keep the task center filter surface attached to shared taskIndex rows`,
-  );
-  pushIf(
-    errors,
-    !panelSource.includes(
-      'import { HarnessStatusPanelSections } from "./HarnessStatusPanelSections";',
-    ) ||
-      !handoffSectionSource.includes(
-        'import { HarnessEvidencePackCard } from "./HarnessEvidencePackCard";',
-      ) ||
-      !evidencePackCardSource.includes(
-        'import { HarnessTaskIndexSection } from "./HarnessTaskIndexSection";',
-      ) ||
-      !evidencePackCardSource.includes("<HarnessTaskIndexSection"),
-    `${HARNESS_STATUS_PANEL_PATH} must delegate the taskIndex surface to HarnessTaskIndexSection`,
-  );
-
-  const forbiddenPanelSnippets = [
-    "buildModalityTaskIndexRows",
-    "filterModalityTaskIndexRows",
-    "function TaskIndexItemCard",
-    "function TaskIndexFilterSelect",
-    "function TaskIndexSummarySection",
-  ];
-  for (const snippet of forbiddenPanelSnippets) {
-    pushIf(
-      errors,
-      panelSource.includes(snippet),
-      `${HARNESS_STATUS_PANEL_PATH} must not inline taskIndex query/list UI (${snippet}); use ${HARNESS_TASK_INDEX_SECTION_PATH}`,
-    );
-  }
-
-  return { errors };
-}
-
 function renderSuccess(
   registry,
   matrix,
   graph,
   contractReport,
   profileReport,
-  taskIndexPresentationReport,
 ) {
   const currentCount = registry.contracts.filter(
     (contract) => contract.lifecycle === "current",
@@ -1598,9 +1496,6 @@ function renderSuccess(
     `  entry bindings: ${contractReport.entryBindingReport.entryBindingCount}`,
     `  task index core fields: ${REQUIRED_ARTIFACT_INDEX_FIELDS.size}`,
     `  media phase8 index fields: ${REQUIRED_MEDIA_TASK_PHASE8_INDEX_FIELDS.size}`,
-    `  task index presentation guard: ${
-      taskIndexPresentationReport.errors.length === 0 ? "current" : "failed"
-    }`,
     `  execution profiles: ${profileReport.profileCount}`,
     `  executor adapters: ${profileReport.adapterCount}`,
     `  registry: ${CONTRACT_PATH}`,
@@ -1628,14 +1523,12 @@ function main() {
     matrixReport,
     graphReport,
   );
-  const taskIndexPresentationReport = validateTaskIndexPresentationGuard();
   const errors = [
     ...validateRequiredDocs(),
     ...matrixReport.errors,
     ...graphReport.errors,
     ...contractReport.errors,
     ...profileReport.errors,
-    ...taskIndexPresentationReport.errors,
   ];
 
   if (errors.length > 0) {
@@ -1653,7 +1546,6 @@ function main() {
       graph,
       contractReport,
       profileReport,
-      taskIndexPresentationReport,
     ),
   );
 }

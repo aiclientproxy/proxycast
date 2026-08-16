@@ -28,8 +28,6 @@ import {
   type AppServerConnection,
   type AppServerRequestOptions,
   type AppServerRequestResult,
-  type EvidenceExportParams,
-  type EvidenceExportResponse,
   type JsonRpcMessage,
   type RequestId,
   type StructuredOutputContract,
@@ -142,13 +140,6 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
     options?: AppServerRequestOptions,
   ): Promise<AppServerRequestResult<AgentSessionToolInventoryReadResponse>> {
     return await this.#base.readToolInventory(params, options);
-  }
-
-  async exportEvidence(
-    params: EvidenceExportParams,
-    options?: AppServerRequestOptions,
-  ): Promise<AppServerRequestResult<EvidenceExportResponse>> {
-    return await this.#base.exportEvidence(params, options);
   }
 
   subscribeLifecycleEvents(

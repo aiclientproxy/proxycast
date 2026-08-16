@@ -37,7 +37,6 @@ mod error;
 mod event_log;
 mod event_sink;
 mod event_store;
-mod evidence_provider;
 mod execution_request;
 mod expert_role_switch;
 mod exports;
@@ -166,8 +165,6 @@ pub use event_log::EventLogRecord;
 pub use event_log::EventLogWriter;
 use event_sink::RuntimeEventCallback;
 pub use event_sink::{RuntimeEvent, RuntimeEventHub, RuntimeEventSink};
-pub use evidence_provider::BasicEvidenceExportProvider;
-pub use evidence_provider::NoopEvidenceExportProvider;
 pub use execution_request::ExecutionRequest;
 pub use output_refs::FilesystemOutputSnapshotStore;
 pub use output_refs::NoopOutputSnapshotStore;
@@ -206,13 +203,10 @@ use app_server_protocol::AgentSessionApprovalDecision;
 use app_server_protocol::AgentTurn;
 use app_server_protocol::ArtifactSummary;
 use app_server_protocol::ClientInfo;
-use app_server_protocol::EvidencePackSummary;
 use app_server_protocol::RuntimeOptions;
 use async_trait::async_trait;
 use lime_browser_runtime::{BrowserProfileScope, BrowserRuntimeManager};
-use lime_infra::telemetry::RequestLog;
 use lime_infra::telemetry::TelemetryStore;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -250,25 +244,6 @@ pub struct ArtifactContentRequest {
 
 pub trait ArtifactContentProvider: Send + Sync {
     fn read_content(&self, request: &ArtifactContentRequest) -> Option<String>;
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct EvidencePackRequest {
-    pub session: AgentSession,
-    pub turns: Vec<AgentTurn>,
-    pub events: Vec<AgentEvent>,
-    pub artifacts: Vec<ArtifactSummary>,
-    pub turn_runtime_metadata: BTreeMap<String, serde_json::Value>,
-    pub request_logs: Vec<RequestLog>,
-    pub workflow_audit_events: Vec<AgentEvent>,
-}
-
-#[async_trait]
-pub trait EvidenceExportProvider: Send + Sync {
-    async fn export_evidence_pack(
-        &self,
-        request: &EvidencePackRequest,
-    ) -> Result<Option<EvidencePackSummary>, RuntimeCoreError>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -507,7 +482,6 @@ pub struct RuntimeCore {
     pub(in crate::runtime) telemetry_store: Option<Arc<TelemetryStore>>,
     pub(in crate::runtime) event_hub: RuntimeEventHub,
     pub(in crate::runtime) browser_runtime: Arc<BrowserRuntimeManager>,
-    evidence_export_provider: Arc<dyn EvidenceExportProvider>,
     knowledge_builder_runtime_executor: Arc<dyn KnowledgeBuilderRuntimeExecutor>,
     app_data_source: Arc<dyn AppDataSource>,
     pub(crate) execution_process_server: Option<ExecutionProcessServer>,
@@ -583,20 +557,6 @@ impl RuntimeCore {
         capability_source: Arc<dyn CapabilitySource>,
         artifact_content_provider: Arc<dyn ArtifactContentProvider>,
     ) -> Self {
-        Self::with_backend_capability_source_artifact_content_provider_and_evidence_export_provider(
-            backend,
-            capability_source,
-            artifact_content_provider,
-            Arc::new(BasicEvidenceExportProvider),
-        )
-    }
-
-    pub fn with_backend_capability_source_artifact_content_provider_and_evidence_export_provider(
-        backend: Arc<dyn ExecutionBackend>,
-        capability_source: Arc<dyn CapabilitySource>,
-        artifact_content_provider: Arc<dyn ArtifactContentProvider>,
-        evidence_export_provider: Arc<dyn EvidenceExportProvider>,
-    ) -> Self {
         Self {
             state: Arc::new(Mutex::new(RuntimeCoreState::default())),
             session_loops: RuntimeSessionRegistry::default(),
@@ -621,7 +581,6 @@ impl RuntimeCore {
             telemetry_store: None,
             event_hub: RuntimeEventHub::new(),
             browser_runtime: Arc::new(BrowserRuntimeManager::new()),
-            evidence_export_provider,
             knowledge_builder_runtime_executor: Arc::new(
                 NativeKnowledgeBuilderRuntimeExecutor::new(),
             ),

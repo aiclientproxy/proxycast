@@ -1,7 +1,7 @@
 import { createAgentClient } from "./agentClient";
 import {
   createExportClient,
-  type AgentRuntimeEvidenceExportAppServerClient,
+  type AgentRuntimeExportAppServerClient,
 } from "./exportClient";
 import {
   createInventoryClient,
@@ -24,7 +24,7 @@ import {
 export type AgentRuntimeAppServerClient =
   AgentRuntimeThreadClientDeps["appServerClient"] &
     AppServerSessionRpcClient &
-    AgentRuntimeEvidenceExportAppServerClient &
+    AgentRuntimeExportAppServerClient &
     AgentRuntimeWorkspaceSkillBindingsAppServerClient;
 
 export interface AgentRuntimeClientDeps extends AgentRuntimeTransportDeps {

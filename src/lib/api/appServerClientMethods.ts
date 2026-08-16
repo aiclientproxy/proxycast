@@ -177,11 +177,6 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerProjectGitWorktreeCreateResponse>
     >;
-    exportEvidence(
-      params: appServer.AppServerEvidenceExportParams,
-    ): Promise<
-      appServer.AppServerRequestResult<appServer.AppServerEvidenceExportResponse>
-    >;
     exportHandoffBundle(
       params: appServer.AppServerAgentSessionHandoffBundleExportParams,
     ): Promise<
@@ -607,6 +602,11 @@ declare module "./appServerClient" {
     >;
     createAudioMediaTaskArtifact(
       params: appServer.AppServerMediaTaskArtifactAudioCreateParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerMediaTaskArtifactResponse>
+    >;
+    createTranscriptionMediaTaskArtifact(
+      params: appServer.AppServerMediaTaskArtifactTranscriptionCreateParams,
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerMediaTaskArtifactResponse>
     >;

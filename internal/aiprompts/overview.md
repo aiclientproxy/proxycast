@@ -13,12 +13,12 @@ React Renderer
   -> RuntimeCore / agent-runtime
   -> model-provider + tool-runtime
   -> Thread/Turn/Item + ProjectionStore
-  -> Renderer projection / Evidence
+  -> Renderer projection / Runtime Facts
 ```
 
 - Renderer 负责产品交互、局部显示状态和 i18n；不保存运行时真相，也不拼 provider 请求。
 - Electron 负责窗口、preload、IPC 白名单、系统能力、sidecar 生命周期和更新；不成为业务后端。
-- App Server 是跨应用业务协议入口，负责 JSON-RPC、初始化、handler、read model、evidence/export 和领域接线。
+- App Server 是跨应用业务协议入口，负责 JSON-RPC、初始化、handler、canonical read model 和领域接线。
 - `agent-runtime` 负责回合生命周期与状态机；`model-provider` 负责多模型 capability、canonical content 和 provider lowering；`tool-runtime` 负责工具权限、调度、MCP 与结果归一。
 - `thread-store` 与 ProjectionStore 承担可恢复的 Thread / Turn / Item 读取事实；UI 缓存和 stream buffer 不得反向成为真相。
 - Provider 网络只有 `model-provider` 一个 current owner；已删除的 `lime-providers` 属于 `dead / forbidden-to-restore`，只能出现在历史 evidence 或负向守卫。

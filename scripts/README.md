@@ -263,7 +263,7 @@ npm run harness:deepswe:preflight
 npm run harness:deepswe:run -- --task happy-dom-abort-pending-body-reads --allow-live-provider
 ```
 
-`harness:deepswe:run` 在隔离 git workspace 中通过 `workspace/ensure -> agentSession/start -> agentSession/turn/start -> agentSession/read/evidence/export -> agentSession/turn/cancel` 执行 Lime current Agent。adapter v4 持续导出 `provider.step` 和每次真实 sampling 的 tool catalog；provider step 上限通过 `runtimeRequest.metadata.harness.provider_budget.max_provider_steps` 下沉到 current reply loop，在下一次 sampling 前终止，外部 evidence 轮询只负责 token budget，wall time 由总 timeout 兜底。terminal 或预算取消后先固化 partial evidence 与 `patch.diff`。只有存在 candidate patch 时才进入 Pier separate verifier preflight；缺少容器运行时会保留 agent evidence 并记录独立 verifier blocker，不得生成伪造的 `reward.json`。真实执行默认 fail closed，必须显式允许 live Provider；已有 patch 可用 `--verifier-only --run-dir <path>` 续跑判分。
+`harness:deepswe:run` 在隔离 git workspace 中通过 `workspace/ensure -> agentSession/start -> agentSession/turn/start -> agentSession/read -> agentSession/turn/cancel` 执行 Lime current Agent。adapter v4 从 canonical read model 持续记录 `provider.step` 和每次真实 sampling 的 tool catalog；provider step 上限通过 `runtimeRequest.metadata.harness.provider_budget.max_provider_steps` 下沉到 current reply loop，在下一次 sampling 前终止，wall time 由总 timeout 兜底。terminal 或预算取消后固化 partial facts 与 `patch.diff`。只有存在 candidate patch 时才进入 Pier separate verifier preflight；缺少容器运行时会保留运行事实并记录独立 verifier blocker，不得生成伪造的 `reward.json`。真实执行默认 fail closed，必须显式允许 live Provider；已有 patch 可用 `--verifier-only --run-dir <path>` 续跑判分。
 
 新增 Harness 脚本继续进入 `scripts/harness/` 或复用现有 Harness npm scripts；共享实现仍放在 `scripts/lib/`。
 

@@ -13,7 +13,6 @@ use crate::runtime::{
 };
 
 mod dry_run;
-mod evidence;
 mod health;
 mod idempotency;
 mod path_resolution;

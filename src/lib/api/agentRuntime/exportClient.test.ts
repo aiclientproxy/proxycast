@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createExportClient } from "./exportClient";
 import type { AppServerRequestResult } from "@/lib/api/appServer";
 import { changeLimeLocale } from "@/i18n/createI18n";
-import type { AgentRuntimeEvidenceExportAppServerClient } from "./exportClient";
+import type { AgentRuntimeExportAppServerClient } from "./exportClient";
 
 const handoffBundleOutput = {
   sessionId: "session-handoff",
@@ -155,7 +155,7 @@ const reviewDecisionTemplateOutput = {
   ],
 };
 
-function appServerClientMock(): AgentRuntimeEvidenceExportAppServerClient {
+function appServerClientMock(): AgentRuntimeExportAppServerClient {
   return {
     exportHandoffBundle: vi.fn().mockResolvedValue({
       id: 1,
@@ -189,42 +189,6 @@ function appServerClientMock(): AgentRuntimeEvidenceExportAppServerClient {
       id: 1,
       result: reviewDecisionTemplateOutput,
       response: { id: 1, result: reviewDecisionTemplateOutput },
-      notifications: [],
-      messages: [],
-    }),
-    exportEvidence: vi.fn().mockResolvedValue({
-      id: 1,
-      result: {
-        session: {
-          sessionId: "session-1",
-          threadId: "thread-1",
-          appId: "desktop",
-          workspaceId: "workspace-1",
-          status: "running",
-          createdAt: "2026-06-06T00:00:00.000Z",
-          updatedAt: "2026-06-06T00:00:03.000Z",
-        },
-        turns: [],
-        events: [],
-        artifacts: [],
-        exportedAt: "2026-06-06T00:00:04.000Z",
-        evidencePack: {
-          packRelativeRoot: ".lime/harness/sessions/session-1/evidence",
-          packAbsoluteRoot:
-            "/tmp/work/.lime/harness/sessions/session-1/evidence",
-          exportedAt: "2026-06-06T00:00:05.000Z",
-          threadStatus: "running",
-          latestTurnStatus: "accepted",
-          turnCount: 2,
-          itemCount: 6,
-          pendingRequestCount: 1,
-          queuedTurnCount: 0,
-          recentArtifactCount: 1,
-          knownGaps: [],
-          artifacts: [],
-        },
-      },
-      response: { id: 1, result: {} },
       notifications: [],
       messages: [],
     }),
@@ -582,43 +546,6 @@ describe("agentRuntime exportClient", () => {
     ).rejects.toThrow(
       "agentSession/reviewDecision/save did not return analysisAbsoluteRoot under the requested session",
     );
-  });
-
-  it("exportAgentRuntimeEvidencePack 应走 App Server evidence/export，不回退 legacy command", async () => {
-    const appServerClient = appServerClientMock();
-    const client = createExportClient({
-      appServerClient,
-    });
-
-    await expect(
-      client.exportAgentRuntimeEvidencePack(" session-1 "),
-    ).resolves.toMatchObject({
-      session_id: "session-1",
-      thread_id: "thread-1",
-      workspace_root: "/tmp/work",
-      pack_relative_root: ".lime/harness/sessions/session-1/evidence",
-      thread_status: "running",
-    });
-
-    expect(appServerClient.exportEvidence).toHaveBeenCalledWith({
-      sessionId: "session-1",
-      includeEvents: true,
-      includeArtifacts: true,
-      includeEvidencePack: true,
-    });
-  });
-
-  it("缺少 sessionId 时 evidence export 应 fail closed", async () => {
-    const appServerClient = appServerClientMock();
-    const client = createExportClient({
-      appServerClient,
-    });
-
-    await expect(client.exportAgentRuntimeEvidencePack(" ")).rejects.toThrow(
-      "sessionId is required to export App Server evidence",
-    );
-
-    expect(appServerClient.exportEvidence).not.toHaveBeenCalled();
   });
 
   it("缺少 sessionId 时 handoff export 应 fail closed", async () => {

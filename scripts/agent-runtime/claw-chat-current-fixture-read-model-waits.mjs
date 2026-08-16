@@ -1,5 +1,4 @@
 import {
-  APP_SERVER_METHOD_EVIDENCE_EXPORT,
   APP_SERVER_METHOD_SESSION_LIST,
   APP_SERVER_METHOD_SESSION_READ,
   APP_SERVER_METHOD_SESSION_TURN_START,
@@ -23,7 +22,7 @@ import {
   PLAN_PROMPT,
   PLAN_STEPS,
   SKILLS_RUNTIME_SCENARIO,
-  summarizeSkillsRuntimeEvidenceExport,
+  summarizeSkillsRuntimeThreadRead,
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
   collectRuntimeEvents,
@@ -434,7 +433,7 @@ export async function waitForSessionReadContainsTurn(
   );
 }
 
-export async function exportSkillsRuntimeEvidencePack(
+export async function readSkillsRuntimeThread(
   page,
   requestLog,
   scenario = SKILLS_RUNTIME_SCENARIO,
@@ -444,21 +443,19 @@ export async function exportSkillsRuntimeEvidencePack(
   if (!canonicalSessionId) {
     throw new Error("Claw fixture 缺少 canonical sessionId");
   }
-  const exportResult = await invokeAppServerFromPage(
+  const readResult = await invokeAppServerFromPage(
     page,
-    APP_SERVER_METHOD_EVIDENCE_EXPORT,
+    APP_SERVER_METHOD_SESSION_READ,
     {
-      sessionId: canonicalSessionId,
-      includeEvents: true,
-      includeArtifacts: true,
-      includeEvidencePack: true,
+      threadId: canonicalSessionId,
+      includeTurns: true,
     },
     requestLog,
   );
   return {
-    result: exportResult.result,
+    result: readResult.result,
     summary: sanitizeJson(
-      summarizeSkillsRuntimeEvidenceExport(exportResult.result, scenario),
+      summarizeSkillsRuntimeThreadRead(readResult.result, scenario),
     ),
   };
 }

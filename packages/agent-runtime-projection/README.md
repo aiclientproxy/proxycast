@@ -33,7 +33,7 @@ Agent UI / Runtime 的标准链路由四个包共同组成：
 
 ```text
 src/actions.ts     -> HITL action.required / action.resolved projection helpers
-src/appServerFacts.ts -> App Server agentSession/read、agentSession/event、evidence/export facts -> execution events replay
+src/appServerFacts.ts -> App Server thread/read 与 lifecycle facts -> execution events replay
 src/artifactEvents.ts -> artifact_snapshot projection helpers
 src/collaborationFacts.ts -> collaboration payload facts / Soul style metadata normalizer
 src/contextEvents.ts -> context_trace / turn_context projection helpers
@@ -78,7 +78,7 @@ npm install @limecloud/agent-ui-contracts @limecloud/agent-runtime-projection
 - 给 UI 提供 `subagents` 标准模型，统一表达子代理线程、委派调用、活动摘要、隔离摘要和协作 facts，避免 React 组件重新解释子代理事实。
 - 为 `AgentUiProjectionEvent` 提供 host-neutral 的索引、scope selector 和 latest selector，宿主 store 只负责持久化和订阅。
 - 为 `AgentUiProjectionEvent` 提供 host-neutral 的 summary selector，包括 action / task / artifact / evidence / diagnostics 计数、notable latest events、Subagents surface 聚合和 artifact latest lookup。
-- 为 App Server `agentSession/read`、`agentSession/event`、`evidence/export` facts 提供标准 execution events replay adapter。
+- 为 App Server `thread/read` 与 lifecycle facts 提供标准 execution events replay adapter。
 - 为宿主事件 adapter 提供 host-neutral 的 action event builder、artifact snapshot builder、context trace / turn context builder、conversation event builder、diagnostic / cost metric builder、historical hydration builder、plan approval metadata parser / builder、runtime permission builder、queue event builder、routing status builder、runtime lifecycle / model routing / task profile builder、thread item builder、thread item action builder、subagent activity / worker notification builder、tool lifecycle builder、TaskUpdate owner metadata parser、event base 字段、sequence 编排、字段规整、artifact refs 提取、routing decision payload、runtime entity/status/phase/topology 和 worker usage 解释函数。
 
 这个包不负责：
@@ -98,7 +98,7 @@ npm install @limecloud/agent-ui-contracts @limecloud/agent-runtime-projection
 | 已有 normalized `AgentRuntimeExecutionEvent[]` | `projectAgentUiState` | 新 UI 默认入口，输出 message / timeline / graph / action / read model。 |
 | 只需要旧事实栏 | `projectAgentRuntimeReadModel` | 兼容入口，不适合作为新 surface 的唯一状态。 |
 | 既有产品已有 transcript messages + read model | `projectAgentUiStateFromSessionSnapshot` | 迁移期入口，把旧消息转成 `UIMessageParts`，同时复用 read model source events 生成 timeline / graph / refs / actions。 |
-| App Server `agentSession/read` + `agentSession/event` + `evidence/export` facts | `replayAppServerFacts` | 不创建 client，只把已取得 facts replay 成标准 projection。 |
+| App Server `thread/read` + lifecycle facts | `replayAppServerFacts` | 不创建 client，只把已取得 facts replay 成标准 projection。 |
 | contracts fixture | `replayAgentUiFixture` | 下游包和产品接入测试使用。 |
 | 宿主私有事件 shape | `buildAgentUi*Event` helpers | 在 adapter 边界转成标准 projection event。 |
 
@@ -150,8 +150,7 @@ import {
 
 const replay = replayAppServerFacts({
   readModel: await runtimeClient.readThread({ sessionId }),
-  events: drainedAgentSessionEvents,
-  evidenceExport: exportedEvidence,
+  events: drainedLifecycleEvents,
 });
 
 const state = projectAgentUiState({
@@ -338,20 +337,18 @@ import { replayAppServerFacts } from "@limecloud/agent-runtime-projection";
 
 const result = replayAppServerFacts({
   readModel: sessionReadResult,
-  events: drainedAgentSessionEvents,
-  evidenceExport: evidenceExportResult,
+  events: drainedLifecycleEvents,
 });
 
 console.log(result.state.messages, result.state.timeline, result.state.graph);
 ```
 
-`replayAppServerFacts` 只消费已取得的结构化 facts，不创建 `AppServerClient`，不订阅 JSON-RPC，也不直读数据库。`waitingAction` 会被表达为 `action.required` + waiting runtime state；artifact 和 evidence export 只通过 refs 暴露大输出，避免 UI 从 assistant 正文或 provider 原始响应猜测事实状态。
+`replayAppServerFacts` 只消费已取得的结构化 facts，不创建 `AppServerClient`，不订阅 JSON-RPC，也不直读数据库。`waitingAction` 会被表达为 `action.required` + waiting runtime state；artifact 和 evidence 只通过 refs 暴露大输出，避免 UI 从 assistant 正文或 provider 原始响应猜测事实状态。
 
 `replayAppServerFacts` 的输入建议：
 
-- `readModel`: `AgentRuntimeClient.readThread(...)` 或 App Server `agentSession/read` 的 result。
-- `events`: App Server `agentSession/event` notification 中的 `params.event` 列表。
-- `evidenceExport`: App Server `evidence/export` 的 result，只提供 evidence pack refs 和 artifact refs。
+- `readModel`: `AgentRuntimeClient.readThread(...)` 或 App Server `thread/read` 的 result。
+- `events`: App Server lifecycle notification 中的标准 execution facts 列表。
 
 不要把 JSON-RPC envelope、provider stream chunk 或 assistant Markdown 原文直接传给 projection；这些应该先在 runtime / host adapter 边界规整成 facts。
 

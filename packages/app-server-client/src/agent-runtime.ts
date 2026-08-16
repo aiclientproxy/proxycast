@@ -16,8 +16,6 @@ import {
   type TurnSteerParams,
   type TurnSteerResponse,
   type ServerNotification,
-  type EvidenceExportParams,
-  type EvidenceExportResponse,
   type JsonRpcMessage,
   type JsonRpcError,
   type RequestId,
@@ -124,10 +122,6 @@ export interface AgentRuntimeClient {
     params?: AgentSessionToolInventoryReadParams,
     options?: AppServerRequestOptions,
   ): Promise<AppServerRequestResult<AgentSessionToolInventoryReadResponse>>;
-  exportEvidence(
-    params: EvidenceExportParams,
-    options?: AppServerRequestOptions,
-  ): Promise<AppServerRequestResult<EvidenceExportResponse>>;
   subscribeLifecycleEvents(
     listener: AgentRuntimeLifecycleEventListener,
   ): AgentRuntimeClientSubscription;
@@ -272,16 +266,6 @@ export class AppServerAgentRuntimeClient implements AgentRuntimeClient {
     options: AppServerRequestOptions = {},
   ): Promise<AppServerRequestResult<AgentSessionToolInventoryReadResponse>> {
     return await this.connection.readAgentSessionToolInventory(
-      params,
-      mergeRequestOptions(this.defaultRequestOptions, options),
-    );
-  }
-
-  async exportEvidence(
-    params: EvidenceExportParams,
-    options: AppServerRequestOptions = {},
-  ): Promise<AppServerRequestResult<EvidenceExportResponse>> {
-    return await this.connection.exportEvidence(
       params,
       mergeRequestOptions(this.defaultRequestOptions, options),
     );

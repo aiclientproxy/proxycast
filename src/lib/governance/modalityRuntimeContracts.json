@@ -436,7 +436,7 @@
     },
     {
       "contract_key": "voice_generation",
-      "lifecycle": "compat",
+      "lifecycle": "current",
       "modality": "audio",
       "runtime_identity": [
         "session_id",
@@ -459,14 +459,30 @@
         "request_user_input"
       ],
       "routing_slot": "voice_generation_model",
-      "route_execution_status": "metadata_only",
-      "route_execution_exit_condition": "audio worker or RuntimeCore provider protocol mapper consumes ResolvedModelRoute and writes model_route_execution for voice_generation",
+      "executor_binding": {
+        "executor_kind": "app_server",
+        "binding_key": "mediaTaskArtifact/audio/create",
+        "current_path": "Agent turn -> App Server audio task artifact -> model-provider audio speech",
+        "supports_progress": true,
+        "supports_cancel": true,
+        "supports_resume": true,
+        "supports_artifact": true,
+        "failure_mapping": [
+          "permission_denied",
+          "capability_gap",
+          "provider_error",
+          "executor_error"
+        ]
+      },
+      "route_execution_status": "executable",
       "truth_source": ["audio_task_artifact", "runtime_timeline_event"],
       "artifact_kinds": ["audio_task", "audio_output"],
       "viewer_surface": ["audio_player"],
       "evidence_events": [
         "runtime_identity_bound",
+        "model_routing_decision",
         "execution_profile_decision",
+        "executor_invoked",
         "artifact_written"
       ],
       "limecore_policy_refs": [
@@ -485,7 +501,7 @@
           "cloud_run_without_explicit_scene"
         ]
       },
-      "owner_surface": "service_skill_runtime",
+      "owner_surface": "app_server_runtime",
       "bound_entries": [
         {
           "entry_key": "at_voice_command",

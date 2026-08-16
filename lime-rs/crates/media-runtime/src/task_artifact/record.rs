@@ -1,7 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use chrono::Utc;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use super::types::{
@@ -56,21 +56,35 @@ pub(super) fn apply_payload_patch(
     payload: &mut Value,
     patch: Value,
 ) -> Result<(), MediaRuntimeError> {
-    let Some(target) = payload.as_object_mut() else {
+    if !payload.is_object() {
         return Err(MediaRuntimeError::InvalidState(
             "任务 payload 必须是 JSON object 才能应用 patch".to_string(),
         ));
-    };
+    }
     let Value::Object(patch) = patch else {
         return Err(MediaRuntimeError::InvalidParams(
             "payloadPatch 必须是 JSON object".to_string(),
         ));
     };
 
-    for (key, value) in patch {
-        target.insert(key, value);
-    }
+    let target = payload
+        .as_object_mut()
+        .expect("payload object was checked above");
+    merge_payload_object(target, patch);
     Ok(())
+}
+
+fn merge_payload_object(target: &mut Map<String, Value>, patch: Map<String, Value>) {
+    for (key, patch_value) in patch {
+        let merged = match (target.remove(&key), patch_value) {
+            (Some(Value::Object(mut target_object)), Value::Object(patch_object)) => {
+                merge_payload_object(&mut target_object, patch_object);
+                Value::Object(target_object)
+            }
+            (_, patch_value) => patch_value,
+        };
+        target.insert(key, merged);
+    }
 }
 
 pub(super) fn normalize_idempotency_key(

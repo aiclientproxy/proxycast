@@ -418,27 +418,6 @@ export interface AgentRuntimeCompletionAuditSummary {
   notes: string[];
 }
 
-export interface AgentRuntimeEvidencePack {
-  session_id: string;
-  thread_id: string;
-  workspace_id?: string;
-  workspace_root: string;
-  pack_relative_root: string;
-  pack_absolute_root: string;
-  exported_at: string;
-  thread_status: string;
-  latest_turn_status?: string;
-  turn_count: number;
-  item_count: number;
-  pending_request_count: number;
-  queued_turn_count: number;
-  recent_artifact_count: number;
-  known_gaps: string[];
-  observability_summary?: AgentRuntimeEvidenceObservabilitySummary;
-  completion_audit_summary?: AgentRuntimeCompletionAuditSummary;
-  artifacts: AgentRuntimeEvidenceArtifact[];
-}
-
 export type AgentRuntimeReplayArtifactKind =
   | "input"
   | "expected"

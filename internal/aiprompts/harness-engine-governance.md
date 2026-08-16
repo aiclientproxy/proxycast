@@ -4,16 +4,16 @@
 
 本文件定义 Lime 的 harness Engine 应该如何长期演进，主要回答：
 
-- 运行时诊断、evidence pack、replay case、analysis handoff、review template 分别谁负责什么
+- 运行时诊断、runtime facts、replay case、analysis handoff、review template 分别谁负责什么
 - 什么才算 harness 的唯一事实源，什么只是消费层或展示层
 - 哪些证据可以导出，哪些只能在“适用时”导出，不能把不存在的信号硬写成全局缺口
-- 当 Lime 对齐 Claude Code 的治理方式时，哪些原则应该真正落到代码里
+- 当 Lime 对齐 Codex 的运行时边界时，哪些原则应该真正落到代码里
 
 它是 **Harness Engine 的长期治理文档**，不是某次分析导出功能的临时设计说明。
 
 ## 对齐目标
 
-这份规范参考 Claude Code 的治理方式，但 **不照搬实现细节**。对齐的是以下几条原则：
+这份规范中的 Claude Code 内容只保留为历史 evidence，不是 Lime 的能力事实源。Lime 的 Agent runtime、Thread/Turn/Item、审批和导出边界只按 Codex 收敛；Harness evidence/replay/analysis/review 仍是 Lime 产品扩展，不得冒充 Codex portable signed receipt。当前保留的治理原则是：
 
 1. **单一事实源**
 2. **先采集，再解释**
@@ -23,26 +23,30 @@
 
 一句话说，就是：
 
-**Harness Engine 不是“再做一层报表”，而是把运行时事实稳定导出，供 replay / analysis / review / UI 复用。**
+**Harness Engine 不是“再做一层报表”，而是把 canonical runtime facts 稳定投影，供 replay / analysis / review / UI 复用。**
 
 ## 事实源声明
 
-从现在开始，Harness Engine 相关能力默认收敛到以下主链：
+从现在开始，Harness Engine 相关能力默认收敛到以下主链。Lime 的 derived export 只消费 canonical Thread/Turn/Item facts，不得把导出结果描述为签名回执：
 
-- 运行时事实导出：App Server `evidence/export`
+- 运行时事实：App Server `agentSession/read` / `thread/read`
 - 回放样本导出：App Server `agentSession/replayCase/export`
 - 外部诊断交接：App Server `agentSession/analysisHandoff/export`
 - 人工审核模板：App Server `agentSession/reviewDecisionTemplate/export`、`agentSession/reviewDecision/save`
 
 其中：
 
-- `evidence pack` 是 **运行时事实源**
+- canonical read model 是 **运行时事实源**
 - `replay / analysis / review / history-record summary` 是 **派生物**
 - GUI 面板例如 `HarnessStatusPanel` 与 nightly dashboard 是 **展示层**
 
+Codex 对齐补充：`HarnessStatusPanel` 的运行时事实区只消费 canonical `thread/read`
+投影；Workspace 已保存技能面板也不维护独立 transcript。只有仍有明确产品消费者的
+Lime 派生链才可暂时保留，不能把导出结果当作 Codex current 或来源真实性证明。
+
 允许的数据方向只有：
 
-`runtime thread/session` -> `evidence pack` -> `replay / analysis / review / summary` -> `trend / cleanup / dashboard` -> `UI`
+`runtime thread/session` -> `canonical read model` -> `replay / analysis / review / summary` -> `trend / cleanup / dashboard` -> `UI`
 
 禁止反向或旁路：
 
@@ -65,8 +69,8 @@ Harness Engine 相关 surface 继续沿用仓库统一分类：
 在 harness 语境里，常见判断如下：
 
 - `current`
-  - App Server `evidence/export` 与 `agentSession/*/export`
-  - evidence pack 中的 `runtime.json / timeline.json / artifacts.json`
+  - App Server `agentSession/read` / `thread/read`
+  - canonical Thread/Turn/Item facts 与 artifact/read
 - `compat`
   - 临时存在但只做委托的旧导出入口
   - 仍保留的旧 GUI 打开目录/复制命令适配层
@@ -94,7 +98,7 @@ analysis brief、replay input、review template 只能在此基础上做解释�
 
 ### 2. 信号必须按适用性导出
 
-Claude Code 风格最重要的一点，不是“信号越多越好”，而是“只导出当前回合真正成立的信号”。
+可验证运行时的关键不是“信号越多越好”，而是“只导出当前回合真正成立的信号”。
 
 因此 Lime 的 harness 必须遵守：
 
@@ -133,7 +137,7 @@ Claude Code 风格最重要的一点，不是“信号越多越好”，而是�
 
 ### 4. 关联键先于遥测摘要
 
-Claude Code 的 tracing / event logging 之所以可用，前提是事件先有稳定的 session 级关联。
+Codex 的 rollout / Thread / Turn / Item 之所以可用，前提是事件先有稳定的 session 级关联。
 
 因此 Lime 必须把下面这些键视为 harness 级基础设施，而不是锦上添花：
 
@@ -208,9 +212,9 @@ Harness Engine 不只是导出文件目录。以下旁路也必须收敛：
 
 涉及 Harness Engine 改动时，默认按这个顺序做：
 
-1. 先确认唯一事实源是不是 App Server `evidence/export` 与 `agentSession/*/export`
+1. 先确认唯一事实源是不是 App Server `agentSession/read` / `thread/read`
 2. 再确认改动属于 `current / compat / deprecated / dead` 哪一类
-3. 先修 evidence pack，再修 replay / analysis / review / UI
+3. 先修 canonical facts，再修 replay / analysis / review / UI
 4. 先删错误默认值，再考虑是否需要新增字段
 5. 最后补定向测试与最小 GUI / 契约验证
 
@@ -260,7 +264,7 @@ npm run verify:gui-smoke
 
 **把已导出的 request telemetry 继续沉淀到 trend / replay / review 守卫里，确保后续任何新入口都只能复用同一份会话级摘要，而不是再次旁路读取或重建第二套真相。**
 
-这样才能继续逼近 Claude Code 那种“先 trace，再解释，而且所有解释都复用同一份 trace”的治理状态。
+这样才能保持“先记录 canonical runtime facts，再做下游解释”的治理边界，而不会把 Lime evidence 扩展误写成 Codex receipt。
 
 ## 相关文档
 

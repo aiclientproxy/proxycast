@@ -49,6 +49,12 @@ fn media_task_binding_for_task(task_kind: ModelTaskKind) -> Option<MediaTaskBind
         ModelTaskKind::VideoGenerate => Some(MediaTaskBinding {
             binding_key: "mediaTaskArtifact/video/create",
         }),
+        ModelTaskKind::VoiceGenerate => Some(MediaTaskBinding {
+            binding_key: "mediaTaskArtifact/audio/create",
+        }),
+        ModelTaskKind::TranscriptionGenerate => Some(MediaTaskBinding {
+            binding_key: "mediaTaskArtifact/transcription/create",
+        }),
         _ => None,
     }
 }
@@ -169,5 +175,28 @@ mod tests {
             video_binding["executor"]["bindingKey"].as_str(),
             Some("mediaTaskArtifact/video/create")
         );
+
+        let transcription_binding = media_route_execution_binding(
+            &json!({
+                "model_task_request": {
+                    "taskKind": "transcription_generate"
+                }
+            }),
+            &route,
+        )
+        .expect("transcription binding");
+        assert_eq!(
+            transcription_binding["executor"]["bindingKey"].as_str(),
+            Some("mediaTaskArtifact/transcription/create")
+        );
+        assert!(media_route_execution_binding(
+            &json!({
+                "model_task_request": {
+                    "taskKind": "embedding"
+                }
+            }),
+            &route,
+        )
+        .is_none());
     }
 }

@@ -11,7 +11,6 @@ import {
   Workflow,
   Wrench,
 } from "lucide-react";
-import type { AgentRuntimeEvidencePack } from "@/lib/api/agentRuntime/evidenceTypes";
 import type { AgentRuntimeToolInventory } from "@/lib/api/agentRuntime/toolInventoryTypes";
 import type {
   AgentUiProjectionSummary,
@@ -25,10 +24,11 @@ import type { HarnessSessionState } from "../utils/harnessState";
 import type { HarnessEnvironmentSummary } from "./HarnessActivityTypes";
 import type { HarnessSectionNavItem } from "./HarnessStatusSectionFrame";
 import type { HarnessSummaryCard } from "./HarnessStatusPanelTypes";
+import { agentText } from "./harnessPanelText";
 import {
-  formatIsoDateTime,
   type ChildSubagentSessionSummary,
   type FileChangeReviewEntry,
+  type HarnessRuntimeFactSummary,
   type RuntimeTaskPresentation,
 } from "./harnessStatusPanelViewModel";
 
@@ -48,7 +48,6 @@ interface BuildHarnessPanelSectionNavItemsInput {
   environment: HarnessEnvironmentSummary;
   fileChangeReviewEntriesLength: number;
   hasAgentUiProjectionSection: boolean;
-  hasHandoffSection: boolean;
   hasToolInventorySection: boolean;
   harnessState: Pick<
     HarnessSessionState,
@@ -64,19 +63,20 @@ interface BuildHarnessPanelSectionNavItemsInput {
   runtimeTaskPresentation: RuntimeTaskPresentation | null;
   threadReliability: HarnessThreadReliabilitySummary;
   fileReviewTitle: string;
+  runtimeFactSummary: HarnessRuntimeFactSummary | null;
 }
 
 export function buildHarnessPanelSectionNavItems({
   environment,
   fileChangeReviewEntriesLength,
   hasAgentUiProjectionSection,
-  hasHandoffSection,
   hasToolInventorySection,
   harnessState,
   realTeamSummary,
   runtimeTaskPresentation,
   threadReliability,
   fileReviewTitle,
+  runtimeFactSummary,
 }: BuildHarnessPanelSectionNavItemsInput): HarnessSectionNavItem[] {
   const sections: HarnessSectionNavItem[] = [];
 
@@ -86,8 +86,11 @@ export function buildHarnessPanelSectionNavItems({
   if (hasAgentUiProjectionSection) {
     sections.push({ key: "agentui", label: "AgentUI 投影" });
   }
-  if (hasHandoffSection) {
-    sections.push({ key: "handoff", label: "问题证据包" });
+  if (runtimeFactSummary) {
+    sections.push({
+      key: "runtime-facts",
+      label: agentText("agentChat.harness.runtimeFacts.title", "运行时事实"),
+    });
   }
   if (threadReliability.shouldRender) {
     sections.push({ key: "reliability", label: "可靠性" });
@@ -138,9 +141,7 @@ interface BuildHarnessSummaryCardsInput {
   environment: HarnessEnvironmentSummary;
   fileChangeReviewEntries: FileChangeReviewEntry[];
   fileReviewCopy: HarnessFileReviewSummaryCopy;
-  evidencePack: AgentRuntimeEvidencePack | null;
   hasAgentUiProjectionSection: boolean;
-  hasHandoffSection: boolean;
   hasToolInventorySection: boolean;
   harnessState: Pick<
     HarnessSessionState,
@@ -155,6 +156,7 @@ interface BuildHarnessSummaryCardsInput {
   toolInventoryError: string | null;
   toolInventoryLoading: boolean;
   translateProjection: AgentUiProjectionTranslation;
+  runtimeFactSummary: HarnessRuntimeFactSummary | null;
 }
 
 export function buildHarnessSummaryCards({
@@ -162,9 +164,7 @@ export function buildHarnessSummaryCards({
   environment,
   fileChangeReviewEntries,
   fileReviewCopy,
-  evidencePack,
   hasAgentUiProjectionSection,
-  hasHandoffSection,
   hasToolInventorySection,
   harnessState,
   realTeamSummary,
@@ -176,6 +176,7 @@ export function buildHarnessSummaryCards({
   toolInventoryError,
   toolInventoryLoading,
   translateProjection,
+  runtimeFactSummary,
 }: BuildHarnessSummaryCardsInput): HarnessSummaryCard[] {
   const cards: HarnessSummaryCard[] = [];
 
@@ -205,17 +206,20 @@ export function buildHarnessSummaryCards({
     });
   }
 
-  if (hasHandoffSection) {
+  if (runtimeFactSummary) {
     cards.push({
-      sectionKey: "handoff",
-      title: "问题证据包",
-      value: evidencePack
-        ? `${evidencePack.artifacts.length} 个文件`
-        : "待导出",
-      hint: evidencePack
-        ? `最近导出 ${formatIsoDateTime(evidencePack.exported_at)}`
-        : "导出当前会话的 runtime、timeline、最近产物和已知缺口",
-      icon: ShieldAlert,
+      sectionKey: "runtime-facts",
+      title: agentText("agentChat.harness.runtimeFacts.title", "运行时事实"),
+      value: `${runtimeFactSummary.turnCount} / ${runtimeFactSummary.itemCount}`,
+      hint: agentText(
+        "agentChat.harness.runtimeFacts.pendingRequestsHint",
+        "{{status}} · {{count}} 个待处理请求",
+        {
+          status: runtimeFactSummary.status ?? "unknown",
+          count: runtimeFactSummary.pendingRequestCount,
+        },
+      ),
+      icon: ListChecks,
     });
   }
 

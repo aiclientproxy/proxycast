@@ -1,7 +1,8 @@
 use crate::media_runtime_contract::{
-    runtime_contract_or_default, MediaRuntimeContractKind, IMAGE_GENERATION_CONTRACT_KEY,
-    IMAGE_GENERATION_ROUTING_SLOT, VIDEO_GENERATION_CONTRACT_KEY, VIDEO_GENERATION_ROUTING_SLOT,
-    VOICE_GENERATION_CONTRACT_KEY, VOICE_GENERATION_ROUTING_SLOT,
+    runtime_contract_or_default, MediaRuntimeContractKind, AUDIO_TRANSCRIPTION_CONTRACT_KEY,
+    AUDIO_TRANSCRIPTION_ROUTING_SLOT, IMAGE_GENERATION_CONTRACT_KEY, IMAGE_GENERATION_ROUTING_SLOT,
+    VIDEO_GENERATION_CONTRACT_KEY, VIDEO_GENERATION_ROUTING_SLOT, VOICE_GENERATION_CONTRACT_KEY,
+    VOICE_GENERATION_ROUTING_SLOT,
 };
 use crate::model_task_contract::{
     apply_media_route_assessment_payload, build_model_task_request, model_task_request_value,
@@ -9,8 +10,8 @@ use crate::model_task_contract::{
 };
 use app_server_protocol::{
     MediaTaskArtifactAudioCreateParams, MediaTaskArtifactImageCreateParams,
-    MediaTaskArtifactVideoCreateParams, ModelRefSource, ModelTaskKind, ModelTaskRequest,
-    ModelTaskSource,
+    MediaTaskArtifactTranscriptionCreateParams, MediaTaskArtifactVideoCreateParams, ModelRefSource,
+    ModelTaskKind, ModelTaskRequest, ModelTaskSource,
 };
 use serde_json::{json, Value};
 
@@ -398,7 +399,10 @@ pub(crate) fn audio_model_task_request(
     })
 }
 
-pub(crate) fn create_audio_payload(params: &MediaTaskArtifactAudioCreateParams) -> Value {
+pub(crate) fn create_audio_payload(
+    params: &MediaTaskArtifactAudioCreateParams,
+    route_assessment: Option<&MediaRouteAssessment>,
+) -> Value {
     let modality_contract_key = normalize_optional_string(params.modality_contract_key.clone())
         .unwrap_or_else(|| VOICE_GENERATION_CONTRACT_KEY.to_string());
     let modality =
@@ -411,7 +415,7 @@ pub(crate) fn create_audio_payload(params: &MediaTaskArtifactAudioCreateParams) 
         .unwrap_or_else(|| AUDIO_TASK_DEFAULT_MIME_TYPE.to_string());
     let model_task_request = model_task_request_value(&audio_model_task_request(params));
 
-    json!({
+    let mut payload = json!({
         "prompt": source_text,
         "source_text": source_text,
         "raw_text": params.raw_text,
@@ -420,6 +424,7 @@ pub(crate) fn create_audio_payload(params: &MediaTaskArtifactAudioCreateParams) 
         "target_language": params.target_language,
         "mime_type": mime_type,
         "audio_path": params.audio_path,
+        "output_path": params.output_path,
         "duration_ms": params.duration_ms,
         "provider_id": params.provider_id,
         "model": params.model,
@@ -448,7 +453,109 @@ pub(crate) fn create_audio_payload(params: &MediaTaskArtifactAudioCreateParams) 
             "voice_style": params.voice_style,
             "target_language": params.target_language,
         }
+    });
+    apply_media_route_assessment_payload(&mut payload, route_assessment);
+    payload
+}
+
+fn transcription_required_capabilities(
+    params: &MediaTaskArtifactTranscriptionCreateParams,
+) -> Vec<String> {
+    if params.required_capabilities.is_empty() {
+        vec!["audio_transcription".to_string()]
+    } else {
+        normalize_string_list(params.required_capabilities.clone())
+    }
+}
+
+pub(crate) fn transcription_model_task_request(
+    params: &MediaTaskArtifactTranscriptionCreateParams,
+) -> ModelTaskRequest {
+    let modality_contract_key = normalize_optional_string(params.modality_contract_key.clone())
+        .unwrap_or_else(|| AUDIO_TRANSCRIPTION_CONTRACT_KEY.to_string());
+    let routing_slot = normalize_optional_string(params.routing_slot.clone())
+        .unwrap_or_else(|| AUDIO_TRANSCRIPTION_ROUTING_SLOT.to_string());
+    build_model_task_request(ModelTaskRequestInput {
+        task_kind: ModelTaskKind::TranscriptionGenerate,
+        source: ModelTaskSource::MediaTaskArtifact,
+        provider_id: params.provider_id.clone(),
+        model_id: params.model.clone(),
+        model_ref_source: ModelRefSource::Task,
+        modality_contract_key: Some(modality_contract_key),
+        routing_slot: Some(routing_slot),
+        task_families: vec!["speech_to_text".to_string()],
+        input_modalities: vec!["audio".to_string()],
+        output_modalities: vec!["text".to_string()],
+        runtime_features: Vec::new(),
+        capabilities: transcription_required_capabilities(params),
+        session_id: params.session_id.clone(),
+        thread_id: params.thread_id.clone(),
+        turn_id: params.turn_id.clone(),
+        content_id: params.content_id.clone(),
+        trace_id: None,
     })
+}
+
+pub(crate) fn create_transcription_payload(
+    params: &MediaTaskArtifactTranscriptionCreateParams,
+    route_assessment: Option<&MediaRouteAssessment>,
+) -> Value {
+    let modality_contract_key = normalize_optional_string(params.modality_contract_key.clone())
+        .unwrap_or_else(|| AUDIO_TRANSCRIPTION_CONTRACT_KEY.to_string());
+    let modality =
+        normalize_optional_string(params.modality.clone()).unwrap_or_else(|| "audio".to_string());
+    let routing_slot = normalize_optional_string(params.routing_slot.clone())
+        .unwrap_or_else(|| AUDIO_TRANSCRIPTION_ROUTING_SLOT.to_string());
+    let required_capabilities = transcription_required_capabilities(params);
+    let model_task_request = model_task_request_value(&transcription_model_task_request(params));
+    let output_format = normalize_optional_string(params.output_format.clone())
+        .unwrap_or_else(|| "txt".to_string());
+    let mut payload = json!({
+        "prompt": params.prompt,
+        "raw_text": params.raw_text,
+        "source_path": params.source_path,
+        "source_url": params.source_url,
+        "language": params.language,
+        "output_format": output_format,
+        "speaker_labels": params.speaker_labels,
+        "timestamps": params.timestamps,
+        "output_path": params.output_path,
+        "provider_id": params.provider_id,
+        "model": params.model,
+        "session_id": params.session_id,
+        "thread_id": params.thread_id,
+        "turn_id": params.turn_id,
+        "project_id": params.project_id,
+        "content_id": params.content_id,
+        "entry_source": normalize_optional_string(params.entry_source.clone())
+            .unwrap_or_else(|| "at_transcription_command".to_string()),
+        "modality_contract_key": modality_contract_key,
+        "modality": modality,
+        "required_capabilities": required_capabilities,
+        "routing_slot": routing_slot,
+        "model_task_request": model_task_request,
+        "modelTaskRequest": model_task_request,
+        "runtime_contract": runtime_contract_or_default(
+            params.runtime_contract.as_ref(),
+            MediaRuntimeContractKind::AudioTranscription,
+        ),
+        "requested_target": normalize_optional_string(params.requested_target.clone())
+            .unwrap_or_else(|| "transcript".to_string()),
+        "transcript": {
+            "kind": "transcript",
+            "status": "pending",
+            "source_path": params.source_path,
+            "source_url": params.source_url,
+            "language": params.language,
+            "output_format": output_format,
+            "speaker_labels": params.speaker_labels,
+            "timestamps": params.timestamps,
+            "provider_id": params.provider_id,
+            "model": params.model,
+        }
+    });
+    apply_media_route_assessment_payload(&mut payload, route_assessment);
+    payload
 }
 
 #[cfg(test)]
@@ -770,17 +877,20 @@ mod tests {
 
     #[test]
     fn audio_payload_keeps_task_request_without_executable_route() {
-        let payload = create_audio_payload(&MediaTaskArtifactAudioCreateParams {
-            project_root_path: "/tmp/project".to_string(),
-            source_text: "朗读这段文字".to_string(),
-            provider_id: Some("voice-provider".to_string()),
-            model: Some("voice-model".to_string()),
-            session_id: Some("session-1".to_string()),
-            thread_id: Some("thread-1".to_string()),
-            turn_id: Some("turn-1".to_string()),
-            content_id: Some("content-1".to_string()),
-            ..MediaTaskArtifactAudioCreateParams::default()
-        });
+        let payload = create_audio_payload(
+            &MediaTaskArtifactAudioCreateParams {
+                project_root_path: "/tmp/project".to_string(),
+                source_text: "朗读这段文字".to_string(),
+                provider_id: Some("voice-provider".to_string()),
+                model: Some("voice-model".to_string()),
+                session_id: Some("session-1".to_string()),
+                thread_id: Some("thread-1".to_string()),
+                turn_id: Some("turn-1".to_string()),
+                content_id: Some("content-1".to_string()),
+                ..MediaTaskArtifactAudioCreateParams::default()
+            },
+            None,
+        );
 
         assert_eq!(
             payload["model_task_request"]["taskKind"].as_str(),

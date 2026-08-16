@@ -22,7 +22,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_PROJECT_GIT_BRANCH_CHECKOUT,
             METHOD_PROJECT_GIT_BRANCH_CREATE,
             METHOD_PROJECT_GIT_WORKTREE_CREATE,
-            METHOD_EVIDENCE_EXPORT,
             METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT,
             METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT,
             METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT,
@@ -95,6 +94,7 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_GATEWAY_TUNNEL_SYNC_WEBHOOK_URL,
             METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE,
             METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE,
+            METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
             METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE,
             METHOD_MEDIA_TASK_ARTIFACT_IMAGE_COMPLETE,
             METHOD_MEDIA_TASK_ARTIFACT_AUDIO_COMPLETE,
@@ -286,7 +286,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
         METHOD_MCP_SERVER_ELICITATION_REQUEST
     ));
     assert!(is_app_server_request_method(METHOD_INITIALIZE));
-    assert!(is_app_server_request_method(METHOD_EVIDENCE_EXPORT));
     assert!(is_app_server_request_method(
         METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT
     ));

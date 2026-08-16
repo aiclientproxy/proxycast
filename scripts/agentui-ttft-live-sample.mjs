@@ -20,7 +20,6 @@ const DEFAULT_INTERVAL_MS = 1_000;
 const DEFAULT_MESSAGE = "Reply with exactly: OK";
 const DEFAULT_MODE = "responsive-auto";
 const MAX_SAMPLES_PER_RUN = 6;
-const APP_SERVER_METHOD_EVIDENCE_EXPORT = "evidence/export";
 const TERMINAL_RUN_STATUSES = new Set([
   "completed",
   "success",
@@ -188,14 +187,6 @@ function trace(options, stage, fields = {}) {
   console.log(
     `[agentui-ttft-live] stage=${stage}${suffix ? ` ${suffix}` : ""}`,
   );
-}
-
-function parseTimestampMs(value) {
-  if (typeof value !== "string" || !value.trim()) {
-    return null;
-  }
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function asRecord(value) {
@@ -434,60 +425,6 @@ function summarizeThreadRead(threadRead) {
   };
 }
 
-function eventType(event) {
-  return String(event?.type || "").trim();
-}
-
-function eventTurnId(event) {
-  return String(event?.turnId || event?.turn_id || "").trim();
-}
-
-function eventTimestampMs(event) {
-  return (
-    parseTimestampMs(event?.timestamp) ?? parseTimestampMs(event?.createdAt)
-  );
-}
-
-function summarizeTTFTFromEvidence(evidenceExport, expectedTurnId) {
-  const events = Array.isArray(evidenceExport?.events)
-    ? evidenceExport.events
-    : [];
-  const turnScopedEvents = expectedTurnId
-    ? events.filter((event) => eventTurnId(event) === expectedTurnId)
-    : events;
-  const turnStartedAt =
-    turnScopedEvents.find((event) => eventType(event) === "turn.started") ||
-    turnScopedEvents.find((event) => eventType(event) === "turn_started");
-  const firstTextDeltaEvent = turnScopedEvents.find(
-    (event) => eventType(event) === "message.delta",
-  );
-  const turnStartedMs = eventTimestampMs(turnStartedAt);
-  const firstTextDeltaMs = eventTimestampMs(firstTextDeltaEvent);
-
-  return {
-    evidenceEventCount: turnScopedEvents.length,
-    turnStartedAt: turnStartedAt?.timestamp || null,
-    firstTextDeltaAt: firstTextDeltaEvent?.timestamp || null,
-    firstTextDeltaMs:
-      turnStartedMs !== null && firstTextDeltaMs !== null
-        ? firstTextDeltaMs - turnStartedMs
-        : null,
-    firstTextDeltaEventType: firstTextDeltaEvent
-      ? eventType(firstTextDeltaEvent)
-      : null,
-  };
-}
-
-async function exportEvidenceForSession(options, sessionId, turnId) {
-  return await invoke(options, APP_SERVER_METHOD_EVIDENCE_EXPORT, {
-    sessionId,
-    turnId,
-    includeEvents: true,
-    includeArtifacts: false,
-    includeEvidencePack: false,
-  });
-}
-
 function isTerminalSample(summary) {
   if (summary.assertions.hasFirstTextDelta) {
     return true;
@@ -588,33 +525,6 @@ async function runSample(options, workspaceId, sampleIndex) {
   });
 
   const summary = await waitForSampleSummary(options, sessionId);
-  let ttftEvidence = {
-    evidenceEventCount: 0,
-    turnStartedAt: null,
-    firstTextDeltaAt: null,
-    firstTextDeltaMs: null,
-    firstTextDeltaEventType: null,
-  };
-  try {
-    const evidence = await exportEvidenceForSession(options, sessionId, turnId);
-    ttftEvidence = summarizeTTFTFromEvidence(evidence, turnId);
-    if (summary.timing.firstTextDeltaMs === null) {
-      summary.timing.firstTextDeltaMs = ttftEvidence.firstTextDeltaMs;
-    }
-    trace(options, "evidence-export", {
-      sampleIndex,
-      evidenceEvents: ttftEvidence.evidenceEventCount,
-      turnStartedAt: ttftEvidence.turnStartedAt,
-      firstTextDeltaAt: ttftEvidence.firstTextDeltaAt,
-      firstTextDeltaMs: ttftEvidence.firstTextDeltaMs,
-    });
-  } catch (error) {
-    trace(options, "evidence-export-failed", {
-      sampleIndex,
-      turnStatus: summary.status?.latestTurnStatus,
-      reason: error instanceof Error ? error.message : String(error),
-    });
-  }
   trace(options, "sample-complete", {
     sampleIndex,
     elapsedMs: Date.now() - sampleStartedAt,
@@ -626,8 +536,8 @@ async function runSample(options, workspaceId, sampleIndex) {
     sampleIndex,
     sessionId,
     turnId,
-    evidenceEventCount: ttftEvidence.evidenceEventCount,
-    firstTextDeltaAt: ttftEvidence.firstTextDeltaAt,
+    evidenceEventCount: 0,
+    firstTextDeltaAt: null,
     firstTextDeltaMs: summary.timing?.firstTextDeltaMs ?? null,
     ...summary,
   };

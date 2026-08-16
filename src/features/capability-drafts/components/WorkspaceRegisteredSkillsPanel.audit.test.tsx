@@ -2,16 +2,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { capabilityDraftsApi } from "@/lib/api/capabilityDrafts";
-import { exportAgentRuntimeEvidencePack } from "@/lib/api/agentRuntime/exportClient";
 import { listWorkspaceSkillBindings } from "@/lib/api/agentRuntime/inventoryClient";
-import {
-  getAutomationJobs,
-  getAutomationRunHistory,
-  updateAutomationJob,
-} from "@/lib/api/automation";
-import {
-  clearAgentUiProjectionEvents,
-} from "@/components/agent/chat/projection/conversationProjectionStore";
+import { getAutomationJobs, updateAutomationJob } from "@/lib/api/automation";
+import { clearAgentUiProjectionEvents } from "@/components/agent/chat/projection/conversationProjectionStore";
 import { WorkspaceRegisteredSkillsPanel } from "./WorkspaceRegisteredSkillsPanel";
 
 const { mockUseTranslation } = vi.hoisted(() => {
@@ -48,17 +41,12 @@ vi.mock("@/lib/api/capabilityDrafts", () => ({
   },
 }));
 
-vi.mock("@/lib/api/agentRuntime/exportClient", () => ({
-  exportAgentRuntimeEvidencePack: vi.fn(),
-}));
-
 vi.mock("@/lib/api/agentRuntime/inventoryClient", () => ({
   listWorkspaceSkillBindings: vi.fn(),
 }));
 
 vi.mock("@/lib/api/automation", () => ({
   getAutomationJobs: vi.fn(),
-  getAutomationRunHistory: vi.fn(),
   updateAutomationJob: vi.fn(),
 }));
 
@@ -93,9 +81,7 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
     vi.mocked(listWorkspaceSkillBindings).mockReset();
     vi.mocked(getAutomationJobs).mockReset();
     vi.mocked(getAutomationJobs).mockResolvedValue([]);
-    vi.mocked(getAutomationRunHistory).mockReset();
     vi.mocked(updateAutomationJob).mockReset();
-    vi.mocked(exportAgentRuntimeEvidencePack).mockReset();
     clearAgentUiProjectionEvents();
     vi.mocked(listWorkspaceSkillBindings).mockResolvedValue({
       request: {

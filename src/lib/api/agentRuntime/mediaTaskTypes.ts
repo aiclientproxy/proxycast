@@ -107,6 +107,34 @@ export interface CreateVideoGenerationTaskArtifactRequest {
   outputPath?: string;
 }
 
+export interface CreateTranscriptionTaskArtifactRequest {
+  projectRootPath: string;
+  prompt?: string;
+  title?: string;
+  rawText?: string;
+  sourcePath?: string;
+  sourceUrl?: string;
+  language?: string;
+  outputFormat?: string;
+  speakerLabels?: boolean;
+  timestamps?: boolean;
+  providerId?: string;
+  model?: string;
+  sessionId?: string;
+  threadId?: string;
+  turnId?: string;
+  projectId?: string;
+  contentId?: string;
+  entrySource?: string;
+  modalityContractKey?: "audio_transcription";
+  modality?: "audio";
+  requiredCapabilities?: string[];
+  routingSlot?: "audio_transcription_model";
+  runtimeContract?: Record<string, unknown>;
+  requestedTarget?: "transcript";
+  outputPath?: string;
+}
+
 export interface CompleteAudioGenerationTaskArtifactRequest {
   projectRootPath: string;
   taskRef: string;

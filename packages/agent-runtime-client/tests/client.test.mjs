@@ -81,22 +81,6 @@ test("session gateway delegates the standard runtime client surface", async () =
         updatedAt: "2026-05-15T00:00:01.000Z",
       });
     },
-    async exportEvidence(params, options) {
-      calls.push(["exportEvidence", params, options]);
-      return requestResult(5, {
-        session: {
-          sessionId: params.sessionId,
-          threadId: "thread-1",
-          status: "completed",
-          createdAt: "2026-05-15T00:00:00.000Z",
-          updatedAt: "2026-05-15T00:00:02.000Z",
-        },
-        turns: [],
-        events: [],
-        artifacts: [],
-        exportedAt: "2026-05-15T00:00:03.000Z",
-      });
-    },
   };
   const runtime = createAgentRuntimeClientFromSessionGateway(gateway);
   const options = { timeoutMs: 120_000 };
@@ -132,11 +116,6 @@ test("session gateway delegates the standard runtime client surface", async () =
     },
     options,
   );
-  await runtime.exportEvidence(
-    { sessionId: "session-1", includeEvents: true },
-    options,
-  );
-
   assert.deepEqual(
     calls.map(([name]) => name),
     [
@@ -146,11 +125,9 @@ test("session gateway delegates the standard runtime client surface", async () =
       "readToolInventory",
       "cancelTurn",
       "respondAction",
-      "exportEvidence",
     ],
   );
   assert.equal(calls[2][2].timeoutMs, 120_000);
-  assert.equal(calls[6][1].includeEvents, true);
 });
 
 test("package root exports the direct lifecycle mapper without compatibility aliases", () => {
@@ -612,10 +589,6 @@ test("session gateway fails closed when optional runtime surfaces are absent", a
     createMinimalSessionGateway(),
   );
 
-  await assert.rejects(
-    runtime.exportEvidence({ sessionId: "session-1" }),
-    /does not expose exportEvidence/,
-  );
   await assert.rejects(
     runtime.nextEvent(),
     /does not expose direct lifecycle notifications/,

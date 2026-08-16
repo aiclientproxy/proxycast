@@ -22,6 +22,9 @@ import type {
   WorkspaceRightSurfacePendingChangedParams as GeneratedWorkspaceRightSurfacePendingChangedParams,
 } from "./generated/protocol-types.js";
 export * from "./generated/protocol-types.js";
+export {
+  METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
+} from "./generated/protocol-types.js";
 export const JSONRPC_VERSION = "2.0";
 export const PROTOCOL_VERSION = "appserver.v0";
 export const SERVER_NAME = "app-server";
@@ -338,48 +341,6 @@ export type ProjectGitWorktreeCreateResponse = {
   worktreePath: string;
   branch: string;
   status: ProjectGitStatusResponse;
-};
-
-export type EvidenceExportParams = {
-  sessionId: string;
-  turnId?: string;
-  includeEvents?: boolean;
-  includeArtifacts?: boolean;
-  includeEvidencePack?: boolean;
-};
-
-export type EvidenceExportResponse = {
-  session: AgentSession;
-  turns: AgentTurn[];
-  events: AgentEvent[];
-  artifacts: ArtifactSummary[];
-  exportedAt: string;
-  evidencePack?: EvidencePackSummary;
-};
-
-export type EvidencePackSummary = {
-  packRelativeRoot: string;
-  packAbsoluteRoot?: string;
-  exportedAt: string;
-  threadStatus: string;
-  latestTurnStatus?: string;
-  turnCount: number;
-  itemCount: number;
-  pendingRequestCount: number;
-  queuedTurnCount: number;
-  recentArtifactCount: number;
-  knownGaps: string[];
-  observabilitySummary?: unknown;
-  completionAuditSummary?: unknown;
-  artifacts: EvidencePackArtifact[];
-};
-
-export type EvidencePackArtifact = {
-  kind: string;
-  title: string;
-  relativePath: string;
-  absolutePath?: string;
-  bytes: number;
 };
 
 export type AgentSessionHandoffBundleExportParams = {
@@ -1546,6 +1507,34 @@ export type MediaTaskArtifactAudioCreateParams = {
   mimeType?: string;
   audioPath?: string;
   durationMs?: number;
+  providerId?: string;
+  model?: string;
+  sessionId?: string;
+  threadId?: string;
+  turnId?: string;
+  projectId?: string;
+  contentId?: string;
+  entrySource?: string;
+  modalityContractKey?: string;
+  modality?: string;
+  requiredCapabilities?: string[];
+  routingSlot?: string;
+  runtimeContract?: unknown;
+  requestedTarget?: string;
+  outputPath?: string;
+};
+
+export type MediaTaskArtifactTranscriptionCreateParams = {
+  projectRootPath: string;
+  prompt?: string;
+  title?: string;
+  rawText?: string;
+  sourcePath?: string;
+  sourceUrl?: string;
+  language?: string;
+  outputFormat?: string;
+  speakerLabels?: boolean;
+  timestamps?: boolean;
   providerId?: string;
   model?: string;
   sessionId?: string;

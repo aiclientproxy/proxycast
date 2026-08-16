@@ -28,6 +28,12 @@ Renderer typed gateway
 
 禁止为业务调用新增第二个 Electron 后端、renderer mock fallback、临时 DevBridge 命令或 legacy wrapper。生产失败必须显式失败；mock 仅在测试夹具中显式注入。
 
+## Codex 能力边界
+
+Codex 的 `requestAttestation` 只用于客户端声明接收 `attestation/generate`，由 Desktop Host 生成不透明 token，再转成上游 `x-oai-attestation`。Lime 当前没有真实 token producer，因此 initialize 收到 `capabilities.requestAttestation=true` 时必须 fail closed；不得静默忽略、生成假 token 或新增 `attestation/generate` 兼容入口。
+
+Codex 不定义 portable signed receipt，也不为 task、tool、approval、artifact 或 transcript 提供逐项签名。Lime 的 handoff、replay、analysis 和 review 导出只消费 canonical Thread/Turn/Item read model；其 digest 只能表示完整性，不能宣称来源真实性。本轮不新增签名字段、密钥管理或 BoundaryAttest 依赖。
+
 ## 协议变更清单
 
 新增或修改跨层业务 method 时，同一变更集必须同步：

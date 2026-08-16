@@ -12,6 +12,9 @@ use super::item::ThreadItem as CanonicalThreadItem;
 pub struct InitializeCapabilities {
     #[serde(default)]
     pub experimental_api: bool,
+    /// Opt into Codex-compatible `attestation/generate` requests for the
+    /// upstream `x-oai-attestation` header. Lime currently rejects this
+    /// capability because its Desktop Host has no token producer.
     #[serde(default)]
     pub request_attestation: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

@@ -298,7 +298,7 @@ describe("modalityRuntimeContracts", () => {
     );
   });
 
-  it("voice_generation contract 在 audio worker 接入前只能提供 metadata-only 入口元数据", () => {
+  it("voice_generation contract 应提供 App Server audio worker 入口元数据", () => {
     const contract = resolveVoiceGenerationRuntimeContractBinding();
 
     expect(contract).toMatchObject({
@@ -306,19 +306,24 @@ describe("modalityRuntimeContracts", () => {
       modality: "audio",
       routingSlot: "voice_generation_model",
       executionProfileKey: "voice_generation_profile",
-      executorAdapterKey: undefined,
+      executorAdapterKey: "app_server:mediaTaskArtifact/audio/create",
       runtimeContract: expect.objectContaining({
         contract_key: "voice_generation",
         routing_slot: "voice_generation_model",
-        route_execution_status: "metadata_only",
-        route_execution_exit_condition:
-          expect.stringContaining("ResolvedModelRoute"),
-        executor_binding: undefined,
-        executor_adapter: undefined,
+        route_execution_status: "executable",
+        executor_binding: expect.objectContaining({
+          executor_kind: "app_server",
+          binding_key: "mediaTaskArtifact/audio/create",
+        }),
+        executor_adapter: expect.objectContaining({
+          adapter_key: "app_server:mediaTaskArtifact/audio/create",
+        }),
       }),
     });
-    expect(contract.executionProfile?.lifecycle).toBe("compat");
-    expect(contract.executorAdapter).toBeUndefined();
+    expect(contract.executionProfile?.lifecycle).toBe("current");
+    expect(contract.executorAdapter).toMatchObject({
+      adapter_key: "app_server:mediaTaskArtifact/audio/create",
+    });
     expect(contract.requiredCapabilities).toEqual(
       expect.arrayContaining(["text_generation", "voice_generation"]),
     );

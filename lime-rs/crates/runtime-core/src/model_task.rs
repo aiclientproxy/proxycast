@@ -235,6 +235,33 @@ fn capability_satisfied(required: &str, snapshot: &CapabilitySnapshot) -> bool {
                     .iter()
                     .any(|modality| modality == "video")
         }
+        "voice_generation" | "text_to_speech" => {
+            normalized_values(&snapshot.task_families)
+                .iter()
+                .any(|family| family == "text_to_speech")
+                && normalized_values(&snapshot.output_modalities)
+                    .iter()
+                    .any(|modality| modality == "audio")
+        }
+        "audio_transcription" | "speech_to_text" | "transcription" => {
+            normalized_values(&snapshot.task_families)
+                .iter()
+                .any(|family| family == "speech_to_text")
+                && normalized_values(&snapshot.input_modalities)
+                    .iter()
+                    .any(|modality| modality == "audio")
+                && normalized_values(&snapshot.output_modalities)
+                    .iter()
+                    .any(|modality| modality == "text")
+        }
+        "embedding" => {
+            normalized_values(&snapshot.task_families)
+                .iter()
+                .any(|family| family == "embedding")
+                && normalized_values(&snapshot.output_modalities)
+                    .iter()
+                    .any(|modality| modality == "embedding")
+        }
         _ => false,
     }
 }

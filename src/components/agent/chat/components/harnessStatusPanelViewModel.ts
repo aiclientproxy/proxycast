@@ -19,7 +19,6 @@ import {
 export * from "./harnessFileReviewViewModel";
 export * from "./harnessOutputSignalViewModel";
 export * from "./harnessToolInventoryViewModel";
-export * from "./harnessEvidenceViewModel";
 export {
   createUrlPattern,
   findFirstUrl,
@@ -33,6 +32,38 @@ export type {
   NormalizedUrlCandidate,
   TextSegment,
 } from "./harnessStatusPanelTextParsing";
+
+export function formatIsoDateTime(value?: string): string {
+  if (!value) {
+    return "未知";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function formatSize(value?: number): string | null {
+  if (!value || value <= 0) {
+    return null;
+  }
+
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (value >= 1024) {
+    return `${Math.round(value / 1024)} KB`;
+  }
+  return `${value} B`;
+}
 
 export type HarnessStatusBadgeVariant =
   | "default"
@@ -63,6 +94,13 @@ export interface RuntimeTaskPresentation {
 }
 
 export interface HarnessRuntimeFactSummary {
+  threadId: string;
+  status: string | null;
+  turnCount: number;
+  itemCount: number;
+  pendingRequestCount: number;
+  artifactCount: number;
+  evidenceRefCount: number;
   decisionReason: string | null;
   fallbackChain: string[];
   oemPolicy: NonNullable<AgentRuntimeThreadReadModel["oem_policy"]> | null;
@@ -270,6 +308,11 @@ export function buildRuntimeTaskPresentation(
 export function buildRuntimeFactSummary(
   threadRead?: AgentRuntimeThreadReadModel | null,
 ): HarnessRuntimeFactSummary | null {
+  const threadId = threadRead?.thread_id?.trim();
+  if (!threadId) {
+    return null;
+  }
+
   const runtimeSummary = threadRead?.runtime_summary;
   const decisionReason =
     threadRead?.decision_reason ?? runtimeSummary?.decisionReason ?? null;
@@ -280,11 +323,22 @@ export function buildRuntimeFactSummary(
       : [];
   const oemPolicy = threadRead?.oem_policy ?? null;
 
-  if (!decisionReason && fallbackChain.length === 0 && !oemPolicy) {
-    return null;
-  }
-
   return {
+    threadId,
+    status: threadRead?.status ?? null,
+    turnCount: Array.isArray(threadRead?.turns) ? threadRead.turns.length : 0,
+    itemCount: Array.isArray(threadRead?.thread_items)
+      ? threadRead.thread_items.length
+      : 0,
+    pendingRequestCount: Array.isArray(threadRead?.pending_requests)
+      ? threadRead.pending_requests.length
+      : 0,
+    artifactCount: Array.isArray(threadRead?.artifacts)
+      ? threadRead.artifacts.length
+      : 0,
+    evidenceRefCount: Array.isArray(threadRead?.evidence_summary?.evidence_refs)
+      ? threadRead.evidence_summary.evidence_refs.length
+      : 0,
     decisionReason,
     fallbackChain,
     oemPolicy,

@@ -162,6 +162,8 @@ fn routing_payload_keeps_review_fast_local_as_diagnostics_only() {
     assert_eq!(payload["serviceModelSlot"].as_str(), Some("coding"));
     assert_eq!(payload["selectedProvider"].as_str(), Some("custom-coding"));
     assert_eq!(payload["selectedModel"].as_str(), Some("coder-large"));
+    assert_eq!(payload["routingMode"].as_str(), Some("multi_candidate"));
+    assert_eq!(payload["candidateCount"].as_u64(), Some(3));
     assert_eq!(payload["modelSlot"]["slots"].as_array().unwrap().len(), 4);
     assert!(payload["fallbackChain"].as_array().unwrap().is_empty());
     assert_eq!(
@@ -284,6 +286,142 @@ fn ready_routing_falls_back_from_unready_coding_slot_to_base_slot() {
     assert_eq!(
         payload["requiredCapabilities"],
         json!(["coding", "tools", "streaming"])
+    );
+    assert_eq!(payload["routingMode"].as_str(), Some("multi_candidate"));
+    assert_eq!(payload["candidateCount"].as_u64(), Some(2));
+}
+
+#[test]
+fn routing_payload_marks_single_candidate_without_profile_fallbacks() {
+    let selection = selection("openai", "gpt-5.2");
+    let routing = resolve_model_routing_for_candidate(&[], &selection);
+    let payload = routing_decision_payload(
+        &selection,
+        &routing,
+        &ProviderReadiness::direct_request_ready(),
+        &json!({}),
+    );
+
+    assert_eq!(payload["routingMode"].as_str(), Some("single_candidate"));
+    assert_eq!(payload["candidateCount"].as_u64(), Some(1));
+    assert_eq!(
+        payload["routingDecision"]["routingMode"].as_str(),
+        Some("single_candidate")
+    );
+}
+
+#[test]
+fn routing_not_possible_marks_no_candidate_after_all_readiness_attempts_fail() {
+    let metadata = json!({
+        "harness": {
+            "coding_model_slots": {
+                "coding": {
+                    "provider": "primary-provider",
+                    "model": "primary-model"
+                },
+                "base": {
+                    "provider": "backup-provider",
+                    "model": "backup-model"
+                }
+            }
+        }
+    });
+    let requested =
+        selection_from_profile_model_slot(&[&metadata], None, None).expect("requested selection");
+    let resolution = resolve_ready_model_routing(&[&metadata], &requested, |_| {
+        Ok(ProviderReadiness::provider_store_needs_setup(
+            "missing_enabled_api_key",
+            Some("openai".to_string()),
+            Some(true),
+            0,
+            0,
+        ))
+    })
+    .expect("blocked resolution");
+    let payload = routing_not_possible_payload_with_attempts(
+        &resolution.selection,
+        &resolution.routing,
+        &resolution.readiness,
+        &json!({}),
+        &resolution.attempted,
+    );
+
+    assert_eq!(payload["routingMode"].as_str(), Some("no_candidate"));
+    assert_eq!(payload["candidateCount"].as_u64(), Some(0));
+    assert_eq!(
+        payload["routingDecision"]["routingMode"].as_str(),
+        Some("no_candidate")
+    );
+    assert_eq!(
+        payload["routingDecision"]["candidateCount"].as_u64(),
+        Some(0)
+    );
+}
+
+#[test]
+fn candidate_model_set_filters_capability_before_preference_and_keeps_evidence() {
+    let selection = selection("primary", "text-only");
+    let mut candidates = CandidateModelSet::new(CandidateRequirements {
+        task_families: vec!["chat".to_string(), "vision_understanding".to_string()],
+        input_modalities: vec!["text".to_string(), "image".to_string()],
+        output_modalities: vec!["text".to_string()],
+        runtime_features: vec!["streaming".to_string()],
+        capabilities: vec![
+            "coding".to_string(),
+            "tools".to_string(),
+            "vision".to_string(),
+        ],
+    });
+    candidates.push_unique(CandidateModel {
+        provider: "primary".to_string(),
+        model: "text-only".to_string(),
+        source: "provider_models_cache".to_string(),
+        status: "active".to_string(),
+        task_families: vec!["chat".to_string()],
+        input_modalities: vec!["text".to_string()],
+        output_modalities: vec!["text".to_string()],
+        runtime_features: vec!["streaming".to_string()],
+        capabilities: vec!["tools".to_string(), "streaming".to_string()],
+        estimated_cost_class: Some("free".to_string()),
+        limit_state: Some("declared".to_string()),
+        continuity_key: Some("text".to_string()),
+    });
+    candidates.push_unique(CandidateModel {
+        provider: "backup".to_string(),
+        model: "vision-pro".to_string(),
+        source: "provider_models_cache".to_string(),
+        status: "active".to_string(),
+        task_families: vec!["chat".to_string(), "vision_understanding".to_string()],
+        input_modalities: vec!["text".to_string(), "image".to_string()],
+        output_modalities: vec!["text".to_string()],
+        runtime_features: vec!["streaming".to_string()],
+        capabilities: vec![
+            "tools".to_string(),
+            "vision".to_string(),
+            "streaming".to_string(),
+        ],
+        estimated_cost_class: Some("priced".to_string()),
+        limit_state: Some("declared".to_string()),
+        continuity_key: Some("vision".to_string()),
+    });
+
+    let resolved = candidates.resolve_candidates(
+        &selection,
+        &OemRoutingPolicy {
+            soft_model_preferences: vec!["primary/text-only".to_string()],
+            ..OemRoutingPolicy::default()
+        },
+        &[],
+    );
+    assert_eq!(resolved.len(), 2);
+    assert_eq!(resolved[0].model, "text-only");
+    assert_eq!(resolved[1].model, "vision-pro");
+
+    let payload = candidates.to_payload();
+    assert_eq!(payload["candidates"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        payload["candidates"][1]["estimatedCostClass"].as_str(),
+        Some("priced")
     );
 }
 
@@ -450,4 +588,155 @@ fn credential_failure_keeps_route_available_without_exposing_credential_ref() {
     assert_eq!(resolution.selection, requested);
     assert_eq!(resolution.attempted.len(), 1);
     assert!(resolution.attempted[0].runtime_failure.is_none());
+}
+
+#[test]
+fn oem_managed_allowlist_filters_candidates_and_records_policy() {
+    let metadata = json!({
+        "oemPolicy": {
+            "routingMode": "managed",
+            "hardModelAllowlist": ["backup-provider/backup-model"],
+            "fallbackToLocalAllowed": false
+        },
+        "harness": {
+            "coding_model_slots": {
+                "coding": {
+                    "provider": "primary-provider",
+                    "model": "primary-model"
+                },
+                "base": {
+                    "provider": "backup-provider",
+                    "model": "backup-model"
+                },
+                "local": {
+                    "provider": "ollama",
+                    "model": "local-model"
+                }
+            }
+        }
+    });
+    let requested = selection("primary-provider", "primary-model");
+    let resolution = resolve_ready_model_routing(&[&metadata], &requested, |candidate| {
+        assert_eq!(candidate.provider, "backup-provider");
+        assert_eq!(candidate.model, "backup-model");
+        Ok(ProviderReadiness::provider_store_ready(
+            Some("openai".to_string()),
+            1,
+            1,
+        ))
+    })
+    .expect("managed OEM routing");
+
+    assert_eq!(resolution.selection.provider, "backup-provider");
+    assert_eq!(resolution.routing.candidate_count, 1);
+    assert_eq!(resolution.routing.oem_policy.mode, OemRoutingMode::Managed);
+    assert_eq!(resolution.attempted.len(), 1);
+    let payload = routing_decision_payload(
+        &resolution.selection,
+        &resolution.routing,
+        &resolution.readiness,
+        &json!({}),
+    );
+    assert_eq!(payload["oemPolicy"]["mode"], "managed");
+    assert_eq!(
+        payload["oemPolicy"]["hardModelAllowlist"][0],
+        "backup-provider/backup-model"
+    );
+}
+
+#[test]
+fn oem_policy_can_leave_no_candidate_without_calling_readiness() {
+    let metadata = json!({
+        "oem_policy": {
+            "mode": "managed",
+            "hard_model_allowlist": ["other-provider/other-model"]
+        },
+        "harness": {
+            "coding_model_slots": {
+                "coding": {
+                    "provider": "primary-provider",
+                    "model": "primary-model"
+                },
+                "base": {
+                    "provider": "backup-provider",
+                    "model": "backup-model"
+                }
+            }
+        }
+    });
+    let requested = selection("primary-provider", "primary-model");
+    let resolution = resolve_ready_model_routing(&[&metadata], &requested, |_| {
+        panic!("blocked OEM policy must not probe readiness")
+    })
+    .expect("blocked OEM routing");
+
+    assert!(!resolution.readiness.ready);
+    assert_eq!(
+        resolution.readiness.reason_code,
+        Some("oem_no_allowed_candidate")
+    );
+    assert_eq!(resolution.routing.candidate_count, 0);
+    let payload = routing_not_possible_payload_with_attempts(
+        &resolution.selection,
+        &resolution.routing,
+        &resolution.readiness,
+        &json!({}),
+        &resolution.attempted,
+    );
+    assert_eq!(payload["routingMode"], "no_candidate");
+    assert_eq!(payload["candidateCount"], 0);
+}
+
+#[test]
+fn oem_soft_preferences_reorder_only_fallback_candidates() {
+    let metadata = json!({
+        "oemPolicy": {
+            "mode": "hybrid",
+            "softModelPreferences": ["openai/steady-model", "ollama/fast-model"]
+        },
+        "harness": {
+            "coding_model_slots": {
+                "coding": {
+                    "provider": "primary-provider",
+                    "model": "primary-model"
+                },
+                "base": {
+                    "provider": "ollama",
+                    "model": "fast-model"
+                },
+                "fast": {
+                    "provider": "openai",
+                    "model": "steady-model"
+                }
+            }
+        }
+    });
+    let requested = selection("primary-provider", "primary-model");
+    let mut attempted = Vec::new();
+    let resolution = resolve_ready_model_routing(&[&metadata], &requested, |candidate| {
+        attempted.push(format!("{}/{}", candidate.provider, candidate.model));
+        if candidate.provider == "openai" {
+            Ok(ProviderReadiness::provider_store_ready(
+                Some("openai".to_string()),
+                1,
+                1,
+            ))
+        } else {
+            Ok(ProviderReadiness::provider_store_needs_setup(
+                "missing_enabled_api_key",
+                Some(candidate.provider.clone()),
+                Some(true),
+                0,
+                0,
+            ))
+        }
+    })
+    .expect("hybrid OEM routing");
+
+    assert_eq!(
+        attempted,
+        vec!["primary-provider/primary-model", "openai/steady-model"]
+    );
+    assert_eq!(resolution.selection.provider, "openai");
+    assert_eq!(resolution.routing.oem_policy.mode, OemRoutingMode::Hybrid);
 }

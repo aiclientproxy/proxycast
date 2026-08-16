@@ -9,7 +9,6 @@ pub const METHOD_PROJECT_GIT_BRANCH_CHECKOUT: &str = "projectGit/branch/checkout
 pub const METHOD_PROJECT_GIT_BRANCH_CREATE: &str = "projectGit/branch/create";
 pub const METHOD_PROJECT_GIT_WORKTREE_CREATE: &str = "projectGit/worktree/create";
 pub const METHOD_PROJECT_GIT_WORKTREE_DELETE: &str = "projectGit/worktree/delete";
-pub const METHOD_EVIDENCE_EXPORT: &str = "evidence/export";
 pub const METHOD_AGENT_SESSION_HANDOFF_BUNDLE_EXPORT: &str = "agentSession/handoffBundle/export";
 pub const METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT: &str = "agentSession/replayCase/export";
 pub const METHOD_AGENT_SESSION_ANALYSIS_HANDOFF_EXPORT: &str =
@@ -93,6 +92,8 @@ pub const METHOD_GATEWAY_TUNNEL_STATUS: &str = "gatewayTunnel/status";
 pub const METHOD_GATEWAY_TUNNEL_SYNC_WEBHOOK_URL: &str = "gatewayTunnel/syncWebhookUrl";
 pub const METHOD_MEDIA_TASK_ARTIFACT_IMAGE_CREATE: &str = "mediaTaskArtifact/image/create";
 pub const METHOD_MEDIA_TASK_ARTIFACT_AUDIO_CREATE: &str = "mediaTaskArtifact/audio/create";
+pub const METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE: &str =
+    "mediaTaskArtifact/transcription/create";
 pub const METHOD_MEDIA_TASK_ARTIFACT_VIDEO_CREATE: &str = "mediaTaskArtifact/video/create";
 pub const METHOD_MEDIA_TASK_ARTIFACT_IMAGE_COMPLETE: &str = "mediaTaskArtifact/image/complete";
 pub const METHOD_MEDIA_TASK_ARTIFACT_AUDIO_COMPLETE: &str = "mediaTaskArtifact/audio/complete";

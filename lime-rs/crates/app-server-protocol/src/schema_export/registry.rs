@@ -72,10 +72,6 @@ pub(super) fn v0_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<ProjectGitCommit>("ProjectGitCommit"),
         typed_schema::<ProjectGitWorktreeCreateResponse>("ProjectGitWorktreeCreateResponse"),
         typed_schema::<ProjectGitWorktreeDeleteResponse>("ProjectGitWorktreeDeleteResponse"),
-        typed_schema::<EvidenceExportParams>("EvidenceExportParams"),
-        typed_schema::<EvidenceExportResponse>("EvidenceExportResponse"),
-        typed_schema::<EvidencePackSummary>("EvidencePackSummary"),
-        typed_schema::<EvidencePackArtifact>("EvidencePackArtifact"),
         typed_schema::<AgentSessionHandoffBundleExportParams>(
             "AgentSessionHandoffBundleExportParams",
         ),
@@ -242,6 +238,9 @@ pub(super) fn v0_schemas() -> Vec<GeneratedJsonSchema> {
         typed_schema::<ImageStoryboardSlotInput>("ImageStoryboardSlotInput"),
         typed_schema::<MediaTaskArtifactImageCreateParams>("MediaTaskArtifactImageCreateParams"),
         typed_schema::<MediaTaskArtifactAudioCreateParams>("MediaTaskArtifactAudioCreateParams"),
+        typed_schema::<MediaTaskArtifactTranscriptionCreateParams>(
+            "MediaTaskArtifactTranscriptionCreateParams",
+        ),
         typed_schema::<MediaTaskArtifactVideoCreateParams>("MediaTaskArtifactVideoCreateParams"),
         typed_schema::<MediaTaskArtifactCompletedImageInput>(
             "MediaTaskArtifactCompletedImageInput",

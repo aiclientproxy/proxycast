@@ -786,6 +786,10 @@ declare module "./connection.js" {
       params: protocol.MediaTaskArtifactAudioCreateParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.MediaTaskArtifactResponse>>;
+    createTranscriptionMediaTaskArtifact(
+      params: protocol.MediaTaskArtifactTranscriptionCreateParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.MediaTaskArtifactResponse>>;
     createVideoMediaTaskArtifact(
       params: protocol.MediaTaskArtifactVideoCreateParams,
       options?: AppServerRequestOptions,
@@ -1040,10 +1044,6 @@ declare module "./connection.js" {
     ): Promise<
       AppServerRequestResult<protocol.ProjectGitWorktreeCreateResponse>
     >;
-    exportEvidence(
-      params: protocol.EvidenceExportParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.EvidenceExportResponse>>;
     exportHandoffBundle(
       params: protocol.AgentSessionHandoffBundleExportParams,
       options?: AppServerRequestOptions,

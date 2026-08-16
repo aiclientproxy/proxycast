@@ -118,10 +118,5 @@
   "agentExperts.info.skills.timeline.invocationRunning": "実行中",
   "agentExperts.info.skills.timeline.invocationCompleted": "完了",
   "agentExperts.info.skills.timeline.invocationFailed": "失敗",
-  "agentExperts.info.skills.timeline.invocationUnknown": "確認待ち",
-  "agentExperts.info.skills.evidence.title": "証拠パックの振り返り",
-  "agentExperts.info.skills.evidence.counts": "検索 {{searchCount}} 回 · 実行 {{invocationCount}} 回",
-  "agentExperts.info.skills.evidence.exportedAt": "最終エクスポート {{exportedAt}}",
-  "agentExperts.info.skills.evidence.latestSkill": "最新スキル {{skillName}}",
-  "agentExperts.info.skills.evidence.knownGaps": "既知の不足 {{count}} 件"
+  "agentExperts.info.skills.timeline.invocationUnknown": "確認待ち"
 }

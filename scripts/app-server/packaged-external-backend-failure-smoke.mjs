@@ -187,25 +187,18 @@ async function main() {
       throw new Error(`read failed turn ${turnId} is missing completedAt`);
     }
 
-    const evidenceResult = await connection.exportEvidence(
-      {
-        sessionId,
-        turnId,
-        includeEvents: true,
-        includeArtifacts: true,
-      },
-      { timeoutMs: 5_000 },
+    const readTurnError = String(
+      readTurn.error?.message ?? readTurn.error ?? readTurn.failure?.message ?? "",
     );
-    const evidenceEvents = evidenceResult.result.events;
-    const evidenceFailure = assertEvidenceFailureEvents(
-      evidenceEvents,
-      "evidence events",
-    );
-    assertEqual(
-      evidenceResult.result.artifacts.length,
-      0,
-      "failed turn artifact count",
-    );
+    if (
+      !readTurnError.includes(
+        "packaged external backend crashed after partial output",
+      )
+    ) {
+      throw new Error(
+        `read thread missing failure summary: ${JSON.stringify(readTurn)}`,
+      );
+    }
 
     await lifecycle.stop();
 
@@ -216,14 +209,12 @@ async function main() {
         `packaged=${packagedBinaryPath}`,
         `protocol=${started.connected.initializeResponse.serverInfo.protocolVersion}`,
         `clientNotifications=${clientNotifications.map((notification) => notification.method).join(",")}`,
-        `evidenceEvents=${evidenceEvents.map((event) => event.type).join(",")}`,
         `threadId=${threadId}`,
         `turnId=${turnId}`,
         `readTurns=${readTurns.length}`,
         `readTurnStatus=${readTurn.status}`,
         `runtimeLibraries=${runtimeLibraries.length}`,
         `clientFailure=${JSON.stringify(clientFailure.params.turn.error.message)}`,
-        `evidenceFailure=${JSON.stringify(evidenceFailure.payload.message)}`,
       ].join(" "),
     );
   } finally {
@@ -337,27 +328,6 @@ function assertDirectFailureNotifications(notifications, identity) {
   ) {
     throw new Error(
       `client turn/completed missing stderr summary: ${JSON.stringify(failed)}`,
-    );
-  }
-  return failed;
-}
-
-function assertEvidenceFailureEvents(events, label) {
-  if (!events.some((event) => event.type === "message.delta")) {
-    throw new Error(
-      `${label} missing message.delta: ${JSON.stringify(events)}`,
-    );
-  }
-  const failed = events.find((event) => event.type === "turn.failed");
-  if (!failed) {
-    throw new Error(`${label} missing turn.failed: ${JSON.stringify(events)}`);
-  }
-  const message = String(failed.payload?.message ?? "");
-  if (
-    !message.includes("packaged external backend crashed after partial output")
-  ) {
-    throw new Error(
-      `${label} turn.failed missing stderr summary: ${JSON.stringify(failed)}`,
     );
   }
   return failed;

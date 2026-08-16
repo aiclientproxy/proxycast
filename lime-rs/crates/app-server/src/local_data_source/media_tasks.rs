@@ -1,5 +1,8 @@
 use crate::media_task;
-use crate::media_task_payload::{image_model_task_request, video_model_task_request};
+use crate::media_task_payload::{
+    audio_model_task_request, image_model_task_request, transcription_model_task_request,
+    video_model_task_request,
+};
 use crate::model_route_assembly::{resolved_route_from_task_with_credential, ModelRouteSelection};
 use crate::model_task_contract::{
     capability_snapshot_from_model_capabilities, MediaRouteAssessment,
@@ -14,6 +17,7 @@ use app_server_protocol::MediaTaskArtifactListParams;
 use app_server_protocol::MediaTaskArtifactListResponse;
 use app_server_protocol::MediaTaskArtifactLookupParams;
 use app_server_protocol::MediaTaskArtifactResponse;
+use app_server_protocol::MediaTaskArtifactTranscriptionCreateParams;
 use app_server_protocol::MediaTaskArtifactVideoCreateParams;
 use app_server_protocol::{ModelRefSource, ModelTaskRequest};
 use lime_core::config::{Config, ConfigManager};
@@ -35,8 +39,9 @@ pub(crate) fn create_image_media_task_artifact(
 
 pub(crate) fn create_audio_media_task_artifact(
     params: MediaTaskArtifactAudioCreateParams,
+    route_assessment: MediaRouteAssessment,
 ) -> Result<MediaTaskArtifactResponse, String> {
-    media_task::create_audio_generation_task_artifact(params)
+    media_task::create_audio_generation_task_artifact(params, Some(route_assessment))
 }
 
 pub(crate) fn create_video_media_task_artifact(
@@ -44,6 +49,13 @@ pub(crate) fn create_video_media_task_artifact(
     route_assessment: MediaRouteAssessment,
 ) -> Result<MediaTaskArtifactResponse, String> {
     media_task::create_video_generation_task_artifact(params, Some(route_assessment))
+}
+
+pub(crate) fn create_transcription_media_task_artifact(
+    params: MediaTaskArtifactTranscriptionCreateParams,
+    route_assessment: MediaRouteAssessment,
+) -> Result<MediaTaskArtifactResponse, String> {
+    media_task::create_transcription_task_artifact(params, Some(route_assessment))
 }
 
 pub(crate) fn complete_audio_media_task_artifact(
@@ -89,6 +101,36 @@ pub(crate) async fn assess_image_route(
         api_key_provider_service,
         model_registry_service,
         &image_model_task_request(params),
+    )
+    .await
+}
+
+pub(crate) async fn assess_audio_route(
+    db: &DbConnection,
+    api_key_provider_service: &ApiKeyProviderService,
+    model_registry_service: &ModelRegistryService,
+    params: &MediaTaskArtifactAudioCreateParams,
+) -> Result<MediaRouteAssessment, String> {
+    assess_media_route(
+        db,
+        api_key_provider_service,
+        model_registry_service,
+        &audio_model_task_request(params),
+    )
+    .await
+}
+
+pub(crate) async fn assess_transcription_route(
+    db: &DbConnection,
+    api_key_provider_service: &ApiKeyProviderService,
+    model_registry_service: &ModelRegistryService,
+    params: &MediaTaskArtifactTranscriptionCreateParams,
+) -> Result<MediaRouteAssessment, String> {
+    assess_media_route(
+        db,
+        api_key_provider_service,
+        model_registry_service,
+        &transcription_model_task_request(params),
     )
     .await
 }

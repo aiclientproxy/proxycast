@@ -41,16 +41,6 @@ impl TestSessionDataSource {
         }
     }
 
-    pub(in crate::runtime::tests) fn with_memory_data_root(
-        self,
-        data_root: impl Into<std::path::PathBuf>,
-    ) -> Self {
-        Self {
-            memory_backend: Some(crate::LocalMemoryBackend::new(data_root)),
-            ..self
-        }
-    }
-
     pub(in crate::runtime::tests) fn with_memory_store_read_response(
         self,
         response: Result<MemoryStoreReadResponse, String>,

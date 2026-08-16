@@ -19,12 +19,7 @@ import type { AgentRuntimeWorkspaceSkillBinding } from "@/lib/api/agentRuntime/t
 import type { ServiceSkillItem } from "@/lib/api/serviceSkills";
 import type { Skill } from "@/lib/api/skills";
 import type { SkillScaffoldDraft } from "@/types/page";
-import {
-  resolveHarnessEvidenceThreadId,
-  useHarnessEvidencePackSnapshot,
-} from "../components/harnessEvidencePackStore";
 import type { AgentThreadItem } from "../types";
-import { ExpertSkillEvidenceSummary } from "./ExpertSkillEvidenceSummary";
 import {
   buildSkillCandidates,
   filterSkillCandidates,
@@ -411,14 +406,6 @@ export function ExpertSkillsSection({
       }),
     [threadItems, t],
   );
-  const evidenceThreadId = useMemo(
-    () => resolveHarnessEvidenceThreadId(threadItems),
-    [threadItems],
-  );
-  const evidencePack = useHarnessEvidencePackSnapshot({
-    threadId: evidenceThreadId,
-  });
-
   const handleRuntimeActionClick = (
     item: (typeof skillRuntimeActions)[number],
   ) => {
@@ -666,7 +653,6 @@ export function ExpertSkillsSection({
                 {skillRuntimeTimeline.emptyLabel}
               </SkillRuntimeTimelineEmpty>
             )}
-            <ExpertSkillEvidenceSummary evidencePack={evidencePack} />
             {skillRuntimeActions.length > 0 ? (
               <SkillRuntimeActionList data-testid="expert-info-skills-runtime-actions">
                 {skillRuntimeActions.slice(0, 3).map((item) => (

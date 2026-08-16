@@ -15,7 +15,6 @@ import {
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
   addExpertSkillsRuntimeSkillFromInfoPanel,
-  exportExpertPanelEvidencePackFromHarnessPanel,
   launchExpertSkillsRuntimeFromExpertPlaza,
   reloadRendererAfterExpertPanelSkillCatalogInjection,
   selectExpertPanelSkillsRuntimeSessionId,
@@ -39,7 +38,7 @@ import {
   waitForRendererReady,
 } from "./claw-chat-current-fixture-rpc.mjs";
 import {
-  exportSkillsRuntimeEvidencePack,
+  readSkillsRuntimeThread,
   waitForCanonicalThreadIdBySessionId,
   waitForSessionReadSkillsRuntimeCompleted,
 } from "./claw-chat-current-fixture-read-model-waits.mjs";
@@ -87,13 +86,13 @@ export async function runSkillsRuntimeScenario({
     readModelSkillsRuntimeCompleted.summary;
 
   logStage("export-skills-runtime-evidence-pack");
-  const evidencePackSkillsRuntime = await exportSkillsRuntimeEvidencePack(
+  const readModelSkillsRuntime = await readSkillsRuntimeThread(
     page,
     appServerRequests,
     SKILLS_RUNTIME_SCENARIO,
     options.sessionId,
   );
-  result.evidencePackSkillsRuntime = evidencePackSkillsRuntime.summary;
+  result.readModelSkillsRuntime = readModelSkillsRuntime.summary;
 
   logStage("send-explicit-skills-runtime-prompt-from-gui");
   result.explicitSkillsRuntimeInputSend = sanitizeJson(
@@ -121,15 +120,15 @@ export async function runSkillsRuntimeScenario({
     readModelExplicitSkillsRuntimeCompleted.summary;
 
   logStage("export-explicit-skills-runtime-evidence-pack");
-  const evidencePackExplicitSkillsRuntime =
-    await exportSkillsRuntimeEvidencePack(
+  const readModelExplicitSkillsRuntime =
+    await readSkillsRuntimeThread(
       page,
       appServerRequests,
       SKILLS_RUNTIME_EXPLICIT_SCENARIO,
       options.sessionId,
     );
-  result.evidencePackExplicitSkillsRuntime =
-    evidencePackExplicitSkillsRuntime.summary;
+  result.readModelExplicitSkillsRuntime =
+    readModelExplicitSkillsRuntime.summary;
 
   logStage("launch-manual-enable-skills-runtime-from-workspace-panel");
   const manualEnableSkillsRuntimeLaunch =
@@ -187,15 +186,15 @@ export async function runSkillsRuntimeScenario({
     readModelManualEnableSkillsRuntimeCompleted.summary;
 
   logStage("export-manual-enable-skills-runtime-evidence-pack");
-  const evidencePackManualEnableSkillsRuntime =
-    await exportSkillsRuntimeEvidencePack(
+  const readModelManualEnableSkillsRuntime =
+    await readSkillsRuntimeThread(
       page,
       appServerRequests,
       SKILLS_RUNTIME_MANUAL_ENABLE_SCENARIO,
       manualEnableSkillsRuntimeSessionId,
     );
-  result.evidencePackManualEnableSkillsRuntime =
-    evidencePackManualEnableSkillsRuntime.summary;
+  result.readModelManualEnableSkillsRuntime =
+    readModelManualEnableSkillsRuntime.summary;
 
   return result;
 }
@@ -313,14 +312,14 @@ async function runPlazaOrPanelExpertSkillsRuntimeScenario({
     readModelExpertSkillsRuntimeCompleted.summary;
 
   logStage("export-expert-plaza-skills-runtime-evidence-pack");
-  const evidencePackExpertSkillsRuntime = await exportSkillsRuntimeEvidencePack(
+  const readModelExpertSkillsRuntime = await readSkillsRuntimeThread(
     page,
     appServerRequests,
     EXPERT_SKILLS_RUNTIME_SCENARIO,
     expertPlazaSkillsRuntimeSessionId,
   );
-  result.evidencePackExpertSkillsRuntime =
-    evidencePackExpertSkillsRuntime.summary;
+  result.readModelExpertSkillsRuntime =
+    readModelExpertSkillsRuntime.summary;
 
   logStage("wait-gui-expert-plaza-skills-runtime-completed");
   result.guiExpertSkillsRuntimeCompleted = sanitizeJson(
@@ -460,15 +459,15 @@ async function runExpertPanelSkillsRuntimeFollowup({
     readModelExpertPanelSkillsRuntimeCompleted.summary;
 
   logStage("export-expert-panel-skills-runtime-evidence-pack");
-  const evidencePackExpertPanelSkillsRuntime =
-    await exportSkillsRuntimeEvidencePack(
+  const readModelExpertPanelSkillsRuntime =
+    await readSkillsRuntimeThread(
       page,
       appServerRequests,
       EXPERT_PANEL_SKILLS_RUNTIME_SCENARIO,
       expertPanelSkillsRuntimeSessionId,
     );
-  result.evidencePackExpertPanelSkillsRuntime =
-    evidencePackExpertPanelSkillsRuntime.summary;
+  result.readModelExpertPanelSkillsRuntime =
+    readModelExpertPanelSkillsRuntime.summary;
 
   logStage("wait-gui-expert-panel-skills-runtime-completed");
   result.guiExpertPanelSkillsRuntimeCompleted = sanitizeJson(
@@ -481,10 +480,5 @@ async function runExpertPanelSkillsRuntimeFollowup({
         turnId: expertPanelSkillsRuntimeBackendTurn.entry.turnId,
       },
     ),
-  );
-
-  logStage("export-expert-panel-evidence-pack-from-harness-panel");
-  result.expertPanelEvidencePackGuiExport = sanitizeJson(
-    await exportExpertPanelEvidencePackFromHarnessPanel(page, options),
   );
 }

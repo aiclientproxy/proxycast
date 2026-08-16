@@ -366,27 +366,14 @@ async function main() {
       threadId,
       turnId,
     );
-    const evidence = await transport.invoke(options, "evidence/export", {
-      sessionId,
-      turnId,
-      includeEvents: true,
-      includeArtifacts: false,
-      includeEvidencePack: false,
-    });
-
     assert(
       terminal.status === "completed",
       `turn terminal status=${terminal.status}`,
     );
     const readText = JSON.stringify(terminal.read);
-    const evidenceText = JSON.stringify(evidence);
     assert(
       !readText.includes("base64,"),
       "thread/read leaked inline image payload",
-    );
-    assert(
-      !evidenceText.includes("base64,"),
-      "evidence/export leaked inline image payload",
     );
     assert(
       readText.includes("sidecar://"),

@@ -9,6 +9,8 @@
 > - `./cost-limit-events.md`
 > - `./runtime-integration.md`
 
+当前实现注记：RuntimeCore 已持有 typed `CandidateModelSet`；App Server 只负责把 configured Provider 的声明模型和缓存目录适配为候选来源。能力/任务族/模态过滤先于 OEM 偏好、连续性和成本排序，显式选择不被自动策略覆盖；候选集合会进入 routing decision evidence。凭证 readiness、真实 provider protocol 和未声明能力仍在后续 route gate fail closed。
+
 ## 1. 固定目标
 
 模型层后续统一拆成两步：

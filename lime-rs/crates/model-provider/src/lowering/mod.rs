@@ -6,7 +6,9 @@
 //! `packages/llm/src/route/protocol.ts` and `protocols/*.ts` at commit
 //! `9976269ab1accfc9f9dc98a4a688c516934de422` (MIT).
 
+mod audio_speech;
 mod common;
+mod embeddings;
 mod fal_video_generation;
 mod openai_images;
 mod openai_responses_image_generation;
@@ -39,6 +41,22 @@ pub fn build_openai_images_generation_body(
     request: &CanonicalRequest,
 ) -> Result<serde_json::Value, ProtocolMappingError> {
     openai_images::body_for_model(model_id, request)
+}
+
+pub fn build_openai_audio_speech_body(
+    model_id: &str,
+    request: &CanonicalRequest,
+) -> Result<serde_json::Value, ProtocolMappingError> {
+    audio_speech::body_for_model(model_id, request)
+}
+
+pub fn build_openai_embeddings_body(
+    model_id: &str,
+    inputs: &[String],
+    dimensions: Option<u32>,
+    encoding_format: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    embeddings::body_for_model(model_id, inputs, dimensions, encoding_format)
 }
 
 pub fn build_fal_video_generation_body(

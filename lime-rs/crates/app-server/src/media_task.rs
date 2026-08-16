@@ -3,7 +3,8 @@ use crate::media_runtime_contract::{
     VOICE_GENERATION_ROUTING_SLOT,
 };
 use crate::media_task_payload::{
-    create_audio_payload, create_image_payload, create_video_payload, AUDIO_TASK_DEFAULT_MIME_TYPE,
+    create_audio_payload, create_image_payload, create_transcription_payload, create_video_payload,
+    AUDIO_TASK_DEFAULT_MIME_TYPE,
 };
 use crate::model_task_contract::MediaRouteAssessment;
 use crate::runtime::sidecar_store::SidecarStore;
@@ -17,6 +18,7 @@ use app_server_protocol::MediaTaskArtifactListParams;
 use app_server_protocol::MediaTaskArtifactListResponse;
 use app_server_protocol::MediaTaskArtifactLookupParams;
 use app_server_protocol::MediaTaskArtifactResponse;
+use app_server_protocol::MediaTaskArtifactTranscriptionCreateParams;
 use app_server_protocol::MediaTaskArtifactVideoCreateParams;
 use lime_media_runtime::list_task_outputs;
 use lime_media_runtime::load_task_output;
@@ -621,6 +623,7 @@ pub fn create_image_generation_task_artifact(
 
 pub fn create_audio_generation_task_artifact(
     params: MediaTaskArtifactAudioCreateParams,
+    route_assessment: Option<MediaRouteAssessment>,
 ) -> Result<MediaTaskArtifactResponse, String> {
     let workspace_root = normalize_required_string(&params.project_root_path, "projectRootPath")?;
     let source_text = normalize_required_string(&params.source_text, "sourceText")?;
@@ -632,7 +635,7 @@ pub fn create_audio_generation_task_artifact(
         Path::new(&workspace_root),
         MediaTaskType::AudioGenerate,
         normalize_optional_string(params.title.clone()),
-        create_audio_payload(&params),
+        create_audio_payload(&params, route_assessment.as_ref()),
         TaskWriteOptions {
             status: Some("pending_submit".to_string()),
             output_path: output_path.as_deref(),
@@ -665,6 +668,40 @@ pub fn create_video_generation_task_artifact(
             output_path: output_path.as_deref(),
             artifact_dir: None,
             idempotency_key: Some(idempotency::build_video_idempotency_key(&params).as_str()),
+            relationships: TaskRelationships::default(),
+        },
+    )
+    .map_err(data_error)?;
+    response_from_output(output)
+}
+
+pub fn create_transcription_task_artifact(
+    params: MediaTaskArtifactTranscriptionCreateParams,
+    route_assessment: Option<MediaRouteAssessment>,
+) -> Result<MediaTaskArtifactResponse, String> {
+    let workspace_root = normalize_required_string(&params.project_root_path, "projectRootPath")?;
+    if normalize_optional_string(params.source_path.clone()).is_none()
+        && normalize_optional_string(params.source_url.clone()).is_none()
+    {
+        return Err("sourcePath 或 sourceUrl 至少需要提供一个".to_string());
+    }
+    let mut params = params;
+    params.project_root_path = workspace_root.clone();
+    params.source_path = normalize_optional_string(params.source_path);
+    params.source_url = normalize_optional_string(params.source_url);
+    let output_path = normalize_optional_string(params.output_path.clone());
+    let output = write_task_artifact(
+        Path::new(&workspace_root),
+        MediaTaskType::TranscriptionGenerate,
+        normalize_optional_string(params.title.clone()),
+        create_transcription_payload(&params, route_assessment.as_ref()),
+        TaskWriteOptions {
+            status: Some("pending_submit".to_string()),
+            output_path: output_path.as_deref(),
+            artifact_dir: None,
+            idempotency_key: Some(
+                idempotency::build_transcription_idempotency_key(&params).as_str(),
+            ),
             relationships: TaskRelationships::default(),
         },
     )

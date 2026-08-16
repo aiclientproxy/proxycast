@@ -108,7 +108,7 @@ fn canonical_output_item_payload(
 }
 
 #[tokio::test]
-async fn coding_file_changed_artifact_refs_join_read_model_and_evidence() {
+async fn coding_file_changed_artifact_refs_join_read_model() {
     let (core, session_id, turn_id) = runtime_with_active_turn(
         "sess_coding_artifact_refs",
         "thread_coding_artifact_refs",
@@ -206,24 +206,6 @@ async fn coding_file_changed_artifact_refs_join_read_model_and_evidence() {
             .and_then(serde_json::Value::as_str),
         Some("diff://src-app")
     );
-
-    let evidence = core
-        .export_evidence(EvidenceExportParams {
-            session_id,
-            turn_id: Some(turn_id),
-            include_events: Some(true),
-            include_artifacts: Some(true),
-            include_evidence_pack: Some(false),
-        })
-        .await
-        .expect("evidence export");
-    let artifact_refs = evidence
-        .artifacts
-        .iter()
-        .map(|artifact| artifact.artifact_ref.as_str())
-        .collect::<Vec<_>>();
-    assert!(artifact_refs.contains(&"artifact_src_app_after"));
-    assert!(artifact_refs.contains(&"artifact_src_app_before"));
 }
 
 #[tokio::test]
@@ -398,21 +380,6 @@ async fn tool_terminal_large_output_is_readable_from_output_owner() {
         artifact_read.artifacts[0].content_status,
         ArtifactContentStatus::Available
     );
-
-    let evidence = core
-        .export_evidence(EvidenceExportParams {
-            session_id,
-            turn_id: Some(turn_id),
-            include_events: Some(true),
-            include_artifacts: Some(true),
-            include_evidence_pack: Some(false),
-        })
-        .await
-        .expect("evidence export");
-    assert!(evidence
-        .artifacts
-        .iter()
-        .any(|artifact| artifact.artifact_ref == artifact_read.artifacts[0].artifact_ref));
 }
 
 #[tokio::test]

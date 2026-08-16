@@ -118,10 +118,5 @@
   "agentExperts.info.skills.timeline.invocationRunning": "执行中",
   "agentExperts.info.skills.timeline.invocationCompleted": "执行完成",
   "agentExperts.info.skills.timeline.invocationFailed": "执行失败",
-  "agentExperts.info.skills.timeline.invocationUnknown": "执行待确认",
-  "agentExperts.info.skills.evidence.title": "证据包复盘",
-  "agentExperts.info.skills.evidence.counts": "检索 {{searchCount}} 次 · 执行 {{invocationCount}} 次",
-  "agentExperts.info.skills.evidence.exportedAt": "最近导出 {{exportedAt}}",
-  "agentExperts.info.skills.evidence.latestSkill": "最近技能 {{skillName}}",
-  "agentExperts.info.skills.evidence.knownGaps": "{{count}} 个已知缺口"
+  "agentExperts.info.skills.timeline.invocationUnknown": "执行待确认"
 }

@@ -17,10 +17,8 @@ const CORE_EXPERT_ASSERTIONS = [
   "readModelExpertSkillsRuntimeCompleted",
   "readModelExpertSkillSearchObserved",
   "readModelExpertSkillInvocationObserved",
-  "evidenceExpertSkillBodyReadObserved",
-  "evidenceExpertSkillGateObserved",
-  "evidencePackExpertSkillSearchObserved",
-  "evidencePackExpertSkillInvocationObserved",
+  "readModelExpertSkillBodyReadObserved",
+  "readModelExpertSkillGateObserved",
   "expertSkillSearchBeforeSkillInvocation",
 ];
 
@@ -28,12 +26,11 @@ const PANEL_EXPERT_ASSERTIONS = [
   "expertPanelSecondTurnPromptReachedBackend",
   "expertPanelSkillRefsOverrideReachedBackend",
   "expertPanelReadModelCompleted",
-  "expertPanelEvidenceSkillBodyReadObserved",
-  "expertPanelEvidenceSkillGateObserved",
-  "expertPanelEvidenceSkillSearchObserved",
-  "expertPanelEvidenceSkillInvocationObserved",
+  "expertPanelReadModelSkillBodyReadObserved",
+  "expertPanelReadModelSkillGateObserved",
+  "expertPanelReadModelSkillSearchObserved",
+  "expertPanelReadModelSkillInvocationObserved",
   "expertPanelSkillSearchBeforeSkillInvocation",
-  "expertPanelEvidencePackExportedFromHarnessPanel",
 ];
 
 function isRecord(value) {
@@ -69,29 +66,32 @@ function missingTrueKeys(assertions, keys) {
   return keys.filter((key) => assertions[key] !== true);
 }
 
-function expertEvidencePack(summary) {
+function expertReadModel(summary) {
   return (
-    summary?.evidencePackExpertPanelSkillsRuntime ??
-    summary?.evidencePackExpertSkillsRuntime ??
+    summary?.readModelExpertPanelSkillsRuntime ??
+    summary?.readModelExpertSkillsRuntime ??
     null
   );
 }
 
-function evidencePackIssues(summary) {
-  const pack = expertEvidencePack(summary);
-  if (!isRecord(pack)) {
-    return ["missing expert skills Evidence Pack summary"];
+function readModelIssues(summary) {
+  const readModel = expertReadModel(summary);
+  if (!isRecord(readModel)) {
+    return ["missing expert skills canonical read-model summary"];
   }
   const issues = [];
-  if (pack.hasEvidencePack !== true) {
-    issues.push("Evidence Pack missing");
+  if (readModel.hasThreadRead !== true) {
+    issues.push("canonical read model missing");
   }
-  if (!Number.isFinite(pack.skillSearchCount) || pack.skillSearchCount < 1) {
+  if (
+    !Number.isFinite(readModel.skillSearchCount) ||
+    readModel.skillSearchCount < 1
+  ) {
     issues.push("skill_search summary missing");
   }
   if (
-    !Number.isFinite(pack.skillInvocationCount) ||
-    pack.skillInvocationCount < 1
+    !Number.isFinite(readModel.skillInvocationCount) ||
+    readModel.skillInvocationCount < 1
   ) {
     issues.push("Skill invocation summary missing");
   }
@@ -103,7 +103,7 @@ function evidencePackIssues(summary) {
     ["expertInvokedObserved", "expert invoked skill missing"],
     ["skillSearchBeforeSkillInvocation", "skill_search ordering missing"],
   ]) {
-    if (pack[key] !== true) {
+    if (readModel[key] !== true) {
       issues.push(label);
     }
   }
@@ -121,7 +121,10 @@ function hasLiveProviderStatement(summary) {
 }
 
 function isFixtureProvider(summary) {
-  return summary?.provider === "fixture-provider" || summary?.model === "fixture-model";
+  return (
+    summary?.provider === "fixture-provider" ||
+    summary?.model === "fixture-model"
+  );
 }
 
 function evaluateSummary(summary, { requireLiveProvider }) {
@@ -140,7 +143,7 @@ function evaluateSummary(summary, { requireLiveProvider }) {
       (key) => `missing assertion ${key}`,
     ),
   );
-  issues.push(...evidencePackIssues(summary));
+  issues.push(...readModelIssues(summary));
 
   if (requireLiveProvider) {
     if (!hasLiveProviderStatement(summary)) {
@@ -159,12 +162,14 @@ function evaluateSummary(summary, { requireLiveProvider }) {
     scenario: summary?.scenario ?? null,
     provider: summary?.provider ?? null,
     model: summary?.model ?? null,
-    evidencePack: expertEvidencePack(summary),
+    readModel: expertReadModel(summary),
   };
 }
 
 function resolvePath(repoRoot, inputPath) {
-  return path.isAbsolute(inputPath) ? inputPath : path.join(repoRoot, inputPath);
+  return path.isAbsolute(inputPath)
+    ? inputPath
+    : path.join(repoRoot, inputPath);
 }
 
 function readOptionalSummary(repoRoot, inputPath) {
@@ -200,9 +205,13 @@ export function buildExpertSkillsLiveGateReport(options = {}) {
           }),
         }
       : {
-          path: deterministicInput?.path ?? resolvePath(repoRoot, deterministicPath),
+          path:
+            deterministicInput?.path ??
+            resolvePath(repoRoot, deterministicPath),
           status: "missing",
-          issues: deterministicInput?.issues ?? ["deterministic summary missing"],
+          issues: deterministicInput?.issues ?? [
+            "deterministic summary missing",
+          ],
         };
 
   const liveInput = readOptionalSummary(repoRoot, options.liveSummary);
@@ -217,16 +226,21 @@ export function buildExpertSkillsLiveGateReport(options = {}) {
       : {
           path: liveInput?.path ?? null,
           status: "missing",
-          issues: liveInput?.issues ?? ["live Provider expert skills summary missing"],
+          issues: liveInput?.issues ?? [
+            "live Provider expert skills summary missing",
+          ],
         };
 
   const deterministicReady = deterministic.status === "pass";
   const liveReady = live.status === "pass";
-  const status = deterministicReady && liveReady
-    ? "pass"
-    : deterministicReady && options.allowMissingLive && live.status === "missing"
-      ? "pending_live_provider"
-      : "fail";
+  const status =
+    deterministicReady && liveReady
+      ? "pass"
+      : deterministicReady &&
+          options.allowMissingLive &&
+          live.status === "missing"
+        ? "pending_live_provider"
+        : "fail";
 
   return {
     status,

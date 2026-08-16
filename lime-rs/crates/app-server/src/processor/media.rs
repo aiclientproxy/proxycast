@@ -4,7 +4,8 @@ use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, R
 use app_server_protocol::{
     JsonRpcError, MediaTaskArtifactAudioCompleteParams, MediaTaskArtifactAudioCreateParams,
     MediaTaskArtifactImageCompleteParams, MediaTaskArtifactImageCreateParams,
-    MediaTaskArtifactListParams, MediaTaskArtifactLookupParams, MediaTaskArtifactVideoCreateParams,
+    MediaTaskArtifactListParams, MediaTaskArtifactLookupParams,
+    MediaTaskArtifactTranscriptionCreateParams, MediaTaskArtifactVideoCreateParams,
 };
 
 impl RequestProcessor {
@@ -45,6 +46,20 @@ impl RequestProcessor {
         let response = self
             .runtime
             .create_video_media_task_artifact(params)
+            .await
+            .map_err(to_jsonrpc_error)?;
+        dispatch_result(response)
+    }
+
+    pub(super) async fn handle_media_task_artifact_transcription_create_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: MediaTaskArtifactTranscriptionCreateParams = parse_params(params)?;
+        let response = self
+            .runtime
+            .create_transcription_media_task_artifact(params)
             .await
             .map_err(to_jsonrpc_error)?;
         dispatch_result(response)

@@ -16,11 +16,11 @@ import {
   preparePierReplayTask,
   prepareTaskWorkspace,
   providerStepExhaustion,
-  providerStepsFromEvidence,
+  providerStepsFromCurrentFacts,
   readJson,
   runCurrentChainTask,
   runtimePrerequisites,
-  terminalMessageFromEvidence,
+  terminalMessageFromCurrentFacts,
 } from "./deepswe-adapter-core.mjs";
 
 const repoRoot = process.cwd();
@@ -222,9 +222,6 @@ describe("DeepSWE current-chain adapter", () => {
         if (method === "thread/read") {
           return sessionRead;
         }
-        if (method === "evidence/export") {
-          return { events: [{ type: "tool.completed", callId: "call-1" }] };
-        }
         throw new Error(`unexpected method ${method}`);
       },
       resolveProvider: async () => ({
@@ -267,7 +264,6 @@ describe("DeepSWE current-chain adapter", () => {
       "workspace/ensure",
       "thread/start",
       "thread/read",
-      "evidence/export",
     ]);
     expect(
       calls.find((call) => call.method === "thread/start")?.params,
@@ -296,67 +292,43 @@ describe("DeepSWE current-chain adapter", () => {
   });
 
   it("summarizes provider step output and enforces comparable token accounting", () => {
-    const summary = providerStepsFromEvidence(
+    const summary = providerStepsFromCurrentFacts(
       {
-        events: [
+        threadRead: {
+          providerSteps: [
           {
-            type: "provider.request.started",
-            sequence: 5,
-            timestamp: "2026-07-16T00:00:00Z",
-            payload: {
-              runtimeEvent: {
-                attempt: 1,
-                tool_names: ["Read", "apply_patch", "Read"],
-              },
-            },
-          },
-          {
-            type: "provider.step",
             sequence: 10,
             timestamp: "2026-07-16T00:00:00Z",
-            payload: {
-              attempt: 1,
-              completed: true,
-              finish_reason: "tool_call",
-              text_output_chars: 7,
-              reasoning_output_chars: 40,
-              tool_call_count: 1,
-              usage: {
-                input_tokens: 100,
-                output_tokens: 20,
-                cached_input_tokens: 40,
-              },
+            attempt: 1,
+            completed: true,
+            finish_reason: "tool_call",
+            toolNames: ["Read", "apply_patch", "Read"],
+            text_output_chars: 7,
+            reasoning_output_chars: 40,
+            tool_call_count: 1,
+            usage: {
+              input_tokens: 100,
+              output_tokens: 20,
+              cached_input_tokens: 40,
             },
           },
           {
-            type: "provider.request.started",
-            sequence: 15,
-            payload: {
-              attempt: 2,
-              toolNames: ["exec_command", "apply_patch"],
-            },
-          },
-          {
-            type: "provider.step",
             sequence: 20,
-            payload: {
-              runtimeEvent: {
-                type: "provider_step",
-                attempt: 2,
-                completed: true,
-                finish_reason: "stop",
-                text_output_chars: 12,
-                reasoning_output_chars: 60,
-                tool_call_count: 0,
-                usage: {
-                  input_tokens: 200,
-                  output_tokens: 30,
-                  cached_input_tokens: 50,
-                },
-              },
+            attempt: 2,
+            completed: true,
+            finish_reason: "stop",
+            toolNames: ["exec_command", "apply_patch"],
+            text_output_chars: 12,
+            reasoning_output_chars: 60,
+            tool_call_count: 0,
+            usage: {
+              input_tokens: 200,
+              output_tokens: 30,
+              cached_input_tokens: 50,
             },
           },
-        ],
+          ],
+        },
       },
       { maxProviderSteps: 2, tokenBudget: 250 },
     );
@@ -395,18 +367,19 @@ describe("DeepSWE current-chain adapter", () => {
 
   it("keeps the App Server terminal failure message for owner classification", () => {
     expect(
-      terminalMessageFromEvidence(
+      terminalMessageFromCurrentFacts(
         {
-          events: [
-            {
-              type: "turn.failed",
-              turnId: "turn-1",
-              payload: {
-                message:
+          turnId: "turn-1",
+          threadRead: {
+            turns: [
+              {
+                id: "turn-1",
+                status: "failed",
+                error:
                   "execution backend error: 读取 provider SSE 失败: error decoding response body",
               },
-            },
-          ],
+            ],
+          },
         },
         "turn-1",
       ),
@@ -433,9 +406,6 @@ describe("DeepSWE current-chain adapter", () => {
         if (method === "thread/read") {
           readCount += 1;
           return { detail: { turns: [], items: [] } };
-        }
-        if (method === "evidence/export") {
-          return { events: [{ type: "provider.failed" }] };
         }
         throw new Error(`unexpected method ${method}`);
       },
@@ -477,7 +447,7 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
       },
       terminalMessage: "Provider tool call omitted tool name",
-      evidenceCapture: "partial",
+      factsCapture: "partial",
     });
 
     expect(readCount).toBeGreaterThan(0);
@@ -487,108 +457,8 @@ describe("DeepSWE current-chain adapter", () => {
         startTurnError: "Provider tool call omitted tool name",
       },
     });
-    expect(readJson(path.join(root, "trajectory.json")).events).toEqual([
-      { type: "provider.failed" },
-    ]);
+    expect(readJson(path.join(root, "trajectory.json")).turns).toEqual([]);
     expect(fs.existsSync(path.join(root, "tool-lifecycle.json"))).toBe(true);
-  });
-
-  it("cancels the current turn when provider token evidence reaches the budget", async () => {
-    const root = temporaryRoot();
-    const workspaceDir = path.join(root, "workspace");
-    fs.mkdirSync(workspaceDir);
-    let canceled = false;
-    const providerEvents = {
-      events: [
-        {
-          type: "provider.step",
-          sequence: 5,
-          payload: {
-            attempt: 1,
-            completed: true,
-            finish_reason: "tool_call",
-            text_output_chars: 0,
-            reasoning_output_chars: 10,
-            tool_call_count: 1,
-            usage: { input_tokens: 100, output_tokens: 10 },
-          },
-        },
-      ],
-    };
-    const rpc = {
-      waitForHealth: async () => ({ status: "ok" }),
-      invoke: async (_options, method) => {
-        if (method === "workspace/ensure") {
-          return { workspace: { id: "workspace-1", rootPath: workspaceDir } };
-        }
-        if (method === "thread/start") {
-          return { session: { sessionId: "deepswe-run-budget" } };
-        }
-        if (method === "thread/read") {
-          return {
-            detail: {
-              turns: [
-                {
-                  turnId: "deepswe-turn-run-budget",
-                  status: canceled ? "interrupted" : "accepted",
-                },
-              ],
-              items: [],
-            },
-          };
-        }
-        if (method === "evidence/export") {
-          return providerEvents;
-        }
-        throw new Error(`unexpected method ${method}`);
-      },
-      resolveProvider: async () => ({
-        providerPreference: "provider-1",
-        providerName: "openai",
-        modelPreference: "model-1",
-        source: "test",
-      }),
-      updateThreadSettings: async () => {},
-      startTurn: async () => {},
-      cancelTurn: async () => {
-        canceled = true;
-      },
-      readThread: async () => ({
-        status: canceled ? "interrupted" : "running",
-        turns: [],
-      }),
-      sleep: async () => {},
-    };
-
-    const result = await runCurrentChainTask({
-      options: {
-        intervalMs: 1,
-        evidenceIntervalMs: 1,
-        timeoutMs: 30_000,
-        maxProviderSteps: 5,
-        tokenBudget: 100,
-      },
-      task: { id: "task-1", instruction: "Fix the task" },
-      workspaceDir,
-      runDir: root,
-      runId: "run-budget",
-      rpc,
-    });
-
-    expect(canceled).toBe(true);
-    expect(result).toMatchObject({
-      status: "interrupted",
-      terminalMessage: expect.stringContaining("provider budget exhausted"),
-      budgetCancellation: {
-        reasons: ["token_budget"],
-        stepCount: 1,
-        usage: { budgetTokens: 110 },
-      },
-      providerSteps: {
-        stepCount: 1,
-        usageStatus: "complete",
-      },
-    });
   });
 
   it("leaves provider step exhaustion to the runtime reply loop", async () => {
@@ -597,21 +467,16 @@ describe("DeepSWE current-chain adapter", () => {
     fs.mkdirSync(workspaceDir);
     let readCount = 0;
     let canceled = false;
-    const providerEvents = {
-      events: [1, 2].map((attempt) => ({
-        type: "provider.step",
-        sequence: attempt,
-        payload: {
-          attempt,
-          completed: true,
-          finish_reason: "tool_call",
-          text_output_chars: 0,
-          reasoning_output_chars: 10,
-          tool_call_count: 1,
-          usage: { input_tokens: 100, output_tokens: 10 },
-        },
-      })),
-    };
+    const providerSteps = [1, 2].map((attempt) => ({
+      sequence: attempt,
+      attempt,
+      completed: true,
+      finish_reason: "tool_call",
+      text_output_chars: 0,
+      reasoning_output_chars: 10,
+      tool_call_count: 1,
+      usage: { input_tokens: 100, output_tokens: 10 },
+    }));
     const rpc = {
       waitForHealth: async () => ({ status: "ok" }),
       invoke: async (_options, method) => {
@@ -635,9 +500,6 @@ describe("DeepSWE current-chain adapter", () => {
             },
           };
         }
-        if (method === "evidence/export") {
-          return providerEvents;
-        }
         throw new Error(`unexpected method ${method}`);
       },
       resolveProvider: async () => ({
@@ -654,6 +516,7 @@ describe("DeepSWE current-chain adapter", () => {
       readThread: async () => ({
         status: readCount >= 2 ? "completed" : "running",
         turns: [],
+        providerSteps,
       }),
       sleep: async () => {},
     };
@@ -661,7 +524,6 @@ describe("DeepSWE current-chain adapter", () => {
     const result = await runCurrentChainTask({
       options: {
         intervalMs: 1,
-        evidenceIntervalMs: 1,
         timeoutMs: 30_000,
         maxProviderSteps: 2,
         tokenBudget: 1_000,
@@ -702,100 +564,6 @@ describe("DeepSWE current-chain adapter", () => {
     ).toBeNull();
   });
 
-  it("records runtime token exhaustion after the turn is already terminal", async () => {
-    const root = temporaryRoot();
-    const workspaceDir = path.join(root, "workspace");
-    fs.mkdirSync(workspaceDir);
-    let canceled = false;
-    const providerEvents = {
-      events: [
-        {
-          type: "provider.step",
-          sequence: 1,
-          payload: {
-            attempt: 1,
-            completed: true,
-            finish_reason: "tool_call",
-            text_output_chars: 0,
-            reasoning_output_chars: 10,
-            tool_call_count: 1,
-            usage: { input_tokens: 100, output_tokens: 10 },
-          },
-        },
-      ],
-    };
-    const rpc = {
-      waitForHealth: async () => ({ status: "ok" }),
-      invoke: async (_options, method) => {
-        if (method === "workspace/ensure") {
-          return { workspace: { id: "workspace-1", rootPath: workspaceDir } };
-        }
-        if (method === "thread/start") {
-          return { session: { sessionId: "deepswe-run-runtime-budget" } };
-        }
-        if (method === "thread/read") {
-          return {
-            detail: {
-              turns: [
-                {
-                  turnId: "deepswe-turn-run-runtime-budget",
-                  status: "interrupted",
-                },
-              ],
-              items: [],
-            },
-          };
-        }
-        if (method === "evidence/export") {
-          return providerEvents;
-        }
-        throw new Error(`unexpected method ${method}`);
-      },
-      resolveProvider: async () => ({
-        providerPreference: "provider-1",
-        providerName: "openai",
-        modelPreference: "model-1",
-        source: "test",
-      }),
-      updateThreadSettings: async () => {},
-      startTurn: async () => {},
-      cancelTurn: async () => {
-        canceled = true;
-      },
-      readThread: async () => ({
-        status: "interrupted",
-        turns: [],
-      }),
-      sleep: async () => {},
-    };
-
-    const result = await runCurrentChainTask({
-      options: {
-        intervalMs: 1,
-        timeoutMs: 30_000,
-        maxProviderSteps: 5,
-        tokenBudget: 100,
-      },
-      task: { id: "task-1", instruction: "Fix the task" },
-      workspaceDir,
-      runDir: root,
-      runId: "run-runtime-budget",
-      rpc,
-    });
-
-    expect(canceled).toBe(false);
-    expect(result).toMatchObject({
-      status: "interrupted",
-      terminalMessage: expect.stringContaining("provider budget exhausted"),
-      budgetCancellation: {
-        requestedAt: null,
-        reasons: ["token_budget"],
-        stepCount: 1,
-        usage: { budgetTokens: 110 },
-      },
-    });
-  });
-
   it("cancels a wall-timeout turn and captures its real terminal state", async () => {
     const root = temporaryRoot();
     const workspaceDir = path.join(root, "workspace");
@@ -822,9 +590,6 @@ describe("DeepSWE current-chain adapter", () => {
               items: [],
             },
           };
-        }
-        if (method === "evidence/export") {
-          return { events: [] };
         }
         throw new Error(`unexpected method ${method}`);
       },
@@ -861,7 +626,7 @@ describe("DeepSWE current-chain adapter", () => {
     expect(currentChainFromError(error)).toMatchObject({
       status: "timeout",
       terminalStatus: "canceled",
-      evidenceCapture: "terminal",
+      factsCapture: "terminal",
       timeoutCancellation: {
         reason: "wall_timeout",
         terminalStatus: "canceled",
