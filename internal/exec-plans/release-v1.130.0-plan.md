@@ -26,7 +26,7 @@
 
 - 发布前基线为 v1.129.0（commit `a04912c2d`），发布前 `v1.130.0` 本地和远端 tag 均不存在。
 - 版本事实源和双语 release notes 已更新；候选包含版本元数据之外的全部现有工作树改动。
-- 已创建 release commit `7852f6088`（`Release v1.130.0`），并创建、推送 `v1.130.0`；远端 tag 指向该 release commit，`origin/main` 随后包含发布收尾记录提交 `2dc358dff`。
+- 已创建 release commit `7852f6088`（`Release v1.130.0`），并创建、推送 `v1.130.0`；远端 tag 固定指向该 release commit，`origin/main` 随后包含发布收尾记录提交链。
 - 发布提交后发现 3 个未纳入 tag 的 App Server 文件改动：`lime-rs/crates/app-server/src/runtime.rs`、`lime-rs/crates/app-server/src/runtime/skills.rs`、`lime-rs/crates/app-server/tests/skills_jsonrpc.rs`。这些改动保留在工作树中，未回滚、未纳入本版本，待后续变更单独归类。
 
 ## 门禁结果
