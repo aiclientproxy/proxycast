@@ -1,36 +1,16 @@
 use super::data_error;
-use super::values_from_serializable_vec;
 use crate::automation_execution::{
-    apply_automation_run_finished, apply_automation_run_started, build_automation_run_start,
+    apply_automation_run_finished, apply_automation_run_started,
     build_scheduled_task_manual_run_start, next_run_for_automation_schedule,
     validate_automation_schedule_value, AutomationRunFailure, AutomationRunFinish,
     AutomationRunIdentity, AutomationRunStart,
 };
 use crate::RuntimeCoreError;
-mod health;
-use app_server_protocol::AutomationJobCreateParams;
-use app_server_protocol::AutomationJobDeleteResponse;
-use app_server_protocol::AutomationJobIdParams;
-use app_server_protocol::AutomationJobListResponse;
-use app_server_protocol::AutomationJobReadResponse;
-use app_server_protocol::AutomationJobRunHistoryParams;
-use app_server_protocol::AutomationJobRunHistoryResponse;
-use app_server_protocol::AutomationJobUpdateParams;
-use app_server_protocol::AutomationJobWriteResponse;
-use app_server_protocol::AutomationScheduleParams;
-use app_server_protocol::AutomationSchedulePreviewResponse;
-use app_server_protocol::AutomationScheduleValidateResponse;
-use app_server_protocol::AutomationSchedulerConfigReadResponse;
-use app_server_protocol::AutomationSchedulerConfigUpdateParams;
-use app_server_protocol::AutomationSchedulerConfigUpdateResponse;
-use app_server_protocol::AutomationSchedulerStatusResponse;
+use app_server_protocol::protocol::v2::ServerNotification;
+use app_server_protocol::AgentEvent;
 mod scheduled_tasks;
-use chrono::Utc;
-pub(crate) use health::read_automation_health;
-use lime_core::config::load_config;
-use lime_core::config::save_config;
+use chrono::{DateTime, Utc};
 use lime_core::config::AutomationExecutionMode;
-use lime_core::config::AutomationSettings;
 use lime_core::config::DeliveryConfig;
 use lime_core::config::TaskSchedule;
 use lime_core::database;
@@ -48,14 +28,20 @@ use serde_json::json;
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize)]
-struct AutomationSchedulerConfigRequest {
-    #[serde(default)]
-    enabled: bool,
-    #[serde(default = "default_automation_poll_interval_secs")]
-    poll_interval_secs: u64,
-    #[serde(default = "default_automation_enable_history")]
-    enable_history: bool,
+#[derive(Debug)]
+pub(super) struct AutomationJobCreateParams {
+    pub request: Value,
+}
+
+#[derive(Debug)]
+pub(super) struct AutomationJobUpdateParams {
+    pub id: String,
+    pub request: Value,
+}
+
+#[derive(Debug)]
+pub(super) struct AutomationJobWriteResponse {
+    pub job: Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -104,70 +90,6 @@ struct AutomationJobUpdateRequest {
     max_retries: Option<u32>,
 }
 
-pub(crate) fn list_automation_jobs(
-    db: &DbConnection,
-) -> Result<AutomationJobListResponse, RuntimeCoreError> {
-    let conn = database::lock_db(db).map_err(data_error)?;
-    let jobs = AutomationJobDao::list(&conn).map_err(data_error)?;
-    Ok(AutomationJobListResponse {
-        jobs: values_from_serializable_vec(jobs)?,
-    })
-}
-
-pub(crate) fn read_automation_scheduler_config(
-) -> Result<AutomationSchedulerConfigReadResponse, RuntimeCoreError> {
-    Ok(AutomationSchedulerConfigReadResponse {
-        config: automation_scheduler_config_value(load_config().map_err(data_error)?.automation),
-    })
-}
-
-pub(crate) fn update_automation_scheduler_config(
-    params: AutomationSchedulerConfigUpdateParams,
-) -> Result<AutomationSchedulerConfigUpdateResponse, RuntimeCoreError> {
-    let input: AutomationSchedulerConfigRequest =
-        serde_json::from_value(params.config).map_err(data_error)?;
-    let mut config = load_config().map_err(data_error)?;
-    config.automation = AutomationSettings {
-        enabled: input.enabled,
-        poll_interval_secs: input.poll_interval_secs.max(5),
-        enable_history: input.enable_history,
-    };
-    save_config(&config).map_err(data_error)?;
-    Ok(AutomationSchedulerConfigUpdateResponse {
-        config: automation_scheduler_config_value(config.automation),
-    })
-}
-
-pub(crate) fn read_automation_scheduler_status(
-) -> Result<AutomationSchedulerStatusResponse, RuntimeCoreError> {
-    Ok(AutomationSchedulerStatusResponse {
-        status: json!({
-            "running": false,
-            "last_polled_at": null,
-            "next_poll_at": null,
-            "last_job_count": 0,
-            "total_executions": 0,
-            "active_job_id": null,
-            "active_job_name": null,
-        }),
-    })
-}
-
-pub(crate) fn read_automation_job(
-    db: &DbConnection,
-    params: AutomationJobIdParams,
-) -> Result<AutomationJobReadResponse, RuntimeCoreError> {
-    let id = normalize_automation_job_id(&params.id)?;
-    let conn = database::lock_db(db).map_err(data_error)?;
-    let job = AutomationJobDao::get(&conn, &id).map_err(data_error)?;
-    Ok(AutomationJobReadResponse {
-        job: job
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(data_error)?,
-    })
-}
-
 pub(crate) fn create_automation_job(
     db: &DbConnection,
     params: AutomationJobCreateParams,
@@ -204,6 +126,7 @@ pub(crate) fn create_automation_job(
         consecutive_failures: 0,
         last_retry_count: 0,
         auto_disabled_until: None,
+        deleted_at: None,
         last_delivery: None,
         created_at: now.clone(),
         updated_at: now,
@@ -281,32 +204,6 @@ pub(crate) fn update_automation_job(
     })
 }
 
-pub(crate) fn delete_automation_job(
-    db: &DbConnection,
-    params: AutomationJobIdParams,
-) -> Result<AutomationJobDeleteResponse, RuntimeCoreError> {
-    let id = normalize_automation_job_id(&params.id)?;
-    let conn = database::lock_db(db).map_err(data_error)?;
-    let deleted = AutomationJobDao::delete(&conn, &id).map_err(data_error)?;
-    Ok(AutomationJobDeleteResponse { deleted })
-}
-
-pub(crate) fn start_automation_job_run(
-    db: &DbConnection,
-    id: String,
-) -> Result<AutomationRunStart, RuntimeCoreError> {
-    let id = normalize_automation_job_id(&id)?;
-    let conn = database::lock_db(db).map_err(data_error)?;
-    let job = AutomationJobDao::get(&conn, &id)
-        .map_err(data_error)?
-        .ok_or_else(|| RuntimeCoreError::Backend(format!("自动化任务不存在: {id}")))?;
-    let mut start = build_automation_run_start(job, None)?;
-    AgentRunDao::create_run(&conn, &start.run).map_err(data_error)?;
-    apply_automation_run_started(&mut start.job, &start.run);
-    AutomationJobDao::update(&conn, &start.job).map_err(data_error)?;
-    Ok(start)
-}
-
 pub(crate) fn start_scheduled_task_run_record(
     db: &DbConnection,
     id: String,
@@ -330,7 +227,7 @@ pub(crate) fn start_scheduled_task_run_record(
 pub(crate) fn finish_automation_job_run(
     db: &DbConnection,
     finish: AutomationRunFinish,
-) -> Result<(), RuntimeCoreError> {
+) -> Result<bool, RuntimeCoreError> {
     let conn = database::lock_db(db).map_err(data_error)?;
     let metadata = serde_json::to_string(&finish.metadata).map_err(data_error)?;
     let finished = AgentRunDao::finish_run(
@@ -345,15 +242,15 @@ pub(crate) fn finish_automation_job_run(
     )
     .map_err(data_error)?;
     if !finished {
-        return Ok(());
+        return Ok(false);
     }
     let Some(mut job) = AutomationJobDao::get(&conn, &finish.job.id).map_err(data_error)? else {
-        return Ok(());
+        return Ok(true);
     };
     let recompute_next_run = match finish.task_revision.as_deref() {
         Some(task_revision) => {
             if job.running_started_at.as_deref() != finish.ownership_started_at.as_deref() {
-                return Ok(());
+                return Ok(true);
             }
             task_revision != job.updated_at
         }
@@ -367,7 +264,145 @@ pub(crate) fn finish_automation_job_run(
         recompute_next_run,
     );
     AutomationJobDao::update(&conn, &job).map_err(data_error)?;
-    Ok(())
+    Ok(true)
+}
+
+pub(crate) fn finish_scheduled_task_run_for_terminal_event(
+    db: &DbConnection,
+    event: &AgentEvent,
+) -> Result<Option<ServerNotification>, RuntimeCoreError> {
+    let status = match event.event_type.as_str() {
+        "turn.completed" => lime_core::database::dao::agent_run::AgentRunStatus::Success,
+        "turn.failed" => lime_core::database::dao::agent_run::AgentRunStatus::Error,
+        "turn.canceled" => lime_core::database::dao::agent_run::AgentRunStatus::Canceled,
+        _ => return Ok(None),
+    };
+    let session_id = event.session_id.trim();
+    let Some(turn_id) = event
+        .turn_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    if session_id.is_empty() {
+        return Ok(None);
+    }
+
+    let (run, job) = {
+        let conn = database::lock_db(db).map_err(data_error)?;
+        let Some(run) = AgentRunDao::find_active_automation_run_by_turn(&conn, session_id, turn_id)
+            .map_err(data_error)?
+        else {
+            return Ok(None);
+        };
+        let Some(task_id) = run.source_ref.as_deref() else {
+            return Ok(None);
+        };
+        let Some(job) =
+            AutomationJobDao::get_including_deleted(&conn, task_id).map_err(data_error)?
+        else {
+            return Ok(None);
+        };
+        require_scheduled_task_job(&job)?;
+        (run, job)
+    };
+
+    let finished_at = DateTime::parse_from_rfc3339(&event.timestamp)
+        .map_err(data_error)?
+        .with_timezone(&Utc);
+    let started_at = DateTime::parse_from_rfc3339(&run.started_at)
+        .map_err(data_error)?
+        .with_timezone(&Utc);
+    let duration_ms = finished_at
+        .signed_duration_since(started_at)
+        .num_milliseconds()
+        .max(0);
+    let mut metadata = run
+        .metadata
+        .as_deref()
+        .and_then(|value| serde_json::from_str::<Value>(value).ok())
+        .filter(Value::is_object)
+        .unwrap_or_else(|| json!({}));
+    metadata["sessionId"] = json!(session_id);
+    metadata["threadId"] = json!(event.thread_id);
+    metadata["turnId"] = json!(turn_id);
+    metadata["turnStatus"] = json!(event.event_type.trim_start_matches("turn."));
+    metadata["terminalEventId"] = json!(event.event_id);
+    let ownership_started_at = metadata_string(&metadata, &["claimedAt", "claimed_at"]);
+    let task_revision = metadata_string(&metadata, &["taskRevision", "task_revision"]);
+    let (error_code, error_message) = terminal_event_error(event);
+    let task_id = job.id.clone();
+    let run_id = run.id.clone();
+    let finished = finish_automation_job_run(
+        db,
+        AutomationRunFinish {
+            job,
+            run_id: run_id.clone(),
+            status,
+            finished_at: finished_at.to_rfc3339(),
+            duration_ms: Some(duration_ms),
+            error_code,
+            error_message,
+            metadata,
+            ownership_started_at,
+            task_revision,
+        },
+    )?;
+    if !finished {
+        return Ok(None);
+    }
+    crate::scheduled_task_notifications::load_run_notification(db, &task_id, &run_id)
+        .map_err(RuntimeCoreError::Backend)
+}
+
+fn metadata_string(metadata: &Value, keys: &[&str]) -> Option<String> {
+    keys.iter().find_map(|key| {
+        metadata
+            .get(*key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+    })
+}
+
+fn terminal_event_error(event: &AgentEvent) -> (Option<String>, Option<String>) {
+    if event.event_type != "turn.failed" {
+        return (None, None);
+    }
+    let code = metadata_string(
+        &event.payload,
+        &["reason", "code", "errorCode", "error_code"],
+    )
+    .or_else(|| {
+        event
+            .payload
+            .pointer("/error/code")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+    })
+    .or_else(|| Some("scheduled_task_turn_failed".to_string()));
+    let message = metadata_string(&event.payload, &["message"])
+        .or_else(|| {
+            event
+                .payload
+                .get("error")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        })
+        .or_else(|| {
+            event
+                .payload
+                .pointer("/error/message")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        })
+        .or_else(|| code.clone());
+    (code, message)
 }
 
 pub(crate) fn fail_automation_job_run(
@@ -415,63 +450,6 @@ pub(crate) fn fail_automation_job_run(
     );
     AutomationJobDao::update(&conn, &job).map_err(data_error)?;
     Ok(())
-}
-
-pub(crate) fn read_automation_run_history(
-    db: &DbConnection,
-    params: AutomationJobRunHistoryParams,
-) -> Result<AutomationJobRunHistoryResponse, RuntimeCoreError> {
-    let id = normalize_automation_job_id(&params.id)?;
-    let limit = params.limit.unwrap_or(20).clamp(1, 200);
-    let conn = database::lock_db(db).map_err(data_error)?;
-    let runs = AgentRunDao::list_runs_by_source_ref(&conn, "automation", &id, limit)
-        .map_err(data_error)?;
-    Ok(AutomationJobRunHistoryResponse {
-        runs: values_from_serializable_vec(runs)?,
-    })
-}
-
-pub(crate) fn preview_automation_schedule(
-    params: AutomationScheduleParams,
-) -> Result<AutomationSchedulePreviewResponse, RuntimeCoreError> {
-    let schedule: TaskSchedule = serde_json::from_value(params.schedule).map_err(data_error)?;
-    Ok(AutomationSchedulePreviewResponse {
-        next_run_at: preview_next_automation_run(&schedule).map_err(data_error)?,
-    })
-}
-
-pub(crate) fn validate_automation_schedule(
-    params: AutomationScheduleParams,
-) -> Result<AutomationScheduleValidateResponse, RuntimeCoreError> {
-    let schedule: TaskSchedule = serde_json::from_value(params.schedule).map_err(data_error)?;
-    Ok(
-        match validate_automation_schedule_value(&schedule, Utc::now()) {
-            Ok(()) => AutomationScheduleValidateResponse {
-                valid: true,
-                error: None,
-            },
-            Err(error) => AutomationScheduleValidateResponse {
-                valid: false,
-                error: Some(error),
-            },
-        },
-    )
-}
-
-fn default_automation_poll_interval_secs() -> u64 {
-    30
-}
-
-fn default_automation_enable_history() -> bool {
-    true
-}
-
-fn automation_scheduler_config_value(config: AutomationSettings) -> Value {
-    json!({
-        "enabled": config.enabled,
-        "poll_interval_secs": config.poll_interval_secs,
-        "enable_history": config.enable_history,
-    })
 }
 
 fn normalize_automation_job_id(id: &str) -> Result<String, RuntimeCoreError> {

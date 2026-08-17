@@ -1,8 +1,8 @@
 # 已安排任务实现计划
 
-状态：`in-progress / protocol-runtime-gui-slice`
+状态：`implementation-complete / local-validation-blocked-by-disk-space / platform-evidence-pending`
 
-更新时间：2026-08-13
+更新时间：2026-08-17
 
 ## 主目标
 
@@ -10,8 +10,227 @@
 
 ## 当前阶段与下一刀
 
-- 当前阶段：ST-1/2/3/4 的首个垂直切片已落盘。9 个 `scheduledTask/*` method、唯一 `automation_jobs` 存储映射、手动运行到 RuntimeCore、typed Renderer gateway、主从工作台、一级导航和五语种资源已建立。protocol enum、schema fixtures 和 generated TypeScript client 已重建并通过 drift 检查。current read model 只接受显式 Scheduled Task marker，列表/详情已投影最近 Agent Run；`continue_thread` 在运行时通过 canonical Thread 恢复真实 session identity，不再持久化或拼接伪 session。P0 catch-up 已完成：最近 24 小时窗口最多折叠补跑一次并保留 skipped window metadata，超窗窗口写入 `missed` Agent Run 并推进 `next_run_at`，不创建 Thread/Turn。ST-3 本轮补齐了 overlap `skip_if_running` missed 历史、one-shot `NULL next_run_at` CAS、纽约 DST 缺失/重复小时、手动运行日程锚点保留和暂停任务立即运行；并新增启动前遗留 ownership 恢复：active queued/running Run 幂等标记 `scheduled_run_interrupted`，canonical Turn 终态可收口 Task，保留 claim 推进的 `next_run_at`，时钟回拨不重复 claim。
-- 下一刀：接 terminal notification、软删除/运行中删除合同，再物理删除 `automationJob/*` 双轨和旧 Settings consumer；随后补 Agent current fixture、GUI smoke、Electron Gate B 与 Windows 平台证据。
+- 2026-08-17 实现收口：9 个 `scheduledTask/*` method、唯一 `automation_jobs` 内部存储映射、RuntimeCore/Thread/Turn/Item/Agent Run、typed notification、软删除、一级 Scheduled Tasks 工作台、五语言资源和真实 Electron Gate B 已建立。`continue_thread` 复用 canonical Thread identity；`new_thread` 复用 canonical model catalog、route metadata 与 preflight。
+- 公开 Automation 双轨已物理删除：旧 App Server method/schema/client、旧页面和 Settings 工作台、旧 renderer projection/smoke、旧 i18n namespace consumer 均归类为 `dead / deleted / forbidden-to-restore`。最后残留的 `Page = "automation"`、`AutomationPageParams`、侧栏 `id = "automation"` 与 `SettingsTabs.Automation` 已迁为唯一 `scheduled-tasks` 一级路由，Settings 不再重复挂载 Scheduled Tasks 页面。
+- 当前下一刀：释放可再生成的 Rust incremental 缓存后补跑 related、Scheduled Tasks Gate B、Agent current fixture、GUI smoke 与 `verify:local`；平台侧只剩真实 Windows Notification Center、Windows Gate B 和 macOS/Windows sleep-resume 证据。
+
+## 2026-08-17 Terminal Notification 与软删除完成
+
+- 主链：`scheduledTask/* -> App Server typed notification -> Renderer global bridge -> Electron Desktop Host notification`；App Server 不调用 Electron API，Renderer 不维护业务 timer。
+- 窄写集：`lime-rs/crates/app-server-protocol/**`、`lime-rs/crates/app-server/src/{processor/automation.rs,scheduled_task_worker.rs,main.rs,lib.rs,local_data_source/automation/**}`、`lime-rs/crates/core/src/database/{schema.rs,dao/automation_job.rs}`、`lime-rs/crates/scheduler/src/claim{,/recovery}.rs`、`packages/app-server-client/**`、`src/lib/api/scheduledTasks.ts`、`src/components/ScheduledTaskNotificationBridge*`、`src/components/scheduled-tasks/**`、`src/App.tsx`、五语种 `scheduledTasks` 文案、相关 contract/fixture 测试和本计划文件。
+- 避让：不修改 `runtime.rs`、`runtime/skills.rs`、`skills_jsonrpc.rs`、`tool-runtime/execution_process.rs` 与其他未知脏热区；前序 Scheduled Tasks 热区只做增量修改，不覆盖已完成的 route/Gate B 修复。
+- notification 退出条件：新增 typed `scheduledTask/changed` 与 `scheduledTask/run/updated`；create/update/delete/enabled-set 发布失效通知，manual/due/catch-up/recovery/missed terminal Run 发布终态投影；`all_runs / failures / none` 在 Renderer 统一决策；Desktop Host 返回 `unsupported/failed` 时显示可见错误，不伪造成功。
+- 删除退出条件：`scheduledTask/delete` 写入 tombstone、禁用并清除未来调度，但保留 Agent Run 与 canonical Thread/Turn；运行中的 Run 不自动取消，完成写回不得复活 tombstone；GUI 在运行中删除前明确说明影响，当前 runtime 未提供 Scheduled Task cancel，因此不展示“同时取消运行”。
+- 验证：protocol/schema/generated client、DAO migration/软删除、public JSON-RPC notification、worker terminal notification、Renderer policy/Host failure、组件确认文案；再运行 related、`test:contracts`、Scheduled Tasks Gate B、Agent current fixture、GUI smoke、`governance:legacy-report`、`verify:local`、fmt 与 diff check。
+- 明确剩余证据：Windows Notification Center、Windows Gate B 与 macOS/Windows 真实 sleep-resume 仍需对应平台 runner；macOS 证据不能替代 Windows 结论。
+
+### 完成证据
+
+- typed validator 拒绝额外字段、空 identity、非法 `status/policy`，并支持按 task/run 去重订阅；协议 schema、Rust 类型和 TypeScript client 已同步生成。
+- App Server 在 create/update/delete/enabled-set、manual/due/catch-up/recovery/missed terminal Run 时发布 `scheduledTask/changed` 或 `scheduledTask/run/updated`；canonical terminal event 是终态事实源，重复终态写回保持幂等。
+- Renderer 全局 `ScheduledTaskNotificationBridge` 统一执行 `all_runs / failures / none` 策略；Host `unsupported/failed` 显示可见 toast，不伪造成功。Scheduled Tasks 页面收到通知后合并刷新列表、详情和历史，并在运行中删除前明确“不会取消当前运行、完成后仍保留历史”。
+- 软删除写入 tombstone、禁用并清除未来调度；active Run 不自动取消，完成写回不会复活 tombstone；active run 查询使用专用 DAO，不再依赖 `usize::MAX` 分页。
+
+本轮定向验证：
+
+```text
+npm run detect-translations -- --format json
+  5 locales / 14 namespaces / 100% coverage / no issues
+
+npm run governance:legacy-report
+  zero-reference candidates: 0 / classification drift: 0 / boundary violations: 0
+
+npm run test:contracts
+  passed（protocol schema/validator、generated client、app-server-client 299 checks）
+
+npx vitest run "src/components/ScheduledTaskNotificationBridge.test.tsx" \
+  "src/components/scheduled-tasks/ScheduledTasksPage.test.tsx" \
+  "src/lib/api/scheduledTasks.test.ts" \
+  "packages/app-server-client/tests/direct-notifications.test.mjs"
+  4 files / 31 tests passed（validator、通知策略、Host failure、实时刷新、软删除与运行中删除确认）
+
+npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000
+  Gate B passed；真实 Electron/preload/IPC/App Server/RuntimeCore/provider 链路，legacy/mock/invoke error 均为 0
+
+npm run smoke:agent-runtime-current-fixture
+  passed
+
+npm run verify:gui-smoke
+  passed（真实 Electron + App Server）
+
+npm run test:rust:changed -- --changed=origin/main
+  passed（changed-scope 受影响 owner 与反向依赖全部通过）
+
+npm run test:resume
+  no pending batches
+
+npm run verify:local
+  passed（Vitest smart 121/121 batches、changed-scope Rust owner 及反向依赖、真实 Electron GUI smoke）
+
+cargo fmt --manifest-path "lime-rs/Cargo.toml" --all -- --check
+git diff --check
+  passed
+```
+
+## 2026-08-17 测试迁移与最终本地门禁
+
+本轮先将残留的旧 Automation 测试 fixture 收敛到 Scheduled Task current 合约；随后在公开 GUI 路由收口中删除了剩余的 Automation 页面/Settings 入口：
+
+- `WorkspaceRegisteredSkillsPanel.runtime.test.tsx` 改用 `scheduledTasksApi.listDetailed/setEnabled` 和 typed `ScheduledTask`，移除列表加载制造 `automation_job_projection/background_teammate` 的旧断言。
+- `automationLinkStorage.test.ts` 改用 typed `ScheduledTask`、`execution.requestMetadata`、`nextRunAt/lastRunSummary` 和 current 时间字段。
+- `useWorkspaceServiceSkillEntryActions.test.tsx` 改用 `scheduledTasksApi.create`，断言 daily schedule、`execution.threadMode/sourceThreadId/projectId` 和 `requestMetadata`，移除旧 `agent.changed` projection 断言；覆盖已有 contentId 复用和缺失 session 先物化 Thread 两条路径。
+
+本轮验证证据：
+
+```text
+npx vitest run src/components/agent/chat/workspace/useWorkspaceServiceSkillEntryActions.test.tsx
+  14 passed
+
+npm test -- --resume
+  从 113/121 续跑至 121/121，全部通过
+
+npm run verify:local
+  退出码 0；Vitest smart 121/121、i18n/lint/typecheck、test:contracts、changed-scope Rust、真实 Electron GUI smoke 全部通过
+
+npm run test:contracts
+  protocol 无漂移；app-server-client 299 checks；command/harness/modality/scripts/docs 门禁通过
+
+npm run governance:legacy-report
+  zero-reference candidates=0 / classification drift=0 / boundary violations=0
+
+npm run verify:gui-smoke
+  真实 Electron/App Server sidecar 初始化、reload 后 Claw workbench、memory settings 和 smoke evidence 均通过
+
+cargo fmt --manifest-path "lime-rs/Cargo.toml" --all -- --check
+git diff --check
+  通过
+```
+
+当前仍需显式保留的退出条件：`WorkspaceRegisteredSkillsPanel.tsx` 约 1942 行，超过仓库 1000 行业务逻辑上限，拆分应作为后续窄写集；Windows Notification Center 与真实 macOS/Windows sleep-resume 只能由对应平台 runner 补证，不能用本机 macOS 证据替代。
+
+## 2026-08-17 Scheduled Tasks Gate B 与失败历史修复
+
+- Gate B 首次失败的实际根因不是 provider endpoint：保留的真实 Electron rollout 显示 `modelId=null` 继承了隔离环境中排序更靠前的 `lime-hub / gpt-5.2-pro`，请求未到 localhost fixture，最终返回 404。专项 fixture 原先只确认 provider 出现在 `model/list`，没有确认它是默认模型。
+- fixture 修复：创建 provider 后使用 `sortOrder: -1`，并强制断言匹配项 `model/list.isDefault === true`；因此核心场景仍是 `modelId=null`，但继承的 route 确定为本地 OpenAI-compatible fixture，不会因宿主默认 catalog 漂移而误测。
+- GUI 修复：`ScheduledTasksPage.runNow` 在 `startRun` 成功或失败后统一重新加载任务详情、任务列表和运行历史。Runtime 已落盘失败 Run 时，启动请求即使返回错误，页面也会立即显示失败状态、错误文案和运行记录，不再停留在“0 次运行 / 还没有运行记录”。
+- 回归写集：`scripts/electron/scheduled-tasks-fixture-smoke.mjs`、对应 fixture 单测、`src/components/scheduled-tasks/ScheduledTasksPage.tsx`、对应组件单测、`package.json` smoke 入口。
+- 真实证据：`.lime/qc/gui-evidence/scheduled-tasks-electron-fixture/scheduled-tasks-electron-fixture-summary.json` 与同目录 raw/screenshot。
+
+```text
+npx vitest run scripts/electron/scheduled-tasks-fixture-smoke.test.mjs \
+  src/components/scheduled-tasks/ScheduledTasksPage.test.tsx
+  8 passed
+
+npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000 --keep-temp
+  Gate B passed
+  real Electron/preload/IPC/App Server RuntimeCore/provider: passed
+  provider request count: 1; selectedAsDefault: true; authorization: matched
+  canonical Thread/Turn/provider route/final text: matched
+  bridge IPC hits: 34; missing current methods: 0
+  legacy methods/commands: 0; mock fallback: 0; invoke errors: 0
+  console/page errors: 0
+
+npm run test:contracts
+  passed
+
+npm run smoke:agent-runtime-current-fixture
+  passed（真实 Electron/App Server current fixture，liveProviderUsed=false）
+
+npm run verify:gui-smoke
+  passed（真实 Electron + App Server，result=pass）
+
+npm run verify:local
+  passed（Vitest smart 120/120 batches、changed-scope Rust、GUI smoke）
+
+git diff --check
+  passed
+```
+
+本轮 Gate B 证明的主线是：一级导航创建继承模型任务 -> `scheduledTask/run/start` -> Runtime provider 实际请求 -> canonical Thread/Turn/read model -> 运行历史打开同一对话；没有依赖 App Server mock 或 renderer fallback。`--keep-temp` 仅用于保留隔离诊断目录，未删除用户数据。
+
+## 2026-08-17 故障修复写集与退出条件
+
+- 窄写集：`lime-rs/crates/app-server/src/automation_execution.rs`、`lime-rs/crates/app-server/src/runtime/model_providers/selection.rs`、`lime-rs/crates/app-server/src/scheduled_task_worker/tests.rs`、`lime-rs/crates/app-server/tests/scheduled_tasks_jsonrpc.rs`、`scripts/electron/scheduled-tasks-fixture-smoke.mjs`、`scripts/electron/scheduled-tasks-fixture-smoke.test.mjs`、`src/components/scheduled-tasks/ScheduledTasksPage.tsx`、`src/components/scheduled-tasks/ScheduledTasksPage.test.tsx`、`package.json`、本计划文件。
+- `new_thread + modelId=null`：继承 `model/list` 的默认可执行模型，创建 session 前写入 `providerSelector/providerName/modelName` 并执行 `preflight_thread_start`。
+- `new_thread + explicit modelId`：opaque route selector 或 catalog stable id/alias 必须解析为唯一 provider/model；无匹配、非法 selector 或跨 provider 歧义时 fail closed。
+- `continue_thread`：继续复用 durable canonical session route，不创建替代 session，不用 Scheduled Task 的空 route 覆盖 source thread。
+- 回归：public `scheduledTask/run/start` 使用要求 provider selection 的 route-aware backend 与真实 model catalog fixture，断言 inherit/explicit selection、preflight、canonical Thread/Turn/Run lineage；保留无 route catalog 时的 fail-closed 证据。
+- 验证：Rust 定向/related、contracts、Agent current fixture、GUI smoke、`verify:local`、fmt 和 diff check 全部通过；真实 Electron 复走“已安排任务 -> 每日项目简报 -> 更多 -> 立即运行”，确认错误消失、canonical Thread/Turn 已创建且运行历史可见。
+
+### 2026-08-17 故障修复完成
+
+- `new_thread` 已在创建 session 前复用 canonical model catalog 解析：`modelId=null` 继承默认可执行模型，显式 stable id/alias 与 `route:<base64-provider>.<base64-model>` selector 均要求唯一 provider/model；无模型、非法 selector 和跨 provider 歧义均 fail closed。
+- session metadata 写入 `providerSelector/providerName/modelName/serviceTier`，并在真实 Runtime backend 下执行 `preflight_thread_start`；turn runtime options 使用同一路由。`continue_thread` 保留 canonical session identity 和原有 route。
+- route-aware public JSON-RPC 回归覆盖继承、显式 opaque selector、preflight 次数、Thread/Turn route lineage 和无可执行模型错误；worker fixture 已补齐真实 chat provider/model/key，避免测试绕过 route 合同。
+- 真实链路与质量门禁结果：
+
+```text
+cargo test -p app-server --test scheduled_tasks_jsonrpc -- --nocapture
+  5 passed
+
+cargo test -p app-server --lib automation_execution -- --nocapture
+  8 passed
+
+cargo test -p app-server --lib scheduled_task_worker -- --nocapture
+  13 passed
+
+cargo test -p app-server --lib -- --nocapture
+  1678 passed
+
+npm run test:rust:related -- lime-rs/crates/app-server/src/automation_execution.rs \
+  lime-rs/crates/app-server/src/runtime/model_providers/selection.rs \
+  lime-rs/crates/app-server/src/scheduled_task_worker/tests.rs \
+  lime-rs/crates/app-server/tests/scheduled_tasks_jsonrpc.rs
+  passed
+
+npm run test:contracts
+  passed
+
+npm run smoke:agent-runtime-current-fixture
+  passed（真实 Electron/Preload/App Server，liveProviderUsed=false）
+
+npm run verify:gui-smoke
+  passed（result=pass）
+
+npm run verify:local
+  passed
+
+cargo fmt --manifest-path lime-rs/Cargo.toml --all -- --check
+git diff --check
+  passed
+```
+
+原始用户路径“已安排任务 -> 每日项目简报 -> 更多 -> 立即运行”已复走，`App Server runtime backend requires provider/model selection` 不再出现；canonical Thread/Turn 创建成功，运行历史可见。默认上游 Deno `ptrcomp_sandbox` 地址仍会 404，但仓库 wrapper 使用本地 v150.4.0 Apple ARM artifact 完成上述 Rust 验证；该证据不替代 Windows 平台验证。
+
+## 2026-08-17 公开 Automation GUI 路由清理
+
+- 一级入口统一为 `Page = "scheduled-tasks"`、侧栏 `id = "scheduled-tasks"`、`ScheduledTasksPageParams` 和 `selectedTaskId`；旧 `AutomationPageParams`、`AutomationWorkspaceTab` 与 `Page = "automation"` 已删除。
+- Settings 不再暴露 `SettingsTabs.Automation` 或重复挂载 Scheduled Tasks；Settings 首页快捷入口直接导航到一级 `scheduled-tasks`，五语言 `settings`/`navigation` key 同步改名。
+- `legacySurfaceCatalog` 新增 `frontend-retired-automation-page-route` 负向守卫，覆盖 route、sidebar、AppPageContent、Settings layout、i18n key，防止公开 Automation surface 回流。
+
+本轮公开 GUI 收口验证：
+
+```text
+npx vitest run <AppPageContent/AppSidebar/sidebarNav/useAppNavigation/Settings layout/Settings home/legacySurfaceCatalog/i18n>
+  9 files / 308 tests passed
+
+npm run typecheck
+  passed
+
+npm run detect-translations -- --format json
+  5 locales / 14 namespaces / 100% coverage / no issues
+
+npm run governance:legacy-report
+  zero-reference candidates=0 / classification drift=0 / boundary violations=0
+
+npm run test:contracts
+  protocol 967 types no drift / app-server-client 299 checks / command, scripts and docs gates passed
+
+git diff --check
+  passed
+```
+
+Rust related 首次修复后重新编译在链接 `app-server` 测试二进制时被本机磁盘空间阻断（Data volume 可用约 1.7 GB；`lime-rs/target/debug/incremental` 约 36 GB）。待确认删除该可再生成缓存后复跑，不删除源码、用户数据或测试证据。
 
 ## 窄写集
 
@@ -37,21 +256,21 @@
 
 ## 分类
 
-- `current`：`scheduledTask/* -> App Server -> scheduler -> RuntimeCore -> Thread/Turn/Item -> Agent Run -> GUI`。
-- `deprecated`：旧 Automation 页面、`automationJob/*`、`TaskSchedule::{Every,Cron,At}`、旧设置业务工作台。
-- `dead target`：`browser_session` 自动任务、SceneApp automation context、生产 mock fallback、renderer timer。
-- 不建立长期 `compat` owner；存量只允许一次性迁移。
+- `current`：`scheduledTask/* -> App Server -> scheduler -> RuntimeCore -> Thread/Turn/Item -> Agent Run -> GUI`；`automation_jobs` 与 `AutomationJob` DAO 仅是 current 内部存储映射，`TaskSchedule::{Every,Cron,At}` 仅是 scheduler lowering。
+- `compat`：Base Setup / Service Skill 的 `automation_job` binding family 仍有真实消费者，只允许边界委托和一次性迁移，不得扩展第二套任务协议。
+- `dead / deleted / forbidden-to-restore`：旧 Automation public method/schema/client、页面、Settings tab、renderer projection、smoke 与旧 i18n consumer；`browser_session` 自动任务、SceneApp automation context、生产 mock fallback、renderer timer。
+- 不建立新的长期 compat owner；现有 compat taxonomy 必须继续向 Scheduled Task current API 收敛。
 
 ## 阶段
 
 | 阶段 | 状态 | 退出条件 |
 |---|---|---|
 | ST-0 合同与审计 | `complete` | 需求、owner、迁移和验证合同已落盘，现有主链已盘点 |
-| ST-1/2 协议与领域 | `in-progress` | 9 个 method、唯一表映射、协议 enum/schema/generated client 已落盘；旧 method 删除和旧 consumer 清理尚未完成 |
-| ST-3 运行闭环 | `in-progress` | manual run 与在线 Runtime backend 的 due run 均复用 RuntimeCore/Thread/Turn/Agent Run；原子 claim、同一 run id、启动前复核、启动失败终态、canonical lineage、24 小时 catch-up、超窗 missed、overlap missed、one-shot CAS、DST、手动/暂停运行、启动恢复、canonical terminal 收口与时钟回拨合同已通过定向回归；真实 OS sleep/wake 事件和跨平台证据尚未完成 |
-| ST-4 GUI | `in-progress` | 一级入口、主从工作台、创建/编辑/暂停/运行历史和五语种已落盘；GUI smoke/Gate B 尚未完成 |
-| ST-5 对话与通知 | `pending` | draft 确认创建和 Desktop Host 通知完成 |
-| ST-6 清理与验证 | `pending` | 旧路清零，Rust/contracts/fixture/GUI/Gate B 通过 |
+| ST-1/2 协议与领域 | `complete` | 9 个 method、唯一表映射、协议 enum/schema/generated client 已落盘；旧 public method 删除、旧 consumer 清理和 GUI route 收口完成 |
+| ST-3 运行闭环 | `complete / platform-evidence-pending` | manual run 与在线 Runtime backend 的 due run 均复用 RuntimeCore/Thread/Turn/Agent Run；原子 claim、同一 run id、启动前复核、启动失败终态、canonical lineage、24 小时 catch-up、超窗 missed、overlap missed、one-shot CAS、DST、手动/暂停运行、启动恢复、canonical terminal 收口与时钟回拨合同已通过定向回归；真实 OS sleep/wake 事件和跨平台证据尚未完成 |
+| ST-4 GUI | `complete` | 一级入口、主从工作台、创建/编辑/暂停/运行历史和五语种已落盘；仓库 GUI smoke 与 Scheduled Tasks 专项真实 Electron Gate B 已通过 |
+| ST-5 对话与通知 | `complete` | typed terminal notification、Renderer 全局 bridge、Desktop Host failure toast、实时刷新和五语种文案已完成并通过回归 |
+| ST-6 清理与验证 | `implementation-complete / local-validation-blocked-by-disk-space / platform-evidence-pending` | 旧 Automation 双轨、validator、软删除和运行中删除合同已完成；contracts、frontend typecheck、GUI/navigation/i18n/governance 定向门禁已通过；Rust related、Scheduled Tasks Gate B、Agent fixture、GUI smoke 与 verify:local 待释放 36 GB 可再生成 incremental cache 后复跑；Windows Notification Center 和真实 OS sleep/resume 证据仍待平台 runner |
 
 ## 已执行验证
 
@@ -232,18 +451,19 @@ git diff --check
 
 ## 阻塞与风险
 
-- 早期 `ptrcomp_sandbox` archive 404 阻塞已不再阻断本地发布候选：本轮默认 `npm run test:rust:related -- ...` 已完整编译并通过受影响 owner 与反向依赖。该结论只覆盖当前 macOS arm64 工具链，不替代 Windows 平台证据。
-- 旧 `automationJob/*`、`automationSchedule/*`、`automationScheduler/*` 和旧 Settings consumer 仍存在，分类为 `deprecated / migration-pending`，当前不是唯一协议面。
-- 启动恢复、interval sleep/wake reconcile 与时钟跳变源码合同已完成定向验证；真实 macOS/Windows OS sleep/resume 进程证据、terminal notification、软删除和运行中删除合同尚未完成。
-- 仓库级真实 Electron GUI smoke 已通过；Scheduled Tasks 专项 Agent current fixture、用户路径 Gate B 和 Windows 平台证据尚未完成。
+- `npm run test:rust:related -- ...` 已通过源码编译检查并暴露 3 个测试访问点回归，已修正为 `serde_json::Value::get`；随后重跑在链接 `app-server` 测试二进制时因本机 Data volume 仅剩约 1.7 GB 失败。删除 `lime-rs/target/debug/incremental`（约 36 GB）需要用户明确确认，确认后复跑原 related 范围。
+- 上游默认 `ptrcomp_sandbox` archive 仍可能 404；仓库 wrapper 已配置本地 v150.4.0 Apple ARM artifact。该结论只覆盖当前 macOS arm64 工具链，不替代 Windows 平台证据。
+- 公开 Automation 双轨、旧 Settings consumer、旧 GUI route 已完成 `dead / deleted / forbidden-to-restore` 清理；Base Setup / Service Skill 的 `automation_job` binding family 仍属于 `compat` taxonomy，不得机械删除。
+- 启动恢复、interval sleep/wake reconcile 与时钟跳变源码合同已完成定向验证；真实 macOS/Windows OS sleep/resume 进程证据仍需补齐，且 Windows Notification Center 必须由真实 Windows runner 证明。
+- Rust related、Scheduled Tasks 专项 Agent current fixture、真实 Electron GUI smoke 与 `verify:local` 需在释放缓存后复跑；协议 validator、终态通知、Renderer bridge、实时刷新、软删除和运行中删除合同及本轮 GUI route/i18n/typecheck/governance 门禁已通过。
 
 ## 架构确认
 
 ```text
 架构影响：重大；新增 Scheduled Tasks public JSON-RPC/read-model 边界与一级工作台，运行复用 RuntimeCore/Thread/Turn/Item。
 架构图已更新：internal/aiprompts/architecture.md#73-scheduled-tasks；internal/aiprompts/commands.md#scheduled-tasks-主链。
-责任开发者确认：root（2026-08-13，v1.127.0 发布）
-确认内容：已核对目录归属、数据流、依赖方向、协议边界和验证门禁。
+责任开发者确认：root（2026-08-17）
+确认内容：已核对目录归属、数据流、依赖方向、协议边界、通知/软删除行为和验证门禁。
 ```
 
 架构确认已满足 release evidence 入口；Windows 平台证据仍必须使用真实 Windows runner，macOS 不能替代该平台结论。

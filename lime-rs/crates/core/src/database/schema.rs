@@ -1096,7 +1096,8 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
             auto_disabled_until TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
-            last_delivery_json TEXT
+            last_delivery_json TEXT,
+            deleted_at TEXT
         )",
         [],
     )?;
@@ -1104,6 +1105,7 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
         "ALTER TABLE automation_jobs ADD COLUMN last_delivery_json TEXT",
         [],
     );
+    let _ = conn.execute("ALTER TABLE automation_jobs ADD COLUMN deleted_at TEXT", []);
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_automation_jobs_next_run_at ON automation_jobs(next_run_at)",
         [],
@@ -1114,6 +1116,10 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
     )?;
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_automation_jobs_enabled_updated_at ON automation_jobs(enabled, updated_at DESC)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_automation_jobs_deleted_at ON automation_jobs(deleted_at)",
         [],
     )?;
 

@@ -466,34 +466,32 @@ impl LocalExecutionProcessHandle {
     }
 
     pub async fn next_event(&mut self) -> Option<LocalExecutionProcessEvent> {
-        loop {
-            if let Ok(delta) = self.output_rx.try_recv() {
-                return Some(LocalExecutionProcessEvent::Output(delta));
-            }
-            if self.final_snapshot.is_some() {
-                return None;
-            }
-            let mut final_rx = self.final_rx.take()?;
-            tokio::select! {
-                biased;
-                delta = self.output_rx.recv() => {
-                    match delta {
-                        Some(delta) => {
-                            self.final_rx = Some(final_rx);
-                            return Some(LocalExecutionProcessEvent::Output(delta));
-                        }
-                        None => {
-                            let snapshot = final_rx.await.ok()?;
-                            self.final_snapshot = Some(snapshot.clone());
-                            return Some(LocalExecutionProcessEvent::Exited(snapshot));
-                        }
+        if let Ok(delta) = self.output_rx.try_recv() {
+            return Some(LocalExecutionProcessEvent::Output(delta));
+        }
+        if self.final_snapshot.is_some() {
+            return None;
+        }
+        let mut final_rx = self.final_rx.take()?;
+        tokio::select! {
+            biased;
+            delta = self.output_rx.recv() => {
+                match delta {
+                    Some(delta) => {
+                        self.final_rx = Some(final_rx);
+                        return Some(LocalExecutionProcessEvent::Output(delta));
+                    }
+                    None => {
+                        let snapshot = final_rx.await.ok()?;
+                        self.final_snapshot = Some(snapshot.clone());
+                        return Some(LocalExecutionProcessEvent::Exited(snapshot));
                     }
                 }
-                result = &mut final_rx => {
-                    let snapshot = result.ok()?;
-                    self.final_snapshot = Some(snapshot.clone());
-                    return Some(LocalExecutionProcessEvent::Exited(snapshot));
-                }
+            }
+            result = &mut final_rx => {
+                let snapshot = result.ok()?;
+                self.final_snapshot = Some(snapshot.clone());
+                return Some(LocalExecutionProcessEvent::Exited(snapshot));
             }
         }
     }

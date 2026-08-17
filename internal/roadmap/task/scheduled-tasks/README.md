@@ -1,8 +1,8 @@
 # Lime 已安排任务路线图
 
-状态：`requirements-ready / implementation-not-started`
+状态：`implemented / platform-evidence-pending`
 
-更新时间：2026-08-13
+更新时间：2026-08-17
 
 ## 主目标
 
@@ -25,7 +25,7 @@ Electron Desktop Host
 | ------------------------------------------------------ | ---------------------------------------------------------------------- | --------------------- |
 | 用户提供的 5 张 ChatGPT/Codex Desktop 截图             | 页面信息架构、列表/详情/创建/对话内创建体验                            | 产品目标              |
 | `/Users/coso/Documents/dev/rust/codex`                 | `ScheduledTaskSummary`、`hourly/daily/weekdays/weekly` 与 weekday 枚举 | 可验证 parity 基准    |
-| Lime current `automationJob/*`、`scheduler`、Agent Run | CRUD、持久化、调度、真实执行和历史能力                                 | 实现基线              |
+| Lime current `scheduledTask/*`、scheduler、Agent Run | CRUD、持久化、调度、真实执行和历史能力                                  | 已实现基线            |
 | Lime 当前“持续流程”页面                                | 可迁移功能与治理输入                                                   | 迁移来源，不是目标 UX |
 
 不得把截图中不可见的行为写成“Codex 已实现”；不得把 Lime 现有字段未经产品审查全部暴露到新主界面。
@@ -46,12 +46,12 @@ Electron Desktop Host
 
 | 分类                | 能力/路径                                                                            | 处置                                                                           |
 | ------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `current`           | App Server `automationJob/*`、`automationSchedule/*`                                 | 实施前唯一 CRUD owner；同一迁移变更集替换为已安排任务 typed contract，之后删除 |
-| `current`           | `lime-rs/crates/scheduler`                                                           | 继续承担持久化调度语义；不得平级新建 scheduler crate                           |
-| `current`           | RuntimeCore Thread/Turn/Item、Agent Run                                              | 继续承担真实执行、投影与历史                                                   |
-| `current target`    | `src/components/automation/AutomationPage.tsx`                                       | 重构为已安排任务主从工作台                                                     |
-| `deprecated target` | `TaskSchedule::{Every,Cron,At}` 与设置页完整“持续流程”业务工作台                     | 只允许同一变更集迁出；迁移完成即物理删除，不建立 compat owner                  |
-| `dead target`       | `protocol/v0/automation.rs`、`browser_session`、SceneApp 旧上下文、renderer 定时触发 | 替换后删除并补回流守卫                                                         |
+| `current` | App Server `scheduledTask/*`、`src/lib/api/scheduledTasks.ts` | 唯一公开 CRUD、运行、预览和通知合同 |
+| `current` | `lime-rs/crates/scheduler`、`automation_jobs` | 唯一持久化调度 owner；旧 Automation 命名只存在于内部存储映射 |
+| `current` | RuntimeCore Thread/Turn/Item、Agent Run | 真实执行、投影与历史 |
+| `current` | `src/components/scheduled-tasks/**` | 一级主从工作台与 Service Skill 创建对话框 |
+| `compat` | Base Setup / Service Skill `automation_job` binding family | 只做 catalog 分类；不得恢复旧协议或 Agent UI projection，待独立 schema 迁移 |
+| `dead / deleted` | `automationJob/*`、`automationSchedule/*`、`automationScheduler/*`、旧页面/Settings/文案/smoke/Agent UI projection | 只允许负向回流守卫和历史 evidence |
 
 本路线不设置长期 `compat` owner。若审计发现本地存量，只允许启动期一次性数据迁移；迁移完成后旧协议、旧日程写入和旧 UI 入口立即删除。
 
@@ -79,4 +79,4 @@ Electron Desktop Host
 
 ## 当前下一刀
 
-先冻结 `ScheduledTask` v2 产品合同与旧 `AutomationJob` 迁移规则，再做页面。未完成 schema、owner、迁移和失败语义评审前，不应先用现有复杂表单换皮。
+补真实 Windows Notification Center、Windows Gate B 与 macOS/Windows sleep-resume 平台证据。不得用受控时钟回归或 macOS Electron Gate B 代替跨平台证据。

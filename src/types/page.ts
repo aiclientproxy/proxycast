@@ -20,7 +20,7 @@ export type Page =
   | "skills"
   | "plugins"
   | "knowledge"
-  | "automation"
+  | "scheduled-tasks"
   | "channels"
   | "resources"
   | "browser-runtime"
@@ -208,11 +208,8 @@ export interface KnowledgePageParams {
   };
 }
 
-export type AutomationWorkspaceTab = "tasks" | "overview";
-
-export interface AutomationPageParams {
-  selectedJobId?: string;
-  workspaceTab?: AutomationWorkspaceTab;
+export interface ScheduledTasksPageParams {
+  selectedTaskId?: string;
   projectId?: string;
   sessionId?: string;
   threadId?: string;
@@ -263,7 +260,7 @@ export interface AgentProjectFileOpenTarget {
  */
 export type PageParams =
   | AgentPageParams
-  | AutomationPageParams
+  | ScheduledTasksPageParams
   | BrowserRuntimePageParams
   | ExpertsPageParams
   | ResourcesPageParams

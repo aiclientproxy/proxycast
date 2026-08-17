@@ -62,6 +62,59 @@ impl RuntimeCore {
         }
     }
 
+    pub(crate) async fn resolve_scheduled_task_model_selection(
+        &self,
+        model_id: Option<&str>,
+    ) -> Result<ThreadStartModelSelection, RuntimeCoreError> {
+        let Some(model_id) = model_id else {
+            return self
+                .resolve_thread_start_model_selection(None, None, None)
+                .await;
+        };
+        let model_id = non_empty(model_id).ok_or_else(|| {
+            RuntimeCoreError::InvalidRequest(
+                "scheduled task modelId must be a non-empty string".to_string(),
+            )
+        })?;
+        let route = decode_model_route_selector(model_id)?;
+        let catalogs = self.model_catalog(None).await?;
+        let mut candidates = selectable_chat_models(&catalogs)
+            .into_iter()
+            .filter(|candidate| match route.as_ref() {
+                Some((provider, model)) => {
+                    candidate.provider == *provider && candidate.matches_model(model)
+                }
+                None => candidate.matches_model(model_id),
+            })
+            .collect::<Vec<_>>();
+
+        match candidates.len() {
+            1 => {
+                let candidate = candidates.pop().expect("single scheduled task model");
+                Ok(ThreadStartModelSelection {
+                    model: candidate.model,
+                    model_provider: candidate.provider,
+                    service_tier: candidate.default_service_tier,
+                })
+            }
+            0 => Err(RuntimeCoreError::RouteRejected {
+                session_id: "scheduledTask/run/start".to_string(),
+                provider: route.as_ref().map(|(provider, _)| provider.clone()),
+                model: Some(
+                    route
+                        .as_ref()
+                        .map(|(_, model)| model.clone())
+                        .unwrap_or_else(|| model_id.to_string()),
+                ),
+                category: RouteFailureCategory::ModelUnavailable,
+                reason_code: "scheduled_task_model_unavailable".to_string(),
+            }),
+            _ => Err(RuntimeCoreError::InvalidRequest(format!(
+                "scheduled task modelId is ambiguous across providers: {model_id}"
+            ))),
+        }
+    }
+
     pub(crate) async fn reconcile_thread_model_selection(
         &self,
         thread_id: &str,
@@ -595,6 +648,37 @@ fn encode_model_route_selector(provider_id: &str, model_id: &str) -> String {
         URL_SAFE_NO_PAD.encode(provider_id.as_bytes()),
         URL_SAFE_NO_PAD.encode(model_id.as_bytes())
     )
+}
+
+fn decode_model_route_selector(
+    selector: &str,
+) -> Result<Option<(String, String)>, RuntimeCoreError> {
+    let Some(encoded) = selector.strip_prefix("route:") else {
+        return Ok(None);
+    };
+    let mut parts = encoded.split('.');
+    let provider = parts.next();
+    let model = parts.next();
+    if provider.is_none() || model.is_none() || parts.next().is_some() {
+        return Err(invalid_model_route_selector(selector));
+    }
+    let decode = |value: &str| {
+        URL_SAFE_NO_PAD
+            .decode(value)
+            .ok()
+            .and_then(|value| String::from_utf8(value).ok())
+            .and_then(|value| non_empty(&value).map(str::to_string))
+    };
+    match (decode(provider.unwrap()), decode(model.unwrap())) {
+        (Some(provider), Some(model)) => Ok(Some((provider, model))),
+        _ => Err(invalid_model_route_selector(selector)),
+    }
+}
+
+fn invalid_model_route_selector(selector: &str) -> RuntimeCoreError {
+    RuntimeCoreError::InvalidRequest(format!(
+        "scheduled task modelId is not a valid model route selector: {selector}"
+    ))
 }
 
 fn non_empty(value: &str) -> Option<&str> {

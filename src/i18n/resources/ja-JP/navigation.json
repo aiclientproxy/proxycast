@@ -6,7 +6,7 @@
   "navigation.sidebar.actions.expand": "ナビゲーションを展開",
   "navigation.sidebar.home.ariaLabel": "Lime ホームへ戻る",
   "navigation.sidebar.home.label": "Lime ホーム",
-  "navigation.sidebar.items.automation": "スケジュール済みタスク",
+  "navigation.sidebar.items.scheduledTasks": "スケジュール済みタスク",
   "navigation.sidebar.items.channels": "メッセージチャネル",
   "navigation.sidebar.items.homeGeneral": "新規タスク",
   "navigation.sidebar.items.knowledge": "プロジェクト資料",

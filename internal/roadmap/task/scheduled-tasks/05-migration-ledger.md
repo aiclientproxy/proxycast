@@ -1,6 +1,6 @@
 # 已安排任务迁移与清理账本
 
-状态：`target ledger / no deletion executed`
+状态：`executed / public-dual-track-deleted`
 
 ## 1. 原则
 
@@ -8,21 +8,21 @@
 
 ## 2. 账本
 
-| 当前项                          | 当前分类                    | 目标分类                            | 动作                                                 | 退出条件                                            |
-| ------------------------------- | --------------------------- | ----------------------------------- | ---------------------------------------------------- | --------------------------------------------------- |
-| `automationJob/*` JSON-RPC      | `current`                   | `dead/deleted/forbidden-to-restore` | 同一变更集迁到 `scheduledTask/*`，不保留委托 handler | 所有生产 consumer 和 fixture 迁完，负向守卫禁止回流 |
-| `automationSchedule/*`          | `current`                   | `migrated/deleted`                  | 迁为 `scheduledTask/schedule/preview`                | schema/client/GUI 同步完成                          |
-| `automationScheduler/*`         | `current settings`          | `internal/diagnostic`               | 不进入任务主页面；保留必要系统诊断                   | 任务运行不依赖设置页打开                            |
-| `AutomationJob` store rows      | `current`                   | `migrated`                          | 一次性 schema/data migration 到目标 Task             | migration idempotent，冷启动读写仅一份表/owner      |
-| `TaskSchedule::Every/Cron/At`   | `current`                   | `dead/deleted/forbidden-to-restore` | 启动期一次迁移；不可映射记录默认暂停，不继续执行     | 迁移后旧类型读写与 schema 为 0，guard 覆盖          |
-| `agent_turn` payload            | `current`                   | `current normalized`                | 收敛为 execution snapshot + Thread policy            | task/run/thread/turn identity 贯穿                  |
-| `browser_session` payload       | `deprecated`                | `dead/deleted`                      | 禁止创建和执行，删除 GUI/protocol/runtime 分支       | 生产引用为 0，旧行有明确删除/失效策略               |
-| SceneApp legacy context         | `deprecated`                | `dead/deleted`                      | 删除 projection、文案和测试正向路径                  | 只允许历史 evidence/negative guard                  |
-| 设置页完整 Automation workspace | `current duplicate surface` | `deprecated/deleted`                | 业务功能迁到一级页面                                 | 设置页只剩必要系统级项，不重复 CRUD                 |
-| `AutomationPage` 复用设置组件   | `current`                   | `rewritten current`                 | 改为独立主从工作台 owner                             | 新页面不再依赖 Settings 业务大组件                  |
-| automation draft/projection     | `current partial`           | `current normalized`                | 对齐 `scheduled_task_draft` 和确认创建               | Agent 不可未经确认直接创建                          |
-| 旧 i18n `settings.automation.*` | `current`                   | `migrated/deleted`                  | 新增 `scheduledTasks.*`，迁完删除旧正向 key          | 五语种完整且无 orphan key                           |
-| 旧 Electron automation fixture  | `current`                   | `replaced`                          | 更新为真实 scheduled task Gate B                     | 证明 app-server/turn/read model 而非旧 UI           |
+| 项目 | 最终分类 | 已执行动作 | 当前退出条件 |
+| --- | --- | --- | --- |
+| `automationJob/*` JSON-RPC | `dead / deleted / forbidden-to-restore` | protocol/schema/client/handler/consumer/fixture 已删除 | 负向 contract guard 禁止回流 |
+| `automationSchedule/*` | `dead / deleted / forbidden-to-restore` | 公开预览迁到 `scheduledTask/schedule/preview` | 负向 contract guard 禁止回流 |
+| `automationScheduler/*` | `dead / deleted / forbidden-to-restore` | Settings 诊断与公开 method 已删除 | scheduler 只由 current worker 内部驱动 |
+| `AutomationJob` / `automation_jobs` | `current internal storage mapping` | 继续承载 Scheduled Task 唯一持久化，不新增第二表 | 不得重新暴露旧公开协议或产品命名 |
+| `TaskSchedule::Every/Cron/At` | `current internal lowering` | `ScheduledTaskSchedule` 在 App Server 边界统一 lower/raise | 不得出现在 Renderer 或公开 Scheduled Task wire |
+| `agent_turn` payload | `current normalized` | 收敛为 execution snapshot + Thread policy | task/run/thread/turn identity 贯穿 |
+| `browser_session` Scheduled Task payload | `dead / rejected` | 创建边界不再生成，执行边界 fail closed | 与 current `browserSession/*` 独立能力不得混淆 |
+| SceneApp legacy context | `dead / deleted` | projection、文案和测试正向路径已删除 | 只允许历史 evidence / negative guard |
+| 设置页完整 Automation workspace | `dead / deleted` | 业务功能迁到一级 Scheduled Tasks 页面 | 不得恢复重复 CRUD |
+| 旧 `AutomationPage` | `dead / deleted` | 替换为 `src/components/scheduled-tasks/**` | 一级导航只进入 current 工作台 |
+| automation draft / Agent UI projection | `split` | Service Skill 创建迁到 typed Scheduled Task；`automation_job_projection` 删除 | 不得重建 `background_teammate` 平行 read model |
+| 旧 i18n `settings.automation.*` | `dead / deleted` | 五语种 2015 个 key 删除，current 文案进入 `scheduledTasks.json` | i18n 负向守卫与 100% coverage |
+| 旧 Electron automation fixture | `dead / deleted` | 替换为 Scheduled Tasks 真实 Electron Gate B | old method/mock hit 必须为 0 |
 
 ## 3. 数据迁移规则
 
@@ -39,7 +39,7 @@
 
 - Renderer/业务文档重新出现 `browser_session` 自动化创建路径。
 - `settings.automation` 继续作为任务产品主入口。
-- 生产代码写入 `TaskSchedule::Every/Cron/At`。
+- Renderer 或公开协议写入 `TaskSchedule::Every/Cron/At`；这些类型只允许在内部 storage lowering 使用。
 - 页面/Hook 直接调用裸 invoke 或 renderer timer 触发任务。
 - Electron main 注册任务 CRUD 或 scheduler 业务 handler。
 - 生产 mock 返回 scheduled task 成功。

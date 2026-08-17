@@ -6,7 +6,15 @@ use crate::{
 };
 use app_server_protocol::AgentSessionStartParams;
 use lime_core::config::{AutomationExecutionMode, DeliveryConfig, TaskSchedule};
+use lime_core::database::dao::api_key_provider::{
+    ApiKeyEntry, ApiKeyProvider, ApiKeyProviderDao, ApiProviderType, ProviderGroup,
+};
 use lime_core::database::dao::automation_job::{AutomationJob, AutomationJobDao};
+use lime_core::models::model_registry::{
+    ModelCapabilities, ModelModality, ModelRuntimeFeature, ModelTaskFamily,
+    ProviderModelCapability, ProviderModelConfig,
+};
+use lime_services::api_key_provider_service::ApiKeyProviderService;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
 
@@ -58,6 +66,7 @@ async fn worker_fixture() -> WorkerFixture {
     let temp = tempfile::tempdir().expect("create scheduled task worker temp dir");
     let db = database::init_database_at_path(temp.path().join("product.sqlite"))
         .expect("initialize scheduled task worker database");
+    insert_chat_provider(&db);
     let app_data_source = LocalAppDataSource::initialize_with_roots(
         db.clone(),
         temp.path(),
@@ -79,6 +88,67 @@ async fn worker_fixture() -> WorkerFixture {
         runtime,
         backend,
     }
+}
+
+fn insert_chat_provider(db: &DbConnection) {
+    let conn = database::lock_db(db).expect("lock scheduled task worker provider database");
+    let now = Utc::now();
+    let provider_id = "scheduled-worker-provider";
+    ApiKeyProviderDao::insert_provider(
+        &conn,
+        &ApiKeyProvider {
+            id: provider_id.to_string(),
+            name: provider_id.to_string(),
+            provider_type: ApiProviderType::Openai,
+            api_host: "https://fixture.invalid/v1".to_string(),
+            is_system: false,
+            group: ProviderGroup::Custom,
+            enabled: true,
+            sort_order: 0,
+            api_version: None,
+            project: None,
+            location: None,
+            region: None,
+            models: vec![ProviderModelConfig {
+                id: "scheduled-worker-model".to_string(),
+                display_name: None,
+                capability: Some(ProviderModelCapability {
+                    task_families: vec![ModelTaskFamily::Chat],
+                    input_modalities: vec![ModelModality::Text],
+                    output_modalities: vec![ModelModality::Text],
+                    runtime_features: vec![
+                        ModelRuntimeFeature::Streaming,
+                        ModelRuntimeFeature::ToolCalling,
+                    ],
+                    capabilities: ModelCapabilities {
+                        tools: true,
+                        streaming: true,
+                        function_calling: true,
+                        ..ModelCapabilities::default()
+                    },
+                }),
+            }],
+            prompt_cache_mode: None,
+            created_at: now,
+            updated_at: now,
+        },
+    )
+    .expect("insert scheduled task worker provider");
+    ApiKeyProviderDao::insert_api_key(
+        &conn,
+        &ApiKeyEntry {
+            id: format!("{provider_id}-key"),
+            provider_id: provider_id.to_string(),
+            api_key_encrypted: ApiKeyProviderService::new().encrypt_api_key("fixture-key"),
+            alias: None,
+            enabled: true,
+            usage_count: 0,
+            error_count: 0,
+            last_used_at: None,
+            created_at: now,
+        },
+    )
+    .expect("insert scheduled task worker provider key");
 }
 
 fn insert_job(
@@ -131,6 +201,7 @@ fn insert_job(
             consecutive_failures: 0,
             last_retry_count: 0,
             auto_disabled_until: None,
+            deleted_at: None,
             last_delivery: None,
             created_at: now.clone(),
             updated_at: now,
@@ -638,8 +709,26 @@ fn due_scan_records_old_window_as_missed_without_claiming_a_turn() {
         )
         .expect("set one-shot old schedule");
     }
-    let claims = claim_due_scheduled_tasks(&db, &now.to_rfc3339(), 32).expect("reconcile old task");
-    assert!(claims.is_empty());
+    let scan = scan_due_scheduled_tasks(&db, &now.to_rfc3339(), 32).expect("reconcile old task");
+    assert!(scan.claims.is_empty());
+    assert_eq!(scan.terminal_runs.len(), 1);
+    assert_eq!(scan.terminal_runs[0].0, "missed-task");
+    let notification = load_run_notification(
+        &db,
+        scan.terminal_runs[0].0.as_str(),
+        scan.terminal_runs[0].1.as_str(),
+    )
+    .expect("load missed notification")
+    .expect("missed notification exists");
+    let app_server_protocol::protocol::v2::ServerNotification::ScheduledTaskRunUpdated(
+        notification,
+    ) = notification
+    else {
+        panic!("expected scheduled task run notification");
+    };
+    assert_eq!(notification.status, "missed");
+    assert!(notification.attention);
+    assert_eq!(notification.notification_policy, "failures");
     let conn = database::lock_db(&db).expect("read missed task database");
     let task = AutomationJobDao::get(&conn, "missed-task")
         .expect("read missed task")
@@ -762,6 +851,7 @@ fn sample_reconcile_job(next_run_at: &str, every_secs: u64) -> AutomationJob {
         consecutive_failures: 0,
         last_retry_count: 0,
         auto_disabled_until: None,
+        deleted_at: None,
         last_delivery: None,
         created_at: now.clone(),
         updated_at: now,

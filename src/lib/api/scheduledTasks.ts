@@ -1,5 +1,15 @@
 import { AppServerClient } from "@/lib/api/appServer";
 import {
+  subscribeAppServerNotifications,
+  type AppServerEventBusDrainOptions,
+  type AppServerEventBusSubscription,
+} from "@/lib/api/appServerEventBus";
+import {
+  scheduledTaskChangedServerNotification,
+  scheduledTaskRunUpdatedServerNotification,
+} from "../../../packages/app-server-client/src/server-notifications";
+import {
+  METHOD_SCHEDULED_TASK_CHANGED,
   METHOD_SCHEDULED_TASK_CREATE,
   METHOD_SCHEDULED_TASK_DELETE,
   METHOD_SCHEDULED_TASK_ENABLED_SET,
@@ -7,22 +17,27 @@ import {
   METHOD_SCHEDULED_TASK_READ,
   METHOD_SCHEDULED_TASK_RUN_LIST,
   METHOD_SCHEDULED_TASK_RUN_START,
+  METHOD_SCHEDULED_TASK_RUN_UPDATED,
   METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW,
   METHOD_SCHEDULED_TASK_UPDATE,
   type ScheduledTask,
+  type ScheduledTaskChangedNotification,
   type ScheduledTaskCreateRequest,
   type ScheduledTaskExecution,
   type ScheduledTaskListParams,
   type ScheduledTaskListResponse,
   type ScheduledTaskRunSummary,
+  type ScheduledTaskRunUpdatedNotification,
   type ScheduledTaskSchedule,
   type ScheduledTaskSchedulePreviewResponse as AppServerScheduledTaskSchedulePreviewResponse,
   type ScheduledTaskSummary,
   type ScheduledTaskUpdateRequest,
   type ScheduledTaskWeekday,
+  type JsonRpcMessage,
 } from "../../../packages/app-server-client/src/protocol";
 
 export {
+  METHOD_SCHEDULED_TASK_CHANGED,
   METHOD_SCHEDULED_TASK_CREATE,
   METHOD_SCHEDULED_TASK_DELETE,
   METHOD_SCHEDULED_TASK_ENABLED_SET,
@@ -30,21 +45,30 @@ export {
   METHOD_SCHEDULED_TASK_READ,
   METHOD_SCHEDULED_TASK_RUN_LIST,
   METHOD_SCHEDULED_TASK_RUN_START,
+  METHOD_SCHEDULED_TASK_RUN_UPDATED,
   METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW,
   METHOD_SCHEDULED_TASK_UPDATE,
 };
 export type {
   ScheduledTask,
+  ScheduledTaskChangedNotification,
   ScheduledTaskCreateRequest,
   ScheduledTaskExecution,
   ScheduledTaskListParams,
   ScheduledTaskListResponse,
   ScheduledTaskRunSummary,
+  ScheduledTaskRunUpdatedNotification,
   ScheduledTaskSchedule,
   ScheduledTaskSummary,
   ScheduledTaskUpdateRequest,
   ScheduledTaskWeekday,
 };
+
+export interface ScheduledTaskNotificationSubscription {
+  onChanged?: (notification: ScheduledTaskChangedNotification) => void;
+  onError?: (error: unknown) => void;
+  onRunUpdated?: (notification: ScheduledTaskRunUpdatedNotification) => void;
+}
 
 export type ScheduledTaskSchedulePreviewResponse =
   AppServerScheduledTaskSchedulePreviewResponse & { warnings: string[] };
@@ -83,6 +107,16 @@ export function createScheduledTasksApi(
         nextCursor:
           typeof record.nextCursor === "string" ? record.nextCursor : null,
       };
+    },
+
+    async listDetailed(
+      params: ScheduledTaskListParams = {},
+    ): Promise<ScheduledTask[]> {
+      const summaries = await this.list(params);
+      const tasks = await Promise.all(
+        summaries.items.map((summary) => this.read(summary.id)),
+      );
+      return tasks.filter((task): task is ScheduledTask => task !== null);
     },
 
     async read(id: string): Promise<ScheduledTask | null> {
@@ -132,7 +166,9 @@ export function createScheduledTasksApi(
         METHOD_SCHEDULED_TASK_DELETE,
       );
       if (typeof response.deleted !== "boolean") {
-        throw new Error(`${METHOD_SCHEDULED_TASK_DELETE} did not return deleted`);
+        throw new Error(
+          `${METHOD_SCHEDULED_TASK_DELETE} did not return deleted`,
+        );
       }
       return response.deleted;
     },
@@ -173,7 +209,9 @@ export function createScheduledTasksApi(
         METHOD_SCHEDULED_TASK_RUN_LIST,
       );
       if (!Array.isArray(response.runs)) {
-        throw new Error(`${METHOD_SCHEDULED_TASK_RUN_LIST} did not return runs`);
+        throw new Error(
+          `${METHOD_SCHEDULED_TASK_RUN_LIST} did not return runs`,
+        );
       }
       return response.runs.map((run) =>
         requireRun(run, METHOD_SCHEDULED_TASK_RUN_LIST),
@@ -211,6 +249,77 @@ export function createScheduledTasksApi(
 
 export const scheduledTasksApi = createScheduledTasksApi();
 
+export function readScheduledTaskChangedNotification(
+  message: unknown,
+): ScheduledTaskChangedNotification | null {
+  if (!isRecord(message)) {
+    return null;
+  }
+  return (
+    scheduledTaskChangedServerNotification(message as JsonRpcMessage)?.params ??
+    null
+  );
+}
+
+export function readScheduledTaskRunUpdatedNotification(
+  message: unknown,
+): ScheduledTaskRunUpdatedNotification | null {
+  if (!isRecord(message)) {
+    return null;
+  }
+  return (
+    scheduledTaskRunUpdatedServerNotification(message as JsonRpcMessage)
+      ?.params ?? null
+  );
+}
+
+export function subscribeScheduledTaskNotifications(
+  subscription: ScheduledTaskNotificationSubscription,
+  options: AppServerEventBusDrainOptions & {
+    isBridgeAvailable?: () => boolean;
+    subscribeNotifications?: (
+      subscription: AppServerEventBusSubscription,
+    ) => () => void;
+  } = {},
+): () => void {
+  const subscribeNotifications =
+    options.subscribeNotifications ?? subscribeAppServerNotifications;
+  return subscribeNotifications({
+    getDrainOptions: () => ({
+      activeIntervalMs: options.activeIntervalMs,
+      includeRecent: options.includeRecent,
+      intervalMs: options.intervalMs,
+      limit: options.limit,
+    }),
+    onError: subscription.onError,
+    onNotifications: (notifications) => {
+      const changedByTask = new Map<string, ScheduledTaskChangedNotification>();
+      const updatedByRun = new Map<
+        string,
+        ScheduledTaskRunUpdatedNotification
+      >();
+      for (const message of notifications) {
+        const changed = readScheduledTaskChangedNotification(message);
+        if (changed) {
+          changedByTask.set(changed.taskId, changed);
+          continue;
+        }
+        const runUpdated = readScheduledTaskRunUpdatedNotification(message);
+        if (runUpdated) {
+          updatedByRun.set(runUpdated.runId, runUpdated);
+        }
+      }
+      for (const changed of changedByTask.values()) {
+        subscription.onChanged?.(changed);
+      }
+      for (const runUpdated of updatedByRun.values()) {
+        subscription.onRunUpdated?.(runUpdated);
+      }
+    },
+    shouldDrain: options.isBridgeAvailable,
+  });
+}
+
 function requireWriteTask(value: unknown, method: string): ScheduledTask {
   return requireTask(requireRecord(value, method).task, method);
 }
@@ -227,6 +336,9 @@ function requireTask(value: unknown, method: string): ScheduledTask {
     typeof task.createdAt !== "string" ||
     typeof task.updatedAt !== "string" ||
     !isThreadMode(execution.threadMode) ||
+    (execution.requestMetadata !== undefined &&
+      execution.requestMetadata !== null &&
+      !isRecord(execution.requestMetadata)) ||
     !isNotificationPolicy(task.notificationPolicy) ||
     task.overlapPolicy !== "skip_if_running"
   ) {
@@ -235,7 +347,10 @@ function requireTask(value: unknown, method: string): ScheduledTask {
   return task as unknown as ScheduledTask;
 }
 
-function requireTaskSummary(value: unknown, method: string): ScheduledTaskSummary {
+function requireTaskSummary(
+  value: unknown,
+  method: string,
+): ScheduledTaskSummary {
   const task = requireRecord(value, method);
   if (
     typeof task.id !== "string" ||
@@ -261,11 +376,18 @@ function requireRun(value: unknown, method: string): ScheduledTaskRunSummary {
   return run as unknown as ScheduledTaskRunSummary;
 }
 
-function requireRecord(value: unknown, method: string): Record<string, unknown> {
+function requireRecord(
+  value: unknown,
+  method: string,
+): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${method} did not return an object`);
   }
   return value as Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function requiredText(value: string, field: string): string {
@@ -284,7 +406,9 @@ function isSchedule(value: unknown): value is ScheduledTaskSchedule {
   return ["hourly", "daily", "weekdays", "weekly"].includes(String(type));
 }
 
-function isThreadMode(value: unknown): value is ScheduledTaskExecution["threadMode"] {
+function isThreadMode(
+  value: unknown,
+): value is ScheduledTaskExecution["threadMode"] {
   return value === "new_thread" || value === "continue_thread";
 }
 

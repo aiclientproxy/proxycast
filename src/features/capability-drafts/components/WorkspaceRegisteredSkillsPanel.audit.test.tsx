@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { capabilityDraftsApi } from "@/lib/api/capabilityDrafts";
 import { listWorkspaceSkillBindings } from "@/lib/api/agentRuntime/inventoryClient";
-import { getAutomationJobs, updateAutomationJob } from "@/lib/api/automation";
+import { scheduledTasksApi } from "@/lib/api/scheduledTasks";
 import { clearAgentUiProjectionEvents } from "@/components/agent/chat/projection/conversationProjectionStore";
 import { WorkspaceRegisteredSkillsPanel } from "./WorkspaceRegisteredSkillsPanel";
 
@@ -45,9 +45,11 @@ vi.mock("@/lib/api/agentRuntime/inventoryClient", () => ({
   listWorkspaceSkillBindings: vi.fn(),
 }));
 
-vi.mock("@/lib/api/automation", () => ({
-  getAutomationJobs: vi.fn(),
-  updateAutomationJob: vi.fn(),
+vi.mock("@/lib/api/scheduledTasks", () => ({
+  scheduledTasksApi: {
+    listDetailed: vi.fn(),
+    setEnabled: vi.fn(),
+  },
 }));
 
 interface RenderResult {
@@ -79,9 +81,9 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     vi.mocked(capabilityDraftsApi.listRegisteredSkills).mockReset();
     vi.mocked(listWorkspaceSkillBindings).mockReset();
-    vi.mocked(getAutomationJobs).mockReset();
-    vi.mocked(getAutomationJobs).mockResolvedValue([]);
-    vi.mocked(updateAutomationJob).mockReset();
+    vi.mocked(scheduledTasksApi.listDetailed).mockReset();
+    vi.mocked(scheduledTasksApi.listDetailed).mockResolvedValue([]);
+    vi.mocked(scheduledTasksApi.setEnabled).mockReset();
     clearAgentUiProjectionEvents();
     vi.mocked(listWorkspaceSkillBindings).mockResolvedValue({
       request: {

@@ -1,4 +1,4 @@
-import type { AutomationJobRecord } from "@/lib/api/automation";
+import type { ScheduledTask } from "@/lib/api/scheduledTasks";
 import type {
   ServiceSkillAutomationLinkRecord,
   ServiceSkillAutomationStatus,
@@ -155,20 +155,16 @@ function resolveStatusTone(
   return "slate";
 }
 
-function resolveStatusDetail(job: AutomationJobRecord): string | null {
-  if (job.running_started_at) {
-    const startedAt = formatAutomationTime(job.running_started_at);
+function resolveStatusDetail(task: ScheduledTask): string | null {
+  const lastRun = task.lastRunSummary;
+  if (lastRun?.status === "running" && lastRun.startedAt) {
+    const startedAt = formatAutomationTime(lastRun.startedAt);
     return startedAt ? `开始于 ${startedAt}` : null;
   }
 
-  if (job.auto_disabled_until) {
-    const resumeAt = formatAutomationTime(job.auto_disabled_until);
-    return resumeAt ? `冷却至 ${resumeAt}` : "当前处于冷却期";
-  }
-
-  if (job.last_status === "success") {
-    const nextRunAt = formatAutomationTime(job.next_run_at);
-    const finishedAt = formatAutomationTime(job.last_finished_at);
+  if (lastRun?.status === "success") {
+    const nextRunAt = formatAutomationTime(task.nextRunAt);
+    const finishedAt = formatAutomationTime(lastRun.finishedAt);
     if (nextRunAt) {
       return `下次 ${nextRunAt}`;
     }
@@ -178,22 +174,26 @@ function resolveStatusDetail(job: AutomationJobRecord): string | null {
     return null;
   }
 
-  if (job.last_status === "error" || job.last_status === "timeout") {
+  if (
+    lastRun?.status === "error" ||
+    lastRun?.status === "timeout" ||
+    lastRun?.status === "missed"
+  ) {
     const finishedAt =
-      formatAutomationTime(job.last_finished_at) ??
-      formatAutomationTime(job.updated_at);
+      formatAutomationTime(lastRun.finishedAt) ??
+      formatAutomationTime(task.updatedAt);
     if (finishedAt) {
       return `最近一次 ${finishedAt}`;
     }
     return null;
   }
 
-  if (job.next_run_at) {
-    const nextRunAt = formatAutomationTime(job.next_run_at);
+  if (task.nextRunAt) {
+    const nextRunAt = formatAutomationTime(task.nextRunAt);
     return nextRunAt ? `下次 ${nextRunAt}` : null;
   }
 
-  if (!job.enabled) {
+  if (!task.enabled) {
     return "任务已停用";
   }
 
@@ -201,13 +201,9 @@ function resolveStatusDetail(job: AutomationJobRecord): string | null {
 }
 
 function extractPersistedServiceSkillLink(
-  job: AutomationJobRecord,
+  task: ScheduledTask,
 ): ServiceSkillAutomationLinkRecord | null {
-  if (job.payload.kind !== "agent_turn") {
-    return null;
-  }
-
-  const requestMetadata = job.payload.request_metadata;
+  const requestMetadata = task.execution.requestMetadata;
   if (!isPlainRecord(requestMetadata)) {
     return null;
   }
@@ -228,19 +224,19 @@ function extractPersistedServiceSkillLink(
 
   return {
     skillId,
-    jobId: job.id,
-    jobName: job.name,
-    linkedAt: parseLinkedAt(job.updated_at) || parseLinkedAt(job.created_at),
+    jobId: task.id,
+    jobName: task.title,
+    linkedAt: parseLinkedAt(task.updatedAt) || parseLinkedAt(task.createdAt),
   };
 }
 
 export function resolveServiceSkillAutomationLinks(
-  jobs: AutomationJobRecord[],
+  tasks: readonly ScheduledTask[],
 ): ServiceSkillAutomationLinkRecord[] {
   const merged = new Map<string, ServiceSkillAutomationLinkRecord>();
 
-  jobs.forEach((job) => {
-    const persistedLink = extractPersistedServiceSkillLink(job);
+  tasks.forEach((task) => {
+    const persistedLink = extractPersistedServiceSkillLink(task);
     if (!persistedLink) {
       return;
     }
@@ -345,36 +341,26 @@ export function subscribeServiceSkillAutomationLinksChanged(
 }
 
 export function buildServiceSkillAutomationStatusMap(
-  jobs: AutomationJobRecord[],
+  tasks: readonly ScheduledTask[],
 ): Record<string, ServiceSkillAutomationStatus> {
-  const jobsById = new Map(jobs.map((job) => [job.id, job]));
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
 
-  return resolveServiceSkillAutomationLinks(jobs).reduce<
+  return resolveServiceSkillAutomationLinks(tasks).reduce<
     Record<string, ServiceSkillAutomationStatus>
   >((result, link) => {
-    const job = jobsById.get(link.jobId);
-    if (!job) {
+    const task = tasksById.get(link.jobId);
+    if (!task) {
       return result;
     }
 
-    const statusLabel = job.auto_disabled_until
-      ? "冷却中"
-      : resolveStatusLabel(
-          job.running_started_at ? "running" : job.last_status,
-        );
+    const status = task.lastRunSummary?.status ?? null;
 
     result[link.skillId] = {
-      jobId: job.id,
-      jobName: job.name || link.jobName,
-      statusLabel,
-      tone: resolveStatusTone(
-        job.auto_disabled_until
-          ? "timeout"
-          : job.running_started_at
-            ? "running"
-            : job.last_status,
-      ),
-      detail: resolveStatusDetail(job),
+      jobId: task.id,
+      jobName: task.title || link.jobName,
+      statusLabel: resolveStatusLabel(status),
+      tone: resolveStatusTone(status),
+      detail: resolveStatusDetail(task),
     };
     return result;
   }, {});

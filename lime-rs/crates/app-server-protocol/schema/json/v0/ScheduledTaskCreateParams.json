@@ -74,6 +74,7 @@
             "string"
           ]
         },
+        "requestMetadata": true,
         "sandboxPolicy": true,
         "sourceThreadId": {
           "type": [

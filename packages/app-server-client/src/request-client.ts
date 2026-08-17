@@ -307,39 +307,6 @@ export interface AppServerClient {
   validateKnowledgeContextRun(
     params: protocol.KnowledgeValidateContextRunParams,
   ): protocol.JsonRpcRequest;
-  listAutomationJobs(): protocol.JsonRpcRequest;
-  readAutomationSchedulerConfig(): protocol.JsonRpcRequest;
-  updateAutomationSchedulerConfig(
-    params: protocol.AutomationSchedulerConfigUpdateParams,
-  ): protocol.JsonRpcRequest;
-  readAutomationSchedulerStatus(): protocol.JsonRpcRequest;
-  readAutomationJob(
-    params: protocol.AutomationJobIdParams,
-  ): protocol.JsonRpcRequest;
-  createAutomationJob(
-    params: protocol.AutomationJobCreateParams,
-  ): protocol.JsonRpcRequest;
-  updateAutomationJob(
-    params: protocol.AutomationJobUpdateParams,
-  ): protocol.JsonRpcRequest;
-  deleteAutomationJob(
-    params: protocol.AutomationJobIdParams,
-  ): protocol.JsonRpcRequest;
-  runAutomationJobNow(
-    params: protocol.AutomationJobIdParams,
-  ): protocol.JsonRpcRequest;
-  readAutomationHealth(
-    params?: protocol.AutomationJobHealthParams,
-  ): protocol.JsonRpcRequest;
-  readAutomationRunHistory(
-    params: protocol.AutomationJobRunHistoryParams,
-  ): protocol.JsonRpcRequest;
-  previewAutomationSchedule(
-    params: protocol.AutomationScheduleParams,
-  ): protocol.JsonRpcRequest;
-  validateAutomationSchedule(
-    params: protocol.AutomationScheduleParams,
-  ): protocol.JsonRpcRequest;
   listMcpServers(): protocol.JsonRpcRequest;
   listMcpServersWithStatus(): protocol.JsonRpcRequest;
   createMcpServer(

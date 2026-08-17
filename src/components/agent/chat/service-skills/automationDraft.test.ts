@@ -6,7 +6,7 @@ import type {
 } from "@/lib/base-setup/types";
 import {
   buildServiceSkillAutomationAgentTurnPayloadContext,
-  buildServiceSkillAutomationInitialValues,
+  buildServiceSkillScheduledTaskInitialForm,
   supportsServiceSkillLocalAutomation,
 } from "./automationDraft";
 import type { ServiceSkillItem } from "./types";
@@ -210,8 +210,8 @@ describe("service skill automation draft", () => {
     ).toBe(false);
   });
 
-  it("应把 schedule_time 预填为 automation 创建表单", () => {
-    const initialValues = buildServiceSkillAutomationInitialValues({
+  it("应把 schedule_time 预填为 Scheduled Task 创建表单", () => {
+    const initialValues = buildServiceSkillScheduledTaskInitialForm({
       skill: SCHEDULED_SKILL,
       slotValues: {
         platform: "x",
@@ -222,67 +222,15 @@ describe("service skill automation draft", () => {
       workspaceId: "project-1",
     });
 
-    expect(initialValues.name).toContain("每日趋势摘要");
-    expect(initialValues.workspace_id).toBe("project-1");
-    expect(initialValues.execution_mode).toBe("skill");
-    expect(initialValues.payload_kind).toBe("agent_turn");
-    expect(initialValues.schedule_kind).toBe("cron");
-    expect(initialValues.cron_expr).toBe("00 09 * * *");
+    expect(initialValues.title).toContain("每日趋势摘要");
+    expect(initialValues.projectId).toBe("project-1");
+    expect(initialValues.threadMode).toBe("continue_thread");
+    expect(initialValues.scheduleType).toBe("daily");
+    expect(initialValues.time).toBe("09:00");
+    expect(initialValues.timezone).toBe("Asia/Shanghai");
     expect(initialValues.enabled).toBe(false);
-    expect(initialValues.max_retries).toBe("4");
-    expect(initialValues.delivery_mode).toBe("announce");
-    expect(initialValues.delivery_channel).toBe("local_file");
-    expect(initialValues.delivery_target).toBe("reports/daily-trend.md");
-    expect(initialValues.best_effort).toBe(false);
     expect(initialValues.prompt).toContain("[技能任务] 每日趋势摘要");
     expect(initialValues.prompt).toContain("[自动化执行要求]");
-    expect(initialValues.agent_request_metadata).toEqual(
-      expect.objectContaining({
-        artifact: expect.objectContaining({
-          artifact_mode: "draft",
-          artifact_kind: "analysis",
-        }),
-        service_skill: expect.objectContaining({
-          id: "daily-trend-briefing",
-          title: "每日趋势摘要",
-          runner_type: "scheduled",
-          base_setup: expect.objectContaining({
-            package_id: "automation-pack",
-            package_version: "0.4.0",
-            projection_id: "daily-trend-briefing",
-            automation_profile_ref: "trend-automation",
-          }),
-          slot_values: [
-            {
-              key: "platform",
-              label: "监测平台",
-              value: "X / Twitter",
-            },
-            {
-              key: "industry_keywords",
-              label: "行业关键词",
-              value: "AI Agent，创作者工具",
-            },
-            {
-              key: "schedule_time",
-              label: "推送时间",
-              value: "每天 09:00",
-            },
-          ],
-          slot_summary: [
-            "监测平台: X / Twitter",
-            "行业关键词: AI Agent，创作者工具",
-            "推送时间: 每天 09:00",
-          ],
-          user_input: "重点关注新增热点与异常波动。",
-        }),
-        harness: expect.objectContaining({
-          theme: "general",
-          session_mode: "general_workbench",
-          run_title: "每日趋势摘要",
-        }),
-      }),
-    );
   });
 
   it("应为自动化 agent_turn 生成可复用的 artifact/content payload 上下文", () => {
@@ -323,7 +271,7 @@ describe("service skill automation draft", () => {
   });
 
   it("没有 schedule slot 输入时应回退到 automation profile 预设", () => {
-    const initialValues = buildServiceSkillAutomationInitialValues({
+    const initialValues = buildServiceSkillScheduledTaskInitialForm({
       skill: SCHEDULED_SKILL,
       slotValues: {
         platform: "x",
@@ -332,8 +280,8 @@ describe("service skill automation draft", () => {
       workspaceId: "project-1",
     });
 
-    expect(initialValues.schedule_kind).toBe("cron");
-    expect(initialValues.cron_expr).toBe("30 8 * * *");
-    expect(initialValues.cron_tz).toBe("Asia/Shanghai");
+    expect(initialValues.scheduleType).toBe("daily");
+    expect(initialValues.time).toBe("08:30");
+    expect(initialValues.timezone).toBe("Asia/Shanghai");
   });
 });

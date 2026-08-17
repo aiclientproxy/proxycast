@@ -41,6 +41,33 @@ fn scheduled_task_policies_use_closed_wire_values() {
 }
 
 #[test]
+fn scheduled_task_execution_preserves_request_metadata() {
+    let execution = ScheduledTaskExecution {
+        thread_mode: ScheduledTaskThreadMode::NewThread,
+        source_thread_id: None,
+        project_id: Some("project-1".to_string()),
+        cwd: None,
+        model_id: None,
+        reasoning_effort: None,
+        approval_policy: None,
+        sandbox_policy: None,
+        request_metadata: Some(json!({
+            "harness": {
+                "agent_envelope": { "skill": "project:daily" }
+            }
+        })),
+    };
+
+    assert_eq!(
+        serde_json::to_value(execution)
+            .expect("serialize scheduled task execution")
+            .pointer("/requestMetadata/harness/agent_envelope/skill")
+            .and_then(serde_json::Value::as_str),
+        Some("project:daily")
+    );
+}
+
+#[test]
 fn scheduled_task_methods_are_current_request_methods() {
     let methods = [
         METHOD_SCHEDULED_TASK_LIST,

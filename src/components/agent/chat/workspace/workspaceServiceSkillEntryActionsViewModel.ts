@@ -1,7 +1,8 @@
-import type { Project } from "@/lib/api/project";
-import type { AutomationJobRequest } from "@/lib/api/automation";
-import type { AutomationJobDialogInitialValues } from "@/components/settings-v2/system/automation/AutomationJobDialog";
-import { normalizeThemeType } from "@/lib/workspace/workbenchContract";
+import type { ScheduledTaskCreateRequest } from "@/lib/api/scheduledTasks";
+import {
+  buildScheduledTaskCreateRequest,
+  type ScheduledTaskFormState,
+} from "@/components/scheduled-tasks/scheduledTaskViewModel";
 import {
   composeServiceSkillPrompt,
   createDefaultServiceSkillSlotValues,
@@ -9,7 +10,7 @@ import {
 } from "../service-skills/promptComposer";
 import {
   buildServiceSkillAutomationAgentTurnPayloadContext,
-  buildServiceSkillAutomationInitialValues,
+  buildServiceSkillScheduledTaskInitialForm,
 } from "../service-skills/automationDraft";
 import { resolveServiceSkillLaunchPrefill } from "../service-skills/serviceSkillLaunchPrefill";
 import { isServiceSkillExecutableAsSiteAdapter } from "../service-skills/siteCapabilityBinding";
@@ -19,7 +20,6 @@ import type {
   ServiceSkillSlotValues,
 } from "../service-skills/types";
 import type { CreationReplayMetadata } from "../utils/creationReplayMetadata";
-import { normalizeProjectId } from "../utils/topicProjectResolution";
 
 export interface ServiceSkillLaunchUserInputOptions {
   launchUserInput?: string | null;
@@ -55,7 +55,7 @@ export interface ServiceSkillAutomationThreadLineage {
 }
 
 export interface ServiceSkillAutomationSetupState {
-  dialogInitialValues: AutomationJobDialogInitialValues;
+  dialogInitialValues: ScheduledTaskFormState;
   pendingAutomation: PendingServiceSkillAutomationLaunch;
 }
 
@@ -87,19 +87,35 @@ export interface BuildServiceSkillAutomationSetupStateInput {
 
 export interface ShouldCreateServiceSkillAutomationContentInput {
   pendingAutomation?: PendingServiceSkillAutomationLaunch | null;
-  request: AutomationJobRequest;
   contentId?: string | null;
 }
 
 export interface BuildServiceSkillAutomationSubmitRequestInput {
   pendingAutomation?: PendingServiceSkillAutomationLaunch | null;
-  request: AutomationJobRequest;
+  form: ScheduledTaskFormState;
   contentId?: string | null;
 }
 
-export interface ServiceSkillAutomationSubmitRequestPlan {
-  request: AutomationJobRequest;
-  automationContentId: string | null;
+export function buildServiceSkillScheduledTaskCreateRequest(
+  input: BuildServiceSkillAutomationSubmitRequestInput,
+): ScheduledTaskCreateRequest {
+  const request = buildScheduledTaskCreateRequest(input.form);
+  if (!input.pendingAutomation) {
+    return request;
+  }
+  const context = buildServiceSkillAutomationAgentTurnPayloadContext({
+    skill: input.pendingAutomation.skill,
+    slotValues: input.pendingAutomation.slotValues,
+    userInput: input.pendingAutomation.userInput,
+    contentId: input.contentId,
+  });
+  return {
+    ...request,
+    execution: {
+      ...request.execution,
+      requestMetadata: context.request_metadata ?? null,
+    },
+  };
 }
 
 export function getWorkspaceServiceSkillErrorMessage(error: unknown): string {
@@ -204,12 +220,15 @@ export function buildServiceSkillAutomationSetupState({
   });
 
   return {
-    dialogInitialValues: buildServiceSkillAutomationInitialValues({
-      skill,
-      slotValues,
-      userInput,
-      workspaceId,
-    }),
+    dialogInitialValues: {
+      ...buildServiceSkillScheduledTaskInitialForm({
+        skill,
+        slotValues,
+        userInput,
+        workspaceId,
+      }),
+      sourceThreadId: threadLineage.threadId,
+    },
     pendingAutomation: {
       skill,
       prompt,
@@ -227,89 +246,7 @@ export function buildServiceSkillAutomationSetupState({
 
 export function shouldCreateServiceSkillAutomationContent({
   pendingAutomation,
-  request,
   contentId,
 }: ShouldCreateServiceSkillAutomationContentInput): boolean {
-  return Boolean(
-    pendingAutomation && request.payload.kind === "agent_turn" && !contentId,
-  );
-}
-
-export function buildServiceSkillAutomationSubmitRequest({
-  pendingAutomation,
-  request,
-  contentId,
-}: BuildServiceSkillAutomationSubmitRequestInput): ServiceSkillAutomationSubmitRequestPlan {
-  const automationContentId = contentId ?? null;
-
-  if (!pendingAutomation || request.payload.kind !== "agent_turn") {
-    return {
-      request,
-      automationContentId,
-    };
-  }
-
-  return {
-    request: {
-      ...request,
-      payload: {
-        ...request.payload,
-        session_id: pendingAutomation.threadLineage.sessionId,
-        thread_id: pendingAutomation.threadLineage.threadId,
-        ...buildServiceSkillAutomationAgentTurnPayloadContext({
-          skill: pendingAutomation.skill,
-          slotValues: pendingAutomation.slotValues,
-          userInput: pendingAutomation.userInput,
-          contentId: automationContentId,
-        }),
-      },
-    },
-    automationContentId,
-  };
-}
-
-export function resolveFallbackProjectType(
-  theme?: string,
-): Project["workspaceType"] {
-  return normalizeThemeType(theme);
-}
-
-export function buildFallbackAutomationWorkspace(
-  projectId: string,
-  theme?: string,
-): Project {
-  return {
-    id: projectId,
-    name: projectId,
-    workspaceType: resolveFallbackProjectType(theme),
-    rootPath: "",
-    isDefault: false,
-    createdAt: 0,
-    updatedAt: 0,
-    isFavorite: false,
-    isArchived: false,
-    tags: [],
-  };
-}
-
-export function prioritizeAutomationWorkspaces(
-  workspaces: Project[],
-  projectId?: string | null,
-  theme?: string,
-): Project[] {
-  const normalizedProjectId = normalizeProjectId(projectId);
-  if (!normalizedProjectId) {
-    return workspaces;
-  }
-
-  const matched = workspaces.find(
-    (workspace) => workspace.id === normalizedProjectId,
-  );
-  const fallbackWorkspace =
-    matched ?? buildFallbackAutomationWorkspace(normalizedProjectId, theme);
-  const remaining = workspaces.filter(
-    (workspace) => workspace.id !== normalizedProjectId,
-  );
-
-  return [fallbackWorkspace, ...remaining];
+  return Boolean(pendingAutomation && !contentId);
 }

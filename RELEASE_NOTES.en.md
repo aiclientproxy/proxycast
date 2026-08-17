@@ -1,38 +1,38 @@
-## Lime v1.130.0
+## Lime v1.131.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- Added Turn-scoped Responses provider WebSocket sessions with strict prefix checks, `previous_response_id` deltas, prompt cache keys, and complete-request fallback.
-- Routed asynchronous Hook results through the session-owned lifecycle: active turns use steer, idle turns use a mailbox, and lifecycle, warning, and cancellation facts are projected.
-- Connected transcription to the App Server transcription worker through the `openai_audio_transcription` route, producing workspace transcript artifacts and provider diagnostics.
+- Shipped the Scheduled Tasks current workspace with create, edit, pause, run-now, run history, and conversation lineage flows.
+- Added typed `scheduledTask/changed` and `scheduledTask/run/updated` notifications projected through the App Server, Renderer bridge, and Electron Desktop Host.
+- Added a soft-delete contract for deleting tasks while a run is active: Agent Run and canonical Thread/Turn history remain, and terminal writes cannot resurrect a tombstone.
 
 ### Fixes
 
-- Fixed global and workspace discovery for standard `AGENTS.md` / `AGENTS.override.md`, while retaining `.lime` rules as a controlled fallback.
-- Fixed MCP concurrency gating so only tools with explicit `read_only_hint=true` and server opt-in run concurrently; missing or false hints remain serial.
-- Fixed recovery and state projection around session mailboxes, turn lifecycle, external backend events, and the ProjectThread-first boundary.
+- Fixed `new_thread` Scheduled Task runs with `modelId=null` bypassing canonical model selection and failing the real Runtime backend provider/model-selection contract.
+- Fixed the run-now page staying stale after a failed run; failed Runs, terminal notifications, and error messages now appear immediately.
+- Fixed Host `unsupported/failed` notification results being presented as success, and aligned task refresh and delete-confirmation behavior.
 
 ### Improvements and Refactoring
 
-- Converged request lowering, incremental response state, WebSocket reuse, and media input handling in the current model-provider client owner.
-- Split Hook discovery, runtime, and lifecycle into observable tool-runtime owners and removed duplicate compatibility paths and the retired evidence-export test entry.
-- Updated modality contracts, the media-task index, Harness architecture assets, governance catalogs, Claw fixtures, and five locales so transcription and runtime facts share one current chain.
+- Migrated the old Automation management surface to the Scheduled Tasks current protocol, single storage mapping, and typed Renderer gateway; removed retired pages, fixtures, and API dual paths.
+- Converged manual/due/catch-up/missed/recovery terminal states, overlap policy, one-shot CAS, DST, and startup recovery in the scheduler worker while keeping RuntimeCore/Thread/Turn/Agent Run as the single product chain.
+- Updated five locales, protocol schemas, generated clients, governance catalogs, and execution plans, with a real Electron current fixture.
 
 ### Testing and Quality
 
-- Added Rust regression coverage for Responses deltas and fallback, MCP read-only concurrency, standard AGENTS discovery, async Hook mailboxes, and session-loop behavior.
-- Updated media-task, runtime-facts, ProjectThread-first, modality, governance, and current-fixture contracts; final gate results are recorded in the release execution plan.
+- Passed App Server protocol/client contracts, Scheduled Tasks focused Vitest, and affected Rust related/changed validation.
+- Passed the Scheduled Tasks Electron Gate B, Agent runtime current fixture, GUI smoke, governance report, `verify:local`, formatting, and diff checks.
 
 ### Documentation
 
-- Updated architecture, Playwright E2E, model capability, Skills, Workflow, Warp, and Agent Runtime roadmap documentation to identify the transcription-worker and provider-route owners.
-- Added the `v1.130.0` release execution plan and execution-plan navigation entry, plus source and rendered assets for the current Lime Agent Harness architecture.
+- Updated Scheduled Tasks architecture, command boundaries, migration ledger, roadmap, and implementation plan to record notification, soft-delete, and provider-route owners.
+- Added the v1.131.0 release execution plan, including platform evidence and remaining retired Automation cleanup boundaries.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.130.0`.
-- Windows/macOS packaged parity, signing, notarization, and formal release-asset evidence are not claimed locally and remain dependent on CI/platform workflows.
+- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.131.0`.
+- Windows Notification Center, real macOS/Windows sleep-resume, signing, notarization, and formal release-asset evidence still require the corresponding platform or CI runners and are not claimed locally.
 
-**Full changes**: `v1.129.0` -> `v1.130.0`
+**Full changes**: `v1.130.0` -> `v1.131.0`

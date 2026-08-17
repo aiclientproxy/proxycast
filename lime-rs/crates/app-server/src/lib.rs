@@ -35,6 +35,7 @@ mod processor;
 mod runtime;
 mod runtime_backend;
 mod runtime_factory;
+mod scheduled_task_notifications;
 mod scheduled_task_worker;
 mod server_request;
 mod skill_registry;
@@ -296,6 +297,7 @@ pub struct AppServer {
 
 #[derive(Clone)]
 pub struct AppServerEventBridge {
+    pub(crate) runtime: RuntimeCore,
     runtime_events: RuntimeCoreEventAppender,
     thread_states: thread_state::ThreadStateManager,
     outbound_messages: broadcast::Sender<JsonRpcMessage>,
@@ -332,6 +334,7 @@ impl AppServer {
             tracing::warn!(%error, "runtime backend rejected current-time gateway injection");
         }
         let interrupt_bridge = AppServerEventBridge {
+            runtime: runtime.clone(),
             runtime_events: runtime.event_appender(),
             thread_states: thread_states.clone(),
             outbound_messages: outbound_messages.clone(),
@@ -533,6 +536,7 @@ impl AppServer {
 
     pub fn event_bridge(&self) -> AppServerEventBridge {
         AppServerEventBridge {
+            runtime: self.processor.runtime().clone(),
             runtime_events: self.processor.runtime().event_appender(),
             thread_states: self.thread_states.clone(),
             outbound_messages: self.outbound_messages.clone(),
@@ -1042,6 +1046,14 @@ pub fn spawn_media_task_worker_scheduler(
 }
 
 impl AppServerEventBridge {
+    pub async fn publish_server_notification(
+        &self,
+        notification: app_server_protocol::protocol::v2::ServerNotification,
+    ) {
+        self.broadcast_message(JsonRpcMessage::Notification(notification.into()))
+            .await;
+    }
+
     async fn broadcast_message(&self, message: JsonRpcMessage) {
         let _ = self.outbound_messages.send(message.clone());
         let connection_ids = self

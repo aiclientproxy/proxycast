@@ -258,13 +258,19 @@ current method 为 `scheduledTask/list`、`scheduledTask/read`、`scheduledTask/
 `scheduledTask/run/start`、`scheduledTask/run/list` 与 `scheduledTask/schedule/preview`。
 Renderer 只持有筛选、选中项和编辑表单状态；任务、next run、revision 与运行历史由 App Server read model 提供。
 `run/start` 必须经同一个 RuntimeCore execution service 创建或继续 canonical Thread，并提交真实 Turn；GUI 只在运行
-返回真实 `sessionId` 时开放恢复对话。Electron 继续只转发 JSONL，不新增任务 CRUD IPC、renderer timer 或第二调度器。
+返回真实 `sessionId` 时开放恢复对话。App Server 同时发布 typed `scheduledTask/changed`（create/update/delete/enabled-set）
+和 `scheduledTask/run/updated`（canonical `turn.completed/failed/canceled` 终态、missed/catch-up/recovery 终态）；
+Agent Run 使用 `finished_at IS NULL` 幂等门，事件重放不得重复终态通知。Renderer 通过全局 notification bridge 按
+`all_runs / failures / none` 决定是否请求 Electron Desktop Host `show_desktop_notification`，Host 的 unsupported/failed
+结果必须显示可见错误。任务删除写入 tombstone、禁用并清除未来调度，但不取消正在运行的 Turn；canonical terminal 写回
+仍保留运行历史且不得复活 tombstone。Electron 继续只转发 JSONL 和系统通知壳能力，不新增任务 CRUD IPC、renderer timer 或第二调度器。
 
-当前迁移尚未完成：旧 `automationJob/*`、`automationSchedule/*`、`automationScheduler/*` 与旧设置工作台均为
-`deprecated / migration-pending`，只允许迁出，不得增长新 consumer。它们物理删除并加入回流守卫前，
-`scheduledTask/*` 不能宣称为唯一生产 method；scheduler 的原子 claim、休眠补跑、DST、通知和删除并发合同也必须按
-`internal/roadmap/task/scheduled-tasks/` 的退出条件补齐。生产路径禁止 mock fallback，测试专用 Rust backend 只能用于
-public JSON-RPC fixture。
+旧 `automationJob/*`、`automationSchedule/*`、`automationScheduler/*`、`src/lib/api/automation.ts` 与旧设置工作台已物理删除，
+分类为 `dead / deleted / forbidden-to-restore`；旧 method 字符串只允许存在于 contract、Electron fixture 和治理扫描的负向
+回流守卫中。`automation_jobs` 表、Rust `AutomationJob` DAO 与内部 execution helper 仍是 Scheduled Tasks 的 current 存储映射，
+不构成第二公开协议或产品对象。scheduler 的原子 claim、24 小时休眠补跑、超窗 missed、DST、通知和删除并发合同已由 current
+owner 收口。真实 OS sleep/wake、Windows Notification Center 和 Windows Gate B 仍是平台证据缺口。生产路径禁止 mock
+fallback，测试专用 Rust backend 只能用于 public JSON-RPC fixture。
 
 ## Host Reverse Requests, Plan And Diff Notifications
 

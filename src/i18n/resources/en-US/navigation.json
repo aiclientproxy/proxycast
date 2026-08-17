@@ -6,7 +6,7 @@
   "navigation.sidebar.actions.expand": "Expand navigation",
   "navigation.sidebar.home.ariaLabel": "Back to Lime Home",
   "navigation.sidebar.home.label": "Lime Home",
-  "navigation.sidebar.items.automation": "Scheduled Tasks",
+  "navigation.sidebar.items.scheduledTasks": "Scheduled Tasks",
   "navigation.sidebar.items.channels": "Channels",
   "navigation.sidebar.items.homeGeneral": "New Task",
   "navigation.sidebar.items.knowledge": "Project Knowledge",

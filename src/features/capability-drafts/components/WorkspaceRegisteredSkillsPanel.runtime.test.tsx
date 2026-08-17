@@ -3,12 +3,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { capabilityDraftsApi } from "@/lib/api/capabilityDrafts";
 import { listWorkspaceSkillBindings } from "@/lib/api/agentRuntime/inventoryClient";
-import { getAutomationJobs, updateAutomationJob } from "@/lib/api/automation";
 import {
-  clearAgentUiProjectionEvents,
-  conversationProjectionStore,
-  selectAgentUiProjectionEventsBySurface,
-} from "@/components/agent/chat/projection/conversationProjectionStore";
+  scheduledTasksApi,
+  type ScheduledTask,
+} from "@/lib/api/scheduledTasks";
 import { WorkspaceRegisteredSkillsPanel } from "./WorkspaceRegisteredSkillsPanel";
 
 const { mockUseTranslation } = vi.hoisted(() => {
@@ -49,9 +47,11 @@ vi.mock("@/lib/api/agentRuntime/inventoryClient", () => ({
   listWorkspaceSkillBindings: vi.fn(),
 }));
 
-vi.mock("@/lib/api/automation", () => ({
-  getAutomationJobs: vi.fn(),
-  updateAutomationJob: vi.fn(),
+vi.mock("@/lib/api/scheduledTasks", () => ({
+  scheduledTasksApi: {
+    listDetailed: vi.fn(),
+    setEnabled: vi.fn(),
+  },
 }));
 
 interface RenderResult {
@@ -83,10 +83,9 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     vi.mocked(capabilityDraftsApi.listRegisteredSkills).mockReset();
     vi.mocked(listWorkspaceSkillBindings).mockReset();
-    vi.mocked(getAutomationJobs).mockReset();
-    vi.mocked(getAutomationJobs).mockResolvedValue([]);
-    vi.mocked(updateAutomationJob).mockReset();
-    clearAgentUiProjectionEvents();
+    vi.mocked(scheduledTasksApi.listDetailed).mockReset();
+    vi.mocked(scheduledTasksApi.listDetailed).mockResolvedValue([]);
+    vi.mocked(scheduledTasksApi.setEnabled).mockReset();
     vi.mocked(listWorkspaceSkillBindings).mockResolvedValue({
       request: {
         workspace_root: "/tmp/work",
@@ -121,7 +120,6 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
       mounted.container.remove();
     }
     vi.clearAllMocks();
-    clearAgentUiProjectionEvents();
   });
 
   it("显式传入 runtime enable handler 时，仅 ready binding 可触发本回合启用", async () => {
@@ -362,23 +360,20 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
         },
       ],
     });
-    const managedJob = {
+    const managedTask: ScheduledTask = {
       id: "job-1",
-      name: "只读 CLI 报告｜Managed Agent 草案",
-      description: null,
+      title: "只读 CLI 报告｜Managed Agent 草案",
+      prompt: "run",
       enabled: false,
-      workspace_id: "project-1",
-      execution_mode: "skill",
       schedule: {
-        kind: "cron",
-        expr: "0 9 * * *",
-        tz: "Asia/Shanghai",
+        type: "daily",
+        time: "09:00",
+        timezone: "Asia/Shanghai",
       },
-      payload: {
-        kind: "agent_turn",
-        prompt: "run",
-        web_search: false,
-        request_metadata: {
+      execution: {
+        threadMode: "new_thread",
+        projectId: "project-1",
+        requestMetadata: {
           harness: {
             agent_envelope: {
               directory: "capability-report",
@@ -387,30 +382,18 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
           },
         },
       },
-      delivery: {
-        mode: "none",
-        best_effort: true,
-      },
-      timeout_secs: null,
-      max_retries: 2,
-      next_run_at: null,
-      last_status: null,
-      last_error: null,
-      last_run_at: null,
-      last_finished_at: null,
-      running_started_at: null,
-      consecutive_failures: 0,
-      last_retry_count: 0,
-      auto_disabled_until: null,
-      created_at: "2026-05-06T10:00:00Z",
-      updated_at: "2026-05-06T10:00:00Z",
+      notificationPolicy: "failures",
+      overlapPolicy: "skip_if_running",
+      createdAt: "2026-05-06T10:00:00Z",
+      updatedAt: "2026-05-06T10:00:00Z",
     };
-    vi.mocked(getAutomationJobs).mockResolvedValueOnce([managedJob as any]);
-    vi.mocked(updateAutomationJob).mockResolvedValueOnce({
-      ...managedJob,
+    vi.mocked(scheduledTasksApi.listDetailed).mockResolvedValueOnce([
+      managedTask,
+    ]);
+    vi.mocked(scheduledTasksApi.setEnabled).mockResolvedValueOnce({
+      ...managedTask,
       enabled: true,
-      last_status: "success",
-    } as any);
+    });
 
     const { container } = renderPanel({
       workspaceRoot: "/tmp/work",
@@ -438,13 +421,7 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
     expect(container.textContent).toContain("记录：已保留检查结果");
     expect(container.textContent).toContain("结果：试用后展示最近状态");
     expect(container.textContent).toContain("Managed Job：草案暂停");
-    expect(container.textContent).toContain("Schedule：Cron 0 9 * * *");
-    expect(
-      selectAgentUiProjectionEventsBySurface(
-        conversationProjectionStore.getSnapshot(),
-        "background_teammate",
-      ),
-    ).toHaveLength(1);
+    expect(container.textContent).toContain("Schedule：每天 09:00");
     expect(toggleButton).toBeTruthy();
     expect(toggleButton?.textContent).toContain("开启定时运行");
     expect(
@@ -474,9 +451,7 @@ describe("WorkspaceRegisteredSkillsPanel", () => {
       await Promise.resolve();
     });
 
-    expect(updateAutomationJob).toHaveBeenCalledWith("job-1", {
-      enabled: true,
-    });
+    expect(scheduledTasksApi.setEnabled).toHaveBeenCalledWith("job-1", true);
     expect(container.textContent).toContain("Managed Job：已启用");
 
     const envelopeButton = container.querySelector(

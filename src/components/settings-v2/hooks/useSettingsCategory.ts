@@ -14,7 +14,6 @@ import {
   BarChart3,
   Palette,
   Brain,
-  Bot,
   Image,
   Plug,
   Search,
@@ -157,11 +156,6 @@ export function useSettingsCategory(): CategoryGroup[] {
           key: SettingsTabs.ChromeRelay,
           label: t("settings.tab.chromeRelay"),
           icon: Monitor,
-        },
-        {
-          key: SettingsTabs.Automation,
-          label: t("settings.tab.automation"),
-          icon: Bot,
         },
         {
           key: SettingsTabs.Developer,

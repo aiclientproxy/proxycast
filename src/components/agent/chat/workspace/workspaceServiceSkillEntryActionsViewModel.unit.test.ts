@@ -1,34 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { AutomationJobRequest } from "@/lib/api/automation";
-import type { Project } from "@/lib/api/project";
+import type { ScheduledTaskFormState } from "@/components/scheduled-tasks/scheduledTaskViewModel";
 import type { ServiceSkillHomeItem } from "../service-skills/types";
 import {
-  buildFallbackAutomationWorkspace,
   buildServiceSkillAutomationSetupState,
-  buildServiceSkillAutomationSubmitRequest,
+  buildServiceSkillScheduledTaskCreateRequest,
   buildServiceSkillSelectionPlan,
   getWorkspaceServiceSkillErrorMessage,
   normalizeWorkspaceServiceSkillOptionalText,
-  prioritizeAutomationWorkspaces,
   resolveServiceSkillLaunchUserInput,
   shouldCreateServiceSkillAutomationContent,
   siteSkillRequiresProject,
 } from "./workspaceServiceSkillEntryActionsViewModel";
-
-function createProject(id: string, workspaceType: Project["workspaceType"]) {
-  return {
-    id,
-    name: `项目 ${id}`,
-    workspaceType,
-    rootPath: "",
-    isDefault: false,
-    createdAt: 1,
-    updatedAt: 1,
-    isFavorite: false,
-    isArchived: false,
-    tags: [],
-  } satisfies Project;
-}
 
 function createServiceSkill(
   overrides: Partial<ServiceSkillHomeItem> = {},
@@ -63,31 +45,23 @@ function createServiceSkill(
   } as ServiceSkillHomeItem;
 }
 
-function createAutomationJobRequest(): AutomationJobRequest {
+function createScheduledTaskForm(): ScheduledTaskFormState {
   return {
-    name: "每日趋势摘要｜定时执行",
-    description: "围绕指定平台与关键词输出趋势摘要。",
-    workspace_id: "project-1",
-    execution_mode: "skill",
-    schedule: {
-      kind: "cron",
-      expr: "00 09 * * *",
-      tz: "Asia/Shanghai",
-    },
-    payload: {
-      kind: "agent_turn",
-      prompt: "自动化 prompt",
-      session_id: "session-dialog-1",
-      thread_id: "thread-dialog-1",
-      system_prompt: "",
-      web_search: false,
-    },
-    delivery: {
-      mode: "none",
-      best_effort: true,
-      output_schema: "text",
-      output_format: "text",
-    },
+    title: "每日趋势摘要｜定时执行",
+    prompt: "定时任务 prompt",
+    enabled: true,
+    scheduleType: "daily",
+    intervalHours: 1,
+    days: [],
+    time: "09:00",
+    timezone: "Asia/Shanghai",
+    threadMode: "continue_thread",
+    sourceThreadId: "thread-current",
+    projectId: "project-1",
+    cwd: "",
+    modelId: "",
+    reasoningEffort: "",
+    notificationPolicy: "failures",
   };
 }
 
@@ -100,6 +74,41 @@ describe("workspaceServiceSkillEntryActionsViewModel", () => {
     expect(getWorkspaceServiceSkillErrorMessage({ code: "UNKNOWN" })).toBe(
       "请稍后重试",
     );
+  });
+
+  it("应把服务技能表单与 metadata 构建为 current Scheduled Task", () => {
+    const scheduledTask = buildServiceSkillScheduledTaskCreateRequest({
+      form: createScheduledTaskForm(),
+      contentId: null,
+      pendingAutomation: {
+        skill: createServiceSkill(),
+        prompt: "自动化 prompt",
+        slotValues: {},
+        threadLineage: {
+          sessionId: "session-current",
+          threadId: "thread-current",
+        },
+        usage: {
+          skillId: "github-repo-radar",
+          runnerType: "instant",
+          slotValues: {},
+        },
+      },
+    });
+
+    expect(scheduledTask).toMatchObject({
+      title: "每日趋势摘要｜定时执行",
+      schedule: {
+        type: "daily",
+        time: "09:00",
+        timezone: "Asia/Shanghai",
+      },
+      execution: {
+        threadMode: "continue_thread",
+        sourceThreadId: "thread-current",
+        projectId: "project-1",
+      },
+    });
   });
 
   it("应归一化入口输入，并让显式 launchUserInput 覆盖当前输入", () => {
@@ -316,12 +325,12 @@ describe("workspaceServiceSkillEntryActionsViewModel", () => {
     });
     expect(state.pendingAutomation.prompt).toContain("请重点看最近 30 天");
     expect(state.dialogInitialValues).toMatchObject({
-      name: "每日趋势摘要｜定时执行",
-      workspace_id: "project-1",
-      execution_mode: "skill",
-      payload_kind: "agent_turn",
-      schedule_kind: "cron",
-      cron_expr: "00 09 * * *",
+      title: "每日趋势摘要｜定时执行",
+      projectId: "project-1",
+      threadMode: "continue_thread",
+      sourceThreadId: "thread-current",
+      scheduleType: "daily",
+      time: "09:00",
     });
   });
 
@@ -356,36 +365,29 @@ describe("workspaceServiceSkillEntryActionsViewModel", () => {
         threadId: "thread-current",
       },
     });
-    const request = createAutomationJobRequest();
-
     expect(
       shouldCreateServiceSkillAutomationContent({
         pendingAutomation: setupState.pendingAutomation,
-        request,
         contentId: null,
       }),
     ).toBe(true);
     expect(
       shouldCreateServiceSkillAutomationContent({
         pendingAutomation: setupState.pendingAutomation,
-        request,
         contentId: "content-current",
       }),
     ).toBe(false);
 
-    const plan = buildServiceSkillAutomationSubmitRequest({
+    const request = buildServiceSkillScheduledTaskCreateRequest({
       pendingAutomation: setupState.pendingAutomation,
-      request,
+      form: setupState.dialogInitialValues,
       contentId: "content-current",
     });
 
-    expect(plan.automationContentId).toBe("content-current");
-    expect(plan.request.payload).toMatchObject({
-      kind: "agent_turn",
-      session_id: "session-current",
-      thread_id: "thread-current",
-      content_id: "content-current",
-      request_metadata: {
+    expect(request.execution).toMatchObject({
+      threadMode: "continue_thread",
+      sourceThreadId: "thread-current",
+      requestMetadata: {
         service_skill: expect.objectContaining({
           id: "daily-trend-briefing",
           title: "每日趋势摘要",
@@ -393,33 +395,5 @@ describe("workspaceServiceSkillEntryActionsViewModel", () => {
         }),
       },
     });
-  });
-
-  it("应把当前项目排到自动化工作区列表首位，缺失时构造 fallback", () => {
-    const generalProject = createProject("project-general", "general");
-    const temporaryProject = createProject("project-temporary", "temporary");
-    const workspaces = [generalProject, temporaryProject];
-
-    expect(prioritizeAutomationWorkspaces(workspaces, null)).toBe(workspaces);
-    expect(
-      prioritizeAutomationWorkspaces(workspaces, "project-temporary").map(
-        (workspace) => workspace.id,
-      ),
-    ).toEqual(["project-temporary", "project-general"]);
-
-    const prioritized = prioritizeAutomationWorkspaces(
-      workspaces,
-      "project-new",
-      "video",
-    );
-
-    expect(prioritized.map((workspace) => workspace.id)).toEqual([
-      "project-new",
-      "project-general",
-      "project-temporary",
-    ]);
-    expect(prioritized[0]).toEqual(
-      buildFallbackAutomationWorkspace("project-new", "video"),
-    );
   });
 });

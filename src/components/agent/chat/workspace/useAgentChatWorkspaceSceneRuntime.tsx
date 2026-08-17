@@ -6,7 +6,7 @@ import { useWorkspaceCanvasSceneRuntime } from "./useWorkspaceCanvasSceneRuntime
 import { useWorkspaceInputbarSceneRuntime } from "./useWorkspaceInputbarSceneRuntime";
 import { useWorkspaceTaskCenterSendRuntime } from "./useWorkspaceTaskCenterSendRuntime";
 import { useWorkspaceMessageKnowledgeSaveRuntime } from "./useWorkspaceMessageKnowledgeSaveRuntime";
-import { AutomationJobDialog } from "@/components/settings-v2/system/automation/AutomationJobDialog";
+import { ScheduledTaskDialog } from "@/components/scheduled-tasks/ScheduledTaskDialog";
 import {
   EMPTY_WORKSPACE_WORKFLOW_STEPS,
   HIDDEN_WORKSPACE_WORKFLOW_STEP_INDEX,
@@ -664,15 +664,10 @@ export function useAgentChatWorkspaceSceneRuntime({
   return (
     <>
       {workspaceSceneNode}
-      <AutomationJobDialog
+      <ScheduledTaskDialog
         open={workspaceServiceSkillEntryActions.automationDialogOpen}
-        mode="create"
-        workspaces={workspaceServiceSkillEntryActions.automationWorkspaces}
-        initialValues={
+        initialForm={
           workspaceServiceSkillEntryActions.automationDialogInitialValues
-        }
-        threadLineage={
-          workspaceServiceSkillEntryActions.automationThreadLineage
         }
         saving={workspaceServiceSkillEntryActions.automationJobSaving}
         onOpenChange={

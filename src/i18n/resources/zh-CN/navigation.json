@@ -6,7 +6,7 @@
   "navigation.sidebar.actions.expand": "展开导航栏",
   "navigation.sidebar.home.ariaLabel": "返回 Lime 首页",
   "navigation.sidebar.home.label": "Lime 首页",
-  "navigation.sidebar.items.automation": "已安排任务",
+  "navigation.sidebar.items.scheduledTasks": "已安排任务",
   "navigation.sidebar.items.channels": "消息渠道",
   "navigation.sidebar.items.homeGeneral": "新建任务",
   "navigation.sidebar.items.knowledge": "项目资料",

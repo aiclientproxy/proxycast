@@ -24,7 +24,6 @@ export interface AgentUiSubagentsProjectionSummary {
   workerNotificationCount: number;
   reviewCount: number;
   transcriptCount: number;
-  backgroundCount: number;
   remoteCount: number;
   policyCount: number;
   latestEvents: AgentUiProjectionEvent[];
@@ -74,7 +73,6 @@ export const EMPTY_AGENT_UI_SUBAGENTS_PROJECTION_SUMMARY: AgentUiSubagentsProjec
     workerNotificationCount: 0,
     reviewCount: 0,
     transcriptCount: 0,
-    backgroundCount: 0,
     remoteCount: 0,
     policyCount: 0,
     latestEvents: [],
@@ -128,7 +126,6 @@ export const AGENT_UI_SUBAGENTS_SURFACES = new Set<AgentUiSurface>([
   "worker_notifications",
   "review_lane",
   "teammate_transcript",
-  "background_teammate",
   "remote_teammate",
   "team_policy",
 ]);
@@ -171,11 +168,6 @@ export const AGENT_UI_SUBAGENTS_SURFACE_DEFINITIONS: AgentUiSubagentsSurfaceDefi
       description: "子代理 transcript ref 与局部会话线索",
     },
     {
-      surface: "background_teammate",
-      label: "Background",
-      description: "后台 automation job 与持续刷新",
-    },
-    {
       surface: "remote_teammate",
       label: "Remote",
       description: "远端子代理 / external task 状态",
@@ -207,7 +199,6 @@ export const AGENT_UI_SUBAGENTS_SURFACE_LANES: AgentUiSubagentsSurfaceLaneDefini
       surfaces: [
         "worker_notifications",
         "teammate_transcript",
-        "background_teammate",
         "remote_teammate",
       ],
     },
@@ -320,9 +311,6 @@ export function summarizeAgentUiSubagentsProjectionEvents(
     ).length,
     transcriptCount: subagentEvents.filter(
       (event) => event.surface === "teammate_transcript",
-    ).length,
-    backgroundCount: subagentEvents.filter(
-      (event) => event.surface === "background_teammate",
     ).length,
     remoteCount: subagentEvents.filter(
       (event) => event.surface === "remote_teammate",

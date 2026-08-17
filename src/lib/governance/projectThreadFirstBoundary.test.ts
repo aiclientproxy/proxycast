@@ -92,13 +92,14 @@ const FORBIDDEN_RENDERER_PLUGIN_RUNTIME_PATTERNS = [
   "runtime_authorization",
 ] as const;
 
-const AUTOMATION_THREAD_FIRST_SURFACE_FILES = [
+const SCHEDULED_TASK_THREAD_FIRST_SURFACE_FILES = [
   "lime-rs/crates/app-server/src/automation_execution.rs",
-  "lime-rs/crates/app-server/src/local_data_source/automation.rs",
-  "src/lib/api/automation.ts",
+  "lime-rs/crates/app-server/src/local_data_source/automation/scheduled_tasks.rs",
+  "src/lib/api/scheduledTasks.ts",
+  "src/components/scheduled-tasks/scheduledTaskViewModel.ts",
 ] as const;
 
-const FORBIDDEN_AUTOMATION_FIRST_RUNTIME_PATTERNS = [
+const FORBIDDEN_SCHEDULED_TASK_RUNTIME_PATTERNS = [
   "automation-session-",
   "automation-thread-",
 ] as const;
@@ -281,39 +282,39 @@ describe("Project / Thread-first boundary", () => {
     ).toEqual([]);
   });
 
-  it("Automation job 不得把 job id 拼成私有 session / thread fallback", () => {
-    const hits = AUTOMATION_THREAD_FIRST_SURFACE_FILES.flatMap((file) => {
+  it("Scheduled Task 不得把 task id 拼成私有 session / thread fallback", () => {
+    const hits = SCHEDULED_TASK_THREAD_FIRST_SURFACE_FILES.flatMap((file) => {
       const source = readFileSync(repoPath(file), "utf8");
-      return FORBIDDEN_AUTOMATION_FIRST_RUNTIME_PATTERNS.flatMap((pattern) =>
-        source.includes(pattern) ? [`${file}: ${pattern}`] : [],
+      return FORBIDDEN_SCHEDULED_TASK_RUNTIME_PATTERNS.flatMap(
+        (pattern) => (source.includes(pattern) ? [`${file}: ${pattern}`] : []),
       );
     });
 
     expect(
       hits,
-      "Automation / Workflow 可以是项目级配置，但运行产物必须显式绑定 Project / Thread lineage；不得用 job id 自动拼出能力私有 session 或 thread",
+      "Scheduled Task 可以是项目级配置，但运行产物必须绑定 canonical Thread lineage；不得用 task id 自动拼出私有 session 或 thread",
     ).toEqual([]);
   });
 
-  it("Automation agent_turn API 类型必须要求显式 session / thread lineage", () => {
-    const source = readFileSync(repoPath("src/lib/api/automation.ts"), "utf8");
+  it("Scheduled Task continue_thread 必须要求显式 source thread lineage", () => {
+    const source = readFileSync(
+      repoPath("src/components/scheduled-tasks/scheduledTaskViewModel.ts"),
+      "utf8",
+    );
 
-    expect(source).toContain("session_id: string;");
-    expect(source).toContain("thread_id: string;");
-    expect(source).not.toContain("session_id?:");
-    expect(source).not.toContain("thread_id?:");
+    expect(source).toContain(
+      'form.threadMode === "continue_thread" && !form.sourceThreadId.trim()',
+    );
+    expect(source).toContain("errors.sourceThreadId = \"sourceThreadId\"");
+    expect(source).toContain(
+      "sourceThreadId: optionalText(form.sourceThreadId)",
+    );
   });
 
-  it("Thread 内 service skill automation 创建链必须写入当前 session / thread lineage", () => {
+  it("Thread 内 service skill Scheduled Task 创建链必须写入当前 thread lineage", () => {
     const workspaceSource = readFileSync(
       repoPath(
         "src/components/agent/chat/workspace/useAgentChatWorkspaceSetupRuntime.ts",
-      ),
-      "utf8",
-    );
-    const sceneSource = readFileSync(
-      repoPath(
-        "src/components/agent/chat/workspace/useAgentChatWorkspaceSceneRuntime.tsx",
       ),
       "utf8",
     );
@@ -333,17 +334,13 @@ describe("Project / Thread-first boundary", () => {
     expect(workspaceSource).toContain(
       "threadId: threadRead?.thread_id ?? sessionId",
     );
-    expect(sceneSource).toContain("threadLineage={");
     expect(actionSource).toContain("ensureSessionForThreadLineage");
-    expect(actionSource).toContain("normalizeAutomationThreadLineage");
+    expect(actionSource).toContain("buildServiceSkillScheduledTaskCreateRequest");
     expect(viewModelSource).toContain(
       "threadLineage: ServiceSkillAutomationThreadLineage",
     );
     expect(viewModelSource).toContain(
-      "session_id: pendingAutomation.threadLineage.sessionId",
-    );
-    expect(viewModelSource).toContain(
-      "thread_id: pendingAutomation.threadLineage.threadId",
+      "sourceThreadId: threadLineage.threadId",
     );
   });
 

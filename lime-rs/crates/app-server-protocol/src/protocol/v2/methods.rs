@@ -67,6 +67,8 @@ pub const METHOD_PLUGIN_INSTALLED: &str = "plugin/installed";
 pub const METHOD_PLUGIN_ENABLED_SET: &str = "plugin/enabled/set";
 pub const METHOD_MODEL_LIST_UPDATED: &str = "model/list/updated";
 pub const METHOD_APP_LIST_UPDATED: &str = "app/list/updated";
+pub const METHOD_SCHEDULED_TASK_CHANGED: &str = "scheduledTask/changed";
+pub const METHOD_SCHEDULED_TASK_RUN_UPDATED: &str = "scheduledTask/run/updated";
 pub const METHOD_HOOK_STARTED: &str = "hook/started";
 pub const METHOD_HOOK_COMPLETED: &str = "hook/completed";
 pub const METHOD_TURN_START: &str = "turn/start";
@@ -636,6 +638,8 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_MODEL_REROUTED,
     METHOD_MODEL_LIST_UPDATED,
     METHOD_APP_LIST_UPDATED,
+    METHOD_SCHEDULED_TASK_CHANGED,
+    METHOD_SCHEDULED_TASK_RUN_UPDATED,
     METHOD_MODEL_VERIFICATION,
     METHOD_TURN_MODERATION_METADATA,
     METHOD_MODEL_SAFETY_BUFFERING_UPDATED,

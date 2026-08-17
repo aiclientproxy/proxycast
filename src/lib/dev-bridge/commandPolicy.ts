@@ -93,7 +93,7 @@ const APP_SERVER_CONVERSATION_IMPORT_METHODS = new Set([
   "conversationImport/thread/commit",
 ]);
 const APP_SERVER_KNOWLEDGE_COMPILE_METHOD = "knowledgePack/compile";
-const APP_SERVER_LONG_RUNNING_METHODS = new Set(["automationJob/runNow"]);
+const APP_SERVER_LONG_RUNNING_METHODS = new Set(["scheduledTask/run/start"]);
 const APP_SERVER_PROVIDER_NETWORK_METHODS = new Set([
   "modelProvider/testConnection",
   "modelProvider/testChat",

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Projects a terminal Scheduled Task run for GUI refresh and OS notification.",
+  "properties": {
+    "attention": {
+      "type": "boolean"
+    },
+    "error": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "notificationPolicy": {
+      "type": "string"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "taskId": {
+      "type": "string"
+    },
+    "threadId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "title": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "turnId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "attention",
+    "notificationPolicy",
+    "runId",
+    "status",
+    "taskId"
+  ],
+  "title": "ScheduledTaskRunUpdatedNotification",
+  "type": "object"
+}

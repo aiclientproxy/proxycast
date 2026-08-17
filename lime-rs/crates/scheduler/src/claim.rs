@@ -118,6 +118,7 @@ impl AutomationWindowClaimDao {
                  FROM automation_jobs
                  WHERE id = ?1
                    AND enabled = 1
+                   AND deleted_at IS NULL
                    AND next_run_at = ?2
                    AND datetime(next_run_at) <= datetime(?3)
                    AND running_started_at IS NULL
@@ -169,6 +170,7 @@ impl AutomationWindowClaimDao {
                  last_error = NULL
              WHERE id = ?3
                AND enabled = 1
+               AND deleted_at IS NULL
                AND next_run_at = ?4
                AND updated_at = ?5
                AND running_started_at IS NULL
@@ -217,6 +219,7 @@ impl AutomationWindowClaimDao {
                 FROM automation_jobs
                 WHERE id = ?1
                   AND enabled = 1
+                  AND deleted_at IS NULL
                   AND updated_at = ?2
                   AND running_started_at = ?3
             )",
@@ -240,6 +243,7 @@ impl AutomationWindowClaimDao {
                  last_error = NULL
              WHERE id = ?2
                AND enabled = 1
+               AND deleted_at IS NULL
                AND updated_at = ?3
                AND running_started_at = ?4",
             params![
@@ -310,6 +314,7 @@ impl AutomationWindowClaimDao {
                  running_started_at = NULL,
                  updated_at = ?4
              WHERE id = ?5
+               AND deleted_at IS NULL
                AND updated_at = ?6
                AND next_run_at = ?7
                AND running_started_at IS NULL",
@@ -374,6 +379,7 @@ impl AutomationWindowClaimDao {
             "UPDATE automation_jobs
              SET next_run_at = ?1
              WHERE id = ?2
+               AND deleted_at IS NULL
                AND updated_at = ?3
                AND next_run_at = ?4
                AND running_started_at = ?5",
@@ -487,6 +493,7 @@ mod tests {
                 consecutive_failures: 0,
                 last_retry_count: 0,
                 auto_disabled_until: None,
+                deleted_at: None,
                 last_delivery: None,
                 created_at: now.clone(),
                 updated_at: now,
@@ -728,7 +735,38 @@ mod tests {
     }
 
     #[test]
-    fn deleting_task_after_claim_still_cancels_queued_run() {
+    fn soft_deleted_task_cannot_be_claimed() {
+        let mut conn = Connection::open_in_memory().expect("open scheduler test db");
+        create_tables(&conn).expect("create scheduler test schema");
+        let now = Utc::now();
+        let scheduled_for = (now - Duration::minutes(1)).to_rfc3339();
+        insert_job(&conn, "task-1", &scheduled_for);
+        AutomationJobDao::soft_delete(&conn, "task-1", &(now + Duration::seconds(1)).to_rfc3339())
+            .expect("soft delete task before claim");
+
+        assert!(
+            AutomationWindowClaimDao::list_due_candidates(&conn, &now.to_rfc3339())
+                .expect("list due candidates")
+                .is_empty()
+        );
+        assert!(AutomationWindowClaimDao::try_claim(
+            &mut conn,
+            "task-1",
+            &scheduled_for,
+            &now.to_rfc3339(),
+            &(now + Duration::seconds(2)).to_rfc3339(),
+        )
+        .expect("attempt deleted task claim")
+        .is_none());
+        assert!(
+            AgentRunDao::list_runs_by_source_ref(&conn, "automation", "task-1", 10)
+                .expect("read deleted task runs")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn soft_deleting_task_after_claim_still_cancels_queued_run() {
         let mut conn = Connection::open_in_memory().expect("open scheduler test db");
         create_tables(&conn).expect("create scheduler test schema");
         let now = Utc::now();
@@ -744,12 +782,13 @@ mod tests {
         .expect("claim scheduled window")
         .expect("claim exists");
 
-        AutomationJobDao::delete(&conn, "task-1").expect("delete task after claim");
+        AutomationJobDao::soft_delete(&conn, "task-1", &(now + Duration::seconds(1)).to_rfc3339())
+            .expect("soft delete task after claim");
 
         assert!(AutomationWindowClaimDao::invalidate(
             &mut conn,
             &claim,
-            &(now + Duration::seconds(1)).to_rfc3339(),
+            &(now + Duration::seconds(2)).to_rfc3339(),
             "task deleted after claim",
         )
         .expect("invalidate deleted task claim"));

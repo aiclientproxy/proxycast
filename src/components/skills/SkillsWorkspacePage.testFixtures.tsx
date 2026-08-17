@@ -40,8 +40,8 @@ const hoisted = vi.hoisted(() => ({
     getProject: vi.fn(),
     listRegisteredSkills: vi.fn(),
     listWorkspaceSkillBindings: vi.fn(),
-    getAutomationJobs: vi.fn(),
-    updateAutomationJob: vi.fn(),
+    listScheduledTasks: vi.fn(),
+    setScheduledTaskEnabled: vi.fn(),
     serviceSkills: [] as ServiceSkillHomeItem[],
     officialMarketplaceSkills: [] as SkillMarketplaceItem[],
     officialMarketplaceError: null as string | null,
@@ -165,10 +165,12 @@ vi.mock("@/lib/api/agentRuntime/inventoryClient", () => ({
     mocks.listWorkspaceSkillBindings(...args),
 }));
 
-vi.mock("@/lib/api/automation", () => ({
-  getAutomationJobs: (...args: unknown[]) => mocks.getAutomationJobs(...args),
-  updateAutomationJob: (...args: unknown[]) =>
-    mocks.updateAutomationJob(...args),
+vi.mock("@/lib/api/scheduledTasks", () => ({
+  scheduledTasksApi: {
+    listDetailed: (...args: unknown[]) => mocks.listScheduledTasks(...args),
+    setEnabled: (...args: unknown[]) =>
+      mocks.setScheduledTaskEnabled(...args),
+  },
 }));
 
 vi.mock("./SkillScaffoldDialog", () => ({
@@ -673,10 +675,10 @@ export function useSkillsWorkspacePageTestLifecycle() {
     mocks.listRegisteredSkills.mockResolvedValue([]);
     mocks.listWorkspaceSkillBindings.mockReset();
     mocks.listWorkspaceSkillBindings.mockResolvedValue({ bindings: [] });
-    mocks.getAutomationJobs.mockReset();
-    mocks.getAutomationJobs.mockResolvedValue([]);
-    mocks.updateAutomationJob.mockReset();
-    mocks.updateAutomationJob.mockResolvedValue({});
+    mocks.listScheduledTasks.mockReset();
+    mocks.listScheduledTasks.mockResolvedValue([]);
+    mocks.setScheduledTaskEnabled.mockReset();
+    mocks.setScheduledTaskEnabled.mockResolvedValue({});
     window.localStorage.clear();
   });
 

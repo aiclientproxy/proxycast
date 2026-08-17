@@ -34,7 +34,6 @@ const LEGACY_WORKSPACE_SKILL_BINDING_COMMANDS = [
 const LEGACY_REGISTERED_SKILLS_DISCOVERY_COMMANDS = [
   "capability_draft_list_registered_skills",
 ];
-const ADJACENT_PANEL_APP_SERVER_METHODS = ["automationJob/list"];
 
 function printHelp() {
   console.log(`
@@ -342,9 +341,6 @@ function summarizeInvokeEntries(entries) {
         skillCount: Array.isArray(skills) ? skills.length : null,
       };
     });
-  const adjacentPanelAppServerMethodsSeen = appServerMethodsSeen.filter(
-    (method) => ADJACENT_PANEL_APP_SERVER_METHODS.includes(method),
-  );
   const legacyWorkspaceSkillBindingCommandsSeen = Array.from(
     new Set(
       entries
@@ -376,7 +372,6 @@ function summarizeInvokeEntries(entries) {
   return {
     appServerHandleJsonLinesSeen,
     appServerMethodsSeen,
-    adjacentPanelAppServerMethodsSeen,
     registeredSkillsDiscoveryCommandsSeen,
     legacyWorkspaceSkillBindingCommandsSeen,
     workspaceRegisteredSkillsRequestCount:
@@ -620,7 +615,6 @@ async function run() {
     workspaceRegisteredSkillsPanelSettled: false,
     appServerHandleJsonLinesSeen: false,
     appServerMethodsSeen: [],
-    adjacentPanelAppServerMethodsSeen: [],
     registeredSkillsDiscoveryCommandsSeen: [],
     legacyWorkspaceSkillBindingCommandsSeen: [],
     workspaceRegisteredSkillsRequestCount: 0,

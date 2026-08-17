@@ -49,20 +49,6 @@ describe("agentUiProjectionSummary", () => {
         persistence: "archive",
       },
       {
-        type: "agent.changed",
-        sourceType: "automation_job_projection",
-        sequence: 4,
-        sessionId: "session-team-1",
-        agentId: "automation-1",
-        taskId: "automation-1",
-        owner: "agent",
-        scope: "agent",
-        phase: "acting",
-        surface: "background_teammate",
-        persistence: "snapshot",
-        runtimeEntity: "automation_job",
-      },
-      {
         type: "review.completed",
         sourceType: "evidence_projection",
         sequence: 5,
@@ -95,12 +81,12 @@ describe("agentUiProjectionSummary", () => {
       "review-handoff",
     ]);
     expect(lanes.find((lane) => lane.id === "team-topology")?.total).toBe(2);
-    expect(lanes.find((lane) => lane.id === "worker-flow")?.total).toBe(2);
+    expect(lanes.find((lane) => lane.id === "worker-flow")?.total).toBe(1);
     expect(lanes.find((lane) => lane.id === "review-handoff")?.total).toBe(1);
     expect(
       lanes.find((lane) => lane.id === "worker-flow")?.latestEvents[0]
         ?.sequence,
-    ).toBe(4);
+    ).toBe(3);
   });
 
   it("应按单个 Subagents surface 产出可交互详情 selector", () => {

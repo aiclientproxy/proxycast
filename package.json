@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.130.0",
+  "version": "1.131.0",
   "description": "Open-source full-stack desktop AI agent for global users: coding, research, content, files, terminals, tools, multimodal work, and multi-agent workflows.",
   "keywords": [
     "ai",
@@ -197,7 +197,6 @@
     "app-server:manifest": "npm --prefix \"packages/app-server-client\" run build && node scripts/app-server/release-manifest.mjs",
     "app-server:manifest:test": "npm --prefix \"packages/app-server-client\" run build && npx vitest run \"scripts/app-server/release-manifest.test.mjs\" --silent=passed-only --disableConsoleIntercept",
     "smoke:workspace-ready": "node scripts/workspace-ready-smoke.mjs",
-    "smoke:automation-current": "node scripts/automation-current-smoke.mjs",
     "smoke:connect-deep-link-current": "node scripts/connect-deep-link-current-smoke.mjs",
     "smoke:connect-open-deep-link-current": "node scripts/connect-open-deep-link-current-smoke.mjs",
     "smoke:connect-deep-link-save-current": "node scripts/connect-deep-link-save-current-smoke.mjs",
@@ -234,7 +233,7 @@
     "smoke:settings-profile-electron-fixture": "node scripts/electron/settings-profile-fixture-smoke.mjs",
     "smoke:settings-appearance-electron-fixture": "node scripts/electron/settings-appearance-fixture-smoke.mjs",
     "smoke:settings-developer-electron-fixture": "node scripts/electron/settings-developer-fixture-smoke.mjs",
-    "smoke:settings-automation-electron-fixture": "node scripts/electron/settings-automation-fixture-smoke.mjs",
+    "smoke:scheduled-tasks-electron-fixture": "node scripts/electron/scheduled-tasks-fixture-smoke.mjs",
     "smoke:settings-execution-policy-electron-fixture": "node scripts/electron/settings-execution-policy-fixture-smoke.mjs",
     "smoke:settings-browser-session-electron-fixture": "node scripts/electron/settings-browser-session-fixture-smoke.mjs",
     "smoke:settings-mcp-lifecycle-electron-fixture": "node scripts/electron/settings-mcp-lifecycle-fixture-smoke.mjs",

@@ -1,6 +1,11 @@
 # 已安排任务实施计划
 
-状态：`planned / implementation-not-started`
+状态：`implemented / platform-evidence-pending`
+
+执行结果：ST-0、ST-1/2、ST-4、ST-5 已完成；ST-3 的 domain/runtime 合同已完成，真实 OS sleep-resume 证据待补；
+ST-6 的旧公开 Automation 双轨已物理删除并补负向守卫，Windows Notification Center 与 Windows Gate B 待平台 runner。
+实际进度与验证证据以 `internal/exec-plans/scheduled-tasks-implementation.md` 为准。以下分阶段内容保留为实施输入，
+不再作为 current owner 或未完成清单。
 
 ## 1. 写集纪律
 

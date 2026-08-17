@@ -41,7 +41,6 @@ export interface AgentUiTeamRuntimeMetadata {
 const AGENT_UI_RUNTIME_ENTITIES = new Set<AgentUiRuntimeEntity>([
   "agent_turn",
   "subagent_turn",
-  "automation_job",
   "external_task",
   "work_item",
   "unknown",

@@ -9,18 +9,18 @@ import styled from "styled-components";
 import type {
   AgentPageParams,
   PluginsPageParams,
-  AutomationPageParams,
   BrowserRuntimePageParams,
   ExpertsPageParams,
   KnowledgePageParams,
   Page,
   PageParams,
   ResourcesPageParams,
+  ScheduledTasksPageParams,
   SettingsPageParams,
   SkillsPageParams,
 } from "@/types/page";
 import type { AgentBackgroundSessionRuntimeSnapshot } from "./agent/chat";
-import { AutomationPage } from "./automation";
+import { ScheduledTasksPage } from "./scheduled-tasks/ScheduledTasksPage";
 import { ImConfigPage } from "./channels/ImConfigPage";
 import { SettingsPageV2 } from "./settings-v2";
 import { PluginWorkspaceTabs } from "@/features/plugin/ui/PluginWorkspaceTabs";
@@ -162,12 +162,12 @@ export function AppPageContent({
     [onAgentSessionChange],
   );
 
-  if (activePage === "automation") {
+  if (activePage === "scheduled-tasks") {
     return (
       <div style={columnPageStyle}>
-        <AutomationPage
+        <ScheduledTasksPage
           onNavigate={onNavigate}
-          pageParams={activePageParams as AutomationPageParams}
+          pageParams={activePageParams as ScheduledTasksPageParams}
         />
       </div>
     );

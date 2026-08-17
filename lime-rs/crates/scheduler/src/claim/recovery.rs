@@ -125,6 +125,7 @@ impl AutomationWindowClaimDao {
                 SELECT 1
                 FROM automation_jobs
                 WHERE id = ?1
+                  AND deleted_at IS NULL
                   AND updated_at = ?2
                   AND running_started_at = ?3
             )",
@@ -341,6 +342,7 @@ fn finish_task_ownership(
              END,
              updated_at = ?9
          WHERE id = ?10
+           AND deleted_at IS NULL
            AND updated_at = ?11
            AND running_started_at = ?12",
         params![
@@ -441,6 +443,7 @@ mod tests {
                 consecutive_failures: 0,
                 last_retry_count: 0,
                 auto_disabled_until: None,
+                deleted_at: None,
                 last_delivery: None,
                 created_at: created_at.clone(),
                 updated_at: created_at,

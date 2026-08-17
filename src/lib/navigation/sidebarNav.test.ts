@@ -34,7 +34,7 @@ describe("sidebarNav", () => {
     expect(pluginsEntry?.isActive?.("plugins")).toBe(true);
     expect(pluginsEntry?.isActive?.("skills")).toBe(true);
     expect(pluginsEntry?.isActive?.("experts")).toBe(true);
-    expect(pluginsEntry?.isActive?.("automation")).toBe(false);
+    expect(pluginsEntry?.isActive?.("scheduled-tasks")).toBe(false);
   });
 
   it("恢复导航设置时应过滤固定系统入口和已下线 companion", () => {
@@ -45,6 +45,7 @@ describe("sidebarNav", () => {
         "terminal",
         "tools",
         "home-general",
+        "scheduled-tasks",
         "automation",
         "channels",
         "plugins",

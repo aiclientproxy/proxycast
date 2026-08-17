@@ -567,12 +567,13 @@ Runtime prompt 层的禁止证据：
 5. 点击“断开连接”，确认可见状态进入“已断开”、当前连接区消失，并命中 `browserSession/close`
 6. 全程不得命中旧 connector install、Chrome relay endpoint、backend policy、renderer mock 或 Electron diagnostic facade
 
-### 自动化设置页验证
+### 已安排任务验证
 
-1. 进入 `设置 -> 系统 -> 自动化`
-2. 确认调度状态、任务列表、健康面板能正常加载
-3. 打开控制台 / 网络证据，确认自动化读取经 `app_server_handle_json_lines` 观察到 `automationJob/list`、`automationJob/health` 或 `automationJob/runHistory` 等 App Server method，且没有旧 automation 命令族调用
-4. 如当前环境允许创建或编辑任务，再确认提交后列表能刷新，而不是只靠测试夹具静态回显
+1. 从一级导航进入 `已安排任务`，创建继承默认模型的任务并立即运行。
+2. 确认列表、详情、运行历史和打开对话使用同一 task/run/thread/turn identity，失败运行也会立即刷新为可见历史。
+3. 从 trace 确认链路经 `electron-ipc -> app_server_handle_json_lines` 命中 `scheduledTask/list|create|read|run/list|run/start`，并实际进入 RuntimeCore provider 与 canonical Thread/Turn read model。
+4. 确认旧 `automationJob/*`、`automationSchedule/*`、`automationScheduler/*`、legacy Desktop 命令和生产 mock fallback 命中均为零。
+5. 专项 Gate B 使用 `npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000`；浏览器投影或旧 Settings smoke 不能替代该证据。
 
 ### 话题模型恢复验证
 

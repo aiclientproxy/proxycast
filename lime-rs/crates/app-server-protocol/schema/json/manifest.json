@@ -84,58 +84,6 @@
     },
     {
       "kind": "request",
-      "method": "automationJob/create"
-    },
-    {
-      "kind": "request",
-      "method": "automationJob/delete"
-    },
-    {
-      "kind": "request",
-      "method": "automationJob/health"
-    },
-    {
-      "kind": "request",
-      "method": "automationJob/list"
-    },
-    {
-      "kind": "request",
-      "method": "automationJob/read"
-    },
-    {
-      "kind": "request",
-      "method": "automationJob/runHistory"
-    },
-    {
-      "kind": "request",
-      "method": "automationJob/runNow"
-    },
-    {
-      "kind": "request",
-      "method": "automationJob/update"
-    },
-    {
-      "kind": "request",
-      "method": "automationSchedule/preview"
-    },
-    {
-      "kind": "request",
-      "method": "automationSchedule/validate"
-    },
-    {
-      "kind": "request",
-      "method": "automationScheduler/config/read"
-    },
-    {
-      "kind": "request",
-      "method": "automationScheduler/config/update"
-    },
-    {
-      "kind": "request",
-      "method": "automationScheduler/status"
-    },
-    {
-      "kind": "request",
       "method": "browserSession/action/execute"
     },
     {
@@ -955,6 +903,10 @@
       "method": "review/start"
     },
     {
+      "kind": "notification",
+      "method": "scheduledTask/changed"
+    },
+    {
       "kind": "request",
       "method": "scheduledTask/create"
     },
@@ -981,6 +933,10 @@
     {
       "kind": "request",
       "method": "scheduledTask/run/start"
+    },
+    {
+      "kind": "notification",
+      "method": "scheduledTask/run/updated"
     },
     {
       "kind": "request",
@@ -1752,25 +1708,6 @@
       "ArtifactSummary",
       "AuthKind",
       "AuthMaterialRef",
-      "AutomationJobCreateParams",
-      "AutomationJobDeleteResponse",
-      "AutomationJobHealthParams",
-      "AutomationJobHealthResponse",
-      "AutomationJobIdParams",
-      "AutomationJobListResponse",
-      "AutomationJobReadResponse",
-      "AutomationJobRunHistoryParams",
-      "AutomationJobRunHistoryResponse",
-      "AutomationJobRunNowResponse",
-      "AutomationJobUpdateParams",
-      "AutomationJobWriteResponse",
-      "AutomationScheduleParams",
-      "AutomationSchedulePreviewResponse",
-      "AutomationScheduleValidateResponse",
-      "AutomationSchedulerConfigReadResponse",
-      "AutomationSchedulerConfigUpdateParams",
-      "AutomationSchedulerConfigUpdateResponse",
-      "AutomationSchedulerStatusResponse",
       "BrowserSessionActionExecuteParams",
       "BrowserSessionActionExecuteResponse",
       "BrowserSessionCloseResponse",
@@ -2489,6 +2426,9 @@
       "ReviewStartParams",
       "ReviewStartResponse",
       "ReviewTarget",
+      "ScheduledTaskChange",
+      "ScheduledTaskChangedNotification",
+      "ScheduledTaskRunUpdatedNotification",
       "ServerNotification",
       "ServerRequest",
       "ServerRequestResolvedNotification",

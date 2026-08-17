@@ -59,8 +59,8 @@ vi.mock("./settings-v2", () => ({
   },
 }));
 
-vi.mock("./automation", () => ({
-  AutomationPage: () => <div data-testid="automation-page" />,
+vi.mock("./scheduled-tasks/ScheduledTasksPage", () => ({
+  ScheduledTasksPage: () => <div data-testid="scheduled-tasks-page" />,
 }));
 
 vi.mock("./skills", () => ({
@@ -877,6 +877,13 @@ describe("AppPageContent", () => {
     await flushEffects();
 
     expectTestId(container, "im-config-page");
+  });
+
+  it("scheduled-tasks 页面应渲染已安排任务工作台", async () => {
+    const { container } = renderContent("scheduled-tasks");
+    await flushEffects();
+
+    expectTestId(container, "scheduled-tasks-page");
   });
 
   it("settings 页面应渲染设置页入口", async () => {

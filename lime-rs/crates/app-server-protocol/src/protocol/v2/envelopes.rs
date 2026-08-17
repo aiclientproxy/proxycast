@@ -34,6 +34,7 @@ use super::{
     ProcessSpawnParams, ProcessSpawnResponse, ProcessWriteStdinParams, ProcessWriteStdinResponse,
     ReasoningSummaryPartAddedNotification, ReasoningSummaryTextDeltaNotification,
     ReasoningTextDeltaNotification, ReviewStartParams, ReviewStartResponse,
+    ScheduledTaskChangedNotification, ScheduledTaskRunUpdatedNotification,
     ServerRequestResolvedNotification, SkillsChangedNotification, SkillsConfigWriteParams,
     SkillsConfigWriteResponse, SkillsExtraRootsSetParams, SkillsExtraRootsSetResponse,
     SkillsListParams, SkillsListResponse, ThreadApproveGuardianDeniedActionParams,
@@ -82,6 +83,7 @@ use super::{
     METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA, METHOD_PROCESS_EXITED,
     METHOD_PROCESS_OUTPUT_DELTA, METHOD_REASONING_SUMMARY_PART_ADDED,
     METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
+    METHOD_SCHEDULED_TASK_CHANGED, METHOD_SCHEDULED_TASK_RUN_UPDATED,
     METHOD_SERVER_REQUEST_RESOLVED, METHOD_SKILLS_CHANGED, METHOD_THREAD_CLOSED,
     METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
     METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED, METHOD_TURN_DIFF_UPDATED,
@@ -1151,6 +1153,10 @@ pub enum ServerNotification {
     McpServerStatusUpdated(McpServerStatusUpdatedNotification),
     #[serde(rename = "app/list/updated")]
     AppListUpdated(AppListUpdatedNotification),
+    #[serde(rename = "scheduledTask/changed")]
+    ScheduledTaskChanged(ScheduledTaskChangedNotification),
+    #[serde(rename = "scheduledTask/run/updated")]
+    ScheduledTaskRunUpdated(ScheduledTaskRunUpdatedNotification),
     #[serde(rename = "hook/started")]
     HookStarted(HookStartedNotification),
     #[serde(rename = "hook/completed")]
@@ -1244,6 +1250,8 @@ impl ServerNotification {
             Self::McpServerOauthLoginCompleted(_) => METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
             Self::McpServerStatusUpdated(_) => METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED,
             Self::AppListUpdated(_) => METHOD_APP_LIST_UPDATED,
+            Self::ScheduledTaskChanged(_) => METHOD_SCHEDULED_TASK_CHANGED,
+            Self::ScheduledTaskRunUpdated(_) => METHOD_SCHEDULED_TASK_RUN_UPDATED,
             Self::HookStarted(_) => METHOD_HOOK_STARTED,
             Self::HookCompleted(_) => METHOD_HOOK_COMPLETED,
             Self::ThreadStarted(_) => "thread/started",
@@ -1319,6 +1327,12 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_APP_LIST_UPDATED => serde_json::from_value(params)
                 .map(Self::AppListUpdated)
+                .map_err(|error| error.to_string()),
+            METHOD_SCHEDULED_TASK_CHANGED => serde_json::from_value(params)
+                .map(Self::ScheduledTaskChanged)
+                .map_err(|error| error.to_string()),
+            METHOD_SCHEDULED_TASK_RUN_UPDATED => serde_json::from_value(params)
+                .map(Self::ScheduledTaskRunUpdated)
                 .map_err(|error| error.to_string()),
             METHOD_HOOK_STARTED => serde_json::from_value(params)
                 .map(Self::HookStarted)
@@ -1467,6 +1481,12 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::AppListUpdated(params) => {
                 jsonrpc_notification(METHOD_APP_LIST_UPDATED, params)
+            }
+            ServerNotification::ScheduledTaskChanged(params) => {
+                jsonrpc_notification(METHOD_SCHEDULED_TASK_CHANGED, params)
+            }
+            ServerNotification::ScheduledTaskRunUpdated(params) => {
+                jsonrpc_notification(METHOD_SCHEDULED_TASK_RUN_UPDATED, params)
             }
             ServerNotification::HookStarted(params) => {
                 jsonrpc_notification(METHOD_HOOK_STARTED, params)

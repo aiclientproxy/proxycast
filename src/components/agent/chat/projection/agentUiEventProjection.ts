@@ -51,13 +51,6 @@ export {
 } from "./evidenceProjection";
 
 export type {
-  AgentUiAutomationJobProjectionEvent,
-  AgentUiAutomationJobProjectionInput,
-} from "./automationJobProjection";
-
-export { buildAgentUiAutomationJobProjectionEvents } from "./automationJobProjection";
-
-export type {
   AgentUiTeamControlProjectionAction,
   AgentUiTeamControlProjectionInput,
 } from "./teamControlProjection";

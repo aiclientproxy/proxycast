@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 
 use app_server::{AppServer, MockBackend, RuntimeCore};
 use app_server_protocol::protocol::v2::{
@@ -19,7 +19,7 @@ async fn skills_list_preserves_cwd_order_errors_and_exact_metadata_shape() {
     write_skill(second.path(), "reviewer", "Second description", false);
     write_invalid_skill(second.path(), "broken");
 
-    let server = AppServer::with_runtime(RuntimeCore::with_backend(Arc::new(MockBackend)));
+    let server = app_server_with_config_path(first.path().join("config.yaml"));
     initialize(&server).await;
 
     let response = request(
@@ -82,7 +82,7 @@ async fn skills_list_preserves_cwd_order_errors_and_exact_metadata_shape() {
 async fn skills_list_force_reload_reloads_changed_metadata() {
     let cwd = TempDir::new().expect("cwd");
     write_skill(cwd.path(), "writer", "Before", true);
-    let server = AppServer::with_runtime(RuntimeCore::with_backend(Arc::new(MockBackend)));
+    let server = app_server_with_config_path(cwd.path().join("config.yaml"));
     initialize(&server).await;
 
     let before = request(
@@ -116,7 +116,7 @@ async fn skills_extra_roots_replace_clear_and_notify_over_public_jsonrpc() {
         let _ = lime_skills::set_runtime_extra_skill_roots(Vec::new());
     });
 
-    let server = AppServer::with_runtime(RuntimeCore::with_backend(Arc::new(MockBackend)));
+    let server = app_server_with_config_path(cwd.path().join("config.yaml"));
     initialize(&server).await;
 
     let messages = request_messages(
@@ -193,25 +193,13 @@ async fn skills_extra_roots_replace_clear_and_notify_over_public_jsonrpc() {
 
 #[tokio::test]
 async fn skills_config_write_validates_selector_and_changes_effective_state() {
-    let _config_env_lock = config_env_lock()
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
     let temp = TempDir::new().expect("skills config temp");
     let config_path = temp.path().join("config.yaml");
-    let previous_config_path = std::env::var_os("LIME_CONFIG_PATH");
-    let _restore_config_path = scopeguard::guard(previous_config_path, |value| {
-        if let Some(value) = value {
-            std::env::set_var("LIME_CONFIG_PATH", value);
-        } else {
-            std::env::remove_var("LIME_CONFIG_PATH");
-        }
-    });
-    std::env::set_var("LIME_CONFIG_PATH", &config_path);
 
     let cwd = TempDir::new().expect("cwd");
     write_skill(cwd.path(), "writer", "Writer", true);
     let skill_path = cwd.path().join(".agents/skills/writer/SKILL.md");
-    let server = AppServer::with_runtime(RuntimeCore::with_backend(Arc::new(MockBackend)));
+    let server = app_server_with_config_path(config_path.clone());
     initialize(&server).await;
 
     for (id, params) in [
@@ -315,9 +303,10 @@ fn write_skill_root(root: &Path, name: &str, description: &str) {
     .expect("extra root skill file");
 }
 
-fn config_env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
+fn app_server_with_config_path(config_path: impl Into<std::path::PathBuf>) -> AppServer {
+    AppServer::with_runtime(
+        RuntimeCore::with_backend(Arc::new(MockBackend)).with_app_config_path(config_path.into()),
+    )
 }
 
 fn find_skill<'a>(response: &'a Value, name: &str) -> &'a Value {

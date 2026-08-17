@@ -2,14 +2,9 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { siteGetAdapterLaunchReadiness } from "@/lib/webview-api";
-import { createAutomationJob } from "@/lib/api/automation";
-import { recordAutomationJobAgentUiProjection } from "../projection/automationJobAgentUiProjection";
-import { createContent, listProjects, type Project } from "@/lib/api/project";
-import {
-  type AutomationJobDialogInitialValues,
-  type AutomationJobDialogSubmit,
-} from "@/components/settings-v2/system/automation/AutomationJobDialog";
-import { normalizeAutomationThreadLineage } from "@/components/settings-v2/system/automation/automationThreadLineage";
+import { scheduledTasksApi } from "@/lib/api/scheduledTasks";
+import { createContent } from "@/lib/api/project";
+import type { ScheduledTaskFormState } from "@/components/scheduled-tasks/scheduledTaskViewModel";
 import type {
   A2UIFormData,
   A2UIResponse,
@@ -53,15 +48,13 @@ import type {
   ServiceSkillSlotValues,
 } from "../service-skills/types";
 import {
-  buildFallbackAutomationWorkspace,
   buildServiceSkillAutomationSetupState,
-  buildServiceSkillAutomationSubmitRequest,
+  buildServiceSkillScheduledTaskCreateRequest,
   buildServiceSkillSelectionPlan,
   getWorkspaceServiceSkillErrorMessage,
   normalizeWorkspaceServiceSkillOptionalText,
   type PendingServiceSkillAutomationLaunch,
   type PendingServiceSkillLaunchInputState,
-  prioritizeAutomationWorkspaces,
   resolveServiceSkillLaunchUserInput,
   type ServiceSkillSelectionOptions,
   shouldCreateServiceSkillAutomationContent,
@@ -104,13 +97,10 @@ export function useWorkspaceServiceSkillEntryActions({
   onNavigate,
   recordServiceSkillUsage,
 }: UseWorkspaceServiceSkillEntryActionsParams) {
-  const { t } = useTranslation("settings");
+  const { t } = useTranslation("workspace");
   const [automationDialogOpen, setAutomationDialogOpen] = useState(false);
   const [automationDialogInitialValues, setAutomationDialogInitialValues] =
-    useState<AutomationJobDialogInitialValues | null>(null);
-  const [automationWorkspaces, setAutomationWorkspaces] = useState<Project[]>(
-    [],
-  );
+    useState<ScheduledTaskFormState | null>(null);
   const [automationJobSaving, setAutomationJobSaving] = useState(false);
   const [pendingServiceSkillAutomation, setPendingServiceSkillAutomation] =
     useState<PendingServiceSkillAutomationLaunch | null>(null);
@@ -121,10 +111,12 @@ export function useWorkspaceServiceSkillEntryActions({
   const currentProjectId = normalizeProjectId(projectId);
   const currentContentId = contentId?.trim() || null;
   const resolveAutomationThreadLineage = useCallback(async () => {
-    const currentLineage = normalizeAutomationThreadLineage({
-      sessionId,
-      threadId: threadId ?? sessionId,
-    });
+    const currentSessionId = sessionId?.trim();
+    const currentThreadId = (threadId ?? sessionId)?.trim();
+    const currentLineage =
+      currentSessionId && currentThreadId
+        ? { sessionId: currentSessionId, threadId: currentThreadId }
+        : null;
     if (currentLineage) {
       return currentLineage;
     }
@@ -135,10 +127,7 @@ export function useWorkspaceServiceSkillEntryActions({
       return null;
     }
 
-    return normalizeAutomationThreadLineage({
-      sessionId: ensuredSessionId,
-      threadId: ensuredSessionId,
-    });
+    return { sessionId: ensuredSessionId, threadId: ensuredSessionId };
   }, [ensureSessionForThreadLineage, sessionId, threadId]);
 
   const navigateToServiceSkillWorkspace = useCallback(
@@ -735,25 +724,9 @@ export function useWorkspaceServiceSkillEntryActions({
         const automationThreadLineage = await resolveAutomationThreadLineage();
         if (!automationThreadLineage) {
           toast.error(
-            t("settings.automation.jobDialog.validation.threadLineageRequired"),
+            t("scheduledTasks.editor.validation.threadLineageRequired"),
           );
           return;
-        }
-
-        let workspaces: Project[];
-        try {
-          workspaces = prioritizeAutomationWorkspaces(
-            await listProjects(),
-            currentProjectId,
-            skill.themeTarget ?? activeTheme,
-          );
-        } catch {
-          workspaces = [
-            buildFallbackAutomationWorkspace(
-              currentProjectId,
-              skill.themeTarget ?? activeTheme,
-            ),
-          ];
         }
 
         const setupState = buildServiceSkillAutomationSetupState({
@@ -764,7 +737,6 @@ export function useWorkspaceServiceSkillEntryActions({
           threadLineage: automationThreadLineage,
         });
 
-        setAutomationWorkspaces(workspaces);
         setAutomationDialogInitialValues(setupState.dialogInitialValues);
         setPendingServiceSkillAutomation(setupState.pendingAutomation);
         setPendingServiceSkillLaunchInput(null);
@@ -778,7 +750,6 @@ export function useWorkspaceServiceSkillEntryActions({
       }
     },
     [
-      activeTheme,
       currentProjectId,
       handleServiceSkillLaunch,
       input,
@@ -797,42 +768,35 @@ export function useWorkspaceServiceSkillEntryActions({
   }, []);
 
   const handleAutomationDialogSubmit = useCallback(
-    async (payload: AutomationJobDialogSubmit) => {
-      if (payload.mode !== "create") {
-        throw new Error("当前技能入口只支持创建新的本地自动化任务");
-      }
-
+    async (form: ScheduledTaskFormState) => {
       setAutomationJobSaving(true);
       try {
         const pendingLaunch = pendingServiceSkillAutomation;
-        let request = payload.request;
         let automationContentId = currentContentId;
 
         if (
           shouldCreateServiceSkillAutomationContent({
             pendingAutomation: pendingLaunch,
-            request,
             contentId: automationContentId,
           }) &&
           pendingLaunch
         ) {
           const createdContent = await createServiceSkillSeededContent(
             pendingLaunch.skill,
-            request.workspace_id,
+            form.projectId,
           );
           automationContentId = createdContent?.id ?? null;
         }
-        const submitRequestPlan = buildServiceSkillAutomationSubmitRequest({
-          pendingAutomation: pendingLaunch,
-          request,
-          contentId: automationContentId,
-        });
-        request = submitRequestPlan.request;
-        automationContentId = submitRequestPlan.automationContentId;
+        const scheduledTaskRequest =
+          buildServiceSkillScheduledTaskCreateRequest({
+            pendingAutomation: pendingLaunch,
+            form,
+            contentId: automationContentId,
+          });
 
-        const createdJob = await createAutomationJob(request);
-        recordAutomationJobAgentUiProjection(createdJob, "created");
-        toast.success(`本地自动化任务已创建：${createdJob.name}`);
+        const createdTask =
+          await scheduledTasksApi.create(scheduledTaskRequest);
+        toast.success(`本地定时任务已创建：${createdTask.title}`);
 
         setAutomationDialogOpen(false);
         setAutomationDialogInitialValues(null);
@@ -844,8 +808,8 @@ export function useWorkspaceServiceSkillEntryActions({
 
         recordServiceSkillAutomationLink({
           skillId: pendingLaunch.usage.skillId,
-          jobId: createdJob.id,
-          jobName: createdJob.name,
+          jobId: createdTask.id,
+          jobName: createdTask.title,
         });
         recordServiceSkillUsage(pendingLaunch.usage);
 
@@ -856,7 +820,7 @@ export function useWorkspaceServiceSkillEntryActions({
             pendingLaunch.prompt,
             {
               contentId: automationContentId,
-              projectId: request.workspace_id,
+              projectId: form.projectId,
             },
           );
         } catch (error) {
@@ -900,7 +864,6 @@ export function useWorkspaceServiceSkillEntryActions({
     automationDialogInitialValues,
     automationThreadLineage:
       pendingServiceSkillAutomation?.threadLineage ?? null,
-    automationWorkspaces,
     automationJobSaving,
     handleServiceSkillSelect,
     handlePendingServiceSkillLaunchSubmit,

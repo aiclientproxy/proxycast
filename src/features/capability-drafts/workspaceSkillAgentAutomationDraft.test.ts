@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { ScheduledTask } from "@/lib/api/scheduledTasks";
 import type { AgentRuntimeWorkspaceSkillBinding } from "@/lib/api/agentRuntime/toolInventoryTypes";
 import {
   buildWorkspaceSkillManagedAutomationPresentation,
   buildWorkspaceSkillAgentAutomationInitialValues,
   buildWorkspaceSkillAgentAutomationRequestMetadata,
   canBuildWorkspaceSkillAgentAutomationDraft,
-  isWorkspaceSkillAgentAutomationJobForDirectory,
+  isWorkspaceSkillScheduledTaskForDirectory,
 } from "./workspaceSkillAgentAutomationDraft";
 
 function createBinding(
@@ -52,16 +53,16 @@ describe("workspaceSkillAgentAutomationDraft", () => {
     });
 
     expect(initialValues).toMatchObject({
-      name: "只读 CLI 报告｜Managed Agent 草案",
-      workspace_id: "project-1",
-      enabled: false,
-      execution_mode: "skill",
-      payload_kind: "agent_turn",
-      schedule_kind: "cron",
-      max_retries: "2",
+      form: {
+        title: "只读 CLI 报告｜Managed Agent 草案",
+        projectId: "project-1",
+        enabled: false,
+        scheduleType: "daily",
+        time: "09:00",
+      },
     });
-    expect(initialValues?.prompt).toContain("project:capability-report");
-    expect(initialValues?.agent_request_metadata).toMatchObject({
+    expect(initialValues?.form.prompt).toContain("project:capability-report");
+    expect(initialValues?.requestMetadata).toMatchObject({
       harness: {
         agent_envelope: {
           source: "skill_forge_p4_agent_envelope",
@@ -86,7 +87,7 @@ describe("workspaceSkillAgentAutomationDraft", () => {
         },
       },
     });
-    expect(JSON.stringify(initialValues?.agent_request_metadata)).not.toContain(
+    expect(JSON.stringify(initialValues?.requestMetadata)).not.toContain(
       "managed_objective",
     );
   });
@@ -132,42 +133,33 @@ describe("workspaceSkillAgentAutomationDraft", () => {
       },
     });
 
-    expect(initialValues?.name).toBe("Managed draft for 只读 CLI 报告");
-    expect(initialValues?.description).toContain(
-      "Skill: project:capability-report",
-    );
-    expect(initialValues?.description).toContain(
-      "Provenance: capdraft-1/capver-1",
-    );
-    expect(initialValues?.prompt).toContain(
+    expect(initialValues?.form.title).toBe("Managed draft for 只读 CLI 报告");
+    expect(initialValues?.form.prompt).toContain(
       "Run 只读 CLI 报告 with project:capability-report.",
     );
-    expect(JSON.stringify(initialValues?.agent_request_metadata)).not.toContain(
+    expect(JSON.stringify(initialValues?.requestMetadata)).not.toContain(
       "managed_objective",
     );
-    expect(JSON.stringify(initialValues?.agent_request_metadata)).not.toContain(
+    expect(JSON.stringify(initialValues?.requestMetadata)).not.toContain(
       "agent_runtime_submit_turn",
     );
   });
 
-  it("应识别 workspace skill 对应的 Managed Job 并生成状态摘要", () => {
-    const job = {
+  it("应识别 workspace skill 对应的 Scheduled Task 并生成状态摘要", () => {
+    const task: ScheduledTask = {
       id: "job-1",
-      name: "只读 CLI 报告｜Managed Agent 草案",
-      description: null,
+      title: "只读 CLI 报告｜Managed Agent 草案",
+      prompt: "run",
       enabled: false,
-      workspace_id: "project-1",
-      execution_mode: "skill",
       schedule: {
-        kind: "cron",
-        expr: "0 9 * * *",
-        tz: "Asia/Shanghai",
+        type: "daily",
+        time: "09:00",
+        timezone: "Asia/Shanghai",
       },
-      payload: {
-        kind: "agent_turn",
-        prompt: "run",
-        web_search: false,
-        request_metadata: {
+      execution: {
+        threadMode: "new_thread",
+        projectId: "project-1",
+        requestMetadata: {
           harness: {
             agent_envelope: {
               directory: "capability-report",
@@ -176,37 +168,24 @@ describe("workspaceSkillAgentAutomationDraft", () => {
           },
         },
       },
-      delivery: {
-        mode: "none",
-        best_effort: true,
-      },
-      timeout_secs: null,
-      max_retries: 2,
-      next_run_at: null,
-      last_status: null,
-      last_error: null,
-      last_run_at: null,
-      last_finished_at: null,
-      running_started_at: null,
-      consecutive_failures: 0,
-      last_retry_count: 0,
-      auto_disabled_until: null,
-      created_at: "2026-05-06T10:00:00Z",
-      updated_at: "2026-05-06T10:00:00Z",
-    } as const;
+      notificationPolicy: "failures",
+      overlapPolicy: "skip_if_running",
+      createdAt: "2026-05-06T10:00:00Z",
+      updatedAt: "2026-05-06T10:00:00Z",
+    };
 
     expect(
-      isWorkspaceSkillAgentAutomationJobForDirectory(job, "capability-report"),
+      isWorkspaceSkillScheduledTaskForDirectory(task, "capability-report"),
     ).toBe(true);
-    expect(
-      isWorkspaceSkillAgentAutomationJobForDirectory(job, "other-skill"),
-    ).toBe(false);
+    expect(isWorkspaceSkillScheduledTaskForDirectory(task, "other-skill")).toBe(
+      false,
+    );
 
     const presentation = buildWorkspaceSkillManagedAutomationPresentation([
-      job,
+      task,
     ]);
     expect(presentation.statusLabel).toContain("草案暂停");
-    expect(presentation.scheduleLabel).toContain("Cron 0 9 * * *");
+    expect(presentation.scheduleLabel).toContain("每天 09:00");
     expect(presentation.lastRunLabel).toContain("暂无");
   });
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getAutomationJobs } from "@/lib/api/automation";
+import { scheduledTasksApi } from "@/lib/api/scheduledTasks";
 import {
   getSkillCatalog,
   isSeededSkillCatalog,
@@ -194,11 +194,13 @@ export function useServiceSkills(
 
       if (automationLinks.length > 0 || hasLocalAutomationSkills) {
         try {
-          const automationJobs = await getAutomationJobs();
+          const scheduledTasks = await scheduledTasksApi.listDetailed({
+            limit: 200,
+          });
           automationStatuses =
-            buildServiceSkillAutomationStatusMap(automationJobs);
+            buildServiceSkillAutomationStatusMap(scheduledTasks);
           resolvedAutomationLinkCount =
-            resolveServiceSkillAutomationLinks(automationJobs).length;
+            resolveServiceSkillAutomationLinks(scheduledTasks).length;
         } catch {
           automationStatuses = {};
         }

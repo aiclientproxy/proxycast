@@ -31,22 +31,6 @@ export const METHOD_APP_LIST_UPDATED = "app/list/updated";
 export const METHOD_APP_READ = "app/read";
 export const METHOD_ARTIFACT_READ = "artifact/read";
 export const METHOD_ARTIFACT_WRITE = "artifact/write";
-export const METHOD_AUTOMATION_JOB_CREATE = "automationJob/create";
-export const METHOD_AUTOMATION_JOB_DELETE = "automationJob/delete";
-export const METHOD_AUTOMATION_JOB_HEALTH = "automationJob/health";
-export const METHOD_AUTOMATION_JOB_LIST = "automationJob/list";
-export const METHOD_AUTOMATION_JOB_READ = "automationJob/read";
-export const METHOD_AUTOMATION_JOB_RUN_HISTORY = "automationJob/runHistory";
-export const METHOD_AUTOMATION_JOB_RUN_NOW = "automationJob/runNow";
-export const METHOD_AUTOMATION_JOB_UPDATE = "automationJob/update";
-export const METHOD_AUTOMATION_SCHEDULE_PREVIEW = "automationSchedule/preview";
-export const METHOD_AUTOMATION_SCHEDULE_VALIDATE =
-  "automationSchedule/validate";
-export const METHOD_AUTOMATION_SCHEDULER_CONFIG_READ =
-  "automationScheduler/config/read";
-export const METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE =
-  "automationScheduler/config/update";
-export const METHOD_AUTOMATION_SCHEDULER_STATUS = "automationScheduler/status";
 export const METHOD_BROWSER_SESSION_ACTION_EXECUTE =
   "browserSession/action/execute";
 export const METHOD_BROWSER_SESSION_CLOSE = "browserSession/close";
@@ -298,6 +282,7 @@ export const METHOD_PROJECT_MATERIAL_UPDATE = "projectMaterial/update";
 export const METHOD_PROJECT_MATERIAL_UPLOAD = "projectMaterial/upload";
 export const METHOD_PROJECT_MEMORY_READ = "projectMemory/read";
 export const METHOD_REVIEW_START = "review/start";
+export const METHOD_SCHEDULED_TASK_CHANGED = "scheduledTask/changed";
 export const METHOD_SCHEDULED_TASK_CREATE = "scheduledTask/create";
 export const METHOD_SCHEDULED_TASK_DELETE = "scheduledTask/delete";
 export const METHOD_SCHEDULED_TASK_ENABLED_SET = "scheduledTask/enabled/set";
@@ -305,6 +290,7 @@ export const METHOD_SCHEDULED_TASK_LIST = "scheduledTask/list";
 export const METHOD_SCHEDULED_TASK_READ = "scheduledTask/read";
 export const METHOD_SCHEDULED_TASK_RUN_LIST = "scheduledTask/run/list";
 export const METHOD_SCHEDULED_TASK_RUN_START = "scheduledTask/run/start";
+export const METHOD_SCHEDULED_TASK_RUN_UPDATED = "scheduledTask/run/updated";
 export const METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW =
   "scheduledTask/schedule/preview";
 export const METHOD_SCHEDULED_TASK_UPDATE = "scheduledTask/update";
@@ -544,58 +530,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "artifact/write",
-  },
-  {
-    kind: "request",
-    method: "automationJob/create",
-  },
-  {
-    kind: "request",
-    method: "automationJob/delete",
-  },
-  {
-    kind: "request",
-    method: "automationJob/health",
-  },
-  {
-    kind: "request",
-    method: "automationJob/list",
-  },
-  {
-    kind: "request",
-    method: "automationJob/read",
-  },
-  {
-    kind: "request",
-    method: "automationJob/runHistory",
-  },
-  {
-    kind: "request",
-    method: "automationJob/runNow",
-  },
-  {
-    kind: "request",
-    method: "automationJob/update",
-  },
-  {
-    kind: "request",
-    method: "automationSchedule/preview",
-  },
-  {
-    kind: "request",
-    method: "automationSchedule/validate",
-  },
-  {
-    kind: "request",
-    method: "automationScheduler/config/read",
-  },
-  {
-    kind: "request",
-    method: "automationScheduler/config/update",
-  },
-  {
-    kind: "request",
-    method: "automationScheduler/status",
   },
   {
     kind: "request",
@@ -1418,6 +1352,10 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "review/start",
   },
   {
+    kind: "notification",
+    method: "scheduledTask/changed",
+  },
+  {
     kind: "request",
     method: "scheduledTask/create",
   },
@@ -1444,6 +1382,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "scheduledTask/run/start",
+  },
+  {
+    kind: "notification",
+    method: "scheduledTask/run/updated",
   },
   {
     kind: "request",
@@ -3372,71 +3314,6 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
-      method: "automationScheduler/config/read";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationScheduler/config/update";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationScheduler/status";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationJob/list";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationJob/read";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationJob/create";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationJob/update";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationJob/delete";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationJob/runNow";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationJob/health";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationJob/runHistory";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationSchedule/preview";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "automationSchedule/validate";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
       method: "scheduledTask/list";
       params?: unknown;
     }
@@ -3898,19 +3775,6 @@ export type AppServerRequestMethod =
   | "agentSession/reviewDecisionTemplate/export"
   | "agentSession/toolInventory/read"
   | "artifact/read"
-  | "automationJob/create"
-  | "automationJob/delete"
-  | "automationJob/health"
-  | "automationJob/list"
-  | "automationJob/read"
-  | "automationJob/runHistory"
-  | "automationJob/runNow"
-  | "automationJob/update"
-  | "automationSchedule/preview"
-  | "automationSchedule/validate"
-  | "automationScheduler/config/read"
-  | "automationScheduler/config/update"
-  | "automationScheduler/status"
   | "browserSession/action/execute"
   | "browserSession/close"
   | "browserSession/event/list"
@@ -4262,85 +4126,6 @@ export interface AuthMaterialRef {
 }
 
 export type AutoReviewDecisionSource = "agent";
-
-export interface AutomationJobCreateParams {
-  request: unknown;
-}
-
-export interface AutomationJobDeleteResponse {
-  deleted: boolean;
-}
-
-export interface AutomationJobHealthParams {
-  query?: unknown;
-}
-
-export interface AutomationJobHealthResponse {
-  health: unknown;
-}
-
-export interface AutomationJobIdParams {
-  id: string;
-}
-
-export interface AutomationJobListResponse {
-  jobs?: unknown[];
-}
-
-export interface AutomationJobReadResponse {
-  job?: unknown;
-}
-
-export interface AutomationJobRunHistoryParams {
-  id: string;
-  limit?: number | null;
-}
-
-export interface AutomationJobRunHistoryResponse {
-  runs?: unknown[];
-}
-
-export interface AutomationJobRunNowResponse {
-  result: unknown;
-}
-
-export interface AutomationJobUpdateParams {
-  id: string;
-  request: unknown;
-}
-
-export interface AutomationJobWriteResponse {
-  job: unknown;
-}
-
-export interface AutomationScheduleParams {
-  schedule: unknown;
-}
-
-export interface AutomationSchedulePreviewResponse {
-  nextRunAt?: null | string;
-}
-
-export interface AutomationScheduleValidateResponse {
-  error?: null | string;
-  valid: boolean;
-}
-
-export interface AutomationSchedulerConfigReadResponse {
-  config: unknown;
-}
-
-export interface AutomationSchedulerConfigUpdateParams {
-  config: unknown;
-}
-
-export interface AutomationSchedulerConfigUpdateResponse {
-  config: unknown;
-}
-
-export interface AutomationSchedulerStatusResponse {
-  status: unknown;
-}
 
 export interface BrowserSessionActionExecuteParams {
   action: string;
@@ -8517,6 +8302,13 @@ export interface ScheduledTask {
   updatedAt: string;
 }
 
+export type ScheduledTaskChange = "created" | "deleted" | "enabled" | "updated";
+
+export interface ScheduledTaskChangedNotification {
+  change: ScheduledTaskChange;
+  taskId: string;
+}
+
 export interface ScheduledTaskCreateParams {
   task: ScheduledTaskCreateRequest;
 }
@@ -8546,6 +8338,7 @@ export interface ScheduledTaskExecution {
   modelId?: null | string;
   projectId?: null | string;
   reasoningEffort?: null | string;
+  requestMetadata?: unknown;
   sandboxPolicy?: unknown;
   sourceThreadId?: null | string;
   threadMode: ScheduledTaskThreadMode;
@@ -8599,6 +8392,18 @@ export interface ScheduledTaskRunSummary {
   summary?: null | string;
   taskId: string;
   threadId?: null | string;
+  turnId?: null | string;
+}
+
+export interface ScheduledTaskRunUpdatedNotification {
+  attention: boolean;
+  error?: null | string;
+  notificationPolicy: string;
+  runId: string;
+  status: string;
+  taskId: string;
+  threadId?: null | string;
+  title?: null | string;
   turnId?: null | string;
 }
 
@@ -8734,6 +8539,14 @@ export type ServerNotification =
   | {
       method: "app/list/updated";
       params: AppListUpdatedNotification;
+    }
+  | {
+      method: "scheduledTask/changed";
+      params: ScheduledTaskChangedNotification;
+    }
+  | {
+      method: "scheduledTask/run/updated";
+      params: ScheduledTaskRunUpdatedNotification;
     }
   | {
       method: "hook/started";

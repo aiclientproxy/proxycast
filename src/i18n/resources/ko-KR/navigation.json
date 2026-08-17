@@ -6,7 +6,7 @@
   "navigation.sidebar.actions.expand": "탐색 막대 펼치기",
   "navigation.sidebar.home.ariaLabel": "Lime 홈으로 돌아가기",
   "navigation.sidebar.home.label": "Lime 홈",
-  "navigation.sidebar.items.automation": "예약된 작업",
+  "navigation.sidebar.items.scheduledTasks": "예약된 작업",
   "navigation.sidebar.items.channels": "메시지 채널",
   "navigation.sidebar.items.homeGeneral": "새 작업",
   "navigation.sidebar.items.knowledge": "프로젝트 자료",

@@ -12,7 +12,7 @@ export const SIDEBAR_CONVERSATION_NAVIGATION_DEFER_MS =
   SIDEBAR_SESSION_ENTRY_REFRESH_DEFER_MS;
 
 export const SIDEBAR_NAV_LABEL_KEYS: Record<string, string> = {
-  automation: "navigation.sidebar.items.automation",
+  "scheduled-tasks": "navigation.sidebar.items.scheduledTasks",
   channels: "navigation.sidebar.items.channels",
   "home-general": "navigation.sidebar.items.homeGeneral",
   knowledge: "navigation.sidebar.items.knowledge",

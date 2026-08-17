@@ -14,10 +14,14 @@ import type {
   ServiceSkillSurfaceScope,
   ServiceSkillType,
 } from "@/lib/api/serviceSkills";
-import type {
-  AutomationOutputFormat,
-  AutomationOutputSchema,
-} from "@/lib/api/automation";
+
+export type AutomationOutputFormat = "text" | "json";
+export type AutomationOutputSchema =
+  | "text"
+  | "json"
+  | "table"
+  | "csv"
+  | "links";
 
 export const BASE_SETUP_TARGET_CATALOGS = [
   "skill_catalog",

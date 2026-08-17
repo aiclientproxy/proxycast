@@ -1,15 +1,16 @@
 use super::{
     create_automation_job, data_error, normalize_automation_job_id, update_automation_job,
+    AutomationJobCreateParams, AutomationJobUpdateParams,
 };
 use crate::automation_execution::next_run_for_automation_schedule;
 use crate::RuntimeCoreError;
 use app_server_protocol::{
-    AutomationJobCreateParams, AutomationJobUpdateParams, ScheduledTask, ScheduledTaskCreateParams,
-    ScheduledTaskCreateRequest, ScheduledTaskDeleteResponse, ScheduledTaskEnabledSetParams,
-    ScheduledTaskExecution, ScheduledTaskIdParams, ScheduledTaskListParams,
-    ScheduledTaskListResponse, ScheduledTaskNotificationPolicy, ScheduledTaskOverlapPolicy,
-    ScheduledTaskReadResponse, ScheduledTaskRunListParams, ScheduledTaskRunListResponse,
-    ScheduledTaskRunSummary, ScheduledTaskSchedule, ScheduledTaskSchedulePreviewParams,
+    ScheduledTask, ScheduledTaskCreateParams, ScheduledTaskCreateRequest,
+    ScheduledTaskDeleteResponse, ScheduledTaskEnabledSetParams, ScheduledTaskExecution,
+    ScheduledTaskIdParams, ScheduledTaskListParams, ScheduledTaskListResponse,
+    ScheduledTaskNotificationPolicy, ScheduledTaskOverlapPolicy, ScheduledTaskReadResponse,
+    ScheduledTaskRunListParams, ScheduledTaskRunListResponse, ScheduledTaskRunSummary,
+    ScheduledTaskSchedule, ScheduledTaskSchedulePreviewParams,
     ScheduledTaskSchedulePreviewResponse, ScheduledTaskSummary, ScheduledTaskThreadMode,
     ScheduledTaskUpdateParams, ScheduledTaskUpdateRequest, ScheduledTaskWeekday,
     ScheduledTaskWriteResponse,
@@ -138,7 +139,8 @@ pub(crate) fn delete_scheduled_task(
         return Ok(ScheduledTaskDeleteResponse { deleted: false });
     };
     require_scheduled_task_job(&job)?;
-    let deleted = AutomationJobDao::delete(&conn, &id).map_err(data_error)?;
+    let deleted =
+        AutomationJobDao::soft_delete(&conn, &id, &Utc::now().to_rfc3339()).map_err(data_error)?;
     Ok(ScheduledTaskDeleteResponse { deleted })
 }
 
@@ -149,7 +151,7 @@ pub(crate) fn list_scheduled_task_runs(
     let id = normalize_automation_job_id(&params.task_id)?;
     let limit = params.limit.unwrap_or(20).clamp(1, 200);
     let conn = database::lock_db(db).map_err(data_error)?;
-    let job = AutomationJobDao::get(&conn, &id)
+    let job = AutomationJobDao::get_including_deleted(&conn, &id)
         .map_err(data_error)?
         .ok_or_else(|| scheduled_task_not_found(&id))?;
     require_scheduled_task_job(&job)?;
@@ -266,6 +268,20 @@ fn lower_scheduled_task_update(
             "threadId",
             "source_thread_id",
             "sourceThreadId",
+            "thread_mode",
+            "threadMode",
+            "cwd",
+            "model",
+            "model_id",
+            "modelId",
+            "reasoning_effort",
+            "reasoningEffort",
+            "approval_policy",
+            "approvalPolicy",
+            "sandbox_policy",
+            "sandboxPolicy",
+            "request_metadata",
+            "requestMetadata",
         ] {
             payload.remove(key);
         }
@@ -343,6 +359,14 @@ fn execution_to_payload(
     }
     if let Some(value) = execution.sandbox_policy.clone() {
         object.insert("sandbox_policy".to_string(), value);
+    }
+    if let Some(value) = execution.request_metadata.clone() {
+        if !value.is_object() {
+            return Err(RuntimeCoreError::Backend(
+                "requestMetadata 必须为对象".to_string(),
+            ));
+        }
+        object.insert("request_metadata".to_string(), value);
     }
     Ok((workspace_id, payload))
 }
@@ -531,6 +555,10 @@ fn scheduled_task_from_job(
             .map(ToOwned::to_owned),
         approval_policy: payload.get("approval_policy").cloned(),
         sandbox_policy: payload.get("sandbox_policy").cloned(),
+        request_metadata: payload
+            .get("request_metadata")
+            .or_else(|| payload.get("requestMetadata"))
+            .cloned(),
     };
     Ok(ScheduledTask {
         id: job.id,

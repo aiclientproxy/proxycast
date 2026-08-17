@@ -105,19 +105,6 @@ const {
   METHOD_WORKFLOW_RESPOND,
   METHOD_WORKFLOW_RETRY,
   METHOD_ARTIFACT_READ,
-  METHOD_AUTOMATION_JOB_CREATE,
-  METHOD_AUTOMATION_JOB_DELETE,
-  METHOD_AUTOMATION_JOB_HEALTH,
-  METHOD_AUTOMATION_JOB_LIST,
-  METHOD_AUTOMATION_JOB_READ,
-  METHOD_AUTOMATION_JOB_RUN_HISTORY,
-  METHOD_AUTOMATION_JOB_RUN_NOW,
-  METHOD_AUTOMATION_JOB_UPDATE,
-  METHOD_AUTOMATION_SCHEDULER_CONFIG_READ,
-  METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE,
-  METHOD_AUTOMATION_SCHEDULER_STATUS,
-  METHOD_AUTOMATION_SCHEDULE_PREVIEW,
-  METHOD_AUTOMATION_SCHEDULE_VALIDATE,
   METHOD_BROWSER_SESSION_ACTION_EXECUTE,
   METHOD_BROWSER_SESSION_CLOSE,
   METHOD_BROWSER_SESSION_EVENT_LIST,
@@ -1460,48 +1447,6 @@ test("builds app data surface requests with current methods", () => {
     name: "sample-product",
     runPath: "runs/context.json",
   });
-  const schedulerConfig = client.readAutomationSchedulerConfig();
-  const schedulerConfigUpdate = client.updateAutomationSchedulerConfig({
-    config: {
-      enabled: true,
-      poll_interval_secs: 60,
-      enable_history: true,
-    },
-  });
-  const schedulerStatus = client.readAutomationSchedulerStatus();
-  const jobs = client.listAutomationJobs();
-  const job = client.readAutomationJob({ id: "job-1" });
-  const createdJob = client.createAutomationJob({
-    request: {
-      name: "每日简报",
-      workspace_id: "workspace-main",
-      schedule: { kind: "every", every_secs: 3600 },
-      payload: {
-        kind: "agent_turn",
-        prompt: "总结今天重点",
-        web_search: false,
-      },
-    },
-  });
-  const updatedJob = client.updateAutomationJob({
-    id: "job-1",
-    request: { enabled: false },
-  });
-  const deletedJob = client.deleteAutomationJob({ id: "job-1" });
-  const runNow = client.runAutomationJobNow({ id: "job-1" });
-  const health = client.readAutomationHealth({
-    query: { top_limit: 3 },
-  });
-  const history = client.readAutomationRunHistory({
-    id: "job-1",
-    limit: 10,
-  });
-  const preview = client.previewAutomationSchedule({
-    schedule: { kind: "every", every_secs: 3600 },
-  });
-  const validate = client.validateAutomationSchedule({
-    schedule: { kind: "every", every_secs: 3600 },
-  });
   const mcpServers = client.listMcpServers();
   const mcpServerStatus = client.listMcpServersWithStatus();
   const mcpServer = {
@@ -1851,60 +1796,6 @@ test("builds app data surface requests with current methods", () => {
     name: "sample-product",
     runPath: "runs/context.json",
   });
-  assert.equal(schedulerConfig.method, METHOD_AUTOMATION_SCHEDULER_CONFIG_READ);
-  assert.deepEqual(schedulerConfig.params, {});
-  assert.equal(
-    schedulerConfigUpdate.method,
-    METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE,
-  );
-  assert.deepEqual(schedulerConfigUpdate.params, {
-    config: {
-      enabled: true,
-      poll_interval_secs: 60,
-      enable_history: true,
-    },
-  });
-  assert.equal(schedulerStatus.method, METHOD_AUTOMATION_SCHEDULER_STATUS);
-  assert.deepEqual(schedulerStatus.params, {});
-  assert.equal(jobs.method, METHOD_AUTOMATION_JOB_LIST);
-  assert.deepEqual(jobs.params, {});
-  assert.equal(job.method, METHOD_AUTOMATION_JOB_READ);
-  assert.deepEqual(job.params, { id: "job-1" });
-  assert.equal(createdJob.method, METHOD_AUTOMATION_JOB_CREATE);
-  assert.deepEqual(createdJob.params, {
-    request: {
-      name: "每日简报",
-      workspace_id: "workspace-main",
-      schedule: { kind: "every", every_secs: 3600 },
-      payload: {
-        kind: "agent_turn",
-        prompt: "总结今天重点",
-        web_search: false,
-      },
-    },
-  });
-  assert.equal(updatedJob.method, METHOD_AUTOMATION_JOB_UPDATE);
-  assert.deepEqual(updatedJob.params, {
-    id: "job-1",
-    request: { enabled: false },
-  });
-  assert.equal(deletedJob.method, METHOD_AUTOMATION_JOB_DELETE);
-  assert.deepEqual(deletedJob.params, { id: "job-1" });
-  assert.equal(runNow.method, METHOD_AUTOMATION_JOB_RUN_NOW);
-  assert.equal(health.method, METHOD_AUTOMATION_JOB_HEALTH);
-  assert.deepEqual(health.params, {
-    query: { top_limit: 3 },
-  });
-  assert.equal(history.method, METHOD_AUTOMATION_JOB_RUN_HISTORY);
-  assert.deepEqual(history.params, {
-    id: "job-1",
-    limit: 10,
-  });
-  assert.equal(preview.method, METHOD_AUTOMATION_SCHEDULE_PREVIEW);
-  assert.deepEqual(preview.params, {
-    schedule: { kind: "every", every_secs: 3600 },
-  });
-  assert.equal(validate.method, METHOD_AUTOMATION_SCHEDULE_VALIDATE);
   assert.equal(mcpServers.method, METHOD_MCP_SERVER_LIST);
   assert.deepEqual(mcpServers.params, {});
   assert.equal(mcpServerStatus.method, METHOD_MCP_SERVER_STATUS_LIST);

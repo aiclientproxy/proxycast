@@ -1,7 +1,7 @@
 # Codex Runtime 缺口对齐实施计划
 
-> 状态：实施完成；本计划 owner 门禁及 GUI smoke 已通过，全仓 release evidence 受并行媒体 fixture 与本机磁盘余量阻塞
-> 更新时间：2026-08-16
+> 状态：实施完成；四项 runtime 主线、全仓 release evidence 与真实 Electron GUI smoke 均已通过
+> 更新时间：2026-08-17
 > 目标：只补齐 Codex 中 Lime 已确认缺失且属于 Lime 产品范围的 runtime 语义，不引入远端 exec-server、账号、marketplace 或第二套业务后端。
 
 ## 1. 范围与 owner
@@ -159,6 +159,9 @@ npm run smoke:agent-runtime-current-fixture
 - 2026-08-16：完成不间断 `npm run verify:local` 复验：i18n、lint、typecheck、120 个 Vitest 批次和 contracts 全部通过；Rust changed selector 对并行工作树中的 `lime-rs/resources/default-skills/transcription_generate/SKILL.md` 按 fail-closed 退出，随后以 workspace unit/integration 扩大覆盖。
 - 2026-08-16：workspace Rust unit 全部通过；workspace integration 在执行到 `app-server/tests/media_task_jsonrpc.rs` 时仅 `image_task_complete_rejects_wrong_task_type` 因独立媒体夹具缺少 `media_model_ref` 失败。本计划四个 owner 的定向、反向依赖和 current fixture 回归仍全部通过，未越界修改媒体链。
 - 2026-08-16：重新执行真实 Electron GUI smoke、workspace rustfmt 与 diff 检查，均通过；旧 `audio.rs` 格式阻塞已消除。
+- 2026-08-17：修复 Skills JSON-RPC 测试对进程级 `LIME_CONFIG_PATH` 的并行竞争；`RuntimeCore` 注入 `app_config_path`，生产路径与测试均改为显式配置文件，`skills_jsonrpc` 4/4 通过并以 4 线程重复 30 次无失败。
+- 2026-08-17：修复 Rust 1.95 Clippy `never_loop` blocker；`LocalExecutionProcessHandle::next_event` 移除语义上不会重复的外层循环，保留 `try_recv`、`final_rx` 与 biased `select` 行为；`tool-runtime` 356/356、带 Rusty V8 artifact 的 Clippy 和全量 rustfmt 均通过。
+- 2026-08-17：恢复媒体 fixture 后完成第二次 `npm run verify:local:full`；版本/i18n/lint/typecheck、120 个 Vitest 批次、contracts、workspace Rust unit/integration、Clippy 与真实 Electron GUI smoke 全部通过，退出码 0。最新 GUI evidence 为 `standalone-shell-01-20260817001202-86438`，result=`pass`。
 
 ## 5. 完成记录
 
@@ -175,24 +178,23 @@ npm run smoke:agent-runtime-current-fixture
   - `npm run test:rust:related -- lime-rs/crates/model-provider lime-rs/crates/tool-runtime lime-rs/crates/agent-runtime lime-rs/crates/agent`：通过；覆盖 owner 及反向依赖 `agent-runtime`、`app-server`、`lime-agent`、`lime-cli`、`lime-embedding`、`lime-mcp`、`lime-media-runtime`、`lime-processor`、`lime-scheduler`、`lime-server`、`lime-services`、`lime-skills`、`model-provider`、`tool-runtime`。
   - `npm run test:contracts`：通过（app-server-client 299 checks，其他 contracts/governance/docs 检查通过）。
   - `npm run smoke:agent-runtime-current-fixture`：通过；真实 Electron、preload、App Server sidecar、GUI fixture 全链路通过。
-  - `npm run verify:local`：最新一次不间断执行中，i18n、lint、typecheck、完整 120 个 Vitest 批次和下游 contracts 全部通过；随后 Rust changed selector 因无法把并行工作树中的 `lime-rs/resources/default-skills/transcription_generate/SKILL.md` 映射到 workspace crate 而按 fail-closed 退出。
+  - `npm run verify:local`：通过；i18n、lint、typecheck、完整 120 个 Vitest 批次和下游 contracts 均通过。
+  - `npm run verify:local:full`：通过（退出码 0）；覆盖版本/i18n/lint/typecheck、Vitest、contracts、workspace Rust unit/integration、Clippy 与真实 Electron GUI smoke。
   - `npm run test:rust:unit -- --workspace`：通过；workspace 所有 Rust lib unit tests 无失败。
-  - `npm run test:rust:integration -- --workspace`：扩大验证执行到 App Server integration；本计划相关测试均通过，仅独立媒体夹具 `image_task_complete_rejects_wrong_task_type` 因 `media_model_ref_missing` 失败。
-  - `npm run verify:gui-smoke`：两次通过；最新证据 `standalone-shell-01-20260816152010-71415` result=`pass`，真实 Electron renderer、preload、App Server sidecar、工作台重载和 memory settings smoke 全链路通过。
+  - `npm run test:rust:integration -- --workspace`：通过；workspace integration 全部测试通过，媒体任务 fixture 已恢复。
+  - `npm run verify:gui-smoke`：通过；最新证据 `standalone-shell-01-20260817001202-86438` result=`pass`，真实 Electron renderer、preload、App Server sidecar、工作台重载和 memory settings smoke 全链路通过。
   - `cargo test -p lime-skills agent_selection::tests::selects_skill_from`：3 passed。
   - `npm run i18n:unused -- --check`：通过，`unused=0`。
   - `npm test -- --run src/lib/governance/codexModelToolCallPolicyOrigin.test.ts src/lib/governance/codexModelExecutionPolicyOrigin.test.ts`：5 passed。
   - `cargo fmt --manifest-path "lime-rs/Cargo.toml" --all -- --check`：通过。
   - `git diff --check`：通过；计划文件无尾随空白。
-未跑或未通过验证及原因：
-  - 聚合 `npm run verify:local` 未取得零退出码：smart Rust selector 无法映射上述 default skill 资源路径；workspace unit 已完整通过，workspace integration 的唯一失败属于并行媒体任务链。
-  - 精确复跑 `image_task_complete_rejects_wrong_task_type` 未进入测试体：App Server integration 二进制在仅剩约 1.5 GiB 磁盘空间时链接失败；不删除用户数据或共享构建缓存来规避该环境限制。
+未跑或未通过验证及原因：无。第二次 `npm run verify:local:full` 已取得零退出码，覆盖完整 Rust workspace、Clippy、contracts、Vitest 和真实 Electron GUI smoke。
 环境依赖：Rust V8 测试需先运行 `node "scripts/lib/rusty-v8-artifacts.mjs"`，将其输出的 `RUSTY_V8_ARCHIVE` 与 `RUSTY_V8_SRC_BINDING_PATH` 作为 Cargo 命令级环境变量；本次已使用临时 artifact 完成验证。
 残余风险：Async Hook 结果依赖 `pending_input` 注入；无该上下文的直接 provider 调用路径只保证执行与生命周期投影，不会追加 provider 上下文。失败/阻断/中止结果当前通过 `AgentEvent::Warning` 投影，尚无专用 warning protocol。
-是否达到 Lime 本次实现门槛：是；current owner、定向测试、related 反向依赖、contracts、完整 Vitest 和真实 Electron GUI smoke 均通过。
-是否可进入全仓 release evidence：否；并行媒体 fixture 仍有 `media_model_ref_missing`，且本机磁盘余量不足以完成其精确重链接。两项均不属于本计划 runtime 写集。
+是否达到 Lime 本次实现门槛：是；current owner、定向测试、related 反向依赖、workspace 全量 Rust、Clippy、contracts、完整 Vitest 和真实 Electron GUI smoke 均通过。
+是否可进入全仓 release evidence：是；`npm run verify:local:full` 已通过，媒体 fixture 与本机磁盘 blocker 均已消除。
 治理分类：`current` 为 model-provider、tool-runtime、agent-runtime 与标准 AGENTS prompt owner；`compat` 仅保留 `.lime/AGENTS.md` fallback 且不承接新语义；`deprecated` 无新增；`dead`/已删除 runtime 未恢复，无第二套后端或生产 mock fallback。
-下一刀：媒体任务责任开发者修复或补齐 `media_model_ref` fixture，并在释放安全磁盘空间后重跑 workspace integration / `verify:local:full`；本计划不再有 runtime 实现任务。
+下一刀：本计划无剩余 runtime 实现任务；后续按发布负责人节奏消费本次 release evidence，不需要恢复任何旧 runtime 或 compat 入口。
 ```
 
 ## 6. 架构确认
@@ -200,6 +202,6 @@ npm run smoke:agent-runtime-current-fixture
 ```text
 架构影响：非重大。保持 provider 网络、tool-runtime、agent-runtime 和 prompt owner 不变；不新增 crate、协议方法或跨层事实源。
 架构图已更新：不适用；本次只在既有 owner 内补齐行为和测试。
-责任开发者确认：root，2026-08-16
+责任开发者确认：root，2026-08-17
 确认内容：已核对目录归属、数据流、依赖方向、协议边界和验证门禁。
 ```

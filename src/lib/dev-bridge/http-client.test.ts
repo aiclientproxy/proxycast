@@ -799,7 +799,7 @@ describe("http-client", () => {
           lines: [
             JSON.stringify({
               id: "automation-run-now",
-              method: "automationJob/runNow",
+              method: "scheduledTask/run/start",
               params: { id: "job-1" },
             }),
           ],
@@ -837,9 +837,9 @@ describe("http-client", () => {
         request: {
           lines: [
             JSON.stringify({
-              id: "automation-history",
-              method: "automationJob/runHistory",
-              params: { id: "job-1" },
+              id: "scheduled-task-runs",
+              method: "scheduledTask/run/list",
+              params: { taskId: "task-1" },
             }),
           ],
         },

@@ -1094,6 +1094,9 @@ ScheduledTasksPage
        agent_runs（运行历史）
   -> RuntimeCore thread/session + turn submission
   -> canonical Thread / Turn / Item projection
+  -> App Server typed scheduledTask/changed + scheduledTask/run/updated
+  -> Renderer Scheduled Task notification policy / refresh bridge
+  -> Electron Desktop Host system notification (壳能力)
   -> ScheduledTasksPage history / open conversation
 ```
 
@@ -1104,17 +1107,24 @@ Desktop 已存在同构实现。任务写入继续复用 `automation_jobs`，不
 `agent_runs.source_ref=taskId` 投影。`new_thread` 每次运行产生新 lineage，`continue_thread` 必须使用显式来源 lineage；
 运行返回真实 `sessionId/threadId/turnId` 后 GUI 才能恢复 canonical 对话。
 
-Electron 只负责 JSONL 转发和未来的系统通知宿主能力，不承接 scheduler、任务 CRUD、运行状态或 timer。Renderer timer、
-生产 mock backend/fallback、browser session automation 与 SceneApp automation context 均禁止成为 current owner。旧
-`automationJob/*`、`automationSchedule/*`、`automationScheduler/*` 及旧 Settings 工作台当前分类为
-`deprecated / migration-pending`；所有 consumer 迁移并物理删除前不得把双轨描述为已清零。scheduler 原子 claim、
-missed/catch-up、sleep/wake、DST、通知、软删除及并发运行合同仍是交付阻塞，按
-`internal/roadmap/task/scheduled-tasks/` 和对应执行计划收口。
+Electron 只负责 JSONL 转发和系统通知宿主能力，不承接 scheduler、任务 CRUD、运行状态或 timer。App Server 是任务变更与 canonical
+terminal event 的 typed notification owner：任务 create/update/delete/enabled-set 发布 `scheduledTask/changed`，
+`turn.completed/failed/canceled` 经过 Agent Run 幂等终态写回后发布 `scheduledTask/run/updated`。Renderer 只按任务的
+`all_runs / failures / none` policy 决定是否调用 Desktop Host；`unsupported/failed` 必须进入可见错误通道，不能伪造发送成功。
+	Renderer timer、生产 mock backend/fallback、browser session automation 与 SceneApp automation context 均禁止成为 current owner。旧
+	`automationJob/*`、`automationSchedule/*`、`automationScheduler/*`、Renderer automation gateway 及旧 Settings 工作台已物理删除，
+	分类为 `dead / deleted / forbidden-to-restore`；旧 method 字符串只允许作为 contract、fixture 或治理扫描的负向回流守卫。Rust
+	`AutomationJob` DAO、`automation_jobs` 表与内部 execution helper 是 Scheduled Tasks 的 current 存储映射，不是公开双轨。scheduler 原子 claim、
+missed/catch-up、DST、通知、软删除及并发运行合同已由 current owner 收口；任务删除写入 tombstone、禁用并清除未来调度，
+但不取消已运行 Turn，canonical terminal write 仍保留 Agent Run 历史且不得复活 tombstone。真实 OS sleep/wake、Windows
+Notification Center 与 Windows Gate B 仍是平台证据缺口，按 `internal/roadmap/task/scheduled-tasks/` 和对应执行计划收口。
 
 Architecture impact: major; this adds the Scheduled Tasks public JSON-RPC/read-model boundary and top-level GUI workspace while
-preserving Electron as transport host and RuntimeCore/ThreadStore as the execution truth. Architecture diagram updated: this
-section and `internal/aiprompts/commands.md#scheduled-tasks-主链`. Responsible developer confirmation: confirmed for the
-v1.127.0 release by root on 2026-08-13, covering directory ownership, data flow, dependency direction, protocol boundaries, and release gates.
+preserving Electron as transport/system-notification host and RuntimeCore/ThreadStore as the execution truth. Architecture diagram
+updated: this section and `internal/aiprompts/commands.md#scheduled-tasks-主链`. Responsible developer confirmation: root,
+2026-08-17. Confirmation content: 已核对 scheduledTask JSON-RPC、typed invalidation/terminal notifications、Agent Run
+幂等终态、soft-delete tombstone、Renderer notification policy、Electron system notification boundary，以及未完成的
+	Windows/sleep-resume 平台证据，以及旧 Automation 协议、GUI、client、smoke 与 Agent UI projection 的物理删除和回流守卫。
 
 ## 8. 命令、配置与数据边界
 

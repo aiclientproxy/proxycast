@@ -49,6 +49,16 @@ export type AppListUpdatedServerNotification = Extract<
   { method: "app/list/updated" }
 >;
 
+export type ScheduledTaskChangedServerNotification = Extract<
+  ServerNotification,
+  { method: "scheduledTask/changed" }
+>;
+
+export type ScheduledTaskRunUpdatedServerNotification = Extract<
+  ServerNotification,
+  { method: "scheduledTask/run/updated" }
+>;
+
 export type McpServerOauthLoginCompletedServerNotification = Extract<
   ServerNotification,
   { method: "mcpServer/oauthLogin/completed" }
@@ -302,6 +312,85 @@ export function isAppListUpdatedNotification(
   return appListUpdatedServerNotification(message) !== undefined;
 }
 
+export function scheduledTaskChangedServerNotification(
+  message: JsonRpcMessage,
+): ScheduledTaskChangedServerNotification | undefined {
+  if (
+    !isJsonRpcNotification(message) ||
+    message.method !== "scheduledTask/changed"
+  ) {
+    return undefined;
+  }
+  const params = record(message.params);
+  if (
+    !hasOnlyKeys(params, ["change", "taskId"]) ||
+    !hasString(params, "taskId") ||
+    (params?.change !== "created" &&
+      params?.change !== "deleted" &&
+      params?.change !== "enabled" &&
+      params?.change !== "updated")
+  ) {
+    return undefined;
+  }
+  return message as ScheduledTaskChangedServerNotification;
+}
+
+export function isScheduledTaskChangedNotification(
+  message: JsonRpcMessage,
+): message is ScheduledTaskChangedServerNotification {
+  return scheduledTaskChangedServerNotification(message) !== undefined;
+}
+
+export function scheduledTaskRunUpdatedServerNotification(
+  message: JsonRpcMessage,
+): ScheduledTaskRunUpdatedServerNotification | undefined {
+  if (
+    !isJsonRpcNotification(message) ||
+    message.method !== "scheduledTask/run/updated"
+  ) {
+    return undefined;
+  }
+  const params = record(message.params);
+  if (
+    !hasOnlyKeys(params, [
+      "attention",
+      "error",
+      "notificationPolicy",
+      "runId",
+      "status",
+      "taskId",
+      "threadId",
+      "title",
+      "turnId",
+    ]) ||
+    !hasString(params, "taskId") ||
+    !hasString(params, "runId") ||
+    !hasString(params, "status") ||
+    (params?.status !== "success" &&
+      params?.status !== "error" &&
+      params?.status !== "canceled" &&
+      params?.status !== "timeout" &&
+      params?.status !== "missed") ||
+    typeof params?.attention !== "boolean" ||
+    (params?.notificationPolicy !== "all_runs" &&
+      params?.notificationPolicy !== "failures" &&
+      params?.notificationPolicy !== "none") ||
+    !hasOptionalNullableStringValue(params, "title") ||
+    !hasOptionalNullableStringValue(params, "threadId") ||
+    !hasOptionalNullableStringValue(params, "turnId") ||
+    !hasOptionalNullableStringValue(params, "error")
+  ) {
+    return undefined;
+  }
+  return message as ScheduledTaskRunUpdatedServerNotification;
+}
+
+export function isScheduledTaskRunUpdatedNotification(
+  message: JsonRpcMessage,
+): message is ScheduledTaskRunUpdatedServerNotification {
+  return scheduledTaskRunUpdatedServerNotification(message) !== undefined;
+}
+
 export function mcpServerOauthLoginCompletedServerNotification(
   message: JsonRpcMessage,
 ): McpServerOauthLoginCompletedServerNotification | undefined {
@@ -416,13 +505,17 @@ export function isItemCompletedNotification(
 export function isGuardianReviewStartedNotification(
   message: JsonRpcMessage,
 ): message is GuardianReviewStartedServerNotification {
-  return serverNotification(message)?.method === "item/autoApprovalReview/started";
+  return (
+    serverNotification(message)?.method === "item/autoApprovalReview/started"
+  );
 }
 
 export function isGuardianReviewCompletedNotification(
   message: JsonRpcMessage,
 ): message is GuardianReviewCompletedServerNotification {
-  return serverNotification(message)?.method === "item/autoApprovalReview/completed";
+  return (
+    serverNotification(message)?.method === "item/autoApprovalReview/completed"
+  );
 }
 
 export function isGuardianWarningNotification(

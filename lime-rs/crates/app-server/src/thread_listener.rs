@@ -409,6 +409,11 @@ async fn publish_thread_listener_event(
     event: AgentEvent,
     completion_tx: Option<oneshot::Sender<Result<Vec<JsonRpcMessage>, String>>>,
 ) -> Option<String> {
+    let terminal_event = matches!(
+        event.event_type.as_str(),
+        "turn.completed" | "turn.failed" | "turn.canceled"
+    )
+    .then(|| event.clone());
     let pending_goal_updates = bridge
         .runtime_events
         .pending_thread_goal_updates_for_event(&event);
@@ -446,6 +451,23 @@ async fn publish_thread_listener_event(
                 }
             }
             Err(error) => result = Err(error.to_string()),
+        }
+    }
+    if let Some(event) = terminal_event {
+        match bridge
+            .runtime
+            .finish_scheduled_task_run_for_terminal_event(event.clone())
+            .await
+        {
+            Ok(Some(notification)) => bridge.publish_server_notification(notification).await,
+            Ok(None) => {}
+            Err(error) => tracing::error!(
+                event_id = %event.event_id,
+                session_id = %event.session_id,
+                turn_id = ?event.turn_id,
+                %error,
+                "failed to finish scheduled task run from canonical turn terminal event"
+            ),
         }
     }
     let error = result.as_ref().err().cloned();

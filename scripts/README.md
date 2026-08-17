@@ -162,7 +162,7 @@ npm run smoke:settings-web-search-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-profile-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-appearance-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-developer-electron-fixture -- --run-id <run-id>
-npm run smoke:settings-automation-electron-fixture -- --run-id <run-id>
+npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000
 npm run smoke:settings-execution-policy-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-mcp-lifecycle-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-provider-crud-electron-fixture -- --run-id <run-id>
@@ -202,7 +202,7 @@ npm run smoke:orchestrator-skills-gate-b
 
 `npm run smoke:settings-developer-electron-fixture -- --run-id <run-id>` 从 Developer GUI 点击“复制纯 JSON”，真实采集 `config/read`、`log/list`、`log/persistedTail`、`diagnostics/server/read`、`diagnostics/logStorage/read`、`diagnostics/windowsStartup/read`、`modelProvider/list` 与 `mcpServerStatus/list`。fixture 只用显式 test-only renderer sink 替代最终系统剪贴板写入，不替换任何诊断采集或 bridge；JSON evidence 仅记录写入次数、文本长度、payload shape 布尔与 current method/command，不记录剪贴板正文、日志、配置、路径、Provider/MCP 数据或凭证，也不声称系统剪贴板交付已验证。
 
-`npm run smoke:settings-automation-electron-fixture -- --run-id <run-id>` 验证 Automation Settings 的真实 owner：经 GUI 修改调度器启用、历史记录和轮询间隔，命中 `automationScheduler/config/read|update`、`automationScheduler/status`、`automationJob/list` 与 `automationJob/health`，冷重启读回后从 GUI 恢复，再次冷重启确认恢复。该 claim 不包含已归 Automation Workspace 的 job CRUD/runNow；结构化 evidence 不记录调度器值、job 数据、prompt、路径或运行输出。
+`npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000` 从真实 Electron 一级导航创建已安排任务并立即运行，要求命中 `scheduledTask/list|create|read|run/list|run/start`、RuntimeCore provider、canonical Thread/Turn/read model 与运行历史。fixture 使用隔离 userData 和 localhost OpenAI-compatible provider，不调用正式模型；旧 `automationJob/*`、`automationSchedule/*`、`automationScheduler/*`、legacy Desktop 命令与生产 mock fallback 命中必须为零。
 
 `npm run smoke:settings-execution-policy-electron-fixture -- --run-id <run-id>` 验证 Execution Policy Settings 的持久化策略输入和 App Server 错误恢复：从 GUI 保存严格工作区限制与 Bash warning-bypass 输入，冷重启读回；再在隔离 userData 中把临时 `config.yaml` 短暂替换成同名目录，要求真实 `config/batchWrite` 返回且页面展示 `EISDIR`，随即恢复文件、重新加载、恢复原策略并再次冷重启确认。expected save failure 单列计数，`errors.*` 只统计 unexpected errors；evidence 不保存配置值、规则、prompt、路径或错误正文。该 B-F claim 不证明 RuntimeCore 实际执行某条允许/拒绝工具，后者必须单列 B-R。
 
@@ -216,19 +216,15 @@ npm run smoke:orchestrator-skills-gate-b
 
 新增 MCP control-plane 脚本继续进入 `scripts/mcp/` 或复用现有 `smoke:mcp-current` npm script；涉及真实 Electron Desktop Host GUI 的 MCP fixture 进入 `scripts/electron/`。共享实现仍放在领域子目录或 `scripts/lib/`。
 
-### Automation 脚本
+### Scheduled Tasks 脚本
 
-自动化 current 页面 smoke 统一通过稳定入口执行：
+已安排任务的真实桌面闭环统一通过稳定入口执行：
 
 ```bash
-npm run smoke:automation-current
-npm run smoke:settings-automation-electron-fixture -- --run-id <run-id>
+npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000
 ```
 
-该入口使用 Chrome + DevBridge `/invoke` 验证持续流程页面读取走
-`app_server_handle_json_lines -> automationJob/list`，只归类为 Gate A / browser mirror；
-它不能替代真实 Electron preload/IPC 和自动化任务执行的 Gate B。
-Settings scheduler 的 Gate B-F 使用 `smoke:settings-automation-electron-fixture`；Automation Workspace 的 job CRUD/runNow 仍需在对应 Workspace surface 单独取证，不能由 Settings summary 代替。
+该入口验证 `ScheduledTasksPage -> app_server_handle_json_lines -> scheduledTask/* -> RuntimeCore -> Thread/Turn/Item + Agent Run -> GUI` 的 Gate B 主链。它不能替代真实 Windows Notification Center、macOS/Windows sleep-resume 或 packaged 平台证据。
 
 ### Electron 脚本
 

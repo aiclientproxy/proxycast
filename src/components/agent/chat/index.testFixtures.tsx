@@ -80,8 +80,6 @@ const {
   mockExecutionRunGet,
   mockSkillExecutionListExecutableSkills,
   mockSkillExecutionGetDetail,
-  mockGetAutomationJobs,
-  mockCreateAutomationJob,
   mockSkillsGetAll,
   mockSkillsGetLocal,
   mockGetAgentRuntimeToolInventory,
@@ -199,8 +197,6 @@ const {
   mockExecutionRunGet: vi.fn(),
   mockSkillExecutionListExecutableSkills: vi.fn(),
   mockSkillExecutionGetDetail: vi.fn(),
-  mockGetAutomationJobs: vi.fn(),
-  mockCreateAutomationJob: vi.fn(),
   mockSkillsGetAll: vi.fn(),
   mockSkillsGetLocal: vi.fn(),
   mockGetAgentRuntimeToolInventory: vi.fn(),
@@ -307,8 +303,6 @@ export function getIndexTestMocks() {
     mockExecutionRunGet,
     mockSkillExecutionListExecutableSkills,
     mockSkillExecutionGetDetail,
-    mockGetAutomationJobs,
-    mockCreateAutomationJob,
     mockSkillsGetAll,
     mockSkillsGetLocal,
     mockGetAgentRuntimeToolInventory,
@@ -913,11 +907,6 @@ vi.mock("@/lib/api/skill-execution", async () => {
   };
 });
 
-vi.mock("@/lib/api/automation", () => ({
-  getAutomationJobs: () => mockGetAutomationJobs(),
-  createAutomationJob: (request: unknown) => mockCreateAutomationJob(request),
-}));
-
 vi.mock("@/lib/api/skills", () => ({
   skillsApi: {
     getAll: mockSkillsGetAll,
@@ -1429,11 +1418,6 @@ beforeEach(async () => {
     execution_mode: "prompt",
     has_workflow: false,
     workflow_steps: [],
-  });
-  mockGetAutomationJobs.mockResolvedValue([]);
-  mockCreateAutomationJob.mockResolvedValue({
-    id: "automation-job-1",
-    name: "自动化任务",
   });
   mockSkillsGetAll.mockResolvedValue([]);
   mockSkillsGetLocal.mockResolvedValue([]);

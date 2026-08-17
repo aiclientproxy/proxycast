@@ -95,6 +95,29 @@ describe("legacySurfaceCatalog", () => {
     );
   });
 
+  it("应阻止已删除的 Automation GUI 路由与 Settings 重复入口回流", () => {
+    const monitor = legacySurfaceCatalogJson.frontendText.find(
+      (entry) => entry.id === "frontend-retired-automation-page-route",
+    );
+
+    expect(monitor?.classification).toBe("dead");
+    expect(monitor?.allowedPaths).toEqual([]);
+    expect(monitor?.patterns).toEqual(
+      expect.arrayContaining(["automation", "Automation"]),
+    );
+    expect(monitor?.includePathPrefixes).toEqual(
+      expect.arrayContaining([
+        "src/types/page.ts",
+        "src/types/settings.ts",
+        "src/lib/navigation/sidebarNav.ts",
+        "src/components/AppPageContent.tsx",
+        "src/components/settings-v2/_layout/index.tsx",
+        "src/i18n/resources/en-US/navigation.json",
+        "src/i18n/resources/en-US/settings.json",
+      ]),
+    );
+  });
+
   it("应阻止第一批已删除前端空壳和重复 UI surface 回流", () => {
     const expectedTargetsById = {
       "frontend-image-search-retired-facade-surface": [
@@ -878,7 +901,7 @@ describe("legacySurfaceCatalog", () => {
     );
   });
 
-  it("应将 SceneApp 自动化详情运行面标记为 dead surface", () => {
+  it("应将已删除的 Settings Automation / SceneApp 详情面标记为 dead surface", () => {
     const importMonitor = legacySurfaceCatalogJson.imports.find(
       (entry) => entry.id === "sceneapp-automation-detail-runtime-surface",
     );

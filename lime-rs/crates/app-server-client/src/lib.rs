@@ -88,25 +88,6 @@ pub use app_server_protocol::AgentSessionTurnStartParams;
 pub use app_server_protocol::AppServerMethodKind;
 pub use app_server_protocol::AppServerMethodSpec;
 pub use app_server_protocol::ArtifactReadParams;
-pub use app_server_protocol::AutomationJobCreateParams;
-pub use app_server_protocol::AutomationJobDeleteResponse;
-pub use app_server_protocol::AutomationJobHealthParams;
-pub use app_server_protocol::AutomationJobHealthResponse;
-pub use app_server_protocol::AutomationJobIdParams;
-pub use app_server_protocol::AutomationJobListResponse;
-pub use app_server_protocol::AutomationJobReadResponse;
-pub use app_server_protocol::AutomationJobRunHistoryParams;
-pub use app_server_protocol::AutomationJobRunHistoryResponse;
-pub use app_server_protocol::AutomationJobRunNowResponse;
-pub use app_server_protocol::AutomationJobUpdateParams;
-pub use app_server_protocol::AutomationJobWriteResponse;
-pub use app_server_protocol::AutomationScheduleParams;
-pub use app_server_protocol::AutomationSchedulePreviewResponse;
-pub use app_server_protocol::AutomationScheduleValidateResponse;
-pub use app_server_protocol::AutomationSchedulerConfigReadResponse;
-pub use app_server_protocol::AutomationSchedulerConfigUpdateParams;
-pub use app_server_protocol::AutomationSchedulerConfigUpdateResponse;
-pub use app_server_protocol::AutomationSchedulerStatusResponse;
 pub use app_server_protocol::BrowserSessionActionExecuteParams;
 pub use app_server_protocol::BrowserSessionActionExecuteResponse;
 pub use app_server_protocol::BrowserSessionCloseResponse;
@@ -297,19 +278,6 @@ pub use app_server_protocol::METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT;
 pub use app_server_protocol::METHOD_ARTIFACT_READ;
-pub use app_server_protocol::METHOD_AUTOMATION_JOB_CREATE;
-pub use app_server_protocol::METHOD_AUTOMATION_JOB_DELETE;
-pub use app_server_protocol::METHOD_AUTOMATION_JOB_HEALTH;
-pub use app_server_protocol::METHOD_AUTOMATION_JOB_LIST;
-pub use app_server_protocol::METHOD_AUTOMATION_JOB_READ;
-pub use app_server_protocol::METHOD_AUTOMATION_JOB_RUN_HISTORY;
-pub use app_server_protocol::METHOD_AUTOMATION_JOB_RUN_NOW;
-pub use app_server_protocol::METHOD_AUTOMATION_JOB_UPDATE;
-pub use app_server_protocol::METHOD_AUTOMATION_SCHEDULER_CONFIG_READ;
-pub use app_server_protocol::METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE;
-pub use app_server_protocol::METHOD_AUTOMATION_SCHEDULER_STATUS;
-pub use app_server_protocol::METHOD_AUTOMATION_SCHEDULE_PREVIEW;
-pub use app_server_protocol::METHOD_AUTOMATION_SCHEDULE_VALIDATE;
 pub use app_server_protocol::METHOD_BROWSER_SESSION_ACTION_EXECUTE;
 pub use app_server_protocol::METHOD_BROWSER_SESSION_CLOSE;
 pub use app_server_protocol::METHOD_BROWSER_SESSION_EVENT_LIST;
@@ -1173,88 +1141,6 @@ impl AppServerClient {
         params: KnowledgeValidateContextRunParams,
     ) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::validate_knowledge_context_run(params))
-    }
-
-    pub fn list_automation_jobs(&mut self) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::list_automation_jobs())
-    }
-
-    pub fn read_automation_scheduler_config(&mut self) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::read_automation_scheduler_config())
-    }
-
-    pub fn update_automation_scheduler_config(
-        &mut self,
-        params: AutomationSchedulerConfigUpdateParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::update_automation_scheduler_config(params))
-    }
-
-    pub fn read_automation_scheduler_status(&mut self) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::read_automation_scheduler_status())
-    }
-
-    pub fn read_automation_job(
-        &mut self,
-        params: AutomationJobIdParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::read_automation_job(params))
-    }
-
-    pub fn create_automation_job(
-        &mut self,
-        params: AutomationJobCreateParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::create_automation_job(params))
-    }
-
-    pub fn update_automation_job(
-        &mut self,
-        params: AutomationJobUpdateParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::update_automation_job(params))
-    }
-
-    pub fn delete_automation_job(
-        &mut self,
-        params: AutomationJobIdParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::delete_automation_job(params))
-    }
-
-    pub fn run_automation_job_now(
-        &mut self,
-        params: AutomationJobIdParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::run_automation_job_now(params))
-    }
-
-    pub fn read_automation_health(
-        &mut self,
-        params: AutomationJobHealthParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::read_automation_health(params))
-    }
-
-    pub fn read_automation_run_history(
-        &mut self,
-        params: AutomationJobRunHistoryParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::read_automation_run_history(params))
-    }
-
-    pub fn preview_automation_schedule(
-        &mut self,
-        params: AutomationScheduleParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::preview_automation_schedule(params))
-    }
-
-    pub fn validate_automation_schedule(
-        &mut self,
-        params: AutomationScheduleParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::validate_automation_schedule(params))
     }
 
     pub fn list_mcp_servers(&mut self) -> Result<JsonRpcRequest, ClientError> {
@@ -2149,81 +2035,6 @@ pub mod typed {
         params: KnowledgeValidateContextRunParams,
     ) -> TypedRequest<KnowledgeValidateContextRunParams> {
         TypedRequest::new(METHOD_KNOWLEDGE_CONTEXT_RUN_VALIDATE, params)
-    }
-
-    pub fn list_automation_jobs() -> TypedRequest<serde_json::Value> {
-        TypedRequest::new(METHOD_AUTOMATION_JOB_LIST, serde_json::json!({}))
-    }
-
-    pub fn read_automation_scheduler_config() -> TypedRequest<serde_json::Value> {
-        TypedRequest::new(
-            METHOD_AUTOMATION_SCHEDULER_CONFIG_READ,
-            serde_json::json!({}),
-        )
-    }
-
-    pub fn update_automation_scheduler_config(
-        params: AutomationSchedulerConfigUpdateParams,
-    ) -> TypedRequest<AutomationSchedulerConfigUpdateParams> {
-        TypedRequest::new(METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE, params)
-    }
-
-    pub fn read_automation_scheduler_status() -> TypedRequest<serde_json::Value> {
-        TypedRequest::new(METHOD_AUTOMATION_SCHEDULER_STATUS, serde_json::json!({}))
-    }
-
-    pub fn read_automation_job(
-        params: AutomationJobIdParams,
-    ) -> TypedRequest<AutomationJobIdParams> {
-        TypedRequest::new(METHOD_AUTOMATION_JOB_READ, params)
-    }
-
-    pub fn create_automation_job(
-        params: AutomationJobCreateParams,
-    ) -> TypedRequest<AutomationJobCreateParams> {
-        TypedRequest::new(METHOD_AUTOMATION_JOB_CREATE, params)
-    }
-
-    pub fn update_automation_job(
-        params: AutomationJobUpdateParams,
-    ) -> TypedRequest<AutomationJobUpdateParams> {
-        TypedRequest::new(METHOD_AUTOMATION_JOB_UPDATE, params)
-    }
-
-    pub fn delete_automation_job(
-        params: AutomationJobIdParams,
-    ) -> TypedRequest<AutomationJobIdParams> {
-        TypedRequest::new(METHOD_AUTOMATION_JOB_DELETE, params)
-    }
-
-    pub fn run_automation_job_now(
-        params: AutomationJobIdParams,
-    ) -> TypedRequest<AutomationJobIdParams> {
-        TypedRequest::new(METHOD_AUTOMATION_JOB_RUN_NOW, params)
-    }
-
-    pub fn read_automation_health(
-        params: AutomationJobHealthParams,
-    ) -> TypedRequest<AutomationJobHealthParams> {
-        TypedRequest::new(METHOD_AUTOMATION_JOB_HEALTH, params)
-    }
-
-    pub fn read_automation_run_history(
-        params: AutomationJobRunHistoryParams,
-    ) -> TypedRequest<AutomationJobRunHistoryParams> {
-        TypedRequest::new(METHOD_AUTOMATION_JOB_RUN_HISTORY, params)
-    }
-
-    pub fn preview_automation_schedule(
-        params: AutomationScheduleParams,
-    ) -> TypedRequest<AutomationScheduleParams> {
-        TypedRequest::new(METHOD_AUTOMATION_SCHEDULE_PREVIEW, params)
-    }
-
-    pub fn validate_automation_schedule(
-        params: AutomationScheduleParams,
-    ) -> TypedRequest<AutomationScheduleParams> {
-        TypedRequest::new(METHOD_AUTOMATION_SCHEDULE_VALIDATE, params)
     }
 
     pub fn list_mcp_servers() -> TypedRequest<serde_json::Value> {
@@ -3849,91 +3660,6 @@ mod tests {
                 run_path: "runs/context.json".to_string(),
             })
             .expect("knowledge context validation");
-        let scheduler_config = client
-            .read_automation_scheduler_config()
-            .expect("automation scheduler config");
-        let scheduler_config_update = client
-            .update_automation_scheduler_config(AutomationSchedulerConfigUpdateParams {
-                config: json!({
-                    "enabled": true,
-                    "poll_interval_secs": 60,
-                    "enable_history": true,
-                }),
-            })
-            .expect("automation scheduler config update");
-        let scheduler_status = client
-            .read_automation_scheduler_status()
-            .expect("automation scheduler status");
-        let jobs = client.list_automation_jobs().expect("automation jobs");
-        let job = client
-            .read_automation_job(AutomationJobIdParams {
-                id: "job-1".to_string(),
-            })
-            .expect("automation job");
-        let created_job = client
-            .create_automation_job(AutomationJobCreateParams {
-                request: json!({
-                    "name": "每日简报",
-                    "workspace_id": "workspace-main",
-                    "schedule": {
-                        "kind": "every",
-                        "every_secs": 3600,
-                    },
-                    "payload": {
-                        "kind": "agent_turn",
-                        "prompt": "总结今天重点",
-                        "web_search": false,
-                    },
-                }),
-            })
-            .expect("automation job create");
-        let updated_job = client
-            .update_automation_job(AutomationJobUpdateParams {
-                id: "job-1".to_string(),
-                request: json!({
-                    "enabled": false,
-                }),
-            })
-            .expect("automation job update");
-        let deleted_job = client
-            .delete_automation_job(AutomationJobIdParams {
-                id: "job-1".to_string(),
-            })
-            .expect("automation job delete");
-        let run_now = client
-            .run_automation_job_now(AutomationJobIdParams {
-                id: "job-1".to_string(),
-            })
-            .expect("automation job run now");
-        let health = client
-            .read_automation_health(AutomationJobHealthParams {
-                query: Some(json!({
-                    "top_limit": 3,
-                })),
-            })
-            .expect("automation health");
-        let history = client
-            .read_automation_run_history(AutomationJobRunHistoryParams {
-                id: "job-1".to_string(),
-                limit: Some(10),
-            })
-            .expect("automation run history");
-        let preview = client
-            .preview_automation_schedule(AutomationScheduleParams {
-                schedule: json!({
-                    "kind": "every",
-                    "every_secs": 3600,
-                }),
-            })
-            .expect("automation schedule preview");
-        let validate = client
-            .validate_automation_schedule(AutomationScheduleParams {
-                schedule: json!({
-                    "kind": "every",
-                    "every_secs": 3600,
-                }),
-            })
-            .expect("automation schedule validate");
         let memory = client
             .read_project_memory(ProjectMemoryReadParams {
                 project_id: "workspace-main".to_string(),
@@ -4127,88 +3853,6 @@ mod tests {
                 "runPath": "runs/context.json",
             })
         );
-        assert_eq!(
-            scheduler_config.method,
-            METHOD_AUTOMATION_SCHEDULER_CONFIG_READ
-        );
-        assert_eq!(
-            scheduler_config_update.method,
-            METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE
-        );
-        assert_eq!(
-            scheduler_config_update.params.expect("params"),
-            json!({
-                "config": {
-                    "enabled": true,
-                    "poll_interval_secs": 60,
-                    "enable_history": true,
-                },
-            })
-        );
-        assert_eq!(scheduler_status.method, METHOD_AUTOMATION_SCHEDULER_STATUS);
-        assert_eq!(jobs.method, METHOD_AUTOMATION_JOB_LIST);
-        assert_eq!(jobs.params.expect("params"), json!({}));
-        assert_eq!(job.method, METHOD_AUTOMATION_JOB_READ);
-        assert_eq!(job.params.expect("params"), json!({ "id": "job-1" }));
-        assert_eq!(created_job.method, METHOD_AUTOMATION_JOB_CREATE);
-        assert_eq!(
-            created_job.params.expect("params"),
-            json!({
-                "request": {
-                    "name": "每日简报",
-                    "workspace_id": "workspace-main",
-                    "schedule": {
-                        "kind": "every",
-                        "every_secs": 3600,
-                    },
-                    "payload": {
-                        "kind": "agent_turn",
-                        "prompt": "总结今天重点",
-                        "web_search": false,
-                    },
-                },
-            })
-        );
-        assert_eq!(updated_job.method, METHOD_AUTOMATION_JOB_UPDATE);
-        assert_eq!(
-            updated_job.params.expect("params"),
-            json!({
-                "id": "job-1",
-                "request": {
-                    "enabled": false,
-                },
-            })
-        );
-        assert_eq!(deleted_job.method, METHOD_AUTOMATION_JOB_DELETE);
-        assert_eq!(run_now.method, METHOD_AUTOMATION_JOB_RUN_NOW);
-        assert_eq!(health.method, METHOD_AUTOMATION_JOB_HEALTH);
-        assert_eq!(
-            health.params.expect("params"),
-            json!({
-                "query": {
-                    "top_limit": 3,
-                },
-            })
-        );
-        assert_eq!(history.method, METHOD_AUTOMATION_JOB_RUN_HISTORY);
-        assert_eq!(
-            history.params.expect("params"),
-            json!({
-                "id": "job-1",
-                "limit": 10,
-            })
-        );
-        assert_eq!(preview.method, METHOD_AUTOMATION_SCHEDULE_PREVIEW);
-        assert_eq!(
-            preview.params.expect("params"),
-            json!({
-                "schedule": {
-                    "kind": "every",
-                    "every_secs": 3600,
-                },
-            })
-        );
-        assert_eq!(validate.method, METHOD_AUTOMATION_SCHEDULE_VALIDATE);
         assert_eq!(memory.method, METHOD_PROJECT_MEMORY_READ);
         assert_eq!(
             memory.params.expect("params"),
@@ -4881,19 +4525,6 @@ mod tests {
         assert!(methods.contains(&METHOD_WORKSPACE_SKILL_BINDINGS_LIST));
         assert!(methods.contains(&METHOD_KNOWLEDGE_PACK_LIST));
         assert!(methods.contains(&METHOD_KNOWLEDGE_PACK_READ));
-        assert!(methods.contains(&METHOD_AUTOMATION_SCHEDULER_CONFIG_READ));
-        assert!(methods.contains(&METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE));
-        assert!(methods.contains(&METHOD_AUTOMATION_SCHEDULER_STATUS));
-        assert!(methods.contains(&METHOD_AUTOMATION_JOB_LIST));
-        assert!(methods.contains(&METHOD_AUTOMATION_JOB_READ));
-        assert!(methods.contains(&METHOD_AUTOMATION_JOB_CREATE));
-        assert!(methods.contains(&METHOD_AUTOMATION_JOB_UPDATE));
-        assert!(methods.contains(&METHOD_AUTOMATION_JOB_DELETE));
-        assert!(methods.contains(&METHOD_AUTOMATION_JOB_RUN_NOW));
-        assert!(methods.contains(&METHOD_AUTOMATION_JOB_HEALTH));
-        assert!(methods.contains(&METHOD_AUTOMATION_JOB_RUN_HISTORY));
-        assert!(methods.contains(&METHOD_AUTOMATION_SCHEDULE_PREVIEW));
-        assert!(methods.contains(&METHOD_AUTOMATION_SCHEDULE_VALIDATE));
         assert!(methods.contains(&METHOD_PROJECT_MEMORY_READ));
         assert!(methods.contains(&METHOD_AGENT_SESSION_EVENT));
         assert!(is_app_server_request_method(METHOD_CAPABILITY_LIST));
@@ -4938,20 +4569,6 @@ mod tests {
         assert!(is_app_server_request_method(METHOD_SKILLS_LIST));
         assert!(is_app_server_request_method(METHOD_KNOWLEDGE_PACK_LIST));
         assert!(is_app_server_request_method(METHOD_KNOWLEDGE_PACK_READ));
-        assert!(is_app_server_request_method(
-            METHOD_AUTOMATION_SCHEDULER_CONFIG_READ
-        ));
-        assert!(is_app_server_request_method(
-            METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE
-        ));
-        assert!(is_app_server_request_method(
-            METHOD_AUTOMATION_SCHEDULER_STATUS
-        ));
-        assert!(is_app_server_request_method(METHOD_AUTOMATION_JOB_LIST));
-        assert!(is_app_server_request_method(METHOD_AUTOMATION_JOB_CREATE));
-        assert!(is_app_server_request_method(
-            METHOD_AUTOMATION_SCHEDULE_VALIDATE
-        ));
         assert!(is_app_server_request_method(METHOD_PROJECT_MEMORY_READ));
         assert!(is_app_server_request_method(METHOD_TURN_INTERRUPT));
         assert!(!is_app_server_request_method(METHOD_INITIALIZED));

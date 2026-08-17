@@ -306,7 +306,7 @@ describe("useAppNavigation", () => {
     await renderProbe();
 
     await act(async () => {
-      latestNavigation?.handleNavigate("automation");
+      latestNavigation?.handleNavigate("scheduled-tasks");
       latestNavigation?.handleNavigate("plugins", { query: "fixture" });
     });
     await flushEffects();

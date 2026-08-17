@@ -50,9 +50,6 @@ vi.mock("../general/archived-conversations", () => ({
     return <div>archived-conversations</div>;
   },
 }));
-vi.mock("../system/automation", () => ({
-  AutomationSettings: () => <div>automation</div>,
-}));
 vi.mock("../system/developer-lab", () => ({
   DeveloperLabSettings: (props: unknown) => {
     mockDeveloperLabSettings(props);
@@ -365,6 +362,7 @@ describe("SettingsLayoutV2 Developer Tab", () => {
     expect(container.textContent ?? "").toContain("execution-policy");
     expect(mockExecutionPolicySettings).toHaveBeenCalledTimes(1);
   });
+
 });
 
 describe("SettingsLayoutV2 Provider Focus", () => {

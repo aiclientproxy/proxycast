@@ -376,7 +376,7 @@ describe("commandPolicy", () => {
           lines: [
             JSON.stringify({
               id: "automation-run-now",
-              method: "automationJob/runNow",
+              method: "scheduledTask/run/start",
               params: { id: "job-1" },
             }),
           ],
@@ -474,9 +474,9 @@ describe("commandPolicy", () => {
         request: {
           lines: [
             JSON.stringify({
-              id: "automation-create",
-              method: "automationJob/create",
-              params: { request: { name: "job" } },
+              id: "scheduled-task-create",
+              method: "scheduledTask/create",
+              params: { task: { title: "task" } },
             }),
           ],
         },

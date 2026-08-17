@@ -51,60 +51,6 @@ impl AutomationManagementAppDataSource for LocalAppDataSource {
     ) -> Result<ScheduledTaskSchedulePreviewResponse, RuntimeCoreError> {
         automation::preview_scheduled_task_schedule(params)
     }
-    async fn read_automation_scheduler_config(
-        &self,
-    ) -> Result<AutomationSchedulerConfigReadResponse, RuntimeCoreError> {
-        automation::read_automation_scheduler_config()
-    }
-
-    async fn update_automation_scheduler_config(
-        &self,
-        params: AutomationSchedulerConfigUpdateParams,
-    ) -> Result<AutomationSchedulerConfigUpdateResponse, RuntimeCoreError> {
-        automation::update_automation_scheduler_config(params)
-    }
-
-    async fn read_automation_scheduler_status(
-        &self,
-    ) -> Result<AutomationSchedulerStatusResponse, RuntimeCoreError> {
-        automation::read_automation_scheduler_status()
-    }
-
-    async fn read_automation_job(
-        &self,
-        params: AutomationJobIdParams,
-    ) -> Result<AutomationJobReadResponse, RuntimeCoreError> {
-        automation::read_automation_job(&self.db, params)
-    }
-
-    async fn create_automation_job(
-        &self,
-        params: AutomationJobCreateParams,
-    ) -> Result<AutomationJobWriteResponse, RuntimeCoreError> {
-        automation::create_automation_job(&self.db, params)
-    }
-
-    async fn update_automation_job(
-        &self,
-        params: AutomationJobUpdateParams,
-    ) -> Result<AutomationJobWriteResponse, RuntimeCoreError> {
-        automation::update_automation_job(&self.db, params)
-    }
-
-    async fn delete_automation_job(
-        &self,
-        params: AutomationJobIdParams,
-    ) -> Result<AutomationJobDeleteResponse, RuntimeCoreError> {
-        automation::delete_automation_job(&self.db, params)
-    }
-
-    async fn start_automation_job_run(
-        &self,
-        id: String,
-    ) -> Result<crate::automation_execution::AutomationRunStart, RuntimeCoreError> {
-        automation::start_automation_job_run(&self.db, id)
-    }
-
     async fn start_scheduled_task_run_record(
         &self,
         id: String,
@@ -117,7 +63,15 @@ impl AutomationManagementAppDataSource for LocalAppDataSource {
         &self,
         finish: crate::automation_execution::AutomationRunFinish,
     ) -> Result<(), RuntimeCoreError> {
-        automation::finish_automation_job_run(&self.db, finish)
+        automation::finish_automation_job_run(&self.db, finish).map(|_| ())
+    }
+
+    async fn finish_scheduled_task_run_for_terminal_event(
+        &self,
+        event: app_server_protocol::AgentEvent,
+    ) -> Result<Option<app_server_protocol::protocol::v2::ServerNotification>, RuntimeCoreError>
+    {
+        automation::finish_scheduled_task_run_for_terminal_event(&self.db, &event)
     }
 
     async fn fail_automation_job_run(
@@ -125,33 +79,5 @@ impl AutomationManagementAppDataSource for LocalAppDataSource {
         failure: crate::automation_execution::AutomationRunFailure,
     ) -> Result<(), RuntimeCoreError> {
         automation::fail_automation_job_run(&self.db, failure)
-    }
-
-    async fn read_automation_health(
-        &self,
-        params: AutomationJobHealthParams,
-    ) -> Result<AutomationJobHealthResponse, RuntimeCoreError> {
-        automation::read_automation_health(&self.db, params)
-    }
-
-    async fn read_automation_run_history(
-        &self,
-        params: AutomationJobRunHistoryParams,
-    ) -> Result<AutomationJobRunHistoryResponse, RuntimeCoreError> {
-        automation::read_automation_run_history(&self.db, params)
-    }
-
-    async fn preview_automation_schedule(
-        &self,
-        params: AutomationScheduleParams,
-    ) -> Result<AutomationSchedulePreviewResponse, RuntimeCoreError> {
-        automation::preview_automation_schedule(params)
-    }
-
-    async fn validate_automation_schedule(
-        &self,
-        params: AutomationScheduleParams,
-    ) -> Result<AutomationScheduleValidateResponse, RuntimeCoreError> {
-        automation::validate_automation_schedule(params)
     }
 }

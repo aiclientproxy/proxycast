@@ -337,32 +337,6 @@ pub enum AppServerRequestMethod {
     KnowledgeContextResolve,
     #[serde(rename = "knowledgeContextRun/validate")]
     KnowledgeContextRunValidate,
-    #[serde(rename = "automationScheduler/config/read")]
-    AutomationSchedulerConfigRead,
-    #[serde(rename = "automationScheduler/config/update")]
-    AutomationSchedulerConfigUpdate,
-    #[serde(rename = "automationScheduler/status")]
-    AutomationSchedulerStatus,
-    #[serde(rename = "automationJob/list")]
-    AutomationJobList,
-    #[serde(rename = "automationJob/read")]
-    AutomationJobRead,
-    #[serde(rename = "automationJob/create")]
-    AutomationJobCreate,
-    #[serde(rename = "automationJob/update")]
-    AutomationJobUpdate,
-    #[serde(rename = "automationJob/delete")]
-    AutomationJobDelete,
-    #[serde(rename = "automationJob/runNow")]
-    AutomationJobRunNow,
-    #[serde(rename = "automationJob/health")]
-    AutomationJobHealth,
-    #[serde(rename = "automationJob/runHistory")]
-    AutomationJobRunHistory,
-    #[serde(rename = "automationSchedule/preview")]
-    AutomationSchedulePreview,
-    #[serde(rename = "automationSchedule/validate")]
-    AutomationScheduleValidate,
     #[serde(rename = "scheduledTask/list")]
     ScheduledTaskList,
     #[serde(rename = "scheduledTask/read")]
@@ -693,19 +667,6 @@ impl AppServerRequestMethod {
             Self::KnowledgePackStatusUpdate => METHOD_KNOWLEDGE_PACK_STATUS_UPDATE,
             Self::KnowledgeContextResolve => METHOD_KNOWLEDGE_CONTEXT_RESOLVE,
             Self::KnowledgeContextRunValidate => METHOD_KNOWLEDGE_CONTEXT_RUN_VALIDATE,
-            Self::AutomationSchedulerConfigRead => METHOD_AUTOMATION_SCHEDULER_CONFIG_READ,
-            Self::AutomationSchedulerConfigUpdate => METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE,
-            Self::AutomationSchedulerStatus => METHOD_AUTOMATION_SCHEDULER_STATUS,
-            Self::AutomationJobList => METHOD_AUTOMATION_JOB_LIST,
-            Self::AutomationJobRead => METHOD_AUTOMATION_JOB_READ,
-            Self::AutomationJobCreate => METHOD_AUTOMATION_JOB_CREATE,
-            Self::AutomationJobUpdate => METHOD_AUTOMATION_JOB_UPDATE,
-            Self::AutomationJobDelete => METHOD_AUTOMATION_JOB_DELETE,
-            Self::AutomationJobRunNow => METHOD_AUTOMATION_JOB_RUN_NOW,
-            Self::AutomationJobHealth => METHOD_AUTOMATION_JOB_HEALTH,
-            Self::AutomationJobRunHistory => METHOD_AUTOMATION_JOB_RUN_HISTORY,
-            Self::AutomationSchedulePreview => METHOD_AUTOMATION_SCHEDULE_PREVIEW,
-            Self::AutomationScheduleValidate => METHOD_AUTOMATION_SCHEDULE_VALIDATE,
             Self::ScheduledTaskList => METHOD_SCHEDULED_TASK_LIST,
             Self::ScheduledTaskRead => METHOD_SCHEDULED_TASK_READ,
             Self::ScheduledTaskCreate => METHOD_SCHEDULED_TASK_CREATE,
@@ -962,21 +923,6 @@ impl AppServerRequestMethod {
             METHOD_KNOWLEDGE_PACK_STATUS_UPDATE => Some(Self::KnowledgePackStatusUpdate),
             METHOD_KNOWLEDGE_CONTEXT_RESOLVE => Some(Self::KnowledgeContextResolve),
             METHOD_KNOWLEDGE_CONTEXT_RUN_VALIDATE => Some(Self::KnowledgeContextRunValidate),
-            METHOD_AUTOMATION_SCHEDULER_CONFIG_READ => Some(Self::AutomationSchedulerConfigRead),
-            METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE => {
-                Some(Self::AutomationSchedulerConfigUpdate)
-            }
-            METHOD_AUTOMATION_SCHEDULER_STATUS => Some(Self::AutomationSchedulerStatus),
-            METHOD_AUTOMATION_JOB_LIST => Some(Self::AutomationJobList),
-            METHOD_AUTOMATION_JOB_READ => Some(Self::AutomationJobRead),
-            METHOD_AUTOMATION_JOB_CREATE => Some(Self::AutomationJobCreate),
-            METHOD_AUTOMATION_JOB_UPDATE => Some(Self::AutomationJobUpdate),
-            METHOD_AUTOMATION_JOB_DELETE => Some(Self::AutomationJobDelete),
-            METHOD_AUTOMATION_JOB_RUN_NOW => Some(Self::AutomationJobRunNow),
-            METHOD_AUTOMATION_JOB_HEALTH => Some(Self::AutomationJobHealth),
-            METHOD_AUTOMATION_JOB_RUN_HISTORY => Some(Self::AutomationJobRunHistory),
-            METHOD_AUTOMATION_SCHEDULE_PREVIEW => Some(Self::AutomationSchedulePreview),
-            METHOD_AUTOMATION_SCHEDULE_VALIDATE => Some(Self::AutomationScheduleValidate),
             METHOD_SCHEDULED_TASK_LIST => Some(Self::ScheduledTaskList),
             METHOD_SCHEDULED_TASK_READ => Some(Self::ScheduledTaskRead),
             METHOD_SCHEDULED_TASK_CREATE => Some(Self::ScheduledTaskCreate),
@@ -1674,58 +1620,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
     },
     AppServerMethodSpec {
         method: METHOD_KNOWLEDGE_CONTEXT_RUN_VALIDATE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_SCHEDULER_CONFIG_READ,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_SCHEDULER_STATUS,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_JOB_LIST,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_JOB_READ,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_JOB_CREATE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_JOB_UPDATE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_JOB_DELETE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_JOB_RUN_NOW,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_JOB_HEALTH,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_JOB_RUN_HISTORY,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_SCHEDULE_PREVIEW,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_AUTOMATION_SCHEDULE_VALIDATE,
         kind: AppServerMethodKind::Request,
     },
     AppServerMethodSpec {

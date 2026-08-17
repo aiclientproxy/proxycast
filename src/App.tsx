@@ -15,6 +15,7 @@ import { withI18nPatch } from "./i18n/withI18nPatch";
 import { AppPageContent } from "./components/AppPageContent";
 import type { AgentBackgroundSessionRuntimeSnapshot } from "./components/agent/chat";
 import { AppServerConfigWarningToastBridge } from "./components/AppServerConfigWarningToastBridge";
+import { ScheduledTaskNotificationBridge } from "./components/ScheduledTaskNotificationBridge";
 import { SplashScreen } from "./components/SplashScreen";
 import { AppSidebar } from "./components/AppSidebar";
 import { startupTracker } from "./lib/diagnostics/startupPerformance";
@@ -556,6 +557,7 @@ function AppContent() {
 
         <ComponentDebugOverlay />
         <AppServerConfigWarningToastBridge />
+        <ScheduledTaskNotificationBridge />
       </AppContainer>
     </ComponentDebugProvider>
   );

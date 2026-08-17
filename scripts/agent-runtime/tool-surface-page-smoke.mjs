@@ -1385,9 +1385,10 @@ async function installCodeRuntimeDevBridgeFixture(page, options) {
           plugins: [],
           nextCursor: null,
         });
-      case "automationJob/list":
+      case "scheduledTask/list":
         return buildAppServerJsonRpcResult(message.id, {
-          jobs: [],
+          items: [],
+          nextCursor: null,
         });
       case "modelProvider/list":
         return buildAppServerJsonRpcResult(message.id, {

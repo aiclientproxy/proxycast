@@ -572,33 +572,6 @@ impl RequestProcessor {
             METHOD_KNOWLEDGE_CONTEXT_RUN_VALIDATE => self
                 .handle_knowledge_context_run_validate_impl(params)
                 .boxed(),
-            METHOD_AUTOMATION_SCHEDULER_CONFIG_READ => {
-                self.handle_automation_scheduler_config_read_impl().boxed()
-            }
-            METHOD_AUTOMATION_SCHEDULER_CONFIG_UPDATE => self
-                .handle_automation_scheduler_config_update_impl(params)
-                .boxed(),
-            METHOD_AUTOMATION_SCHEDULER_STATUS => {
-                self.handle_automation_scheduler_status_impl().boxed()
-            }
-            METHOD_AUTOMATION_JOB_LIST => self.handle_automation_job_list_impl().boxed(),
-            METHOD_AUTOMATION_JOB_READ => self.handle_automation_job_read_impl(params).boxed(),
-            METHOD_AUTOMATION_JOB_CREATE => self.handle_automation_job_create_impl(params).boxed(),
-            METHOD_AUTOMATION_JOB_UPDATE => self.handle_automation_job_update_impl(params).boxed(),
-            METHOD_AUTOMATION_JOB_DELETE => self.handle_automation_job_delete_impl(params).boxed(),
-            METHOD_AUTOMATION_JOB_RUN_NOW => {
-                self.handle_automation_job_run_now_impl(params).boxed()
-            }
-            METHOD_AUTOMATION_JOB_HEALTH => self.handle_automation_job_health_impl(params).boxed(),
-            METHOD_AUTOMATION_JOB_RUN_HISTORY => {
-                self.handle_automation_job_run_history_impl(params).boxed()
-            }
-            METHOD_AUTOMATION_SCHEDULE_PREVIEW => {
-                self.handle_automation_schedule_preview_impl(params).boxed()
-            }
-            METHOD_AUTOMATION_SCHEDULE_VALIDATE => self
-                .handle_automation_schedule_validate_impl(params)
-                .boxed(),
             METHOD_SCHEDULED_TASK_LIST => self.handle_scheduled_task_list_impl(params).boxed(),
             METHOD_SCHEDULED_TASK_READ => self.handle_scheduled_task_read_impl(params).boxed(),
             METHOD_SCHEDULED_TASK_CREATE => self.handle_scheduled_task_create_impl(params).boxed(),

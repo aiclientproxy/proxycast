@@ -88,7 +88,6 @@ const AGENT_UI_EVENT_LABEL_KEYS: Partial<Record<AgentUiEventClass, string>> =
 const AGENT_UI_SOURCE_TYPE_LABELS: Record<string, string> = {
   action_required: "等待操作",
   artifact_snapshot: "产物快照",
-  automation_job_projection: "自动任务",
   evidence_projection: "证据记录",
   item_completed: "历史正文",
   performance_metric: "性能指标",

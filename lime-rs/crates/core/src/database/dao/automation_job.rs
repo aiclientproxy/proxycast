@@ -52,6 +52,7 @@ pub struct AutomationJob {
     pub consecutive_failures: u32,
     pub last_retry_count: u32,
     pub auto_disabled_until: Option<String>,
+    pub deleted_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_delivery: Option<AutomationJobLastDelivery>,
     pub created_at: String,
@@ -82,11 +83,12 @@ impl AutomationJobDao {
                 next_run_at, last_status, last_error, last_run_at, last_finished_at,
                 running_started_at, consecutive_failures, last_retry_count,
                 auto_disabled_until, created_at, updated_at, last_delivery_json
+                , deleted_at
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6,
                 ?7, ?8, ?9, ?10, ?11,
                 ?12, ?13, ?14, ?15, ?16,
-                ?17, ?18, ?19, ?20, ?21, ?22, ?23
+                ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24
             )",
             params![
                 job.id,
@@ -113,6 +115,7 @@ impl AutomationJobDao {
                 job.created_at,
                 job.updated_at,
                 last_delivery_json,
+                job.deleted_at,
             ],
         )?;
 
@@ -126,9 +129,10 @@ impl AutomationJobDao {
                 schedule_json, payload_json, delivery_json, timeout_secs, max_retries,
                 next_run_at, last_status, last_error, last_run_at, last_finished_at,
                 running_started_at, consecutive_failures, last_retry_count,
-                auto_disabled_until, created_at, updated_at, last_delivery_json
+                auto_disabled_until, created_at, updated_at, last_delivery_json,
+                deleted_at
              FROM automation_jobs
-             WHERE id = ?1",
+             WHERE id = ?1 AND deleted_at IS NULL",
         )?;
 
         let mut rows = stmt.query(params![id])?;
@@ -139,6 +143,25 @@ impl AutomationJobDao {
         }
     }
 
+    pub fn get_including_deleted(
+        conn: &Connection,
+        id: &str,
+    ) -> Result<Option<AutomationJob>, rusqlite::Error> {
+        let mut stmt = conn.prepare(
+            "SELECT
+                id, name, description, enabled, workspace_id, execution_mode,
+                schedule_json, payload_json, delivery_json, timeout_secs, max_retries,
+                next_run_at, last_status, last_error, last_run_at, last_finished_at,
+                running_started_at, consecutive_failures, last_retry_count,
+                auto_disabled_until, created_at, updated_at, last_delivery_json,
+                deleted_at
+             FROM automation_jobs
+             WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query(params![id])?;
+        rows.next()?.map(Self::row_to_job).transpose()
+    }
+
     pub fn list(conn: &Connection) -> Result<Vec<AutomationJob>, rusqlite::Error> {
         let mut stmt = conn.prepare(
             "SELECT
@@ -147,7 +170,9 @@ impl AutomationJobDao {
                 next_run_at, last_status, last_error, last_run_at, last_finished_at,
                 running_started_at, consecutive_failures, last_retry_count,
                 auto_disabled_until, created_at, updated_at, last_delivery_json
+                , deleted_at
              FROM automation_jobs
+             WHERE deleted_at IS NULL
              ORDER BY updated_at DESC, created_at DESC",
         )?;
 
@@ -167,8 +192,10 @@ impl AutomationJobDao {
                 next_run_at, last_status, last_error, last_run_at, last_finished_at,
                 running_started_at, consecutive_failures, last_retry_count,
                 auto_disabled_until, created_at, updated_at, last_delivery_json
+                , deleted_at
              FROM automation_jobs
              WHERE enabled = 1
+               AND deleted_at IS NULL
                AND next_run_at IS NOT NULL
                AND datetime(next_run_at) <= datetime(?1)
                AND running_started_at IS NULL
@@ -221,7 +248,8 @@ impl AutomationJobDao {
                  auto_disabled_until = ?19,
                  updated_at = ?20,
                  last_delivery_json = ?21
-             WHERE id = ?22",
+                 , deleted_at = ?22
+             WHERE id = ?23 AND deleted_at IS NULL",
             params![
                 job.name,
                 job.description,
@@ -245,6 +273,7 @@ impl AutomationJobDao {
                 job.auto_disabled_until,
                 job.updated_at,
                 last_delivery_json,
+                job.deleted_at,
                 job.id,
             ],
         )?;
@@ -257,12 +286,27 @@ impl AutomationJobDao {
         Ok(rows > 0)
     }
 
+    pub fn soft_delete(
+        conn: &Connection,
+        id: &str,
+        deleted_at: &str,
+    ) -> Result<bool, rusqlite::Error> {
+        let rows = conn.execute(
+            "UPDATE automation_jobs
+             SET enabled = 0, next_run_at = NULL, deleted_at = ?2, updated_at = ?2
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![id, deleted_at],
+        )?;
+        Ok(rows > 0)
+    }
+
     fn row_to_job(row: &rusqlite::Row<'_>) -> Result<AutomationJob, rusqlite::Error> {
         let execution_mode_raw: String = row.get(5)?;
         let schedule_json: String = row.get(6)?;
         let payload_json: String = row.get(7)?;
         let delivery_json: String = row.get(8)?;
         let last_delivery_json: Option<String> = row.get(22)?;
+        let deleted_at: Option<String> = row.get(23)?;
 
         let execution_mode = serde_json::from_str(&execution_mode_raw).map_err(|e| {
             rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e))
@@ -309,6 +353,7 @@ impl AutomationJobDao {
             consecutive_failures: row.get::<_, i64>(17)? as u32,
             last_retry_count: row.get::<_, i64>(18)? as u32,
             auto_disabled_until: row.get(19)?,
+            deleted_at,
             last_delivery,
             created_at: row.get(20)?,
             updated_at: row.get(21)?,
@@ -353,6 +398,7 @@ mod tests {
             consecutive_failures: 1,
             last_retry_count: 0,
             auto_disabled_until: None,
+            deleted_at: None,
             last_delivery: Some(AutomationJobLastDelivery {
                 success: false,
                 message: "写入本地文件失败: permission denied".to_string(),
@@ -409,5 +455,73 @@ mod tests {
                 .map(|value| value.delivery_attempts),
             Some(2)
         );
+    }
+
+    #[test]
+    fn soft_delete_hides_job_but_preserves_tombstone() {
+        let conn = Connection::open_in_memory().expect("创建内存数据库失败");
+        create_tables(&conn).expect("创建数据表失败");
+        let mut job = sample_job("job-soft-delete");
+        AutomationJobDao::create(&conn, &job).expect("创建自动化任务失败");
+
+        let deleted_at = "2026-03-16T01:00:00Z";
+        assert!(AutomationJobDao::soft_delete(&conn, &job.id, deleted_at)
+            .expect("软删除自动化任务失败"));
+        assert!(!AutomationJobDao::soft_delete(&conn, &job.id, deleted_at)
+            .expect("重复软删除自动化任务失败"));
+        assert!(AutomationJobDao::get(&conn, &job.id)
+            .expect("读取自动化任务失败")
+            .is_none());
+        assert!(AutomationJobDao::list(&conn)
+            .expect("列出自动化任务失败")
+            .is_empty());
+        assert!(AutomationJobDao::list_due(&conn, deleted_at, 10)
+            .expect("列出到期自动化任务失败")
+            .is_empty());
+
+        let deleted = AutomationJobDao::get_including_deleted(&conn, &job.id)
+            .expect("读取软删除自动化任务失败")
+            .expect("软删除自动化任务不存在");
+        assert!(!deleted.enabled);
+        assert!(deleted.next_run_at.is_none());
+        assert_eq!(deleted.deleted_at.as_deref(), Some(deleted_at));
+
+        job.name = "不应复活".to_string();
+        job.updated_at = "2026-03-16T02:00:00Z".to_string();
+        AutomationJobDao::update(&conn, &job).expect("更新软删除任务应安全忽略");
+        let still_deleted = AutomationJobDao::get_including_deleted(&conn, &job.id)
+            .expect("重新读取软删除自动化任务失败")
+            .expect("软删除自动化任务不存在");
+        assert_eq!(still_deleted.name, "巡检任务");
+        assert_eq!(still_deleted.deleted_at.as_deref(), Some(deleted_at));
+    }
+
+    fn sample_job(id: &str) -> AutomationJob {
+        AutomationJob {
+            id: id.to_string(),
+            name: "巡检任务".to_string(),
+            description: None,
+            enabled: true,
+            workspace_id: "workspace-1".to_string(),
+            execution_mode: AutomationExecutionMode::Intelligent,
+            schedule: TaskSchedule::Every { every_secs: 300 },
+            payload: json!({"kind": "agent_turn"}),
+            delivery: DeliveryConfig::default(),
+            timeout_secs: None,
+            max_retries: 2,
+            next_run_at: Some("2026-03-16T00:10:00Z".to_string()),
+            last_status: None,
+            last_error: None,
+            last_run_at: None,
+            last_finished_at: None,
+            running_started_at: None,
+            consecutive_failures: 0,
+            last_retry_count: 0,
+            auto_disabled_until: None,
+            deleted_at: None,
+            last_delivery: None,
+            created_at: "2026-03-16T00:00:00Z".to_string(),
+            updated_at: "2026-03-16T00:00:00Z".to_string(),
+        }
     }
 }

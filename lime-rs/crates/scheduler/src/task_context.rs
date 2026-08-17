@@ -1,7 +1,7 @@
 //! 调度任务运行上下文解析。
 //!
 //! `lime-scheduler` 只保留历史任务上下文投影测试与数据模型守卫。
-//! 真实自动化执行必须走 App Server `automationJob/runNow` current 主链。
+//! 真实自动化执行必须走 App Server `scheduledTask/run/start` current 主链。
 
 use crate::types::ScheduledTask;
 use agent_protocol::turn_context::{TurnContextOverride, TurnOutputSchemaSource};

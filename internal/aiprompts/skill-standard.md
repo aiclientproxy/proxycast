@@ -264,11 +264,11 @@ Lime 的技能标准必须分成五层：
 
 - `agent_turn`
 - `browser_assist`
-- `automation_job`
 - `native_skill`
 
 兼容说明：
 
+- `automation_job` 只允许作为 Base Setup / Service Skill catalog 的 compat binding family；客户端必须把它正规化为 Scheduled Task 创建，不得恢复旧 Automation protocol 或 Agent UI runtime entity
 - `cloud_scene` 只允许作为历史目录输入或 compat binding family 理解
 - current 客户端主链必须先把它正规化为 `agent_turn / service_scene` 语义，再继续进入工作区执行
 
@@ -608,7 +608,7 @@ ClaudeCode 对 Lime 最值得借鉴的，不是“再做一个 ClaudeCode skills
 - 不能把“浏览器工作台 / 调试面板”作为主产品语义
 - 不允许隐式后台自动化
 
-### 3. `automation_job`
+### 3. compat：`automation_job`
 
 适用于：
 
@@ -617,6 +617,8 @@ ClaudeCode 对 Lime 最值得借鉴的，不是“再做一个 ClaudeCode skills
 要求：
 
 - 必须说明首轮结果、后续调度、失败处理和结果回流方式
+- current 执行入口必须是 `scheduledTask/* -> RuntimeCore -> Agent Turn`，不能调用旧 Automation gateway
+- 该 binding family 完成 schema 与 consumer 迁移后应改为 Scheduled Task 领域命名
 
 ### 4. compat：`cloud_scene`
 

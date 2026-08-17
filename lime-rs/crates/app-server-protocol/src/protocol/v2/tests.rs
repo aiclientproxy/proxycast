@@ -2933,6 +2933,8 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "mcpServer/oauthLogin/completed",
             "mcpServer/startupStatus/updated",
             "app/list/updated",
+            "scheduledTask/changed",
+            "scheduledTask/run/updated",
             "hook/started",
             "hook/completed",
             "thread/started",

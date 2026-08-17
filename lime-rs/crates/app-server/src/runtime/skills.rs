@@ -31,7 +31,7 @@ impl RuntimeCore {
         } else {
             params.cwds
         };
-        let config = load_skill_config()?;
+        let config = load_skill_config(&self.app_config_path)?;
 
         Ok(SkillsListResponse {
             data: cwds
@@ -58,8 +58,7 @@ impl RuntimeCore {
         let _guard = skill_config_lock()
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        let config_path = ConfigManager::default_config_path();
-        let mut manager = ConfigManager::load(&config_path).map_err(|error| {
+        let mut manager = ConfigManager::load(&self.app_config_path).map_err(|error| {
             RuntimeCoreError::Backend(format!("failed to load skill settings: {error}"))
         })?;
         update_skill_config(manager.config_mut(), &selector, params.enabled);
@@ -283,12 +282,11 @@ fn skill_config_lock() -> &'static Mutex<()> {
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
-fn load_skill_config() -> Result<Vec<SkillConfig>, RuntimeCoreError> {
+fn load_skill_config(path: &Path) -> Result<Vec<SkillConfig>, RuntimeCoreError> {
     let _guard = skill_config_lock()
         .lock()
         .unwrap_or_else(|error| error.into_inner());
-    let path = ConfigManager::default_config_path();
-    ConfigManager::load(&path)
+    ConfigManager::load(path)
         .map(|manager| manager.config().skills.config.clone())
         .map_err(|error| {
             RuntimeCoreError::Backend(format!("failed to load skill settings: {error}"))

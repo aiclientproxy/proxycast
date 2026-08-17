@@ -3,7 +3,8 @@ use crate::automation_execution::{
     AutomationRunIdentity, ClaimedAutomationRun,
 };
 use crate::local_data_source::is_scheduled_task_job;
-use crate::{RuntimeCore, RuntimeCoreError, RuntimeHostContext};
+use crate::scheduled_task_notifications::load_run_notification;
+use crate::{AppServerEventBridge, RuntimeCore, RuntimeCoreError, RuntimeHostContext};
 use app_server_protocol::ScheduledTaskThreadMode;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use lime_core::database;
@@ -34,6 +35,11 @@ struct ReconciledDueWindow {
     within_catch_up_window: bool,
 }
 
+struct ScheduledTaskScan {
+    claims: Vec<AutomationWindowClaim>,
+    terminal_runs: Vec<(String, String)>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ScheduledTaskWorkerConfig {
     scan_interval: Duration,
@@ -49,13 +55,23 @@ impl Default for ScheduledTaskWorkerConfig {
     }
 }
 
-pub fn spawn_scheduled_task_worker(db: DbConnection, runtime: RuntimeCore) -> JoinHandle<()> {
-    spawn_scheduled_task_worker_with_config(db, runtime, ScheduledTaskWorkerConfig::default())
+pub fn spawn_scheduled_task_worker(
+    db: DbConnection,
+    runtime: RuntimeCore,
+    event_bridge: AppServerEventBridge,
+) -> JoinHandle<()> {
+    spawn_scheduled_task_worker_with_config(
+        db,
+        runtime,
+        event_bridge,
+        ScheduledTaskWorkerConfig::default(),
+    )
 }
 
 fn spawn_scheduled_task_worker_with_config(
     db: DbConnection,
     runtime: RuntimeCore,
+    event_bridge: AppServerEventBridge,
     config: ScheduledTaskWorkerConfig,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -70,6 +86,10 @@ fn spawn_scheduled_task_worker_with_config(
                         kind = ?recovery.kind,
                         "recovered stale scheduled task run"
                     );
+                    if let Some(run_id) = recovery.run_id.as_deref() {
+                        publish_run_notification(&db, &event_bridge, &recovery.task_id, run_id)
+                            .await;
+                    }
                 }
             }
             Err(error) => {
@@ -81,17 +101,21 @@ fn spawn_scheduled_task_worker_with_config(
         loop {
             interval.tick().await;
             let now = Utc::now().to_rfc3339();
-            match claim_due_scheduled_tasks(&db, &now, config.scan_limit) {
-                Ok(claims) => {
-                    for claim in claims {
+            match scan_due_scheduled_tasks(&db, &now, config.scan_limit) {
+                Ok(scan) => {
+                    for (task_id, run_id) in scan.terminal_runs {
+                        publish_run_notification(&db, &event_bridge, &task_id, &run_id).await;
+                    }
+                    for claim in scan.claims {
                         let db = db.clone();
                         let runtime = runtime.clone();
+                        let event_bridge = event_bridge.clone();
                         tokio::spawn(async move {
                             let task_id = claim.job.id.clone();
                             let run_id = claim.run_id.clone();
-                            if let Err(error) =
-                                execute_claimed_scheduled_task(&db, &runtime, claim).await
-                            {
+                            let result = execute_claimed_scheduled_task(&db, &runtime, claim).await;
+                            publish_run_notification(&db, &event_bridge, &task_id, &run_id).await;
+                            if let Err(error) = result {
                                 tracing::warn!(
                                     task_id = %task_id,
                                     run_id = %run_id,
@@ -252,17 +276,27 @@ async fn canonical_terminal_for_run(
     })
 }
 
+#[cfg(test)]
 fn claim_due_scheduled_tasks(
     db: &DbConnection,
     now: &str,
     limit: usize,
 ) -> Result<Vec<AutomationWindowClaim>, String> {
+    Ok(scan_due_scheduled_tasks(db, now, limit)?.claims)
+}
+
+fn scan_due_scheduled_tasks(
+    db: &DbConnection,
+    now: &str,
+    limit: usize,
+) -> Result<ScheduledTaskScan, String> {
     let mut conn = database::lock_db(db)?;
     let candidates = AutomationWindowClaimDao::list_due_candidates(&conn, now)
         .map_err(|error| error.to_string())?;
     let overlap_candidates = AutomationWindowClaimDao::list_overlap_candidates(&conn, now)
         .map_err(|error| error.to_string())?;
     let mut claims = Vec::new();
+    let mut terminal_runs = Vec::new();
     for job in candidates
         .into_iter()
         .filter(is_scheduled_task_job)
@@ -287,7 +321,7 @@ fn claim_due_scheduled_tasks(
             }
             continue;
         }
-        AutomationWindowClaimDao::record_missed_and_advance(
+        let recorded = AutomationWindowClaimDao::record_missed_and_advance(
             &mut conn,
             &job.id,
             &job.updated_at,
@@ -299,6 +333,12 @@ fn claim_due_scheduled_tasks(
             &window.scheduled_for,
         )
         .map_err(|error| error.to_string())?;
+        if recorded {
+            terminal_runs.push((
+                job.id.clone(),
+                format!("scheduled-run-{}-{}", job.id, window.scheduled_for),
+            ));
+        }
     }
     for job in overlap_candidates
         .into_iter()
@@ -309,7 +349,7 @@ fn claim_due_scheduled_tasks(
         let Some(running_started_at) = job.running_started_at.as_deref() else {
             continue;
         };
-        AutomationWindowClaimDao::record_overlap_missed_and_advance(
+        let recorded = AutomationWindowClaimDao::record_overlap_missed_and_advance(
             &mut conn,
             &job.id,
             &job.updated_at,
@@ -321,8 +361,32 @@ fn claim_due_scheduled_tasks(
             running_started_at,
         )
         .map_err(|error| error.to_string())?;
+        if recorded {
+            terminal_runs.push((
+                job.id.clone(),
+                format!("scheduled-run-{}-{}", job.id, window.scheduled_for),
+            ));
+        }
     }
-    Ok(claims)
+    Ok(ScheduledTaskScan {
+        claims,
+        terminal_runs,
+    })
+}
+
+async fn publish_run_notification(
+    db: &DbConnection,
+    event_bridge: &AppServerEventBridge,
+    task_id: &str,
+    run_id: &str,
+) {
+    match load_run_notification(db, task_id, run_id) {
+        Ok(Some(notification)) => event_bridge.publish_server_notification(notification).await,
+        Ok(None) => {}
+        Err(error) => {
+            tracing::warn!(%task_id, %run_id, %error, "failed to project scheduled task notification")
+        }
+    }
 }
 
 fn reconcile_due_window(job: &AutomationJob, now: &str) -> Result<ReconciledDueWindow, String> {

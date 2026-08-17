@@ -1,36 +1,36 @@
-## Lime v1.130.0
+## Lime v1.131.0
 
 ### 新功能
 
-- 为 Responses provider 增加按 Turn 隔离的 WebSocket 会话，支持严格前缀校验、`previous_response_id` 增量请求、prompt cache key 与完整请求回退。
-- 将异步 Hook 结果接入 session-owned 生命周期：活动回合使用 steer，空闲回合进入 mailbox，并投影 Started/Completed、warning 与取消状态。
-- 将音频转写接入 App Server transcription worker，消费 `openai_audio_transcription` route，生成 workspace transcript artifact 并回写 provider diagnostics 与任务状态。
+- 上线 Scheduled Tasks current 工作台，覆盖创建、编辑、暂停、立即运行、运行历史与对话回链。
+- 新增 `scheduledTask/changed` 和 `scheduledTask/run/updated` typed notification，经 App Server、Renderer bridge 与 Electron Desktop Host 投影任务和运行终态。
+- 支持运行中删除的软删除合同：保留 Agent Run 与 canonical Thread/Turn 历史，完成写回不会复活已删除任务。
 
 ### 修复
 
-- 修复标准 `AGENTS.md` / `AGENTS.override.md` 的全局与工作区发现优先级，同时保留 `.lime` 规则作为受控 fallback，避免运行时遗漏项目指令。
-- 修复 MCP 工具并发判断，只有显式 `read_only_hint=true` 且 server opt-in 的工具才进入并发路径，缺失或 false 继续串行。
-- 修复 session mailbox、turn lifecycle、external backend 事件和 ProjectThread-first 边界中的恢复与状态投影问题。
+- 修复 Scheduled Task `new_thread` 在 `modelId=null` 时绕过 canonical 模型选择，导致真实 Runtime backend 缺少 provider/model selection 的问题。
+- 修复立即运行失败后页面不刷新运行历史的问题；失败 Run、终态通知和错误提示现在会及时回显。
+- 修复通知 Host 返回 `unsupported/failed` 时错误被伪装为成功的问题，并补齐任务状态刷新与删除确认语义。
 
 ### 优化与重构
 
-- 在 model-provider current client 内收敛请求 lowering、响应增量状态、WebSocket 连接复用和媒体输入处理，保持 provider 网络边界单一。
-- 将 Hook discovery、runtime 与 lifecycle 拆分为可观察的 tool-runtime owner，清理重复兼容路径与已删除的 evidence export 测试入口。
-- 更新多模态执行合同、媒体任务索引、Harness 架构图、治理 catalog、Claw fixture 与五语言资源，使转写和 runtime facts 使用同一 current 主链。
+- 将旧 Automation 管理面迁移到 Scheduled Tasks current 协议、唯一存储映射和 typed Renderer gateway，清理已脱离构建图的旧页面、fixture 与 API 双轨。
+- 收敛调度 worker 的 manual/due/catch-up/missed/recovery 终态、重叠策略、one-shot CAS、DST 与启动恢复行为，保持 RuntimeCore/Thread/Turn/Agent Run 单一主链。
+- 更新五语种 Scheduled Tasks 文案、协议 schema、生成客户端、治理目录和执行计划，补齐真实 Electron current fixture。
 
 ### 测试与质量
 
-- 补充 Responses 增量请求、模型/工具/指令变化回退、MCP 只读并发、标准 AGENTS 发现、异步 Hook mailbox 和 session-loop 的 Rust 回归。
-- 更新媒体任务、runtime facts、ProjectThread-first、modality、治理与 current fixture 契约；最终门禁结果以本发布执行计划为准。
+- 通过 App Server protocol/client contracts、Scheduled Tasks 定向 Vitest 与 Rust related/changed 验证。
+- 通过 Scheduled Tasks Electron Gate B、Agent runtime current fixture、GUI smoke、治理报告、`verify:local`、格式检查与 diff 检查。
 
 ### 文档
 
-- 更新架构、Playwright E2E、模型能力、Skills、Workflow、Warp 和 Agent Runtime 路线图文档，明确转写 worker 与 provider route 的 current owner。
-- 新增 `v1.130.0` 发布执行计划并维护执行计划导航；补充 Lime Agent Harness current 架构图源文件与渲染资产。
+- 更新 Scheduled Tasks 架构、命令边界、迁移账本、路线图与实现计划，记录通知、软删除和 provider route 的 current owner。
+- 新增 v1.131.0 发布执行计划，明确平台证据与旧 Automation 物理清理的剩余边界。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.130.0`。
-- Windows/macOS packaged parity、签名、公证和正式发布资产证据不在本地候选中冒充完成，待 CI/平台流程提供证据。
+- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.131.0`。
+- Windows Notification Center、真实 macOS/Windows sleep-resume、签名、公证和正式 release asset 证据仍需对应平台或 CI runner，不在本地候选中冒充完成。
 
-**完整变更**: `v1.129.0` -> `v1.130.0`
+**完整变更**: `v1.130.0` -> `v1.131.0`

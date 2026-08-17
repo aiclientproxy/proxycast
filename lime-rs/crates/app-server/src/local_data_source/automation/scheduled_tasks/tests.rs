@@ -1,4 +1,6 @@
 use super::*;
+use app_server_protocol::protocol::v2::ServerNotification;
+use app_server_protocol::AgentEvent;
 use lime_core::database::dao::agent_run::AgentRunStatus;
 use lime_core::database::schema::create_tables;
 use rusqlite::Connection;
@@ -31,6 +33,11 @@ fn create_request(
                 reasoning_effort: Some("medium".to_string()),
                 approval_policy: Some(json!("on-request")),
                 sandbox_policy: Some(json!("workspace-write")),
+                request_metadata: Some(json!({
+                    "harness": {
+                        "service_skill": { "id": "daily-brief" }
+                    }
+                })),
             },
             enabled: true,
             notification_policy: Some(ScheduledTaskNotificationPolicy::Failures),
@@ -100,6 +107,14 @@ fn scheduled_task_create_read_list_and_update_preserve_lineage() {
     .task
     .expect("scheduled task exists");
     assert_eq!(read.execution.source_thread_id.as_deref(), Some("thread-1"));
+    assert_eq!(
+        read.execution
+            .request_metadata
+            .as_ref()
+            .and_then(|value| value.pointer("/harness/service_skill/id"))
+            .and_then(Value::as_str),
+        Some("daily-brief")
+    );
     {
         let conn = database::lock_db(&db).expect("lock scheduled task test database");
         let job = AutomationJobDao::get(&conn, &read.id)
@@ -107,6 +122,12 @@ fn scheduled_task_create_read_list_and_update_preserve_lineage() {
             .expect("scheduled task job exists");
         assert!(job.payload.get("session_id").is_none());
         assert!(job.payload.get("thread_id").is_none());
+        assert_eq!(
+            job.payload
+                .pointer("/request_metadata/harness/service_skill/id")
+                .and_then(Value::as_str),
+            Some("daily-brief")
+        );
     }
 
     let listed = list_scheduled_tasks(
@@ -147,6 +168,17 @@ fn scheduled_task_create_read_list_and_update_preserve_lineage() {
         Some("thread-1")
     );
     assert_eq!(updated.prompt, "整理今天的重要进展并给出风险");
+}
+
+#[test]
+fn scheduled_task_rejects_non_object_request_metadata() {
+    let db = test_db();
+    let mut request = create_request(ScheduledTaskThreadMode::NewThread, None);
+    request.task.execution.request_metadata = Some(json!("invalid"));
+
+    let error =
+        create_scheduled_task(&db, request).expect_err("scalar request metadata must fail closed");
+    assert!(error.to_string().contains("requestMetadata 必须为对象"));
 }
 
 #[test]
@@ -338,6 +370,161 @@ fn scheduled_task_read_models_project_missed_run_as_attention() {
             .map(|run| run.status.as_str()),
         Some("missed")
     );
+}
+
+#[test]
+fn deleting_running_task_preserves_history_and_terminal_write_does_not_restore_task() {
+    let db = test_db();
+    let created = create_scheduled_task(
+        &db,
+        create_request(ScheduledTaskThreadMode::NewThread, None),
+    )
+    .expect("create scheduled task")
+    .task;
+    let start = super::super::start_scheduled_task_run_record(&db, created.id.clone(), None)
+        .expect("start scheduled task run record");
+
+    assert!(
+        delete_scheduled_task(
+            &db,
+            ScheduledTaskIdParams {
+                id: created.id.clone(),
+            },
+        )
+        .expect("delete running scheduled task")
+        .deleted
+    );
+    assert!(read_scheduled_task(
+        &db,
+        ScheduledTaskIdParams {
+            id: created.id.clone(),
+        },
+    )
+    .expect("read deleted scheduled task")
+    .task
+    .is_none());
+    assert!(update_scheduled_task(
+        &db,
+        ScheduledTaskUpdateParams {
+            id: created.id.clone(),
+            task: ScheduledTaskUpdateRequest {
+                title: Some("不应更新".to_string()),
+                prompt: None,
+                schedule: None,
+                execution: None,
+                enabled: None,
+                notification_policy: None,
+                overlap_policy: None,
+                revision: None,
+            },
+        },
+    )
+    .is_err());
+    assert!(super::super::start_scheduled_task_run_record(&db, created.id.clone(), None).is_err());
+
+    let terminal_event = AgentEvent {
+        event_id: "event-deleted-task-terminal".to_string(),
+        sequence: 1,
+        session_id: start.session_id.clone(),
+        thread_id: Some(start.thread_id.clone()),
+        turn_id: Some(start.turn_id.clone()),
+        event_type: "turn.completed".to_string(),
+        timestamp: (chrono::DateTime::parse_from_rfc3339(&start.run.started_at)
+            .expect("parse scheduled task run start")
+            + chrono::Duration::seconds(1))
+        .to_rfc3339(),
+        payload: json!({"source": "scheduled-task-delete-test"}),
+    };
+    let notification =
+        super::super::finish_scheduled_task_run_for_terminal_event(&db, &terminal_event)
+            .expect("finish deleted scheduled task run")
+            .expect("deleted task terminal notification");
+    let ServerNotification::ScheduledTaskRunUpdated(notification) = notification else {
+        panic!("expected scheduled task run notification");
+    };
+    assert_eq!(notification.task_id, created.id);
+    assert_eq!(notification.run_id, start.run.id);
+    assert_eq!(notification.status, "success");
+    assert!(
+        super::super::finish_scheduled_task_run_for_terminal_event(&db, &terminal_event,)
+            .expect("replay deleted scheduled task terminal event")
+            .is_none()
+    );
+
+    let history = list_scheduled_task_runs(
+        &db,
+        ScheduledTaskRunListParams {
+            task_id: created.id.clone(),
+            limit: Some(10),
+        },
+    )
+    .expect("read deleted scheduled task history");
+    assert_eq!(history.runs.len(), 1);
+    assert_eq!(history.runs[0].status, "success");
+
+    let conn = database::lock_db(&db).expect("lock scheduled task test database");
+    let deleted = AutomationJobDao::get_including_deleted(&conn, &created.id)
+        .expect("read deleted scheduled task job")
+        .expect("deleted scheduled task tombstone");
+    assert!(deleted.deleted_at.is_some());
+    assert!(!deleted.enabled);
+    assert!(deleted.next_run_at.is_none());
+}
+
+#[test]
+fn failed_terminal_event_preserves_error_and_is_idempotent() {
+    let db = test_db();
+    let created = create_scheduled_task(
+        &db,
+        create_request(ScheduledTaskThreadMode::NewThread, None),
+    )
+    .expect("create scheduled task")
+    .task;
+    let start = super::super::start_scheduled_task_run_record(&db, created.id.clone(), None)
+        .expect("start scheduled task run");
+    let terminal_event = AgentEvent {
+        event_id: "event-scheduled-task-failed".to_string(),
+        sequence: 1,
+        session_id: start.session_id.clone(),
+        thread_id: Some(start.thread_id.clone()),
+        turn_id: Some(start.turn_id.clone()),
+        event_type: "turn.failed".to_string(),
+        timestamp: (chrono::DateTime::parse_from_rfc3339(&start.run.started_at)
+            .expect("parse scheduled task run start")
+            + chrono::Duration::seconds(2))
+        .to_rfc3339(),
+        payload: json!({
+            "error": {
+                "code": "provider_unavailable",
+                "message": "模型服务暂不可用"
+            }
+        }),
+    };
+
+    let notification =
+        super::super::finish_scheduled_task_run_for_terminal_event(&db, &terminal_event)
+            .expect("finish failed scheduled task run")
+            .expect("failed scheduled task terminal notification");
+    let ServerNotification::ScheduledTaskRunUpdated(notification) = notification else {
+        panic!("expected scheduled task run notification");
+    };
+    assert_eq!(notification.status, "error");
+    assert!(notification.attention);
+    assert_eq!(notification.error.as_deref(), Some("模型服务暂不可用"));
+    assert!(
+        super::super::finish_scheduled_task_run_for_terminal_event(&db, &terminal_event)
+            .expect("replay failed scheduled task terminal event")
+            .is_none()
+    );
+
+    let conn = database::lock_db(&db).expect("lock scheduled task test database");
+    let run = AgentRunDao::get_run(&conn, &start.run.id)
+        .expect("read failed scheduled task run")
+        .expect("failed scheduled task run exists");
+    assert_eq!(run.status, AgentRunStatus::Error);
+    assert_eq!(run.error_code.as_deref(), Some("provider_unavailable"));
+    assert_eq!(run.error_message.as_deref(), Some("模型服务暂不可用"));
+    assert_eq!(run.duration_ms, Some(2_000));
 }
 
 #[test]

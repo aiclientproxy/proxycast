@@ -461,67 +461,6 @@ declare module "./connection.js" {
     ): Promise<
       AppServerRequestResult<protocol.KnowledgeValidateContextRunResponse>
     >;
-    listAutomationJobs(
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.AutomationJobListResponse>>;
-    readAutomationSchedulerConfig(
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.AutomationSchedulerConfigReadResponse>
-    >;
-    updateAutomationSchedulerConfig(
-      params: protocol.AutomationSchedulerConfigUpdateParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.AutomationSchedulerConfigUpdateResponse>
-    >;
-    readAutomationSchedulerStatus(
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.AutomationSchedulerStatusResponse>
-    >;
-    readAutomationJob(
-      params: protocol.AutomationJobIdParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.AutomationJobReadResponse>>;
-    createAutomationJob(
-      params: protocol.AutomationJobCreateParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.AutomationJobWriteResponse>>;
-    updateAutomationJob(
-      params: protocol.AutomationJobUpdateParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.AutomationJobWriteResponse>>;
-    deleteAutomationJob(
-      params: protocol.AutomationJobIdParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.AutomationJobDeleteResponse>>;
-    runAutomationJobNow(
-      params: protocol.AutomationJobIdParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.AutomationJobRunNowResponse>>;
-    readAutomationHealth(
-      params?: protocol.AutomationJobHealthParams,
-      options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.AutomationJobHealthResponse>>;
-    readAutomationRunHistory(
-      params: protocol.AutomationJobRunHistoryParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.AutomationJobRunHistoryResponse>
-    >;
-    previewAutomationSchedule(
-      params: protocol.AutomationScheduleParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.AutomationSchedulePreviewResponse>
-    >;
-    validateAutomationSchedule(
-      params: protocol.AutomationScheduleParams,
-      options?: AppServerRequestOptions,
-    ): Promise<
-      AppServerRequestResult<protocol.AutomationScheduleValidateResponse>
-    >;
     listMcpServers(
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.McpServerListResponse>>;

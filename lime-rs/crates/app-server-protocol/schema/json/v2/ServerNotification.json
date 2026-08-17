@@ -2206,6 +2206,85 @@
         }
       ]
     },
+    "ScheduledTaskChange": {
+      "enum": [
+        "created",
+        "deleted",
+        "enabled",
+        "updated"
+      ],
+      "type": "string"
+    },
+    "ScheduledTaskChangedNotification": {
+      "additionalProperties": false,
+      "description": "Invalidates Scheduled Tasks list/detail projections after a task mutation.",
+      "properties": {
+        "change": {
+          "$ref": "#/$defs/ScheduledTaskChange"
+        },
+        "taskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "change",
+        "taskId"
+      ],
+      "type": "object"
+    },
+    "ScheduledTaskRunUpdatedNotification": {
+      "additionalProperties": false,
+      "description": "Projects a terminal Scheduled Task run for GUI refresh and OS notification.",
+      "properties": {
+        "attention": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "notificationPolicy": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "attention",
+        "notificationPolicy",
+        "runId",
+        "status",
+        "taskId"
+      ],
+      "type": "object"
+    },
     "ServerRequestResolvedNotification": {
       "description": "Emitted after a server-initiated request reaches a terminal state.",
       "properties": {
@@ -4320,6 +4399,38 @@
         },
         "params": {
           "$ref": "#/$defs/AppListUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "scheduledTask/changed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ScheduledTaskChangedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "scheduledTask/run/updated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ScheduledTaskRunUpdatedNotification"
         }
       },
       "required": [

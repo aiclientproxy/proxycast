@@ -5,8 +5,8 @@
 本文件定义 Lime 当前 `Task / Agent / Coordinator` 的唯一 taxonomy，主要回答：
 
 - 哪些对象才算当前一等执行实体
-- `agent turn`、`subagent turn`、`automation job`、`scheduler tick`、`execution run` 分别是什么关系
-- `execution tracker / scheduler / subagent / automation` 各自属于哪一层，而不是继续互相抢“主入口”
+- `agent turn`、`subagent turn`、`scheduled task`、`scheduler tick`、`agent run` 分别是什么关系
+- Agent Run / scheduler / subagent / Scheduled Tasks 各自属于哪一层，而不是继续互相抢“主入口”
 - 哪些旧文档、旧术语、旧路径只能当专项说明或兼容壳，不能再反向定义当前主链
 
 它是 **长时执行与协作编排的 current 事实源**，不是执行追踪专项计划，也不是单个服务的实现说明。
@@ -16,10 +16,10 @@
 遇到以下任一情况时，先读本文件：
 
 - 调整 App Server / RuntimeCore / `lime-rs/crates/agent` 子代理 spawn、send input、wait、resume、close 能力
-- 调整自动化任务的创建、调度、执行、投递或运行历史
-- 调整 `ExecutionTracker`、`agent_runs`、执行状态聚合或 run 级读模型
-- 调整 `SchedulerService`、`scheduled_tasks`、`cron.run` 或任何“后台轮询 / 心跳执行”逻辑
-- 讨论“这是任务、子代理、自动化还是调度器”的边界归属
+- 调整已安排任务的创建、调度、执行、通知或运行历史
+- 调整 `agent_runs`、执行状态聚合或 run 级读模型
+- 调整 `scheduled_task_worker`、`lime-rs/crates/scheduler` 或任何后台到期触发逻辑
+- 讨论“这是回合、子代理、已安排任务还是调度器”的边界归属
 
 如果一个需求同时碰到“子代理 + 自动化”“调度 + 执行追踪”“会话回合 + 长时后台任务”里的两项以上，默认属于本主链。
 
@@ -29,7 +29,7 @@
 
 ## 固定 taxonomy
 
-当前 Lime 只承认下面三类一等执行实体：
+当前 Lime Agent runtime 只承认下面两类一等执行实体：
 
 1. `agent turn`
    前台会话回合。统一走 `agentSession/turn/start -> RuntimeCore -> Query Loop` 主链。
@@ -37,20 +37,20 @@
 2. `subagent turn`
    父会话派生出的 child session / teammate 回合。它是 `agent turn` 的协作变体，不是另一套执行引擎。
 
-3. `automation job`
-   可持久化、可延时、可周期触发的后台任务。它是 durable coordinator，统一由自动化服务承接。
+下面三类不是 Agent runtime 的一等执行实体：
 
-下面两类不是一等执行实体：
+- `scheduled task`
+  是可持久化、可延时、可周期触发的产品 coordinator；每次执行必须进入 RuntimeCore 并生成 canonical Agent Turn。
 
 - `scheduler tick`
-  只是“发现到期任务并触发执行”的兼容触发器，不单独代表一个任务分类。
+  只是“发现到期任务并触发执行”的领域触发器，不单独代表一个任务分类。
 
-- `execution run`
-  只是跨入口的执行摘要与生命周期记录，不是 coordinator。本层统一由 `ExecutionTracker` 与 `agent_runs` 承载。
+- `agent run`
+  是跨入口的执行摘要与生命周期记录，不是 coordinator。本层由 `agent_runs` 与 App Server read model 承载。
 
 固定规则只有一句：
 
-**后续新增长时执行能力时，只允许落成 `agent turn`、`subagent turn` 或 `automation job` 三类之一；不允许再造第四类 runtime taxonomy。**
+**新的模型执行只能落成 `agent turn` 或 `subagent turn`；需要延时或周期触发时由 Scheduled Task 协调，但运行仍回到 Agent Turn，不得新增平行 runtime taxonomy。**
 
 补充迁移边界：旧 `agent_runtime_*`、`automation_*`、`execution_run_*` 这类命令名只允许作为 retired guard、历史 evidence、测试 fixture 或受控迁移面；`lime-rs/src/commands/**` 已删除，不是新的 taxonomy、coordinator 或 runtime 实现目录。新增长时执行、子代理、自动化或执行摘要能力应进入 RuntimeCore / services / App Server protocol，不得恢复旧 wrapper。
 
@@ -60,7 +60,7 @@
 
 1. 前台即时推进仍归 `agent turn`。
 2. 协作拆分仍归 `subagent turn`。
-3. durable 后台推进仍归 `automation job`。
+3. durable 后台推进由 Scheduled Task 协调，实际模型执行仍归 `agent turn`。
 4. ThreadGoal status、budget / usage / pause / resume 只控制 thread 是否继续，不单独定义新的 run source、queue、scheduler 或 evidence。
 
 旧 `ManagedObjective` owner、criteria/audit/evidence 和 Automation Goal 已删除，禁止以第四类执行实体或 ThreadGoal compat 恢复。
@@ -69,15 +69,15 @@
 
 当前主链统一按下面这张图理解：
 
-`agent turn -> subagent turn / automation job -> ExecutionTracker(agent_runs) -> thread/session/evidence 读模型`
+`Scheduled Task / foreground request -> agent turn / subagent turn -> agent_runs + Thread/Turn/Item read model`
 
 这条主链意味着：
 
 1. `agent turn` 是前台交互入口，主事实源仍然是 `query-loop.md`
 2. `subagent turn` 是 child session 的协作入口，复用当前 agent runtime 与会话事实，不单独发明另一套 task 状态机
-3. `automation job` 是唯一 durable 后台任务入口，可以触发 agent turn，但不应该自己再发明第二套 run 摘要系统
-4. `ExecutionTracker` 只负责“这次执行怎么开始、怎么结束、归因到哪里”，不负责调度、分工或 parent/child 编排
-5. `scheduler tick` 只负责触发 due job，不负责定义产品层 task taxonomy
+3. Scheduled Task 是唯一 durable 后台任务入口，可以触发 agent turn，但不定义 Agent UI `runtimeEntity` 或第二套 run 摘要
+4. `agent_runs` 只记录“这次执行怎么开始、怎么结束、归因到哪里”，不负责调度、分工或 parent/child 编排
+5. `scheduler tick` 只负责原子 claim 和触发 due task，不负责定义产品层 task taxonomy
 
 ## 代码入口地图
 
@@ -113,62 +113,62 @@
 - 在执行摘要层，它继续复用 `chat` 会话型 run 与 `session_id / parent-child context / evidence` 关联
 - 需要新增子代理能力时，优先扩展这里，而不是绕去 scheduler 或自动化任务
 
-### 3. `automation job`
+### 3. `scheduled task`
 
-- `lime-rs/src/services/automation_service/mod.rs`
-- `automation_*` 命令 surface（旧 `automation_cmd.rs` 只作为 cleanup reference）
-- `src/lib/api/automation.ts`
+- `src/lib/api/scheduledTasks.ts`
+- App Server `scheduledTask/*`
+- `lime-rs/crates/app-server/src/automation_execution.rs`
+- `lime-rs/crates/app-server/src/scheduled_task_worker.rs`
+- `lime-rs/crates/scheduler/*`
 
 当前这里负责：
 
 1. `automation_jobs` 的创建、更新、删除与启停
-2. 后台轮询和到期任务执行
-3. `run_job_now` 手动触发
-4. 输出投递、健康聚合与运行历史
-5. 与 `ExecutionTracker` 的 `RunSource::Automation` 对接
+2. 原子 claim、到期执行、catch-up/missed、DST 和启动恢复
+3. `scheduledTask/run/start` 手动触发
+4. typed terminal notification 与 Agent Run 历史
+5. RuntimeCore canonical Thread/session 与 Turn submission
 
 固定规则：
 
-- durable 后台任务统一走自动化服务
-- 如果一个需求需要“稍后执行 / 周期执行 / 无前台会话也能继续跑”，默认先落 `automation job`
-- 自动化任务可以触发 agent turn，但不允许自己再维护第二份 run 历史真相
+- durable 后台任务统一走 Scheduled Tasks current owner
+- 如果一个需求需要“稍后执行 / 周期执行 / 无前台会话也能继续跑”，默认先判断能否落到 `scheduledTask/*`
+- Scheduled Task 可以触发 agent turn，但不允许维护第二份 Thread/Turn/Item 或 Agent UI runtime projection
 
-### 4. `execution run`
+### 4. `agent run`
 
-- `lime-rs/src/services/execution_tracker_service.rs`
 - `lime-rs/crates/core/src/database/dao/agent_run.rs`
-- `execution_run_*` 命令 surface（旧 `execution_run_cmd.rs` 只作为 cleanup reference）
+- App Server Scheduled Tasks read model
 
 当前这里负责：
 
-1. 为 `chat / skill / automation` 记录统一生命周期摘要
+1. 为 `chat / skill / scheduled task` 记录统一生命周期摘要
 2. 暴露 `agent_runs` 只读查询
 3. 统一终态与错误归一化
 
 固定规则：
 
-- `ExecutionTracker` 是观测层，不是 coordinator
-- `RunSource::Chat` 覆盖前台与子代理会话型回合
-- `RunSource::Skill` 代表独立 skill 执行摘要，不是新的 task taxonomy
-- `RunSource::Automation` 代表后台任务执行摘要
+- Agent Run 是观测层，不是 coordinator
+- `source=chat` 覆盖前台与子代理会话型回合
+- `source=skill` 代表独立 skill 执行摘要，不是新的 task taxonomy
+- `source=automation` 是 Scheduled Tasks 的内部持久化 discriminator，不是公开 Automation 协议
 
 ### 5. `scheduler tick`
 
-- `lime-rs/src/app/scheduler_service.rs`
 - `lime-rs/crates/scheduler/*`
-- `internal/develop/scheduler-task-governance-p1.md`
+- `lime-rs/crates/app-server/src/scheduled_task_worker.rs`
 
 当前这里负责：
 
-1. 轮询 `scheduled_tasks`
+1. 查询并 claim `automation_jobs` 中的 due Scheduled Task
 2. 发现 due task
 3. 执行并标记完成 / 失败
 
 固定规则：
 
-- 它当前是 compat 触发壳，不再是主 taxonomy
-- 后续允许做治理减法、冷却恢复、兼容委托
-- 不允许继续在这里长新的产品级任务语义、统一状态页或第二套编排模型
+- 它是 Scheduled Tasks current domain trigger，但不是 Agent runtime taxonomy
+- claim、catch-up/missed、DST、overlap 与恢复逻辑归 scheduler owner
+- 不允许在这里新增公开协议、GUI read model 或第二套编排模型
 
 ## current / compat / deprecated / dead
 
@@ -177,8 +177,10 @@
 - `internal/aiprompts/task-agent-taxonomy.md`
 - `internal/aiprompts/query-loop.md`
 - `lime-rs/crates/agent/src` 与 `lime-rs/crates/app-server/src` 承接协作 runtime；新逻辑按职责进入 RuntimeCore / services
-- `lime-rs/src/services/automation_service/*`
-- `lime-rs/src/services/execution_tracker_service.rs`
+- `src/lib/api/scheduledTasks.ts`
+- `lime-rs/crates/app-server/src/automation_execution.rs`
+- `lime-rs/crates/app-server/src/scheduled_task_worker.rs`
+- `lime-rs/crates/scheduler/*`
 - `agent_runs`
 - `automation_jobs`
 
@@ -186,26 +188,15 @@
 
 - 前台执行看 `agent turn`
 - 协作执行看 `subagent turn`
-- 后台 durable 执行看 `automation job`
-- 执行摘要看 `ExecutionTracker`
+- 后台 durable 协调看 `scheduled task`
+- 执行摘要看 Agent Run
 
 ### `compat`
 
-- `lime-rs/src/app/scheduler_service.rs`
-- `lime-rs/crates/scheduler/*`
-- `scheduled_tasks`
-- `internal/develop/scheduler-task-governance-p1.md`
+- Base Setup 与 Service Skill catalog 的 `automation_job` binding family
 
-保留原因：
-
-- 仓库里仍存在到期任务轮询与 `cron.run` 兼容链路
-- 这些路径目前仍承接“发现任务并执行”的历史职责
-
-退出条件：
-
-- 后续如果 scheduler 继续留存，也必须明确只做“触发器 / 兼容壳”
-- 若有新的后台任务能力，一律先判断能否落到 `automation job`
-- 不再允许把 scheduler 写成新的 coordinator 事实源
+该名称仍有真实 catalog consumer，只表达“可绑定到 durable schedule”的旧分类。它不得映射回旧公开 Automation 协议、
+Agent UI `runtimeEntity=automation_job` 或 `background_teammate`；退出条件是 binding schema 与全部消费者一次迁到 Scheduled Task 领域名。
 
 ### `deprecated`
 
@@ -221,18 +212,21 @@
 ### `dead`
 
 - `automation_jobs.payload.browser_session`
+- `automationJob/*`、`automationSchedule/*`、`automationScheduler/*`
+- `src/lib/api/automation.ts` 与旧 Settings Automation 工作台
+- Agent UI `automation_job_projection`、`runtimeEntity=automation_job` 与 `background_teammate`
 
-当前自动化服务已在启动与执行阶段主动停用这类任务；它只能迁移或删除，不能继续创建、更新或恢复为 current 能力。
+这些旧 surface 只能迁移、删除或作为负向守卫引用，不能继续创建、更新或恢复为 current 能力。
 
 ## 最低验证要求
 
 如果本轮改动涉及本主链，至少按边界选择最贴近的验证：
 
 - 纯文档 / 分类回写：`npm run harness:doc-freshness`
-- 改 `ExecutionTracker` 或 `agent_runs`：相关定向 Rust 测试
+- 改 `agent_runs`：相关定向 Rust 测试
 - 改子代理 runtime：`subagent_runtime.rs` 或 `runtime_turn` 的定向测试
-- 改自动化命令 / 服务：自动化服务定向测试，必要时补 `test:contracts`
-- 改 scheduler / cron 命令：scheduler 或 websocket RPC 定向测试
+- 改 `scheduledTask/*` / 执行服务：App Server public JSON-RPC、Rust related 与 `test:contracts`
+- 改 scheduler：scheduler related、Scheduled Tasks Gate B 与必要的 sleep/catch-up 证据
 
 ## 这一步如何服务主线
 
@@ -241,8 +235,8 @@
 从现在开始：
 
 - 解释前台协作执行时，回到 `agent turn / subagent turn`
-- 解释后台 durable 执行时，回到 `automation job`
-- 解释执行摘要时，回到 `ExecutionTracker`
-- 解释 scheduler 时，默认把它视为 compat 触发壳
+- 解释后台 durable 协调时，回到 `scheduled task`
+- 解释执行摘要时，回到 Agent Run
+- 解释 scheduler 时，把它视为 Scheduled Tasks current trigger，而不是 Agent runtime taxonomy
 
 这样后续的 `M3 Remote runtime`、`M4 Memory / Compaction`、`M5 State / History / Telemetry` 才不会继续被长时任务边界反复打断。

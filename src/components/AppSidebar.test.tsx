@@ -186,7 +186,7 @@ describe("AppSidebar navigation", () => {
     await flushEffects(2);
 
     const button = container.querySelector<HTMLButtonElement>(
-      '[data-testid="app-sidebar-nav-automation"]',
+      '[data-testid="app-sidebar-nav-scheduled-tasks"]',
     );
 
     expect(button).not.toBeNull();
@@ -196,7 +196,7 @@ describe("AppSidebar navigation", () => {
       button?.click();
     });
 
-    expect(onNavigate).toHaveBeenCalledWith("automation", undefined);
+    expect(onNavigate).toHaveBeenCalledWith("scheduled-tasks", undefined);
   });
 
   it("Lime 首页入口应保持在左侧栏顶部，并在 macOS 预留系统按钮安全区", async () => {

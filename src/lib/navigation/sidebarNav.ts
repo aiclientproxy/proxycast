@@ -50,11 +50,11 @@ const BASE_MAIN_SIDEBAR_NAV_ITEMS: SidebarNavItemDefinition[] = [
     configurable: false,
   },
   {
-    id: "automation",
+    id: "scheduled-tasks",
     label: "已安排任务",
     icon: CalendarClock,
-    page: "automation",
-    isActive: (currentPage) => currentPage === "automation",
+    page: "scheduled-tasks",
+    isActive: (currentPage) => currentPage === "scheduled-tasks",
     configurable: false,
   },
   {

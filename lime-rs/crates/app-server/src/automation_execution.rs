@@ -1,7 +1,5 @@
 use app_server_protocol::AgentSessionStartParams;
 use app_server_protocol::AgentTurnStatus;
-use app_server_protocol::AutomationJobIdParams;
-use app_server_protocol::AutomationJobRunNowResponse;
 use app_server_protocol::BusinessObjectRef;
 use app_server_protocol::RuntimeOptions;
 use chrono::DateTime;
@@ -88,22 +86,12 @@ pub struct ClaimedAutomationRun {
 }
 
 impl RuntimeCore {
-    pub async fn execute_automation_job_now(
-        &self,
-        params: AutomationJobIdParams,
-        host: RuntimeHostContext,
-    ) -> Result<AutomationJobRunNowResponse, RuntimeCoreError> {
-        let start = self.start_automation_job_run(params.id.clone()).await?;
-        self.execute_started_automation_job(params.id, start, host)
-            .await
-    }
-
     pub(crate) async fn execute_scheduled_task_now(
         &self,
         id: String,
         identity: Option<AutomationRunIdentity>,
         host: RuntimeHostContext,
-    ) -> Result<AutomationJobRunNowResponse, RuntimeCoreError> {
+    ) -> Result<Value, RuntimeCoreError> {
         let start = self
             .start_scheduled_task_run_record(id.clone(), identity)
             .await?;
@@ -115,7 +103,7 @@ impl RuntimeCore {
         id: String,
         start: AutomationRunStart,
         host: RuntimeHostContext,
-    ) -> Result<AutomationJobRunNowResponse, RuntimeCoreError> {
+    ) -> Result<Value, RuntimeCoreError> {
         let started_ms = Utc::now().timestamp_millis();
 
         let start_result = self.start_automation_turn(&start, host).await;
@@ -157,19 +145,17 @@ impl RuntimeCore {
                     self.finish_automation_job_run(finish).await?;
                     finished_at = Some(terminal_at);
                 }
-                Ok(AutomationJobRunNowResponse {
-                    result: json!({
-                        "job_id": id,
-                        "run_id": start.run.id,
-                        "session_id": start.session_id,
-                        "thread_id": start.thread_id,
-                        "turn_id": turn.turn_id,
-                        "started_at": start.run.started_at,
-                        "finished_at": finished_at,
-                        "started": true,
-                        "status": agent_turn_status_value(turn.status),
-                    }),
-                })
+                Ok(json!({
+                    "job_id": id,
+                    "run_id": start.run.id,
+                    "session_id": start.session_id,
+                    "thread_id": start.thread_id,
+                    "turn_id": turn.turn_id,
+                    "started_at": start.run.started_at,
+                    "finished_at": finished_at,
+                    "started": true,
+                    "status": agent_turn_status_value(turn.status),
+                }))
             }
             Err(error) => {
                 let failure = AutomationRunFailure {
@@ -206,7 +192,41 @@ impl RuntimeCore {
         start: &AutomationRunStart,
         host: RuntimeHostContext,
     ) -> Result<app_server_protocol::AgentTurn, RuntimeCoreError> {
-        match self.start_session(AgentSessionStartParams {
+        let payload = start.job.payload.as_object().ok_or_else(|| {
+            RuntimeCoreError::Backend("自动化任务 payload 必须为对象".to_string())
+        })?;
+        let thread_mode = string_field(payload, &["thread_mode", "threadMode"]);
+        let requested_model = string_field(payload, &["model"]);
+        let selection = match thread_mode.as_deref() {
+            Some("new_thread") => Some(
+                self.resolve_scheduled_task_model_selection(requested_model.as_deref())
+                    .await?,
+            ),
+            Some("continue_thread") if requested_model.is_some() => Some(
+                self.resolve_scheduled_task_model_selection(requested_model.as_deref())
+                    .await?,
+            ),
+            _ => None,
+        };
+        let mut metadata = json!({
+            "source": AUTOMATION_SOURCE,
+            "runId": start.run.id,
+            "executionMode": start.job.execution_mode,
+            "trigger": start.trigger,
+            "scheduledFor": start.scheduled_for,
+            "claimedAt": start.claimed_at,
+            "workingDir": start.runtime_options.runtime_request().and_then(|request| request.working_dir.clone()),
+            "reasoningEffort": start.runtime_options.runtime_request().and_then(|request| request.reasoning_effort.clone()),
+            "approvalPolicy": start.runtime_options.runtime_request().and_then(|request| request.approval_policy.clone()),
+            "sandbox": start.runtime_options.runtime_request().and_then(|request| request.sandbox_policy.clone()),
+        });
+        if let Some(selection) = selection.as_ref() {
+            metadata["providerSelector"] = json!(selection.model_provider);
+            metadata["providerName"] = json!(selection.model_provider);
+            metadata["modelName"] = json!(selection.model);
+            metadata["serviceTier"] = json!(selection.service_tier);
+        }
+        let session_start = AgentSessionStartParams {
             session_id: Some(start.session_id.clone()),
             thread_id: Some(start.thread_id.clone()),
             app_id: "automation".to_string(),
@@ -216,20 +236,30 @@ impl RuntimeCore {
                 id: start.job.id.clone(),
                 title: Some(start.job.name.clone()),
                 uri: None,
-                metadata: Some(json!({
-                    "source": AUTOMATION_SOURCE,
-                    "runId": start.run.id,
-                    "executionMode": start.job.execution_mode,
-                    "trigger": start.trigger,
-                    "scheduledFor": start.scheduled_for,
-                    "claimedAt": start.claimed_at,
-                })),
+                metadata: Some(metadata),
             }),
             locale: None,
-        }) {
-            Ok(_) => {}
-            Err(RuntimeCoreError::SessionAlreadyExists(_)) => {}
-            Err(error) => return Err(error),
+        };
+        match thread_mode.as_deref() {
+            Some("new_thread") => {
+                self.preflight_thread_start(&session_start).await?;
+                self.start_session(session_start)?;
+            }
+            Some("continue_thread") => {}
+            _ => match self.start_session(session_start) {
+                Ok(_) | Err(RuntimeCoreError::SessionAlreadyExists(_)) => {}
+                Err(error) => return Err(error),
+            },
+        }
+
+        let mut runtime_options = start.runtime_options.clone();
+        if let Some(selection) = selection {
+            let request = runtime_options.runtime_request_mut();
+            request.provider_preference = Some(selection.model_provider);
+            request.model_preference = Some(selection.model);
+            if request.service_tier.is_none() {
+                request.service_tier = selection.service_tier;
+            }
         }
 
         let output = self
@@ -238,7 +268,7 @@ impl RuntimeCore {
                     session_id: start.session_id.clone(),
                     turn_id: Some(start.turn_id.clone()),
                     input: vec![agent_protocol::AgentInput::text(start.prompt.clone())],
-                    runtime_options: Some(start.runtime_options.clone()),
+                    runtime_options: Some(runtime_options),
                     queue_if_busy: false,
                     skip_pre_submit_resume: false,
                 },
@@ -904,6 +934,7 @@ mod tests {
             consecutive_failures: 0,
             last_retry_count: 0,
             auto_disabled_until: None,
+            deleted_at: None,
             last_delivery: None,
             created_at: now.clone(),
             updated_at: now,
@@ -1128,10 +1159,17 @@ mod tests {
         let job = sample_job(json!({
             "kind": "agent_turn",
             "prompt": "生成今日摘要",
+            "scheduled_task_schedule": {
+                "type": "daily",
+                "time": "09:00",
+                "timezone": "Asia/Shanghai"
+            },
+            "thread_mode": "continue_thread",
+            "source_thread_id": "thread-job-1",
+            "notification_policy": "all_runs",
+            "overlap_policy": "skip_if_running",
             "session_id": "session-job-1",
             "thread_id": "thread-job-1",
-            "provider": "openai",
-            "model": "gpt-4.1",
             "system_prompt": "请求级提示",
             "reasoningEffort": "high",
             "webSearch": true,
@@ -1158,19 +1196,36 @@ mod tests {
         });
         let core =
             RuntimeCore::with_backend(backend.clone()).with_app_data_source(Arc::new(data_source));
+        core.start_session(AgentSessionStartParams {
+            session_id: Some("session-job-1".to_string()),
+            thread_id: Some("thread-job-1".to_string()),
+            app_id: "automation".to_string(),
+            workspace_id: Some("workspace-1".to_string()),
+            business_object_ref: Some(BusinessObjectRef {
+                kind: "automation_job".to_string(),
+                id: "job-1".to_string(),
+                title: Some("每日摘要".to_string()),
+                uri: None,
+                metadata: None,
+            }),
+            locale: None,
+        })
+        .expect("start canonical scheduled task session");
 
         let response = core
-            .run_automation_job_now(
-                AutomationJobIdParams {
-                    id: "job-1".to_string(),
-                },
+            .execute_scheduled_task_now(
+                "job-1".to_string(),
+                Some(AutomationRunIdentity {
+                    session_id: "session-job-1".to_string(),
+                    thread_id: "thread-job-1".to_string(),
+                }),
                 RuntimeHostContext::default(),
             )
             .await
             .expect("run automation job");
 
         assert_eq!(
-            response.result.get("status").and_then(Value::as_str),
+            response.get("status").and_then(Value::as_str),
             Some("completed")
         );
         let requests = backend
@@ -1199,8 +1254,8 @@ mod tests {
             Some("job-1")
         );
         assert_eq!(request.input.concat_text(), "生成今日摘要");
-        assert_eq!(request.provider_preference(), Some("openai"));
-        assert_eq!(request.model_preference(), Some("gpt-4.1"));
+        assert_eq!(request.provider_preference(), None);
+        assert_eq!(request.model_preference(), None);
         assert_eq!(
             request
                 .runtime_metadata()
@@ -1253,15 +1308,14 @@ mod tests {
             Some("job-1")
         );
         assert_eq!(
-            response.result.get("session_id").and_then(Value::as_str),
+            response.get("session_id").and_then(Value::as_str),
             Some("session-job-1")
         );
         assert_eq!(
-            response.result.get("thread_id").and_then(Value::as_str),
+            response.get("thread_id").and_then(Value::as_str),
             Some("thread-job-1")
         );
         let response_turn_id = response
-            .result
             .get("turn_id")
             .and_then(Value::as_str)
             .expect("response turn_id")

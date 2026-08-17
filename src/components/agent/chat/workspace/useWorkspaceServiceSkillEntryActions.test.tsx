@@ -4,14 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatToolPreferences } from "../utils/chatToolPreferences";
 import type { ServiceSkillHomeItem } from "../service-skills/types";
-import {
-  clearAgentUiProjectionEvents,
-  conversationProjectionStore,
-  selectAgentUiProjectionEventsByType,
-} from "../projection/conversationProjectionStore";
 import { useWorkspaceServiceSkillEntryActions } from "./useWorkspaceServiceSkillEntryActions";
 
-const mockCreateAutomationJob = vi.fn();
+const mockCreateScheduledTask = vi.fn();
 const mockCreateContent = vi.fn();
 const mockListProjects = vi.fn();
 const mockGetOrCreateDefaultProject = vi.fn();
@@ -38,8 +33,10 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-vi.mock("@/lib/api/automation", () => ({
-  createAutomationJob: (request: unknown) => mockCreateAutomationJob(request),
+vi.mock("@/lib/api/scheduledTasks", () => ({
+  scheduledTasksApi: {
+    create: (request: unknown) => mockCreateScheduledTask(request),
+  },
 }));
 
 vi.mock("@/lib/api/project", () => ({
@@ -292,9 +289,9 @@ beforeEach(() => {
     message:
       "已检测到 github.com 的真实浏览器页面，Claw 可以直接复用当前会话执行。",
   });
-  mockCreateAutomationJob.mockResolvedValue({
+  mockCreateScheduledTask.mockResolvedValue({
     id: "automation-job-1",
-    name: "每日趋势摘要｜定时执行",
+    title: "每日趋势摘要｜定时执行",
   });
   mockCreateContent.mockResolvedValue({
     id: "content-created-by-service-skill",
@@ -303,7 +300,6 @@ beforeEach(() => {
   mockGetOrCreateDefaultProject.mockResolvedValue(
     createProject("project-default"),
   );
-  clearAgentUiProjectionEvents();
   mockRecordServiceSkillAutomationLink.mockReset();
   mockToastSuccess.mockReset();
   mockToastError.mockReset();
@@ -315,7 +311,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearAgentUiProjectionEvents();
   while (mountedRoots.length > 0) {
     const mounted = mountedRoots.pop();
     if (!mounted) {
@@ -812,46 +807,26 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
 
     await act(async () => {
       await getValue().handleAutomationDialogSubmit({
-        mode: "create",
-        request: {
-          name: "每日趋势摘要｜定时执行",
-          description: "围绕指定平台与关键词输出趋势摘要。",
-          workspace_id: "project-1",
-          execution_mode: "skill",
-          schedule: {
-            kind: "cron",
-            expr: "00 09 * * *",
-            tz: "Asia/Shanghai",
-          },
-          payload: {
-            kind: "agent_turn",
-            prompt: "自动化 prompt",
-            session_id: "session-current",
-            thread_id: "thread-current",
-            system_prompt: "",
-            web_search: false,
-          },
-          delivery: {
-            mode: "none",
-            best_effort: true,
-            output_schema: "text",
-            output_format: "text",
-          },
-        },
+        ...getValue().automationDialogInitialValues!,
+        title: "每日趋势摘要｜定时执行",
+        prompt: "定时任务 prompt",
       });
     });
 
     expect(mockCreateContent).not.toHaveBeenCalled();
-    expect(mockCreateAutomationJob).toHaveBeenCalledWith(
+    expect(mockCreateScheduledTask).toHaveBeenCalledWith(
       expect.objectContaining({
-        workspace_id: "project-1",
-        execution_mode: "skill",
-        payload: expect.objectContaining({
-          kind: "agent_turn",
-          session_id: "session-current",
-          thread_id: "thread-current",
-          content_id: "content-current",
-          request_metadata: expect.objectContaining({
+        title: "每日趋势摘要｜定时执行",
+        schedule: {
+          type: "daily",
+          time: "09:00",
+          timezone: "Asia/Shanghai",
+        },
+        execution: expect.objectContaining({
+          threadMode: "continue_thread",
+          sourceThreadId: "thread-current",
+          projectId: "project-1",
+          requestMetadata: expect.objectContaining({
             service_skill: expect.objectContaining({
               id: "daily-trend-briefing",
               title: "每日趋势摘要",
@@ -895,21 +870,6 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
       jobId: "automation-job-1",
       jobName: "每日趋势摘要｜定时执行",
     });
-    expect(
-      selectAgentUiProjectionEventsByType(
-        conversationProjectionStore.getSnapshot(),
-        "agent.changed",
-      ),
-    ).toEqual([
-      expect.objectContaining({
-        sourceType: "automation_job_projection",
-        taskId: "automation-job-1",
-        agentId: "automation-job-1",
-        agentName: "每日趋势摘要｜定时执行",
-        surface: "background_teammate",
-        runtimeEntity: "automation_job",
-      }),
-    ]);
     expect(recordServiceSkillUsage).toHaveBeenCalledWith({
       skillId: "daily-trend-briefing",
       runnerType: "scheduled",
@@ -956,32 +916,9 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
 
     await act(async () => {
       await getValue().handleAutomationDialogSubmit({
-        mode: "create",
-        request: {
-          name: "每日趋势摘要｜定时执行",
-          description: "围绕指定平台与关键词输出趋势摘要。",
-          workspace_id: "project-1",
-          execution_mode: "skill",
-          schedule: {
-            kind: "cron",
-            expr: "00 09 * * *",
-            tz: "Asia/Shanghai",
-          },
-          payload: {
-            kind: "agent_turn",
-            prompt: "自动化 prompt",
-            session_id: "session-ensured",
-            thread_id: "session-ensured",
-            system_prompt: "",
-            web_search: false,
-          },
-          delivery: {
-            mode: "none",
-            best_effort: true,
-            output_schema: "text",
-            output_format: "text",
-          },
-        },
+        ...getValue().automationDialogInitialValues!,
+        title: "每日趋势摘要｜定时执行",
+        prompt: "定时任务 prompt",
       });
     });
 
@@ -990,14 +927,17 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
         project_id: "project-1",
       }),
     );
-    expect(mockCreateAutomationJob).toHaveBeenCalledWith(
+    expect(mockCreateScheduledTask).toHaveBeenCalledWith(
       expect.objectContaining({
-        workspace_id: "project-1",
-        payload: expect.objectContaining({
-          kind: "agent_turn",
-          session_id: "session-ensured",
-          thread_id: "session-ensured",
-          content_id: "content-created-by-service-skill",
+        execution: expect.objectContaining({
+          threadMode: "continue_thread",
+          sourceThreadId: "session-ensured",
+          projectId: "project-1",
+          requestMetadata: expect.objectContaining({
+            harness: expect.objectContaining({
+              content_id: "content-created-by-service-skill",
+            }),
+          }),
         }),
       }),
     );

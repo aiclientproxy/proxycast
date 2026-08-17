@@ -73,7 +73,6 @@ export type AgentUiSurface =
   | "worker_notifications"
   | "review_lane"
   | "teammate_transcript"
-  | "background_teammate"
   | "remote_teammate"
   | "team_policy";
 
@@ -168,7 +167,6 @@ export type AgentUiEventClass = (typeof AGENT_UI_EVENT_CLASSES)[number];
 export type AgentUiRuntimeEntity =
   | "agent_turn"
   | "subagent_turn"
-  | "automation_job"
   | "external_task"
   | "work_item"
   | "unknown";
@@ -180,7 +178,6 @@ export type AgentUiTopology =
   | "specialist_handoff"
   | "review_team"
   | "human_agent_board"
-  | "background_teammate"
   | "remote_teammate"
   | "unknown";
 
@@ -206,7 +203,6 @@ export type AgentUiProjectionSourceType =
   | "action_required"
   | "action_resolved"
   | "artifact_snapshot"
-  | "automation_job_projection"
   | "evidence_projection"
   | "hydration_projection"
   | "performance_metric"

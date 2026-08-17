@@ -209,6 +209,7 @@ use lime_browser_runtime::{BrowserProfileScope, BrowserRuntimeManager};
 use lime_infra::telemetry::TelemetryStore;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
@@ -472,6 +473,7 @@ pub struct RuntimeCore {
     catalog_refresh: model_providers::CatalogRefreshCoordinator,
     backend: Arc<dyn ExecutionBackend>,
     capability_source: Arc<dyn CapabilitySource>,
+    app_config_path: PathBuf,
     pub(in crate::runtime) artifact_content_provider: Arc<dyn ArtifactContentProvider>,
     pub(in crate::runtime) file_checkpoint_snapshot_store: Arc<dyn FileCheckpointSnapshotStore>,
     pub(in crate::runtime) output_snapshot_store: Arc<dyn OutputSnapshotStore>,
@@ -571,6 +573,7 @@ impl RuntimeCore {
             catalog_refresh: model_providers::CatalogRefreshCoordinator::default(),
             backend,
             capability_source,
+            app_config_path: lime_core::config::ConfigManager::default_config_path(),
             artifact_content_provider,
             file_checkpoint_snapshot_store: Arc::new(NoopFileCheckpointSnapshotStore),
             output_snapshot_store: Arc::new(NoopOutputSnapshotStore),
@@ -595,6 +598,11 @@ impl RuntimeCore {
     ) -> Result<Self, RuntimeCoreError> {
         self.rollout_budget = Arc::new(rollout_budget::RolloutBudget::new(config)?);
         Ok(self)
+    }
+
+    pub fn with_app_config_path(mut self, path: PathBuf) -> Self {
+        self.app_config_path = path;
+        self
     }
 
     pub(crate) fn take_event_receiver(&self) -> Option<mpsc::UnboundedReceiver<AgentEvent>> {

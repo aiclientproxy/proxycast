@@ -7117,253 +7117,6 @@
               "$ref": "#/$defs/RequestId"
             },
             "method": {
-              "const": "automationScheduler/config/read",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationScheduler/config/update",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationScheduler/status",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationJob/list",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationJob/read",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationJob/create",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationJob/update",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationJob/delete",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationJob/runNow",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationJob/health",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationJob/runHistory",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationSchedule/preview",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
-              "const": "automationSchedule/validate",
-              "type": "string"
-            },
-            "params": {
-              "default": null
-            }
-          },
-          "required": [
-            "id",
-            "method"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "id": {
-              "$ref": "#/$defs/RequestId"
-            },
-            "method": {
               "const": "scheduledTask/list",
               "type": "string"
             },
@@ -9092,19 +8845,6 @@
         "agentSession/reviewDecisionTemplate/export",
         "agentSession/toolInventory/read",
         "artifact/read",
-        "automationJob/create",
-        "automationJob/delete",
-        "automationJob/health",
-        "automationJob/list",
-        "automationJob/read",
-        "automationJob/runHistory",
-        "automationJob/runNow",
-        "automationJob/update",
-        "automationSchedule/preview",
-        "automationSchedule/validate",
-        "automationScheduler/config/read",
-        "automationScheduler/config/update",
-        "automationScheduler/status",
         "browserSession/action/execute",
         "browserSession/close",
         "browserSession/event/list",
@@ -10434,239 +10174,6 @@
       ],
       "title": "AutoReviewDecisionSource",
       "type": "string"
-    },
-    "AutomationJobCreateParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "request": true
-      },
-      "required": [
-        "request"
-      ],
-      "title": "AutomationJobCreateParams",
-      "type": "object"
-    },
-    "AutomationJobDeleteResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "deleted": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "deleted"
-      ],
-      "title": "AutomationJobDeleteResponse",
-      "type": "object"
-    },
-    "AutomationJobHealthParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "query": true
-      },
-      "title": "AutomationJobHealthParams",
-      "type": "object"
-    },
-    "AutomationJobHealthResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "health": true
-      },
-      "required": [
-        "health"
-      ],
-      "title": "AutomationJobHealthResponse",
-      "type": "object"
-    },
-    "AutomationJobIdParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "title": "AutomationJobIdParams",
-      "type": "object"
-    },
-    "AutomationJobListResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "jobs": {
-          "default": [],
-          "items": true,
-          "type": "array"
-        }
-      },
-      "title": "AutomationJobListResponse",
-      "type": "object"
-    },
-    "AutomationJobReadResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "job": true
-      },
-      "title": "AutomationJobReadResponse",
-      "type": "object"
-    },
-    "AutomationJobRunHistoryParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "limit": {
-          "format": "uint",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "title": "AutomationJobRunHistoryParams",
-      "type": "object"
-    },
-    "AutomationJobRunHistoryResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "runs": {
-          "default": [],
-          "items": true,
-          "type": "array"
-        }
-      },
-      "title": "AutomationJobRunHistoryResponse",
-      "type": "object"
-    },
-    "AutomationJobRunNowResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "result": true
-      },
-      "required": [
-        "result"
-      ],
-      "title": "AutomationJobRunNowResponse",
-      "type": "object"
-    },
-    "AutomationJobUpdateParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "request": true
-      },
-      "required": [
-        "id",
-        "request"
-      ],
-      "title": "AutomationJobUpdateParams",
-      "type": "object"
-    },
-    "AutomationJobWriteResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "job": true
-      },
-      "required": [
-        "job"
-      ],
-      "title": "AutomationJobWriteResponse",
-      "type": "object"
-    },
-    "AutomationScheduleParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "schedule": true
-      },
-      "required": [
-        "schedule"
-      ],
-      "title": "AutomationScheduleParams",
-      "type": "object"
-    },
-    "AutomationSchedulePreviewResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "nextRunAt": {
-          "type": [
-            "null",
-            "string"
-          ]
-        }
-      },
-      "title": "AutomationSchedulePreviewResponse",
-      "type": "object"
-    },
-    "AutomationScheduleValidateResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "error": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "valid": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "valid"
-      ],
-      "title": "AutomationScheduleValidateResponse",
-      "type": "object"
-    },
-    "AutomationSchedulerConfigReadResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "config": true
-      },
-      "required": [
-        "config"
-      ],
-      "title": "AutomationSchedulerConfigReadResponse",
-      "type": "object"
-    },
-    "AutomationSchedulerConfigUpdateParams": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "config": true
-      },
-      "required": [
-        "config"
-      ],
-      "title": "AutomationSchedulerConfigUpdateParams",
-      "type": "object"
-    },
-    "AutomationSchedulerConfigUpdateResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "config": true
-      },
-      "required": [
-        "config"
-      ],
-      "title": "AutomationSchedulerConfigUpdateResponse",
-      "type": "object"
-    },
-    "AutomationSchedulerStatusResponse": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "status": true
-      },
-      "required": [
-        "status"
-      ],
-      "title": "AutomationSchedulerStatusResponse",
-      "type": "object"
     },
     "BrowserSessionActionExecuteParams": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -52836,6 +52343,7 @@
                 "string"
               ]
             },
+            "requestMetadata": true,
             "sandboxPolicy": true,
             "sourceThreadId": {
               "type": [
@@ -53126,6 +52634,47 @@
       "title": "ScheduledTask",
       "type": "object"
     },
+    "ScheduledTaskChange": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "enum": [
+        "created",
+        "deleted",
+        "enabled",
+        "updated"
+      ],
+      "title": "ScheduledTaskChange",
+      "type": "string"
+    },
+    "ScheduledTaskChangedNotification": {
+      "$defs": {
+        "ScheduledTaskChange": {
+          "enum": [
+            "created",
+            "deleted",
+            "enabled",
+            "updated"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Invalidates Scheduled Tasks list/detail projections after a task mutation.",
+      "properties": {
+        "change": {
+          "$ref": "#/$defs/ScheduledTaskChange"
+        },
+        "taskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "change",
+        "taskId"
+      ],
+      "title": "ScheduledTaskChangedNotification",
+      "type": "object"
+    },
     "ScheduledTaskCreateParams": {
       "$defs": {
         "ScheduledTaskCreateRequest": {
@@ -53202,6 +52751,7 @@
                 "string"
               ]
             },
+            "requestMetadata": true,
             "sandboxPolicy": true,
             "sourceThreadId": {
               "type": [
@@ -53402,6 +52952,7 @@
                 "string"
               ]
             },
+            "requestMetadata": true,
             "sandboxPolicy": true,
             "sourceThreadId": {
               "type": [
@@ -53676,6 +53227,7 @@
             "string"
           ]
         },
+        "requestMetadata": true,
         "sandboxPolicy": true,
         "sourceThreadId": {
           "type": [
@@ -54104,6 +53656,7 @@
                 "string"
               ]
             },
+            "requestMetadata": true,
             "sandboxPolicy": true,
             "sourceThreadId": {
               "type": [
@@ -54601,6 +54154,61 @@
         "taskId"
       ],
       "title": "ScheduledTaskRunSummary",
+      "type": "object"
+    },
+    "ScheduledTaskRunUpdatedNotification": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Projects a terminal Scheduled Task run for GUI refresh and OS notification.",
+      "properties": {
+        "attention": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "notificationPolicy": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "turnId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "attention",
+        "notificationPolicy",
+        "runId",
+        "status",
+        "taskId"
+      ],
+      "title": "ScheduledTaskRunUpdatedNotification",
       "type": "object"
     },
     "ScheduledTaskSchedule": {
@@ -55160,6 +54768,7 @@
                 "string"
               ]
             },
+            "requestMetadata": true,
             "sandboxPolicy": true,
             "sourceThreadId": {
               "type": [
@@ -55433,6 +55042,7 @@
                 "string"
               ]
             },
+            "requestMetadata": true,
             "sandboxPolicy": true,
             "sourceThreadId": {
               "type": [
@@ -55768,6 +55378,7 @@
                 "string"
               ]
             },
+            "requestMetadata": true,
             "sandboxPolicy": true,
             "sourceThreadId": {
               "type": [
@@ -58549,6 +58160,85 @@
             }
           ]
         },
+        "ScheduledTaskChange": {
+          "enum": [
+            "created",
+            "deleted",
+            "enabled",
+            "updated"
+          ],
+          "type": "string"
+        },
+        "ScheduledTaskChangedNotification": {
+          "additionalProperties": false,
+          "description": "Invalidates Scheduled Tasks list/detail projections after a task mutation.",
+          "properties": {
+            "change": {
+              "$ref": "#/$defs/ScheduledTaskChange"
+            },
+            "taskId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "change",
+            "taskId"
+          ],
+          "type": "object"
+        },
+        "ScheduledTaskRunUpdatedNotification": {
+          "additionalProperties": false,
+          "description": "Projects a terminal Scheduled Task run for GUI refresh and OS notification.",
+          "properties": {
+            "attention": {
+              "type": "boolean"
+            },
+            "error": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "notificationPolicy": {
+              "type": "string"
+            },
+            "runId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "taskId": {
+              "type": "string"
+            },
+            "threadId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "title": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "turnId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "attention",
+            "notificationPolicy",
+            "runId",
+            "status",
+            "taskId"
+          ],
+          "type": "object"
+        },
         "ServerRequestResolvedNotification": {
           "description": "Emitted after a server-initiated request reaches a terminal state.",
           "properties": {
@@ -60663,6 +60353,38 @@
             },
             "params": {
               "$ref": "#/$defs/AppListUpdatedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "scheduledTask/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ScheduledTaskChangedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "scheduledTask/run/updated",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ScheduledTaskRunUpdatedNotification"
             }
           },
           "required": [
@@ -114531,6 +114253,8 @@
               "model/verification",
               "process/exited",
               "process/outputDelta",
+              "scheduledTask/changed",
+              "scheduledTask/run/updated",
               "serverRequest/resolved",
               "skills/changed",
               "thread/archived",
@@ -114574,19 +114298,6 @@
               "app/read",
               "artifact/read",
               "artifact/write",
-              "automationJob/create",
-              "automationJob/delete",
-              "automationJob/health",
-              "automationJob/list",
-              "automationJob/read",
-              "automationJob/runHistory",
-              "automationJob/runNow",
-              "automationJob/update",
-              "automationSchedule/preview",
-              "automationSchedule/validate",
-              "automationScheduler/config/read",
-              "automationScheduler/config/update",
-              "automationScheduler/status",
               "browserSession/action/execute",
               "browserSession/close",
               "browserSession/event/list",

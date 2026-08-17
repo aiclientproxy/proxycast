@@ -7,9 +7,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 const CRON_DEPRECATED_MESSAGE: &str =
-    "cron.* 已下线旧 scheduled_tasks 查询/执行入口；请使用 App Server automationJob/*";
+    "cron.* 已下线旧 scheduled_tasks 查询/执行入口；请使用 App Server scheduledTask/*";
 const AGENT_RUN_DEPRECATED_MESSAGE: &str =
-    "agent.run 已下线旧 WebSocket scheduler 执行入口；请使用 App Server agentSession/turn/start 或 automationJob/runNow";
+    "agent.run 已下线旧 WebSocket scheduler 执行入口；请使用 App Server agentSession/turn/start 或 scheduledTask/run/start";
 const SESSIONS_DEPRECATED_MESSAGE: &str =
     "sessions.* 已下线旧 WebSocket agent_messages 查询入口；请使用 App Server agentSession/list 或 agentSession/read";
 
@@ -178,7 +178,7 @@ impl RpcHandler {
                 RpcError::invalid_params("Missing or invalid parameters for cron.run")
             })?;
         Err(RpcError::invalid_params(format!(
-            "cron.run 已下线旧 scheduled_tasks 执行器，任务 {} 未执行；请使用 App Server automationJob/runNow",
+            "cron.run 已下线旧 scheduled_tasks 执行器，任务 {} 未执行；请使用 App Server scheduledTask/run/start",
             params.task_id
         )))
     }
@@ -346,7 +346,7 @@ mod tests {
         let list_response = handler.handle_request(list_request).await;
         let list_err = list_response.error.expect("cron.list 应返回错误");
         assert!(list_err.message.contains("cron.* 已下线旧 scheduled_tasks"));
-        assert!(list_err.message.contains("automationJob/*"));
+        assert!(list_err.message.contains("scheduledTask/*"));
 
         let run_request = GatewayRpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -361,7 +361,7 @@ mod tests {
         assert!(err
             .message
             .contains("cron.run 已下线旧 scheduled_tasks 执行器"));
-        assert!(err.message.contains("automationJob/runNow"));
+        assert!(err.message.contains("scheduledTask/run/start"));
 
         let health_request = GatewayRpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -377,6 +377,6 @@ mod tests {
         assert!(health_err
             .message
             .contains("cron.* 已下线旧 scheduled_tasks"));
-        assert!(health_err.message.contains("automationJob/*"));
+        assert!(health_err.message.contains("scheduledTask/*"));
     }
 }

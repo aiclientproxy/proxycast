@@ -49,11 +49,6 @@ const ArchivedConversationsSettings = lazy(() =>
     default: module.ArchivedConversationsSettings,
   })),
 );
-const AutomationSettings = lazy(() =>
-  import("../system/automation").then((module) => ({
-    default: module.AutomationSettings,
-  })),
-);
 const DeveloperLabSettings = lazy(() =>
   import("../system/developer-lab").then((module) => ({
     default: module.DeveloperLabSettings,
@@ -341,7 +336,6 @@ const ACTIVE_SETTINGS_TABS = new Set<SettingsTabs>([
   SettingsTabs.Environment,
   SettingsTabs.ExecutionPolicy,
   SettingsTabs.ChromeRelay,
-  SettingsTabs.Automation,
   SettingsTabs.Developer,
   SettingsTabs.About,
 ]);
@@ -387,8 +381,6 @@ function preloadSettingsTab(tab: SettingsTabs): Promise<unknown> | null {
       return import("../system/execution-policy");
     case SettingsTabs.ChromeRelay:
       return import("../system/chrome-relay");
-    case SettingsTabs.Automation:
-      return import("../system/automation");
     case SettingsTabs.Developer:
       return Promise.all([
         import("../system/developer-lab"),
@@ -510,15 +502,6 @@ function renderSettingsContent(
       return withSettingsContentFallback(
         <ChromeRelaySettings />,
         t("settings.layout.loading.chromeRelay"),
-      );
-
-    case SettingsTabs.Automation:
-      return withSettingsContentFallback(
-        <AutomationSettings
-          mode="settings"
-          onOpenWorkspace={() => onNavigate?.("automation")}
-        />,
-        t("settings.layout.loading.automation"),
       );
 
     case SettingsTabs.Developer:

@@ -46,24 +46,6 @@ mod workspaces;
 use app_server_protocol::protocol::v2::{
     McpServerResourceReadParams, McpServerResourceReadResponse,
 };
-use app_server_protocol::AutomationJobCreateParams;
-use app_server_protocol::AutomationJobDeleteResponse;
-use app_server_protocol::AutomationJobHealthParams;
-use app_server_protocol::AutomationJobHealthResponse;
-use app_server_protocol::AutomationJobIdParams;
-use app_server_protocol::AutomationJobListResponse;
-use app_server_protocol::AutomationJobReadResponse;
-use app_server_protocol::AutomationJobRunHistoryParams;
-use app_server_protocol::AutomationJobRunHistoryResponse;
-use app_server_protocol::AutomationJobUpdateParams;
-use app_server_protocol::AutomationJobWriteResponse;
-use app_server_protocol::AutomationScheduleParams;
-use app_server_protocol::AutomationSchedulePreviewResponse;
-use app_server_protocol::AutomationScheduleValidateResponse;
-use app_server_protocol::AutomationSchedulerConfigReadResponse;
-use app_server_protocol::AutomationSchedulerConfigUpdateParams;
-use app_server_protocol::AutomationSchedulerConfigUpdateResponse;
-use app_server_protocol::AutomationSchedulerStatusResponse;
 use app_server_protocol::ChannelProbeParams;
 use app_server_protocol::ChannelProbeResponse;
 use app_server_protocol::ConnectCallbackSendParams;

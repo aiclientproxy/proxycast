@@ -1,4 +1,4 @@
-import type { AutomationJobDialogInitialValues } from "@/components/settings-v2/system/automation/AutomationJobDialog";
+import type { ScheduledTaskFormState } from "@/components/scheduled-tasks/scheduledTaskViewModel";
 import { resolveBaseSetupAutomationProjectionForSkill } from "@/lib/base-setup/automationProjection";
 import { buildHarnessRequestMetadata } from "../utils/harnessRequestMetadata";
 import { composeServiceSkillAutomationPrompt } from "./promptComposer";
@@ -9,7 +9,7 @@ import type {
 } from "./types";
 import { buildServiceSkillWorkspaceSeed } from "./workspaceLaunch";
 
-const DEFAULT_AUTOMATION_INTERVAL_SECS = 86_400;
+const DEFAULT_SCHEDULE_INTERVAL_HOURS = 24;
 const WEEKDAY_TO_CRON_DAY: Record<string, string> = {
   一: "1",
   二: "2",
@@ -21,7 +21,7 @@ const WEEKDAY_TO_CRON_DAY: Record<string, string> = {
   天: "0",
 };
 
-interface BuildServiceSkillAutomationInitialValuesInput {
+interface BuildServiceSkillScheduledTaskInitialFormInput {
   skill: ServiceSkillItem;
   slotValues: ServiceSkillSlotValues;
   userInput?: string;
@@ -134,53 +134,90 @@ function resolveScheduleSlotValue(
   return resolveSlotValue(scheduleSlot, slotValues);
 }
 
-function buildDefaultSchedulePrefill(): Pick<
-  AutomationJobDialogInitialValues,
-  "schedule_kind" | "every_secs"
-> {
+type ScheduledTaskSchedulePrefill = Pick<
+  ScheduledTaskFormState,
+  "scheduleType" | "intervalHours" | "days" | "time" | "timezone"
+>;
+
+function buildDefaultSchedulePrefill(): ScheduledTaskSchedulePrefill {
   return {
-    schedule_kind: "every",
-    every_secs: String(DEFAULT_AUTOMATION_INTERVAL_SECS),
+    scheduleType: "hourly",
+    intervalHours: DEFAULT_SCHEDULE_INTERVAL_HOURS,
+    days: [],
+    time: "00:00",
+    timezone: resolveLocalTimeZone(),
+  };
+}
+
+function buildIntervalPrefill(everySecs: number): ScheduledTaskSchedulePrefill {
+  if (
+    !Number.isInteger(everySecs) ||
+    everySecs <= 0 ||
+    everySecs % 3_600 !== 0 ||
+    everySecs > 86_400
+  ) {
+    throw new Error("当前定时任务仅支持 1 到 24 小时的整数间隔");
+  }
+  return {
+    ...buildDefaultSchedulePrefill(),
+    intervalHours: everySecs / 3_600,
   };
 }
 
 function buildCronPrefill(
   expr: string,
-): Pick<
-  AutomationJobDialogInitialValues,
-  "schedule_kind" | "cron_expr" | "cron_tz"
-> {
-  return {
-    schedule_kind: "cron",
-    cron_expr: expr,
-    cron_tz: resolveLocalTimeZone(),
-  };
-}
-
-function buildAtPrefill(
-  at: string,
-): Pick<AutomationJobDialogInitialValues, "schedule_kind" | "at_local"> {
-  const date = new Date(at);
-  if (Number.isNaN(date.getTime())) {
-    return {
-      schedule_kind: "at",
-      at_local: "",
-    };
+  timezone = resolveLocalTimeZone(),
+): ScheduledTaskSchedulePrefill {
+  const parts = expr.trim().split(/\s+/);
+  const minute = Number(parts[0]);
+  const hour = Number(parts[1]);
+  if (
+    parts.length !== 5 ||
+    !Number.isInteger(minute) ||
+    minute < 0 ||
+    minute > 59 ||
+    !Number.isInteger(hour) ||
+    hour < 0 ||
+    hour > 23 ||
+    parts[2] !== "*" ||
+    parts[3] !== "*"
+  ) {
+    throw new Error("当前定时任务仅支持按时间和星期设置 Cron");
   }
-
-  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-  return {
-    schedule_kind: "at",
-    at_local: date.toISOString().slice(0, 16),
+  const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  const base = {
+    intervalHours: 1,
+    time,
+    timezone,
   };
+  if (parts[4] === "*") {
+    return { ...base, scheduleType: "daily", days: [] };
+  }
+  if (parts[4] === "1-5") {
+    return { ...base, scheduleType: "weekdays", days: [] };
+  }
+  const weekdayMap = {
+    "0": "SU",
+    "1": "MO",
+    "2": "TU",
+    "3": "WE",
+    "4": "TH",
+    "5": "FR",
+    "6": "SA",
+  } as const;
+  const days = parts[4]
+    ?.split(",")
+    .map((day) => weekdayMap[day as keyof typeof weekdayMap])
+    .filter((day): day is NonNullable<typeof day> => Boolean(day));
+  if (!days?.length || new Set(days).size !== days.length) {
+    throw new Error("当前定时任务不支持该 Cron 星期范围");
+  }
+  return { ...base, scheduleType: "weekly", days };
 }
 
 function parseScheduleTextToPrefill(
   rawValue: string,
-): Pick<
-  AutomationJobDialogInitialValues,
-  "schedule_kind" | "every_secs" | "cron_expr" | "cron_tz"
-> {
+): ScheduledTaskSchedulePrefill {
   const value = rawValue.trim();
   if (!value) {
     return buildDefaultSchedulePrefill();
@@ -197,10 +234,7 @@ function parseScheduleTextToPrefill(
           : unit === "分钟" || unit === "分"
             ? amount * 60
             : amount * 3_600;
-      return {
-        schedule_kind: "every",
-        every_secs: String(Math.max(60, everySecs)),
-      };
+      return buildIntervalPrefill(everySecs);
     }
   }
 
@@ -241,17 +275,6 @@ function buildServiceSkillAutomationName(skill: ServiceSkillItem): string {
     return `${skill.title}｜定时执行`;
   }
   return `${skill.title}｜本地任务`;
-}
-
-function buildServiceSkillAutomationDescription(
-  skill: ServiceSkillItem,
-  scheduleValue: string,
-): string {
-  const lines = [skill.summary, "来源：技能本地自动化草稿。"];
-  if (scheduleValue.trim()) {
-    lines.push(`预设调度：${scheduleValue.trim()}`);
-  }
-  return lines.join("\n");
 }
 
 function buildServiceSkillAutomationMetadata(input: {
@@ -354,12 +377,12 @@ export function buildServiceSkillAutomationAgentTurnPayloadContext({
   };
 }
 
-export function buildServiceSkillAutomationInitialValues({
+export function buildServiceSkillScheduledTaskInitialForm({
   skill,
   slotValues,
   userInput,
   workspaceId,
-}: BuildServiceSkillAutomationInitialValuesInput): AutomationJobDialogInitialValues {
+}: BuildServiceSkillScheduledTaskInitialFormInput): ScheduledTaskFormState {
   const automationProjection =
     resolveBaseSetupAutomationProjectionForSkill(skill);
   const scheduleValue = resolveScheduleSlotValue(
@@ -370,65 +393,34 @@ export function buildServiceSkillAutomationInitialValues({
   const schedulePrefill = scheduleValue.trim()
     ? parseScheduleTextToPrefill(scheduleValue)
     : automationProjection.profile?.schedule?.kind === "every"
-      ? {
-          schedule_kind: "every" as const,
-          every_secs: String(automationProjection.profile.schedule.everySecs),
-        }
+      ? buildIntervalPrefill(automationProjection.profile.schedule.everySecs)
       : automationProjection.profile?.schedule?.kind === "cron"
-        ? {
-            schedule_kind: "cron" as const,
-            cron_expr: automationProjection.profile.schedule.cronExpr,
-            cron_tz:
-              automationProjection.profile.schedule.cronTz ||
+        ? buildCronPrefill(
+            automationProjection.profile.schedule.cronExpr,
+            automationProjection.profile.schedule.cronTz ||
               resolveLocalTimeZone(),
-          }
+          )
         : automationProjection.profile?.schedule?.kind === "at"
-          ? buildAtPrefill(automationProjection.profile.schedule.at)
+          ? (() => {
+              throw new Error("当前定时任务不支持一次性执行时间");
+            })()
           : buildDefaultSchedulePrefill();
-  const deliveryPrefill =
-    automationProjection.profile?.delivery?.mode === "announce"
-      ? {
-          delivery_mode: "announce" as const,
-          delivery_channel:
-            automationProjection.profile.delivery.channel ?? "webhook",
-          delivery_target: automationProjection.profile.delivery.target ?? "",
-          delivery_output_schema:
-            automationProjection.profile.delivery.outputSchema ?? "text",
-          delivery_output_format:
-            automationProjection.profile.delivery.outputFormat ?? "text",
-          best_effort: automationProjection.profile.delivery.bestEffort ?? true,
-        }
-      : {
-          delivery_mode: "none" as const,
-          best_effort:
-            automationProjection.profile?.delivery?.bestEffort ?? true,
-        };
 
   return {
-    name: buildServiceSkillAutomationName(skill),
-    description: buildServiceSkillAutomationDescription(skill, scheduleValue),
-    workspace_id: workspaceId,
-    execution_mode: "skill",
-    payload_kind: "agent_turn",
+    title: buildServiceSkillAutomationName(skill),
     prompt: composeServiceSkillAutomationPrompt({
       skill,
       slotValues,
       userInput,
     }),
-    system_prompt: "",
-    web_search: false,
-    agent_content_id: "",
-    agent_request_metadata: buildServiceSkillAutomationAgentTurnPayloadContext({
-      skill,
-      slotValues,
-      userInput,
-    }).request_metadata,
-    max_retries:
-      automationProjection.profile?.maxRetries !== undefined
-        ? String(automationProjection.profile.maxRetries)
-        : "2",
     enabled: automationProjection.profile?.enabledByDefault ?? true,
-    ...deliveryPrefill,
+    threadMode: "continue_thread",
+    sourceThreadId: "",
+    projectId: workspaceId,
+    cwd: "",
+    modelId: "",
+    reasoningEffort: "",
+    notificationPolicy: "failures",
     ...schedulePrefill,
   };
 }

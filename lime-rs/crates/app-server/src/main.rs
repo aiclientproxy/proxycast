@@ -244,15 +244,18 @@ async fn build_app_server(config: &CliConfig) -> anyhow::Result<AppServer> {
         }
     }
 
+    let server = AppServer::with_runtime(runtime.clone())
+        .with_mcp_elicitation_router(mcp_elicitation_router)
+        .map_err(|error| anyhow::anyhow!("failed to attach MCP elicitation router: {error}"))?;
     if config.backend_mode == AppServerBackendMode::Runtime {
-        let _scheduled_task_worker =
-            app_server::spawn_scheduled_task_worker(scheduled_task_worker_db, runtime.clone());
+        let _scheduled_task_worker = app_server::spawn_scheduled_task_worker(
+            scheduled_task_worker_db,
+            runtime,
+            server.event_bridge(),
+        );
         drop(_scheduled_task_worker);
     }
-
-    AppServer::with_runtime(runtime)
-        .with_mcp_elicitation_router(mcp_elicitation_router)
-        .map_err(|error| anyhow::anyhow!("failed to attach MCP elicitation router: {error}"))
+    Ok(server)
 }
 
 /// 组合根：唯一允许解析平台默认 AppDataRoot 的位置。

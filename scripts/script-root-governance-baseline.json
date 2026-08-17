@@ -26,7 +26,6 @@
     "scripts/app-version.d.mts",
     "scripts/app-version.mjs",
     "scripts/at-command-registry-e2e.mjs",
-    "scripts/automation-current-smoke.mjs",
     "scripts/benchmark-layered-design-model-slot-http-json-executor.mjs",
     "scripts/browser-runtime-smoke.mjs",
     "scripts/check-app-server-client-contract.mjs",

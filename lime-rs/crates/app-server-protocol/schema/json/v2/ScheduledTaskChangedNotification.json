@@ -1,0 +1,30 @@
+{
+  "$defs": {
+    "ScheduledTaskChange": {
+      "enum": [
+        "created",
+        "deleted",
+        "enabled",
+        "updated"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Invalidates Scheduled Tasks list/detail projections after a task mutation.",
+  "properties": {
+    "change": {
+      "$ref": "#/$defs/ScheduledTaskChange"
+    },
+    "taskId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "change",
+    "taskId"
+  ],
+  "title": "ScheduledTaskChangedNotification",
+  "type": "object"
+}

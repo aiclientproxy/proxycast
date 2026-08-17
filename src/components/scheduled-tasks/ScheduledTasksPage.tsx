@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, CalendarClock, LoaderCircle, PenLine, Plus, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Bot,
+  CalendarClock,
+  LoaderCircle,
+  PenLine,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { isAppServerBridgeAvailable } from "@/lib/api/appServerBridgeAvailability";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,12 +20,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   scheduledTasksApi,
+  subscribeScheduledTaskNotifications,
   type ScheduledTask,
   type ScheduledTaskRunSummary,
   type ScheduledTaskSchedule,
   type ScheduledTaskSummary,
 } from "@/lib/api/scheduledTasks";
-import type { AutomationPageParams, Page, PageParams } from "@/types/page";
+import type { Page, PageParams, ScheduledTasksPageParams } from "@/types/page";
 import { ScheduledTaskDetails } from "./ScheduledTaskDetails";
 import { ScheduledTaskEditor } from "./ScheduledTaskEditor";
 import { ScheduledTaskList } from "./ScheduledTaskList";
@@ -35,7 +44,7 @@ import {
 
 interface ScheduledTasksPageProps {
   onNavigate?: (page: Page, params?: PageParams) => void;
-  pageParams?: AutomationPageParams;
+  pageParams?: ScheduledTasksPageParams;
 }
 
 type EditorMode = "create" | "edit" | null;
@@ -47,9 +56,10 @@ export function ScheduledTasksPage({
   const { t, i18n } = useTranslation("workspace");
   const [tasks, setTasks] = useState<ScheduledTaskSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(
-    pageParams?.selectedJobId ?? null,
+    pageParams?.selectedTaskId ?? null,
   );
   const [selectedTask, setSelectedTask] = useState<ScheduledTask | null>(null);
+  const selectedIdRef = useRef(selectedId);
   const [runs, setRuns] = useState<ScheduledTaskRunSummary[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ScheduledTaskFilter>("all");
@@ -90,34 +100,41 @@ export function ScheduledTasksPage({
     }
   }, []);
 
-  const loadTask = useCallback(async (id: string) => {
-    setLoadingDetail(true);
-    setLoadingRuns(true);
-    try {
-      const [task, history] = await Promise.all([
-        scheduledTasksApi.read(id),
-        scheduledTasksApi.listRuns(id),
-      ]);
-      if (!task) {
-        throw new Error(t("scheduledTasks.error.notFound"));
+  const loadTask = useCallback(
+    async (id: string) => {
+      setLoadingDetail(true);
+      setLoadingRuns(true);
+      try {
+        const [task, history] = await Promise.all([
+          scheduledTasksApi.read(id),
+          scheduledTasksApi.listRuns(id),
+        ]);
+        if (!task) {
+          throw new Error(t("scheduledTasks.error.notFound"));
+        }
+        setSelectedTask(task);
+        setRuns(history);
+      } catch (error) {
+        toast.error(
+          t("scheduledTasks.error.detail", { message: errorMessage(error) }),
+        );
+        setSelectedTask(null);
+        setRuns([]);
+      } finally {
+        setLoadingDetail(false);
+        setLoadingRuns(false);
       }
-      setSelectedTask(task);
-      setRuns(history);
-    } catch (error) {
-      toast.error(
-        t("scheduledTasks.error.detail", { message: errorMessage(error) }),
-      );
-      setSelectedTask(null);
-      setRuns([]);
-    } finally {
-      setLoadingDetail(false);
-      setLoadingRuns(false);
-    }
-  }, [t]);
+    },
+    [t],
+  );
 
   useEffect(() => {
     void loadTasks();
   }, [loadTasks]);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -127,6 +144,63 @@ export function ScheduledTasksPage({
     }
     void loadTask(selectedId);
   }, [loadTask, selectedId]);
+
+  useEffect(() => {
+    let disposed = false;
+    let refreshQueued = false;
+    const detailTaskIds = new Set<string>();
+
+    const queueRefresh = (taskId: string, includeDetail: boolean) => {
+      if (includeDetail) {
+        detailTaskIds.add(taskId);
+      }
+      if (refreshQueued) {
+        return;
+      }
+      refreshQueued = true;
+      queueMicrotask(() => {
+        refreshQueued = false;
+        if (disposed) {
+          return;
+        }
+        const selectedTaskId = selectedIdRef.current;
+        const shouldLoadDetail = Boolean(
+          selectedTaskId && detailTaskIds.has(selectedTaskId),
+        );
+        detailTaskIds.clear();
+        void Promise.all([
+          loadTasks(),
+          ...(selectedTaskId && shouldLoadDetail
+            ? [loadTask(selectedTaskId)]
+            : []),
+        ]);
+      });
+    };
+
+    const unsubscribe = subscribeScheduledTaskNotifications(
+      {
+        onChanged: ({ change, taskId }) => {
+          if (change === "deleted" && selectedIdRef.current === taskId) {
+            selectedIdRef.current = null;
+            setSelectedId(null);
+            setSelectedTask(null);
+            setRuns([]);
+            queueRefresh(taskId, false);
+            return;
+          }
+          queueRefresh(taskId, selectedIdRef.current === taskId);
+        },
+        onRunUpdated: ({ taskId }) => {
+          queueRefresh(taskId, selectedIdRef.current === taskId);
+        },
+      },
+      { isBridgeAvailable: isAppServerBridgeAvailable },
+    );
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [loadTask, loadTasks]);
 
   const startCreate = useCallback(
     (preset?: "daily" | "weekly" | "monitor") => {
@@ -193,7 +267,9 @@ export function ScheduledTasksPage({
               selectedTask.id,
               buildScheduledTaskUpdateRequest(form, selectedTask.updatedAt),
             )
-          : await scheduledTasksApi.create(buildScheduledTaskCreateRequest(form));
+          : await scheduledTasksApi.create(
+              buildScheduledTaskCreateRequest(form),
+            );
       setEditorMode(null);
       setSelectedId(task.id);
       setSelectedTask(task);
@@ -253,27 +329,28 @@ export function ScheduledTasksPage({
 
   const runNow = useCallback(async () => {
     if (!selectedTask) return;
+    const taskId = selectedTask.id;
     setBusyAction("run");
     try {
-      await scheduledTasksApi.startRun(selectedTask.id);
+      await scheduledTasksApi.startRun(taskId);
       toast.success(t("scheduledTasks.toast.runStarted"));
-      await loadTask(selectedTask.id);
-      await loadTasks();
     } catch (error) {
       toast.error(
         t("scheduledTasks.error.run", { message: errorMessage(error) }),
       );
     } finally {
+      await Promise.all([loadTask(taskId), loadTasks()]);
       setBusyAction(null);
     }
   }, [loadTask, loadTasks, selectedTask, t]);
 
   const removeTask = useCallback(async () => {
+    const confirmationKey = hasActiveRun(selectedTask, runs)
+      ? "scheduledTasks.confirm.deleteRunning"
+      : "scheduledTasks.confirm.delete";
     if (
       !selectedTask ||
-      !window.confirm(
-        t("scheduledTasks.confirm.delete", { title: selectedTask.title }),
-      )
+      !window.confirm(t(confirmationKey, { title: selectedTask.title }))
     ) {
       return;
     }
@@ -291,7 +368,7 @@ export function ScheduledTasksPage({
     } finally {
       setBusyAction(null);
     }
-  }, [loadTasks, selectedTask, t]);
+  }, [loadTasks, runs, selectedTask, t]);
 
   const openRun = useCallback(
     (run: ScheduledTaskRunSummary) => {
@@ -344,7 +421,11 @@ export function ScheduledTasksPage({
             {t("scheduledTasks.error.loadTitle")}
           </h2>
           <p className="mt-1 max-w-md text-sm text-slate-600">{loadError}</p>
-          <Button variant="outline" className="mt-5" onClick={() => void loadTasks()}>
+          <Button
+            variant="outline"
+            className="mt-5"
+            onClick={() => void loadTasks()}
+          >
             <RefreshCw className="mr-2 h-4 w-4" />
             {t("scheduledTasks.action.retry")}
           </Button>
@@ -369,7 +450,13 @@ export function ScheduledTasksPage({
               onCreate={() => startCreate()}
             />
           </div>
-          <main className={selectedId || editorMode ? "min-h-0 flex-1" : "hidden min-h-0 flex-1 md:block"}>
+          <main
+            className={
+              selectedId || editorMode
+                ? "min-h-0 flex-1"
+                : "hidden min-h-0 flex-1 md:block"
+            }
+          >
             {editorMode ? (
               <ScheduledTaskEditor
                 mode={editorMode}
@@ -460,4 +547,13 @@ function EmptyWorkbench({
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function hasActiveRun(
+  task: ScheduledTask | null,
+  runs: ScheduledTaskRunSummary[],
+): boolean {
+  return [task?.lastRunSummary, ...runs].some(
+    (run) => run?.status === "queued" || run?.status === "running",
+  );
 }

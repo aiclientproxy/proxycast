@@ -8,16 +8,18 @@ import {
   type SkillCatalog,
 } from "@/lib/api/skillCatalog";
 import {
-  getAutomationJobs,
-  type AutomationJobRecord,
-} from "@/lib/api/automation";
+  scheduledTasksApi,
+  type ScheduledTask,
+} from "@/lib/api/scheduledTasks";
 import { changeLimeLocale } from "@/i18n/createI18n";
 import { recordServiceSkillAutomationLink } from "./automationLinkStorage";
 import { recordServiceSkillUsage } from "./storage";
 import { useServiceSkills } from "./useServiceSkills";
 
-vi.mock("@/lib/api/automation", () => ({
-  getAutomationJobs: vi.fn(),
+vi.mock("@/lib/api/scheduledTasks", () => ({
+  scheduledTasksApi: {
+    listDetailed: vi.fn(),
+  },
 }));
 
 interface HookHarness {
@@ -25,45 +27,42 @@ interface HookHarness {
   unmount: () => void;
 }
 
-function buildAutomationJob(
-  overrides: Partial<AutomationJobRecord> = {},
-): AutomationJobRecord {
+function buildScheduledTask(
+  overrides: Partial<ScheduledTask> = {},
+): ScheduledTask {
   const timestamp = "2026-03-29T12:00:00.000Z";
 
   return {
-    id: "automation-job-daily-brief",
-    name: "每日线索巡检",
-    description: null,
+    id: "scheduled-task-daily-brief",
+    title: "每日线索巡检",
+    prompt: "巡检今日可复用的增长线索",
     enabled: true,
-    workspace_id: "workspace-default",
-    execution_mode: "skill",
-    schedule: { kind: "every", every_secs: 86_400 },
-    payload: {
-      kind: "agent_turn",
-      prompt: "巡检今日可复用的增长线索",
-      web_search: false,
-      request_metadata: null,
+    schedule: {
+      type: "daily",
+      time: "09:00",
+      timezone: "Asia/Shanghai",
     },
-    delivery: {
-      mode: "none",
-      best_effort: true,
-      output_schema: "text",
-      output_format: "text",
+    execution: {
+      threadMode: "new_thread",
+      projectId: "workspace-default",
+      requestMetadata: {
+        service_skill: {
+          id: "carousel-post-replication",
+        },
+      },
     },
-    timeout_secs: null,
-    max_retries: 0,
-    next_run_at: "2026-03-30T12:00:00.000Z",
-    last_status: "success",
-    last_error: null,
-    last_run_at: timestamp,
-    last_finished_at: timestamp,
-    running_started_at: null,
-    consecutive_failures: 0,
-    last_retry_count: 0,
-    auto_disabled_until: null,
-    last_delivery: null,
-    created_at: timestamp,
-    updated_at: timestamp,
+    notificationPolicy: "failures",
+    overlapPolicy: "skip_if_running",
+    nextRunAt: "2026-03-30T12:00:00.000Z",
+    lastRunSummary: {
+      id: "run-daily-brief",
+      taskId: "scheduled-task-daily-brief",
+      status: "success",
+      startedAt: timestamp,
+      finishedAt: timestamp,
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp,
     ...overrides,
   };
 }
@@ -261,7 +260,7 @@ describe("useServiceSkills", () => {
         IS_REACT_ACT_ENVIRONMENT?: boolean;
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
-    vi.mocked(getAutomationJobs).mockResolvedValue([]);
+    vi.mocked(scheduledTasksApi.listDetailed).mockResolvedValue([]);
     window.localStorage.clear();
   });
 
@@ -293,7 +292,7 @@ describe("useServiceSkills", () => {
       expect(harness.getValue().groups).toEqual([]);
       expect(harness.getValue().catalogMeta).toBeNull();
       expect(fetchMock).not.toHaveBeenCalled();
-      expect(getAutomationJobs).not.toHaveBeenCalled();
+      expect(scheduledTasksApi.listDetailed).not.toHaveBeenCalled();
     } finally {
       harness.unmount();
     }
@@ -325,7 +324,9 @@ describe("useServiceSkills", () => {
   });
 
   it("目录更新事件后应刷新技能列表并保留分组元数据", async () => {
-    vi.mocked(getAutomationJobs).mockResolvedValue([buildAutomationJob()]);
+    vi.mocked(scheduledTasksApi.listDetailed).mockResolvedValue([
+      buildScheduledTask(),
+    ]);
 
     const harness = mountHook();
 
@@ -347,7 +348,7 @@ describe("useServiceSkills", () => {
       act(() => {
         recordServiceSkillAutomationLink({
           skillId: "carousel-post-replication",
-          jobId: "automation-job-daily-brief",
+          jobId: "scheduled-task-daily-brief",
           jobName: "每日线索巡检",
         });
       });
@@ -361,7 +362,7 @@ describe("useServiceSkills", () => {
           ?.automationStatus,
       ).toEqual(
         expect.objectContaining({
-          jobId: "automation-job-daily-brief",
+          jobId: "scheduled-task-daily-brief",
           jobName: "每日线索巡检",
           statusLabel: "成功",
         }),

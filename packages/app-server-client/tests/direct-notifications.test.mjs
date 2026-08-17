@@ -18,6 +18,8 @@ import {
   isReasoningTextDeltaNotification,
   isServerNotification,
   isSkillsChangedNotification,
+  isScheduledTaskChangedNotification,
+  isScheduledTaskRunUpdatedNotification,
   isThreadStartedNotification,
   isThreadSettingsUpdatedNotification,
   isTurnPlanUpdatedNotification,
@@ -28,6 +30,8 @@ import {
   mcpServerStatusUpdatedServerNotification,
   serverNotification,
   skillsChangedServerNotification,
+  scheduledTaskChangedServerNotification,
+  scheduledTaskRunUpdatedServerNotification,
 } from "../dist/index.js";
 
 const threadId = "thread-1";
@@ -45,6 +49,60 @@ test("recognizes strict skills/changed catalog invalidation", () => {
   ]) {
     assert.equal(skillsChangedServerNotification(malformed), undefined);
     assert.equal(isSkillsChangedNotification(malformed), false);
+  }
+});
+
+test("recognizes strict scheduled task projection notifications", () => {
+  const changed = {
+    method: "scheduledTask/changed",
+    params: { change: "updated", taskId: "task-1" },
+  };
+  const runUpdated = {
+    method: "scheduledTask/run/updated",
+    params: {
+      attention: true,
+      error: "provider unavailable",
+      notificationPolicy: "failures",
+      runId: "run-1",
+      status: "error",
+      taskId: "task-1",
+      threadId: "thread-1",
+      title: "Daily brief",
+      turnId: "turn-1",
+    },
+  };
+
+  assert.deepEqual(scheduledTaskChangedServerNotification(changed), changed);
+  assert.equal(isScheduledTaskChangedNotification(changed), true);
+  assert.deepEqual(
+    scheduledTaskRunUpdatedServerNotification(runUpdated),
+    runUpdated,
+  );
+  assert.equal(isScheduledTaskRunUpdatedNotification(runUpdated), true);
+
+  for (const malformed of [
+    { ...changed, params: { ...changed.params, taskId: "" } },
+    { ...changed, params: { ...changed.params, change: "paused" } },
+    { ...changed, params: { ...changed.params, source: "legacy" } },
+  ]) {
+    assert.equal(scheduledTaskChangedServerNotification(malformed), undefined);
+    assert.equal(isScheduledTaskChangedNotification(malformed), false);
+  }
+
+  for (const malformed of [
+    { ...runUpdated, params: { ...runUpdated.params, status: "running" } },
+    {
+      ...runUpdated,
+      params: { ...runUpdated.params, notificationPolicy: "always" },
+    },
+    { ...runUpdated, params: { ...runUpdated.params, attention: "yes" } },
+    { ...runUpdated, params: { ...runUpdated.params, source: "legacy" } },
+  ]) {
+    assert.equal(
+      scheduledTaskRunUpdatedServerNotification(malformed),
+      undefined,
+    );
+    assert.equal(isScheduledTaskRunUpdatedNotification(malformed), false);
   }
 });
 
@@ -93,7 +151,10 @@ test("recognizes strict Guardian auto approval review lifecycle", () => {
   assert.deepEqual(serverNotification(completed), completed);
 
   for (const malformed of [
-    { ...started, params: { ...started.params, review: { status: "approved" } } },
+    {
+      ...started,
+      params: { ...started.params, review: { status: "approved" } },
+    },
     { ...completed, params: { ...completed.params, decisionSource: "user" } },
     { ...completed, params: { ...completed.params, extra: true } },
     {

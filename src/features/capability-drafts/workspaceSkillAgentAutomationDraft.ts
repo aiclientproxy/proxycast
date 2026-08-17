@@ -1,9 +1,11 @@
-import type { AutomationJobDialogInitialValues } from "@/components/settings-v2/system/automation/AutomationJobDialog";
+import type { ScheduledTaskFormState } from "@/components/scheduled-tasks/scheduledTaskViewModel";
 import type { AgentRuntimeWorkspaceSkillBinding } from "@/lib/api/agentRuntime/toolInventoryTypes";
-import type { AutomationJobRecord, TaskSchedule } from "@/lib/api/automation";
+import type {
+  ScheduledTask,
+  ScheduledTaskSchedule,
+} from "@/lib/api/scheduledTasks";
 
 const DEFAULT_CRON_TIMEZONE = "Asia/Shanghai";
-const DEFAULT_CRON_EXPR = "0 9 * * *";
 
 export interface WorkspaceSkillManagedAutomationPresentation {
   statusLabel: string;
@@ -171,12 +173,17 @@ function buildAutomationPrompt(
   ].join("\n");
 }
 
+export interface WorkspaceSkillScheduledTaskDraft {
+  form: ScheduledTaskFormState;
+  requestMetadata: Record<string, unknown>;
+}
+
 export function buildWorkspaceSkillAgentAutomationInitialValues(input: {
   binding: AgentRuntimeWorkspaceSkillBinding;
   workspaceRoot: string;
   workspaceId: string;
   copy?: WorkspaceSkillManagedAutomationInitialValuesCopy;
-}): AutomationJobDialogInitialValues | null {
+}): WorkspaceSkillScheduledTaskDraft | null {
   const workspaceId = normalizeText(input.workspaceId);
   const requestMetadata = buildWorkspaceSkillAgentAutomationRequestMetadata({
     binding: input.binding,
@@ -188,43 +195,28 @@ export function buildWorkspaceSkillAgentAutomationInitialValues(input: {
   }
 
   const displayName = buildDisplayName(input.binding);
-  const sourceDraftId = resolveSourceDraftId(input.binding);
-  const sourceVerificationReportId = resolveSourceVerificationReportId(
-    input.binding,
-  );
-  const skillName = buildSkillName(input.binding);
   const copy = input.copy;
 
   return {
-    name:
-      copy?.formatName?.(displayName) ?? `${displayName}｜Managed Agent 草案`,
-    description: [
-      copy?.descriptionSource ?? "来源：P4 Workspace Agent envelope 草案。",
-      copy?.formatDescriptionSkill?.(skillName) ?? `Skill：${skillName}`,
-      copy?.formatDescriptionProvenance?.(
-        sourceDraftId,
-        sourceVerificationReportId,
-      ) ?? `Provenance：${sourceDraftId} / ${sourceVerificationReportId}`,
-      copy?.descriptionPausedByDefault ??
-        "默认先暂停，确认调度与权限后再启用。",
-    ].join("\n"),
-    workspace_id: workspaceId,
-    enabled: false,
-    execution_mode: "skill",
-    payload_kind: "agent_turn",
-    schedule_kind: "cron",
-    cron_expr: DEFAULT_CRON_EXPR,
-    cron_tz: DEFAULT_CRON_TIMEZONE,
-    prompt: buildAutomationPrompt(input.binding, copy),
-    system_prompt: "",
-    web_search: false,
-    agent_content_id: "",
-    agent_request_metadata: requestMetadata,
-    max_retries: "2",
-    delivery_mode: "none",
-    delivery_output_schema: "text",
-    delivery_output_format: "text",
-    best_effort: true,
+    form: {
+      title:
+        copy?.formatName?.(displayName) ?? `${displayName}｜Managed Agent 草案`,
+      prompt: buildAutomationPrompt(input.binding, copy),
+      enabled: false,
+      scheduleType: "daily",
+      intervalHours: 1,
+      days: [],
+      time: "09:00",
+      timezone: DEFAULT_CRON_TIMEZONE,
+      threadMode: "new_thread",
+      sourceThreadId: "",
+      projectId: workspaceId,
+      cwd: "",
+      modelId: "",
+      reasoningEffort: "",
+      notificationPolicy: "failures",
+    },
+    requestMetadata,
   };
 }
 
@@ -243,40 +235,33 @@ function readNestedRecord(
 }
 
 function describeSchedule(
-  schedule: TaskSchedule,
+  schedule: ScheduledTaskSchedule,
   copy?: WorkspaceSkillManagedAutomationPresentationCopy,
 ): string {
-  switch (schedule.kind) {
-    case "every":
-      return (
-        copy?.formatEverySchedule?.(schedule.every_secs) ??
-        `每 ${schedule.every_secs} 秒`
-      );
-    case "cron":
-      return (
-        copy?.formatCronSchedule?.(schedule.expr, schedule.tz) ??
-        `Cron ${schedule.expr}${schedule.tz ? ` · ${schedule.tz}` : ""}`
-      );
-    case "at":
-      return copy?.formatAtSchedule?.(schedule.at) ?? `一次性 ${schedule.at}`;
+  switch (schedule.type) {
+    case "hourly":
+      return `每 ${schedule.intervalHours} 小时`;
+    case "daily":
+      return `每天 ${schedule.time}`;
+    case "weekdays":
+      return `工作日 ${schedule.time}`;
+    case "weekly":
+      return `每周 ${schedule.days.join(",")} ${schedule.time}`;
     default:
       return copy?.unknownSchedule ?? "未知调度";
   }
 }
 
-export function isWorkspaceSkillAgentAutomationJobForDirectory(
-  job: AutomationJobRecord,
+export function isWorkspaceSkillScheduledTaskForDirectory(
+  task: ScheduledTask,
   directory: string,
 ): boolean {
-  if (job.payload.kind !== "agent_turn") {
-    return false;
-  }
   const normalizedDirectory = normalizeText(directory);
   if (!normalizedDirectory) {
     return false;
   }
 
-  const requestMetadata = asRecord(job.payload.request_metadata);
+  const requestMetadata = asRecord(task.execution.requestMetadata);
   const harness = readNestedRecord(requestMetadata, "harness");
   const agentEnvelope =
     readNestedRecord(harness, "agent_envelope") ??
@@ -295,11 +280,11 @@ export function isWorkspaceSkillAgentAutomationJobForDirectory(
 }
 
 export function buildWorkspaceSkillManagedAutomationPresentation(
-  jobs: readonly AutomationJobRecord[],
+  tasks: readonly ScheduledTask[],
   copy?: WorkspaceSkillManagedAutomationPresentationCopy,
 ): WorkspaceSkillManagedAutomationPresentation {
-  const [job] = jobs;
-  if (!job) {
+  const [task] = tasks;
+  if (!task) {
     return {
       statusLabel: copy?.notCreatedStatus ?? "Managed Job：未创建",
       scheduleLabel:
@@ -308,26 +293,28 @@ export function buildWorkspaceSkillManagedAutomationPresentation(
     };
   }
 
-  const stateLabel = job.enabled
+  const stateLabel = task.enabled
     ? (copy?.stateEnabled ?? "已启用")
     : (copy?.statePaused ?? "草案暂停");
-  const lastStatus = job.last_status ?? copy?.notRunStatus ?? "尚未运行";
-  const lastRun = job.last_run_at ?? copy?.lastRunValueNone ?? "暂无";
-  const schedule = describeSchedule(job.schedule, copy);
+  const lastStatus =
+    task.lastRunSummary?.status ?? copy?.notRunStatus ?? "尚未运行";
+  const lastRun =
+    task.lastRunSummary?.startedAt ?? copy?.lastRunValueNone ?? "暂无";
+  const schedule = describeSchedule(task.schedule, copy);
   return {
-    jobId: job.id,
-    jobName: job.name,
-    enabled: job.enabled,
+    jobId: task.id,
+    jobName: task.title,
+    enabled: task.enabled,
     statusLabel:
       copy?.formatStatus?.(stateLabel, lastStatus) ??
       `Managed Job：${stateLabel} · ${lastStatus}`,
     scheduleLabel:
-      copy?.formatSchedule?.(schedule, job.next_run_at) ??
-      `Schedule：${schedule}${job.next_run_at ? ` · 下次 ${job.next_run_at}` : ""}`,
+      copy?.formatSchedule?.(schedule, task.nextRunAt) ??
+      `Schedule：${schedule}${task.nextRunAt ? ` · 下次 ${task.nextRunAt}` : ""}`,
     lastRunLabel:
-      copy?.formatLastRun?.(lastRun, job.last_error) ??
-      `最近运行：${job.last_run_at ?? "暂无"}${
-        job.last_error ? ` · ${job.last_error}` : ""
+      copy?.formatLastRun?.(lastRun, task.lastRunSummary?.error) ??
+      `最近运行：${lastRun}${
+        task.lastRunSummary?.error ? ` · ${task.lastRunSummary.error}` : ""
       }`,
   };
 }

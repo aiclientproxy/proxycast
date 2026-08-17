@@ -4543,7 +4543,7 @@
     {
       "id": "sceneapp-automation-detail-frontend-surface",
       "classification": "dead",
-      "description": "前端不得恢复 Settings Automation 中的旧 SceneApp 自动化详情运行面、复盘动作、治理 artifact 动作或对应旧文案；旧自动化任务只显示下线提示",
+      "description": "前端不得恢复已删除的 Settings Automation、SceneApp 自动化详情运行面、复盘动作、治理 artifact 动作或对应旧文案；这些字符串仅作为负向回流守卫",
       "patterns": [
         "useAutomationSceneAppRuntime",
         "SceneAppRunDetailPanel",
@@ -4791,6 +4791,34 @@
         "packages/app-server-client/src",
         "packages/agent-runtime-client/src",
         "src/lib/api"
+      ],
+      "allowedPaths": []
+    },
+    {
+      "id": "frontend-retired-automation-page-route",
+      "classification": "dead",
+      "description": "已安排任务的 current GUI 入口只能使用 scheduled-tasks；不得恢复 Automation 页面参数、一级路由、Settings 重复页签或旧 i18n key",
+      "patterns": ["automation", "Automation"],
+      "includePathPrefixes": [
+        "src/types/page.ts",
+        "src/types/settings.ts",
+        "src/lib/navigation/sidebarNav.ts",
+        "src/components/AppPageContent.tsx",
+        "src/components/scheduled-tasks/ScheduledTasksPage.tsx",
+        "src/components/app-sidebar/AppSidebar.constants.ts",
+        "src/components/settings-v2/_layout/index.tsx",
+        "src/components/settings-v2/hooks/useSettingsCategory.ts",
+        "src/components/settings-v2/home/index.tsx",
+        "src/i18n/resources/en-US/settings.json",
+        "src/i18n/resources/zh-CN/settings.json",
+        "src/i18n/resources/zh-TW/settings.json",
+        "src/i18n/resources/ja-JP/settings.json",
+        "src/i18n/resources/ko-KR/settings.json",
+        "src/i18n/resources/en-US/navigation.json",
+        "src/i18n/resources/zh-CN/navigation.json",
+        "src/i18n/resources/zh-TW/navigation.json",
+        "src/i18n/resources/ja-JP/navigation.json",
+        "src/i18n/resources/ko-KR/navigation.json"
       ],
       "allowedPaths": []
     }

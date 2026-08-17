@@ -348,6 +348,57 @@ impl AgentRunDao {
         iter.collect()
     }
 
+    pub fn find_active_automation_run_by_turn(
+        conn: &Connection,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Result<Option<AgentRun>, rusqlite::Error> {
+        let mut stmt = conn.prepare(
+            "SELECT id, source, source_ref, session_id, status, started_at, finished_at, duration_ms,
+                    error_code, error_message, metadata, created_at, updated_at
+             FROM agent_runs
+             WHERE source = 'automation'
+               AND session_id = ?1
+               AND status IN ('queued', 'running')
+               AND finished_at IS NULL
+             ORDER BY started_at DESC",
+        )?;
+        let mut rows = stmt.query(params![session_id])?;
+        while let Some(row) = rows.next()? {
+            let metadata: Option<String> = row.get(10)?;
+            let matches_turn = metadata
+                .as_deref()
+                .and_then(|value| serde_json::from_str::<serde_json::Value>(value).ok())
+                .as_ref()
+                .and_then(|value| value.get("turnId").or_else(|| value.get("turn_id")))
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|candidate| candidate == turn_id);
+            if !matches_turn {
+                continue;
+            }
+            let status_raw: String = row.get(4)?;
+            let status = AgentRunStatus::try_from(status_raw.as_str()).map_err(|_| {
+                rusqlite::Error::InvalidColumnType(4, "status".into(), rusqlite::types::Type::Text)
+            })?;
+            return Ok(Some(AgentRun {
+                id: row.get(0)?,
+                source: row.get(1)?,
+                source_ref: row.get(2)?,
+                session_id: row.get(3)?,
+                status,
+                started_at: row.get(5)?,
+                finished_at: row.get(6)?,
+                duration_ms: row.get(7)?,
+                error_code: row.get(8)?,
+                error_message: row.get(9)?,
+                metadata,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
+            }));
+        }
+        Ok(None)
+    }
+
     pub fn list_terminal_runs_by_session(
         conn: &Connection,
         session_id: &str,
@@ -595,6 +646,39 @@ mod tests {
         assert_eq!(active.len(), 2);
         assert_eq!(active[0].id, "run-running");
         assert_eq!(active[1].id, "run-queued");
+    }
+
+    #[test]
+    fn find_active_automation_run_by_turn_matches_canonical_identity() {
+        let conn = setup_conn();
+        let mut matching = sample_run("run-matching", AgentRunStatus::Running);
+        matching.source = "automation".to_string();
+        matching.session_id = Some("session-a".to_string());
+        matching.metadata = Some(serde_json::json!({"turnId": "turn-a"}).to_string());
+        AgentRunDao::create_run(&conn, &matching).expect("create matching run");
+
+        let mut other_turn = sample_run("run-other-turn", AgentRunStatus::Running);
+        other_turn.source = "automation".to_string();
+        other_turn.session_id = Some("session-a".to_string());
+        other_turn.metadata = Some(serde_json::json!({"turnId": "turn-b"}).to_string());
+        AgentRunDao::create_run(&conn, &other_turn).expect("create other turn run");
+
+        let mut chat = sample_run("run-chat", AgentRunStatus::Running);
+        chat.session_id = Some("session-a".to_string());
+        chat.metadata = Some(serde_json::json!({"turnId": "turn-a"}).to_string());
+        AgentRunDao::create_run(&conn, &chat).expect("create chat run");
+
+        let found = AgentRunDao::find_active_automation_run_by_turn(&conn, "session-a", "turn-a")
+            .expect("find active automation run")
+            .expect("matching automation run");
+        assert_eq!(found.id, "run-matching");
+        assert!(AgentRunDao::find_active_automation_run_by_turn(
+            &conn,
+            "session-a",
+            "turn-missing",
+        )
+        .expect("find missing automation run")
+        .is_none());
     }
 
     #[test]

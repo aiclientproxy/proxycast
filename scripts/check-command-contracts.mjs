@@ -1814,6 +1814,46 @@ function collectRetiredAutomationFacadeSourceFailures() {
   return failures;
 }
 
+function collectScheduledTaskLegacyConsumerFailures() {
+  const failures = [];
+  const currentConsumerPaths = [
+    "src/components/settings-v2/_layout/index.tsx",
+    "src/components/agent/chat/service-skills/useServiceSkills.ts",
+    "src/components/agent/chat/workspace/useWorkspaceServiceSkillEntryActions.ts",
+    "src/features/capability-drafts/components/WorkspaceRegisteredSkillsPanel.tsx",
+    "src/features/capability-drafts/workspaceSkillAgentAutomationDraft.ts",
+    "src/components/agent/chat/service-skills/automationLinkStorage.ts",
+  ];
+  const legacyConsumerTokens = [
+    "getAutomationJobs",
+    "createAutomationJob",
+    "updateAutomationJob",
+    "deleteAutomationJob",
+    "runAutomationJobNow",
+    "automationJob/",
+    "automationSchedule/",
+    "automationScheduler/",
+  ];
+
+  for (const relativePath of currentConsumerPaths) {
+    const sourceCode = readSourceIfExists(relativePath);
+    if (!sourceCode) {
+      continue;
+    }
+    for (const token of legacyConsumerTokens) {
+      if (sourceCode.includes(token)) {
+        failures.push({
+          file: relativePath,
+          message:
+            "Scheduled Tasks current consumer 不能重新依赖旧 Automation API；旧协议仅允许留在迁移区和负向守卫",
+          token,
+        });
+      }
+    }
+  }
+  return failures;
+}
+
 function collectRetiredApiKeyProviderFacadeSourceFailures() {
   const failures = [];
   const restrictedSources = [
@@ -4553,6 +4593,8 @@ function main() {
     collectRetiredFileBrowserFacadeSourceFailures();
   const retiredAutomationFacadeSourceFailures =
     collectRetiredAutomationFacadeSourceFailures();
+  const scheduledTaskLegacyConsumerFailures =
+    collectScheduledTaskLegacyConsumerFailures();
   const retiredApiKeyProviderFacadeSourceFailures =
     collectRetiredApiKeyProviderFacadeSourceFailures();
   const retiredMcpDesktopFacadeSourceFailures =
@@ -5320,6 +5362,14 @@ function main() {
     printGuardFailures(
       "已迁到 App Server automation* 的旧自动化命令不能回到旧客户端源码",
       retiredAutomationFacadeSourceFailures,
+    );
+  }
+
+  if (scheduledTaskLegacyConsumerFailures.length > 0) {
+    hasError = true;
+    printGuardFailures(
+      "Scheduled Tasks current consumer 不能回流旧 Automation API",
+      scheduledTaskLegacyConsumerFailures,
     );
   }
 

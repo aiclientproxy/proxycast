@@ -219,13 +219,13 @@ describe("SettingsHomePage", () => {
 
     expect(text).toContain("Current Entrypoints");
     expect(text).not.toContain("All Skills");
-    expect(text).toContain("Automation");
+    expect(text).toContain("Scheduled Tasks");
     expect(text).toContain("Message Channels");
     expect(text).toContain("Project Knowledge");
 
-    const openAutomationButton = Array.from(
+    const openScheduledTasksButton = Array.from(
       container.querySelectorAll("button"),
-    ).find((item) => item.textContent?.includes("Open Automation"));
+    ).find((item) => item.textContent?.includes("Open Scheduled Tasks"));
     const openChannelsButton = Array.from(
       container.querySelectorAll("button"),
     ).find((item) => item.textContent?.includes("Open Channels"));
@@ -234,7 +234,7 @@ describe("SettingsHomePage", () => {
     ).find((item) => item.textContent?.includes("Open Project Knowledge"));
 
     act(() => {
-      openAutomationButton?.dispatchEvent(
+      openScheduledTasksButton?.dispatchEvent(
         new MouseEvent("click", { bubbles: true }),
       );
       openChannelsButton?.dispatchEvent(
@@ -246,7 +246,7 @@ describe("SettingsHomePage", () => {
     });
 
     expect(onTabChange).not.toHaveBeenCalled();
-    expect(onNavigate).toHaveBeenCalledWith("automation");
+    expect(onNavigate).toHaveBeenCalledWith("scheduled-tasks");
     expect(onNavigate).toHaveBeenCalledWith("channels");
     expect(onNavigate).toHaveBeenCalledWith("resources");
   });
