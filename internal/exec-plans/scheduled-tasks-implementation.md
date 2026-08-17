@@ -1,8 +1,8 @@
 # 已安排任务实现计划
 
-状态：`implementation-complete / local-validation-blocked-by-disk-space / platform-evidence-pending`
+状态：`implementation-complete / local-validation-complete / platform-evidence-pending`
 
-更新时间：2026-08-17
+更新时间：2026-08-18
 
 ## 主目标
 
@@ -12,7 +12,10 @@
 
 - 2026-08-17 实现收口：9 个 `scheduledTask/*` method、唯一 `automation_jobs` 内部存储映射、RuntimeCore/Thread/Turn/Item/Agent Run、typed notification、软删除、一级 Scheduled Tasks 工作台、五语言资源和真实 Electron Gate B 已建立。`continue_thread` 复用 canonical Thread identity；`new_thread` 复用 canonical model catalog、route metadata 与 preflight。
 - 公开 Automation 双轨已物理删除：旧 App Server method/schema/client、旧页面和 Settings 工作台、旧 renderer projection/smoke、旧 i18n namespace consumer 均归类为 `dead / deleted / forbidden-to-restore`。最后残留的 `Page = "automation"`、`AutomationPageParams`、侧栏 `id = "automation"` 与 `SettingsTabs.Automation` 已迁为唯一 `scheduled-tasks` 一级路由，Settings 不再重复挂载 Scheduled Tasks 页面。
-- 当前下一刀：释放可再生成的 Rust incremental 缓存后补跑 related、Scheduled Tasks Gate B、Agent current fixture、GUI smoke 与 `verify:local`；平台侧只剩真实 Windows Notification Center、Windows Gate B 和 macOS/Windows sleep-resume 证据。
+- 2026-08-18 本地收尾已完成：Rust related、Scheduled Tasks Gate B、Agent current fixture、GUI smoke、contracts、governance、`verify:local`、fmt 与 diff check 全部通过；磁盘空间不再构成阻塞。
+- 当前下一刀只剩平台证据：真实 Windows Notification Center、Windows Gate B，以及 macOS/Windows 真实 sleep-resume。不得以当前 macOS arm64 fixture 替代这些结论。
+
+完成度：实现 `100%`；本地门禁 `100%`；平台证据 `pending`。
 
 ## 2026-08-17 Terminal Notification 与软删除完成
 
@@ -106,7 +109,7 @@ git diff --check
   通过
 ```
 
-当前仍需显式保留的退出条件：`WorkspaceRegisteredSkillsPanel.tsx` 约 1942 行，超过仓库 1000 行业务逻辑上限，拆分应作为后续窄写集；Windows Notification Center 与真实 macOS/Windows sleep-resume 只能由对应平台 runner 补证，不能用本机 macOS 证据替代。
+`WorkspaceRegisteredSkillsPanel.tsx` 已拆为 Panel、Card 与 RegistrationDetails 三个 owner，单文件均低于 1000 行。当前仍需显式保留的退出条件只有 Windows Notification Center、Windows Gate B 与真实 macOS/Windows sleep-resume，且必须由对应平台 runner 补证。
 
 ## 2026-08-17 Scheduled Tasks Gate B 与失败历史修复
 
@@ -230,7 +233,50 @@ git diff --check
   passed
 ```
 
-Rust related 首次修复后重新编译在链接 `app-server` 测试二进制时被本机磁盘空间阻断（Data volume 可用约 1.7 GB；`lime-rs/target/debug/incremental` 约 36 GB）。待确认删除该可再生成缓存后复跑，不删除源码、用户数据或测试证据。
+Rust related 首次修复后曾在链接 `app-server` 测试二进制时因本机仅余约 1.7 GB 被阻断；随后 Data volume 恢复到约 68 GB，未删除源码、用户数据、测试证据或缓存，原 related 范围已完整复跑通过。
+
+## 2026-08-18 最终本地收尾
+
+- 26 个 Scheduled Task Rust owner/consumer 路径的 related 回归完整结束，所选 crate 与反向依赖均为 `0 failed`；最后删除了仅供测试调用、生产零引用的 `build_automation_run_start` 旧公共 helper，测试统一进入 `build_scheduled_task_manual_run_start` 或 claimed run current 入口。
+- Scheduled Tasks Gate B 首次复跑在创建任务前等待旧 `app-sidebar-nav-automation` selector 超时；根因是 fixture 未随公开一级路由迁移。fixture 已改用 `app-sidebar-nav-scheduled-tasks`，并补 current/retired selector 源码守卫，随后完整 Gate B 通过。
+- Gate B 最终证据为真实 Electron/preload/IPC、`app_server_handle_json_lines`、App Server RuntimeCore 与本地 provider fixture；创建、立即运行、运行历史和 canonical 对话均可见，provider request 为 1，missing method、legacy、mock fallback、invoke/console/page error 均为 0。
+- 当前 Vitest smart ledger 为 `119/119 passed`，无 pending batch；本轮 selector 与 dead helper 增量修改均已通过最贴 owner 的回归。
+
+最终本地门禁：
+
+```text
+CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 npm run test:rust:related -- <26 个 Scheduled Task Rust owner/consumer paths>
+  passed（所选 owner 与反向依赖 0 failed）
+
+CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 npm run test:rust:related -- \
+  lime-rs/crates/app-server/src/automation_execution.rs
+  app-server 1683 passed / 0 failed
+
+npx vitest run scripts/electron/scheduled-tasks-fixture-smoke.test.mjs
+  4 passed
+
+npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000
+  Gate B passed（backendMode=runtime；真实 Electron；provider request=1；legacy/mock/error=0）
+
+npm run smoke:agent-runtime-current-fixture
+  passed（完整 current fixture 回归；liveProviderUsed=false）
+
+npm run verify:gui-smoke
+  passed（真实 Electron + App Server，result=pass）
+
+npm run test:contracts
+  passed（967 protocol types；app-server-client 299 checks；scripts/docs gates passed）
+
+npm run governance:legacy-report
+  zero-reference candidates=0 / classification drift=0 / boundary violations=0
+
+npm run verify:local
+  passed（smart ledger 119/119；无 pending batch）
+
+cargo fmt --manifest-path "lime-rs/Cargo.toml" --all -- --check
+git diff --check
+  passed
+```
 
 ## 窄写集
 
@@ -270,7 +316,7 @@ Rust related 首次修复后重新编译在链接 `app-server` 测试二进制�
 | ST-3 运行闭环 | `complete / platform-evidence-pending` | manual run 与在线 Runtime backend 的 due run 均复用 RuntimeCore/Thread/Turn/Agent Run；原子 claim、同一 run id、启动前复核、启动失败终态、canonical lineage、24 小时 catch-up、超窗 missed、overlap missed、one-shot CAS、DST、手动/暂停运行、启动恢复、canonical terminal 收口与时钟回拨合同已通过定向回归；真实 OS sleep/wake 事件和跨平台证据尚未完成 |
 | ST-4 GUI | `complete` | 一级入口、主从工作台、创建/编辑/暂停/运行历史和五语种已落盘；仓库 GUI smoke 与 Scheduled Tasks 专项真实 Electron Gate B 已通过 |
 | ST-5 对话与通知 | `complete` | typed terminal notification、Renderer 全局 bridge、Desktop Host failure toast、实时刷新和五语种文案已完成并通过回归 |
-| ST-6 清理与验证 | `implementation-complete / local-validation-blocked-by-disk-space / platform-evidence-pending` | 旧 Automation 双轨、validator、软删除和运行中删除合同已完成；contracts、frontend typecheck、GUI/navigation/i18n/governance 定向门禁已通过；Rust related、Scheduled Tasks Gate B、Agent fixture、GUI smoke 与 verify:local 待释放 36 GB 可再生成 incremental cache 后复跑；Windows Notification Center 和真实 OS sleep/resume 证据仍待平台 runner |
+| ST-6 清理与验证 | `complete / platform-evidence-pending` | 旧 Automation 双轨、validator、软删除和运行中删除合同已完成；Rust related、contracts、frontend typecheck、GUI/navigation/i18n/governance、Scheduled Tasks Gate B、Agent fixture、GUI smoke、`verify:local`、fmt 与 diff check 全部通过；只剩 Windows Notification Center、Windows Gate B 和真实 OS sleep/resume 平台证据 |
 
 ## 已执行验证
 
@@ -405,19 +451,14 @@ git diff --check
 
 覆盖证据：worker 启动首轮只处理带 Scheduled Task marker 的遗留 ownership，旧 Automation 的 running 状态不被改写；queued/running Run 原子终止为 `error / scheduled_run_interrupted` 并清除 Task ownership，普通 claim 已推进的 `next_run_at` 保留，运行中编辑则按最新启用状态和 schedule 重算；canonical Thread/Turn 已有终态时复用真实终态收口，不伪造 interrupted；重复启动恢复幂等；时钟回拨后同一 deterministic run id 仅保留一次。
 
-上述 3 条 App Server 命令在本机使用上游 v150.4.0 已发布的 `ptrcomp` Apple ARM archive 与对应 binding 显式覆盖，仅用于源码编译/定向测试；仓库默认启用的 `ptrcomp_sandbox` 归档未发布，默认命令仍按下述阻塞记录。测试证明：旧/非法 Automation 行不进入 Scheduled Task read model 且 read/update/delete/run fail closed；列表/详情投影最近运行与失败 attention；`continue_thread` 使用 canonical session/thread identity。
+上述 3 条 App Server 命令在本机使用上游 v150.4.0 已发布的 `ptrcomp` Apple ARM archive 与对应 binding 显式覆盖，仅用于源码编译/定向测试；裸 `cargo test` 未经仓库 wrapper 时仍会请求未发布的 `ptrcomp_sandbox` archive，质量门禁统一使用 `npm run test:rust:*` wrapper。测试证明：旧/非法 Automation 行不进入 Scheduled Task read model 且 read/update/delete/run fail closed；列表/详情投影最近运行与失败 attention；`continue_thread` 使用 canonical session/thread identity。
 
-## 后续验证
+## 平台侧后续验证
 
-```bash
-npm run test:contracts
-npm run test:rust:related -- <changed-rust-paths>
-npm run test:related -- <changed-frontend-files>
-npm run smoke:agent-runtime-current-fixture
-npm run verify:gui-smoke
-npm run governance:legacy-report
-npm run verify:local
-```
+- Windows runner：真实 Notification Center 展示与 Host failure 行为。
+- Windows runner：Scheduled Tasks Gate B，证明 Electron/preload/IPC/App Server/RuntimeCore/GUI 同一 identity 闭环。
+- macOS 与 Windows：真实 OS sleep-resume，证明 catch-up、missed、overlap 与 one-shot 恢复行为。
+- 当前仓库没有可复用的 sleep/wake 或 Windows Notification Center runner；本机未执行系统休眠/唤醒，也未把受控时钟或 macOS Electron fixture 记作平台证据。
 
 2026-08-13 v1.127.0 发布候选验证：
 
@@ -451,11 +492,9 @@ git diff --check
 
 ## 阻塞与风险
 
-- `npm run test:rust:related -- ...` 已通过源码编译检查并暴露 3 个测试访问点回归，已修正为 `serde_json::Value::get`；随后重跑在链接 `app-server` 测试二进制时因本机 Data volume 仅剩约 1.7 GB 失败。删除 `lime-rs/target/debug/incremental`（约 36 GB）需要用户明确确认，确认后复跑原 related 范围。
-- 上游默认 `ptrcomp_sandbox` archive 仍可能 404；仓库 wrapper 已配置本地 v150.4.0 Apple ARM artifact。该结论只覆盖当前 macOS arm64 工具链，不替代 Windows 平台证据。
+- 本地实现与门禁无阻塞。裸 `cargo test` 仍可能因未发布的 `ptrcomp_sandbox` archive 返回 404；仓库 `npm run test:rust:*` wrapper 已固定本地 v150.4.0 Apple ARM artifact，且相关 related 回归已通过。该结论只覆盖当前 macOS arm64 工具链，不替代 Windows 平台证据。
 - 公开 Automation 双轨、旧 Settings consumer、旧 GUI route 已完成 `dead / deleted / forbidden-to-restore` 清理；Base Setup / Service Skill 的 `automation_job` binding family 仍属于 `compat` taxonomy，不得机械删除。
 - 启动恢复、interval sleep/wake reconcile 与时钟跳变源码合同已完成定向验证；真实 macOS/Windows OS sleep/resume 进程证据仍需补齐，且 Windows Notification Center 必须由真实 Windows runner 证明。
-- Rust related、Scheduled Tasks 专项 Agent current fixture、真实 Electron GUI smoke 与 `verify:local` 需在释放缓存后复跑；协议 validator、终态通知、Renderer bridge、实时刷新、软删除和运行中删除合同及本轮 GUI route/i18n/typecheck/governance 门禁已通过。
 
 ## 架构确认
 

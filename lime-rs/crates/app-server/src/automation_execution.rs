@@ -279,13 +279,6 @@ impl RuntimeCore {
     }
 }
 
-pub fn build_automation_run_start(
-    job: AutomationJob,
-    resolved_identity: Option<AutomationRunIdentity>,
-) -> Result<AutomationRunStart, RuntimeCoreError> {
-    build_automation_run_start_inner(job, resolved_identity, None, false)
-}
-
 pub fn build_scheduled_task_manual_run_start(
     job: AutomationJob,
     resolved_identity: Option<AutomationRunIdentity>,
@@ -967,7 +960,7 @@ mod tests {
             }
         }));
 
-        let start = build_automation_run_start(job, None).expect("run start");
+        let start = build_scheduled_task_manual_run_start(job, None).expect("run start");
         let runtime_request = start
             .runtime_options
             .runtime_request
@@ -1024,7 +1017,7 @@ mod tests {
             "prompt": "旧浏览器自动化"
         }));
 
-        let error = build_automation_run_start(job, None).expect_err("should reject");
+        let error = build_scheduled_task_manual_run_start(job, None).expect_err("should reject");
         assert!(error.to_string().contains("browser_session"));
     }
 
@@ -1036,7 +1029,7 @@ mod tests {
             "session_id": "session-job-1"
         }));
 
-        let error = build_automation_run_start(job, None).expect_err("should reject");
+        let error = build_scheduled_task_manual_run_start(job, None).expect_err("should reject");
         assert!(error.to_string().contains("thread_id"));
     }
 
@@ -1048,8 +1041,9 @@ mod tests {
             "thread_mode": "new_thread"
         }));
 
-        let first = build_automation_run_start(job.clone(), None).expect("first run start");
-        let second = build_automation_run_start(job, None).expect("second run start");
+        let first =
+            build_scheduled_task_manual_run_start(job.clone(), None).expect("first run start");
+        let second = build_scheduled_task_manual_run_start(job, None).expect("second run start");
 
         assert_ne!(first.session_id, second.session_id);
         assert_ne!(first.thread_id, second.thread_id);

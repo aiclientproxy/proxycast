@@ -79,6 +79,7 @@ describe("Scheduled Tasks Electron Gate B", () => {
     expect(content).toContain("startOpenAiCompatibleFixtureServer");
     expect(content).toContain("sortOrder: -1");
     expect(content).toContain("selected.isDefault === true");
+    expect(content).toContain('app-sidebar-nav-scheduled-tasks');
     expect(content).toContain('"scheduledTask/run/start"');
     expect(content).toContain('"thread/read"');
     expect(content).toContain("canonicalConversationOpened: true");
@@ -87,5 +88,6 @@ describe("Scheduled Tasks Electron Gate B", () => {
     expect(content).not.toContain("mockPriorityCommands");
     expect(content).not.toContain("defaultMocks");
     expect(content).not.toContain("invokeMockOnly");
+    expect(content).not.toContain('app-sidebar-nav-automation');
   });
 });

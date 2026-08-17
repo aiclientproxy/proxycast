@@ -309,7 +309,9 @@ async function clearInvokeBuffers(page) {
 }
 
 async function createTaskFromGui(page) {
-  await page.locator('[data-testid="app-sidebar-nav-automation"]').click();
+  await page
+    .locator('[data-testid="app-sidebar-nav-scheduled-tasks"]')
+    .click();
   await page
     .getByText(TASK_TITLE, { exact: true })
     .waitFor({
