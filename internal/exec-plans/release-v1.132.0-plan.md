@@ -1,6 +1,6 @@
 # Lime v1.132.0 发布执行计划
 
-状态：`validated / awaiting-git-confirmation`
+状态：`tag-published / windows-release-blocked / awaiting-release-strategy`
 日期：2026-08-19
 目标版本：`1.132.0`
 目标 tag：`v1.132.0`
@@ -26,6 +26,16 @@
 - 发布前基线为 `v1.131.0`（commit `340c5c1ba`），发布前 `v1.132.0` 本地和远端 tag 均不存在。
 - 当前候选已完成本轮完整门禁；本计划只记录实际执行结果，不以历史 v1.131.0 证据替代本轮证据。
 
+## Windows 发布事故修复
+
+- 远端 tag `v1.132.0` 与 release commit `81086c5ec` 已创建；Release run `32222043562` 的 Windows x64 job `95974247072` 在 `Smoke installed Windows Squirrel candidate` 失败，GitHub Release 尚无可发布资产。
+- Windows Squirrel 安装、N-1 更新、候选版本匹配和 packaged `SHELL-01` 均实际成功；内层 summary 为 `result=pass`、`21/21` assertions passed、trace/screenshot 完整。唯一失败为 runner 在证据落盘后仍等待 Electron 进程退出，120 秒超时把子进程退出码覆盖为 `1`。
+- 修复写集限定为 `scripts/electron/smoke.mjs`、`scripts/electron/lib/electron-smoke-summary.mjs` 和对应测试；完整且 run-id 匹配的结构化 summary 成为 harness 完成信号，缺失断言、失败断言、错 run-id 或缺失 trace/screenshot 仍 fail closed。
+- 退出条件：定向回归、脚本治理、release workflow guard、版本一致性和真实 Electron `SHELL-01` Gate B 通过；随后在“重建已推送的 `v1.132.0` tag”与“发布 `v1.132.1` 补丁版”之间明确选择并获得对应 Git 写操作确认，由 Windows runner 补齐 platform/packaged 证据。禁止保留旧 tag 但从另一 commit 构建同版本资产，以免 tag 与二进制不可复现。
+- 已通过：related test `3/3`、Electron/Windows entrypoint 回归 `34/34`、`npm run governance:scripts`、`npm run governance:electron-release-workflow`、`npm run verify:app-version`、Prettier、`git diff --check`。
+- 已通过真实 Electron Gate B：`npm run verify:gui-smoke` 生成 `result=pass`、`21/21` assertions passed、`app_server_handle_json_lines` 命中 `41` 次，且 `evidence ready` 后约 1 秒内 runner 正常退出，不再等待 120 秒。
+- 待 CI 证明：Windows installed Squirrel candidate 的修复后进程终止与 release assets 发布；本地 macOS Gate B 不能替代该 platform/packaged 证据。
+
 ## 门禁结果
 
 - `npm run verify:app-version`：通过，根应用、CLI npm 包、Rust workspace 与 Cargo.lock 均为 `1.132.0`。
@@ -50,4 +60,4 @@
 - `compat`：仅保留仓库中明确标记且不承接新 current 创建路径的迁移边界；本候选不新增 compat wrapper。
 - `deprecated`：旧 Canvas Browser、外部 Chrome/CDP、BrowserSessionRef、site adapter 和 connector 路径已从主链迁出，等待验证后确认删除分类。
 - `dead / deleted`：旧 Browser Runtime crate、旧 v0 Browser Session、旧 Browser 页面/API/fixture 与生产 fallback 随本候选删除。
-- 当前完成度：版本元数据、release notes 与全部本地门禁已完成；仅剩危险操作确认后的 commit/tag/push 与远端复核，完成度 95%。
+- 当前完成度：`v1.132.0` tag/release 已创建，Windows harness 修复与本地门禁完成；剩余修复 commit/push、workflow dispatch 和 Windows release assets 复核，完成度 95%。

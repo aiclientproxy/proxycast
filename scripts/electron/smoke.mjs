@@ -3,7 +3,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -12,6 +11,10 @@ import os from "node:os";
 import path from "node:path";
 import { spawnElectron } from "../lib/electron-launcher.mjs";
 import { resolveElectronAppServerRuntimeEnv } from "../lib/electron-app-server-assets.mjs";
+import {
+  readElectronSmokeSummary,
+  resolveElectronSmokeExitCode,
+} from "./lib/electron-smoke-summary.mjs";
 
 const runId = normalizeRunId(
   process.env.LIME_GATE_RUN_ID?.trim() || createStandaloneRunId(),
@@ -45,6 +48,9 @@ const shouldRemoveUserDataDir = !process.env.ELECTRON_E2E_USER_DATA_DIR?.trim();
 const smokeVisible = process.env.LIME_ELECTRON_SMOKE_VISIBLE?.trim() === "1";
 let launcherFailureStage = null;
 let finished = false;
+let completionPoll;
+let completionKillTimer;
+let completionRequested = false;
 
 function cleanupUserDataDir() {
   if (!shouldRemoveUserDataDir) {
@@ -58,53 +64,38 @@ function finish(exitCode, failureStage = null) {
     return;
   }
   finished = true;
+  clearInterval(completionPoll);
+  clearTimeout(completionKillTimer);
 
   if (exitCode !== 0 && !existsSync(summaryPath)) {
     writeLauncherFailureSummary(failureStage || "electron-process-exit");
   }
 
-  let effectiveExitCode = exitCode;
-  try {
-    const summary = JSON.parse(readFileSync(summaryPath, "utf8"));
-    const failedAssertions = Array.isArray(summary.assertions?.failed)
-      ? summary.assertions.failed
-      : ["missing-assertions"];
-    const tracePath = resolveEvidenceArtifact(summary.artifacts?.trace);
-    const screenshotPath = resolveEvidenceArtifact(
-      summary.artifacts?.screenshot,
-    );
-    if (
-      summary.candidateRunId !== runId ||
-      summary.result !== "pass" ||
-      failedAssertions.length > 0 ||
-      !tracePath ||
-      !existsSync(tracePath) ||
-      !screenshotPath ||
-      !existsSync(screenshotPath)
-    ) {
-      effectiveExitCode = 1;
-    }
+  const summaryResult = readElectronSmokeSummary({
+    evidenceDir,
+    runId,
+    summaryPath,
+  });
+  const effectiveExitCode = resolveElectronSmokeExitCode({
+    childExitCode: exitCode,
+    summaryResult,
+  });
+  if (summaryResult.valid) {
     console.log(
-      `[electron-smoke] summary run_id=${runId} result=${String(summary.result)} path=${summaryPath}`,
+      `[electron-smoke] summary run_id=${runId} result=${String(summaryResult.summary.result)} path=${summaryPath}`,
     );
-  } catch (error) {
-    effectiveExitCode = 1;
+  } else if (summaryResult.summary) {
     console.error(
-      `[electron-smoke] structured summary missing or invalid: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `[electron-smoke] structured summary failed validation: ${summaryResult.error}`,
+    );
+  } else {
+    console.error(
+      `[electron-smoke] structured summary missing or invalid: ${summaryResult.error}`,
     );
   }
 
   cleanupUserDataDir();
   process.exit(effectiveExitCode);
-}
-
-function resolveEvidenceArtifact(value) {
-  if (typeof value !== "string" || path.basename(value) !== value) {
-    return null;
-  }
-  return path.join(evidenceDir, value);
 }
 
 function writeLauncherFailureSummary(failedStage) {
@@ -183,7 +174,39 @@ const child = spawnElectron({
   shell: packagedExecutable ? false : undefined,
 });
 
+function requestExitFromCompleteSummary() {
+  if (completionRequested) {
+    return true;
+  }
+  const summaryResult = readElectronSmokeSummary({
+    evidenceDir,
+    runId,
+    summaryPath,
+  });
+  if (!summaryResult.valid) {
+    return false;
+  }
+  completionRequested = true;
+  clearInterval(completionPoll);
+  child.kill();
+  completionKillTimer = setTimeout(() => {
+    if (!finished) {
+      child.kill("SIGKILL");
+    }
+  }, 5_000);
+  return true;
+}
+
+completionPoll = setInterval(() => {
+  if (!finished) {
+    requestExitFromCompleteSummary();
+  }
+}, 250);
+
 const timeout = setTimeout(() => {
+  if (requestExitFromCompleteSummary()) {
+    return;
+  }
   launcherFailureStage = "launcher-timeout";
   child.kill();
   console.error("[electron-smoke] timed out waiting for renderer/workbench");
