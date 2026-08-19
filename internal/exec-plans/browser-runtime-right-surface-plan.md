@@ -1,375 +1,209 @@
-# Browser Runtime / Right Surface 骨架实施计划
+# Browser Workspace 同 Tab 重构执行计划
 
-更新时间：2026-06-24
+更新时间：2026-08-19
 
-状态：In Progress
+状态：In Progress / P1-P3
 
-主目标：先把 Browser 模块骨架落到 current 主链，再按阶段补 Chrome 类细节、CDP current 接线、Browser Assist 可见执行和 evidence。右侧栏内嵌浏览器是用户可见主路径，`lime-rs/crates/browser-runtime` 是外部 Chrome / CDP 自动化和观测事实源，二者通过 `browserSessionId / launchUrl / action trace / evidence refs` 收敛，不新增第二套 browser backend。
+## 目标
 
-关联路线图：
+把 Browser 收敛到唯一 current 主链：用户在 Right Surface 看到的 Electron `WebContentsView`，与 Agent 通过 App Server connection-owned reverse request 操作的页面必须是同一个 native view。外部 Chrome/CDP、Canvas Browser owner、`BrowserSessionRef` adapter 和 `mcp__lime-browser__*` 不再作为内嵌 Browser 的兼容路径。
 
-- `internal/roadmap/browser/README.md`
-- `internal/roadmap/rightsurface/README.md`
-- `internal/roadmap/agentapp/v3/README.md`
-- `internal/roadmap/agentworkbench/README.md`
-- `internal/develop/traceable-agent-acceptance-methodology.md`
+## 当前事实
 
-## 1. Skeleton-first 执行原则
+```text
+Renderer Browser Workspace
+  -> Electron Desktop Host host capability（mount / bounds / user chrome）
+  -> BrowserTabHost
+  -> WebContentsView + webContents.debugger
 
-1. 先实现模块骨架和事实源接线，再补细节体验。
-2. P1 / P2 不新增顶层 package、Rust crate、Playwright production server 或 browser 专用 mock backend。
-3. P1 继续复用 App Server `workspaceRightSurface/*` pending contract，通过 `metadata` 解析 browser intent；字段稳定后再提升为强类型 protocol。
-4. CDP 不走旧 Electron / Tauri command。`launch_browser_session`、`close_chrome_profile_session` 只能作为旧 smoke 阻塞证据，不恢复为 current。
-5. 每一阶段的 Partial / Evidence Gap / Fail 必须转成测试、contract、smoke、guard 或本计划 checklist。
+Agent Browser capability
+  -> RuntimeCore / tool-runtime dynamic tool binding
+  -> App Server item/tool/call server request
+  -> Electron AppServerDynamicToolHost
+  -> 同一个 BrowserTabHost route
+```
 
-## 2. Current / Compat / Dead 分类
+App Server 仍是业务与 turn owner；Electron 只执行原生 WebContents、debugger、权限、下载和窗口宿主能力。Dynamic tool binding 的 connection/thread/turn owner 与 BrowserTabHost 的 session/tab/view identity 必须在每次请求中精确校验。
 
-| 分类       | 路径                                                                                       | 规则                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| current    | `electron/embeddedBrowserHost.ts`、`src/lib/api/embeddedBrowser.ts`                        | 内嵌 `WebContentsView` host 和 renderer typed API                    |
-| current    | `src/components/agent/chat/workspace/right-surface/**`                                     | Right Surface `browser` tab、pending intent、launcher、host 渲染     |
-| current    | `lime-rs/crates/app-server*/**` 的 `workspaceRightSurface/*`                               | Browser surface intent 的 App Server pending 事实源                  |
-| current    | `lime-rs/crates/browser-runtime/src/**`                                                    | 外部 Chrome / CDP session、action、event buffer、后续 evidence facts |
-| compat     | `src/components/agent/chat/components/canvas-workbench/browser/**`                         | 迁移来源和短期 thin panel 复用，不再新增 Browser Runtime 主能力      |
-| deprecated | `src/lib/webview-api.ts` 中 rejectMissingBrowserRuntimeCurrent 的旧 browser runtime 命令面 | 只记录 current 缺口，不补 mock fallback                              |
-| dead       | 旧 Tauri wrapper、`<webview>`、BrowserView、新增 legacy desktop facade                     | 不恢复、不接生产路径                                                 |
+## 写集与避让
 
-## 3. 阶段计划
+### 本轮认领写集
 
-### P1 Right Surface Browser 骨架
-
-目标：用户或 App Server pending intent 能打开右侧 `browser` surface，并带上 `launchUrl / title / browserSessionId` 投影。
-
-交付物：
-
-- [x] `browser` surface kind / registry / available launcher 接入。
-- [x] `RightSurfaceBrowserPanel` 复用现有 `CanvasWorkbenchBrowserPanel`，不新增 backend。
-- [x] 顶部 Browser 按钮打开右侧栏，不弹系统浏览器。
-- [x] `surfaceKind=browser` pending metadata 解析为 `WorkspaceRightSurfaceBrowserIntent`。
-- [x] `priority=foreground` browser pending 自动打开右侧 browser surface。
-- [x] `priority!=foreground` browser pending 只进入 launcher badge，用户点击后打开。
-- [x] GUI smoke 复测右侧浏览器打开后不出现下拉空白或系统浏览器弹出。
-
-写集：
-
-- `src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.ts`
-- `src/components/agent/chat/workspace/useWorkspaceRightSurfacePendingRuntime.ts`
-- `src/components/agent/chat/AgentChatWorkspace.tsx`
+- `internal/exec-plans/browser-runtime-right-surface-plan.md`
+- `internal/aiprompts/architecture.md` 末尾独立 Browser owner 小节
+- `electron/embeddedBrowserHost.ts` 及后续拆出的 BrowserTabHost/测试
+- `electron/appServerHost.ts`、`electron/appServerDynamicToolHost.ts` 及对应测试
+- `src/lib/api/embeddedBrowser.ts` 迁移后的 Browser typed gateway 与测试
 - `src/components/agent/chat/workspace/right-surface/browser/**`
-- 对应 `*.unit.test.ts(x)` / `*.test.tsx`
+- Browser 专项 protocol/catalog/fixture/negative guard 文件
+- `lime-rs/crates/agent/src/agent_tools/catalog.rs`、`inventory.rs` 中仅限
+  `BrowserAssist`、`mcp__lime-browser__*`、`lime_site_*` 静态工具面；原因是这些旧 catalog
+  仍与 `browser__*` dynamic capability 竞争唯一 Browser owner。验证使用 agent/app-server
+  Rust related tests、`npm run test:contracts` 与 legacy guard。
+- App Server tool inventory / workspace skill binding 的 `browser_assist` protocol、runtime、typed
+  client 与直接测试 consumer；只删除该字段和旧正向断言，不改相邻 AgentControl/CodeCell 行为。
 
-### P2 Chrome 类基础体验
+### 只读避让写集
 
-目标：在不扩大 runtime 的前提下补齐用户感知最强的浏览器 chrome。
+- `lime-rs/crates/agent-runtime/**`
+- `lime-rs/crates/agent/**` 现有并行 CodeCell/AgentControl 改动
+- `lime-rs/crates/app-server/src/runtime/event_sink.rs`
+- `lime-rs/crates/app-server/src/runtime/trace_store*`
+- `lime-rs/crates/tool-runtime/src/tool_lifecycle.rs`
+- `src/components/input-kit/**`
+- 其它未与 Browser 纵切直接相关的用户改动
 
-交付物：
+如必须触碰避让写集，先登记具体文件、函数、原因和验证命令，不覆盖既有改动。
 
-- [x] stop / reload 状态合一。
-- [x] favicon / title / loading progress。
-- [x] find in page。
-- [x] per-tab zoom。
-- [x] 错误页分类：DNS / TLS / blocked / load failed。
-- [x] bounds / visible 同步回归，覆盖切 tab / 收起 / resize。
+## 删除集
 
-### P3 Browser Session / Profile 合同
+完成迁移后直接删除，不新增 compat wrapper：
 
-目标：把 embedded adapter 与 CDP adapter 的 session/profile 语义对齐，但不提前做完整 profile UI。
+- `lime-rs/crates/app-server-protocol/src/protocol/v0/browser_session.rs` 及其 v0 schema/catalog 正向引用。
+- `lime-rs/crates/app-server/src/runtime/browser_session.rs` 对外部 CDP 的生产调用。
+- `lime-rs/crates/browser-runtime/**` 的内嵌 Browser 主链调用；若无其它 current consumer，物理删除 crate。
+- `src/features/browser-runtime/**` 的外部 Chrome/connector Settings 工作台与正向入口。
+- `BrowserSessionRef`、`browserSession/*` 的 Renderer current gateway 和 `mcp__lime-browser__*` catalog 正向依赖。
+- `CanvasWorkbenchBrowserPanel` 及 Browser 专属 Canvas 子组件；共享的 Host policy 逻辑迁入 Browser Workspace 后删除旧 owner。
+- `embedded_browser_view_*` 作为 Browser 产品命令；Plugin 若仍需要 WebContents，迁到独立宿主 owner，不回流 Browser 双轨。
 
-交付物：
+允许出现在负向回流 guard、不可变历史 evidence 和执行计划历史记录中；不得出现在 production method、mock priority、catalog 正向断言或 GUI 主路径。
 
-- [x] 定义最小 `BrowserSessionRef`：`browserSessionId / profileKey / adapterKind / launchUrl / title / sourceRequestId`。
-- [x] Right Surface browser intent、CDP session state 统一映射到该 ref。
-- [x] Browser Assist metadata 统一映射到该 ref。
-- [x] 临时 profile 清理和 task scoped profile 只做 host/runtime owner，不落 UI 大中心。
+## 阶段与退出条件
 
-### P4 CDP Runtime current 接线
+### P0：事实源与 route identity
 
-目标：让 `lime-rs/crates/browser-runtime` 从孤立 crate 进入 App Server / Runtime current method，不恢复旧 `launch_browser_session`。
+状态：骨架完成，negative guard 待补。
 
-候选 current method：
+- [x] 重写本计划和 Browser 路线图。
+- [x] 追加架构 owner 图与责任确认。
+- [x] 定义 Electron Host `BrowserRoute`、`BrowserTab`、`BrowserTabMark` 边界。
+- [x] 明确 `threadId + turnId + windowId + ownerWebContentsId + sessionId + tabId + viewId + webContentsId` 的校验与 stale 行为。
+- [x] 将 identity 收敛到 canonical App Server read model，删除旧 `BrowserSessionRef` 输入。
+- [ ] 为旧 BrowserSession/Canvas/MCP 前缀补负向回流守卫。
 
-- `browserSession/target/list`
-- `browserSession/open`
-- `browserSession/read`
-- `browserSession/close`
-- `browserSession/event/list`
-- `browserSession/action/execute`
+退出条件：协议、dynamic tool binding、Host route、Renderer projection 使用同一 identity；任何只凭 `BrowserSessionRef` 或外部 CDP target 的完成项均失效。
 
-交付物：
+### P1：同一 WebContents 纵切
 
-- [x] App Server protocol / client / processor / RuntimeCore owner 成组接入。
-- [x] `BrowserRuntimeManager` 由 RuntimeCore 持有或通过明确 service owner 注入。
-- [x] 前端 gateway 只进 `src/lib/api/browserRuntime.ts`，页面不直接 `safeInvoke`。
-- [x] `smoke:browser-runtime` 迁到 current App Server method；通过 `--remote-debugging-port` attach 已启动的 Chrome / Chromium CDP，不再负责启动旧 Chrome session。
-- [x] `npm run test:contracts` 覆盖新 method / mock 不回流。
+状态：基础纵切、active-turn identity Gate B 与 renderer termination cleanup Gate B 已通过，disconnect/window-close 等扩展生命周期仍待补。
 
-P4 当前结论：Skeleton current 已收口。`browserSession/*` 已进入 App Server current 方法、Rust client、npm client、前端 API 网关、治理 catalog 和 `smoke:browser-runtime`；真实 smoke 仍要求用户先启动带 remote debugging port 的 Chrome / Chromium，例如 `--remote-debugging-port 9222`，避免恢复旧 `launch_browser_session`。
+- [x] BrowserTabHost 按稳定 `sessionId/tabId/viewId` 创建或复用 `WebContentsView`。
+- [x] App Server `item/tool/call` reverse request 能由 Electron Host 精确路由到该 tab。
+- [x] `navigate`、`observe`、`screenshot`、用户后退/刷新与 Agent action 返回同一 identity。
+- [x] Host attach debugger 前后校验 owner；destroyed、window mismatch、stale turn 一律 fail closed。
+- [x] `turnEnded` 清理 debugger，并按 origin/mark close 或 release。
+- [x] 真实 Electron fixture 证明 Renderer mount 与 Agent `openTabs -> claimTab -> observe` 使用相同 `browserSessionId/tabId/threadId/webContentsId`，并绑定同一 active turn。
+- [x] Electron Host 断连会 detach debugger，并对 user tab release、Agent tab close；原生 `WebContents` destroyed 会回收 Browser route。
+- [ ] 补齐 clipboard、download/permission grant、窗口关闭和上述断连路径的真实 Electron turn-scoped evidence。
+- [x] 真实 Electron fixture 证明用户人工操作后的 Agent observe 和同一 `webContentsId`。
 
-### P5 Browser Assist 可见执行
+退出条件：真实 Electron 中 Agent navigate/observe 改变用户可见页面，且 `browserSessionId/tabId/webContentsId` 全部相等；不是普通 Chrome、browser mirror 或 mock 证据。
 
-目标：`@浏览器` / `mcp__lime-browser__*` 绑定可见 `browserSessionId`，不退回 WebSearch。
+### P2：Right Surface Browser Workspace
 
-交付物：
+状态：组件骨架完成，Gate A 待复核。
 
-- [x] `@浏览器` 发送边界继续写 `browser_requirement / browser_launch_url`，关闭本轮 WebSearch，并触发 Browser Assist / 右侧 browser surface prime。
-- [x] `@浏览器` 发送边界把当前可见 Browser Assist session 投影到 `harness.browser_assist.session_id / profile_key / launch_url / title / target_id / transport_kind / lifecycle_state / control_mode`。
-- [x] `mcp__lime-browser__*` 工具结果与 current `BrowserSessionRef` / 右侧 visible session 首轮绑定：tool result -> `BrowserAssistSessionState` -> `BrowserSessionRef` -> Right Surface browser session facts / initialUrl。
-- [x] Browser Assist navigate / observe 使用 current session ref：CDP session 走 App Server `browserSession/action/execute`，attached Chrome session 走 extension bridge，embedded ref 只做右栏展示不伪造控制。
-- [x] 人工接管状态进入 Right Surface overlay 和 Runtime flags：`controlMode/lifecycleState` 统一投影为 `agent/human/shared/unknown`，右侧 browser surface 暴露 data flags，并在 `human/shared` 时显示接管 overlay。
-- [x] 高风险动作走 action.required / confirmation / human takeover 闭环：当前仅 `navigate / read_page / read_console_messages / read_network_requests` 自动执行，`click / type / form_input / submit / upload / download / javascript` 等动作在 `browser-runtime` CDP executor 内 fail-closed，不触发页面 CDP mutation；返回 `tool_confirmation` 请求、`permission_facts`、`action.required` metadata，并把 session 切到 `human_controlling / human`，由 EvidencePack `browser_action_index` 记录 `status=pending / confirmation_request_id / control_mode / lifecycle_state / human_reason`。
+- [x] 用稳定 tab identity mount Right Surface，不再使用 React `useId()` 生成产品 view identity。
+- [x] 独立 Browser Workspace 承担 tab strip、chrome、viewport、权限/下载/接管状态。
+- [x] 用户切换、收起、恢复、resize 只改变同一 view 的 bounds/visibility，不重建页面。
+- [x] 五语言文案已补齐，Browser component test 已覆盖基础 DOM identity。
+- [ ] `verify:gui-smoke` 与 Gate A evidence 复核无第二右栏、无系统浏览器、无重复 WebContents。
 
-### P6 Evidence / Replay
+退出条件：Gate A 打开、切换、收起、恢复和 resize 通过，无系统浏览器弹出、第二右栏、Canvas 镜像或重复 WebContents。
 
-目标：浏览器动作、截图、DOM / accessibility、network、console 和人工接管都能进入 evidence。
+### P3：旧链清退、Agent Browser API 与安全
 
-交付物：
+状态：进行中；Browser identity、stale-control、active-turn 与 native renderer termination cleanup 已完成，旧链清退和剩余扩展生命周期证据仍阻塞。
 
-- [x] `browser_session` evidence artifact。
-- [x] `browser_snapshot` evidence artifact。
-- [x] `BrowserActionTrace` 带 `sessionId / tabId / actionId / status / evidenceRefs`。
-- [x] `browser_network_log` / `browser_console_log` / `browser_screenshot` 文件级 evidence artifact。
-- [x] 历史打开能恢复 snapshot 或 replay viewer，不自动继续危险动作。
+- [x] Dynamic Browser capability 以稳定对象语义暴露 tabs/open/claim/release/navigate/observe/screenshot/mark。
+- [x] 空白 Claw 任务打开 Browser 前先建立 canonical runtime session/thread；owner 申请失败显示明确错误，不再永久显示 loading。
+- [x] App Server 校验 `runtimeSessionId -> canonical threadId`，拒绝跨 session 或伪造 Browser identity。
+- [x] Browser action 校验 `pageRevision + snapshotId`，页面导航或动作后使旧 snapshot 失效。
+- [ ] 重建 protocol schema/generated client，删除 `browserSession/*`、外部 CDP Settings 和旧 fixture。
+- [ ] 删除 `BrowserSessionRef`、Canvas Browser owner 与 `mcp__lime-browser__*` 正向依赖。
+- [ ] DOM snapshot 使用稳定 node identity；click/fill/press/select 只对 actionability 通过的目标执行。
+- [ ] 普通读取/导航自动执行；提交、发布、删除、支付、身份信息、上传下载和脚本等高风险动作进入 human takeover 或审批闭环。
+- [x] 用户人工操作后 Agent observe 能继续读取同一 tab，不创建新 session。
 
-## 4. 可追踪验收链
+退出条件：至少一个真实网页工作流完成 observe、导航、用户操作、Agent observe 和 evidence join；旧 MCP Browser 工具不再是 current owner。
 
-按 `Traceable Agent Acceptance Loop` 执行：
+### P4：Evidence、恢复与清退
 
-| 节点                   | current owner                                          | 可观测证据                                                 | 通过判据                                         | 失败分类         |
-| ---------------------- | ------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------ | ---------------- |
-| Browser 入口           | TaskCenter / Right Surface launcher                    | launcher projection、组件回归                              | 点击后 active surface 是 `browser`               | `projection_gap` |
-| Browser pending intent | App Server `workspaceRightSurface/*` + 前端 projection | pending request、`WorkspaceRightSurfaceBrowserIntent` 单测 | `launchUrl / title / browserSessionId` 可解析    | `protocol_gap`   |
-| 右侧嵌入               | `RightSurfaceHost` + `RightSurfaceBrowserPanel`        | DOM / component test / GUI smoke                           | 浏览器在右侧 active pane，不弹系统浏览器         | `projection_gap` |
-| Embedded view          | Electron Host                                          | host test、state event、GUI smoke                          | `WebContentsView` mount / navigate / bounds 成功 | `protocol_gap`   |
-| CDP action             | `lime-rs/crates/browser-runtime`                       | Rust unit、App Server method、event buffer                 | action 有 session/action/result/error            | `evidence_gap`   |
-| Browser Assist         | Runtime / Browser tools                                | `browser_requirement`、tool timeline、surface intent       | `@浏览器` 不退回 WebSearch，绑定可见 session     | `routing_gap`    |
-| Evidence               | App Server `evidence/export`                           | `browser_session` / `browser_snapshot`                     | 可按 session/thread/turn/action join             | `evidence_gap`   |
+状态：待实施。
 
-## 5. 验证矩阵
+- [ ] action/evidence 关联 thread/turn/session/tab/view/webContents/action identity。
+- [ ] 历史只恢复 snapshot/replay，不自动恢复 debugger 或 pending mutation。
+- [ ] 删除外部 CDP、Canvas owner、BrowserSessionRef、旧 v0 schema、旧 Settings connector 和 Browser mock 正向路径；Rust crate/source 已开始物理删除，schema/client/Renderer 仍未收口。
+- [ ] 负向 guard 阻止旧路径回流。
 
-P1 最低验证：
+退出条件：治理扫描无 Browser 分类漂移；断连、窗口关闭、turn cancel 和 stale route 均有可观察终态。
 
-```bash
-npx vitest run \
-  "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" \
-  "src/components/agent/chat/workspace/useWorkspaceRightSurfacePendingRuntime.unit.test.tsx" \
-  "src/components/agent/chat/workspace/right-surface/rightSurfaceRuntimeAdapter.unit.test.ts" \
-  "src/components/agent/chat/workspace/right-surface/RightSurfaceHost.unit.test.tsx" \
-  "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx"
-npx eslint \
-  "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.ts" \
-  "src/components/agent/chat/workspace/useWorkspaceRightSurfacePendingRuntime.ts" \
-  "src/components/agent/chat/AgentChatWorkspace.tsx" \
-  --max-warnings 0
-npm run typecheck:electron
+## Gate A / Gate B
+
+### Gate A：投影与布局
+
+使用显式 test-only fixture 或 renderer projection 验证 Right Surface Browser Workspace 的 DOM、chrome、bounds、状态和五语言文案。Gate A 不能证明 Agent 使用同一 WebContents。
+
+### Gate B：真实 Electron 同 tab
+
+必须使用真实 Electron Desktop Host、preload/contextBridge、Electron IPC、`app_server_handle_json_lines`、App Server current turn/tool chain 和用户可见页面，证明：
+
+```text
+Agent action.browserSessionId == visible sessionId
+Agent action.tabId            == visible tabId
+Agent action.webContentsId    == Host visible webContentsId
+Agent action.threadId         == canonical threadId
+Agent action.turnId           == active turnId
 ```
 
-触碰命令 / App Server protocol 后追加：
+证据至少包含 Electron Host route、reverse request id、App Server method、debugger attach/detach、用户人工操作后的 observe，以及 `turnEnded` close/release。普通 Chrome CDP、外部 target、Renderer `data-*`、静态截图、mock bridge 或 external backend 单独通过均不足以标记 Gate B。
 
-```bash
-npm run test:contracts
-cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-browser-runtime
-```
+2026-08-19 核心 identity Gate B 已通过：`npm run smoke:browser-runtime-electron-gate-b -- --timeout-ms 60000` 启动真实 Electron 与 runtime provider fixture，经 `app_server_handle_json_lines` 建立 current Thread/Turn，完成 `browser__openTabs -> browser__claimTab -> browser__observe -> final assistant` provider round trip。Agent observation 与 GUI 的 `browserSessionId/tabId/threadId/webContentsId` 全等，`viewId/windowId/ownerWebContentsId` 为有效 native identity，turn 以 `completed` 收口，Renderer 地址栏随后通过真实 `browser_tab_navigate` 操作相同 tab；console/page error 为零，生产 mock fallback 命中为零。脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-summary.json`。
 
-触碰 GUI 主路径后追加：
+同一 fixture 已扩展为 active-turn 生命周期场景：用户导航后旧 snapshot mutation fail-closed，Agent 重新 claim/observe 使用同一 tab/WebContents，terminal release detach debugger；随后通过真实 Electron renderer-process-gone 事件回收 Browser route。该证据标记 identity、stale-control、turn cleanup 与 renderer termination cleanup 为 pass；直接 `destroyed` 事件仍由 Electron Host 单测覆盖，不把两者混为同一触发器。尚未覆盖 approval、cancel、sidecar disconnect、window close、权限/下载和历史恢复的真实 Electron 终态。
 
-```bash
-npm run verify:gui-smoke
-```
+## 验证矩阵
 
-当前已知限制：
+| 改动                             | 最低验证                                                       |
+| -------------------------------- | -------------------------------------------------------------- |
+| Browser protocol/catalog/client  | `npm run test:contracts` + protocol/Rust related tests         |
+| Electron BrowserTabHost          | Host unit/integration + `npm run typecheck:electron`           |
+| Right Surface Workspace          | Browser component tests + `npm run verify:gui-smoke`（Gate A） |
+| Agent dynamic Browser capability | tool/runtime related tests + current Agent fixture             |
+| 真实同 tab 闭环                  | Electron Gate B fixture / Playwright identity evidence         |
+| legacy 删除                      | `npm run governance:legacy-report` + negative guards           |
 
-- `npm run smoke:browser-runtime` 已迁 current，但真实运行需要已启动的 Chrome / Chromium CDP 端口；本脚本只验证 `browserSession/*` attach / action / event / close，不负责启动浏览器进程。退出条件：如后续需要 task-scoped profile 自动拉起，应继续扩展 App Server current profile/session owner，不恢复旧 Electron Host 命令。
-- `lime-rs/crates/app-server/src/processor/mod.rs` 已超过 `1000` 行；本轮只保留 method dispatch 接线，业务逻辑已拆到 `processor/browser_session.rs`。退出条件：后续新增 Browser Session method 时继续进入分域 processor，不再扩中心文件。
-- `lime-rs/crates/browser-runtime/src/manager.rs` 已从 `1216` 行拆为 `344` 行 facade；`manager/session.rs` 只保留 `CdpSessionHandle` core / CDP command helpers，`manager/session_reader.rs` 承接 CDP reader，`manager/session_events.rs` 承接 event buffer / collection，`manager/session_stream.rs` 承接 screencast / screenshot fallback，`manager/session_lifecycle.rs` 承接 control lifecycle，`manager/cdp_targets.rs` 承接 CDP target discovery，`profile_scope.rs` 承接 task scoped profile owner / cleanup plan。退出条件：后续新增 trace、evidence、profile policy 时继续进分域子模块，不回填 `manager.rs` 或 `manager/session.rs`。
-- `lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs` 已拆为 `35` 行 facade，`browser/action_index.rs` 承接既有 action index 逻辑，`browser/file_artifacts.rs` 承接 network / console / screenshot 文件级 evidence。退出条件：`browser/action_index.rs` 不再继续追加 network / console / screenshot 细节；后续新增 evidence 维度必须进入同级子模块。
-- 标准 `npm run verify:gui-smoke` 已于 2026-06-25 重新跑通；此前 `dist/` EPERM 构建目录问题未复现。
-- `src/components/agent/chat/AgentChatWorkspace.tsx` 已超过 `1000` 行；本轮仅做 Right Surface browser props 透传接线，控制状态判断已抽到 `workspaceBrowserControlMode.ts`，未在中心文件新增状态机。退出条件：后续继续扩 Browser Right Surface 时先抽 `workspaceRightSurfaceBrowserRuntime.ts` 或同级 facade，中心文件只保留 props 装配。
+每次验证记录实际命令、scenario、identity、terminal/pending 状态和未验证原因；生产路径禁止 mock fallback。
 
-本轮已执行：
+## 架构确认
 
-- [x] `npx vitest run "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" "src/components/agent/chat/workspace/useWorkspaceRightSurfacePendingRuntime.unit.test.tsx" "src/components/agent/chat/workspace/right-surface/rightSurfaceRuntimeAdapter.unit.test.ts" "src/components/agent/chat/workspace/right-surface/RightSurfaceHost.unit.test.tsx" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx"`
-- [x] `npx eslint "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.ts" "src/components/agent/chat/workspace/useWorkspaceRightSurfacePendingRuntime.ts" "src/components/agent/chat/AgentChatWorkspace.tsx" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" "src/components/agent/chat/workspace/useWorkspaceRightSurfacePendingRuntime.unit.test.tsx" --max-warnings 0`
-- [x] `npm run typecheck:electron`
-- [x] `npm run verify:gui-smoke`
-- [x] `npm run test:contracts`
-- [x] `git diff --check`
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server-protocol browser_session`
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server browser_session`
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server-protocol`
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server-client`
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/app-server-protocol/src/protocol/v0/browser_session.rs" "lime-rs/crates/app-server/src/runtime/browser_session.rs" "lime-rs/crates/app-server/src/processor/browser_session.rs" "lime-rs/crates/app-server-client/src/lib.rs"`
-- [x] `npx vitest run "src/lib/api/browserRuntime.test.ts" "packages/app-server-client/tests/client.test.mjs"`
-- [x] `npx vitest run "src/lib/governance/legacySurfaceCatalog.test.ts"`
-- [x] `npm run check:protocol-types`
-- [x] `node "scripts/check-app-server-client-contract.mjs"`
-- [x] `npm run smoke:browser-runtime -- --remote-debugging-port 9333`（临时 headless Chrome，独立 user-data-dir；session / action / event / close 均通过）
-- [x] `npx vitest run "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" "src/components/agent/chat/workspace/useWorkspaceRightSurfacePendingRuntime.unit.test.tsx"`
-- [x] `npx eslint "src/components/agent/chat/workspace/workspaceBrowserSessionRef.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.ts" --max-warnings 0`
-- [x] `npx vitest run "electron/embeddedBrowserHost.test.ts" "electron/ipcChannels.test.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx"`
-- [x] `npx eslint "electron/embeddedBrowserHost.ts" "electron/embeddedBrowserHost.test.ts" "electron/ipcChannels.ts" "electron/ipcChannels.test.ts" "src/lib/api/embeddedBrowser.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx" --max-warnings 0`
-- [x] `npm run typecheck:electron`
-- [x] `npm run verify:gui-smoke`
-- [x] `npx vitest run "electron/embeddedBrowserHost.test.ts" "electron/ipcChannels.test.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx"`（P2 title/favicon/progress/find/zoom）
-- [x] `npx eslint "electron/embeddedBrowserHost.ts" "electron/embeddedBrowserHost.test.ts" "electron/ipcChannels.ts" "electron/ipcChannels.test.ts" "src/lib/api/embeddedBrowser.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx" --max-warnings 0`（P2 title/favicon/progress/find/zoom）
-- [x] `npm run typecheck:electron`（P2 title/favicon/progress/find/zoom）
-- [x] `npm run test:contracts`（P2 新增 Electron Host command 计数更新为 93）
-- [x] `npm run verify:gui-smoke`（P2 右侧浏览器 chrome / Host bridge 触达 GUI 主路径）
-- [x] `git diff --check`（P2 title/favicon/progress/find/zoom）
-- [x] `npx vitest run "electron/embeddedBrowserHost.test.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx"`（P2 错误分类 / bounds visible）
-- [x] `npx vitest run "electron/embeddedBrowserHost.test.ts" "electron/ipcChannels.test.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx" "src/i18n/__tests__/loadNamespace.test.ts" "src/i18n/__tests__/types.test.ts"`（P2 错误分类 / 五语言文案 / bounds visible）
-- [x] `npx eslint "electron/embeddedBrowserHost.ts" "electron/embeddedBrowserHost.test.ts" "src/lib/api/embeddedBrowser.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx" --max-warnings 0`（P2 错误分类 / bounds visible）
-- [x] `npm run typecheck:electron`（P2 错误分类 / bounds visible）
-- [x] `npm run test:contracts`（P2 错误分类 / bounds visible；Electron host command 计数保持 93，mock priority 为 0）
-- [x] `npm run verify:gui-smoke`（P2 错误分类 / bounds visible；真实 Electron renderer、App Server、Claw shell 启动通过）
-- [x] `npx vitest run "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts"`（P3 Browser Assist metadata -> `BrowserSessionRef`）
-- [x] `npx eslint "src/components/agent/chat/workspace/workspaceBrowserSessionRef.ts" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" --max-warnings 0`（P3 Browser Assist metadata -> `BrowserSessionRef`）
-- [x] `npx vitest run "src/components/agent/chat/workspace/useWorkspaceSendActions.test.tsx" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts"`（P5 `@浏览器` visible session metadata / Browser Assist prime）
-- [x] `npx eslint "src/components/agent/chat/workspace/browserControlLaunch.ts" "src/components/agent/chat/workspace/useWorkspaceSendActions.ts" "src/components/agent/chat/workspace/useWorkspaceSendActions.test.tsx" "src/components/agent/chat/AgentChatWorkspace.tsx" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.ts" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" --max-warnings 0`（P5 `@浏览器` visible session metadata / Browser Assist prime）
-- [x] `npx vitest run "src/components/agent/chat/utils/browserWorkbenchCommand.test.ts" "src/components/agent/chat/workspace/useWorkspaceSendActions.test.tsx" "src/components/agent/chat/skill-selection/CharacterMention.test.tsx" "src/lib/api/skillCatalog.test.ts" "src/components/agent/chat/workspace/useWorkspaceBrowserAssistRuntime.test.tsx" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts"`（P5 显式浏览器任务接线最低回归）
-- [x] `npm run typecheck:electron`（P5 `@浏览器` visible session metadata / Browser Assist prime）
-- [x] `npm run test:contracts`（P5 harness browser_assist session 投影扩展；Electron host command 计数保持 93，mock priority 为 0）
-- [x] `npm run verify:gui-smoke`（P5 GUI 主路径；真实 Electron renderer、App Server、Claw shell 启动通过）
-- [x] `npx vitest run "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/utils/browserAssistSession.test.ts" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx"`（P5 `mcp__lime-browser__*` tool result -> `BrowserSessionRef` -> Right Surface browser facts）
-- [x] `npx eslint "src/components/agent/chat/workspace/workspaceBrowserSessionRef.ts" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.tsx" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx" "src/components/agent/chat/AgentChatWorkspace.tsx" --max-warnings 0`（P5 第二刀窄写集）
-- [x] `npx vitest run "src/components/agent/chat/utils/browserWorkbenchCommand.test.ts" "src/components/agent/chat/workspace/useWorkspaceSendActions.test.tsx" "src/components/agent/chat/skill-selection/CharacterMention.test.tsx" "src/lib/api/skillCatalog.test.ts" "src/components/agent/chat/workspace/useWorkspaceBrowserAssistRuntime.test.tsx" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx"`（P5 显式浏览器任务、Browser Assist runtime、右栏 browser ref 回归）
-- [x] `npm run typecheck:electron`（P5 第二刀）
-- [x] `npm run verify:gui-smoke`（P5 第二刀 GUI 主路径；真实 Electron renderer、App Server、Claw shell、memory settings 启动通过）
-- [x] `npm run test:contracts`（P5 第二刀；Electron host command 计数保持 93，mock priority 为 0）
-- [x] `git diff --check -- "src/components/agent/chat/workspace/workspaceBrowserSessionRef.ts" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.tsx" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx" "src/components/agent/chat/AgentChatWorkspace.tsx" "internal/exec-plans/browser-runtime-right-surface-plan.md"`（P5 第二刀窄写集）
-- [x] `npx vitest run "src/components/agent/chat/workspace/workspaceBrowserAssistControl.unit.test.ts" "src/components/agent/chat/workspace/useWorkspaceBrowserAssistRuntime.test.tsx" "src/components/agent/chat/workspace/workspaceBrowserRuntimeNavigation.unit.test.ts"`（P5 第三刀：navigate / observe 使用 current `BrowserSessionRef`）
-- [x] `npx eslint "src/components/agent/chat/workspace/workspaceBrowserAssistControl.ts" "src/components/agent/chat/workspace/workspaceBrowserAssistControl.unit.test.ts" "src/components/agent/chat/workspace/useWorkspaceBrowserAssistRuntime.ts" "src/components/agent/chat/workspace/useWorkspaceBrowserAssistRuntime.test.tsx" "src/components/agent/chat/workspace/workspaceBrowserRuntimeNavigation.ts" "src/components/agent/chat/workspace/workspaceBrowserRuntimeNavigation.unit.test.ts" "src/components/agent/chat/AgentChatWorkspace.tsx" --max-warnings 0`（P5 第三刀窄写集）
-- [x] `npx vitest run "src/components/agent/chat/utils/browserWorkbenchCommand.test.ts" "src/components/agent/chat/workspace/useWorkspaceSendActions.test.tsx" "src/components/agent/chat/skill-selection/CharacterMention.test.tsx" "src/lib/api/skillCatalog.test.ts" "src/components/agent/chat/workspace/useWorkspaceBrowserAssistRuntime.test.tsx" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceBrowserAssistControl.unit.test.ts" "src/components/agent/chat/workspace/workspaceBrowserRuntimeNavigation.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx"`（P5 第三刀扩展回归，192 tests passed）
-- [x] `npm run typecheck:electron`（P5 第三刀）
-- [x] `npm run test:contracts`（P5 第三刀；Electron host command 计数保持 93，mock priority 为 0）
-- [x] `npm run electron:build:host`（P5 第三刀 dev-server GUI smoke 前置 host 构建）
-- [x] `VITE_DEV_SERVER_URL="http://127.0.0.1:1420/" node "scripts/electron/smoke.mjs"`（P5 第三刀临时 GUI 证据；真实 Electron renderer、App Server、Claw shell、memory settings 启动通过）
-- [x] `npm run verify:gui-smoke`（P5 第三刀标准入口 2026-06-25 重跑通过；renderer build、Electron host build、App Server sidecar、Claw shell、memory settings 均 ready）
-- [x] `npx vitest run "src/components/agent/chat/workspace/workspaceBrowserControlMode.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx"`（P5 人工接管 overlay / flags 定向回归）
-- [x] `npx eslint "src/components/agent/chat/workspace/workspaceBrowserControlMode.ts" "src/components/agent/chat/workspace/workspaceBrowserControlMode.unit.test.ts" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.tsx" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" "src/components/agent/chat/AgentChatWorkspace.tsx" --max-warnings 0`（P5 人工接管 overlay / flags 窄写集）
-- [x] `npx vitest run "src/i18n/__tests__/loadNamespace.test.ts" "src/i18n/__tests__/types.test.ts"`（P5 人工接管 overlay 五语言文案）
-- [x] `npx vitest run "src/components/agent/chat/utils/browserWorkbenchCommand.test.ts" "src/components/agent/chat/workspace/useWorkspaceSendActions.test.tsx" "src/components/agent/chat/skill-selection/CharacterMention.test.tsx" "src/lib/api/skillCatalog.test.ts" "src/components/agent/chat/workspace/useWorkspaceBrowserAssistRuntime.test.tsx" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceBrowserAssistControl.unit.test.ts" "src/components/agent/chat/workspace/workspaceBrowserControlMode.unit.test.ts" "src/components/agent/chat/workspace/workspaceBrowserRuntimeNavigation.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx"`（P5 人工接管 overlay / flags 扩展回归，196 tests passed）
-- [x] `npm run typecheck:electron`（P5 人工接管 overlay / flags）
-- [x] `npm run test:contracts`（P5 人工接管 overlay / flags；Electron host command 计数保持 93，mock priority 为 0）
-- [x] `VITE_DEV_SERVER_URL="http://127.0.0.1:1420/" node "scripts/electron/smoke.mjs"`（P5 人工接管 overlay / flags 临时 GUI 证据；真实 Electron renderer、App Server、Claw shell、memory settings 启动通过）
-- [x] `npx vitest run "src/components/agent/chat/workspace/workspaceBrowserAssistControl.unit.test.ts"`（P5 高风险动作 confirmation skeleton 定向回归，6 tests passed）
-- [x] `npx eslint "src/components/agent/chat/workspace/workspaceBrowserAssistControl.ts" "src/components/agent/chat/workspace/workspaceBrowserAssistControl.unit.test.ts" --max-warnings 0`（P5 高风险动作 confirmation skeleton 窄写集）
-- [x] `npx prettier --check "src/components/agent/chat/workspace/workspaceBrowserAssistControl.ts" "src/components/agent/chat/workspace/workspaceBrowserAssistControl.unit.test.ts" "internal/exec-plans/browser-runtime-right-surface-plan.md"`（P5 高风险动作 confirmation skeleton 格式检查）
-- [x] `npx vitest run "src/components/agent/chat/utils/browserWorkbenchCommand.test.ts" "src/components/agent/chat/workspace/useWorkspaceSendActions.test.tsx" "src/components/agent/chat/skill-selection/CharacterMention.test.tsx" "src/lib/api/skillCatalog.test.ts" "src/components/agent/chat/workspace/useWorkspaceBrowserAssistRuntime.test.tsx" "src/components/agent/chat/workspace/workspaceBrowserSessionRef.unit.test.ts" "src/components/agent/chat/workspace/workspaceBrowserAssistControl.unit.test.ts" "src/components/agent/chat/workspace/workspaceBrowserControlMode.unit.test.ts" "src/components/agent/chat/workspace/workspaceBrowserRuntimeNavigation.unit.test.ts" "src/components/agent/chat/workspace/workspaceRightSurfaceBrowserIntent.unit.test.ts" "src/components/agent/chat/workspace/right-surface/browser/RightSurfaceBrowserPanel.test.tsx"`（P5 高风险动作 confirmation skeleton 扩展回归，199 tests passed）
-- [x] `npm run typecheck:electron`（P5 高风险动作 confirmation skeleton）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-browser-runtime`（P5 高风险动作 CDP executor fail-closed，16 tests passed）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server browser_session_action_trace_preserves_action_required_state`（P5/P6 高风险动作 pending trace）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server evidence_exports`（P5/P6 高风险动作 confirmation / human takeover evidence，12 tests passed）
-- [x] `npx vitest run "src/components/agent/chat/components/harnessEvidenceViewModel.unit.test.ts"`（P6 高风险动作 replay meta 透传，9 tests passed）
-- [x] `npx eslint "src/lib/api/agentRuntime/types.ts" "src/lib/api/agentRuntime/normalizers.ts" "src/components/agent/chat/components/harnessEvidenceViewModel.ts" "src/components/agent/chat/components/harnessEvidenceViewModel.unit.test.ts" --max-warnings 0`（P6 高风险动作 evidence TS 窄写集）
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/browser-runtime/src/action.rs" "lime-rs/crates/browser-runtime/src/action_policy.rs" "lime-rs/crates/browser-runtime/src/lib.rs" "lime-rs/crates/app-server/src/runtime/browser_session.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser/action_index.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/browser.rs"`（P5/P6 高风险动作 Rust 格式检查）
-- [x] `npx prettier --check "src/lib/api/agentRuntime/types.ts" "src/lib/api/agentRuntime/types.d.ts" "src/lib/api/agentRuntime/normalizers.ts" "src/components/agent/chat/components/harnessEvidenceViewModel.ts" "src/components/agent/chat/components/harnessEvidenceViewModel.unit.test.ts"`（P6 高风险动作前端格式检查）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server evidence_exports`（P6 browser evidence 第一刀，11 tests passed）
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/app-server/src/runtime/evidence_provider.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/browser.rs"`（P6 browser evidence 第一刀）
-- [x] `git diff --check -- "lime-rs/crates/app-server/src/runtime/evidence_provider.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/browser.rs"`（P6 browser evidence 第一刀）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server browser_session_action_result`（P6 BrowserActionTrace 第二刀，2 tests passed）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server evidence_exports`（P6 BrowserActionTrace 第二刀，11 tests passed）
-- [x] `npx vitest run "src/components/agent/chat/components/harnessEvidenceViewModel.unit.test.ts"`（P6 BrowserActionTrace 第二刀，8 tests passed）
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/app-server/src/runtime/browser_session.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/browser.rs"`（P6 BrowserActionTrace 第二刀）
-- [x] `npx prettier --check "src/lib/api/agentRuntime/types.ts" "src/lib/api/agentRuntime/types.d.ts" "src/lib/api/agentRuntime/normalizers.ts" "src/components/agent/chat/components/harnessEvidenceViewModel.ts" "src/components/agent/chat/components/harnessEvidenceViewModel.unit.test.ts"`（P6 BrowserActionTrace 第二刀）
-- [x] `git diff --check -- "lime-rs/crates/app-server/src/runtime/browser_session.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/browser.rs" "src/lib/api/agentRuntime/types.ts" "src/lib/api/agentRuntime/types.d.ts" "src/lib/api/agentRuntime/normalizers.ts" "src/components/agent/chat/components/harnessEvidenceViewModel.ts" "src/components/agent/chat/components/harnessEvidenceViewModel.unit.test.ts"`（P6 BrowserActionTrace 第二刀）
-- [x] `npm run test:contracts`（P6 BrowserActionTrace 第二刀；协议无漂移，Electron host command 计数保持 93，mock priority 为 0）
-- [x] `npx vitest run "src/components/artifact/renderers/BrowserAssistRenderer.test.tsx"`（P6 replay 只读恢复第三刀，4 tests passed）
-- [x] `npx vitest run "src/i18n/__tests__/loadNamespace.test.ts" "src/i18n/__tests__/types.test.ts"`（P6 replay 只读恢复第三刀，8 tests passed）
-- [x] `npx eslint "src/components/artifact/renderers/BrowserAssistRenderer.tsx" "src/components/artifact/renderers/BrowserAssistRenderer.test.tsx" --max-warnings 0`（P6 replay 只读恢复第三刀）
-- [x] `npx prettier --check "src/components/artifact/renderers/BrowserAssistRenderer.tsx" "src/components/artifact/renderers/BrowserAssistRenderer.test.tsx" "src/i18n/resources/zh-CN/workspace.json" "src/i18n/resources/zh-TW/workspace.json" "src/i18n/resources/en-US/workspace.json" "src/i18n/resources/ja-JP/workspace.json" "src/i18n/resources/ko-KR/workspace.json"`（P6 replay 只读恢复第三刀）
-- [x] `git diff --check -- "src/components/artifact/renderers/BrowserAssistRenderer.tsx" "src/components/artifact/renderers/BrowserAssistRenderer.test.tsx" "src/i18n/resources/zh-CN/workspace.json" "src/i18n/resources/zh-TW/workspace.json" "src/i18n/resources/en-US/workspace.json" "src/i18n/resources/ja-JP/workspace.json" "src/i18n/resources/ko-KR/workspace.json"`（P6 replay 只读恢复第三刀）
-- [x] `npx prettier --write "scripts/agent-runtime/claw-chat-current-fixture-right-surface-visual.mjs" "scripts/agent-runtime/claw-chat-current-fixture-scenario-assertions.mjs" "scripts/agent-runtime/claw-chat-current-fixture-smoke.test.mjs"`（P1/P2/P5 右侧 Browser 截图级验收）
-- [x] `npx vitest run "scripts/agent-runtime/claw-chat-current-fixture-smoke.test.mjs"`（P1/P2/P5 右侧 Browser fixture guard，20 tests passed）
-- [x] `npm run smoke:claw-chat-current-fixture -- --scenario right-surface-visual-matrix`（P1/P2/P5 真实 Electron GUI；`rightSurfaceVisualMatrix*` assertions 全部通过）
-- [x] `git diff --check -- "scripts/agent-runtime/claw-chat-current-fixture-right-surface-visual.mjs" "scripts/agent-runtime/claw-chat-current-fixture-scenario-assertions.mjs" "scripts/agent-runtime/claw-chat-current-fixture-smoke.test.mjs"`（P1/P2/P5 右侧 Browser fixture guard）
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser/action_index.rs"`（P6 evidence provider action index 拆分）
-- [x] `git diff --check -- "lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser/action_index.rs"`（P6 evidence provider action index 拆分）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server evidence_exports`（P6 evidence provider action index 拆分，11 tests passed）
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/app-server/src/runtime/evidence_provider.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser/action_index.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser/file_artifacts.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/browser.rs"`（P6 browser file evidence）
-- [x] `git diff --check -- "lime-rs/crates/app-server/src/runtime/evidence_provider.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser/action_index.rs" "lime-rs/crates/app-server/src/runtime/evidence_provider/browser/file_artifacts.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/browser.rs"`（P6 browser file evidence）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server evidence_exports`（P6 browser file evidence，11 tests passed；`lime-agent/request_tool_policy.rs` 仅剩 `unused import: uuid::Uuid` warning，未阻塞本轮）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-browser-runtime profile_scope`（P3 task scoped profile owner skeleton，2 tests passed）
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/browser-runtime/src/manager.rs" "lime-rs/crates/browser-runtime/src/manager/session.rs" "lime-rs/crates/browser-runtime/src/manager/cdp_targets.rs" "lime-rs/crates/browser-runtime/src/lib.rs" "lime-rs/crates/browser-runtime/src/profile_scope.rs"`（BrowserRuntimeManager 拆分）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-browser-runtime`（BrowserRuntimeManager 拆分 / profile scope，8 tests passed）
-- [x] `git diff --check -- "lime-rs/crates/browser-runtime/src/manager.rs" "lime-rs/crates/browser-runtime/src/manager/session.rs" "lime-rs/crates/browser-runtime/src/manager/cdp_targets.rs" "lime-rs/crates/browser-runtime/src/lib.rs" "lime-rs/crates/browser-runtime/src/profile_scope.rs"`（BrowserRuntimeManager 拆分）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server evidence_exports`（BrowserRuntimeManager 拆分下游回归，11 tests passed）
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/browser-runtime/src/manager.rs" "lime-rs/crates/browser-runtime/src/manager/session.rs" "lime-rs/crates/browser-runtime/src/manager/session_events.rs" "lime-rs/crates/browser-runtime/src/manager/session_lifecycle.rs" "lime-rs/crates/browser-runtime/src/manager/session_reader.rs" "lime-rs/crates/browser-runtime/src/manager/session_stream.rs" "lime-rs/crates/browser-runtime/src/manager/cdp_targets.rs"`（BrowserRuntimeManager session 二次拆分）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-browser-runtime`（BrowserRuntimeManager session 二次拆分，12 tests passed）
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/browser-runtime/src/action.rs" "lime-rs/crates/browser-runtime/src/evidence.rs" "lime-rs/crates/browser-runtime/src/lib.rs" "lime-rs/crates/app-server/src/runtime/browser_session.rs" "lime-rs/crates/app-server/src/runtime/tests/evidence_exports/browser.rs"`（P6 browser-runtime action result file evidence metadata）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-browser-runtime`（P6 browser-runtime action result file evidence metadata，12 tests passed）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server browser_session_action`（P6 action trace file evidence refs，3 tests passed）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server evidence_exports`（P6 action result -> evidence pack 回归，11 tests passed）
-- [x] `node --check "scripts/browser-runtime-smoke.mjs"`（smoke action result metadata 断言）
-- [x] `node "scripts/browser-runtime-smoke.mjs" --help`（smoke CLI 帮助路径）
-- [x] `node "scripts/browser-runtime-smoke.mjs" --remote-debugging-port 9333`（临时 headless Chrome；断言 `browser_action_trace`、`browser_snapshot`、`browser_console_log`、`browser_network_log`、对应 `evidenceRefs`，`cleanup=pass`）
-- [x] `rustfmt --edition 2021 --check "lime-rs/crates/app-server/src/runtime.rs" "lime-rs/crates/app-server/src/runtime/browser_session.rs"`（BrowserProfileScope App Server owner 生命周期）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server browser_profile`（BrowserProfileScope App Server owner 生命周期，2 tests passed）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server browser_session`（BrowserProfileScope close cleanup + browser action trace 回归，8 tests passed）
-- [x] `node "scripts/browser-runtime-smoke.mjs" --remote-debugging-port 9333`（BrowserProfileScope close cleanup 真实 current 链路；临时 headless Chrome，`cleanup=pass`）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p lime-browser-runtime`（DOM/accessibility file evidence metadata，14 tests passed）
-- [x] `cargo test --manifest-path "lime-rs/Cargo.toml" -p app-server evidence_exports`（DOM/accessibility file evidence pack 导出，11 tests passed）
-- [x] `node "scripts/browser-runtime-smoke.mjs" --remote-debugging-port 9333`（真实 CDP 断言 `browser_dom_snapshot` / `browser_accessibility_snapshot` metadata 与 `evidenceRefs`，`cleanup=pass`）
-- [x] `npx vitest run "electron/embeddedBrowserHost.test.ts"`（完整产品 Host 右键菜单第一刀，12 tests passed）
-- [x] `npx eslint "electron/embeddedBrowserContextMenu.ts" "electron/embeddedBrowserHost.ts" "electron/embeddedBrowserHost.test.ts" "electron/electronRuntime.ts" "electron/smokeMemorySettings.ts" --max-warnings 0`（完整产品 Host 右键菜单第一刀）
-- [x] `npm run typecheck:electron`（完整产品 Host 右键菜单第一刀）
-- [x] `npx prettier --check "electron/embeddedBrowserContextMenu.ts" "electron/embeddedBrowserHost.ts" "electron/embeddedBrowserHost.test.ts" "electron/electronRuntime.ts" "electron/smokeMemorySettings.ts" "internal/exec-plans/browser-runtime-right-surface-plan.md" "internal/roadmap/browser/README.md"`（完整产品 Host 右键菜单第一刀）
-- [x] `node "scripts/check-command-contracts.mjs"`（完整产品 Host 右键菜单第一刀；Electron host command 计数保持 93，mock priority 为 0）
-- [x] `git diff --check -- "electron/embeddedBrowserContextMenu.ts" "electron/embeddedBrowserHost.ts" "electron/embeddedBrowserHost.test.ts" "electron/electronRuntime.ts" "electron/smokeMemorySettings.ts" "internal/exec-plans/browser-runtime-right-surface-plan.md" "internal/roadmap/browser/README.md"`（完整产品 Host 右键菜单第一刀）
-- [x] `npm run verify:gui-smoke`（完整产品 Host 右键菜单第一刀；renderer loaded、App Server initialized、Claw workbench shell ready、memory settings ready）
-- [x] `npx vitest run "electron/embeddedBrowserHost.test.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx"`（完整产品 Host 下载第一刀，18 tests passed）
-- [x] `npx eslint "electron/embeddedBrowserDownloads.ts" "electron/embeddedBrowserHost.ts" "electron/embeddedBrowserHost.test.ts" "src/lib/api/embeddedBrowser.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserDownloadShelf.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserStatusOverlays.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx" --max-warnings 0`（完整产品 Host 下载第一刀）
-- [x] `npm run typecheck:electron`（完整产品 Host 下载第一刀）
-- [x] `npx vitest run "src/i18n/__tests__/loadNamespace.test.ts" "src/i18n/__tests__/types.test.ts"`（完整产品 Host 下载第一刀五语言文案，8 tests passed）
-- [x] `node "scripts/check-command-contracts.mjs"`（完整产品 Host 下载第一刀；Electron host command 计数保持 93，mock priority 为 0）
-- [x] `npx prettier --check "electron/embeddedBrowserDownloads.ts" "electron/embeddedBrowserHost.ts" "electron/embeddedBrowserHost.test.ts" "src/lib/api/embeddedBrowser.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserDownloadShelf.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserStatusOverlays.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx" "src/i18n/resources/zh-CN/agent.json" "src/i18n/resources/zh-TW/agent.json" "src/i18n/resources/en-US/agent.json" "src/i18n/resources/ja-JP/agent.json" "src/i18n/resources/ko-KR/agent.json" "internal/roadmap/browser/README.md" "internal/exec-plans/browser-runtime-right-surface-plan.md"`（完整产品 Host 下载第一刀）
-- [x] `git diff --check -- "electron/embeddedBrowserDownloads.ts" "electron/embeddedBrowserHost.ts" "electron/embeddedBrowserHost.test.ts" "src/lib/api/embeddedBrowser.ts" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserDownloadShelf.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserStatusOverlays.tsx" "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.test.tsx" "src/i18n/resources/zh-CN/agent.json" "src/i18n/resources/zh-TW/agent.json" "src/i18n/resources/en-US/agent.json" "src/i18n/resources/ja-JP/agent.json" "src/i18n/resources/ko-KR/agent.json" "internal/roadmap/browser/README.md" "internal/exec-plans/browser-runtime-right-surface-plan.md"`（完整产品 Host 下载第一刀）
-- [x] `npm run verify:gui-smoke`（完整产品 Host 下载第一刀；renderer loaded、App Server initialized、Claw workbench shell ready、memory settings ready）
-- [x] `npm test -- "electron/embeddedBrowserHost.test.ts"`（主窗口刷新清理内嵌 `WebContentsView`，15 tests passed）
-- [x] `npm run typecheck:electron`（主窗口刷新清理内嵌 `WebContentsView`）
-- [x] `npm run verify:gui-smoke`（主窗口刷新清理内嵌 `WebContentsView`；真实 Electron renderer、App Server、Claw shell、memory settings 启动通过）
+本计划对应 `internal/roadmap/browser/README.md` 的 P0-P4。责任开发者：root，2026-08-18。确认内容：已复核 Codex Desktop Browser plugin 的 tab cleanup/claiming/safety 合同、Lime App Server connection-owned reverse request、Electron `WebContentsView` Host 与现有 dynamic tool server request；确认内嵌 Browser 唯一执行体为 Electron BrowserTabHost + 同一 `webContents.debugger`，外部 Chrome/CDP、Canvas Browser owner、BrowserSessionRef adapter 与 MCP 前缀不再作为 compat 主链。Gate A 与真实 Electron Gate B 分开取证，未把普通 Chrome、fixture 或 Renderer projection 冒充 Gate B。
 
-## 6. 进度日志
+## 进度记录
 
-- 2026-06-24：建立本执行计划，确认 skeleton-first 策略；P1 已有 Right Surface browser tab / Electron embedded browser 修复 / startup file URL 修复；本轮新增 browser pending intent 纯投影和 foreground 自动打开骨架，并通过 P1 定向 Vitest、ESLint、`typecheck:electron`、`verify:gui-smoke`、`test:contracts`、`git diff --check`。
-- 2026-06-24：P4 skeleton-first 第一刀落地：新增 `browserSession/target/list|open|read|close|event/list|action/execute` App Server method，接入 `app-server-protocol`、`app-server` processor / RuntimeCore、Rust `app-server-client`、npm `packages/app-server-client`、前端 `src/lib/api/browserRuntime.ts` 和 `agentCommandCatalog`；新增 contract guard 防 `launch_browser_session / close_chrome_profile_session` 回流。定向 Rust / TS / contract 验证已过。
-- 2026-06-24：P4 skeleton-first 第二刀落地：`scripts/browser-runtime-smoke.mjs` 改为 `app_server_handle_json_lines -> browserSession/*` current JSON-RPC flow，要求 `--remote-debugging-port` 或 `LIME_BROWSER_RUNTIME_REMOTE_DEBUGGING_PORT`，覆盖 `target/list -> open -> read -> action/execute(read_page|read_console_messages|read_network_requests) -> event/list -> close`；contract guard 已纳入该 smoke，并禁止旧 browser runtime command 回流。已用临时 headless Chrome `9333` 跑通真实 smoke：`session=6ca1c153-6449-4fdc-8edd-46a297ea6fac`、`networkEvents=2`、`browserEvents=15`、`cleanup=pass`。
-- 2026-06-24：P3 skeleton-first 第一刀落地：新增 `workspaceBrowserSessionRef.ts`，定义最小 `BrowserSessionRef` 并提供 Right Surface intent / CDP session state projection；`WorkspaceRightSurfaceBrowserIntent` 现在带 `sessionRef`，不改变现有 browser surface 打开行为。定向 Vitest / ESLint 已过。
-- 2026-06-24：P2 skeleton-first 第一刀落地：新增 `embedded_browser_view_stop` current Electron Host command，renderer API 增加 `stopLoadingEmbeddedBrowserView`，Browser chrome 在 loading 时将 refresh 按钮切换为 stop；五语言文案和组件/host/ipc 回归已补，`test:contracts` 通过且 Electron host command 计数更新为 90。
-- 2026-06-24：P2 skeleton-first 第二刀落地：新增 `embedded_browser_view_find_in_page`、`embedded_browser_view_stop_find_in_page`、`embedded_browser_view_set_zoom` current Electron Host command；`EmbeddedBrowserViewState` 增加 `faviconUrl / loadProgress / zoomFactor / find`，Browser chrome 显示页面 title、favicon、加载进度条、页内查找和单标签缩放。五语言文案、Electron host/ipc/组件回归已补，定向 Vitest / ESLint / `typecheck:electron` 已过。
-- 2026-06-24：P2 skeleton-first 第三刀落地：`embedded-browser-view-load-failed` 增加 `failureCategory=dns|tls|blocked|aborted|load_failed`，renderer API fail-closed 校验该字段，Browser 错误页按 DNS / TLS / blocked / generic 分类展示五语言文案；补 component 回归覆盖 overlay 隐藏、零尺寸收起、resize 恢复时的 `visible` 同步，避免右侧 view 下拉空白或错位。定向 Vitest / ESLint / `typecheck:electron` / `test:contracts` / `verify:gui-smoke` 已过。
-- 2026-06-24：P3 skeleton-first 第二刀落地：`buildBrowserSessionRefFromBrowserAssistMetadata` 支持 `harness.browser_assist` / `harness.browserAssist` / `browser_assist` / `browserAssist` / `browser` 中的 snake/camel session、profile、url、title 和 adapter 字段；`WorkspaceRightSurfaceBrowserIntent` 复用该投影，把 Browser Assist metadata 归一到 `BrowserSessionRef`。显式未知 adapter 保持 `unknown`，避免将 extension / existing-session 类 metadata 错误声明为 CDP。定向 Vitest / ESLint 已过。
-- 2026-06-24：P5 skeleton-first 第一刀落地：`@浏览器` / `@Browser Agent` / `@Mini Tester` 显式浏览器命令发送时以 `browserRequirementForSend` 统一驱动 metadata、关闭 WebSearch、禁用快速响应普通聊天路由，并在发送前调用 `ensureBrowserAssistCanvas(..., navigationMode=explicit-url|best-effort)` 触发右侧 browser surface prime；当前可见 Browser Assist session 会写入 `harness.browser_assist.session_id / profile_key / launch_url / title / target_id / transport_kind / lifecycle_state / control_mode`，后端和后续 Browser tools 可按该 visible session 继续接管。定向 Vitest / ESLint / `typecheck:electron` / `test:contracts` / `verify:gui-smoke` 已过。
-- 2026-06-24：P5 skeleton-first 第二刀落地：新增 `buildBrowserSessionRefFromBrowserAssistSessionState`，把 `mcp__lime-browser__*` 工具结果提取出的 `BrowserAssistSessionState` 投影成 current `BrowserSessionRef`；Right Surface browser wrapper 接收并暴露 `sessionRef` facts，`AgentChatWorkspace` 在没有 pending browser intent 时回退使用当前 Browser Assist session ref 驱动右栏 browser 的 initialUrl / title / session facts。`cdp_frames` 映射为 CDP，`existing_session` 保持 `unknown`，避免误把 Chrome extension / attached session 声明为 CDP。定向 Vitest / ESLint / `typecheck:electron` / `test:contracts` / `verify:gui-smoke` 已过。
-- 2026-06-24：P5 skeleton-first 第三刀落地：新增 `workspaceBrowserAssistControl.ts` 纯 planner，Browser Assist navigate / observe 统一以 `BrowserSessionRef` 做分流；CDP current session 调 App Server `browserSession/action/execute` 的 `navigate/read_page`，attached Chrome session 继续调用 extension bridge，embedded ref 明确不生成自动化控制计划。`useWorkspaceBrowserAssistRuntime` 在已有 session 且无新 URL 时会非阻塞 `read_page` 刷新当前页面状态；`resolveBrowserRuntimeNavigationFromBrowserAssist` 也优先使用同一份 `BrowserSessionRef`。定向 Vitest / ESLint 已过。
-- 2026-06-24：P5 第三刀补验证：`typecheck:electron`、`test:contracts`、`electron:build:host` 和 dev-server 路径的真实 Electron smoke 已过；当日标准 `verify:gui-smoke` 曾因本机 `dist/` 目录 `EPERM` 未过，已登记为环境限制，后续于 2026-06-25 重跑通过。
-- 2026-06-24：P5 第四刀落地：新增 `workspaceBrowserControlMode.ts`，把 `agent / human / shared` 以及兼容的 `human_takeover / waiting_for_human / inspect` 投影为 Right Surface browser runtime flags；`RightSurfaceBrowserPanel` 暴露 `data-browser-control-*` 和 `data-browser-human-takeover`，并在 `human/shared` 状态显示轻量 overlay。`WorkspaceRightSurfaceBrowserIntent` 同步解析 pending metadata 中的 `controlMode / lifecycleState`，`AgentChatWorkspace` 将 Browser Assist session 或 pending intent 的控制状态透传到右侧栏。五语言文案、定向 Vitest / ESLint / `typecheck:electron` / `test:contracts` / dev-server Electron smoke 已过。
-- 2026-06-24：P5 第五刀落地：`workspaceBrowserAssistControl.ts` 增加 action policy skeleton，当前自动执行白名单只覆盖导航和读类动作；页面点击、输入、表单、脚本执行、下载/上传和未知动作统一生成 `tool_confirmation` confirmation request，并写入结构化 `permission_facts`，复用现有 `DecisionPanel` 风险、范围和一次性授权展示，不新增 browser 私有确认 UI 或 Electron/App Server 命令。定向 Vitest / ESLint / P5 扩展回归 / `typecheck:electron` 已过。
-- 2026-06-24：P6 第一刀落地：新增 App Server basic evidence provider 的 `browser` 子模块，从 runtime events / artifact metadata 提取 `browser_session`、`browser_snapshot` 和 `browser_action_index`，并挂到 `observability_summary.modality_runtime_contracts.snapshot_index.browser_action_index`；`evidence/export` 现在可导出浏览器 session / snapshot artifact，不新增协议字段、不耦合 live `BrowserRuntimeManager`。定向 `app-server evidence_exports`、`rustfmt --check`、`git diff --check` 已过。首轮测试暴露 `tool.result` 顺序和 `result.data.browser_session` 深层候选缺口，已在测试和 parser 中收口。
-- 2026-06-24：P6 第二刀落地：`browserSession/action/execute` 复用现有 `result: serde_json::Value` 扩展点，在 CDP action result 中附加 `browser_action_trace`，最小字段包含 `sessionId / tabId / actionId / action / status / success / evidenceRefs / profileKey / backend / lastUrl / title`；Evidence provider 可从 root / payload / result / result.data / item.payload.result.data 等候选路径抽取 trace，`browser_action_index.items` 同步输出 `action_id / tab_id / evidence_refs`；前端 `agentRuntime` normalizer 和 `buildBrowserReplayArtifact` 将这些 join keys 投影到 replay artifact meta。定向 Rust / Vitest / 格式 / contract 验证已过，未新增 App Server method 或 schema。
-- 2026-06-24：P6 第三刀落地：复用现有 `HarnessEvidencePackCard -> buildBrowserReplayArtifact -> BrowserAssistRenderer` 链路打开历史 evidence replay，不新增第二套 viewer；`BrowserAssistRenderer` 现在解析并展示 `actionId / tabId / evidenceRefs`，并在 replay header 显示“只读复盘”标识，明确历史恢复只展示 `browser_snapshot / browser_action_index` 证据，不自动继续 click / type / javascript 等危险动作。五语言文案和 renderer / i18n 回归已过。
-- 2026-06-24：P1/P2/P5 真实截图级 GUI 复测完成：扩展 `right-surface-visual-matrix` fixture，让 `workspaceRightSurface/request` 覆盖 `surfaceKind=browser`，summary 保留 browser request，并在 browser stable 后落专用截图 `.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-right-surface-browser.png`。最新真实 Electron fixture 通过，`rightSurfaceVisualMatrixRequestedThroughAppServer / BrowserSurfaceVisible / HostsFillRightSide / SurfacesMutuallyExclusive` 均为 true；browser root 位于 active pane `x=796 y=48 width=632 height=940`，`rootActivePaneHeightDelta=0`，`rootFillsSurfaceViewport=true`，`sessionId=fixture-browser-session`、`profileKey=fixture-profile`、`adapterKind=cdp`、`controlMode=inspect`、`controlOwner=shared` 可见。目视 PNG 显示浏览器 chrome、地址栏和页面在 Lime 右侧栏内，无系统浏览器弹出迹象，无下拉空白。
-- 2026-06-24：P6 evidence provider 防膨胀拆分完成：`lime-rs/crates/app-server/src/runtime/evidence_provider/browser.rs` 从 788 行收敛为 20 行 facade，既有 browser action index / artifact extraction 逻辑移动到 `browser/action_index.rs`；`evidence_provider.rs` 对外函数名和 `evidence/export` JSON 行为不变。`rustfmt --check`、`git diff --check` 和 `cargo test -p app-server evidence_exports` 已过。
-- 2026-06-24：P6 browser file evidence 落地：新增 `browser/file_artifacts.rs`，从 runtime events / artifact metadata 中识别 `browser_network_log`、`browser_console_log`、`browser_screenshot`，导出到 evidence pack artifacts，并在 `observability_summary.modality_runtime_contracts.file_evidence.browser_file_artifacts` 中输出 artifact / kind / session / tab / action / evidenceRefs 统计。测试覆盖 network、console 和 snapshot metadata 的 screenshot join；不新增 App Server protocol/schema，不引入 replay engine，也不触碰 Electron / GUI / mock fallback。`rustfmt --check`、`git diff --check` 和 `cargo test -p app-server evidence_exports` 已过。
-- 2026-06-24：P3 / BrowserRuntimeManager 防膨胀拆分完成：新增 `profile_scope.rs`，用纯 Rust 数据结构定义 `BrowserProfileOwner`、`BrowserProfileScope` 和 owner cleanup plan，先只表达 task scoped profile owner / cleanup 语义，不新增 App Server method、UI 或完整 profile 中心；随后将 `manager.rs` 按职责拆为 facade + `manager/session.rs` + `manager/cdp_targets.rs`，保留 `manager::CdpSessionHandle`、`manager::fetch_cdp_targets`、`manager::is_cdp_endpoint_alive` 既有访问路径。`manager.rs` 从 `1216` 行降到 `339` 行，`session.rs` 为 `787` 行，低于 `800` 行预警线。`lime-browser-runtime` 全 crate 测试和 `app-server evidence_exports` 下游回归已过。
-- 2026-06-24：BrowserRuntimeManager session 二次拆分完成：在不改变 `CdpSessionHandle` 对外 API 的前提下，将 `manager/session.rs` 从 `787` 行继续拆为 `session.rs` core、`session_reader.rs`、`session_events.rs`、`session_stream.rs`、`session_lifecycle.rs`；最大文件降为 `manager.rs` `344` 行 / `session_reader.rs` `267` 行。`rustfmt --check` 与 `cargo test -p lime-browser-runtime` 已过。
-- 2026-06-24：P6 action result file evidence metadata 落地：新增 `lime-rs/crates/browser-runtime/src/evidence.rs`，`browser-runtime` action result 现在会生成稳定 `actionId`，并按当前 action event cursor 输出 `browser_network_log`、`browser_console_log`、`browser_screenshot` metadata；`read_network_requests` / `read_console_messages` 即使结果为空也会输出对应 log metadata，`navigate / read_page / get_page_info / get_page_text` 会 best-effort 尝试 `Page.captureScreenshot` 并输出 screenshot artifact metadata。App Server `attach_browser_action_trace` 会把 file evidence refs 合并进 `browser_action_trace.evidenceRefs`，`evidence_exports` 回归覆盖 action result 同级 metadata -> evidence pack artifacts / summary。未新增协议、UI 或完整录制回放引擎。
-- 2026-06-24：`smoke:browser-runtime` action result metadata 断言补齐：`scripts/browser-runtime-smoke.mjs` 现在会验证 `read_page.result.browser_action_trace`、`browser_snapshot:{sessionId}:{actionId}`，并对 `browser_screenshot` 做 best-effort 合法性断言；`read_console_messages` / `read_network_requests` 强制验证 `browser_console_log` / `browser_network_log` metadata、artifact path、entryCount 和 file-level `evidenceRefs`。本机 DevBridge + 临时 headless Chrome `9333` 真实 smoke 已过，`session=cf882697-9e3d-41dc-9dd3-d3832aa6a8e9`，`readPageAction=browser-action-be9272f8-5ec2-40b7-9ec8-71bdb43b45fe`，`consoleAction=browser-action-869b9143-e92e-438f-baaa-4203cc26c26b`，`networkAction=browser-action-4fc68349-8302-407f-80f9-d792abc3b7fe`，`cleanup=pass`。
-- 2026-06-25：BrowserProfileScope 接入 App Server current owner 生命周期：`RuntimeCoreState` 现在维护 `browser_profile_scopes`，`browserSession/open` 成功后按返回的 `sessionId/profileKey` 注册 task-scoped owner，`browserSession/close` 先生成 owner cleanup plan，再按 profileKey 关闭同 owner 会话并移除 scope；不新增 App Server protocol 字段、profile UI 或旧 Electron Host 命令。定向 `browser_profile`、`browser_session` Rust 回归和临时 headless Chrome `9333` 真实 `browser-runtime-smoke` 已过，最新 smoke `session=d347adb0-e60b-45f5-a8dc-e0e467b1dbd5`，`cleanup=pass`。
-- 2026-06-25：标准 GUI smoke 环境限制关闭：`npm run verify:gui-smoke` 重新跑通，覆盖 renderer build、Electron host build、App Server sidecar、renderer loaded、App Server initialized、Claw workbench shell ready、memory settings ready；此前 `dist/` EPERM 未复现。
-- 2026-06-25：DOM/accessibility facts 进入 Browser file evidence：`browser-runtime` 对 `navigate/read_page/get_page_info/get_page_text` best-effort 生成 `browser_dom_snapshot` 与 `browser_accessibility_snapshot` metadata，并把 `browser_dom:*` / `browser_accessibility:*` refs 合并进 `browser_action_trace.evidenceRefs`；App Server `browser/file_artifacts.rs` 会导出对应 EvidencePack artifacts 和 summary 计数。`lime-browser-runtime` 全 crate、`app-server evidence_exports` 和真实 DevBridge + headless Chrome `9333` smoke 已过，最新 smoke `session=52da1cf9-a867-4766-b2a6-5fddb520d6b4`，`cleanup=pass`。
-- 2026-06-25：完整产品 Host 右键菜单第一刀落地：新增 `electron/embeddedBrowserContextMenu.ts`，`WebContentsView` 的 `context-menu` 事件现在生成受控菜单，覆盖链接在当前标签打开、系统浏览器打开、复制链接、复制图片、复制图片地址、图片另存为、页面后退/前进/刷新/复制当前页地址/系统浏览器打开当前页；editable 和选中文本继续走 Electron role，inspect 仍默认不开放。自定义 menu label 覆盖 `zh-CN / zh-TW / en-US / ja-JP / ko-KR`，未新增 IPC command、App Server method、profile UI 或旧 Tauri 路径。定向 Vitest / ESLint / `typecheck:electron` / command contract / GUI smoke 已过。
-- 2026-06-25：完整产品 Host 下载第一刀落地：新增 `electron/embeddedBrowserDownloads.ts`，监听 `persist:embedded-browser` session 的 `will-download`，按 `viewId` 发出 `embedded-browser-view-download` fact，字段仅包含 `downloadId / url / filename / mimeType / state / receivedBytes / totalBytes / canResume`，不向 Renderer / Agent 暴露本地保存路径；`src/lib/api/embeddedBrowser.ts` 增加 typed listener，Browser 面板显示最近下载的文件名、状态和进度条。下载 shelf 和状态 overlay 已拆到 `CanvasWorkbenchBrowserDownloadShelf.tsx` / `CanvasWorkbenchBrowserStatusOverlays.tsx`，`CanvasWorkbenchBrowserPanel.tsx` 降到 798 行。五语言文案、Host / 组件回归、ESLint、`typecheck:electron`、command contract、GUI smoke 已过；未新增 IPC command、App Server method、下载管理中心或 profile UI。
-- 2026-06-25：完整产品 Host 权限请求第一刀落地：新增 `electron/embeddedBrowserPermissions.ts`，在 `persist:embedded-browser` session 上安装 `setPermissionRequestHandler`，对页面权限请求默认 `callback(false)` fail-closed，并按 `viewId` 发出 `embedded-browser-view-permission-request` fact，字段包含 `requestId / permission / url / requestingUrl / embeddingOrigin / decision=blocked`；Renderer 只通过 `src/lib/api/embeddedBrowser.ts` typed listener 消费，Browser 面板新增最小权限阻止提示，不新增 allow/deny command、完整权限中心、profile UI 或 App Server method。为守住体量边界，Host 维持 784 行，Browser 面板降到 771 行，错误展示 resolver 继续留在 `CanvasWorkbenchBrowserStatusDisplay.ts` 纯工具文件。定向 Host / 组件 Vitest、五语言 i18n、ESLint、`typecheck:electron`、command contract、`git diff --check`、标准 `verify:gui-smoke` 已过；完整 `test:contracts` 仍失败在既有 `request_tool_policy.rs` WebSearch preflight snippet 缺口，非本轮 Browser Host 权限链路引入。
-- 2026-06-25：Browser action trace 查询面落地：复用现有 `evidence/export -> browser_action_index`，不新增 App Server method、schema 或 replay engine；`browser/action_index.rs` 现在从 `AgentEvent.thread_id / turn_id`、artifact metadata 和 browser action trace metadata 中抽取 `thread_id / turn_id / content_id / executor`，summary 输出 `thread_ids / turn_ids / content_ids / executor_counts`，每个 item 保留同样 join keys；前端 `agentRuntime` normalizer / types 同步这些字段，`buildBrowserReplayArtifact` 透传到 replay meta，并新增 `filterBrowserActionIndexItems` 纯函数支持按 `threadId / turnId / contentId / executor` 组合过滤。定向 `app-server evidence_exports`、`harnessEvidenceViewModel.unit.test.ts`、`rustfmt --check`、Prettier、ESLint、`typecheck:electron`、command contract 已过；全量 `npm run typecheck` 两次运行超过本轮等待窗口仍无输出，已中断并作为验证缺口记录。
-- 2026-06-25：高风险 Browser action confirmation / human takeover 证据闭环落地：`browser-runtime` CDP executor 对 `click / type / form_input / submit / upload / download / javascript` 等 mutation / script 动作 fail-closed，先返回 `action.required + tool_confirmation + permission_facts`，并将 session 切到 `human_controlling / human`，避免 Claw 或 MCP 直接调用 `browserSession/action/execute` 绕过前端 skeleton；App Server `browser_action_trace` 保留 `status=pending / success=false / requestId / controlMode / lifecycleState / humanReason`，`browser_action_index` 增加 `confirmation_request_id / control_mode / lifecycle_state / human_reason`，前端 evidence normalizer 和 Browser replay artifact meta 同步透传。为守住 800 行体量边界，本轮同时拆出 `lime-rs/crates/browser-runtime/src/action_policy.rs`，让 `action.rs` 回落到 694 行；`browser/action_index.rs` 仍为 992 行，后续若再扩展必须先拆分。未新增 App Server method、Electron IPC、私有确认 UI 或确认后恢复状态机。
-- 2026-06-25：Agent App Browser intent 第一刀落地：新增 `src/features/agent-app/ui/agentAppBrowserIntentLaunch.ts`，把 `lime.browser/open` dispatcher 返回的 `requires_agent_task` intent 转成 `workspaceRightSurface/request` 的 `surfaceKind=browser` foreground pending request；workspace/session 只取宿主 `AgentAppRightSurfaceLaunchTarget`，不信任 App intent payload 自带 target。metadata 只保留 app/entry、`lime.browser/open`、URL 和 `shared / waiting_for_human` 控制态，复用 Right Surface browser pending 消费链路，不新增 App Server method、Electron IPC、浏览器 UI 副本或 CapabilityHost 胖接口。定向 Vitest / ESLint / Prettier 已过；尚未接入 Agent App runtime page 的实际投递触发，因此完整验收项继续保持未完成。
-- 2026-06-25：Agent App Browser intent 主路径接线完成：`AgentAppsPage` 已把宿主 `rightSurfaceTarget` 透传到 `agent-app` 路由，`AgentAppRuntimePage` 通过 `wrapAgentAppCapabilityDispatchWithBrowserIntentLaunch` 在 `lime.browser/open` 后自动请求 Right Surface browser pending；定向 Vitest / ESLint / Prettier 已过。完整产品验收仍只差真实网页工作流、Playwright 和多 tab/profile。
-- 2026-06-25：主窗口刷新后内嵌浏览器残留修复：`ElectronEmbeddedBrowserHost` 现在为每个 entry 监听宿主窗口 `webContents.did-start-loading`，主窗口刷新、强刷或 renderer 重新加载时立即销毁对应 native `WebContentsView`，避免 React cleanup 未执行时旧网页继续盖在新 renderer 上；destroy / reparent 会同步摘掉 `closed` 和 `did-start-loading` 监听。未新增 IPC command、App Server method、renderer mock 或浏览器 backend；定向 Host Vitest、`typecheck:electron` 和标准 `verify:gui-smoke` 已过。
+- 2026-08-18：路线图重构完成，确认 Browser 当前综合完成度约 20%；文档和治理校验通过。
+- 2026-08-18：完成本执行计划重写和架构确认，下一刀为 BrowserTabHost route identity 与同 WebContents debugger 纵切。
+- 2026-08-18：完成 Electron `BrowserTabHost`、`browser__*` dynamic tool reverse request、Right Surface `BrowserWorkspace` 和五语言基础投影；定向 Electron/Renderer 测试与 Electron typecheck 已通过。当前综合完成度约 45%，下一刀为 schema/client 重建与旧 Browser 链物理清退，Gate A/Gate B 尚未标记完成。
+- 2026-08-19：定位并修复用户截图中的“正在打开网页”根因：空白 Claw 任务先显示 Right Surface，但 canonical Thread 尚未创建，Browser identity 申请被拒绝，native `WebContentsView` 没有合法 owner。Renderer 现在在打开 Browser 前调用 `ensureSession -> getThreadIdForSubmit -> refreshSessionReadModel`，再申请 App Server Browser identity。
+- 2026-08-19：Browser Host 增加 `pageRevision + snapshotId` stale-control；Electron dynamic tool 增加 connection/thread/turn/native owner 校验。`npx vitest run electron/browserTabHost.test.ts electron/appServerDynamicToolHost.test.ts` 通过（10 tests）；`npm run smoke:agent-runtime-current-fixture` 通过；`npm run verify:gui-smoke` 通过。前置 `npm run typecheck`、`npm run test:contracts` 和 Browser/Renderer 定向组件测试已通过。
+- 2026-08-19：Rust related 入口执行 1660 个 app-server lib tests，1659 通过、1 个 approval projection 断言失败；失败文件属于并行 approval 改动，不在本轮 Browser 写集。额外按测试名重跑时触发 `v8 150.4.0` macOS arm64 预编译包 404，未形成新的 Browser 结果。
+- 2026-08-19：现有 `right-surface-visual-matrix` 在通用 files 面板 geometry 断言处提前失败，且仍携带旧 Canvas/CDP fixture，未进入 Browser；因此不能作为 Gate A/B 结论。当前运行中的旧 Lime 进程未加载本轮改动，9223 CDP 端口也未启用，未中断现有进程。
+- 2026-08-19：继续定位 Agent Browser 工具永久 `inProgress`：`dynamic_tool.requested` 未被 App Server `V2NotificationProjector` 接受，事件泵在创建 `item/tool/call` reverse request 前直接跳过。当前将该 typed server-request 生命周期事件投影为空通知，Electron App Server client 增加持续 server-request handler，Host 在初始连接和 sidecar restart 后安装 handler；Host 已消费请求的 `serverRequest/resolved` 不再泄漏为 GUI 协议诊断。Rust projector 精确回归 `1 passed`，App Server client `122 tests` 通过，Electron Host/Gate 定向回归 `29 tests` 通过。
+- 2026-08-19：Browser 核心 Gate B 通过。真实 Electron evidence 证明同一 session/tab/thread/turn/WebContents、四次 dynamic tool/provider round trip、用户地址栏导航同 tab、final assistant 可见、turn completed、console/page error 为零；证据已去除整页正文和本机路径。stale snapshot 在用户导航后的重新 claim/observe 与完整 terminal cleanup 仍是下一轮 blocker。
+- 2026-08-19：重新执行 `npm run test:contracts`，协议生成无漂移，App Server client、command、harness、modality、scripts、Electron release、cleanup 与 docs boundary 全部通过，命令退出码为 `0`。
+- 2026-08-19：重新执行 `npm run verify:gui-smoke`。SHELL-01 真实 Electron summary 的 `21/21` 产品断言全部通过，覆盖启动、reload、preload/IPC、App Server current method、Workbench/Settings、console/page/invoke error 为零、legacy/mock 命中为零；但 evidence 写入后 Electron 主进程未自行退出，launcher 在 120 秒触发 watchdog，命令最终退出码为 `1`。该结果分类为 smoke 生命周期清理缺口，不标记最新 GUI smoke 门禁通过，也不推翻 Browser 专项 Gate B 的独立通过证据。
+- 2026-08-19：`npm run smoke:agent-runtime-current-fixture` 的最新运行在既有 `unknown-item` Electron 场景超过声明的 240 秒仍未收口；只清理本轮创建的进程树，未终止其它并行任务。该项记录为 current fixture/harness 阻塞，不能作为 Browser dynamic-tool 回归失败，也不能标记通过。
+- 2026-08-19：扩展 `smoke:browser-runtime-electron-gate-b` 为 active-turn 生命周期场景并通过，退出码为 `0`。同一真实 Electron `WebContentsView` 完成初次 Agent observe（pageRevision=3）、用户地址栏导航（同 tab/webContents，controlOwner=user，pageRevision=8）、旧 snapshot mutation fail-closed、重新 claim/observe（新 snapshot、同 tab/webContents），turn `completed` 后用户 tab `released`，debugger 从 attached 变为 detached；24 项 Gate B 断言全部通过，console/page error 为 0。脱敏 evidence 仍位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-summary.json`。
+- 2026-08-19：补齐 Electron sidecar disconnect 与 native `WebContents` destroyed 的统一清理：`AppServerHost` 在 stop、sidecar exit、restart failure 和 stale connection 触发 `BrowserTabHost.connectionLost`；user-origin tab release 并 detach debugger，Agent-origin 无 mark tab close；原生 `destroyed` 事件发出 `browser-tab-closed`。`embeddedBrowserHost`、`browserTabHost`、`appServerDynamicToolHost` 定向回归共 32 tests 通过，`npm run typecheck:electron` 与 `git diff --check` 通过。尚未把该单测结果冒充真实 Electron disconnect/window-close Gate B evidence。
+- 2026-08-19：真实 Electron Gate B 以 `npm run smoke:browser-runtime-electron-gate-b -- --timeout-ms 60000 --interval-ms 500` 通过（退出码 `0`）。25 项断言全部通过：同一 session/tab/thread/WebContents、用户接管后的 stale snapshot 拒绝与重新 observe、turn release/debugger detach，以及 renderer-process-gone 后 Browser route 关闭；console/page error 为零。证据文件为 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-summary.json`。该运行验证的是 renderer termination 触发器；`destroyed` 事件路径仍以 Host 单测为准。
+- 2026-08-19：补齐取消/失败终态的 fail-closed 边界：`AppServerDynamicToolHost` 仅在 `turn/completed` 携带 `completed/failed/interrupted/canceled/cancelled` 状态时调用 `BrowserTabHost.turnEnded`，缺少状态或仍为 `inProgress` 时不释放 Browser 控制；Electron DynamicTool/Browser/AppServerHost 定向回归 62 tests、`npm run typecheck:electron` 通过。真实 Electron cancel、sidecar disconnect 和 window-close evidence 仍待补。
 
-当前非本轮阻塞：`npm run test:contracts` 仍会在 `scripts/check-app-server-client-contract.mjs` 阶段失败，失败项均指向 `lime-rs/crates/agent/src/request_tool_policy.rs` 的 WebSearch preflight contract snippet 缺口；本轮 Browser Host 右键菜单 / 下载没有修改该文件，也没有新增命令。Browser 相关命令边界已用 `node scripts/check-command-contracts.mjs` 单独验证通过。
+## 当前结论
 
-## 7. 下一刀
-
-1. Agent App Browser intent UI 接入：App 触发 `lime.browser/open` 后由宿主把 intent 投递到 Right Surface Browser，并用 GUI/fixture 证明浏览器可见打开。
-2. Playwright 覆盖真实网页工作流：打开 URL、Agent observe、人工接管、继续执行、生成 evidence。
-3. 若继续扩展 evidence / profile 维度，优先新增或拆分分域子模块，不回填 `manager.rs`、`manager/session.rs`、`browser/action_index.rs` 或 App Server protocol。
+- 当前综合完成度约 74%；owner/identity/Host 基础纵切、reverse-request 回环、同 tab Gate B、用户接管后的 stale-control/reclaim、turn terminal cleanup、sidecar disconnect/native renderer termination 清理已落地，旧链清退、Browser 专项 Gate A、权限/下载/窗口关闭的真实 evidence、完整安全审批与历史恢复仍未完成。
+- 用户闭环：空白 Claw 任务会先补齐 canonical owner，再进入 Browser mount；Agent Browser 工具不再永久停在 `inProgress`，真实 Electron 已完成 `openTabs -> claimTab -> observe -> final assistant`。
+- Gate A：Browser 组件与普通 GUI shell 已验证，但专项 visual matrix 被旧 files geometry 断言阻塞，尚未形成 Browser 专项证据。
+- Gate B：核心 identity/dynamic-tool round trip、同一 `WebContentsView`、用户地址栏导航同 tab、用户导航后的 stale snapshot 拒绝、重新 claim/observe、debugger detach/close-release 和 renderer-process-gone route cleanup 均为 pass；直接 `destroyed` 事件已有 Host 单测，approval、cancel、disconnect、window-close、权限/下载和历史恢复真实证据仍未完成。
+- 通用门禁：contracts 已通过；最新 GUI smoke 的产品断言通过但进程生命周期收尾失败；Agent current fixture 在既有 `unknown-item` 场景挂起。二者均需按 harness 缺口单独修复和重跑，当前不能宣称完整本地门禁全绿。
+- 下一刀：补齐 cancel、窗口关闭、权限/下载的真实 Electron turn-scoped 终态证据；随后清理旧 visual matrix 的 Canvas/CDP 正向 fixture并补专项 Gate A。

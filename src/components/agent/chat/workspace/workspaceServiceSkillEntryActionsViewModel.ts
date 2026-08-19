@@ -13,7 +13,6 @@ import {
   buildServiceSkillScheduledTaskInitialForm,
 } from "../service-skills/automationDraft";
 import { resolveServiceSkillLaunchPrefill } from "../service-skills/serviceSkillLaunchPrefill";
-import { isServiceSkillExecutableAsSiteAdapter } from "../service-skills/siteCapabilityBinding";
 import type {
   RecordServiceSkillUsageInput,
   ServiceSkillHomeItem,
@@ -137,18 +136,6 @@ export function normalizeWorkspaceServiceSkillOptionalText(
 
   const normalized = value.trim();
   return normalized ? normalized : undefined;
-}
-
-export function siteSkillRequiresProject(skill: ServiceSkillHomeItem): boolean {
-  if (!isServiceSkillExecutableAsSiteAdapter(skill)) {
-    return false;
-  }
-
-  return (
-    skill.readinessRequirements?.requiresProject ||
-    (skill.siteCapabilityBinding.saveMode ?? "project_resource") ===
-      "project_resource"
-  );
 }
 
 export function resolveServiceSkillLaunchUserInput(

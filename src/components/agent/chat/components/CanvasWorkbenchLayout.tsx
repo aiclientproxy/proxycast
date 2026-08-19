@@ -30,7 +30,6 @@ import {
   WORKBENCH_SHELL_CLASSNAME,
   downloadCanvasWorkbenchText,
   translateCanvasWorkbenchText,
-  type CanvasWorkbenchBrowserOpenRequest,
   type CanvasWorkbenchDefaultPreview,
   type CanvasWorkbenchLayoutMode,
   type CanvasWorkbenchMode,
@@ -43,7 +42,6 @@ import { buildCanvasWorkbenchToolTabProjection } from "./canvas-workbench/tabs/C
 import { useCanvasWorkbenchToolTabsState } from "./canvas-workbench/tabs/useCanvasWorkbenchToolTabsState";
 
 export type {
-  CanvasWorkbenchBrowserOpenRequest,
   CanvasWorkbenchDefaultPreview,
   CanvasWorkbenchLayoutMode,
   CanvasWorkbenchMode,
@@ -136,8 +134,6 @@ export interface CanvasWorkbenchLayoutProps {
   logView?: CanvasWorkbenchUtilityView | null;
   changeView?: CanvasWorkbenchChangeView | null;
   topRightTools?: ReactNode;
-  browserOpenRequest?: CanvasWorkbenchBrowserOpenRequest | null;
-  onBrowserOpenRequestHandled?: (requestKey: string | number) => void;
   previewOpenRequest?: CanvasWorkbenchPreviewOpenRequest | null;
   onPreviewOpenRequestHandled?: (requestKey: string | number) => void;
 }
@@ -184,8 +180,6 @@ export const CanvasWorkbenchLayout = memo(function CanvasWorkbenchLayout({
   logView = null,
   changeView = null,
   topRightTools = null,
-  browserOpenRequest = null,
-  onBrowserOpenRequestHandled,
   previewOpenRequest = null,
   onPreviewOpenRequestHandled,
 }: CanvasWorkbenchLayoutProps) {
@@ -294,19 +288,11 @@ export const CanvasWorkbenchLayout = memo(function CanvasWorkbenchLayout({
     isCodingWorkbench,
     changeView,
   });
-  const {
-    openedToolTabs,
-    openNewToolTab,
-    closeToolTab,
-    resolveToolTabKind,
-    resolveBrowserInitialUrl,
-    updateBrowserTabPage,
-  } = useCanvasWorkbenchToolTabsState({
-    activeTab,
-    setActiveTab,
-    browserOpenRequest,
-    onBrowserOpenRequestHandled,
-  });
+  const { openedToolTabs, openNewToolTab, closeToolTab, resolveToolTabKind } =
+    useCanvasWorkbenchToolTabsState({
+      activeTab,
+      setActiveTab,
+    });
   const [changesFilesPanelOpen, setChangesFilesPanelOpen] = useState(false);
   const [previewOnlyFilePath, setPreviewOnlyFilePath] = useState<string | null>(
     null,
@@ -630,7 +616,6 @@ export const CanvasWorkbenchLayout = memo(function CanvasWorkbenchLayout({
       detailHeaderVisible={
         activeTab !== "changes" &&
         activeToolTabKind !== "terminal" &&
-        activeToolTabKind !== "browser" &&
         (activeToolTabKind !== "project-files" || Boolean(activePreviewContext))
       }
       translateWorkbench={translateWorkbench}
@@ -658,10 +643,6 @@ export const CanvasWorkbenchLayout = memo(function CanvasWorkbenchLayout({
       previewModeState={previewModeState}
       changeView={resolvedChangeView}
       changesFilesPanelOpen={changesFilesPanelOpen}
-      browserInitialUrl={resolveBrowserInitialUrl(activeTab)}
-      onBrowserNavigate={(url, title) => {
-        updateBrowserTabPage(activeTab, { url, title });
-      }}
       loadFilePreview={loadFilePreview}
       workspaceUnavailable={workspaceUnavailable}
       workspaceRoot={workspaceRoot}

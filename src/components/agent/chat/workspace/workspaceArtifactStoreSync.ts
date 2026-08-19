@@ -1,13 +1,18 @@
 import type { Artifact } from "@/lib/artifact/types";
 import type { Message } from "../types";
 import { mergeArtifacts } from "../utils/messageArtifacts";
-import { mergeMessageArtifactsIntoStore } from "./browserAssistArtifact";
 
 export interface ResolveWorkspaceArtifactsFromMessagesParams {
   activeTheme: string;
   messages: readonly Pick<Message, "artifacts">[];
   currentArtifacts: Artifact[];
-  browserAssistScopeKey: string | null;
+}
+
+function shouldPreserveGeneralArtifact(artifact: Artifact): boolean {
+  return (
+    artifact.meta.persistOutsideMessages === true ||
+    artifact.meta.previewArtifact === true
+  );
 }
 
 function stringifyArtifactForCompare(artifact: Artifact): string {
@@ -39,7 +44,6 @@ export function resolveWorkspaceArtifactsFromMessages({
   activeTheme,
   messages,
   currentArtifacts,
-  browserAssistScopeKey,
 }: ResolveWorkspaceArtifactsFromMessagesParams): Artifact[] {
   if (activeTheme !== "general") {
     return [];
@@ -48,9 +52,39 @@ export function resolveWorkspaceArtifactsFromMessages({
   const messageArtifacts = mergeArtifacts(
     messages.flatMap((message) => message.artifacts || []),
   );
-  return mergeMessageArtifactsIntoStore(
-    messageArtifacts,
-    currentArtifacts,
-    browserAssistScopeKey,
+  const preservedArtifacts = currentArtifacts.filter(
+    shouldPreserveGeneralArtifact,
   );
+  if (messageArtifacts.length === 0) {
+    return mergeArtifacts(preservedArtifacts);
+  }
+
+  const currentArtifactsById = new Map(
+    currentArtifacts.map((artifact) => [artifact.id, artifact]),
+  );
+  return mergeArtifacts([
+    ...messageArtifacts.map((artifact) => {
+      const existing = currentArtifactsById.get(artifact.id);
+      if (!existing) {
+        return artifact;
+      }
+      const shouldReuseExistingContent =
+        existing.content.length > 0 &&
+        (artifact.content.length === 0 ||
+          (artifact.status === "streaming" &&
+            artifact.content.length < existing.content.length &&
+            existing.content.startsWith(artifact.content)));
+      return {
+        ...existing,
+        ...artifact,
+        content: shouldReuseExistingContent
+          ? existing.content
+          : artifact.content,
+        meta: { ...existing.meta, ...artifact.meta },
+        createdAt: Math.min(existing.createdAt, artifact.createdAt),
+        updatedAt: Math.max(existing.updatedAt, artifact.updatedAt),
+      };
+    }),
+    ...preservedArtifacts,
+  ]);
 }

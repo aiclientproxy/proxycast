@@ -16,8 +16,6 @@
   "common.app.project.type.fallback": "프로젝트",
   "common.app.project.recommendedName": "{{prefix}}: {{shortLabel}}",
   "common.projects.rename.nameRequired": "프로젝트 이름은 비워 둘 수 없습니다",
-  "common.app.browserConnector.opened.title": "커넥터 설정을 열었습니다",
-  "common.app.browserConnector.opened.description": "'커넥터' 페이지에서 브라우저 커넥터를 켜거나 확장 프로그램을 다시 동기화하세요.",
   "common.app.websiteDeepLink.unsupported.title": "이 공식 사이트 진입점을 열 수 없습니다",
   "common.app.websiteDeepLink.unsupported.description": "현재 사이트 진입점은 데스크톱에서 사용할 수 있는 기능에 매핑되어 있지 않습니다. 공식 사이트와 클라이언트 카탈로그를 동기화하세요.",
   "common.app.startup.windows.blockingTitle": "Windows 시작 자체 점검에서 차단 문제가 발견되었습니다",

@@ -39,7 +39,6 @@ export enum SettingsTabs {
   WebSearch = "web-search",
   Environment = "environment",
   ExecutionPolicy = "execution-policy",
-  ChromeRelay = "chrome-relay",
   ExecutionTracker = "execution-tracker",
 
   Experimental = "experimental",
@@ -85,7 +84,6 @@ export const SETTINGS_GROUPS: Record<SettingsGroupKey, SettingsTabs[]> = {
     SettingsTabs.WebSearch,
     SettingsTabs.Environment,
     SettingsTabs.ExecutionPolicy,
-    SettingsTabs.ChromeRelay,
     SettingsTabs.Developer,
     SettingsTabs.About,
   ],

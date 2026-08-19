@@ -253,36 +253,6 @@
       ]
     },
     {
-      "id": "browser-runtime-site-adapter",
-      "title": "浏览器运行时与站点适配器",
-      "risk": "P0",
-      "executor": "mixed",
-      "lanes": ["L2-agent-runtime", "L3-product-surface"],
-      "commands": [
-        "npm run smoke:browser-runtime",
-        "npm run smoke:site-adapters"
-      ],
-      "goal": "验证 browser runtime attach/status、site adapter catalog、页面读取和清理路径。",
-      "verifier": "必须检查浏览器 session、adapter 状态、console/network 和 cleanup；不能只验证目录可读。",
-      "evidenceRequired": [
-        "browser runtime report",
-        "site adapter catalog",
-        "console/network summary",
-        "cleanup status",
-        "cleanup warning classified",
-        "GUI session owner / isolation statement"
-      ],
-      "evidenceLayers": ["deterministic-smoke", "gui-trace"],
-      "failureModes": [
-        "session leak",
-        "adapter catalog drift",
-        "browser permission denied",
-        "cleanup skipped",
-        "cleanup warning hidden by zero exit",
-        "parallel GUI smoke interference"
-      ]
-    },
-    {
       "id": "knowledge-ingest-retrieve-summarize",
       "title": "Knowledge 导入、检索与引用总结",
       "risk": "P1",

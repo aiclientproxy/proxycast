@@ -11,10 +11,7 @@ export type CanvasWorkbenchFixedTab =
   | "changes"
   | "outputs"
   | "logs";
-export type CanvasWorkbenchNewToolTab =
-  | "terminal"
-  | "browser"
-  | "project-files";
+export type CanvasWorkbenchNewToolTab = "terminal" | "project-files";
 export type CanvasWorkbenchToolTabId = `${CanvasWorkbenchNewToolTab}:${number}`;
 export type CanvasWorkbenchToolTab =
   | CanvasWorkbenchNewToolTab
@@ -25,17 +22,10 @@ export type CanvasWorkbenchTab =
 export type CanvasWorkbenchLayoutMode = "split" | "stacked";
 export type CanvasWorkbenchMode = "default" | "coding";
 
-export interface CanvasWorkbenchBrowserOpenRequest {
-  requestKey: string | number;
-  url?: string | null;
-}
-
 export interface CanvasWorkbenchOpenedToolTab {
   id: CanvasWorkbenchToolTabId;
   kind: CanvasWorkbenchNewToolTab;
   sequence: number;
-  browserUrl?: string | null;
-  browserTitle?: string | null;
 }
 
 export type CanvasWorkbenchTranslation = (
@@ -136,11 +126,11 @@ export function createCanvasWorkbenchToolTabId(
 export function resolveCanvasWorkbenchToolTabKind(
   tab: CanvasWorkbenchTab,
 ): CanvasWorkbenchNewToolTab | null {
-  if (tab === "terminal" || tab === "browser" || tab === "project-files") {
+  if (tab === "terminal" || tab === "project-files") {
     return tab;
   }
   const [kind] = tab.split(":");
-  if (kind === "terminal" || kind === "browser" || kind === "project-files") {
+  if (kind === "terminal" || kind === "project-files") {
     return kind;
   }
   return null;

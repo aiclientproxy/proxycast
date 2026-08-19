@@ -46,13 +46,6 @@ export interface BuildHarnessRequestMetadataOptions {
   browserRequirement?: BrowserTaskRequirement | null;
   browserRequirementReason?: string | null;
   browserLaunchUrl?: string | null;
-  browserAssistProfileKey?: string | null;
-  browserAssistPreferredBackend?:
-    | "current"
-    | "lime_extension_bridge"
-    | "cdp_direct"
-    | null;
-  browserAssistAutoLaunch?: boolean | null;
   workspaceSkillBindings?: AgentRuntimeWorkspaceSkillBinding[] | null;
   workspaceSkillRuntimeEnable?: WorkspaceSkillRuntimeEnableInput | null;
   agentResponseLanguage?: string | null;
@@ -132,6 +125,8 @@ const LEGACY_HARNESS_STATE_KEYS = [
   "selectedTeamRoles",
   "team_memory_shadow",
   "teamMemoryShadow",
+  "browser_assist",
+  "browserAssist",
 ] as const;
 
 function clearLegacyHarnessStateFields(
@@ -158,9 +153,6 @@ export function buildHarnessRequestMetadata(
     browserRequirement,
     browserRequirementReason,
     browserLaunchUrl,
-    browserAssistProfileKey,
-    browserAssistPreferredBackend,
-    browserAssistAutoLaunch,
     workspaceSkillBindings,
     workspaceSkillRuntimeEnable,
     agentResponseLanguage,
@@ -170,28 +162,6 @@ export function buildHarnessRequestMetadata(
 
   const normalizedSessionMode =
     normalizeHarnessSessionMode(sessionMode) || "default";
-  const existingBrowserAssist =
-    asRecord(base?.browser_assist) || asRecord(base?.browserAssist);
-  const browserAssistMetadata = browserAssistProfileKey
-    ? {
-        ...(existingBrowserAssist || {}),
-        enabled: true,
-        profile_key: browserAssistProfileKey,
-        preferred_backend:
-          browserAssistPreferredBackend ??
-          readTrimmedString(existingBrowserAssist?.preferred_backend) ??
-          readTrimmedString(existingBrowserAssist?.preferredBackend),
-        auto_launch:
-          browserAssistAutoLaunch ??
-          readBoolean(existingBrowserAssist?.auto_launch) ??
-          readBoolean(existingBrowserAssist?.autoLaunch) ??
-          true,
-        stream_mode:
-          readTrimmedString(existingBrowserAssist?.stream_mode) ??
-          readTrimmedString(existingBrowserAssist?.streamMode) ??
-          "both",
-      }
-    : existingBrowserAssist;
   const workspaceSkillBindingsMetadata =
     buildWorkspaceSkillBindingsHarnessMetadata(workspaceSkillBindings);
   const workspaceSkillRuntimeEnableMetadata =
@@ -246,7 +216,6 @@ export function buildHarnessRequestMetadata(
     browser_launch_url: browserLaunchUrl || undefined,
     browser_user_step_required:
       browserRequirement === "required_with_user_step",
-    ...(browserAssistMetadata ? { browser_assist: browserAssistMetadata } : {}),
   };
 
   clearLegacyHarnessStateFields(metadata);

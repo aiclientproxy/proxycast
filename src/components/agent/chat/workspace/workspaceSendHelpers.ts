@@ -1,4 +1,3 @@
-import { preheatBrowserAssistInBackground } from "../utils/browserAssistPreheat";
 import {
   detectBrowserTaskRequirement,
   type BrowserTaskRequirementMatch,
@@ -35,7 +34,6 @@ import type {
 } from "@/lib/api/oemCloudControlPlane";
 import { getOemCloudBootstrapSnapshot } from "@/lib/oemCloudSession";
 
-const GENERAL_BROWSER_ASSIST_PROFILE_KEY = "general_browser_assist";
 const OEM_CLOUD_FEATURE_FLAG_KEYS = [
   "oauthLoginEnabled",
   "emailCodeLoginEnabled",
@@ -447,31 +445,12 @@ export function buildGeneralWorkbenchSendBoundaryState({
   };
 }
 
-export interface EnsureBrowserAssistCanvasOptions {
-  silent?: boolean;
-  navigationMode?: "none" | "explicit-url" | "best-effort";
-}
-
 interface BuildWorkspaceSendTextOptions {
   sourceText: string;
   contextWorkspace: ContextWorkspaceSummary;
   mentionedCharacters: Character[];
   sendOptions?: HandleSendOptions;
   preparedActiveContextPrompt?: Promise<PreparedActiveContextPromptResult> | null;
-}
-
-interface PrimeBrowserAssistBeforeSendOptions {
-  activeTheme: string;
-  sourceText: string;
-  browserRequirementMatch?: {
-    requirement: "optional" | "required" | "required_with_user_step";
-    reason: string;
-    launchUrl: string;
-  } | null;
-  ensureBrowserAssistCanvas: (
-    target: string,
-    options?: EnsureBrowserAssistCanvasOptions,
-  ) => Promise<boolean>;
 }
 
 interface BuildWorkspaceRequestMetadataOptions {
@@ -491,13 +470,6 @@ interface BuildWorkspaceRequestMetadataOptions {
     reason: string;
     launchUrl: string;
   } | null;
-  browserAssistProfileKey?: string | null;
-  browserAssistPreferredBackend?:
-    | "current"
-    | "lime_extension_bridge"
-    | "cdp_direct"
-    | null;
-  browserAssistAutoLaunch?: boolean | null;
   workspaceSkillBindings?: AgentRuntimeWorkspaceSkillBinding[] | null;
   workspaceSkillRuntimeEnable?: WorkspaceSkillRuntimeEnableInput | null;
   agentResponseLanguage?: string | null;
@@ -723,49 +695,6 @@ export function hasModelSkillLaunchRequestMetadata(
   });
 }
 
-export function primeBrowserAssistBeforeSend(
-  options: PrimeBrowserAssistBeforeSendOptions,
-): void {
-  const {
-    activeTheme,
-    sourceText,
-    browserRequirementMatch,
-    ensureBrowserAssistCanvas,
-  } = options;
-
-  if (browserRequirementMatch) {
-    void ensureBrowserAssistCanvas(
-      browserRequirementMatch.launchUrl || sourceText,
-      {
-        silent: true,
-        navigationMode:
-          browserRequirementMatch.launchUrl &&
-          browserRequirementMatch.launchUrl !== sourceText
-            ? "explicit-url"
-            : "best-effort",
-      },
-    ).catch((error) => {
-      console.warn(
-        "[AgentChatPage] 强浏览器任务发送前准备浏览器失败，继续由主流程处理:",
-        error,
-      );
-    });
-    return;
-  }
-
-  preheatBrowserAssistInBackground({
-    activeTheme,
-    sourceText,
-    ensureBrowserAssistCanvas,
-    onError: (error) => {
-      console.warn(
-        "[AgentChatPage] 发送前预热浏览器协助失败，继续发送消息:",
-        error,
-      );
-    },
-  });
-}
-
 export function buildWorkspaceRequestMetadata(
   options: BuildWorkspaceRequestMetadataOptions,
 ): Record<string, unknown> {
@@ -782,9 +711,6 @@ export function buildWorkspaceRequestMetadata(
     themeWorkbenchActiveQueueTitle,
     contentId,
     browserRequirementMatch,
-    browserAssistProfileKey,
-    browserAssistPreferredBackend,
-    browserAssistAutoLaunch,
     workspaceSkillBindings,
     workspaceSkillRuntimeEnable,
     agentResponseLanguage,
@@ -830,12 +756,6 @@ export function buildWorkspaceRequestMetadata(
     browserRequirement: resolvedBrowserRequirement,
     browserRequirementReason: resolvedBrowserRequirementReason,
     browserLaunchUrl: resolvedBrowserLaunchUrl,
-    browserAssistProfileKey:
-      mappedTheme === "general"
-        ? browserAssistProfileKey || GENERAL_BROWSER_ASSIST_PROFILE_KEY
-        : undefined,
-    browserAssistPreferredBackend,
-    browserAssistAutoLaunch,
     workspaceSkillBindings,
     workspaceSkillRuntimeEnable,
     agentResponseLanguage,

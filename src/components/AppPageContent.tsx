@@ -5,11 +5,9 @@
  */
 
 import { lazy, useCallback } from "react";
-import styled from "styled-components";
 import type {
   AgentPageParams,
   PluginsPageParams,
-  BrowserRuntimePageParams,
   ExpertsPageParams,
   KnowledgePageParams,
   Page,
@@ -24,13 +22,6 @@ import { ScheduledTasksPage } from "./scheduled-tasks/ScheduledTasksPage";
 import { ImConfigPage } from "./channels/ImConfigPage";
 import { SettingsPageV2 } from "./settings-v2";
 import { PluginWorkspaceTabs } from "@/features/plugin/ui/PluginWorkspaceTabs";
-
-const PageWrapper = styled.div<{ $isActive: boolean }>`
-  flex: 1;
-  padding: 24px;
-  overflow: auto;
-  display: ${(props) => (props.$isActive ? "block" : "none")};
-`;
 
 const columnPageStyle = {
   flex: 1,
@@ -60,10 +51,6 @@ const loadExpertPlazaPage = () =>
   import("./experts").then((module) => ({
     default: module.ExpertPlazaPage,
   }));
-const loadBrowserRuntimeWorkspace = () =>
-  import("@/features/browser-runtime").then((module) => ({
-    default: module.BrowserRuntimeWorkspace,
-  }));
 const loadAgentChatPage = () =>
   import("./agent/chat").then((module) => ({
     default: module.AgentChatPage,
@@ -74,7 +61,6 @@ const SkillsWorkspacePage = lazy(loadSkillsWorkspacePage);
 const KnowledgePage = lazy(loadKnowledgePage);
 const PluginsPage = lazy(loadPluginsPage);
 const ExpertPlazaPage = lazy(loadExpertPlazaPage);
-const BrowserRuntimeWorkspace = lazy(loadBrowserRuntimeWorkspace);
 const AgentChatPage = lazy(loadAgentChatPage);
 
 interface AppPageContentProps {
@@ -253,31 +239,6 @@ export function AppPageContent({
           pageParams={activePageParams as ResourcesPageParams}
         />
       </div>
-    );
-  }
-
-  if (activePage === "browser-runtime") {
-    const browserRuntimeParams = activePageParams as BrowserRuntimePageParams;
-
-    return (
-      <PageWrapper $isActive={true}>
-        <BrowserRuntimeWorkspace
-          active={true}
-          onNavigate={onNavigate}
-          initialProfileKey={browserRuntimeParams.initialProfileKey}
-          initialSessionId={browserRuntimeParams.initialSessionId}
-          initialTargetId={browserRuntimeParams.initialTargetId}
-          currentProjectId={browserRuntimeParams.projectId}
-          currentContentId={browserRuntimeParams.contentId}
-          initialAdapterName={browserRuntimeParams.initialAdapterName}
-          initialArgs={browserRuntimeParams.initialArgs}
-          initialAutoRun={browserRuntimeParams.initialAutoRun}
-          initialRequireAttachedSession={
-            browserRuntimeParams.initialRequireAttachedSession
-          }
-          initialSaveTitle={browserRuntimeParams.initialSaveTitle}
-        />
-      </PageWrapper>
     );
   }
 

@@ -29,7 +29,6 @@ pub enum AppServerRequestSerializationScope {
     Thread,
     McpOauth,
     McpResourceSubscription,
-    BrowserSession,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -301,18 +300,6 @@ pub enum AppServerRequestMethod {
     WorkspaceRightSurfacePendingConsume,
     #[serde(rename = "workspaceRightSurface/pending/dismiss")]
     WorkspaceRightSurfacePendingDismiss,
-    #[serde(rename = "browserSession/target/list")]
-    BrowserSessionTargetList,
-    #[serde(rename = "browserSession/open")]
-    BrowserSessionOpen,
-    #[serde(rename = "browserSession/read")]
-    BrowserSessionRead,
-    #[serde(rename = "browserSession/close")]
-    BrowserSessionClose,
-    #[serde(rename = "browserSession/event/list")]
-    BrowserSessionEventList,
-    #[serde(rename = "browserSession/action/execute")]
-    BrowserSessionActionExecute,
     #[serde(rename = "soulStylePack/install")]
     SoulStylePackInstall,
     #[serde(rename = "soulStylePack/list")]
@@ -649,12 +636,6 @@ impl AppServerRequestMethod {
             Self::WorkspaceRightSurfacePendingDismiss => {
                 METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_DISMISS
             }
-            Self::BrowserSessionTargetList => METHOD_BROWSER_SESSION_TARGET_LIST,
-            Self::BrowserSessionOpen => METHOD_BROWSER_SESSION_OPEN,
-            Self::BrowserSessionRead => METHOD_BROWSER_SESSION_READ,
-            Self::BrowserSessionClose => METHOD_BROWSER_SESSION_CLOSE,
-            Self::BrowserSessionEventList => METHOD_BROWSER_SESSION_EVENT_LIST,
-            Self::BrowserSessionActionExecute => METHOD_BROWSER_SESSION_ACTION_EXECUTE,
             Self::SoulStylePackInstall => METHOD_SOUL_STYLE_PACK_INSTALL,
             Self::SoulStylePackList => METHOD_SOUL_STYLE_PACK_LIST,
             Self::SoulStylePackStatusSet => METHOD_SOUL_STYLE_PACK_STATUS_SET,
@@ -905,12 +886,6 @@ impl AppServerRequestMethod {
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_DISMISS => {
                 Some(Self::WorkspaceRightSurfacePendingDismiss)
             }
-            METHOD_BROWSER_SESSION_TARGET_LIST => Some(Self::BrowserSessionTargetList),
-            METHOD_BROWSER_SESSION_OPEN => Some(Self::BrowserSessionOpen),
-            METHOD_BROWSER_SESSION_READ => Some(Self::BrowserSessionRead),
-            METHOD_BROWSER_SESSION_CLOSE => Some(Self::BrowserSessionClose),
-            METHOD_BROWSER_SESSION_EVENT_LIST => Some(Self::BrowserSessionEventList),
-            METHOD_BROWSER_SESSION_ACTION_EXECUTE => Some(Self::BrowserSessionActionExecute),
             METHOD_SOUL_STYLE_PACK_INSTALL => Some(Self::SoulStylePackInstall),
             METHOD_SOUL_STYLE_PACK_LIST => Some(Self::SoulStylePackList),
             METHOD_SOUL_STYLE_PACK_STATUS_SET => Some(Self::SoulStylePackStatusSet),
@@ -1551,30 +1526,6 @@ pub const APP_SERVER_METHODS: &[AppServerMethodSpec] = &[
         kind: AppServerMethodKind::Notification,
     },
     AppServerMethodSpec {
-        method: METHOD_BROWSER_SESSION_TARGET_LIST,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_BROWSER_SESSION_OPEN,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_BROWSER_SESSION_READ,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_BROWSER_SESSION_CLOSE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_BROWSER_SESSION_EVENT_LIST,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
-        method: METHOD_BROWSER_SESSION_ACTION_EXECUTE,
-        kind: AppServerMethodKind::Request,
-    },
-    AppServerMethodSpec {
         method: METHOD_SOUL_STYLE_PACK_INSTALL,
         kind: AppServerMethodKind::Request,
     },
@@ -2089,29 +2040,9 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
         method: METHOD_MCP_RESOURCE_UNSUBSCRIBE,
         scope: AppServerRequestSerializationScope::McpResourceSubscription,
     },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_BROWSER_SESSION_OPEN,
-        scope: AppServerRequestSerializationScope::BrowserSession,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_BROWSER_SESSION_READ,
-        scope: AppServerRequestSerializationScope::BrowserSession,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_BROWSER_SESSION_CLOSE,
-        scope: AppServerRequestSerializationScope::BrowserSession,
-    },
-    AppServerRequestSerializationScopeSpec {
-        method: METHOD_BROWSER_SESSION_ACTION_EXECUTE,
-        scope: AppServerRequestSerializationScope::BrowserSession,
-    },
 ];
 
 pub const APP_SERVER_REQUEST_ACCESSES: &[AppServerRequestAccessSpec] = &[
-    AppServerRequestAccessSpec {
-        method: METHOD_BROWSER_SESSION_READ,
-        access: AppServerRequestAccess::SharedRead,
-    },
     AppServerRequestAccessSpec {
         method: METHOD_THREAD_READ,
         access: AppServerRequestAccess::SharedRead,

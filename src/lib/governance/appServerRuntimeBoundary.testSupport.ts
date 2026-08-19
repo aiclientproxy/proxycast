@@ -61,7 +61,6 @@ export const RUNTIME_READ_MODEL_OWNER_MODULES = [
   "lime-rs/crates/app-server/src/runtime/artifact_projection.rs",
   "lime-rs/crates/app-server/src/runtime/coding_activity_projection.rs",
   "lime-rs/crates/app-server/src/runtime/file_checkpoint_projection.rs",
-  "lime-rs/crates/app-server/src/runtime/permission_state_projection.rs",
   "lime-rs/crates/app-server/src/runtime/read_model/messages.rs",
   "lime-rs/crates/app-server/src/runtime/read_model/model_routing.rs",
   "lime-rs/crates/app-server/src/runtime/read_model/queued_turns.rs",

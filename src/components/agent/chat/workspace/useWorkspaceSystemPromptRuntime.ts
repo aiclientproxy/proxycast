@@ -14,7 +14,6 @@ import {
   buildGeneralAgentSystemPrompt,
   resolveAgentChatMode,
 } from "../utils/generalAgentPrompt";
-import { GENERAL_BROWSER_ASSIST_PROFILE_KEY } from "./agentChatWorkspaceHelpers";
 
 interface UseWorkspaceSystemPromptRuntimeParams {
   chatToolPreferences: ChatToolPreferences;
@@ -52,8 +51,6 @@ export function useWorkspaceSystemPromptRuntime({
         compact: shouldUseCompactGeneralSystemPrompt,
         toolPreferences: chatToolPreferences,
         harness: {
-          browserAssistEnabled: true,
-          browserAssistProfileKey: GENERAL_BROWSER_ASSIST_PROFILE_KEY,
           contentId: contentId || null,
         },
       });

@@ -16,8 +16,6 @@
   "common.app.project.type.fallback": "Project",
   "common.app.project.recommendedName": "{{prefix}}: {{shortLabel}}",
   "common.projects.rename.nameRequired": "Project name cannot be empty",
-  "common.app.browserConnector.opened.title": "Connector settings opened",
-  "common.app.browserConnector.opened.description": "Enable the browser connector or sync the extension again on the Connector page.",
   "common.app.websiteDeepLink.unsupported.title": "Cannot open this website entry",
   "common.app.websiteDeepLink.unsupported.description": "This website entry is not mapped to a desktop capability. Sync the website and client catalog.",
   "common.app.startup.windows.blockingTitle": "Windows startup self-check found blocking issues",

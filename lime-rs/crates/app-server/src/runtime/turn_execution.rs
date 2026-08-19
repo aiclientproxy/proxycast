@@ -56,43 +56,6 @@ fn runtime_event_is_turn_terminal(event_type: &str) -> bool {
     )
 }
 
-fn app_server_action_resolved_event(request: &ActionRespondRequest) -> RuntimeEvent {
-    let mut payload = json!({
-        "backend": "runtime_core",
-        "source": "runtime_preflight",
-        "requestId": request.request_id,
-        "actionId": request.request_id,
-        "actionType": request.action_type,
-        "confirmed": request.confirmed,
-        "response": request.response,
-        "userData": request.user_data,
-        "scope": request.action_scope,
-    });
-    if let Some(decision) = request.decision {
-        if let Some(object) = payload.as_object_mut() {
-            object.insert("decision".to_string(), json!(decision.as_str()));
-            object.insert("decisionScope".to_string(), json!(decision.scope()));
-        }
-    }
-    RuntimeEvent::new("action.resolved", payload)
-}
-
-fn app_server_action_canceled_event(request: &ActionRespondRequest) -> RuntimeEvent {
-    RuntimeEvent::new(
-        "action.canceled",
-        json!({
-            "backend": "runtime_core",
-            "source": "runtime_preflight",
-            "requestId": request.request_id,
-            "actionId": request.request_id,
-            "actionType": request.action_type,
-            "confirmed": false,
-            "decision": AgentSessionApprovalDecision::Cancel.as_str(),
-            "scope": request.action_scope,
-        }),
-    )
-}
-
 fn turn_interrupt_action_canceled_event(
     request_id: &str,
     identity: &pending_action_descriptor::PendingActionIdentity,
@@ -162,6 +125,7 @@ impl RuntimeEventSink for CollectingRuntimeEventSink {
 enum SessionLoopEvent {
     Runtime(RuntimeEvent),
     Transient(RuntimeEvent),
+    CodeCellTrace(tool_runtime::tool_lifecycle::CodeCellTraceEvent),
     Preappended(AgentEvent),
     PreappendedById(String),
 }
@@ -265,6 +229,17 @@ impl RuntimeEventSink for ChannelRuntimeEventSink {
     fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
         self.sender
             .send(SessionLoopEvent::Transient(event))
+            .map_err(|_| {
+                RuntimeCoreError::Backend("runtime session event receiver closed".to_string())
+            })
+    }
+
+    fn emit_code_cell_trace(
+        &mut self,
+        event: tool_runtime::tool_lifecycle::CodeCellTraceEvent,
+    ) -> Result<(), RuntimeCoreError> {
+        self.sender
+            .send(SessionLoopEvent::CodeCellTrace(event))
             .map_err(|_| {
                 RuntimeCoreError::Backend("runtime session event receiver closed".to_string())
             })
@@ -574,7 +549,48 @@ impl RuntimeEventSink for AppendingRuntimeEventSink<'_> {
                 self.review_context = None;
             }
         }
-        self.emit_durable(event)
+        let code_cell_terminal_status = match event.event_type.as_str() {
+            "turn.failed" => Some(tool_runtime::tool_lifecycle::CodeCellRuntimeStatus::Failed),
+            "turn.canceled" => {
+                Some(tool_runtime::tool_lifecycle::CodeCellRuntimeStatus::Terminated)
+            }
+            _ => None,
+        };
+        self.emit_durable(event)?;
+        if let (Some(trace_event_writer), Some(status)) =
+            (self.trace_event_writer.as_ref(), code_cell_terminal_status)
+        {
+            if let Err(error) = trace_event_writer.close_code_cells_for_turn(
+                &self.session_id,
+                &self.thread_id,
+                &self.turn_id,
+                status,
+            ) {
+                tracing::warn!(
+                    "[trace-event-store] failed to close CodeCells for turn {}: {}",
+                    self.turn_id,
+                    error
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_code_cell_trace(
+        &mut self,
+        event: tool_runtime::tool_lifecycle::CodeCellTraceEvent,
+    ) -> Result<(), RuntimeCoreError> {
+        let Some(trace_event_writer) = self.trace_event_writer.as_ref() else {
+            return Ok(());
+        };
+        if let Err(error) = trace_event_writer.append_code_cell_trace_event(
+            &self.session_id,
+            &self.thread_id,
+            event,
+        ) {
+            tracing::warn!("[trace-event-store] rejected CodeCell trace event: {error}");
+        }
+        Ok(())
     }
 
     fn emit_preappended(&mut self, event: AgentEvent) -> Result<(), RuntimeCoreError> {
@@ -1085,22 +1101,6 @@ impl RuntimeCore {
         }
         self.prepare_memory_prompt_context(&mut params).await;
         self.prepare_session_compaction_prompt_context(&mut params);
-        let session_approval_cache_entry = {
-            let state = self
-                .state
-                .lock()
-                .expect("runtime core state mutex poisoned");
-            let session_workspace_id = state
-                .sessions
-                .get(&params.session_id)
-                .and_then(|stored| stored.session.workspace_id.as_deref());
-            super::approval_cache::apply_hint_to_turn_start(
-                &state.session_approval_cache,
-                &mut params,
-                session_workspace_id,
-            )
-        };
-
         if let Some(capability_id) = params
             .runtime_options
             .as_ref()
@@ -1554,29 +1554,6 @@ impl RuntimeCore {
                     return Err(error);
                 }
             }
-            if let Some(entry) = session_approval_cache_entry.as_ref() {
-                if let Err(error) = sink.emit(RuntimeEvent::new(
-                    "approval.session_cache.hit",
-                    json!({
-                        "backend": "runtime_core",
-                        "decision": entry.decision.as_str(),
-                        "decisionScope": entry.decision.scope(),
-                        "sourceRequestId": &entry.request_id,
-                        "key": super::approval_cache::entry_key_metadata(entry),
-                    }),
-                )) {
-                    let _ = submitted
-                        .session
-                        .interrupt_for_turn(Some(&turn.turn_id))
-                        .await;
-                    self.rollback_started_turn(
-                        &session.session_id,
-                        &turn.turn_id,
-                        previous_session,
-                    );
-                    return Err(error);
-                }
-            }
             let admission_events = sink.events.clone();
             sink.defer_hub_events(pre_turn_events.clone());
 
@@ -1684,18 +1661,6 @@ impl RuntimeCore {
             ) {
                 sink.emit(event)?;
             }
-            if let Some(entry) = session_approval_cache_entry.as_ref() {
-                sink.emit(RuntimeEvent::new(
-                    "approval.session_cache.hit",
-                    json!({
-                        "backend": "runtime_core",
-                        "decision": entry.decision.as_str(),
-                        "decisionScope": entry.decision.scope(),
-                        "sourceRequestId": &entry.request_id,
-                        "key": super::approval_cache::entry_key_metadata(entry),
-                    }),
-                ))?;
-            }
             let backend_event_start = sink.emitted_count();
             if let Err(error) = self
                 .execute_backend_via_session_loop(
@@ -1755,18 +1720,6 @@ impl RuntimeCore {
                 request.runtime_metadata(),
             ) {
                 sink.emit(event)?;
-            }
-            if let Some(entry) = session_approval_cache_entry.as_ref() {
-                sink.emit(RuntimeEvent::new(
-                    "approval.session_cache.hit",
-                    json!({
-                        "backend": "runtime_core",
-                        "decision": entry.decision.as_str(),
-                        "decisionScope": entry.decision.scope(),
-                        "sourceRequestId": &entry.request_id,
-                        "key": super::approval_cache::entry_key_metadata(entry),
-                    }),
-                ))?;
             }
             let backend_event_start = sink.emitted_count();
             if let Err(error) = self
@@ -2113,6 +2066,9 @@ impl RuntimeCore {
                         let result = match event {
                             SessionLoopEvent::Runtime(event) => sink.emit(event),
                             SessionLoopEvent::Transient(event) => sink.emit_transient(event),
+                            SessionLoopEvent::CodeCellTrace(event) => {
+                                sink.emit_code_cell_trace(event)
+                            }
                             SessionLoopEvent::Preappended(event) => sink.emit_preappended(event),
                             SessionLoopEvent::PreappendedById(event_id) => {
                                 sink.emit_preappended_by_id(&event_id)
@@ -2129,6 +2085,9 @@ impl RuntimeCore {
                         match event {
                             SessionLoopEvent::Runtime(event) => sink.emit(event)?,
                             SessionLoopEvent::Transient(event) => sink.emit_transient(event)?,
+                            SessionLoopEvent::CodeCellTrace(event) => {
+                                sink.emit_code_cell_trace(event)?
+                            }
                             SessionLoopEvent::Preappended(event) => sink.emit_preappended(event)?,
                             SessionLoopEvent::PreappendedById(event_id) => {
                                 sink.emit_preappended_by_id(&event_id)?
@@ -2337,16 +2296,6 @@ impl RuntimeCore {
             )?);
             events
         };
-        {
-            let mut state = self
-                .state
-                .lock()
-                .expect("runtime core state mutex poisoned");
-            super::approval_cache::remove_session(
-                &mut state.session_approval_cache,
-                &session.session_id,
-            );
-        }
         if let Some(event_log_writer) = self.event_log_writer.as_deref() {
             let workflow_audit_records = event_log_writer
                 .read_session_workflow_audit_events(&session.session_id)
@@ -2502,7 +2451,7 @@ impl RuntimeCore {
             .unwrap_or_else(|| params.confirmed.unwrap_or(false));
         let workflow_resume_audit_events =
             workflow_resume_audit_events_from_action_response(&params, decision, confirmed);
-        let (cancel_denied_permission_action, app_server_owned_permission_action) = {
+        {
             let state = self
                 .state
                 .lock()
@@ -2518,47 +2467,6 @@ impl RuntimeCore {
                     decision,
                 )?;
             }
-            let cancel_denied_permission_action =
-                super::permission_state_projection::should_cancel_denied_permission_action(
-                    stored,
-                    &request_id,
-                    decision.is_some_and(AgentSessionApprovalDecision::is_cancel),
-                );
-            let app_server_owned_permission_action =
-                super::permission_state_projection::is_runtime_preflight_action(
-                    stored,
-                    &request_id,
-                );
-            (
-                cancel_denied_permission_action,
-                app_server_owned_permission_action,
-            )
-        };
-
-        let session_approval_cache_entry = {
-            let state = self
-                .state
-                .lock()
-                .expect("runtime core state mutex poisoned");
-            let stored = state
-                .sessions
-                .get(&params.session_id)
-                .ok_or_else(|| RuntimeCoreError::SessionNotFound(params.session_id.clone()))?;
-            super::approval_cache::entry_from_action_response(
-                stored,
-                &request_id,
-                decision,
-                params.action_scope.clone(),
-                super::timestamp(),
-            )
-        };
-        if decision == Some(AgentSessionApprovalDecision::AllowForSession)
-            && session_approval_cache_entry.is_none()
-        {
-            return Err(RuntimeCoreError::Backend(format!(
-                "allow_for_session requires session approval cache owner for tool_confirmation request '{}'",
-                request_id
-            )));
         }
 
         let mut sink = CollectingRuntimeEventSink::default();
@@ -2578,37 +2486,29 @@ impl RuntimeCore {
             action_scope: params.action_scope,
             pending_action_descriptor,
         };
-        if app_server_owned_permission_action {
+        self.backend
+            .respond_action(action_response.clone(), &mut sink)
+            .await?;
+        if self.backend.has_live_session_responses() {
+            let backend_events = sink.take_events();
+            precommitted_events.extend(self.append_runtime_events(
+                &session.session_id,
+                &session.thread_id,
+                turn_snapshot.as_ref().map(|turn| turn.turn_id.as_str()),
+                backend_events,
+            )?);
             if decision.is_some_and(AgentSessionApprovalDecision::is_cancel) {
-                sink.emit(app_server_action_canceled_event(&action_response))?;
-            } else {
-                sink.emit(app_server_action_resolved_event(&action_response))?;
+                if let Some(item) = pending_tool_item {
+                    precommitted_events.extend(self.append_runtime_events(
+                        &session.session_id,
+                        &session.thread_id,
+                        turn_snapshot.as_ref().map(|turn| turn.turn_id.as_str()),
+                        vec![turn_interrupt_tool_completed_event(item)],
+                    )?);
+                }
             }
-        } else {
-            self.backend
-                .respond_action(action_response.clone(), &mut sink)
-                .await?;
-            if self.backend.has_live_session_responses() {
-                let backend_events = sink.take_events();
-                precommitted_events.extend(self.append_runtime_events(
-                    &session.session_id,
-                    &session.thread_id,
-                    turn_snapshot.as_ref().map(|turn| turn.turn_id.as_str()),
-                    backend_events,
-                )?);
-                if decision.is_some_and(AgentSessionApprovalDecision::is_cancel) {
-                    if let Some(item) = pending_tool_item {
-                        precommitted_events.extend(self.append_runtime_events(
-                            &session.session_id,
-                            &session.thread_id,
-                            turn_snapshot.as_ref().map(|turn| turn.turn_id.as_str()),
-                            vec![turn_interrupt_tool_completed_event(item)],
-                        )?);
-                    }
-                }
-                if !decision.is_some_and(AgentSessionApprovalDecision::is_cancel) {
-                    self.dispatch_live_action_response(&action_response).await?;
-                }
+            if !decision.is_some_and(AgentSessionApprovalDecision::is_cancel) {
+                self.dispatch_live_action_response(&action_response).await?;
             }
         }
         let backend_cancel_requested = decision
@@ -2662,16 +2562,6 @@ impl RuntimeCore {
                 )
                 .await?;
         }
-        if cancel_denied_permission_action && !backend_cancel_requested {
-            sink.emit(RuntimeEvent::new(
-                "turn.canceled",
-                json!({
-                    "backend": "runtime",
-                    "reason": "permission_denied",
-                    "requestId": request_id,
-                }),
-            ))?;
-        }
         let mut events = self.append_runtime_events(
             &session.session_id,
             &session.thread_id,
@@ -2687,28 +2577,6 @@ impl RuntimeCore {
             turn_snapshot.as_ref().map(|turn| turn.turn_id.as_str()),
             workflow_resume_audit_events,
         )?;
-        if let Some(entry) = session_approval_cache_entry {
-            let mut state = self
-                .state
-                .lock()
-                .expect("runtime core state mutex poisoned");
-            super::approval_cache::insert_entry(
-                &mut state.session_approval_cache,
-                &params.session_id,
-                entry,
-            );
-        }
-        if decision.is_some_and(AgentSessionApprovalDecision::is_cancel) {
-            let mut state = self
-                .state
-                .lock()
-                .expect("runtime core state mutex poisoned");
-            super::approval_cache::remove_session(
-                &mut state.session_approval_cache,
-                &params.session_id,
-            );
-        }
-
         Ok(RuntimeCoreOutput {
             response: AgentSessionActionRespondResponse {},
             events,

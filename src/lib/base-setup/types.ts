@@ -8,7 +8,6 @@ import type {
   ServiceSkillRunnerType,
   ServiceSkillSceneBinding,
   ServiceSkillBundleResourceSummary,
-  ServiceSkillSiteCapabilityBinding,
   ServiceSkillSlotDefinition,
   ServiceSkillSource,
   ServiceSkillSurfaceScope,
@@ -51,7 +50,6 @@ export const BASE_SETUP_POLICY_ROLLOUT_STAGES = [
 
 export const BASE_SETUP_ALLOWED_BINDING_FAMILIES = [
   "agent_turn",
-  "browser_assist",
   "automation_job",
   // legacy compat only：current 目录不应再主动产出 cloud_scene binding。
   "cloud_scene",
@@ -71,7 +69,6 @@ export const BASE_SETUP_ALLOWED_COMMAND_EXECUTION_KINDS = [
   // legacy compat only：仅用于兼容旧 Base Setup / 远端目录输入。
   "cloud_scene",
   "native_skill",
-  "site_adapter",
   "task_queue",
   "server_api",
   "cli",
@@ -263,7 +260,6 @@ export interface BaseSetupCatalogProjection {
   examples?: string[];
   promptTemplateKey?: ServiceSkillPromptTemplateKey;
   themeTarget?: string;
-  siteCapabilityBinding?: ServiceSkillSiteCapabilityBinding;
   sceneBinding?: ServiceSkillSceneBinding;
   commandBinding?: BaseSetupCommandBinding;
   commandRenderContract?: BaseSetupRenderContract;

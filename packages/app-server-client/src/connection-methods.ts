@@ -1191,12 +1191,6 @@ declare module "./connection.js" {
 
 const CONNECTION_CLIENT_METHOD_EXCLUSIONS = new Set<string>([
   "initialize",
-  "listBrowserSessionTargets",
-  "openBrowserSession",
-  "readBrowserSession",
-  "closeBrowserSession",
-  "listBrowserSessionEvents",
-  "executeBrowserSessionAction",
   "readWorkflow",
   "cancelWorkflow",
   "retryWorkflow",

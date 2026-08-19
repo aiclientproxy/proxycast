@@ -16,8 +16,6 @@
   "common.app.project.type.fallback": "プロジェクト",
   "common.app.project.recommendedName": "{{prefix}}：{{shortLabel}}",
   "common.projects.rename.nameRequired": "プロジェクト名は空にできません",
-  "common.app.browserConnector.opened.title": "コネクター設定を開きました",
-  "common.app.browserConnector.opened.description": "「コネクター」ページでブラウザーコネクターを有効にするか、拡張機能を再同期してください。",
   "common.app.websiteDeepLink.unsupported.title": "この公式サイト入口を開けません",
   "common.app.websiteDeepLink.unsupported.description": "このサイト入口はデスクトップ側の利用可能な機能に対応していません。公式サイトとクライアントのカタログを同期してください。",
   "common.app.startup.windows.blockingTitle": "Windows 起動セルフチェックでブロック問題が見つかりました",

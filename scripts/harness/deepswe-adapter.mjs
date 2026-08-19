@@ -16,6 +16,7 @@ import {
   preflightSelectedTasks,
   prepareTaskWorkspace,
   runCurrentChainTask,
+  runContextBase,
   runPierVerifier,
   runtimePrerequisites,
   timestampId,
@@ -183,54 +184,6 @@ Options:
   --container-bin PATH      Container executable, default: docker
   --timeout-ms N            Agent turn timeout, default: 5400000
 `);
-}
-
-function runContextBase(options, runId, task) {
-  return {
-    generatedAt: new Date().toISOString(),
-    runId,
-    scenarioId: "DSW-01",
-    sourceCommit: "3cda4081fed96103a6395de39c85e9b20275e307",
-    task: {
-      id: task.id,
-      language: task.language,
-      repository: task.repository,
-      repositoryUrl: task.repositoryUrl,
-      baseCommit: task.baseCommit,
-      schemaVersion: task.schemaVersion,
-      environment: task.environment,
-      verifier: task.verifier,
-    },
-    executionContract: {
-      adapterVersion: "deepswe-current-chain-adapter-v5",
-      agentPath: "Lime App Server JSON-RPC current chain",
-      appServerMethods: [
-        "workspace/ensure",
-        "thread/start",
-        "thread/settings/update",
-        "turn/start",
-        "thread/read",
-      ],
-      verifier: "Pier separate verifier with patch replay",
-      transport: options.transport,
-      appServerDataIsolation:
-        options.transport === "stdio" ? "sqlite-vacuum-snapshot" : null,
-      taskWorkspaceIsolation: "system-temp-outside-repository",
-      liveProviderExplicitlyAllowed: options.allowLiveProvider,
-      providerBudget: {
-        maxProviderSteps: options.maxProviderSteps,
-        tokenBudget: options.tokenBudget,
-        tokenFormula: "max(0,input_tokens-cached_input_tokens)+output_tokens",
-        enforcementOwner:
-          "agent-runtime reply loop before tool execution and next sampling",
-      },
-      generationControls: {
-        maxOutputTokens: options.maxOutputTokens,
-        enableThinking: options.enableThinking,
-        projection: "runtimeRequest.metadata.harness.generation",
-      },
-    },
-  };
 }
 
 async function main() {

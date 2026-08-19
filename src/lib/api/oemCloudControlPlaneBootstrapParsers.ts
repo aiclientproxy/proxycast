@@ -58,7 +58,6 @@ export function parseBootstrap(value: unknown): OemCloudBootstrapResponse {
     providerPreference: parseProviderPreference(value.providerPreference),
     skillCatalog: value.skillCatalog,
     serviceSkillCatalog: value.serviceSkillCatalog,
-    siteAdapterCatalog: value.siteAdapterCatalog ?? value.site_adapter_catalog,
     sceneCatalog: Array.isArray(value.sceneCatalog)
       ? value.sceneCatalog
           .filter((item) => isRecord(item) && normalizeText(item.id))

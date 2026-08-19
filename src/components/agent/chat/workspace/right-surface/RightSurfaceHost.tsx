@@ -34,10 +34,6 @@ const RIGHT_SURFACE_TAB_LABELS: Record<
     key: "agentChat.rightSurface.tabs.expertInfo",
     fallback: "专家信息",
   },
-  objectCanvas: {
-    key: "agentChat.rightSurface.tabs.objectCanvas",
-    fallback: "对象画布",
-  },
   browser: {
     key: "agentChat.rightSurface.tabs.browser",
     fallback: "浏览器",

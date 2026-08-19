@@ -8,7 +8,6 @@ import {
   APPROVAL_REQUEST_RESUME_PROMPT,
   APPROVAL_REQUEST_RESUME_REQUEST_ID,
   APPROVAL_REQUEST_RESUME_RESULT_TEXT,
-  APPROVAL_REQUEST_RESUME_SECOND_PROMPT,
   APPROVAL_REQUEST_RESUME_TOOL_CALL_ID,
 } from "./claw-chat-current-fixture-constants.mjs";
 
@@ -27,19 +26,21 @@ function emitEventTypesForTurn(backendLedger, turnId) {
     );
 }
 
-function decisionRequestScoped(summary, threadId, turnId, expectedDecision) {
-  const params = summary.approvalRequestDecisionRespondActionRequest?.params;
-  const actionScope =
-    params?.actionScope ??
-    summary.approvalRequestDecisionBackendActionRespond?.actionScope;
+function decisionServerRequestResponseScoped(
+  summary,
+  threadId,
+  turnId,
+  expectedDecision,
+) {
+  const lifecycle = summary.approvalRequestDecisionServerRequestResponse;
   return (
-    params?.sessionId === summary.sessionId &&
-    params?.requestId === APPROVAL_REQUEST_RESUME_REQUEST_ID &&
-    params?.actionType === "tool_confirmation" &&
-    params?.decision === expectedDecision &&
-    !Object.prototype.hasOwnProperty.call(params ?? {}, "confirmed") &&
-    actionScope?.threadId === threadId &&
-    actionScope?.turnId === turnId
+    lifecycle?.request?.threadId === threadId &&
+    lifecycle?.request?.turnId === turnId &&
+    lifecycle?.response?.id === lifecycle?.request?.id &&
+    lifecycle?.response?.threadId === threadId &&
+    lifecycle?.response?.turnId === turnId &&
+    lifecycle?.response?.decision === expectedDecision &&
+    lifecycle?.responseMatchesRequest === true
   );
 }
 
@@ -194,9 +195,6 @@ export function buildApprovalRequestResumeScenarioAssertions({
   pageText,
   summary,
 }) {
-  const secondTurnId =
-    summary.approvalRequestResumeSecondBackendTurnStart?.turnId;
-  const secondEmitTypes = emitEventTypesForTurn(backendLedger, secondTurnId);
   return {
     approvalRequestResumePromptReachedBackend:
       approvalRequestResumeTurnStart?.inputText ===
@@ -207,6 +205,10 @@ export function buildApprovalRequestResumeScenarioAssertions({
       summary.approvalRequestResumeInputSend?.clicked?.clicked === true,
     guiApprovalRequestResumePendingVisible:
       summary.approvalRequestResumePendingGui?.hasSection === true &&
+      summary.approvalRequestResumePendingGui?.hasCurrentInteractionLayer ===
+        true &&
+      summary.approvalRequestResumePendingGui?.interactionKind ===
+        "approval" &&
       summary.approvalRequestResumePendingGui?.hasApprovalContent === true &&
       summary.approvalRequestResumePendingGui?.hasPrompt === true &&
       summary.approvalRequestResumePendingGui?.hasToolName === false &&
@@ -228,37 +230,28 @@ export function buildApprovalRequestResumeScenarioAssertions({
         true &&
       summary.approvalRequestResumePendingReadModel?.includesToolCallId ===
         true,
-    approvalRequestResumeUsedCurrentActionRespond:
-      appServerRequestMethods.includes(
-        APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-      ) ||
-      summary.approvalRequestResumeRespondActionRequest?.method ===
-        APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-    approvalRequestResumeRespondPayloadScoped:
-      summary.approvalRequestResumeRespondActionRequest?.params?.sessionId ===
+    approvalRequestResumeUsedCurrentServerRequestResponse:
+      summary.approvalRequestResumeServerRequestResponse?.request?.method ===
+        "item/commandExecution/requestApproval" &&
+      summary.approvalRequestResumeServerRequestResponse?.request?.threadId ===
+        summary.threadId &&
+      summary.approvalRequestResumeServerRequestResponse?.request?.turnId ===
+        approvalRequestResumeTurnStart?.turnId &&
+      summary.approvalRequestResumeServerRequestResponse?.response?.decision ===
+        "acceptForSession" &&
+      summary.approvalRequestResumeServerRequestResponse
+        ?.responseMatchesRequest === true,
+    approvalRequestResumeBackendResponseScoped:
+      summary.approvalRequestResumeBackendActionRespond?.sessionId ===
         summary.sessionId &&
-      summary.approvalRequestResumeRespondActionRequest?.params?.sessionId ===
+      summary.approvalRequestResumeBackendActionRespond?.sessionId ===
         approvalRequestResumeTurnStart?.sessionId &&
-      summary.approvalRequestResumeRespondActionRequest?.params?.requestId ===
-        APPROVAL_REQUEST_RESUME_REQUEST_ID &&
-      summary.approvalRequestResumeRespondActionRequest?.params?.actionType ===
-        "tool_confirmation" &&
-      summary.approvalRequestResumeRespondActionRequest?.params?.decision ===
-        "allow_for_session" &&
-      !Object.prototype.hasOwnProperty.call(
-        summary.approvalRequestResumeRespondActionRequest?.params ?? {},
-        "confirmed",
-      ) &&
-      (
-        summary.approvalRequestResumeRespondActionRequest?.params
-          ?.actionScope ??
-        summary.approvalRequestResumeBackendActionRespond?.actionScope
-      )?.threadId === summary.threadId &&
-      (
-        summary.approvalRequestResumeRespondActionRequest?.params
-          ?.actionScope ??
-        summary.approvalRequestResumeBackendActionRespond?.actionScope
-      )?.turnId === approvalRequestResumeTurnStart?.turnId,
+      summary.approvalRequestResumeBackendActionRespond?.threadId ===
+        summary.threadId &&
+      summary.approvalRequestResumeBackendActionRespond?.actionScope
+        ?.threadId === summary.threadId &&
+      summary.approvalRequestResumeBackendActionRespond?.actionScope?.turnId ===
+        approvalRequestResumeTurnStart?.turnId,
     approvalRequestResumeServerRequestResolved: serverRequestLifecycleResolved(
       summary.approvalRequestResumeServerRequestLifecycle,
       "acceptForSession",
@@ -309,90 +302,11 @@ export function buildApprovalRequestResumeScenarioAssertions({
         true &&
       summary.readModelApprovalRequestResumeCompleted
         ?.includesAssistantSummary === true,
-    approvalRequestResumeSecondPromptReachedBackend:
-      summary.approvalRequestResumeSecondBackendTurnStart?.inputText ===
-        APPROVAL_REQUEST_RESUME_SECOND_PROMPT &&
-      summary.approvalRequestResumeSecondInputSend?.clicked?.clicked === true,
-    approvalRequestResumeSecondUsesBrowserControlContract:
-      summary.approvalRequestResumeSecondBackendTurnStart?.approvalPolicy ===
-        "on-request" &&
-      summary.approvalRequestResumeSecondBackendTurnStart?.sandboxPolicy ===
-        "workspace-write" &&
-      summary.approvalRequestResumeSecondBackendTurnStart
-        ?.browserAssistContractKey === "browser_control" &&
-      summary.approvalRequestResumeSecondBackendTurnStart
-        ?.browserAssistEnabled === true,
-    approvalRequestResumeSessionCacheHitInjected:
-      summary.approvalRequestResumeSecondBackendTurnStart
-        ?.approvalSessionCacheDecision === "allow_for_session" &&
-      summary.approvalRequestResumeSecondBackendTurnStart
-        ?.approvalSessionCacheDecisionScope === "session" &&
-      summary.approvalRequestResumeSecondBackendTurnStart
-        ?.approvalSessionCacheSourceRequestId ===
-        APPROVAL_REQUEST_RESUME_REQUEST_ID &&
-      summary.approvalRequestResumeSecondBackendTurnStart
-        ?.approvalSessionCacheKey?.actionKind === "permission_preflight" &&
-      summary.approvalRequestResumeSecondBackendTurnStart
-        ?.approvalSessionCacheKey?.toolFamily === "browser_control" &&
-      summary.approvalRequestResumeSecondBackendTurnStart
-        ?.approvalSessionCacheKey?.contractKey === "browser_control",
-    approvalRequestResumeSecondNoPendingApproval:
-      summary.guiApprovalRequestResumeSecondNoApprovalPrompt
-        ?.approvalPromptVisible === false &&
-      summary.guiApprovalRequestResumeSecondNoApprovalPrompt
-        ?.includesRuntimePermissionPrompt === false &&
-      summary.guiApprovalRequestResumeSecondNoApprovalPrompt
-        ?.hasPendingApprovalStatus === false &&
-      summary.guiApprovalRequestResumeSecondNoApprovalPrompt
-        ?.textareaVisible === true &&
-      summary.guiApprovalRequestResumeSecondNoApprovalPrompt
-        ?.textareaDisabled === false,
-    approvalRequestResumeSecondReadModelAutoResolved:
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.pendingRequestCount === 0 &&
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.includesApprovalSessionCacheHit === false &&
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.includesAllowForSession === false &&
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.includesSecondPermissionRequestId === false &&
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.includesActionResolvedForSecondPermission === false &&
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.includesActionRequiredForSecondPermission === false &&
-      secondEmitTypes.includes("approval.session_cache.hit") &&
-      secondEmitTypes.includes("action.resolved") &&
-      !secondEmitTypes.includes("action.required"),
-    guiApprovalRequestResumeSecondCompleted:
-      summary.guiApprovalRequestResumeSecondCompleted?.hasPrompt === true &&
-      (summary.guiApprovalRequestResumeSecondCompleted?.hasAssistantSummary ===
-        true ||
-        summary.guiApprovalRequestResumeSecondCompleted?.hasDoneText ===
-          true) &&
-      summary.guiApprovalRequestResumeSecondCompleted?.textareaVisible ===
-        true &&
-      summary.guiApprovalRequestResumeSecondCompleted?.textareaDisabled ===
-        false &&
-      summary.guiApprovalRequestResumeSecondCompleted?.stopButtonVisible ===
-        false &&
-      currentFailureStatusHidden(
-        summary.guiApprovalRequestResumeSecondCompleted,
-      ),
-    guiApprovalRequestResumeSecondHistoricalDetailsHidden:
-      historicalApprovalDetailsHidden(
-        summary.guiApprovalRequestResumeSecondCompleted,
-      ),
-    readModelApprovalRequestResumeSecondCompleted:
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.latestTurnStatus === "completed" &&
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.includesSecondPrompt === true &&
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.includesSecondResult === true &&
-      summary.readModelApprovalRequestResumeSecondCompleted
-        ?.includesSecondDone === true,
     approvalRequestResumeNoLegacyRuntimeRespond:
       noLegacyRuntimeRespond(appServerRequestMethods) &&
+      !appServerRequestMethods.includes(
+        APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
+      ) &&
       pageText.includes(APPROVAL_REQUEST_RESUME_RESULT_TEXT),
   };
 }
@@ -448,18 +362,20 @@ export function buildApprovalRequestDecisionScenarioAssertions({
         true &&
       summary.approvalRequestDecisionPendingReadModel?.includesToolCallId ===
         true,
-    approvalRequestDecisionUsedCurrentActionRespond:
-      appServerRequestMethods.includes(
-        APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-      ) ||
-      summary.approvalRequestDecisionRespondActionRequest?.method ===
-        APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-    approvalRequestDecisionRespondPayloadScoped: decisionRequestScoped(
-      summary,
-      summary.threadId,
-      turnId,
-      expectedDecision,
-    ),
+    approvalRequestDecisionUsedCurrentServerRequestResponse:
+      summary.approvalRequestDecisionServerRequestResponse?.request?.method ===
+        "item/commandExecution/requestApproval" &&
+      summary.approvalRequestDecisionServerRequestResponse?.response
+        ?.decision === expectedDecision &&
+      summary.approvalRequestDecisionServerRequestResponse
+        ?.responseMatchesRequest === true,
+    approvalRequestDecisionServerRequestResponseScoped:
+      decisionServerRequestResponseScoped(
+        summary,
+        summary.threadId,
+        turnId,
+        expectedDecision,
+      ),
     approvalRequestDecisionServerRequestResolved:
       serverRequestLifecycleResolved(
         summary.approvalRequestDecisionServerRequestLifecycle,
@@ -561,9 +477,11 @@ export function buildApprovalRequestDecisionScenarioAssertions({
             summary.readModelApprovalRequestCancelCanceled
               ?.includesToolResult === false,
         }),
-    approvalRequestDecisionNoLegacyRuntimeRespond: noLegacyRuntimeRespond(
-      appServerRequestMethods,
-    ),
+    approvalRequestDecisionNoRendererActionRespond:
+      noLegacyRuntimeRespond(appServerRequestMethods) &&
+      !appServerRequestMethods.includes(
+        APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
+      ),
   };
 }
 

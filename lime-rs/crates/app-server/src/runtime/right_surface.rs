@@ -1,7 +1,6 @@
 use super::new_id;
 use super::RuntimeCore;
 use super::RuntimeCoreError;
-use super::RuntimeEvent;
 use app_server_protocol::WorkspaceRightSurfacePendingConsumeParams;
 use app_server_protocol::WorkspaceRightSurfacePendingConsumeResponse;
 use app_server_protocol::WorkspaceRightSurfacePendingDismissParams;
@@ -14,55 +13,25 @@ use app_server_protocol::WorkspaceRightSurfaceRequestResponse;
 use chrono::Duration;
 use chrono::SecondsFormat;
 use chrono::Utc;
-use serde_json::json;
+use serde_json::Map;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 const DEFAULT_PRIORITY: &str = "normal";
-const OBJECT_CANVAS_PERSIST_EVENT_KIND: &str = "persistRequested";
-const OBJECT_CANVAS_PERSIST_EVENT_OWNER: &str = "appServer";
-const OBJECT_CANVAS_REPLAY_EVENT_KIND: &str = "replayRequested";
-const OBJECT_CANVAS_REPLAY_EVENT_OWNER: &str = "runtime";
-const OBJECT_CANVAS_REPLAY_DRY_RUN_EVENT_TYPE: &str = "object_canvas.replay.dry_run";
-const OBJECT_CANVAS_SNAPSHOT_PREFIX: &str = "object_canvas_snapshot";
-const REPLAY_EXECUTION_BLOCKER: &str = "runtime_replay_execution_not_implemented";
-const REPLAY_STATUS_METADATA_INCOMPLETE: &str = "metadataIncomplete";
-const REPLAY_STATUS_METADATA_READY: &str = "metadataReady";
-const SURFACE_OBJECT_CANVAS: &str = "objectCanvas";
 const STATUS_CONSUMED: &str = "consumed";
 const STATUS_DISMISSED: &str = "dismissed";
 const STATUS_PENDING: &str = "pending";
+const BROWSER_SURFACE_KIND: &str = "browser";
+const BROWSER_ACTION_OPEN: &str = "open";
+const BROWSER_ACTION_CREATE_TAB: &str = "createTab";
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct WorkspaceObjectCanvasReplayReadinessListParams {
-    pub workspace_id: Option<String>,
-    pub workspace_root: Option<String>,
-    pub session_id: Option<String>,
-    pub board_id: Option<String>,
-    pub limit: Option<u64>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct WorkspaceObjectCanvasReplayReadiness {
-    pub request_id: String,
-    pub workspace_id: Option<String>,
-    pub workspace_root: Option<String>,
-    pub session_id: Option<String>,
-    pub candidate_id: Option<String>,
-    pub board_id: Option<String>,
-    pub revision: Option<u64>,
-    pub object_id: Option<String>,
-    pub object_kind: Option<String>,
-    pub replay_target: Option<String>,
-    pub source: Option<Value>,
-    pub facts: Option<Value>,
-    pub board_snapshot: Option<Value>,
-    pub requested_at: String,
-    pub status: String,
-    pub missing_fields: Vec<String>,
-    pub metadata_ready: bool,
-    pub execution_enabled: bool,
-    pub execution_blocker: Option<String>,
+#[derive(Debug)]
+pub(in crate::runtime) struct BrowserWorkspaceIdentityRecord {
+    browser_session_id: String,
+    primary_tab_id: String,
+    runtime_session_id: Option<String>,
+    tab_origins: HashMap<String, String>,
 }
 
 impl RuntimeCore {
@@ -79,6 +48,13 @@ impl RuntimeCore {
             "origin is required for workspaceRightSurface/request",
         )?;
         let priority = optional_trimmed(params.priority).unwrap_or_else(|| DEFAULT_PRIORITY.into());
+        let runtime_session_id = optional_trimmed(params.session_id);
+        let metadata = if surface_kind == BROWSER_SURFACE_KIND {
+            self.resolve_browser_identity_metadata(runtime_session_id.as_deref(), params.metadata)
+                .await?
+        } else {
+            params.metadata
+        };
         let now = Utc::now();
         let requested_at = now.to_rfc3339_opts(SecondsFormat::Millis, true);
         let expires_at = params.ttl_ms.and_then(|ttl_ms| {
@@ -89,23 +65,18 @@ impl RuntimeCore {
             request_id: new_id("right_surface"),
             workspace_id: optional_trimmed(params.workspace_id),
             workspace_root: optional_trimmed(params.workspace_root),
-            session_id: optional_trimmed(params.session_id),
+            session_id: runtime_session_id,
             surface_kind,
             origin,
             reason: optional_trimmed(params.reason),
             priority,
             candidate_id: optional_trimmed(params.candidate_id),
             ttl_ms: params.ttl_ms,
-            metadata: params.metadata,
+            metadata,
             requested_at,
             expires_at,
             status: STATUS_PENDING.to_string(),
         };
-        if let Some(snapshot) = object_canvas_snapshot_from_pending(&pending) {
-            self.app_data_source
-                .save_workspace_object_canvas_snapshot(snapshot)
-                .await?;
-        }
         self.app_data_source
             .save_workspace_right_surface_pending(pending.clone())
             .await?;
@@ -121,6 +92,90 @@ impl RuntimeCore {
             request_id: pending.request_id.clone(),
             pending,
         })
+    }
+
+    async fn resolve_browser_identity_metadata(
+        &self,
+        runtime_session_id: Option<&str>,
+        metadata: Option<Value>,
+    ) -> Result<Option<Value>, RuntimeCoreError> {
+        let mut metadata = value_object(metadata);
+        let mut browser = value_object(metadata.remove("browser"));
+        let Some(action) = value_string(browser.get("action")) else {
+            if !browser.is_empty() {
+                metadata.insert("browser".to_string(), Value::Object(browser));
+            }
+            return Ok((!metadata.is_empty()).then_some(Value::Object(metadata)));
+        };
+        if action != BROWSER_ACTION_OPEN && action != BROWSER_ACTION_CREATE_TAB {
+            return Err(RuntimeCoreError::Backend(
+                "Browser identity action must be open or createTab".to_string(),
+            ));
+        }
+        let thread_id = value_string(browser.get("threadId")).ok_or_else(|| {
+            RuntimeCoreError::Backend(
+                "Browser identity requires metadata.browser.threadId".to_string(),
+            )
+        })?;
+        let runtime_session_id = runtime_session_id.ok_or_else(|| {
+            RuntimeCoreError::Backend(
+                "Browser identity requires a canonical runtime session".to_string(),
+            )
+        })?;
+        let canonical_thread_id = self
+            .resolve_session_thread_id_current(runtime_session_id)
+            .await?;
+        if canonical_thread_id != thread_id {
+            return Err(RuntimeCoreError::Backend(
+                "Browser identity thread does not belong to the runtime session".to_string(),
+            ));
+        }
+
+        let mut state = self.state.lock().map_err(|_| {
+            RuntimeCoreError::Backend(
+                "failed to lock runtime state for Browser identity".to_string(),
+            )
+        })?;
+        let identity = state
+            .browser_workspaces
+            .entry(thread_id)
+            .or_insert_with(|| {
+                let primary_tab_id = new_id("browser_tab");
+                BrowserWorkspaceIdentityRecord {
+                    browser_session_id: new_id("browser_session"),
+                    primary_tab_id: primary_tab_id.clone(),
+                    runtime_session_id: Some(runtime_session_id.to_string()),
+                    tab_origins: HashMap::from([(primary_tab_id, "user".to_string())]),
+                }
+            });
+        if identity.runtime_session_id.as_deref() != Some(runtime_session_id) {
+            return Err(RuntimeCoreError::Backend(
+                "Browser identity runtime session mismatch".to_string(),
+            ));
+        }
+
+        let tab_id = if action == BROWSER_ACTION_CREATE_TAB {
+            let requested_session_id = value_string(browser.get("browserSessionId"));
+            if requested_session_id.as_deref() != Some(identity.browser_session_id.as_str()) {
+                return Err(RuntimeCoreError::Backend(
+                    "Browser identity session is stale or unavailable".to_string(),
+                ));
+            }
+            let tab_id = new_id("browser_tab");
+            identity
+                .tab_origins
+                .insert(tab_id.clone(), "user".to_string());
+            tab_id
+        } else {
+            identity.primary_tab_id.clone()
+        };
+        browser.insert(
+            "browserSessionId".to_string(),
+            Value::String(identity.browser_session_id.clone()),
+        );
+        browser.insert("tabId".to_string(), Value::String(tab_id));
+        metadata.insert("browser".to_string(), Value::Object(browser));
+        Ok(Some(Value::Object(metadata)))
     }
 
     pub async fn list_workspace_right_surface_pending(
@@ -236,44 +291,6 @@ impl RuntimeCore {
             missing_request_ids,
         })
     }
-
-    pub async fn list_workspace_object_canvas_replay_readiness(
-        &self,
-        params: WorkspaceObjectCanvasReplayReadinessListParams,
-    ) -> Result<Vec<WorkspaceObjectCanvasReplayReadiness>, RuntimeCoreError> {
-        let board_id = optional_trimmed(params.board_id);
-        let mut pending = self
-            .list_workspace_right_surface_pending(WorkspaceRightSurfacePendingListParams {
-                workspace_id: optional_trimmed(params.workspace_id),
-                workspace_root: optional_trimmed(params.workspace_root),
-                session_id: optional_trimmed(params.session_id),
-                surface_kind: Some(SURFACE_OBJECT_CANVAS.to_string()),
-                limit: None,
-            })
-            .await?
-            .pending
-            .into_iter()
-            .filter_map(|request| object_canvas_replay_readiness_from_pending(&request))
-            .filter(|readiness| optional_filter_matches(&board_id, readiness.board_id.as_deref()))
-            .collect::<Vec<_>>();
-        if let Some(limit) = params.limit.map(|value| value as usize) {
-            pending.truncate(limit);
-        }
-        Ok(pending)
-    }
-
-    pub async fn dry_run_workspace_object_canvas_replay(
-        &self,
-        params: WorkspaceObjectCanvasReplayReadinessListParams,
-    ) -> Result<Vec<RuntimeEvent>, RuntimeCoreError> {
-        let readiness = self
-            .list_workspace_object_canvas_replay_readiness(params)
-            .await?;
-        Ok(readiness
-            .iter()
-            .map(object_canvas_replay_dry_run_event_from_readiness)
-            .collect())
-    }
 }
 
 fn required_string(value: String, message: &str) -> Result<String, RuntimeCoreError> {
@@ -289,6 +306,20 @@ fn optional_trimmed(value: Option<String>) -> Option<String> {
     value
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
+}
+
+fn value_object(value: Option<Value>) -> Map<String, Value> {
+    value
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default()
+}
+
+fn value_string(value: Option<&Value>) -> Option<String> {
+    value
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
 }
 
 fn optional_filter_matches(filter: &Option<String>, value: Option<&str>) -> bool {
@@ -405,205 +436,4 @@ fn prune_expired_pending(pending: &mut Vec<WorkspaceRightSurfacePendingRequest>)
             .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
             .is_none_or(|expires_at| expires_at.with_timezone(&Utc) > now)
     });
-}
-
-fn object_canvas_snapshot_from_pending(
-    request: &WorkspaceRightSurfacePendingRequest,
-) -> Option<super::WorkspaceObjectCanvasSnapshot> {
-    if request.surface_kind != SURFACE_OBJECT_CANVAS {
-        return None;
-    }
-
-    let metadata = request.metadata.as_ref()?;
-    let event = metadata.pointer("/objectCanvas/event")?;
-    if string_field(event, "kind").as_deref() != Some(OBJECT_CANVAS_PERSIST_EVENT_KIND)
-        || string_field(event, "owner").as_deref() != Some(OBJECT_CANVAS_PERSIST_EVENT_OWNER)
-    {
-        return None;
-    }
-
-    let event_request = event.get("request")?;
-    let board_id = string_field(event_request, "boardId")?;
-    let revision = u64_field(event_request, "revision")?;
-    let persistence_key = string_field(event_request, "persistenceKey")?;
-    let candidate_id = optional_string_field(metadata, "candidateId")
-        .or_else(|| request.candidate_id.clone())
-        .filter(|value| !value.trim().is_empty());
-    let object_id = optional_string_field(event_request, "objectId");
-    let object_kind = optional_string_field(event_request, "objectKind");
-
-    Some(super::WorkspaceObjectCanvasSnapshot {
-        snapshot_id: format!("{OBJECT_CANVAS_SNAPSHOT_PREFIX}:{}", request.request_id),
-        request_id: request.request_id.clone(),
-        workspace_id: request.workspace_id.clone(),
-        workspace_root: request.workspace_root.clone(),
-        session_id: request.session_id.clone(),
-        board_id,
-        revision,
-        persistence_key,
-        candidate_id,
-        object_id,
-        object_kind,
-        snapshot_json: json!({
-            "source": "workspaceRightSurface/request",
-            "metadata": metadata.clone(),
-            "pendingRequest": {
-                "requestId": request.request_id.clone(),
-                "surfaceKind": request.surface_kind.clone(),
-                "origin": request.origin.clone(),
-                "reason": request.reason.clone(),
-                "requestedAt": request.requested_at.clone(),
-            },
-        }),
-        created_at: request.requested_at.clone(),
-    })
-}
-
-fn object_canvas_replay_readiness_from_pending(
-    request: &WorkspaceRightSurfacePendingRequest,
-) -> Option<WorkspaceObjectCanvasReplayReadiness> {
-    if request.surface_kind != SURFACE_OBJECT_CANVAS {
-        return None;
-    }
-
-    let metadata = request.metadata.as_ref()?;
-    let event = metadata.pointer("/objectCanvas/event")?;
-    if string_field(event, "kind").as_deref() != Some(OBJECT_CANVAS_REPLAY_EVENT_KIND)
-        || string_field(event, "owner").as_deref() != Some(OBJECT_CANVAS_REPLAY_EVENT_OWNER)
-    {
-        return None;
-    }
-
-    let event_request = event.get("request").unwrap_or(&Value::Null);
-    let board_id = optional_string_field(event_request, "boardId");
-    let revision = u64_field(event_request, "revision");
-    let object_id = optional_string_field(event_request, "objectId");
-    let object_kind = optional_string_field(event_request, "objectKind");
-    let replay_target = optional_string_field(event_request, "replayTarget");
-    let source = optional_value_field(event_request, "source");
-    let facts = optional_value_field(event_request, "facts");
-    let board_snapshot = metadata.pointer("/objectCanvas/snapshot").cloned();
-
-    let mut missing_fields = Vec::new();
-    if board_id.is_none() {
-        missing_fields.push("boardId".to_string());
-    }
-    if revision.is_none() {
-        missing_fields.push("revision".to_string());
-    }
-    if object_id.is_none() {
-        missing_fields.push("objectId".to_string());
-    }
-    if replay_target.is_none() {
-        missing_fields.push("replayTarget".to_string());
-    }
-    if board_snapshot.is_none() {
-        missing_fields.push("objectCanvas.snapshot".to_string());
-    }
-    let metadata_ready = missing_fields.is_empty();
-
-    Some(WorkspaceObjectCanvasReplayReadiness {
-        request_id: request.request_id.clone(),
-        workspace_id: request.workspace_id.clone(),
-        workspace_root: request.workspace_root.clone(),
-        session_id: request.session_id.clone(),
-        candidate_id: optional_string_field(metadata, "candidateId")
-            .or_else(|| request.candidate_id.clone())
-            .filter(|value| !value.trim().is_empty()),
-        board_id,
-        revision,
-        object_id,
-        object_kind,
-        replay_target,
-        source,
-        facts,
-        board_snapshot,
-        requested_at: request.requested_at.clone(),
-        status: if metadata_ready {
-            REPLAY_STATUS_METADATA_READY
-        } else {
-            REPLAY_STATUS_METADATA_INCOMPLETE
-        }
-        .to_string(),
-        missing_fields,
-        metadata_ready,
-        execution_enabled: false,
-        execution_blocker: Some(REPLAY_EXECUTION_BLOCKER.to_string()),
-    })
-}
-
-fn object_canvas_replay_dry_run_event_from_readiness(
-    readiness: &WorkspaceObjectCanvasReplayReadiness,
-) -> RuntimeEvent {
-    let mut blocking_reasons = readiness.missing_fields.clone();
-    if let Some(blocker) = readiness.execution_blocker.as_ref() {
-        if !blocking_reasons.contains(blocker) {
-            blocking_reasons.push(blocker.clone());
-        }
-    }
-
-    RuntimeEvent::new(
-        OBJECT_CANVAS_REPLAY_DRY_RUN_EVENT_TYPE,
-        json!({
-            "schemaVersion": "object-canvas.replay.dry-run.v1",
-            "source": "workspaceRightSurface/request",
-            "requestId": readiness.request_id,
-            "workspaceId": readiness.workspace_id,
-            "workspaceRoot": readiness.workspace_root,
-            "sessionId": readiness.session_id,
-            "candidateId": readiness.candidate_id,
-            "boardId": readiness.board_id,
-            "revision": readiness.revision,
-            "objectId": readiness.object_id,
-            "objectKind": readiness.object_kind,
-            "replayTarget": readiness.replay_target,
-            "requestedAt": readiness.requested_at,
-            "metadata": {
-                "status": readiness.status,
-                "ready": readiness.metadata_ready,
-                "missingFields": readiness.missing_fields,
-            },
-            "execution": {
-                "dryRun": true,
-                "enabled": readiness.execution_enabled,
-                "blocker": readiness.execution_blocker,
-                "wouldExecute": readiness.metadata_ready && readiness.execution_enabled,
-            },
-            "audit": {
-                "decision": "blocked",
-                "blockingReasons": blocking_reasons,
-            },
-            "replay": {
-                "target": readiness.replay_target,
-                "source": readiness.source,
-                "facts": readiness.facts,
-                "boardSnapshot": readiness.board_snapshot,
-            },
-        }),
-    )
-}
-
-fn string_field(value: &Value, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-fn optional_string_field(value: &Value, key: &str) -> Option<String> {
-    string_field(value, key)
-}
-
-fn optional_value_field(value: &Value, key: &str) -> Option<Value> {
-    value.get(key).filter(|value| !value.is_null()).cloned()
-}
-
-fn u64_field(value: &Value, key: &str) -> Option<u64> {
-    value.get(key).and_then(|value| {
-        value
-            .as_u64()
-            .or_else(|| value.as_i64().and_then(|value| u64::try_from(value).ok()))
-    })
 }

@@ -148,7 +148,6 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
                 caller: "assistant",
                 surface: {
                   workbench: true,
-                  browser_assist: false,
                 },
               },
               warnings: [],

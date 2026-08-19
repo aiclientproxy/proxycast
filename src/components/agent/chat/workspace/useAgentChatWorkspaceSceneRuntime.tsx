@@ -2,6 +2,7 @@
 
 /** Workspace scene/projection current owner。 */
 
+import { useCallback } from "react";
 import { useWorkspaceCanvasSceneRuntime } from "./useWorkspaceCanvasSceneRuntime";
 import { useWorkspaceInputbarSceneRuntime } from "./useWorkspaceInputbarSceneRuntime";
 import { useWorkspaceTaskCenterSendRuntime } from "./useWorkspaceTaskCenterSendRuntime";
@@ -66,11 +67,11 @@ export function useAgentChatWorkspaceSceneRuntime({
     setAccessMode, messages, setChatMessages, currentTurnId, turns, todoItems,
     threadRead, threadGoal, threadGoalError, isThreadGoalLoading, executionRuntime, sessionWorkingDir, isSending, stopSending, replayPendingAction,
     clearMessages, deleteMessage, editMessage, handlePermissionResponse, submittedActionsInFlight, sessionHistoryWindow,
-    isAutoRestoringSession, isSessionHydrating, sessionId, originalSwitchTopic, loadFullSessionHistory, refreshSessionReadModel, workspacePathMissing, workspaceHealthError,
+    isAutoRestoringSession, isSessionHydrating, sessionId, ensureSession, getThreadIdForSubmit, originalSwitchTopic, loadFullSessionHistory, refreshSessionReadModel, workspacePathMissing, workspaceHealthError,
     combinedSkillsLoading, expertPanelRequestMetadata, expertPanelRuntimeKey, expertSkillRefsOverride, expertWorkspaceSkillRuntimeEnableBindings, expertWorkspaceSkillRuntimeEnableRefs, handleEnableExpertWorkspaceSkillRuntime, handleExpertSkillRefsChange,
     handlePluginSuggestionsNeeded, handleThreadExpertProfileSwitch, workspacePluginInputSuggestions, workspacePluginSuggestionsError, workspacePluginSuggestionsLoading, workspaceSkillBindings, topicById, effectiveChatToolPreferences, canonicalChildren,
     currentSessionTitle, handleStopSending, handleOpenSubagentSession, currentImageWorkbenchState, imageWorkbenchSessionKey, updateCurrentImageWorkbenchState, artifacts, artifactDisplayState,
-    artifactViewMode, browserAssistLaunching, browserAssistSessionRef, browserAssistSessionState, currentCanvasArtifact, currentBrowserAssistScopeKey, displayedCanvasArtifact, handleArtifactViewModeChange,
+    artifactViewMode, currentCanvasArtifact, displayedCanvasArtifact, handleArtifactViewModeChange,
     handleOpenBrowserRuntimeForBrowserAssist, settledWorkbenchArtifacts, contextHarnessRuntime, effectiveThreadItems, harnessState, inputbarIsSending, rightSurfaceLocalState, contextWorkspace,
     isThemeWorkbench, setHarnessPanelVisible, harnessPendingCount, showHarnessToggle, harnessAttentionLevel, harnessToggleLabel, generalWorkbenchScaffoldRuntime, workspaceServiceSkillEntryActions,
     a2uiSubmissionNotice, effectivePendingA2UIForm, effectivePendingA2UISource, handleMessageA2UISubmit, handlePendingA2UISubmit, pendingPromotedA2UIActionRequest, currentGate, themeWorkbenchRunState,
@@ -313,6 +314,18 @@ export function useAgentChatWorkspaceSceneRuntime({
     sceneSessionId,
     shouldHideCurrentSessionContent,
   } = taskCenterSendRuntime;
+  const ensureBrowserWorkspaceOwner = useCallback(async () => {
+    const runtimeSessionId = (await ensureSession())?.trim();
+    if (!runtimeSessionId) {
+      return null;
+    }
+    let threadId = getThreadIdForSubmit(runtimeSessionId)?.trim();
+    if (!threadId) {
+      await refreshSessionReadModel();
+      threadId = getThreadIdForSubmit(runtimeSessionId)?.trim();
+    }
+    return threadId ? { runtimeSessionId, threadId } : null;
+  }, [ensureSession, getThreadIdForSubmit, refreshSessionReadModel]);
   const workspaceSceneNode = useAgentChatWorkspaceSceneComposition({
     expertPanel: {
       canOpenSkillsManage: Boolean(_onNavigate),
@@ -366,11 +379,7 @@ export function useAgentChatWorkspaceSceneRuntime({
       },
       coordinator: {
         bindRightSurfacePendingActions,
-        browserAssistLaunching,
-        browserAssistSessionRef,
-        browserAssistSessionState,
         clawTraceEnabled,
-        currentBrowserAssistScopeKey,
         expertInfoPanelCollapsed,
         handleToggleCanvas,
         harnessPendingCount,
@@ -394,6 +403,7 @@ export function useAgentChatWorkspaceSceneRuntime({
         setLayoutMode,
       },
       host: {
+        ensureBrowserWorkspaceOwner,
         generalWorkbenchHarnessPanelBaseProps,
         harnessState,
         preferredServiceSkillResultFileTarget,
@@ -401,8 +411,6 @@ export function useAgentChatWorkspaceSceneRuntime({
         sceneSessionId,
         sceneThreadId: sceneThreadRead?.thread_id ?? null,
         onOpenArticlePreviewArtifact: openWorkspaceArtifactInWorkbench,
-        onOpenBrowserRuntimeForBrowserAssist:
-          handleOpenBrowserRuntimeForBrowserAssist,
         onOpenServiceSkillResultFile: handleOpenServiceSkillResultFile,
         handleSendRef,
         restoreInput: setInput,
@@ -431,7 +439,7 @@ export function useAgentChatWorkspaceSceneRuntime({
         accessMode,
         activeTheme,
         artifacts,
-        browserAssistLoading: browserAssistLaunching,
+        browserAssistLoading: false,
         chatToolPreferences: effectiveChatToolPreferences,
         contentId,
         creationMode,
@@ -586,10 +594,6 @@ export function useAgentChatWorkspaceSceneRuntime({
         handleSendFromEmptyState,
         shellChromeRuntime,
         currentImageWorkbenchActive: currentImageWorkbenchState.active,
-        browserWorkbenchOpenRequest:
-          workbenchRequests.browserWorkbenchOpenRequest,
-        onBrowserWorkbenchOpenRequestHandled:
-          workbenchRequests.handleBrowserWorkbenchOpenRequestHandled,
         canvasWorkbenchPreviewOpenRequest:
           workbenchRequests.canvasWorkbenchPreviewOpenRequest,
         onCanvasWorkbenchPreviewOpenRequestHandled:

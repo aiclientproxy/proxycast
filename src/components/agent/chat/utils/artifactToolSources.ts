@@ -5,7 +5,6 @@ import type {
   ArtifactDocumentV1,
 } from "@/lib/artifact-document";
 import { extractArtifactProtocolPathsFromValue } from "@/lib/artifact-protocol";
-import { extractBrowserAssistSessionFromToolCall } from "./browserAssistSession";
 import { resolveSearchResultPreviewItemsFromText } from "./searchResultPreview";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -258,6 +257,10 @@ function isSearchLikeToolName(toolName: string): boolean {
   return normalized.includes("search") || normalized.includes("webquery");
 }
 
+function isBrowserToolName(toolName: string): boolean {
+  return toolName.trim().toLowerCase().startsWith("browser__");
+}
+
 function buildFileSource(path: string): ArtifactDocumentSource {
   const normalizedPath = normalizePath(path);
   return {
@@ -283,35 +286,7 @@ export function extractArtifactDocumentSourcesFromToolCall(
   const parsedArguments = parseLooseJsonValue(toolCall.arguments);
   const parsedOutput = parseLooseJsonValue(result.output);
   const metadataRecord = asRecord(result.metadata);
-  const browserSession = extractBrowserAssistSessionFromToolCall({
-    id: toolCall.id,
-    name: toolCall.name,
-    arguments: toolCall.arguments,
-    result,
-    status: "completed",
-    startTime: new Date(0),
-    endTime: new Date(0),
-  });
-
-  if (browserSession && (browserSession.url || browserSession.title)) {
-    collected.push({
-      id: `browser:${browserSession.url || browserSession.sessionId || browserSession.profileKey || toolCall.id}`,
-      type: "web",
-      label: browserSession.title || browserSession.url || "浏览器页面",
-      ...(browserSession.url
-        ? {
-            locator: {
-              url: browserSession.url,
-            },
-          }
-        : {}),
-      snippet:
-        [browserSession.lifecycleState, browserSession.profileKey]
-          .filter(Boolean)
-          .join(" · ") || undefined,
-      reliability: "secondary",
-    });
-  }
+  const browserTool = isBrowserToolName(toolCall.name);
 
   const pathCandidates = new Set<string>();
   for (const path of extractArtifactProtocolPathsFromValue(parsedArguments)) {
@@ -329,7 +304,7 @@ export function extractArtifactDocumentSourcesFromToolCall(
 
   const shouldExtractWebSources =
     isSearchLikeToolName(toolCall.name) ||
-    Boolean(browserSession) ||
+    browserTool ||
     hasStructuredSourceHints(metadataRecord) ||
     hasStructuredSourceHints(parsedOutput);
   if (shouldExtractWebSources) {
@@ -337,11 +312,7 @@ export function extractArtifactDocumentSourcesFromToolCall(
     if (normalizeText(result.output)) {
       previewInputs.add(result.output);
     }
-    if (
-      metadataRecord &&
-      hasStructuredSourceHints(metadataRecord) &&
-      !browserSession
-    ) {
+    if (metadataRecord && hasStructuredSourceHints(metadataRecord)) {
       previewInputs.add(JSON.stringify(metadataRecord));
     }
     if (parsedOutput && hasStructuredSourceHints(parsedOutput)) {
@@ -352,7 +323,7 @@ export function extractArtifactDocumentSourcesFromToolCall(
       for (const item of resolveSearchResultPreviewItemsFromText(rawText)) {
         collected.push({
           id: `web:${item.url}`,
-          type: browserSession ? "web" : "search_result",
+          type: browserTool ? "web" : "search_result",
           label: item.title,
           locator: {
             url: item.url,

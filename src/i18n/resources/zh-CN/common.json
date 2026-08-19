@@ -16,8 +16,6 @@
   "common.app.project.type.fallback": "项目",
   "common.app.project.recommendedName": "{{prefix}}：{{shortLabel}}",
   "common.projects.rename.nameRequired": "项目名称不能为空",
-  "common.app.browserConnector.opened.title": "已打开连接器设置",
-  "common.app.browserConnector.opened.description": "在“连接器”页中开启浏览器连接器或重新同步扩展。",
   "common.app.websiteDeepLink.unsupported.title": "无法打开这个官网入口",
   "common.app.websiteDeepLink.unsupported.description": "当前官网入口没有对应到桌面端可用能力，请同步官网与客户端目录。",
   "common.app.startup.windows.blockingTitle": "Windows 启动自检发现阻塞问题",

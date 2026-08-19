@@ -605,7 +605,6 @@ mod tests {
                     workspace_root: temp.path().to_string_lossy().to_string(),
                     caller: Some("assistant".to_string()),
                     workbench: true,
-                    browser_assist: false,
                 },
             )
             .expect("list workspace bindings");

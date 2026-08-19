@@ -13,128 +13,8 @@ import {
   FIXTURE_PROVIDER,
 } from "./claw-chat-current-fixture-constants.mjs";
 
-const BROWSER_CONTROL_CONTRACT = {
-  contract_key: "browser_control",
-  routing_slot: "browser_reasoning_model",
-  modality: "browser",
-};
-
 function js(value) {
   return JSON.stringify(value);
-}
-
-export function renderApprovalRequestResumeHelpersScript() {
-  return `
-function normalizeApprovalScopeString(value) {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function hashApprovalScopeValue(value) {
-  const normalized = normalizeApprovalScopeString(value);
-  if (!normalized) {
-    return undefined;
-  }
-  return "sha256:" + createHash("sha256").update(normalized).digest("hex");
-}
-
-function normalizeApprovalNetworkHost(value) {
-  const normalized = normalizeApprovalScopeString(value);
-  if (!normalized) {
-    return undefined;
-  }
-  let parsed;
-  try {
-    parsed = new URL(normalized);
-  } catch {
-    try {
-      parsed = new URL("https://" + normalized);
-    } catch {
-      return undefined;
-    }
-  }
-  const scheme = parsed.protocol.replace(/:$/u, "").toLowerCase();
-  const host = parsed.hostname.toLowerCase();
-  const port = parsed.port;
-  if (!host) {
-    return undefined;
-  }
-  if (!port || (scheme === "http" && port === "80") || (scheme === "https" && port === "443")) {
-    return scheme + "://" + host;
-  }
-  return scheme + "://" + host + ":" + port;
-}
-
-function approvalRequestResumeHostMetadata() {
-  return runtimeRequest?.metadata ?? {};
-}
-
-function approvalRequestResumeScope() {
-  const metadata = approvalRequestResumeHostMetadata();
-  const harness = metadata?.harness ?? {};
-  const browserAssist =
-    harness?.browser_assist ??
-    harness?.browserAssist ??
-    metadata?.browser_assist ??
-    metadata?.browserAssist ??
-    {};
-  const commandMatch = ${js(APPROVAL_REQUEST_RESUME_COMMAND)}.match(/https?:\\/\\/\\S+/u);
-  const launchUrl =
-    harness?.browser_launch_url ??
-    harness?.browserLaunchUrl ??
-    browserAssist?.launch_url ??
-    browserAssist?.launchUrl ??
-    browserAssist?.target_url ??
-    browserAssist?.targetUrl ??
-    commandMatch?.[0];
-  const workspaceId = normalizeApprovalScopeString(
-    runtimeRequest?.workspace_id ??
-      runtimeRequest?.workspaceId ??
-      metadata?.workspace_id ??
-      metadata?.workspaceId ??
-      harness?.workspace_id ??
-      harness?.workspaceId ??
-      input.request?.session?.workspaceId ??
-      input.request?.session?.workspace_id,
-  );
-  const workingDirHash = hashApprovalScopeValue(
-    runtimeRequest?.workingDir ??
-      runtimeRequest?.working_dir ??
-      runtimeRequest?.workingDirectory ??
-      runtimeRequest?.working_directory ??
-      metadata?.workingDir ??
-      metadata?.working_dir ??
-      harness?.workingDir ??
-      harness?.working_dir ??
-      harness?.cwd,
-  );
-  const projectRootHash = hashApprovalScopeValue(
-    runtimeRequest?.projectRoot ??
-      runtimeRequest?.project_root ??
-      runtimeRequest?.workspaceRoot ??
-      runtimeRequest?.workspace_root ??
-      metadata?.projectRoot ??
-      metadata?.project_root ??
-      metadata?.workspaceRoot ??
-      metadata?.workspace_root ??
-      harness?.projectRoot ??
-      harness?.project_root ??
-      harness?.workspaceRoot ??
-      harness?.workspace_root,
-  );
-  const networkHost = normalizeApprovalNetworkHost(launchUrl);
-  return {
-    riskClass: "browser_control",
-    ...(workspaceId ? { workspaceId } : {}),
-    ...(workingDirHash ? { workingDirHash } : {}),
-    ...(projectRootHash ? { projectRootHash } : {}),
-    ...(networkHost ? { networkHost } : {}),
-  };
-}
-`;
 }
 
 export function renderApprovalRequestResumeActionRespondScript() {
@@ -166,7 +46,6 @@ if (input.kind === "actionRespond") {
   const actionScopeTurnId = actionScope.turnId || actionScope.turn_id;
   const turnId = currentTurnId();
   const threadId = currentThreadId();
-  const approvalScope = approvalRequestResumeScope();
   const isApprovalRequestResumeAction =
     requestId === ${js(APPROVAL_REQUEST_RESUME_REQUEST_ID)} &&
     actionType === "tool_confirmation";
@@ -244,9 +123,6 @@ if (input.kind === "actionRespond") {
         approval_policy: "on-request",
         sandboxPolicy: "workspace-write",
         sandbox_policy: "workspace-write",
-        runtime_contract: ${js(BROWSER_CONTROL_CONTRACT)},
-        approvalScope,
-        approval_scope: approvalScope,
         scope: {
           sessionId: actionScopeSessionId || input.request?.session?.sessionId,
           session_id: actionScopeSessionId || input.request?.session?.sessionId,
@@ -394,7 +270,6 @@ export function renderApprovalRequestResumeTurnStartScript() {
   if (isApprovalRequestResumePrompt) {
     const turnId = currentTurnId();
     const threadId = currentThreadId();
-    const approvalScope = approvalRequestResumeScope();
     emitEvents([
       {
         type: "provider.request.started",
@@ -418,7 +293,7 @@ export function renderApprovalRequestResumeTurnStartScript() {
             command: ${js(APPROVAL_REQUEST_RESUME_COMMAND)}
           },
           status: "inProgress",
-          metadata: { runtime_contract: ${js(BROWSER_CONTROL_CONTRACT)} }
+          metadata: { commandExecutionSource: "agent" }
         })
       },
       {
@@ -444,9 +319,9 @@ export function renderApprovalRequestResumeTurnStartScript() {
           approval_policy: "on-request",
           sandboxPolicy: "workspace-write",
           sandbox_policy: "workspace-write",
-          runtime_contract: ${js(BROWSER_CONTROL_CONTRACT)},
-          approvalScope,
-          approval_scope: approvalScope,
+          runtime_contract: {
+            session_cache_supported: true
+          },
           arguments: {
             command: ${js(APPROVAL_REQUEST_RESUME_COMMAND)}
           },
@@ -460,9 +335,9 @@ export function renderApprovalRequestResumeTurnStartScript() {
             approval_policy: "on-request",
             sandboxPolicy: "workspace-write",
             sandbox_policy: "workspace-write",
-            runtime_contract: ${js(BROWSER_CONTROL_CONTRACT)},
-            approvalScope,
-            approval_scope: approvalScope,
+            runtime_contract: {
+              session_cache_supported: true
+            },
             arguments: {
               command: ${js(APPROVAL_REQUEST_RESUME_COMMAND)}
             }
@@ -474,7 +349,6 @@ export function renderApprovalRequestResumeTurnStartScript() {
             thread_id: threadId,
             turnId,
             turn_id: turnId,
-            ...(approvalScope.workspaceId ? { workspaceId: approvalScope.workspaceId } : {})
           }
         }
       }

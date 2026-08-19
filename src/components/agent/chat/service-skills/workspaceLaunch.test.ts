@@ -54,34 +54,34 @@ describe("service skill workspace launch", () => {
     });
   });
 
-  it("站点型技能即使带有 defaultArtifactKind 也不应默认注入 artifact draft", () => {
+  it("即时服务技能带有 defaultArtifactKind 时也应注入 artifact draft", () => {
     const seed = buildServiceSkillWorkspaceSeed(
       createSkill({
-        title: "GitHub 仓库线索检索",
+        title: "仓库线索研究",
         category: "情报研究",
         outputHint: "仓库列表 + 关键线索",
         runnerType: "instant",
-        defaultExecutorBinding: "browser_assist",
+        defaultExecutorBinding: "agent_turn",
         defaultArtifactKind: "analysis",
         themeTarget: "general",
-        siteCapabilityBinding: {
-          adapterName: "github/search",
-          autoRun: true,
-          requireAttachedSession: true,
-          saveMode: "current_content",
-        },
       }),
     );
 
     expect(seed).toEqual({
-      title: "GitHub 仓库线索检索",
+      title: "仓库线索研究",
       contentType: "content",
-      requestMetadata: undefined,
+      requestMetadata: {
+        artifact: {
+          artifact_mode: "draft",
+          artifact_kind: "analysis",
+          workbench_surface: "right_panel",
+        },
+      },
       metadata: {
         source: "service_skill",
         serviceSkill: {
           id: "daily-trend-briefing",
-          title: "GitHub 仓库线索检索",
+          title: "仓库线索研究",
           runnerType: "instant",
           executionLocation: "client_default",
           themeTarget: "general",

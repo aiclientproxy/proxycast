@@ -78,20 +78,6 @@ describe("resolveWorkspaceSelectedArtifactIdCorrection", () => {
     ).toBe("artifact-1");
   });
 
-  it("选中 Browser Assist artifact 时应回退到默认 artifact", () => {
-    const browserAssistArtifact = artifact("browser-assist", "browser_assist");
-    expect(
-      resolveWorkspaceSelectedArtifactIdCorrection(
-        baseInput({
-          artifacts: [browserAssistArtifact, artifact("artifact-1")],
-          selectedArtifact: browserAssistArtifact,
-          selectedArtifactId: browserAssistArtifact.id,
-          defaultSelectedArtifactId: "artifact-1",
-        }),
-      ),
-    ).toBe("artifact-1");
-  });
-
   it("选中 artifact 已不存在时应回退到默认 artifact", () => {
     expect(
       resolveWorkspaceSelectedArtifactIdCorrection(

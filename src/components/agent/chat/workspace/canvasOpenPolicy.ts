@@ -7,7 +7,6 @@ export type CanvasOpenReason =
   | "user_open_file"
   | "user_open_message_preview"
   | "runtime_write"
-  | "runtime_browser_assist"
   | "runtime_image_workbench"
   | "runtime_team_workbench";
 

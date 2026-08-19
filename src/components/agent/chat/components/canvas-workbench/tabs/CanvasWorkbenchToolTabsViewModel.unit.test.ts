@@ -6,10 +6,8 @@ const copy: Record<string, string> = {
   "agentChat.canvasWorkbench.coding.tabs.logs": "日志",
   "agentChat.canvasWorkbench.coding.tabs.outputs": "输出",
   "agentChat.canvasWorkbench.newTabs.terminal": "终端",
-  "agentChat.canvasWorkbench.newTabs.browser": "浏览器",
   "agentChat.canvasWorkbench.newTabs.files": "文件",
   "agentChat.canvasWorkbench.newTabs.terminalTab": "终端",
-  "agentChat.canvasWorkbench.newTabs.browserTab": "新选项卡",
   "agentChat.canvasWorkbench.newTabs.filesTab": "打开文件",
 };
 
@@ -54,23 +52,16 @@ describe("CanvasWorkbenchToolTabsViewModel", () => {
       failedChangeItemCount: 0,
       openedToolTabs: [
         { id: "terminal:1", kind: "terminal", sequence: 1 },
-        { id: "browser:1", kind: "browser", sequence: 1 },
         { id: "project-files:1", kind: "project-files", sequence: 1 },
-        {
-          id: "browser:2",
-          kind: "browser",
-          sequence: 2,
-          browserTitle: "Reuters | World News",
-        },
+        { id: "terminal:2", kind: "terminal", sequence: 2 },
       ],
       translateWorkbench: t,
     });
 
     expect(projection.primaryTabs.slice(1)).toEqual([
       { key: "terminal:1", label: "终端", closable: true },
-      { key: "browser:1", label: "新选项卡", closable: true },
       { key: "project-files:1", label: "打开文件", closable: true },
-      { key: "browser:2", label: "Reuters | World News", closable: true },
+      { key: "terminal:2", label: "终端 2", closable: true },
     ]);
   });
 
@@ -109,7 +100,6 @@ describe("CanvasWorkbenchToolTabsViewModel", () => {
 
     expect(projection.newTabActions).toEqual([
       { key: "terminal", label: "终端", shortcut: "^`" },
-      { key: "browser", label: "浏览器" },
       { key: "project-files", label: "文件", shortcut: "⌘P" },
     ]);
   });

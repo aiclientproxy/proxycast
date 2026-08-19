@@ -589,6 +589,40 @@ describe("app-server runtime boundary", () => {
     ).toEqual([]);
   });
 
+  it("已退役的 App Server permission preflight 与 session approval cache 不得恢复", () => {
+    const retiredPaths = [
+      "lime-rs/crates/app-server/src/runtime/approval_cache.rs",
+      "lime-rs/crates/app-server/src/runtime/permission_state_projection.rs",
+      "lime-rs/crates/app-server/src/runtime/tests/permission_preflight.rs",
+      "lime-rs/crates/app-server/src/runtime_backend/permission_preflight.rs",
+    ];
+    const restoredPaths = retiredPaths.filter((path) =>
+      existsSync(join(REPO_ROOT, path)),
+    );
+    const restoredIdentifiers = collectRustFiles(APP_SERVER_SRC_DIR)
+      .map((file) => ({
+        path: repoRelative(file),
+        source: productionSource(file),
+      }))
+      .filter(({ source }) =>
+        [
+          "permission_preflight",
+          "session_approval_cache",
+          "approval.session_cache.hit",
+        ].some((snippet) => source.includes(snippet)),
+      )
+      .map(({ path }) => path);
+
+    expect(
+      restoredPaths,
+      "已删除的 App Server permission preflight 与 session approval cache 模块不得恢复；权限和审批执行归 current tool-runtime / Agent 主链",
+    ).toEqual([]);
+    expect(
+      restoredIdentifiers,
+      "App Server 生产代码不得重新承接 permission preflight 或 session approval cache 状态机",
+    ).toEqual([]);
+  });
+
   it("P1-5 UI execution runtime projection owner 不得折回 utils facade", () => {
     const utilsPath =
       "src/components/agent/chat/utils/sessionExecutionRuntime.ts";

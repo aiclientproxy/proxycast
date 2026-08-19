@@ -122,7 +122,6 @@ impl RuntimeCore {
             .state
             .lock()
             .expect("runtime core state mutex poisoned");
-        super::approval_cache::remove_session(&mut state.session_approval_cache, &session_id);
         state.thread_elicitation_counts.remove(thread_id);
         state.thread_goal_continuations.remove(&session_id);
         Ok(ThreadUnloadResult::Unloaded)
@@ -298,7 +297,6 @@ impl RuntimeCore {
                 .state
                 .lock()
                 .expect("runtime core state mutex poisoned");
-            super::approval_cache::remove_session(&mut state.session_approval_cache, &session_id);
             state.thread_elicitation_counts.remove(thread_id.as_str());
             state.thread_goal_continuations.remove(&session_id);
             state.sessions.remove(&session_id);

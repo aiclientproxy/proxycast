@@ -229,17 +229,13 @@ export const APPROVAL_REQUEST_FULL_ACCESS_SCENARIO =
 export const APPROVAL_REQUEST_RESUME_PROMPT = "验证审批请求 hydrate 后允许继续";
 export const APPROVAL_REQUEST_FULL_ACCESS_PROMPT =
   "验证完全授权不会显示审批记录";
-export const APPROVAL_REQUEST_RESUME_SECOND_PROMPT =
-  "@浏览器 打开 https://example.com/approval-session-cache 并确认页面标题";
-export const APPROVAL_REQUEST_RESUME_SECOND_PROMPT_MARKER =
-  "approval-session-cache";
-export const APPROVAL_REQUEST_RESUME_TOOL_NAME = "browser_control";
+export const APPROVAL_REQUEST_RESUME_TOOL_NAME = "exec_command";
 export const APPROVAL_REQUEST_RESUME_COMMAND =
-  "open https://example.com/approval-resume";
+  "printf 'approval resume fixture\\n'";
 export const APPROVAL_REQUEST_RESUME_APPROVAL_PROMPT =
   "允许执行 approval resume fixture？";
 export const APPROVAL_REQUEST_RESUME_RESULT_TEXT =
-  "approval resume fixture 已经通过 action/respond 继续。";
+  "approval resume fixture 审批通过后已经继续执行。";
 export const APPROVAL_REQUEST_RESUME_DONE_TEXT = "APPROVAL_REQUEST_RESUME_DONE";
 export const APPROVAL_REQUEST_FULL_ACCESS_RESULT_TEXT =
   "full-access fixture 没有生成任何审批记录。";
@@ -250,10 +246,6 @@ export const APPROVAL_REQUEST_DECLINE_RESULT_TEXT =
 export const APPROVAL_REQUEST_DECLINE_DONE_TEXT =
   "APPROVAL_REQUEST_DECLINE_DONE";
 export const APPROVAL_REQUEST_CANCEL_DONE_TEXT = "APPROVAL_REQUEST_CANCEL_DONE";
-export const APPROVAL_REQUEST_RESUME_SECOND_RESULT_TEXT =
-  "approval session cache second request 已经自动通过。";
-export const APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT =
-  "APPROVAL_REQUEST_RESUME_SECOND_DONE";
 export const TERMINAL_STALE_GUARD_SCENARIO = "terminal-stale-guard";
 export const TERMINAL_STALE_GUARD_FIRST_PROMPT =
   "验证旧 terminal 不影响下一轮：第一轮";
@@ -487,20 +479,13 @@ export const APPROVAL_REQUEST_RESUME_ASSERTION_KEYS = [
   "guiApprovalRequestResumeInputSubmitted",
   "guiApprovalRequestResumePendingVisible",
   "readModelApprovalRequestResumePending",
-  "approvalRequestResumeUsedCurrentActionRespond",
-  "approvalRequestResumeRespondPayloadScoped",
+  "approvalRequestResumeUsedCurrentServerRequestResponse",
+  "approvalRequestResumeBackendResponseScoped",
   "approvalRequestResumeServerRequestResolved",
   "approvalRequestResumeBackendActionRespondObserved",
   "approvalRequestResumePendingCleared",
   "guiApprovalRequestResumeCompleted",
   "readModelApprovalRequestResumeCompleted",
-  "approvalRequestResumeSecondPromptReachedBackend",
-  "approvalRequestResumeSecondUsesBrowserControlContract",
-  "approvalRequestResumeSessionCacheHitInjected",
-  "approvalRequestResumeSecondNoPendingApproval",
-  "approvalRequestResumeSecondReadModelAutoResolved",
-  "guiApprovalRequestResumeSecondCompleted",
-  "readModelApprovalRequestResumeSecondCompleted",
   "approvalRequestResumeNoLegacyRuntimeRespond",
 ];
 export const APPROVAL_REQUEST_DECISION_ASSERTION_KEYS = [
@@ -508,8 +493,8 @@ export const APPROVAL_REQUEST_DECISION_ASSERTION_KEYS = [
   "guiApprovalRequestDecisionInputSubmitted",
   "guiApprovalRequestDecisionPendingVisible",
   "readModelApprovalRequestDecisionPending",
-  "approvalRequestDecisionUsedCurrentActionRespond",
-  "approvalRequestDecisionRespondPayloadScoped",
+  "approvalRequestDecisionUsedCurrentServerRequestResponse",
+  "approvalRequestDecisionServerRequestResponseScoped",
   "approvalRequestDecisionServerRequestResolved",
   "approvalRequestDecisionBackendActionRespondObserved",
   "approvalRequestDecisionPendingCleared",
@@ -519,7 +504,7 @@ export const APPROVAL_REQUEST_DECISION_ASSERTION_KEYS = [
   "approvalRequestCancelNoToolExecuted",
   "guiApprovalRequestCancelCompleted",
   "readModelApprovalRequestCancelCanceled",
-  "approvalRequestDecisionNoLegacyRuntimeRespond",
+  "approvalRequestDecisionNoRendererActionRespond",
 ];
 export const APPROVAL_REQUEST_HOST_INTERRUPT_ASSERTION_KEYS = [
   "approvalRequestHostInterruptPromptReachedBackend",

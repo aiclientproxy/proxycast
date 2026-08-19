@@ -605,6 +605,127 @@ describe("ModelSelector", () => {
     expect(setModel).not.toHaveBeenCalled();
   });
 
+  it("供应商未声明静态模型时，应等待实时目录并原子提交完整选择", () => {
+    const setProviderAndModel = vi.fn();
+    mockUseConfiguredProviders.mockReturnValue({
+      providers: [
+        {
+          key: "openai",
+          label: "OpenAI",
+          registryId: "openai",
+          type: "openai",
+          providerId: "openai",
+          models: ["gpt-5.5"],
+        },
+        {
+          key: "deepseek",
+          label: "DeepSeek",
+          registryId: "deepseek",
+          type: "openai",
+          providerId: "deepseek",
+          models: [],
+        },
+      ],
+      loading: false,
+    });
+    mockUseProviderModels.mockImplementation((selectedProvider) => {
+      const providerKey = (selectedProvider as { key?: string } | null)?.key;
+      const models =
+        providerKey === "deepseek"
+          ? [
+              createModelMetadata("gpt-5.5", {
+                provider_id: "openai",
+                provider_name: "OpenAI",
+              }),
+              createModelMetadata("deepseek-chat", {
+                provider_id: "deepseek",
+                provider_name: "DeepSeek",
+              }),
+            ]
+          : [
+              createModelMetadata("gpt-5.5", {
+                provider_id: "openai",
+                provider_name: "OpenAI",
+              }),
+            ];
+
+      return {
+        modelIds: models.map((item) => item.id),
+        models,
+        loading: false,
+        error: null,
+      };
+    });
+
+    const { container } = renderModelSelector({
+      providerType: "openai",
+      model: "gpt-5.5",
+      setProviderAndModel,
+    });
+
+    clickModelSelectorTrigger(container);
+    clickBodyButtonByText("DeepSeek");
+
+    expect(setProviderAndModel).not.toHaveBeenCalledWith("deepseek", "");
+    expect(setProviderAndModel).toHaveBeenCalledTimes(1);
+    expect(setProviderAndModel).toHaveBeenCalledWith(
+      "deepseek",
+      "deepseek-chat",
+    );
+  });
+
+  it("自动选择无静态模型的供应商时，也不应提交空模型", async () => {
+    const setProviderAndModel = vi.fn();
+    mockUseConfiguredProviders.mockReturnValue({
+      providers: [
+        {
+          key: "deepseek",
+          label: "DeepSeek",
+          registryId: "deepseek",
+          type: "openai",
+          providerId: "deepseek",
+          models: [],
+        },
+      ],
+      loading: false,
+    });
+    mockUseProviderModels.mockImplementation((selectedProvider) => {
+      const providerKey = (selectedProvider as { key?: string } | null)?.key;
+      const models =
+        providerKey === "deepseek"
+          ? [
+              createModelMetadata("deepseek-chat", {
+                provider_id: "deepseek",
+                provider_name: "DeepSeek",
+              }),
+            ]
+          : [];
+
+      return {
+        modelIds: models.map((item) => item.id),
+        models,
+        loading: false,
+        error: null,
+      };
+    });
+
+    renderModelSelector({
+      providerType: "",
+      model: "",
+      setProviderAndModel,
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(setProviderAndModel).not.toHaveBeenCalledWith("deepseek", "");
+    expect(setProviderAndModel).toHaveBeenCalledWith(
+      "deepseek",
+      "deepseek-chat",
+    );
+  });
+
   it("带模型过滤器的设置页切换供应商时不应回填该供应商不适用的首个自定义模型", () => {
     const setProviderType = vi.fn();
     const setModel = vi.fn();

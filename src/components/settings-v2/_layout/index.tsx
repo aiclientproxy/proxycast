@@ -104,12 +104,6 @@ const WebSearchSettings = lazy(() =>
     default: module.WebSearchSettings,
   })),
 );
-const ChromeRelaySettings = lazy(() =>
-  import("../system/chrome-relay").then((module) => ({
-    default: module.ChromeRelaySettings,
-  })),
-);
-
 const LayoutContainer = styled.div`
   display: flex;
   flex: 1;
@@ -335,7 +329,6 @@ const ACTIVE_SETTINGS_TABS = new Set<SettingsTabs>([
   SettingsTabs.WebSearch,
   SettingsTabs.Environment,
   SettingsTabs.ExecutionPolicy,
-  SettingsTabs.ChromeRelay,
   SettingsTabs.Developer,
   SettingsTabs.About,
 ]);
@@ -379,8 +372,6 @@ function preloadSettingsTab(tab: SettingsTabs): Promise<unknown> | null {
       return import("../system/environment");
     case SettingsTabs.ExecutionPolicy:
       return import("../system/execution-policy");
-    case SettingsTabs.ChromeRelay:
-      return import("../system/chrome-relay");
     case SettingsTabs.Developer:
       return Promise.all([
         import("../system/developer-lab"),
@@ -496,12 +487,6 @@ function renderSettingsContent(
       return withSettingsContentFallback(
         <ExecutionPolicySettings focus={initialExecutionPolicyFocus ?? null} />,
         t("settings.layout.loading.executionPolicy"),
-      );
-
-    case SettingsTabs.ChromeRelay:
-      return withSettingsContentFallback(
-        <ChromeRelaySettings />,
-        t("settings.layout.loading.chromeRelay"),
       );
 
     case SettingsTabs.Developer:

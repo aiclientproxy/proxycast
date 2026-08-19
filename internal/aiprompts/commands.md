@@ -217,13 +217,18 @@ Codex experimental `fuzzyFileSearch/sessionStart|sessionUpdate|sessionStop` 与
 `product-scope-excluded / forbidden-to-restore`。两个 notification 只允许 method/field-name 级 drift diagnostics，
 不得进入 current protocol manifest、Composer state、pending interaction 或兼容 wrapper。
 
-## Browser Session 主链
+## Browser Workspace 主链
 
-浏览器会话检测、连接、读回、动作与关闭只允许走：
+Browser 只有一个网页执行体：Right Surface 中用户可见的 Electron `WebContentsView`。用户操作与 Agent 动作分别从以下两条控制路径进入同一个 `BrowserTabHost` route：
 
-`src/lib/api/browserRuntime.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server browserSession/* -> BrowserRuntimeManager`
+```text
+Renderer Browser Workspace -> src/lib/api/browserTab.ts -> browser_tab_* Desktop Host command -> BrowserTabHost
+RuntimeCore / tool-runtime browser__* -> App Server item/tool/call -> AppServerDynamicToolHost -> BrowserTabHost
+```
 
-Settings 的浏览器页只消费 `browserSession/target/list`、`browserSession/open`、`browserSession/read` 与 `browserSession/close`；Renderer 只展示带 debugger endpoint 的 `page` target。旧 connector install、Chrome relay endpoint、backend priority 与静态 Electron diagnostic facade 不得回到 Settings 产品面。Browser Workspace 尚未迁完的旧 facade 属于 PAGE-08 blocker，不能作为 Settings 或 Browser Runtime current evidence。
+App Server 持有 Thread/Turn、动态工具生命周期、Browser read model 与 canonical identity；Electron 只持有 native view、window、`webContents.debugger`、下载和权限等宿主状态；Renderer 只消费 projection 并发送用户意图。Agent action 必须按 connection/thread/turn/session/tab/view/WebContents owner 精确路由，用户操作或 turn terminal 必须使旧控制权失效。
+
+外部 Chrome/CDP `browserSession/*`、`BrowserRuntimeManager`、Settings Chrome relay、`BrowserSessionRef` adapter、Canvas Browser 和 `mcp__lime-browser__*` 正向工具均为 `dead / deleted / forbidden-to-restore`；只允许出现在负向回流守卫或不可变历史 evidence。Browser current command 变更必须同步 Electron Host/preload、Renderer typed gateway、App Server reverse-request/catalog、fixture、read model 与 `npm run test:contracts`。
 
 ## Review 主链
 

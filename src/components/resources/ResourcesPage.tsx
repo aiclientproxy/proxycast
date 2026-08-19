@@ -353,8 +353,7 @@ export function ResourcesPage({ onNavigate, pageParams }: ResourcesPageProps) {
     return onResourceProjectChange((detail) => {
       if (
         detail.source !== "image-gen-save" &&
-        detail.source !== "general-chat" &&
-        detail.source !== "browser-runtime"
+        detail.source !== "general-chat"
       ) {
         return;
       }

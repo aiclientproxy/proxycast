@@ -83,39 +83,6 @@
       ]
     },
     {
-      "id": "gui-browser-runtime-site-adapter",
-      "scenarioId": "browser-runtime-site-adapter",
-      "risk": "P0",
-      "surface": "desktop_gui_browser_runtime",
-      "preflight": [
-        "Run npm run smoke:browser-runtime and npm run smoke:site-adapters if a headless smoke is enough.",
-        "For interactive verification, reuse an existing Lime browser session instead of launching unrelated Chrome windows.",
-        "Enable console and network collection before opening the browser runtime panel."
-      ],
-      "steps": [
-        "Open the browser runtime or site adapter surface.",
-        "Confirm browser runtime status is readable.",
-        "Open the site adapter catalog or readiness panel.",
-        "Inspect at least one current adapter entry.",
-        "Confirm cleanup / detach status after the check if the flow created a browser session."
-      ],
-      "assertions": [
-        "browser runtime status is not stale",
-        "site adapter catalog has current entries",
-        "adapter naming does not drift to deprecated surface keys",
-        "cleanup status is captured",
-        "no unexpected console error",
-        "no unexpected network error"
-      ],
-      "evidenceRequired": [
-        "browser runtime status",
-        "site adapter catalog snapshot",
-        "console summary",
-        "network summary",
-        "cleanup or detach result"
-      ]
-    },
-    {
       "id": "gui-workspace-ready-session-restore",
       "scenarioId": "workspace-ready-session-restore",
       "risk": "P0",

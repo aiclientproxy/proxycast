@@ -48,22 +48,6 @@ describe("useWorkspaceWorkbenchRequests", () => {
     return latest;
   }
 
-  it("生成 browser workbench 打开请求，并只清除匹配的 requestKey", () => {
-    const controller = mount();
-
-    act(() => controller.requestBrowserWorkbenchOpen("https://example.com"));
-    expect(latest?.browserWorkbenchOpenRequest).toEqual({
-      requestKey: 1,
-      url: "https://example.com",
-    });
-
-    act(() => latest?.handleBrowserWorkbenchOpenRequestHandled(99));
-    expect(latest?.browserWorkbenchOpenRequest?.requestKey).toBe(1);
-
-    act(() => latest?.handleBrowserWorkbenchOpenRequestHandled(1));
-    expect(latest?.browserWorkbenchOpenRequest).toBeNull();
-  });
-
   it("生成 canvas preview 打开请求并递增 requestKey", () => {
     const controller = mount();
 

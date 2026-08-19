@@ -21,7 +21,6 @@ mod model_route_resolver;
 mod model_routing;
 mod native_tools;
 mod orchestrator_skills;
-mod permission_preflight;
 mod plan_events;
 mod proposed_plan_parser;
 mod provider_config;
@@ -287,19 +286,6 @@ impl RuntimeBackend {
         if image_command::is_image_command_turn(request, &session_scope)? {
             return Ok(request.runtime_options.clone());
         }
-        // Permission preflight must run before provider route selection. A browser-control
-        // confirmation is a local safety boundary and must remain actionable even when no
-        // provider/model has been selected yet.
-        let host_request = runtime_request_from_request(request);
-        if permission_preflight::browser_control_permission_event(
-            request,
-            host_request.as_ref(),
-            &session_scope,
-        )
-        .is_some()
-        {
-            return Ok(request.runtime_options.clone());
-        }
         let mut route_request = request.clone();
         let initial_host_request = runtime_request_from_request(&route_request);
         let initial_tool_policy = request_tool_policy_from_request(initial_host_request.as_ref());
@@ -395,21 +381,6 @@ impl RuntimeBackend {
         );
         for event in agent_skill_events {
             sink.emit(event)?;
-        }
-        if let Some(event) = permission_preflight::browser_control_permission_event(
-            &request,
-            host_request.as_ref(),
-            &session_scope,
-        ) {
-            match event {
-                permission_preflight::PermissionPreflightOutcome::Required(event) => {
-                    sink.emit(event)?;
-                    return Ok(());
-                }
-                permission_preflight::PermissionPreflightOutcome::Cached(event) => {
-                    sink.emit(event)?;
-                }
-            }
         }
         let mut excluded_routes = Vec::new();
         let mut previous_reply_error = None;

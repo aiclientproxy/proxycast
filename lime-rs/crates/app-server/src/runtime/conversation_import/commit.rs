@@ -210,7 +210,6 @@ fn clear_existing_imported_session(
             .state
             .lock()
             .expect("runtime core state mutex poisoned");
-        super::super::approval_cache::remove_session(&mut state.session_approval_cache, session_id);
         if let Some(thread_id) = state
             .sessions
             .get(session_id)

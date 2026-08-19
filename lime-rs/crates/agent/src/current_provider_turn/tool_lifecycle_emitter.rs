@@ -6,15 +6,15 @@ use crate::protocol::{
     canonical_tool_item_event, AgentEvent, CanonicalSubAgentActivity, ToolItemLifecycleContext,
 };
 use agent_protocol::{
-    DynamicToolCallContentItem, SessionId, ThreadId, ThreadItem, ThreadItemPayload,
+    DynamicToolCallContentItem, ItemId, SessionId, ThreadId, ThreadItem, ThreadItemPayload,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 use tool_runtime::tool_lifecycle::{
-    ToolLifecycleEmissionFuture, ToolLifecycleEmitter, ToolLifecycleEvent, ToolLifecyclePhase,
-    ToolOutputDeltaEvent,
+    CodeCellTraceEvent, ToolLifecycleEmissionFuture, ToolLifecycleEmitter, ToolLifecycleEvent,
+    ToolLifecyclePhase, ToolOutputDeltaEvent,
 };
 
 pub(super) struct CurrentTurnToolLifecycleEmitter {
@@ -256,11 +256,27 @@ fn project_mcp_tool_item(
 impl ToolLifecycleEmitter for CurrentTurnToolLifecycleEmitter {
     fn emit<'a>(&'a self, event: ToolLifecycleEvent) -> ToolLifecycleEmissionFuture<'a> {
         Box::pin(async move {
+            for trace_event in code_cell_trace_events_for_lifecycle(&event) {
+                let _ = self.event_sender.send(CurrentTurnHostEvent::ToolLifecycle(
+                    AgentEvent::CodeCellTrace { event: trace_event },
+                ));
+            }
             for event in self.project_all(event) {
                 let _ = self
                     .event_sender
                     .send(CurrentTurnHostEvent::ToolLifecycle(event));
             }
+        })
+    }
+
+    fn emit_code_cell_trace<'a>(
+        &'a self,
+        event: CodeCellTraceEvent,
+    ) -> ToolLifecycleEmissionFuture<'a> {
+        Box::pin(async move {
+            let _ = self.event_sender.send(CurrentTurnHostEvent::ToolLifecycle(
+                AgentEvent::CodeCellTrace { event },
+            ));
         })
     }
 
@@ -291,13 +307,113 @@ impl ToolLifecycleEmitter for CurrentTurnToolLifecycleEmitter {
     }
 }
 
+fn code_cell_trace_events_for_lifecycle(event: &ToolLifecycleEvent) -> Vec<CodeCellTraceEvent> {
+    let mut traces = Vec::new();
+    if event.tool_name == tool_runtime::code_mode::CODE_MODE_EXEC_TOOL_NAME
+        && matches!(event.phase, ToolLifecyclePhase::Started)
+    {
+        traces.push(CodeCellTraceEvent::SourceItemObserved {
+            turn_id: event.turn_id.clone(),
+            model_visible_call_id: event.call_id.clone(),
+            source_item_id: ItemId::new(event.call_id.clone()).to_string(),
+        });
+    }
+    if event.tool_name == tool_runtime::code_mode::CODE_MODE_EXEC_TOOL_NAME
+        && matches!(event.phase, ToolLifecyclePhase::Completed)
+    {
+        let runtime_cell_id = event
+            .output
+            .as_ref()
+            .and_then(|output| output.metadata.get("code_mode_cell_id"))
+            .and_then(serde_json::Value::as_str);
+        if let Some(runtime_cell_id) = runtime_cell_id {
+            traces.push(CodeCellTraceEvent::OutputItemObserved {
+                turn_id: event.turn_id.clone(),
+                runtime_cell_id: runtime_cell_id.to_string(),
+                output_item_id: ItemId::new(event.call_id.clone()).to_string(),
+            });
+        }
+    }
+    traces
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::path::PathBuf;
+    use std::sync::Arc;
     use tool_runtime::tool_call::ToolEnvironment;
     use tool_runtime::tool_result_projection::NormalizedToolOutput;
+
+    #[tokio::test]
+    async fn code_cell_evidence_is_forwarded_before_public_exec_item_projection() {
+        let (event_sender, mut events) = tokio::sync::mpsc::unbounded_channel();
+        let emitter = Arc::new(CurrentTurnToolLifecycleEmitter::new(
+            event_sender,
+            "session-code-mode",
+            "thread-code-mode",
+        ));
+        let call = tool_runtime::tool_call::ToolCall::new(
+            "turn-code-mode",
+            "exec-call-1",
+            "exec",
+            serde_json::Value::String("text('ok')".to_string()),
+            Vec::new(),
+            emitter.clone(),
+        );
+        emitter.emit(ToolLifecycleEvent::started(&call)).await;
+
+        assert!(matches!(
+            events.recv().await,
+            Some(CurrentTurnHostEvent::ToolLifecycle(AgentEvent::CodeCellTrace {
+                event: CodeCellTraceEvent::SourceItemObserved {
+                    model_visible_call_id,
+                    source_item_id,
+                    ..
+                }
+            })) if model_visible_call_id == "exec-call-1" && source_item_id == "item_exec-call-1"
+        ));
+        assert!(matches!(
+            events.recv().await,
+            Some(CurrentTurnHostEvent::ToolLifecycle(AgentEvent::ItemStarted { item }))
+                if item.item_id.as_str() == "item_exec-call-1"
+        ));
+
+        let output = NormalizedToolOutput {
+            success: true,
+            text: "Script completed".to_string(),
+            structured_content: None,
+            error: None,
+            duration_ms: 1,
+            truncation: None,
+            sidecar_reference: None,
+            metadata: HashMap::from([(
+                "code_mode_cell_id".to_string(),
+                serde_json::Value::String("cell-1".to_string()),
+            )]),
+            agent_control_projection_facts: Vec::new(),
+            agent_control_state_facts: Vec::new(),
+        };
+        emitter
+            .emit(ToolLifecycleEvent::completed(&call, output))
+            .await;
+        assert!(matches!(
+            events.recv().await,
+            Some(CurrentTurnHostEvent::ToolLifecycle(AgentEvent::CodeCellTrace {
+                event: CodeCellTraceEvent::OutputItemObserved {
+                    runtime_cell_id,
+                    output_item_id,
+                    ..
+                }
+            })) if runtime_cell_id == "cell-1" && output_item_id == "item_exec-call-1"
+        ));
+        assert!(matches!(
+            events.recv().await,
+            Some(CurrentTurnHostEvent::ToolLifecycle(AgentEvent::ItemCompleted { item }))
+                if item.item_id.as_str() == "item_exec-call-1"
+        ));
+    }
 
     #[tokio::test]
     async fn output_delta_keeps_code_mode_call_and_cell_correlation() {

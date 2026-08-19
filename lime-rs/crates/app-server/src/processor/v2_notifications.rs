@@ -77,6 +77,7 @@ impl V2NotificationProjector {
                         .collect(),
                 )
             }
+            "dynamic_tool.requested" => return EventProjection::Direct(Vec::new()),
             "action.resolved" | "action.canceled" | "action.cancelled" | "action.expired" => {
                 return EventProjection::Direct(
                     self.thread_status
@@ -86,7 +87,7 @@ impl V2NotificationProjector {
                         .collect(),
                 )
             }
-            "approval.session_cache.hit" | "provider.step" => {
+            "provider.step" => {
                 return EventProjection::Direct(Vec::new());
             }
             "thread.goal.continuation" => return EventProjection::Direct(Vec::new()),
@@ -1616,12 +1617,10 @@ mod tests {
 
     #[test]
     fn audit_only_events_are_not_sent_to_clients() {
-        for event_type in ["approval.session_cache.hit", "provider.step"] {
-            let notifications = V2NotificationProjector::default()
-                .project(event(event_type, json!({})))
-                .expect("audit-only event");
-            assert!(notifications.is_empty(), "{event_type}");
-        }
+        let notifications = V2NotificationProjector::default()
+            .project(event("provider.step", json!({})))
+            .expect("audit-only event");
+        assert!(notifications.is_empty());
     }
 
     #[test]
@@ -1883,18 +1882,19 @@ mod tests {
     }
 
     #[test]
-    fn action_lifecycle_is_internal_to_typed_server_requests() {
+    fn reverse_request_lifecycle_is_internal_to_typed_server_requests() {
         for event_type in [
             "action.required",
             "action.resolved",
             "action.canceled",
             "action.cancelled",
             "action.expired",
+            "dynamic_tool.requested",
         ] {
             let mut projector = V2NotificationProjector::default();
             let notifications = projector
                 .project(event(event_type, json!({})))
-                .expect("internal action lifecycle");
+                .expect("internal reverse request lifecycle");
             assert!(notifications.is_empty(), "{event_type}");
         }
     }

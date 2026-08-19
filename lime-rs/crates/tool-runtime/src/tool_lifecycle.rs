@@ -1,5 +1,6 @@
 use crate::tool_call::{ToolCall, ToolEnvironment};
 use crate::tool_result_projection::NormalizedToolOutput;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
@@ -11,6 +12,75 @@ pub type ToolLifecycleEmissionFuture<'a> = Pin<Box<dyn Future<Output = ()> + Sen
 pub enum ToolLifecyclePhase {
     Started,
     Completed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeCellRuntimeStatus {
+    Starting,
+    Yielded,
+    Completed,
+    Failed,
+    Terminated,
+}
+
+impl CodeCellRuntimeStatus {
+    pub fn is_terminal(self) -> bool {
+        matches!(self, Self::Completed | Self::Failed | Self::Terminated)
+    }
+}
+
+/// Internal CodeMode evidence. Hosts must persist this outside the public
+/// Thread/Turn/Item projection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum CodeCellTraceEvent {
+    SourceItemObserved {
+        turn_id: String,
+        model_visible_call_id: String,
+        source_item_id: String,
+    },
+    OutputItemObserved {
+        turn_id: String,
+        runtime_cell_id: String,
+        output_item_id: String,
+    },
+    Started {
+        turn_id: String,
+        runtime_cell_id: String,
+        model_visible_call_id: String,
+        source_js: String,
+    },
+    InitialResponse {
+        turn_id: String,
+        runtime_cell_id: String,
+        status: CodeCellRuntimeStatus,
+        response_chars: usize,
+    },
+    Ended {
+        turn_id: String,
+        runtime_cell_id: String,
+        status: CodeCellRuntimeStatus,
+        response_chars: usize,
+    },
+    NestedToolStarted {
+        turn_id: String,
+        runtime_cell_id: String,
+        tool_call_id: String,
+        runtime_tool_call_id: String,
+        tool_name: String,
+    },
+    NestedToolEnded {
+        turn_id: String,
+        runtime_cell_id: String,
+        tool_call_id: String,
+        status: String,
+    },
+    WaitToolObserved {
+        turn_id: String,
+        runtime_cell_id: String,
+        tool_call_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -65,6 +135,13 @@ impl ToolLifecycleEvent {
 /// Host capability that publishes canonical tool lifecycle events.
 pub trait ToolLifecycleEmitter: Send + Sync {
     fn emit<'a>(&'a self, event: ToolLifecycleEvent) -> ToolLifecycleEmissionFuture<'a>;
+
+    fn emit_code_cell_trace<'a>(
+        &'a self,
+        _event: CodeCellTraceEvent,
+    ) -> ToolLifecycleEmissionFuture<'a> {
+        Box::pin(async {})
+    }
 
     fn emit_output_delta<'a>(
         &'a self,

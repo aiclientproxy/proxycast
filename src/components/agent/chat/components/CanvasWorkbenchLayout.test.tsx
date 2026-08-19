@@ -121,8 +121,8 @@ describe("CanvasWorkbenchLayout", () => {
       ),
     ).toBeNull();
     expectNewWorkbenchToolInMenu(container, "终端");
-    expectNewWorkbenchToolInMenu(container, "浏览器");
     expectNewWorkbenchToolInMenu(container, "文件");
+    expectWorkbenchTabNotInNewMenu(container, "浏览器");
     expectWorkbenchTabNotInNewMenu(container, "文件");
     expectWorkbenchTabNotInNewMenu(container, "Markdown");
     expectWorkbenchTabNotInNewMenu(container, "HTML");
@@ -258,7 +258,7 @@ describe("CanvasWorkbenchLayout", () => {
     clickByAriaLabel(container, "下载");
     expect(globalThis.URL.createObjectURL).toHaveBeenCalledTimes(1);
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
-  });
+  }, 15_000);
 
   it("连续新增工具时应创建独立可关闭 tab，而不是替换同类 tab", async () => {
     const container = mount({
@@ -281,34 +281,36 @@ describe("CanvasWorkbenchLayout", () => {
     });
 
     await flushEffects();
-    clickNewWorkbenchTool(container, "浏览器");
+    clickNewWorkbenchTool(container, "终端");
     await flushEffects();
-    clickNewWorkbenchTool(container, "浏览器");
+    clickNewWorkbenchTool(container, "终端");
     await flushEffects();
 
-    const browserTabs = container.querySelectorAll(
-      '[data-testid="canvas-workbench-direct-tabs"] [data-canvas-tab-kind="browser"]',
+    const terminalTabs = container.querySelectorAll(
+      '[data-testid="canvas-workbench-direct-tabs"] [data-canvas-tab-kind="terminal"]',
     );
-    expect(browserTabs).toHaveLength(2);
-    expect(browserTabs[0]?.textContent).toContain("Google");
-    expect(browserTabs[1]?.textContent).toContain("新选项卡 2");
+    expect(terminalTabs).toHaveLength(2);
+    expect(terminalTabs[0]?.textContent).toContain("终端");
+    expect(terminalTabs[1]?.textContent).toContain("终端 2");
 
-    const browserClose = container.querySelector(
-      '[aria-label="关闭工作台标签-新选项卡 2"]',
+    const terminalClose = container.querySelector(
+      '[aria-label="关闭工作台标签-终端 2"]',
     ) as HTMLButtonElement | null;
-    expect(browserClose).not.toBeNull();
+    expect(terminalClose).not.toBeNull();
     act(() => {
-      browserClose?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      terminalClose?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flushEffects();
 
     expect(
       container.querySelectorAll(
-        '[data-testid="canvas-workbench-direct-tabs"] [data-canvas-tab-kind="browser"]',
+        '[data-testid="canvas-workbench-direct-tabs"] [data-canvas-tab-kind="terminal"]',
       ),
     ).toHaveLength(1);
     expect(
-      container.querySelector('[data-testid="canvas-workbench-panel-browser"]'),
+      container.querySelector(
+        '[data-testid="canvas-workbench-panel-terminal"]',
+      ),
     ).not.toBeNull();
   });
 

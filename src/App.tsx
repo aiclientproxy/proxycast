@@ -28,7 +28,6 @@ import {
 import { useDeepLink } from "./hooks/useDeepLink";
 import { useSkillCatalogBootstrap } from "./hooks/useSkillCatalogBootstrap";
 import { useServiceSkillCatalogBootstrap } from "./hooks/useServiceSkillCatalogBootstrap";
-import { useSiteAdapterCatalogBootstrap } from "./hooks/useSiteAdapterCatalogBootstrap";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useAppShellLayout } from "./hooks/useAppShellLayout";
 import { useAppStartupEffects } from "./hooks/useAppStartupEffects";
@@ -181,7 +180,6 @@ function AppContent() {
 
   useSkillCatalogBootstrap();
   useServiceSkillCatalogBootstrap();
-  useSiteAdapterCatalogBootstrap();
   useOemLimeHubProviderSync();
   useClawTraceRegressionAlertMonitor();
   const handleResourceManagerNavigationHandled = useCallback(
@@ -284,21 +282,6 @@ function AppContent() {
     toast.success(t("common.app.project.created"));
   };
 
-  const handleOpenBrowserConnectorSettings = useCallback(
-    ({ enable }: { enable: boolean }) => {
-      handleNavigate("settings", {
-        tab: SettingsTabs.ChromeRelay,
-      });
-
-      if (enable) {
-        toast.info(t("common.app.browserConnector.opened.title"), {
-          description: t("common.app.browserConnector.opened.description"),
-        });
-      }
-    },
-    [handleNavigate, t],
-  );
-
   const handleOpenWebsiteDeepLink = useCallback(
     async (payload: OpenDeepLinkPayload) => {
       if (payload.kind === "skill" && payload.action === "install") {
@@ -379,7 +362,6 @@ function AppContent() {
     handleConfirm,
     handleCancel,
   } = useDeepLink({
-    onOpenBrowserConnectorSettings: handleOpenBrowserConnectorSettings,
     onOpenWebsiteDeepLink: handleOpenWebsiteDeepLink,
   });
 

@@ -49,7 +49,6 @@ describe("AgentChatWorkspace artifact canvas runtime boundary", () => {
       "artifactsAtom",
       "selectedArtifactAtom",
       "selectedArtifactIdAtom",
-      "GENERAL_BROWSER_ASSIST_ARTIFACT_ID",
       "hasNamedGeneralCanvasFilePreview",
       "resolveDefaultSelectedArtifact(",
       "const liveArtifact = useMemo(",
@@ -57,5 +56,6 @@ describe("AgentChatWorkspace artifact canvas runtime boundary", () => {
       expect(workspaceSource).not.toContain(retiredArtifactSelectionOwner);
       expect(ownerSource).toContain(retiredArtifactSelectionOwner);
     }
+    expect(ownerSource).not.toContain("GENERAL_BROWSER_ASSIST_ARTIFACT_ID");
   });
 });

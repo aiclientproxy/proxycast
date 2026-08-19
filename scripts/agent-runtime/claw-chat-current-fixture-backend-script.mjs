@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import {
   renderApprovalRequestResumeActionRespondScript,
-  renderApprovalRequestResumeHelpersScript,
   renderApprovalRequestResumeTurnStartScript,
 } from "./claw-chat-current-fixture-approval-backend-events.mjs";
 import { renderBackendToolAndSkillEventScript } from "./claw-chat-current-fixture-backend-tool-skill-events.mjs";
@@ -11,9 +10,6 @@ import {
   APPROVAL_REQUEST_FULL_ACCESS_DONE_TEXT,
   APPROVAL_REQUEST_FULL_ACCESS_PROMPT,
   APPROVAL_REQUEST_FULL_ACCESS_RESULT_TEXT,
-  APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT,
-  APPROVAL_REQUEST_RESUME_SECOND_PROMPT,
-  APPROVAL_REQUEST_RESUME_SECOND_RESULT_TEXT,
   ASSISTANT_DONE_TEXT,
   CONTINUE_DONE_TEXT,
   CONTINUE_PROMPT,
@@ -288,7 +284,6 @@ const mediaReferenceSourcePath = ${JSON.stringify(mediaReferenceSourcePath)};
 const input = JSON.parse(readFileSync(0, "utf8"));
 const runtimeRequest = input.request?.runtimeOptions?.runtimeRequest;
 
-${renderApprovalRequestResumeHelpersScript()}
 
 export function appendLedgerEntry(entry) {
   if (!ledgerPath) {
@@ -464,7 +459,6 @@ if (input.kind === "turnStart") {
   const isInputbarRichRestorePrompt = inputText.includes("${INPUTBAR_RICH_RESTORE_PROMPT}");
   const isApprovalRequestResumePrompt = inputText.includes("${APPROVAL_REQUEST_RESUME_PROMPT}");
   const isApprovalRequestFullAccessPrompt = inputText.includes("${APPROVAL_REQUEST_FULL_ACCESS_PROMPT}");
-  const isApprovalRequestResumeSecondPrompt = inputText.includes("${APPROVAL_REQUEST_RESUME_SECOND_PROMPT}");
   const isReasoningFirstVisiblePrompt = inputText.includes("${REASONING_FIRST_VISIBLE_PROMPT}");
   const isLiveTailCommitPrompt = inputText.includes("${LIVE_TAIL_COMMIT_PROMPT}");
   const isTerminalCanceledAfterAnswerPrompt = inputText.includes("${TERMINAL_CANCELED_AFTER_ANSWER_PROMPT}");
@@ -522,8 +516,6 @@ if (input.kind === "turnStart") {
                             ? "${EXPERT_SKILLS_RUNTIME_PANEL_DONE_TEXT}"
                             : isApprovalRequestFullAccessPrompt
                               ? "${APPROVAL_REQUEST_FULL_ACCESS_DONE_TEXT}"
-                            : isApprovalRequestResumeSecondPrompt
-                              ? "${APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT}"
                             : "${ASSISTANT_DONE_TEXT}";
   const hasProcessPrelude =
     isEventReadProbe ||
@@ -563,64 +555,6 @@ if (input.kind === "turnStart") {
       status,
       ...extra
     };
-  }
-  function approvalSessionCacheFromRequest() {
-    const harness = runtimeRequest?.metadata?.harness ?? {};
-    return harness.approval_session_cache ?? harness.approvalSessionCache ?? null;
-  }
-  function approvalSessionCacheEvents() {
-    const cache = approvalSessionCacheFromRequest();
-    if (!cache) {
-      return [];
-    }
-    const turnId = currentTurnId() || "turn";
-    const threadId = currentThreadId();
-    const requestId = "permission-" + turnId;
-    const sourceRequestId = cache.sourceRequestId ?? cache.source_request_id;
-    const key = cache.key ?? {};
-    const scope = {
-      sessionId: input.request?.session?.sessionId,
-      session_id: input.request?.session?.sessionId,
-      threadId,
-      thread_id: threadId,
-      turnId,
-      turn_id: turnId
-    };
-    const cachePayload = {
-      backend: "runtime_core",
-      requestId,
-      request_id: requestId,
-      actionId: requestId,
-      action_id: requestId,
-      actionType: "tool_confirmation",
-      action_type: "tool_confirmation",
-      actionKind: "permission_preflight",
-      action_kind: "permission_preflight",
-      toolName: "browser_control",
-      tool_name: "browser_control",
-      decision: cache.decision ?? "allow_for_session",
-      decisionScope: cache.decisionScope ?? cache.decision_scope ?? "session",
-      decision_scope: cache.decisionScope ?? cache.decision_scope ?? "session",
-      sourceRequestId,
-      source_request_id: sourceRequestId,
-      key,
-      cache,
-      scope
-    };
-    return [
-      {
-        type: "approval.session_cache.hit",
-        payload: cachePayload
-      },
-      {
-        type: "action.resolved",
-        payload: {
-          ...cachePayload,
-          source: "approval_session_cache",
-          confirmed: true
-        }
-      }
-    ];
   }
   if (isTypedErrorRetrySuccessPrompt || isTypedErrorRetryFailurePrompt) {
     const scenario = isTypedErrorRetrySuccessPrompt
@@ -816,8 +750,6 @@ ${renderApprovalRequestResumeTurnStartScript()}
               ? "${TERMINAL_STALE_GUARD_FIRST_TEXT}\\n"
             : isTerminalStaleGuardSecondPrompt
               ? "第二轮已经开始，旧 terminal 到达时不能打断当前输出。\\n"
-            : isApprovalRequestResumeSecondPrompt
-              ? "${APPROVAL_REQUEST_RESUME_SECOND_RESULT_TEXT}\\n"
           : isWebToolsRenderingPrompt
             ? "我先联网核实目标页面来源。\\n"
             : isMcpStructuredContentPrompt
@@ -836,7 +768,6 @@ ${renderApprovalRequestResumeTurnStartScript()}
                             ? "我识别到右侧专家面板更新后的 skillRefs，并继续通过 skill_search 选择单个 Skill。\\n"
                             : "以下是今日国际新闻简要整理：\\n";
   const initialEvents = [
-    ...approvalSessionCacheEvents(),
 ${renderUnknownItemBackendEventsExpression()}
     ...(isLiveTailCommitPrompt
       ? [
@@ -919,8 +850,6 @@ ${renderUnknownItemBackendEventsExpression()}
                           ? ${JSON.stringify(EXPERT_PANEL_SKILLS_RUNTIME_SCENARIO.fixtureText)}
                           : isApprovalRequestFullAccessPrompt
                             ? "${APPROVAL_REQUEST_FULL_ACCESS_DONE_TEXT}\\n"
-                          : isApprovalRequestResumeSecondPrompt
-                            ? "${APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT}\\n"
         : "1. 多国外交议题持续升温，地区安全与经贸协商仍是焦点。\\n2. 全球市场继续关注能源、供应链和主要央行政策变化。\\n3. 国际组织呼吁在气候、粮食与人道援助议题上保持协调。\\n";
   const shouldWaitForCancel =
     ((process.env.CLAW_CHAT_FIXTURE_SCENARIO === "cancel" ||

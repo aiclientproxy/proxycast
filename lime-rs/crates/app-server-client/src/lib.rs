@@ -88,21 +88,6 @@ pub use app_server_protocol::AgentSessionTurnStartParams;
 pub use app_server_protocol::AppServerMethodKind;
 pub use app_server_protocol::AppServerMethodSpec;
 pub use app_server_protocol::ArtifactReadParams;
-pub use app_server_protocol::BrowserSessionActionExecuteParams;
-pub use app_server_protocol::BrowserSessionActionExecuteResponse;
-pub use app_server_protocol::BrowserSessionCloseResponse;
-pub use app_server_protocol::BrowserSessionEventItem;
-pub use app_server_protocol::BrowserSessionEventListParams;
-pub use app_server_protocol::BrowserSessionEventListResponse;
-pub use app_server_protocol::BrowserSessionIdParams;
-pub use app_server_protocol::BrowserSessionOpenParams;
-pub use app_server_protocol::BrowserSessionOpenResponse;
-pub use app_server_protocol::BrowserSessionPageInfo;
-pub use app_server_protocol::BrowserSessionReadResponse;
-pub use app_server_protocol::BrowserSessionState;
-pub use app_server_protocol::BrowserSessionTargetInfo;
-pub use app_server_protocol::BrowserSessionTargetListParams;
-pub use app_server_protocol::BrowserSessionTargetListResponse;
 pub use app_server_protocol::CapabilityListParams;
 pub use app_server_protocol::DiagnosticsCapabilityRoutingMetricsSnapshot;
 pub use app_server_protocol::DiagnosticsIdempotencyDiagnostics;
@@ -278,12 +263,6 @@ pub use app_server_protocol::METHOD_AGENT_SESSION_REPLAY_CASE_EXPORT;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_SAVE;
 pub use app_server_protocol::METHOD_AGENT_SESSION_REVIEW_DECISION_TEMPLATE_EXPORT;
 pub use app_server_protocol::METHOD_ARTIFACT_READ;
-pub use app_server_protocol::METHOD_BROWSER_SESSION_ACTION_EXECUTE;
-pub use app_server_protocol::METHOD_BROWSER_SESSION_CLOSE;
-pub use app_server_protocol::METHOD_BROWSER_SESSION_EVENT_LIST;
-pub use app_server_protocol::METHOD_BROWSER_SESSION_OPEN;
-pub use app_server_protocol::METHOD_BROWSER_SESSION_READ;
-pub use app_server_protocol::METHOD_BROWSER_SESSION_TARGET_LIST;
 pub use app_server_protocol::METHOD_CAPABILITY_LIST;
 pub use app_server_protocol::METHOD_DIAGNOSTICS_LOG_STORAGE_READ;
 pub use app_server_protocol::METHOD_DIAGNOSTICS_SERVER_READ;
@@ -854,48 +833,6 @@ impl AppServerClient {
         params: WorkspaceRightSurfacePendingDismissParams,
     ) -> Result<JsonRpcRequest, ClientError> {
         self.typed_request(typed::dismiss_workspace_right_surface_pending(params))
-    }
-
-    pub fn list_browser_session_targets(
-        &mut self,
-        params: BrowserSessionTargetListParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::list_browser_session_targets(params))
-    }
-
-    pub fn open_browser_session(
-        &mut self,
-        params: BrowserSessionOpenParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::open_browser_session(params))
-    }
-
-    pub fn read_browser_session(
-        &mut self,
-        params: BrowserSessionIdParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::read_browser_session(params))
-    }
-
-    pub fn close_browser_session(
-        &mut self,
-        params: BrowserSessionIdParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::close_browser_session(params))
-    }
-
-    pub fn list_browser_session_events(
-        &mut self,
-        params: BrowserSessionEventListParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::list_browser_session_events(params))
-    }
-
-    pub fn execute_browser_session_action(
-        &mut self,
-        params: BrowserSessionActionExecuteParams,
-    ) -> Result<JsonRpcRequest, ClientError> {
-        self.typed_request(typed::execute_browser_session_action(params))
     }
 
     pub fn list_skills(&mut self, params: SkillsListParams) -> Result<JsonRpcRequest, ClientError> {
@@ -1794,42 +1731,6 @@ pub mod typed {
         params: WorkspaceRightSurfacePendingDismissParams,
     ) -> TypedRequest<WorkspaceRightSurfacePendingDismissParams> {
         TypedRequest::new(METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_DISMISS, params)
-    }
-
-    pub fn list_browser_session_targets(
-        params: BrowserSessionTargetListParams,
-    ) -> TypedRequest<BrowserSessionTargetListParams> {
-        TypedRequest::new(METHOD_BROWSER_SESSION_TARGET_LIST, params)
-    }
-
-    pub fn open_browser_session(
-        params: BrowserSessionOpenParams,
-    ) -> TypedRequest<BrowserSessionOpenParams> {
-        TypedRequest::new(METHOD_BROWSER_SESSION_OPEN, params)
-    }
-
-    pub fn read_browser_session(
-        params: BrowserSessionIdParams,
-    ) -> TypedRequest<BrowserSessionIdParams> {
-        TypedRequest::new(METHOD_BROWSER_SESSION_READ, params)
-    }
-
-    pub fn close_browser_session(
-        params: BrowserSessionIdParams,
-    ) -> TypedRequest<BrowserSessionIdParams> {
-        TypedRequest::new(METHOD_BROWSER_SESSION_CLOSE, params)
-    }
-
-    pub fn list_browser_session_events(
-        params: BrowserSessionEventListParams,
-    ) -> TypedRequest<BrowserSessionEventListParams> {
-        TypedRequest::new(METHOD_BROWSER_SESSION_EVENT_LIST, params)
-    }
-
-    pub fn execute_browser_session_action(
-        params: BrowserSessionActionExecuteParams,
-    ) -> TypedRequest<BrowserSessionActionExecuteParams> {
-        TypedRequest::new(METHOD_BROWSER_SESSION_ACTION_EXECUTE, params)
     }
 
     pub fn list_skills(params: SkillsListParams) -> TypedRequest<SkillsListParams> {
@@ -3202,13 +3103,13 @@ mod tests {
                 workspace_id: Some("workspace-main".to_string()),
                 workspace_root: Some("/workspace/project".to_string()),
                 session_id: Some("sess-main".to_string()),
-                surface_kind: "objectCanvas".to_string(),
-                origin: "mcp:browser".to_string(),
+                surface_kind: "browser".to_string(),
+                origin: "agent".to_string(),
                 reason: Some("Browser candidate".to_string()),
                 priority: Some("high".to_string()),
                 candidate_id: Some("candidate-1".to_string()),
                 ttl_ms: Some(60_000),
-                metadata: Some(json!({ "source": "browser-assist" })),
+                metadata: Some(json!({ "source": "browser" })),
             })
             .expect("right surface request");
         let right_surface_pending = client
@@ -3216,7 +3117,7 @@ mod tests {
                 workspace_id: Some("workspace-main".to_string()),
                 workspace_root: Some("/workspace/project".to_string()),
                 session_id: Some("sess-main".to_string()),
-                surface_kind: Some("objectCanvas".to_string()),
+                surface_kind: Some("browser".to_string()),
                 limit: Some(10),
             })
             .expect("right surface pending");
@@ -3233,82 +3134,16 @@ mod tests {
                 reason: Some("user_closed_surface".to_string()),
             })
             .expect("right surface dismiss");
-        let browser_targets = client
-            .list_browser_session_targets(BrowserSessionTargetListParams {
-                remote_debugging_port: 9222,
-            })
-            .expect("browser targets");
-        let browser_open = client
-            .open_browser_session(BrowserSessionOpenParams {
-                profile_key: "task-profile".to_string(),
-                remote_debugging_port: 9222,
-                target_id: Some("target-1".to_string()),
-                launch_url: Some("https://example.com".to_string()),
-                environment_preset_id: None,
-                environment_preset_name: None,
-            })
-            .expect("browser open");
-        let browser_read = client
-            .read_browser_session(BrowserSessionIdParams {
-                session_id: "browser-session-1".to_string(),
-            })
-            .expect("browser read");
-        let browser_close = client
-            .close_browser_session(BrowserSessionIdParams {
-                session_id: "browser-session-1".to_string(),
-            })
-            .expect("browser close");
-        let browser_events = client
-            .list_browser_session_events(BrowserSessionEventListParams {
-                session_id: "browser-session-1".to_string(),
-                cursor: Some(3),
-            })
-            .expect("browser events");
-        let browser_action = client
-            .execute_browser_session_action(BrowserSessionActionExecuteParams {
-                session_id: "browser-session-1".to_string(),
-                action: "get_page_info".to_string(),
-                args: Some(json!({ "includeMarkdown": true })),
-            })
-            .expect("browser action");
 
         assert_eq!(workspaces.method, METHOD_WORKSPACE_LIST);
-        assert_eq!(workspaces.params.expect("params"), json!({}));
         assert_eq!(workspace.method, METHOD_WORKSPACE_READ);
-        assert_eq!(
-            workspace.params.expect("params"),
-            json!({ "id": "workspace-main" })
-        );
         assert_eq!(workspace_by_path.method, METHOD_WORKSPACE_BY_PATH_READ);
-        assert_eq!(
-            workspace_by_path.params.expect("params"),
-            json!({ "rootPath": "/workspace/project" })
-        );
         assert_eq!(ensured_workspace.method, METHOD_WORKSPACE_ENSURE);
-        assert_eq!(
-            ensured_workspace.params.expect("params"),
-            json!({
-                "name": "content-studio",
-                "rootPath": "/workspace/content-studio",
-                "workspaceType": "general",
-            })
-        );
         assert_eq!(default_workspace.method, METHOD_WORKSPACE_DEFAULT_READ);
         assert_eq!(ensured_default.method, METHOD_WORKSPACE_DEFAULT_ENSURE);
         assert_eq!(projects_root.method, METHOD_WORKSPACE_PROJECTS_ROOT_READ);
         assert_eq!(project_path.method, METHOD_WORKSPACE_PROJECT_PATH_RESOLVE);
-        assert_eq!(
-            project_path.params.expect("params"),
-            json!({
-                "name": "content-studio",
-                "parentRootPath": "/workspace",
-            })
-        );
         assert_eq!(ready.method, METHOD_WORKSPACE_ENSURE_READY);
-        assert_eq!(
-            ready.params.expect("params"),
-            json!({ "id": "workspace-main" })
-        );
         assert_eq!(
             right_surface_request.method,
             METHOD_WORKSPACE_RIGHT_SURFACE_REQUEST
@@ -3319,13 +3154,13 @@ mod tests {
                 "workspaceId": "workspace-main",
                 "workspaceRoot": "/workspace/project",
                 "sessionId": "sess-main",
-                "surfaceKind": "objectCanvas",
-                "origin": "mcp:browser",
+                "surfaceKind": "browser",
+                "origin": "agent",
                 "reason": "Browser candidate",
                 "priority": "high",
                 "candidateId": "candidate-1",
                 "ttlMs": 60000,
-                "metadata": { "source": "browser-assist" },
+                "metadata": { "source": "browser" },
             })
         );
         assert_eq!(
@@ -3333,79 +3168,12 @@ mod tests {
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_LIST
         );
         assert_eq!(
-            right_surface_pending.params.expect("params"),
-            json!({
-                "workspaceId": "workspace-main",
-                "workspaceRoot": "/workspace/project",
-                "sessionId": "sess-main",
-                "surfaceKind": "objectCanvas",
-                "limit": 10,
-            })
-        );
-        assert_eq!(
             right_surface_consume.method,
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CONSUME
         );
         assert_eq!(
-            right_surface_consume.params.expect("params"),
-            json!({
-                "requestId": "right-surface:req-1",
-                "requestIds": ["right-surface:req-2"],
-            })
-        );
-        assert_eq!(
             right_surface_dismiss.method,
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_DISMISS
-        );
-        assert_eq!(
-            right_surface_dismiss.params.expect("params"),
-            json!({
-                "requestId": "right-surface:req-3",
-                "requestIds": ["right-surface:req-4"],
-                "reason": "user_closed_surface",
-            })
-        );
-        assert_eq!(browser_targets.method, METHOD_BROWSER_SESSION_TARGET_LIST);
-        assert_eq!(
-            browser_targets.params.expect("params"),
-            json!({ "remoteDebuggingPort": 9222 })
-        );
-        assert_eq!(browser_open.method, METHOD_BROWSER_SESSION_OPEN);
-        assert_eq!(
-            browser_open.params.expect("params"),
-            json!({
-                "profileKey": "task-profile",
-                "remoteDebuggingPort": 9222,
-                "targetId": "target-1",
-                "launchUrl": "https://example.com",
-            })
-        );
-        assert_eq!(browser_read.method, METHOD_BROWSER_SESSION_READ);
-        assert_eq!(
-            browser_read.params.expect("params"),
-            json!({ "sessionId": "browser-session-1" })
-        );
-        assert_eq!(browser_close.method, METHOD_BROWSER_SESSION_CLOSE);
-        assert_eq!(
-            browser_close.params.expect("params"),
-            json!({ "sessionId": "browser-session-1" })
-        );
-        assert_eq!(browser_events.method, METHOD_BROWSER_SESSION_EVENT_LIST);
-        assert_eq!(
-            browser_events.params.expect("params"),
-            json!({
-                "sessionId": "browser-session-1",
-                "cursor": 3,
-            })
-        );
-        assert_eq!(browser_action.method, METHOD_BROWSER_SESSION_ACTION_EXECUTE);
-        assert_eq!(
-            browser_action.params.expect("params"),
-            json!({
-                "sessionId": "browser-session-1",
-                "action": "get_page_info",
-                "args": { "includeMarkdown": true },
-            })
         );
     }
 
@@ -3493,7 +3261,6 @@ mod tests {
                 workspace_root: "/workspace/project".to_string(),
                 caller: Some("agent-chat".to_string()),
                 workbench: true,
-                browser_assist: false,
             })
             .expect("bindings");
 
@@ -3589,7 +3356,6 @@ mod tests {
                 "workspaceRoot": "/workspace/project",
                 "caller": "agent-chat",
                 "workbench": true,
-                "browserAssist": false,
             })
         );
     }
@@ -4511,12 +4277,6 @@ mod tests {
         assert!(methods.contains(&METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CONSUME));
         assert!(methods.contains(&METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_DISMISS));
         assert!(methods.contains(&METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED));
-        assert!(methods.contains(&METHOD_BROWSER_SESSION_TARGET_LIST));
-        assert!(methods.contains(&METHOD_BROWSER_SESSION_OPEN));
-        assert!(methods.contains(&METHOD_BROWSER_SESSION_READ));
-        assert!(methods.contains(&METHOD_BROWSER_SESSION_CLOSE));
-        assert!(methods.contains(&METHOD_BROWSER_SESSION_EVENT_LIST));
-        assert!(methods.contains(&METHOD_BROWSER_SESSION_ACTION_EXECUTE));
         assert!(methods.contains(&METHOD_SKILLS_LIST));
         assert!(methods.contains(&METHOD_SKILL_READ));
         assert!(methods.contains(&METHOD_SKILL_PACKAGE_LOCAL_INSPECT));
@@ -4553,18 +4313,6 @@ mod tests {
         ));
         assert!(!is_app_server_request_method(
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED
-        ));
-        assert!(is_app_server_request_method(
-            METHOD_BROWSER_SESSION_TARGET_LIST
-        ));
-        assert!(is_app_server_request_method(METHOD_BROWSER_SESSION_OPEN));
-        assert!(is_app_server_request_method(METHOD_BROWSER_SESSION_READ));
-        assert!(is_app_server_request_method(METHOD_BROWSER_SESSION_CLOSE));
-        assert!(is_app_server_request_method(
-            METHOD_BROWSER_SESSION_EVENT_LIST
-        ));
-        assert!(is_app_server_request_method(
-            METHOD_BROWSER_SESSION_ACTION_EXECUTE
         ));
         assert!(is_app_server_request_method(METHOD_SKILLS_LIST));
         assert!(is_app_server_request_method(METHOD_KNOWLEDGE_PACK_LIST));

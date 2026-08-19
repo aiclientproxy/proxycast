@@ -22,7 +22,7 @@ async fn workspace_right_surface_methods_register_and_list_pending_requests() {
                 "workspaceId": "workspace-main",
                 "workspaceRoot": "/workspace/project",
                 "sessionId": "sess-main",
-                "surfaceKind": "objectCanvas",
+                "surfaceKind": "browser",
                 "origin": "mcp:browser",
                 "reason": "Browser candidate",
                 "priority": "high",
@@ -37,7 +37,7 @@ async fn workspace_right_surface_methods_register_and_list_pending_requests() {
     let request_id = match &requested[0] {
         JsonRpcMessage::Response(response) => {
             assert_eq!(response.result["status"], "pending");
-            assert_eq!(response.result["pending"]["surfaceKind"], "objectCanvas");
+            assert_eq!(response.result["pending"]["surfaceKind"], "browser");
             assert_eq!(response.result["pending"]["origin"], "mcp:browser");
             assert_eq!(response.result["pending"]["priority"], "high");
             assert_eq!(
@@ -59,7 +59,7 @@ async fn workspace_right_surface_methods_register_and_list_pending_requests() {
     match &requested[1] {
         JsonRpcMessage::Notification(notification) => {
             let params = notification.params.as_ref().expect("notification params");
-            assert_eq!(params["surfaceKind"], "objectCanvas");
+            assert_eq!(params["surfaceKind"], "browser");
             assert_eq!(params["pending"][0]["requestId"], request_id);
             assert_eq!(params["pending"][0]["workspaceRoot"], "/workspace/project");
         }
@@ -72,7 +72,7 @@ async fn workspace_right_surface_methods_register_and_list_pending_requests() {
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_LIST,
             Some(json!({
                 "workspaceId": "workspace-main",
-                "surfaceKind": "objectCanvas",
+                "surfaceKind": "browser",
                 "limit": 5,
             })),
         ))
@@ -142,7 +142,7 @@ async fn workspace_right_surface_methods_register_and_list_pending_requests() {
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_LIST,
             Some(json!({
                 "workspaceId": "workspace-main",
-                "surfaceKind": "objectCanvas",
+                "surfaceKind": "browser",
             })),
         ))
         .await

@@ -165,13 +165,9 @@ describe("useWorkspaceRightSurfaceArtifactOpenRuntime", () => {
       currentArticleWorkspace,
     );
     expect(refreshRightSurfacePendingRequests).toHaveBeenCalledTimes(1);
-    expect(consumePendingRequestsForSurface).toHaveBeenNthCalledWith(
-      1,
+    expect(consumePendingRequestsForSurface).toHaveBeenCalledOnce();
+    expect(consumePendingRequestsForSurface).toHaveBeenCalledWith(
       "articleWorkspace",
-    );
-    expect(consumePendingRequestsForSurface).toHaveBeenNthCalledWith(
-      2,
-      "objectCanvas",
     );
     expect(props.fallbackOpenArtifact).not.toHaveBeenCalled();
   });

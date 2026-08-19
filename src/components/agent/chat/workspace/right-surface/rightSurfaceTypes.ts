@@ -5,7 +5,6 @@ export type WorkspaceRightSurfaceKind =
   | "appSurface"
   | "articleWorkspace"
   | "expertInfo"
-  | "objectCanvas"
   | "browser"
   | "files"
   | "shell"
@@ -46,7 +45,6 @@ export function normalizeWorkspaceRightSurfaceKind(
     case "appSurface":
     case "articleWorkspace":
     case "expertInfo":
-    case "objectCanvas":
     case "browser":
     case "files":
     case "shell":

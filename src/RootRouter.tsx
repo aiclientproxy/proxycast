@@ -6,7 +6,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import App from "./App";
 import { UpdateNotificationPage } from "./pages/update-notification";
-import { BrowserRuntimeDebuggerPage } from "./pages";
 import { ResourceManagerPage } from "./features/resource-manager";
 import { Toaster } from "./components/ui/sonner";
 import { AppCrashBoundary } from "./components/layout/AppCrashBoundary";
@@ -49,7 +48,6 @@ function getEffectivePathname(location: Location): string {
  * 根据 URL 路径渲染对应的组件
  *
  * - /update-notification: 更新提醒悬浮窗口（独立 Desktop Host 窗口）
- * - /browser-runtime-debugger: 浏览器运行时独立调试窗口
  * - /resource-manager: 独立资源管理器窗口
  * - 其他: 主应用
  */
@@ -74,15 +72,6 @@ export function RootRouter() {
     return (
       <AppCrashBoundary>
         <UpdateNotificationPage />
-      </AppCrashBoundary>
-    );
-  }
-
-  if (pathname === "/browser-runtime-debugger") {
-    return (
-      <AppCrashBoundary>
-        <BrowserRuntimeDebuggerPage />
-        <Toaster />
       </AppCrashBoundary>
     );
   }

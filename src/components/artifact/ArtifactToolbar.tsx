@@ -50,7 +50,6 @@ const ARTIFACT_TYPE_LABEL_KEYS = {
   svg: "workspace.artifactToolbar.type.svg",
   mermaid: "workspace.artifactToolbar.type.mermaid",
   react: "workspace.artifactToolbar.type.react",
-  browser_assist: "workspace.artifactToolbar.type.browserAssist",
   "canvas:document": "workspace.artifactToolbar.type.canvasDocument",
   "canvas:video": "workspace.artifactToolbar.type.canvasVideo",
   "canvas:design": "workspace.artifactToolbar.type.canvasDesign",
@@ -460,14 +459,12 @@ export const ArtifactToolbar: React.FC<ArtifactToolbarProps> = memo(
     // 获取渲染器信息
     const entry = artifactRegistry.get(artifact.type);
 
-    const isBrowserAssist = artifact.type === "browser_assist";
     // 判断是否是代码类型且支持预览
     const isCode = artifact.type === "code";
     const isDocument = artifact.type === "document";
     const language = artifact.meta.language?.toLowerCase() || "";
     const canPreview = isCode && PREVIEWABLE_LANGUAGES.includes(language);
-    const supportsSharedViewMode =
-      !isBrowserAssist && (isDocument || canPreview);
+    const supportsSharedViewMode = isDocument || canPreview;
     const writePhase = resolveArtifactWritePhase(artifact);
     const typeLabel = entry ? t(ARTIFACT_TYPE_LABEL_KEYS[artifact.type]) : null;
     const writePhaseLabel = writePhase
@@ -609,7 +606,6 @@ export const ArtifactToolbar: React.FC<ArtifactToolbarProps> = memo(
 
     // 判断是否支持源码切换（非代码类型才需要切换）
     const supportsSourceToggle =
-      !isBrowserAssist &&
       artifact.type !== "code" &&
       artifact.type !== "document" &&
       onToggleSource;
@@ -740,64 +736,60 @@ export const ArtifactToolbar: React.FC<ArtifactToolbarProps> = memo(
             />
           )}
 
-          {!isBrowserAssist ? (
-            <>
-              {/* 复制按钮 */}
-              <ToolbarButton
-                onClick={handleCopy}
-                title={
-                  copied
-                    ? t("workspace.artifactToolbar.action.copied")
-                    : t("workspace.artifactToolbar.action.copyContent")
-                }
-                tone={tone}
-              >
-                {copied ? (
-                  <Check className="w-4 h-4 text-green-400" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-              </ToolbarButton>
+          {/* 复制按钮 */}
+          <ToolbarButton
+            onClick={handleCopy}
+            title={
+              copied
+                ? t("workspace.artifactToolbar.action.copied")
+                : t("workspace.artifactToolbar.action.copyContent")
+            }
+            tone={tone}
+          >
+            {copied ? (
+              <Check className="w-4 h-4 text-green-400" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+          </ToolbarButton>
 
-              {/* 下载按钮 */}
-              <ToolbarButton
-                onClick={handleDownload}
-                title={t("workspace.artifactToolbar.action.download")}
-                tone={tone}
-              >
-                <Download className="w-4 h-4" />
-              </ToolbarButton>
+          {/* 下载按钮 */}
+          <ToolbarButton
+            onClick={handleDownload}
+            title={t("workspace.artifactToolbar.action.download")}
+            tone={tone}
+          >
+            <Download className="w-4 h-4" />
+          </ToolbarButton>
 
-              {/* 源码切换按钮（非代码类型） */}
-              {supportsSourceToggle && (
-                <ToolbarButton
-                  onClick={handleToggleSource}
-                  title={
-                    showSource
-                      ? t("workspace.artifactToolbar.action.showPreview")
-                      : t("workspace.artifactToolbar.action.showSource")
-                  }
-                  active={showSource}
-                  tone={tone}
-                >
-                  {showSource ? (
-                    <Eye className="w-4 h-4" />
-                  ) : (
-                    <Code className="w-4 h-4" />
-                  )}
-                </ToolbarButton>
+          {/* 源码切换按钮（非代码类型） */}
+          {supportsSourceToggle && (
+            <ToolbarButton
+              onClick={handleToggleSource}
+              title={
+                showSource
+                  ? t("workspace.artifactToolbar.action.showPreview")
+                  : t("workspace.artifactToolbar.action.showSource")
+              }
+              active={showSource}
+              tone={tone}
+            >
+              {showSource ? (
+                <Eye className="w-4 h-4" />
+              ) : (
+                <Code className="w-4 h-4" />
               )}
+            </ToolbarButton>
+          )}
 
-              {/* 新窗口打开按钮 */}
-              <ToolbarButton
-                onClick={handleOpenInWindow}
-                title={t("workspace.artifactToolbar.action.openInWindow")}
-                tone={tone}
-              >
-                <ExternalLink className="w-4 h-4" />
-              </ToolbarButton>
-            </>
-          ) : null}
+          {/* 新窗口打开按钮 */}
+          <ToolbarButton
+            onClick={handleOpenInWindow}
+            title={t("workspace.artifactToolbar.action.openInWindow")}
+            tone={tone}
+          >
+            <ExternalLink className="w-4 h-4" />
+          </ToolbarButton>
 
           {actionsSlot}
 

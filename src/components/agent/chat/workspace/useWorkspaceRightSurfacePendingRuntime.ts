@@ -25,7 +25,6 @@ import {
   buildWorkspacePluginSurfacesFromPendingRequests,
   type WorkspacePluginSurfaceDescriptor,
 } from "./workspacePluginSurfaceModel";
-import type { WorkspaceObjectCanvasCandidate } from "./workspaceObjectCanvasModel";
 import {
   buildWorkspaceArticleWorkspaceFromPendingRequests,
   type WorkspaceArticleWorkspace,
@@ -73,7 +72,6 @@ export interface WorkspaceRightSurfacePendingRuntime {
   pendingFileTarget: WorkspaceFilesSurfaceTarget | null;
   pendingPluginSurface: WorkspacePluginSurfaceDescriptor | null;
   pendingPluginSurfaces: WorkspacePluginSurfaceDescriptor[];
-  pendingObjectCanvasCandidate: WorkspaceObjectCanvasCandidate | null;
   pendingArticleWorkspace: WorkspaceArticleWorkspace | null;
   pendingBrowserIntent: WorkspaceRightSurfaceBrowserIntent | null;
   lastError: Error | null;
@@ -382,11 +380,6 @@ export function useWorkspaceRightSurfacePendingRuntime({
     [pendingRequests],
   );
   const pendingPluginSurface = pendingPluginSurfaces[0] ?? null;
-  const pendingObjectCanvasCandidate = useMemo(
-    () =>
-      buildWorkspaceRightSurfacePendingObjectCanvasCandidate(pendingRequests),
-    [pendingRequests],
-  );
   const pendingArticleWorkspace = useMemo(
     () => buildWorkspaceArticleWorkspaceFromPendingRequests(pendingRequests),
     [pendingRequests],
@@ -402,7 +395,6 @@ export function useWorkspaceRightSurfacePendingRuntime({
     pendingFileTarget,
     pendingPluginSurface,
     pendingPluginSurfaces,
-    pendingObjectCanvasCandidate,
     pendingArticleWorkspace,
     pendingBrowserIntent,
     lastError,
@@ -479,47 +471,6 @@ export function buildWorkspaceRightSurfacePendingFileTarget(
       title:
         firstString(metadata?.title, metadata?.name, metadata?.filename) ??
         extractFileName(relativePath),
-    };
-  }
-
-  return null;
-}
-
-export function buildWorkspaceRightSurfacePendingObjectCanvasCandidate(
-  pendingRequests: readonly WorkspaceRightSurfacePendingRequest[],
-): WorkspaceObjectCanvasCandidate | null {
-  for (const request of pendingRequests) {
-    if (
-      request.status !== "pending" ||
-      request.surfaceKind !== "objectCanvas"
-    ) {
-      continue;
-    }
-
-    const metadata = asRecord(request.metadata);
-    const candidateId = firstString(
-      request.candidateId,
-      metadata?.candidateId,
-      metadata?.id,
-      request.requestId,
-    );
-    if (!candidateId) {
-      continue;
-    }
-
-    return {
-      candidateId,
-      title: firstString(metadata?.title, metadata?.name),
-      url: firstString(metadata?.url, metadata?.href),
-      sessionId: firstString(metadata?.sessionId, request.sessionId),
-      profileKey: firstString(metadata?.profileKey),
-      targetId: firstString(metadata?.targetId),
-      lifecycleState: firstString(metadata?.lifecycleState, metadata?.status),
-      controlMode: firstString(metadata?.controlMode),
-      transportKind: firstString(metadata?.transportKind),
-      launching: metadata?.launching === true,
-      sourceKind: "rightSurfacePending",
-      sourceRequestId: request.requestId,
     };
   }
 

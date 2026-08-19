@@ -7,6 +7,7 @@ import {
   buildAssertions,
   parseArgs,
   readCodeModeProcessEvidence,
+  summarizeCodeCellTrace,
   summarizeProviderEvidence,
 } from "./code-mode-electron-gate-b.mjs";
 
@@ -86,8 +87,91 @@ describe("CodeMode Electron Gate B", () => {
     });
   });
 
+  it("summarizes the canonical redacted CodeCell trace lifecycle", () => {
+    const evidence = summarizeCodeCellTrace({
+      available: true,
+      trace: { traceId: "code-cell-thread-code" },
+      events: [
+        {
+          eventType: "code_cell.source_item_observed",
+          metrics: {
+            model_visible_call_id: "call-code-mode-gate-b",
+            source_item_id: "item-call-code-mode-gate-b",
+          },
+        },
+        {
+          eventType: "code_cell.started",
+          metrics: {
+            runtime_cell_id: "cell-code-mode-gate-b",
+            source_js_chars: 29,
+            source_js_sha256: "a".repeat(64),
+          },
+        },
+        {
+          eventType: "code_cell.initial_response",
+          metrics: { status: "completed" },
+        },
+        {
+          eventType: "code_cell.ended",
+          metrics: { status: "completed" },
+        },
+        {
+          eventType: "code_cell.output_item_observed",
+          metrics: { output_item_id: "item-call-code-mode-gate-b" },
+        },
+      ],
+      redaction: {
+        mode: "summary_only",
+        rawAgentEventPayload: false,
+        promptText: false,
+        providerPayload: false,
+      },
+    });
+
+    expect(evidence).toMatchObject({
+      available: true,
+      traceId: "code-cell-thread-code",
+      lifecycleOrdered: true,
+      runtimeCellId: "cell-code-mode-gate-b",
+      source: {
+        modelVisibleCallId: "call-code-mode-gate-b",
+        itemId: "item-call-code-mode-gate-b",
+      },
+      output: { itemId: "item-call-code-mode-gate-b" },
+      initialStatus: "completed",
+      endedStatus: "completed",
+      sourceJsChars: 29,
+      sourceJsSha256: "a".repeat(64),
+      sourceSummaryOnly: true,
+    });
+  });
+
   it("requires every product-chain and visible-terminal assertion", () => {
     const assertions = buildAssertions({
+      codeCellTrace: {
+        available: true,
+        lifecycleOrdered: true,
+        initialStatus: "completed",
+        endedStatus: "completed",
+        bridgeCall: {
+          command: "app_server_handle_json_lines",
+          method: "diagnostics/trace/read",
+          transport: "electron-ipc",
+          status: "success",
+        },
+        source: {
+          modelVisibleCallId: "call-code-mode-gate-b",
+          itemId: "item-call-code-mode-gate-b",
+        },
+        output: { itemId: "item-call-code-mode-gate-b" },
+        sourceSummaryOnly: true,
+        redaction: {
+          mode: "summary_only",
+          rawAgentEventPayload: false,
+          promptText: false,
+          providerPayload: false,
+        },
+      },
       diagnostics: {
         calls: [
           {
@@ -104,7 +188,11 @@ describe("CodeMode Electron Gate B", () => {
         toolMode: "code_mode",
         runtimeFeatures: ["custom_tools", "responses_api"],
       },
-      outerExec: { name: "exec", status: "completed" },
+      outerExec: {
+        id: "item-call-code-mode-gate-b",
+        name: "exec",
+        status: "completed",
+      },
       processEvidence: {
         electronPid: 100,
         appServerPid: 101,
@@ -222,6 +310,7 @@ describe("CodeMode Electron Gate B", () => {
     expect(source).toContain('"custom_tools"');
     expect(source).toContain('path === "/v1/responses"');
     expect(source).toContain('call.method === "turn/start"');
+    expect(source).toContain('"diagnostics/trace/read"');
     expect(source).toContain("codeModeHostOwnedByAppServer");
     expect(source).not.toContain('backendMode: "mock"');
     expect(source).not.toContain('type: "CodeCell"');

@@ -16,8 +16,6 @@
   "common.app.project.type.fallback": "專案",
   "common.app.project.recommendedName": "{{prefix}}：{{shortLabel}}",
   "common.projects.rename.nameRequired": "專案名稱不能為空",
-  "common.app.browserConnector.opened.title": "已開啟連接器設定",
-  "common.app.browserConnector.opened.description": "在「連接器」頁中啟用瀏覽器連接器或重新同步擴充功能。",
   "common.app.websiteDeepLink.unsupported.title": "無法開啟這個官網入口",
   "common.app.websiteDeepLink.unsupported.description": "目前官網入口尚未對應到桌面端可用能力，請同步官網與客戶端目錄。",
   "common.app.startup.windows.blockingTitle": "Windows 啟動自檢發現阻塞問題",

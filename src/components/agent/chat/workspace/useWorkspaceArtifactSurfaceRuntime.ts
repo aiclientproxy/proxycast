@@ -2,14 +2,10 @@ import { useCallback, type Dispatch, type SetStateAction } from "react";
 import type { LayoutMode } from "@/lib/workspace/workbenchContract";
 import type { WorkspaceWorkbenchRequestsController } from "../hooks/useWorkspaceWorkbenchRequests";
 import { useWorkspaceSceneAppExecutionSurfaceRuntime } from "./useWorkspaceSceneAppExecutionSurfaceRuntime";
-import { useWorkspaceServiceSkillExecutionCardRuntime } from "./useWorkspaceServiceSkillExecutionCardRuntime";
 
 export interface UseWorkspaceArtifactSurfaceRuntimeParams {
   sceneAppExecution: Parameters<
     typeof useWorkspaceSceneAppExecutionSurfaceRuntime
-  >[0];
-  serviceSkillExecution: Parameters<
-    typeof useWorkspaceServiceSkillExecutionCardRuntime
   >[0];
   setLayoutMode: Dispatch<SetStateAction<LayoutMode>>;
   workbenchRequests: WorkspaceWorkbenchRequestsController;
@@ -17,12 +13,9 @@ export interface UseWorkspaceArtifactSurfaceRuntimeParams {
 
 export function useWorkspaceArtifactSurfaceRuntime({
   sceneAppExecution,
-  serviceSkillExecution,
   setLayoutMode,
   workbenchRequests,
 }: UseWorkspaceArtifactSurfaceRuntimeParams) {
-  const { card: serviceSkillExecutionCard } =
-    useWorkspaceServiceSkillExecutionCardRuntime(serviceSkillExecution);
   const sceneAppExecutionSurfaceRuntime =
     useWorkspaceSceneAppExecutionSurfaceRuntime(sceneAppExecution);
   const handleJumpToTimelineItem = useCallback(
@@ -47,6 +40,6 @@ export function useWorkspaceArtifactSurfaceRuntime({
     sceneAppExecutionSummaryCard: sceneAppExecutionSurfaceRuntime.summaryCard,
     sceneAppReviewDecisionDialogNode:
       sceneAppExecutionSurfaceRuntime.reviewDecisionDialogNode,
-    serviceSkillExecutionCard,
+    serviceSkillExecutionCard: null,
   };
 }

@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { InputCapabilitySelection } from "./inputCapabilitySelection";
 import {
   buildCatalogWithSceneEntry,
-  buildCatalogWithXSceneEntry,
+  buildCatalogWithStoryVideoSceneEntry,
   createSkill,
-  createXArticleSceneServiceSkill,
+  createStoryVideoSceneServiceSkill,
   getTextarea,
   mockListServiceSkills,
   renderHarness,
@@ -157,10 +157,10 @@ describe("CharacterMention slash actions", () => {
 
   it("slash 面板选择带必填参数的 scene 时应交给父层 A2UI 补参接管", async () => {
     act(() => {
-      saveSkillCatalog(buildCatalogWithXSceneEntry(), "bootstrap_sync");
+      saveSkillCatalog(buildCatalogWithStoryVideoSceneEntry(), "bootstrap_sync");
     });
     mockListServiceSkills.mockResolvedValueOnce([
-      createXArticleSceneServiceSkill(),
+      createStoryVideoSceneServiceSkill(),
     ]);
 
     const onChangeSpy = vi.fn<(value: string) => void>();
@@ -177,11 +177,11 @@ describe("CharacterMention slash actions", () => {
     });
     const textarea = getTextarea(container);
 
-    await typeSlashAndWait(textarea, "/x文");
+    await typeSlashAndWait(textarea, "/story");
 
     const sceneButton = Array.from(
       document.body.querySelectorAll("button"),
-    ).find((button) => button.textContent?.includes("X文章转存"));
+    ).find((button) => button.textContent?.includes("短视频编排"));
     expect(sceneButton).toBeTruthy();
 
     await act(async () => {
@@ -192,8 +192,8 @@ describe("CharacterMention slash actions", () => {
     expect(onSelectInputCapability).toHaveBeenCalledWith({
       kind: "service_skill",
       skill: expect.objectContaining({
-        id: "x-article-export",
-        title: "X 文章转存",
+        id: "story-video-suite",
+        title: "短视频编排",
       }),
     });
     expect(onChangeSpy).not.toHaveBeenCalled();

@@ -1,30 +1,14 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "vitest";
 
-describe("AgentChatWorkspace Browser Assist canvas runtime boundary", () => {
-  it("Browser Assist canvas attach/detach glue 必须由 browser assist canvas runtime 提供", () => {
-    const workspaceSource = [
-      "src/components/agent/chat/useAgentChatWorkspaceRuntime.tsx",
-      "src/components/agent/chat/workspace/useAgentChatWorkspaceEntryRuntime.ts",
-      "src/components/agent/chat/workspace/useAgentChatWorkspaceSetupRuntime.ts",
-      "src/components/agent/chat/workspace/useAgentChatWorkspaceCommandRuntime.ts",
-      "src/components/agent/chat/workspace/useAgentChatWorkspaceSceneRuntime.tsx",
-    ]
-      .map((ownerPath) => readFileSync(join(process.cwd(), ownerPath), "utf8"))
-      .join("\n");
-    const ownerSource = readFileSync(
+describe("AgentChatWorkspace Browser Canvas negative guard", () => {
+  it("通用 Artifact/Canvas 不得重新承载 Browser runtime", () => {
+    const artifactOwnerSource = readFileSync(
       join(
         process.cwd(),
         "src/components/agent/chat/workspace/useWorkspaceArtifactCanvasRuntime.ts",
-      ),
-      "utf8",
-    );
-    const browserAssistOwnerSource = readFileSync(
-      join(
-        process.cwd(),
-        "src/components/agent/chat/workspace/useWorkspaceBrowserAssistCanvasRuntime.ts",
       ),
       "utf8",
     );
@@ -35,43 +19,20 @@ describe("AgentChatWorkspace Browser Assist canvas runtime boundary", () => {
       ),
       "utf8",
     );
-    const artifactOpenSource = readFileSync(
-      join(
-        process.cwd(),
-        "src/components/agent/chat/workspace/useWorkspaceArtifactOpenRuntime.tsx",
+
+    expect(artifactOwnerSource).toContain(
+      "useWorkspaceBrowserAssistRequestRuntime({",
+    );
+    expect(`${artifactOwnerSource}\n${layoutSource}`).not.toMatch(
+      /useWorkspaceBrowserAssistCanvasRuntime|browserAssistCanvasControl|BrowserSessionRef|browserExecuteAction/,
+    );
+    expect(
+      existsSync(
+        join(
+          process.cwd(),
+          "src/components/agent/chat/components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel.tsx",
+        ),
       ),
-      "utf8",
-    );
-
-    expect(workspaceSource).toContain("useWorkspaceArtifactCanvasRuntime({");
-    expect(workspaceSource).not.toContain(
-      "useWorkspaceBrowserAssistCanvasRuntime({",
-    );
-    expect(ownerSource.split("\n").length).toBeLessThan(180);
-    expect(ownerSource).toContain("useWorkspaceBrowserAssistCanvasRuntime({");
-    expect(browserAssistOwnerSource).toContain(
-      "useWorkspaceBrowserAssistRuntime({",
-    );
-    expect(browserAssistOwnerSource).toContain(
-      "useWorkspaceBrowserAssistRequestRuntime({",
-    );
-    expect(browserAssistOwnerSource).toContain("canvasControl");
-    expect(browserAssistOwnerSource).toContain("artifactOpenControl");
-    expect(layoutSource).toContain("browserAssistCanvasControl");
-    expect(artifactOpenSource).toContain("browserAssistArtifactOpenControl");
-
-    for (const retiredWorkspaceCanvasGlue of [
-      "useWorkspaceBrowserAssistRuntime({",
-      "useWorkspaceBrowserAssistRequestRuntime({",
-      "suppressBrowserAssistCanvasAutoOpen",
-      "suppressGeneralCanvasArtifactAutoOpen",
-      "clearBrowserAssistCanvasArtifact",
-      "hasBrowserAssistArtifact",
-    ]) {
-      expect(workspaceSource).not.toContain(retiredWorkspaceCanvasGlue);
-      expect(`${ownerSource}\n${browserAssistOwnerSource}`).toContain(
-        retiredWorkspaceCanvasGlue,
-      );
-    }
+    ).toBe(false);
   });
 });

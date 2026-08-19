@@ -2711,11 +2711,31 @@ pipeline 进入 App Server/GUI 可消费的事件链；同时以同一 outer `ex
 request 中追加 `custom_tool_call_output`，顺序位于最终 exec output 之前，等价于 Codex
 `inject_if_running(CustomToolCallOutput)` 在当前 turn 内的模型可见结果。空通知静默，已取消通知 fail closed。该注入
 只存在于当前 provider turn 的下一 sampling request，不经过 `RuntimeSessionInputHandle`，也不作为独立 durable Item
-持久化；CodeCell 的 thread-owned trace/evidence owner 尚未建立，不能借用 current-turn `Tool` Item 或公开 ThreadItem
-伪造跨 Turn 的 started/closed 阶段。cell route 还保留 closed-cell 终态集合：terminal response、terminate、
+持久化；CodeCell 的独立 trace/evidence 由下方 App Server `TraceEventWriter` owner 承接，不能借用 current-turn `Tool`
+Item 或公开 ThreadItem 伪造跨 Turn 的 started/closed 阶段。cell route 还保留 closed-cell 终态集合：terminal response、terminate、
 interrupt、shutdown 或 host `cell_closed` 后，迟到的 nested invoke/notify 直接返回 closed error，不会重新创建空 gate
 并永久等待，也不会落到 fallback delegate；provider-turn delegate 同时以原子 closed 标志拒绝迟到的 Desktop delta 和
 provider transcript output。
+
+CodeCell trace/evidence 现已收敛到唯一的 App Server owner，数据流为：
+
+```text
+tool-runtime typed CodeCellTraceEvent
+  -> agent-runtime CodeMode lifecycle
+  -> Lime Agent provider-turn forwarding
+  -> App Server RuntimeEventSink interception
+  -> TraceEventWriter JSONL
+  -> code_cell reducer/replay
+  -> diagnostics/trace/read
+```
+
+`TraceEventWriter` 的 `code_cell` reducer 按 `thread_id + model_visible_call_id` 关联
+`source_item_observed -> started -> initial_response -> ended -> output_item_observed`，允许 source Item 晚到、yielded
+cell 跨 Turn、nested tool/wait 关联，并在 Turn failed/canceled 时关闭未终止 cell；terminal 后迟到事件 fail closed。trace
+只保存源码字符数和 SHA-256，公开 diagnostics 继续使用既有 `DiagnosticsTraceReadResponse`，不新增公开
+`ThreadItem`、`RuntimeEvent`、GUI card 或第二套 trace store。`source_item_id/output_item_id` 使用 canonical `item_*`
+ID，`model_visible_call_id` 保留 provider call ID。Gate B 通过 `diagnostics/trace/read` 真实 Electron bridge 读取该
+trace，证明 reducer 是生产 consumer 而不是 dead code。
 
 V8 build 输入固定从 `lime-rs/Cargo.lock` 读取精确 crate version，`scripts/lib/rusty-v8-artifacts.mjs` 只接受
 Codex `ptrcomp_sandbox_release` 的受支持 platform target，下载 archive/binding/checksum manifest 后逐项校验 SHA-256，
@@ -2729,15 +2749,17 @@ CodeMode 专项 Electron Gate B 已通过
 `.lime/qc/gui-evidence/code-mode-electron-gate-b/code-mode-electron-gate-b-summary.json` 建立：真实 Electron、
 preload/contextBridge、IPC、`app_server_handle_json_lines`、App Server runtime backend、official-host Responses route、
 production process factory、custom `exec` 回采样、canonical Thread/Turn/Tool Item 与 GUI 可见终态使用同一 identity；
-Electron、App Server 与 `code-mode-host` PID 分别为 `44199 / 44203 / 44521`，host 的父 PID 精确为 App Server。公开 Item
+fresh evidence 同时要求 `appServerParentPid == electronPid` 与 `codeModeHostParentPid == appServerPid`；具体 PID 和
+thread/turn identity 只以该机器可读 evidence 为准，不固化为架构常量。公开 Item
 类型只有 `userMessage/dynamicToolCall/agentMessage`，mock fallback、invoke/console/page/provider error 均为零。该场景通过
 标准 `HTTP_PROXY` 把仍以 `api.openai.com` 为 Host 的请求路由到受控本地 fixture，只证明 official-host capability、
 production lowering 与 macOS dev-process isolation，不冒充 live OpenAI、Windows/packaged parity 或公网稳定性证据。
 
-当前 alignment blocker 只剩 thread-owned CodeCell trace/evidence owner；Codex 公开 App Server ThreadItem 本身没有
-CodeCell variant，现阶段只消费既有 outer Tool Item/GUI lifecycle surface，不新增 CodeCell GUI card 或产品事件旁路。
-不得借用系统 Node、shell eval、Electron renderer 或 Codex TUI 进程执行 JavaScript；CodeCell trace 只在建立真实
-consumer 与唯一 trace/evidence owner 后实现。Electron 仍只做 Desktop Host、sidecar lifecycle 与标准 GUI 投影。
+当前 alignment blocker 不再包括 CodeCell trace/evidence owner：该能力已由 App Server `TraceEventWriter` 与内部
+`code_cell` reducer/replay 承接。Codex 公开 App Server ThreadItem 本身没有 CodeCell variant，因此继续只消费既有 outer
+Tool Item/GUI lifecycle surface，不新增 CodeCell GUI card 或产品事件旁路。
+不得借用系统 Node、shell eval、Electron renderer 或 Codex TUI 进程执行 JavaScript；CodeCell trace 现由上述真实
+consumer 与唯一 App Server evidence owner 承接。Electron 仍只做 Desktop Host、sidecar lifecycle 与标准 GUI 投影。
 
 Architecture impact: major；本节固定 CodeMode 的唯一 owner、Desktop/TUI 分界、selected-slot requirement、
 authoritative model declaration 与 resolved provider route 交集、provider custom contract、session lifecycle contract
@@ -2746,5 +2768,67 @@ authoritative model declaration 与 resolved provider route 交集、provider cu
 `wait`、yield/terminate/cancel 与 mixed-call transcript 顺序；确认 Lime 当前完成 transport-neutral contract、
 canonical thread-owned lazy service、process-owned sandbox V8 host、production factory、三重门禁、per-cell nested
 dispatch、outer Tool lifecycle、notify Desktop event/provider-transcript projection、双 sidecar 构建供应链与专项 Electron
-Gate B。当前明确保留 thread-owned CodeCell trace/evidence owner blocker；未把受控 fixture 等同于 live provider，也未把
-macOS dev Gate B 等同于 Windows/packaged parity。
+Gate B、CodeCell trace/replay 唯一 owner。未把受控 fixture 等同于 live provider，也未把 macOS dev Gate B 等同于
+Windows/packaged parity。
+
+Responsible developer confirmation: root, 2026-08-18. Confirmation content: 已复核 `TraceEventWriter` JSONL、CodeCell
+reducer、`diagnostics/trace/read` 生产消费和真实 Electron Gate B evidence；确认 CodeCell trace 属于 `current` App Server
+evidence owner，公开 ThreadItem/GUI card/第二套 RuntimeEvent 属于 `dead / forbidden-to-restore`，无 `compat` 或
+`deprecated` 路径。
+
+## 45. Browser Workspace 同 Tab Owner
+
+Browser 的唯一产品目标是让用户和 Agent 操作同一个 Electron `WebContentsView`。Browser 不再以外部 Chrome/CDP
+target、Canvas 镜像或 `BrowserSessionRef` adapter 作为执行体。目标数据流为：
+
+```text
+Right Surface Browser Workspace
+  -> typed Desktop Host mount / bounds / user chrome
+  -> Electron BrowserTabHost
+  -> one WebContentsView + one webContents.debugger
+
+Agent Browser capability
+  -> RuntimeCore / tool-runtime dynamic tool binding
+  -> App Server item/tool/call server request
+  -> connection-owned Electron AppServerDynamicToolHost
+  -> exact BrowserRoute (thread/turn/session/tab/view/webContents)
+  -> the same BrowserTabHost and debugger
+```
+
+`BrowserRoute` 的逻辑身份包含 `connectionId`、`threadId`、`turnId`、`windowId`、
+`ownerWebContentsId`、`sessionId`、`tabId`、`viewId` 和 `webContentsId`。App Server 负责 server-request 的 connection、
+thread、turn owner 与 terminal abort；Electron 只负责 route 对应的原生窗口、WebContentsView、debugger、下载、权限和
+窗口事件。Renderer 不直接执行 CDP，不保存第二份 tab 状态机，也不能伪造 `webContentsId` 或 `turnId`。
+
+Browser 动态工具绑定必须随 thread/resume 冻结，并在每次 `item/tool/call` 前重新校验 route。window mismatch、owner
+mismatch、destroyed view、stale turn、重复 call identity 和未知 tab 全部 fail closed。工具结果必须回传
+`threadId/turnId/sessionId/tabId/viewId/webContentsId/actionId/status`，使 Thread/Turn/Item、evidence 和 GUI 能以同一
+identity join。
+
+Tab lifecycle 由 BrowserTabHost 与 canonical turn 共同驱动：Agent tab 在 `turnEnded` 默认 close，User/Claimed tab 默认
+release，Handoff/Deliverable mark 只在当前 turn 有效。`turnEnded` 必须清理 debugger、clipboard、download grant、
+permission intent、takeover overlay 和 pending waiter；历史恢复只打开 snapshot/replay，不自动恢复控制权或 pending
+mutation。
+
+Browser 的当前事实源分类如下：
+
+| 分类 | Owner / surface |
+| --- | --- |
+| current | Electron BrowserTabHost + `WebContentsView` / `webContents.debugger` |
+| current | App Server JSON-RPC + connection-owned `item/tool/call` server request |
+| current | RuntimeCore / tool-runtime Browser dynamic capability and approval policy |
+| current | Right Surface Browser Workspace and Browser read projection |
+| deprecated | `CanvasWorkbenchBrowserPanel`，只允许迁出后删除 |
+| deprecated | 外部 Chrome/CDP `browserSession/*`，只允许迁出后删除主链 |
+| deprecated | `BrowserSessionRef` 与 `mcp__lime-browser__*`，被强类型 BrowserRoute/BrowserTab 替换后删除 |
+| dead | production browser mock/fallback、旧 v0 Browser Session、旧 connector/Chrome relay、第二 Browser daemon |
+
+禁止新增 Browser compat wrapper、旧 `embedded_browser_view_*` Browser 产品命令、外部 CDP fallback 或 renderer mock。Plugin
+若另有 WebContents 宿主需求，必须在其自身 current owner 中重新定义，不得继续把 Canvas Browser 作为共享业务事实源。
+
+Architecture impact: major；本节新增 Browser Workspace 的唯一 WebContents 执行体、connection-owned reverse request、
+route identity、turn cleanup 和删除边界。Architecture diagram updated: this section and
+`internal/roadmap/browser/README.md`. Responsible developer confirmation: root, 2026-08-18. Confirmation content: 已复核
+本机 Codex Desktop Browser plugin 的 tab claiming/cleanup/safety 合同、Lime `ServerRequestRouter`、Electron
+`AppServerDynamicToolHost`、`WebContentsView` Host 与 current App Server JSONL 边界；确认 Gate A 只证明投影，真实同 tab
+闭环必须通过 Electron Gate B identity evidence。

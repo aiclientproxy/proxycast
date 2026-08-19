@@ -1,9 +1,7 @@
 use super::*;
 use crate::AppServer;
 use crate::MockBackend;
-use crate::RightSurfaceAppDataSource;
 use crate::RuntimeCore;
-use crate::WorkspaceObjectCanvasSnapshotListParams;
 use app_server_protocol::protocol::v2::METHOD_MCP_SERVER_RESOURCE_READ;
 use app_server_protocol::WorkspaceRightSurfacePendingListParams;
 use app_server_protocol::WorkspaceRightSurfaceRequestParams;
@@ -167,89 +165,37 @@ async fn diagnostics_use_injected_agent_log_root() {
 }
 
 #[tokio::test]
-async fn right_surface_object_canvas_snapshot_persists_in_local_sqlite_data_source() {
+async fn right_surface_pending_request_persists_in_local_sqlite_data_source() {
     let data_source = Arc::new(setup_data_source());
-    let core = RuntimeCore::default().with_app_data_source(data_source.clone());
-
+    let core = RuntimeCore::default().with_app_data_source(data_source);
     let response = core
         .request_workspace_right_surface(WorkspaceRightSurfaceRequestParams {
             workspace_id: Some(WORKSPACE_ID.to_string()),
             workspace_root: Some(WORKSPACE_ROOT.to_string()),
             session_id: Some("browser-session-local".to_string()),
-            surface_kind: "objectCanvas".to_string(),
-            origin: "runtime".to_string(),
-            reason: Some("object_canvas_persist_requested".to_string()),
+            surface_kind: "browser".to_string(),
+            origin: "agent".to_string(),
+            reason: Some("browser workspace requested".to_string()),
             priority: None,
-            candidate_id: Some("browser-assist-local".to_string()),
+            candidate_id: None,
             ttl_ms: None,
-            metadata: Some(json!({
-                "source": "objectCanvas",
-                "schemaVersion": "object-canvas.persist.v1",
-                "candidateId": "browser-assist-local",
-                "objectCanvas": {
-                    "board": {
-                        "id": "object-canvas-board:browser-assist-local",
-                        "revision": 1,
-                        "primaryObjectId": "browser-session:browser-assist-local",
-                        "objectCount": 1,
-                        "edgeCount": 0
-                    },
-                    "event": {
-                        "kind": "persistRequested",
-                        "owner": "appServer",
-                        "enabled": false,
-                        "request": {
-                            "boardId": "object-canvas-board:browser-assist-local",
-                            "revision": 1,
-                            "persistenceKey": "workspace:object-canvas:browser-assist-local",
-                            "objectId": "browser-session:browser-assist-local",
-                            "objectKind": "browserSession",
-                            "facts": {
-                                "candidateId": "browser-assist-local",
-                                "sessionId": "browser-session-local"
-                            }
-                        }
-                    }
-                }
-            })),
+            metadata: Some(json!({ "launchUrl": "https://example.com" })),
         })
         .await
-        .expect("right surface persist request");
-
-    let snapshots = data_source
-        .list_workspace_object_canvas_snapshots(WorkspaceObjectCanvasSnapshotListParams {
-            workspace_id: Some(WORKSPACE_ID.to_string()),
-            workspace_root: Some(WORKSPACE_ROOT.to_string()),
-            session_id: Some("browser-session-local".to_string()),
-            board_id: Some("object-canvas-board:browser-assist-local".to_string()),
-            persistence_key: Some("workspace:object-canvas:browser-assist-local".to_string()),
-            limit: None,
-        })
-        .await
-        .expect("list persisted object canvas snapshots");
-
-    assert_eq!(snapshots.len(), 1);
-    assert_eq!(snapshots[0].request_id, response.request_id);
-    assert_eq!(
-        snapshots[0]
-            .snapshot_json
-            .pointer("/metadata/objectCanvas/event/request/persistenceKey")
-            .and_then(Value::as_str),
-        Some("workspace:object-canvas:browser-assist-local")
-    );
+        .expect("right surface request");
 
     let pending = core
         .list_workspace_right_surface_pending(WorkspaceRightSurfacePendingListParams {
             workspace_id: Some(WORKSPACE_ID.to_string()),
             workspace_root: Some(WORKSPACE_ROOT.to_string()),
             session_id: Some("browser-session-local".to_string()),
-            surface_kind: Some("objectCanvas".to_string()),
+            surface_kind: Some("browser".to_string()),
             limit: None,
         })
         .await
         .expect("list persisted pending requests");
-    assert_eq!(pending.pending.len(), 1);
-    assert_eq!(pending.pending[0].request_id, response.request_id);
+
+    assert_eq!(pending.pending, vec![response.pending]);
 }
 
 #[tokio::test]

@@ -24,7 +24,6 @@ export type ArtifactType =
   | "svg"
   | "mermaid"
   | "react"
-  | "browser_assist"
   // Canvas 类型
   | "canvas:document"
   | "canvas:video"
@@ -146,7 +145,6 @@ export const LIGHTWEIGHT_ARTIFACT_TYPES: ArtifactType[] = [
   "svg",
   "mermaid",
   "react",
-  "browser_assist",
 ];
 
 /**
@@ -206,7 +204,6 @@ export const DEFAULT_FILE_EXTENSIONS: Record<ArtifactType, string> = {
   svg: "svg",
   mermaid: "mmd",
   react: "jsx",
-  browser_assist: "txt",
   "canvas:document": "md",
   "canvas:video": "txt",
   "canvas:design": "json",

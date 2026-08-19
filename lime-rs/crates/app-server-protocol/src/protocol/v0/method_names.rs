@@ -141,12 +141,6 @@ pub const METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_DISMISS: &str =
     "workspaceRightSurface/pending/dismiss";
 pub const METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED: &str =
     "workspaceRightSurface/pendingChanged";
-pub const METHOD_BROWSER_SESSION_TARGET_LIST: &str = "browserSession/target/list";
-pub const METHOD_BROWSER_SESSION_OPEN: &str = "browserSession/open";
-pub const METHOD_BROWSER_SESSION_READ: &str = "browserSession/read";
-pub const METHOD_BROWSER_SESSION_CLOSE: &str = "browserSession/close";
-pub const METHOD_BROWSER_SESSION_EVENT_LIST: &str = "browserSession/event/list";
-pub const METHOD_BROWSER_SESSION_ACTION_EXECUTE: &str = "browserSession/action/execute";
 pub const METHOD_SOUL_STYLE_PACK_INSTALL: &str = "soulStylePack/install";
 pub const METHOD_SOUL_STYLE_PACK_LIST: &str = "soulStylePack/list";
 pub const METHOD_SOUL_STYLE_PACK_STATUS_SET: &str = "soulStylePack/status/set";

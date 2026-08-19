@@ -36,7 +36,6 @@ vi.mock("../components/ChatNavbar", () => ({
 vi.mock("../components/TaskCenterUtilityToolbar", () => ({
   TaskCenterUtilityToolbar: ({
     onToggleShellPanel,
-    onToggleObjectCanvasPanel,
     onToggleBrowserPanel,
     onToggleFilesPanel,
     showHarnessToggle,
@@ -48,7 +47,6 @@ vi.mock("../components/TaskCenterUtilityToolbar", () => ({
     rightSurfaceLaunchers,
   }: {
     onToggleShellPanel?: () => void;
-    onToggleObjectCanvasPanel?: () => void;
     onToggleBrowserPanel?: () => void;
     onToggleFilesPanel?: () => void;
     showHarnessToggle?: boolean;
@@ -67,7 +65,6 @@ vi.mock("../components/TaskCenterUtilityToolbar", () => ({
   }) => {
     const props = {
       onToggleShellPanel,
-      onToggleObjectCanvasPanel,
       onToggleBrowserPanel,
       onToggleFilesPanel,
       showHarnessToggle,
@@ -85,9 +82,6 @@ vi.mock("../components/TaskCenterUtilityToolbar", () => ({
     const filesLauncher = rightSurfaceLaunchers?.find(
       (launcher) => launcher.kind === "files",
     );
-    const objectCanvasLauncher = rightSurfaceLaunchers?.find(
-      (launcher) => launcher.kind === "objectCanvas",
-    );
     const browserLauncher = rightSurfaceLaunchers?.find(
       (launcher) => launcher.kind === "browser",
     );
@@ -100,18 +94,6 @@ vi.mock("../components/TaskCenterUtilityToolbar", () => ({
         >
           toolbar
         </button>
-        {onToggleObjectCanvasPanel ? (
-          <button
-            type="button"
-            data-testid="task-center-object-canvas-toggle-stub"
-            data-expanded={objectCanvasLauncher?.active ? "true" : "false"}
-            data-disabled={objectCanvasLauncher?.disabled ? "true" : "false"}
-            data-pending-count={String(objectCanvasLauncher?.pendingCount ?? 0)}
-            onClick={onToggleObjectCanvasPanel}
-          >
-            object canvas
-          </button>
-        ) : null}
         {onToggleFilesPanel ? (
           <button
             type="button"
@@ -832,48 +814,6 @@ describe("WorkspaceConversationScene", () => {
     });
 
     expect(onToggleRightSurfaceFiles).toHaveBeenCalledTimes(1);
-  });
-
-  it("任务中心场景应把对象画布 surface 入口透传给统一工具栏", () => {
-    const onToggleRightSurfaceObjectCanvas = vi.fn();
-    const rightSurfaceLaunchers: WorkspaceRightSurfaceLauncherProjection[] = [
-      {
-        kind: "objectCanvas",
-        active: true,
-        disabled: false,
-        pendingCount: 1,
-        collapseTarget: "topToolbar",
-      },
-    ];
-    const container = renderScene({
-      navbarVisible: true,
-      navbarChrome: "workspace-compact",
-      navbarContextVariant: "task-center",
-      taskCenterTabsNode: <div data-testid="task-center-tabs-stub">tabs</div>,
-      rightSurfaceObjectCanvasOpen: true,
-      onToggleRightSurfaceObjectCanvas,
-      rightSurfaceLaunchers,
-    });
-
-    expect(mockTaskCenterUtilityToolbar).toHaveBeenCalledWith(
-      expect.objectContaining({
-        onToggleObjectCanvasPanel: onToggleRightSurfaceObjectCanvas,
-        rightSurfaceLaunchers,
-      }),
-    );
-
-    const objectCanvasToggle = container.querySelector<HTMLButtonElement>(
-      '[data-testid="task-center-object-canvas-toggle-stub"]',
-    );
-    expect(objectCanvasToggle?.getAttribute("data-expanded")).toBe("true");
-    expect(objectCanvasToggle?.getAttribute("data-disabled")).toBe("false");
-    expect(objectCanvasToggle?.getAttribute("data-pending-count")).toBe("1");
-
-    act(() => {
-      objectCanvasToggle?.click();
-    });
-
-    expect(onToggleRightSurfaceObjectCanvas).toHaveBeenCalledTimes(1);
   });
 
   it("任务中心场景应把浏览器 surface 入口透传给统一工具栏", () => {

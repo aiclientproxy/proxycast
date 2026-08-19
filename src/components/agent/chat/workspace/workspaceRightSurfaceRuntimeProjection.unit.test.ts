@@ -12,7 +12,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
     expect(
       hasWorkspaceRightSurfaceRuntimePendingSignals({
         harnessPendingCount: 0,
-        objectCanvasCandidateId: null,
         preferredServiceSkillResultFileTargetRelativePath: null,
         showHarnessToggle: false,
         suppressHomeNavbarUtilityActions: false,
@@ -24,7 +23,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
     expect(
       hasWorkspaceRightSurfaceRuntimePendingSignals({
         harnessPendingCount: 2,
-        objectCanvasCandidateId: "browser assist",
         preferredServiceSkillResultFileTargetRelativePath: "result.md",
         showHarnessToggle: true,
         suppressHomeNavbarUtilityActions: false,
@@ -33,7 +31,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
     const intents = buildWorkspaceRightSurfaceRuntimePendingIntents({
       createdAt: 100,
       harnessPendingCount: 2,
-      objectCanvasCandidateId: "browser assist",
       preferredServiceSkillResultFileTargetRelativePath: "result.md",
       showHarnessToggle: true,
       suppressHomeNavbarUtilityActions: false,
@@ -43,14 +40,13 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
       intents.map((intent) =>
         intent.command.action === "open" ? intent.command.kind : null,
       ),
-    ).toEqual(["harness", "harness", "files", "objectCanvas"]);
+    ).toEqual(["harness", "harness", "files"]);
   });
 
   it("隐藏 navbar utility actions 时不生成 harness pending intents", () => {
     const intents = buildWorkspaceRightSurfaceRuntimePendingIntents({
       createdAt: 100,
       harnessPendingCount: 2,
-      objectCanvasCandidateId: null,
       preferredServiceSkillResultFileTargetRelativePath: null,
       showHarnessToggle: true,
       suppressHomeNavbarUtilityActions: true,
@@ -66,7 +62,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
           appSurfaceAvailable: true,
           filesAvailable: true,
           hasExpertInfoPanel: true,
-          objectCanvasAvailable: true,
           articleWorkspaceAvailable: true,
           shellAvailable: true,
           showHarnessToggle: true,
@@ -79,7 +74,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
       "appSurface",
       "articleWorkspace",
       "expertInfo",
-      "objectCanvas",
       "browser",
       "files",
       "shell",
@@ -95,7 +89,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
           appSurfaceAvailable: false,
           filesAvailable: false,
           hasExpertInfoPanel: false,
-          objectCanvasAvailable: false,
           shellAvailable: true,
           showHarnessToggle: true,
           traceAvailable: true,
@@ -109,7 +102,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
     const pendingIntents = buildWorkspaceRightSurfaceRuntimePendingIntents({
       createdAt: 100,
       harnessPendingCount: 1,
-      objectCanvasCandidateId: "browser assist",
       preferredServiceSkillResultFileTargetRelativePath: "result.md",
       showHarnessToggle: true,
       suppressHomeNavbarUtilityActions: false,
@@ -120,7 +112,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
       filesAvailable: false,
       appSurfaceAvailable: true,
       hasExpertInfoPanel: false,
-      objectCanvasAvailable: false,
       shellAvailable: true,
       showHarnessToggle: true,
       suppressHomeNavbarUtilityActions: false,
@@ -151,9 +142,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
       launchers.find((launcher) => launcher.kind === "articleWorkspace"),
     ).toMatchObject({ pendingCount: 0, disabled: true });
     expect(
-      launchers.find((launcher) => launcher.kind === "objectCanvas"),
-    ).toMatchObject({ pendingCount: 1, disabled: true });
-    expect(
       launchers.find((launcher) => launcher.kind === "expertInfo"),
     ).toMatchObject({ disabled: true });
   });
@@ -162,7 +150,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
     const pendingIntents = buildWorkspaceRightSurfaceRuntimePendingIntents({
       createdAt: 100,
       harnessPendingCount: 0,
-      objectCanvasCandidateId: null,
       preferredServiceSkillResultFileTargetRelativePath: "result.md",
       showHarnessToggle: true,
       suppressHomeNavbarUtilityActions: false,
@@ -172,7 +159,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
       pendingIntents,
       filesAvailable: true,
       hasExpertInfoPanel: false,
-      objectCanvasAvailable: false,
       shellAvailable: false,
       showHarnessToggle: false,
       suppressHomeNavbarUtilityActions: false,
@@ -187,49 +173,12 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
     });
   });
 
-  it("objectCanvas 可用时应让对象画布 launcher 可点击并保留 pending 数量", () => {
-    const pendingIntents = buildWorkspaceRightSurfaceRuntimePendingIntents({
-      createdAt: 100,
-      harnessPendingCount: 0,
-      objectCanvasCandidateId: "browser assist",
-      preferredServiceSkillResultFileTargetRelativePath: null,
-      showHarnessToggle: true,
-      suppressHomeNavbarUtilityActions: false,
-    });
-    const launchers = buildWorkspaceRightSurfaceRuntimeLaunchers({
-      surfaceState: buildRightSurfaceState("objectCanvas", "user"),
-      pendingIntents,
-      filesAvailable: false,
-      hasExpertInfoPanel: false,
-      objectCanvasAvailable: true,
-      shellAvailable: false,
-      showHarnessToggle: false,
-      suppressHomeNavbarUtilityActions: false,
-    });
-
-    expect(
-      launchers.find((launcher) => launcher.kind === "articleWorkspace"),
-    ).toMatchObject({
-      active: false,
-      disabled: true,
-      pendingCount: 0,
-    });
-    expect(
-      launchers.find((launcher) => launcher.kind === "objectCanvas"),
-    ).toMatchObject({
-      active: true,
-      disabled: false,
-      pendingCount: 1,
-    });
-  });
-
-  it("articleWorkspace 独立可用时不应误开放 objectCanvas", () => {
+  it("articleWorkspace 可用时应让文章工作台 launcher 激活", () => {
     const launchers = buildWorkspaceRightSurfaceRuntimeLaunchers({
       surfaceState: buildRightSurfaceState("articleWorkspace", "runtime"),
       pendingIntents: [],
       filesAvailable: false,
       hasExpertInfoPanel: false,
-      objectCanvasAvailable: false,
       articleWorkspaceAvailable: true,
       shellAvailable: false,
       showHarnessToggle: false,
@@ -241,12 +190,6 @@ describe("workspaceRightSurfaceRuntimeProjection", () => {
     ).toMatchObject({
       active: true,
       disabled: false,
-    });
-    expect(
-      launchers.find((launcher) => launcher.kind === "objectCanvas"),
-    ).toMatchObject({
-      active: false,
-      disabled: true,
     });
   });
 });

@@ -12,7 +12,6 @@ import { shouldAutoSelectGeneralArtifact } from "./generalArtifactAutoSelection"
 import { doesWorkspaceFileCandidateMatch } from "./workspaceFilePathMatch";
 import { normalizeProjectId } from "../utils/topicProjectResolution";
 
-export const GENERAL_BROWSER_ASSIST_PROFILE_KEY = "general_browser_assist";
 export const BLANK_HOME_DEFERRED_LOAD_MS = 18_000;
 export const RECENT_CONVERSATIONS_IDLE_DEFERRED_LOAD_MS = 0;
 export const SESSION_ENTRY_RUNTIME_WARMUP_DEFERRED_LOAD_MS = 45_000;
@@ -434,10 +433,7 @@ export function resolveDefaultSelectedArtifact(
 
   for (let index = artifacts.length - 1; index >= 0; index -= 1) {
     const candidate = artifacts[index];
-    if (
-      candidate.type !== "browser_assist" &&
-      shouldAutoSelectGeneralArtifact(candidate)
-    ) {
+    if (shouldAutoSelectGeneralArtifact(candidate)) {
       return candidate;
     }
   }

@@ -133,16 +133,6 @@ macOS 上统一 Rust runner 会在调用者未设置时为 Cargo test worker 提
 
 新增 Rust 测试治理脚本优先进入 `scripts/lib/` 或未来已登记的 `scripts/governance/` / Rust 领域目录；不要继续向 `scripts/` 根目录添加平级 runner。
 
-### Browser Runtime 脚本
-
-`npm run smoke:browser-runtime` 是既有根 smoke 入口，当前只保留为稳定 npm script。它已迁到 `app_server_handle_json_lines -> browserSession/*` App Server current 主链，不再调用 `launch_browser_session`、`close_chrome_profile_session` 或旧 Tauri / Electron browser runtime facade。真实运行前必须先启动 Electron DevBridge 和带 CDP 端口的 Chrome / Chromium，例如：
-
-```bash
-npm run smoke:browser-runtime -- --remote-debugging-port 9222
-```
-
-后续新增 Browser 脚本默认进入 `scripts/browser/` 或复用现有 npm script；共享实现进入 `scripts/lib/`。
-
 ### MCP 脚本
 
 MCP current 使用链路 smoke 位于 `scripts/mcp/`。对外继续使用 `package.json` 里的稳定入口：
@@ -206,8 +196,6 @@ npm run smoke:orchestrator-skills-gate-b
 
 `npm run smoke:settings-execution-policy-electron-fixture -- --run-id <run-id>` 验证 Execution Policy Settings 的持久化策略输入和 App Server 错误恢复：从 GUI 保存严格工作区限制与 Bash warning-bypass 输入，冷重启读回；再在隔离 userData 中把临时 `config.yaml` 短暂替换成同名目录，要求真实 `config/batchWrite` 返回且页面展示 `EISDIR`，随即恢复文件、重新加载、恢复原策略并再次冷重启确认。expected save failure 单列计数，`errors.*` 只统计 unexpected errors；evidence 不保存配置值、规则、prompt、路径或错误正文。该 B-F claim 不证明 RuntimeCore 实际执行某条允许/拒绝工具，后者必须单列 B-R。
 
-`npm run smoke:settings-browser-session-electron-fixture -- --run-id <run-id>` 启动隔离的本地 Chromium CDP 页面，并从真实 Browser Settings GUI 经 Electron preload/IPC、`app_server_handle_json_lines`、`browserSession/target/list|open|read|close` 与 RuntimeCore 完成检测、连接、读回和断开。该 Gate B-R 只证明 current CDP 会话生命周期，不声称扩展 relay、持久化 Profile、真实网站、用户浏览器数据或 packaged 平台行为；结构化 evidence 不记录页面正文、URL、session identity、端口、本机路径或浏览器日志。
-
 `npm run smoke:mcp-context7-live-electron-fixture` 是真实 Electron + 远程 Context7 live fixture：复用设置页 GUI 创建 Context7 配置，经 `app_server_handle_json_lines` 启动 server、通过 `mcpTool/search` 找到 `resolve-library-id` / `query-docs`，再创建真实 Thread 并调用 `mcpServer/tool/call` 查询 “AI Agent 是什么”。该入口会访问远程 Context7；summary 只记录 host、工具名、header 名、env var 名、content 类型 / 数量和 `isError`，不记录 key、header value 或工具正文。
 
 `npm run smoke:mcp-elicitation-gate-b` 是 server-originated elicitation 的真实 Electron Gate B：临时 localhost OpenAI-compatible provider 先请求 `mcp__<server>__release_check`，临时 stdio MCP server 在 scoped tools/call 内发出 `elicitation/create`，App Server 将其转为 typed reverse JSON-RPC，Renderer 在当前 Thread 的 Composer 上方唯一表单提交 `{ confirmed: true }`，随后断言 MCP ledger 收到 accept、provider 第二次请求获得最终文本、表单在 `serverRequest/resolved` 后关闭且没有根部 Dialog。Gate B 还要求实际接受 elicitation 的 runtime stdio 连接以 MCP `2025-06-18` 广告精确 `{"elicitation": {}}`，management 连接保持 capability absent；该入口禁止以 `mcpTool/callWithCaller`、`agentSession/action/respond`、mock backend 或 renderer mock 作为成功路径。
@@ -257,9 +245,15 @@ DeepSWE Coding 使用以下 current 入口：
 ```bash
 npm run harness:deepswe:preflight
 npm run harness:deepswe:run -- --task happy-dom-abort-pending-body-reads --allow-live-provider
+npm run harness:deepswe:batch:plan
+npm run harness:deepswe:batch:aggregate
 ```
 
-`harness:deepswe:run` 在隔离 git workspace 中通过 `workspace/ensure -> agentSession/start -> agentSession/turn/start -> agentSession/read -> agentSession/turn/cancel` 执行 Lime current Agent。adapter v4 从 canonical read model 持续记录 `provider.step` 和每次真实 sampling 的 tool catalog；provider step 上限通过 `runtimeRequest.metadata.harness.provider_budget.max_provider_steps` 下沉到 current reply loop，在下一次 sampling 前终止，wall time 由总 timeout 兜底。terminal 或预算取消后固化 partial facts 与 `patch.diff`。只有存在 candidate patch 时才进入 Pier separate verifier preflight；缺少容器运行时会保留运行事实并记录独立 verifier blocker，不得生成伪造的 `reward.json`。真实执行默认 fail closed，必须显式允许 live Provider；已有 patch 可用 `--verifier-only --run-dir <path>` 续跑判分。
+`harness:deepswe:run` 在隔离 git workspace 中通过 `workspace/ensure -> agentSession/start -> agentSession/turn/start -> agentSession/read -> agentSession/turn/cancel` 执行 Lime current Agent。adapter v6 从 canonical read model 持续记录 `provider.step`、逐步 usage 和每次真实 sampling 的 tool catalog；provider step/token budget 通过 `runtimeRequest.metadata.harness.provider_budget` 下沉到 current reply loop，在工具执行和下一次 sampling 前终止。wall time 只作总兜底，触发后先请求 current turn cancel 并等待真实 terminal。terminal 或预算取消后固化 partial facts 与 `patch.diff`。只有存在 candidate patch 时才进入 Pier separate verifier preflight；缺少容器运行时会保留运行事实并记录独立 verifier blocker，不得生成伪造的 `reward.json`。真实执行默认 fail closed，必须显式允许 live Provider；已有 patch 可用 `--verifier-only --run-dir <path>` 续跑判分。
+
+`harness:deepswe:batch:plan` 生成 Smoke 10 或 Release 20 的固定 identity trial plan；`harness:deepswe:batch:aggregate` 只聚合同一 source/schema/adapter identity 的 verifier-complete trial，并输出标准 `pass@1`、`pass@3`、`pass^3`、wall time、budget token 和 infra diagnostics。旧 identity 只计诊断，不占当前 trial 槽位；缺 live provider、candidate、Pier artifacts 或容器 runtime 时保持 `blocked`。
+
+`harness:deepswe:desktop:controlled` 运行 Desktop Smoke 5 的真实 Electron 产品路径：GUI 提交原始 DeepSWE instruction，经过 preload/IPC/App Server/RuntimeCore，执行 `Read/Glob/Grep/apply_patch/exec_command`，运行五种语言的 native fixture tests，记录 Thread/Turn/Item、GUI terminal、diff、session reopen、patch SHA 和零 mock/error。它使用 localhost controlled provider 与合成 task workspace，只能证明桌面产品链；不会产生 DeepSWE score 或 `DesktopCodingPass`。`harness:deepswe:desktop:preflight` 校验五题 source/task/separate verifier 合同；`harness:deepswe:desktop:aggregate -- <evidence-dir>` 只接受 `deepswe-desktop-trial-v1` evidence，并要求 live trial、同一 patch SHA、Pier artifacts 与 Gate B 同时通过。
 
 新增 Harness 脚本继续进入 `scripts/harness/` 或复用现有 Harness npm scripts；共享实现仍放在 `scripts/lib/`。
 
@@ -271,7 +265,7 @@ Agent QC report、GUI flow、qcloop、evidence、release summary 与 owner/check
 
 `npm run agent-qc:project-gate-settings-a -- --run-id <run-id>` 是 `SETTINGS-01` 的专用 Gate A browser-mirror runner：通过稳定 `data-testid` 覆盖全部 current primary tabs、desktop/compact/narrow 三视口、五个 locale 的关键 tab、导航恢复、raw key、loading/error buffer、console/page error 和页面级横向溢出；同时用显式 test-only `agentSession/list` 网络夹具验证已归档对话的 loading、empty、error 与 retry 状态。证据写入 `.lime/qc/project-gates/<run-id>/settings-01-gate-a/`，三种组件态、截图和常规矩阵全部完成时才写 `surfaceProof.complete=true`；它仍明确不声明 Electron main/preload/IPC 或 Gate B。
 
-`npm run agent-qc:project-gate-settings-b -- --run-id <run-id> --source <kind>=<summary.json>...` 聚合同一 run-id 下的 SETTINGS-01 Gate B-F owner evidence。当前合同覆盖 16 个 primary tab 对应的 18 个稳定场景；source 必须位于 `.lime/qc/project-gates/<run-id>/`，且 candidateRunId、真实 Electron/preload/IPC、`app_server_handle_json_lines`、current method、零 legacy/mock 与 owner assertions 全部匹配。现有 `shell-memory` 只完成 `memory-ready`，不得冒充 Soul 持久化；Provider 只接受 current `provider-crud-model-auth` 场景，不再接受整库迁移证据。MCP、About/Home、Stats、Environment、Media Services、Web Search、Profile、Appearance、Developer、Automation、Execution Policy、Browser Session fixture 分别完成 `mcp-create-list`、`about-version-truth`、`home-navigation`、`stats-current-read`、`environment-current-read`、`media-services-readiness`、`web-search-route`、`profile-persistence`、`appearance-persistence`、`developer-current-diagnostics`、`automation-lifecycle`、`execution-policy-allow-deny-error`、`chrome-relay-lifecycle`。Browser Session 来源可使用更强的 Gate B-R，聚合器只折算其已证明的 Settings claim。其余场景继续使用 `settings-scenario` 结构化证据逐项补齐。聚合结果写入同一 run 的 `settings-01-gate-b-f/summary.json`，18 项未全部完成前 `surfaceProof.complete=false`。
+`npm run agent-qc:project-gate-settings-b -- --run-id <run-id> --source <kind>=<summary.json>...` 聚合同一 run-id 下的 SETTINGS-01 Gate B-F owner evidence。当前合同覆盖 15 个 primary tab 对应的 17 个稳定场景；source 必须位于 `.lime/qc/project-gates/<run-id>/`，且 candidateRunId、真实 Electron/preload/IPC、`app_server_handle_json_lines`、current method、零 legacy/mock 与 owner assertions 全部匹配。现有 `shell-memory` 只完成 `memory-ready`，不得冒充 Soul 持久化；Provider 只接受 current `provider-crud-model-auth` 场景，不再接受整库迁移证据。MCP、About/Home、Stats、Environment、Media Services、Web Search、Profile、Appearance、Developer、Automation 与 Execution Policy fixture 分别完成 `mcp-create-list`、`about-version-truth`、`home-navigation`、`stats-current-read`、`environment-current-read`、`media-services-readiness`、`web-search-route`、`profile-persistence`、`appearance-persistence`、`developer-current-diagnostics`、`automation-lifecycle` 与 `execution-policy-allow-deny-error`。其余场景继续使用 `settings-scenario` 结构化证据逐项补齐。聚合结果写入同一 run 的 `settings-01-gate-b-f/summary.json`，17 项未全部完成前 `surfaceProof.complete=false`。
 
 每个 Wave 结束后使用 `npm run agent-qc:project-gate-candidate -- --verify-candidate .lime/qc/project-gates/<run-id>/candidate.json` 重算当前 snapshot；Git HEAD、product digest、tracked diff digest、changed paths 或 exclusion 任一漂移都会非零退出，并只输出 digest、计数和最多 50 个路径差异，不输出文件正文。
 

@@ -37,7 +37,7 @@ Electron Desktop Host
 
 - `agent-qc-scenarios.manifest.json`、`agent-qc-gui-flows.manifest.json`、`agent-qc-evidence.schema.json`：现有 Agent QC 输入，第二期 T0 逐项审计前不自动算新门禁。
 - `harness-evals.manifest.json`、`harness-fixtures/**`：replay/eval 输入，只能证明 manifest 声明的场景。
-- `deepswe-coding-slice-v2.json`：DeepSWE Smoke 10 / Release 20 的版本化选题与 adapter v5 执行合同；当前已有真实 request tool catalog、runtime step/token cap、generation controls 和诊断 true run。Agnes 正式题预算内仍无 candidate；本地 Pier editable package 已失效且无容器运行时，Verifier 双重阻塞。
+- `deepswe-coding-slice-v2.json`：DeepSWE Smoke 10 / Release 20 的版本化选题与 adapter v6 执行合同；当前已有真实 request tool catalog、runtime step/token cap、generation controls、批量 plan/aggregate 和诊断 true run。Agnes 正式题预算内仍无 candidate；Pier `0.3.1` CLI 已固定但本机无容器运行时，Verifier 仍阻塞。
 
 旧 `benchmark-release` 和 `agent-qc-benchmark` manifest 已删除，禁止恢复同名入口。
 

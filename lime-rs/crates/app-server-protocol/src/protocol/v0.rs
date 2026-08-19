@@ -1,5 +1,4 @@
 mod agent_session;
-mod browser_session;
 mod catalog;
 mod channels;
 mod client_notification;
@@ -31,7 +30,6 @@ mod workflow;
 mod workspaces;
 
 pub use agent_session::*;
-pub use browser_session::*;
 pub use catalog::*;
 pub use channels::*;
 pub use client_notification::*;

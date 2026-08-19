@@ -12,15 +12,7 @@ import type {
 
 function resolveSceneExecutionKind(
   bindingProfile: BaseSetupBindingProfile,
-  projection: BaseSetupCatalogProjection,
 ): SkillCatalogSceneEntry["executionKind"] {
-  if (
-    projection.siteCapabilityBinding ||
-    bindingProfile.bindingFamily === "browser_assist"
-  ) {
-    return "site_adapter";
-  }
-
   switch (bindingProfile.bindingFamily) {
     case "native_skill":
       return "native_skill";
@@ -104,7 +96,7 @@ function compileSceneProjectionEntry(params: {
       id: linkedSkillId,
       skillKey: projection.skillKey,
     }),
-    executionKind: resolveSceneExecutionKind(bindingProfile, projection),
+    executionKind: resolveSceneExecutionKind(bindingProfile),
     renderContract: {
       resultKind: "tool_timeline",
       detailKind: "scene_detail",

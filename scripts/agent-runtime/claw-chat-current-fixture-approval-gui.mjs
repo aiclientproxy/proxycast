@@ -2,8 +2,6 @@ import {
   APPROVAL_REQUEST_RESUME_APPROVAL_PROMPT,
   APPROVAL_REQUEST_RESUME_COMMAND,
   APPROVAL_REQUEST_RESUME_REQUEST_ID,
-  APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT,
-  APPROVAL_REQUEST_RESUME_SECOND_PROMPT_MARKER,
   APPROVAL_REQUEST_RESUME_TOOL_NAME,
 } from "./claw-chat-current-fixture-constants.mjs";
 import { evaluatePageSnapshot } from "./claw-chat-current-fixture-rpc.mjs";
@@ -71,6 +69,9 @@ export async function waitForGuiApprovalPending(page, options) {
         const approvalPrompt = document.querySelector(
           '[data-testid="inputbar-approval-prompt"]',
         );
+        const interactionLayer = approvalPrompt?.closest(
+          '[data-testid="pending-interaction-layer"]',
+        );
         const section = requestSection ?? approvalPrompt;
         const sectionText = section?.textContent || "";
         const searchRoot = section || document;
@@ -120,6 +121,11 @@ export async function waitForGuiApprovalPending(page, options) {
         const promptSummaryText = promptSummary?.textContent || "";
         return {
           hasSection: Boolean(approvalPrompt),
+          hasCurrentInteractionLayer: Boolean(interactionLayer),
+          interactionId:
+            interactionLayer?.getAttribute("data-interaction-id") ?? null,
+          interactionKind:
+            interactionLayer?.getAttribute("data-interaction-kind") ?? null,
           hasApprovalContent: promptSummaryText.includes(promptText),
           hasPrompt: promptSummaryText.includes(promptText),
           hasRequestId: Boolean(requestSection),
@@ -187,6 +193,8 @@ export async function waitForGuiApprovalPending(page, options) {
     lastSnapshot = snapshot;
     if (
       snapshot.hasSection &&
+      snapshot.hasCurrentInteractionLayer === true &&
+      snapshot.interactionKind === "approval" &&
       snapshot.hasApprovalContent &&
       snapshot.hasPrompt &&
       snapshot.hasToolName === false &&
@@ -270,8 +278,11 @@ export async function clickApprovalDecisionButton(
           Array.from(document.querySelectorAll("[data-request-id]")).find(
             (element) => element.getAttribute("data-request-id") === requestId,
           ) ?? null;
+        const currentInteractionLayer = requestSection?.closest(
+          '[data-testid="pending-interaction-layer"][data-interaction-kind="approval"]',
+        );
         const section =
-          requestSection ??
+          currentInteractionLayer ??
           document
             .querySelector(
               '[data-testid="decision-panel-tool-confirmation-summary"]',
@@ -296,6 +307,7 @@ export async function clickApprovalDecisionButton(
           return {
             clicked: false,
             decision,
+            hasCurrentInteractionLayer: Boolean(currentInteractionLayer),
             buttonCount: buttons.length,
             sectionText: section.textContent || "",
           };
@@ -303,6 +315,13 @@ export async function clickApprovalDecisionButton(
         button.click();
         return {
           clicked: true,
+          hasCurrentInteractionLayer: Boolean(currentInteractionLayer),
+          interactionId:
+            currentInteractionLayer?.getAttribute("data-interaction-id") ??
+            null,
+          interactionKind:
+            currentInteractionLayer?.getAttribute("data-interaction-kind") ??
+            null,
           text: button.textContent || "",
           aria: button.getAttribute("aria-label") || "",
           decision: button.getAttribute("data-decision") || decision,
@@ -315,7 +334,11 @@ export async function clickApprovalDecisionButton(
       continue;
     }
     lastSnapshot = snapshot;
-    if (snapshot.clicked === true) {
+    if (
+      snapshot.clicked === true &&
+      snapshot.hasCurrentInteractionLayer === true &&
+      snapshot.interactionKind === "approval"
+    ) {
       return sanitizeJson(snapshot);
     }
     await sleep(options.intervalMs);
@@ -415,83 +438,5 @@ export async function waitForGuiApprovalPromptAbsent(
   }
   throw new Error(
     `不应出现审批输入区: ${JSON.stringify(sanitizeJson(lastSnapshot))}`,
-  );
-}
-
-export async function waitForGuiApprovalPromptAbsentAfterSecondTurn(
-  page,
-  options,
-) {
-  const startedAt = Date.now();
-  let lastSnapshot = null;
-  while (Date.now() - startedAt < Math.min(options.timeoutMs, 30_000)) {
-    const snapshot = await evaluatePageSnapshot(
-      page,
-      ({ promptText, secondPromptMarker, secondDoneText }) => {
-        const bodyText = document.body?.innerText || "";
-        const secondTurnGroup = [...document.querySelectorAll(
-          '[data-testid="message-turn-group"]',
-        )]
-          .reverse()
-          .find((group) =>
-            (group.innerText || "").includes(secondPromptMarker),
-          );
-        const approvalPrompt = document.querySelector(
-          '[data-testid="inputbar-approval-prompt"]',
-        );
-        const textarea = document.querySelector(
-          'textarea[name="agent-chat-message"]',
-        );
-        const buttons = Array.from(document.querySelectorAll("button"));
-        const stopButtonVisible = buttons.some((button) => {
-          const label = [
-            button.textContent || "",
-            button.getAttribute("aria-label") || "",
-          ].join("\n");
-          return (
-            !button.disabled &&
-            (label.includes("停止") ||
-              label.includes("终止") ||
-              /\bStop\b/i.test(label))
-          );
-        });
-        return {
-          approvalPromptVisible: Boolean(approvalPrompt),
-          includesFirstApprovalPrompt: bodyText.includes(promptText),
-          includesRuntimePermissionPrompt:
-            bodyText.includes("需要确认浏览器控制权限"),
-          hasSecondPrompt: bodyText.includes(secondPromptMarker),
-          hasSecondDoneText: bodyText.includes(secondDoneText),
-          hasPendingApprovalStatus: (secondTurnGroup?.innerText || "").includes(
-            "待确认",
-          ),
-          textareaVisible: Boolean(textarea),
-          textareaDisabled: textarea?.disabled ?? null,
-          stopButtonVisible,
-        };
-      },
-      {
-        promptText: APPROVAL_REQUEST_RESUME_APPROVAL_PROMPT,
-        secondPromptMarker: APPROVAL_REQUEST_RESUME_SECOND_PROMPT_MARKER,
-        secondDoneText: APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT,
-      },
-    );
-    lastSnapshot = snapshot;
-    if (
-      snapshot?.hasSecondPrompt === true &&
-      snapshot?.hasSecondDoneText === true &&
-      snapshot?.approvalPromptVisible === false &&
-      snapshot?.includesRuntimePermissionPrompt === false &&
-      snapshot?.hasPendingApprovalStatus === false &&
-      snapshot?.textareaVisible === true &&
-      snapshot?.textareaDisabled === false &&
-      snapshot?.stopButtonVisible === false
-    ) {
-      return sanitizeJson(snapshot);
-    }
-    await sleep(options.intervalMs);
-  }
-  throw new Error(
-    `第二轮不应出现审批输入区: ${JSON.stringify(sanitizeJson(lastSnapshot))}`,
   );
 }

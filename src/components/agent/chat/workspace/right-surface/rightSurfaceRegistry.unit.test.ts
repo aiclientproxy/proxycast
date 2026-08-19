@@ -11,7 +11,6 @@ const EXPECTED_SURFACE_KINDS: WorkspaceRightSurfaceKind[] = [
   "appSurface",
   "articleWorkspace",
   "expertInfo",
-  "objectCanvas",
   "browser",
   "files",
   "shell",

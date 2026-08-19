@@ -44,10 +44,6 @@ import {
   resolveInputCapabilitySelectionFromRoute,
   type InputCapabilitySelection,
 } from "../skill-selection/inputCapabilitySelection";
-import {
-  getSiteSkillAutoLaunchExample,
-  hasAutoLaunchableSiteSkill,
-} from "../service-skills/siteSkillExamplePrompts";
 import { buildServiceSkillHomeCopy } from "../service-skills/homeCopy";
 import { HomeStartSurface } from "../home/HomeStartSurface";
 import { buildHomeSurfaceCopy } from "../home/homeSurfaceCopy";
@@ -334,10 +330,6 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     onImportSkill,
     onRefreshSkills,
   });
-  const hasAutoLaunchSiteSkill = hasAutoLaunchableSiteSkill(serviceSkills);
-  const siteSkillAutoLaunchExample =
-    getSiteSkillAutoLaunchExample(serviceSkills);
-
   const [curatedTaskTemplatesVersion, setCuratedTaskTemplatesVersion] =
     useState(0);
   const [
@@ -629,14 +621,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     return sendResult;
   };
 
-  // Dynamic Placeholder
-  const getPlaceholder = () => {
-    return hasAutoLaunchSiteSkill
-      ? homeSurfaceCopy.composerAutoLaunchPlaceholder(
-          siteSkillAutoLaunchExample,
-        )
-      : homeSurfaceCopy.composerPlaceholder;
-  };
+  const getPlaceholder = () => homeSurfaceCopy.composerPlaceholder;
 
   const handleApplyRecommendation = useCallback(
     (shortLabel: string, fullPrompt: string) => {

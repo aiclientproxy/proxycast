@@ -13,6 +13,8 @@ describe("harnessRequestMetadata", () => {
       base: {
         trace_id: "trace-1",
         legacy_flag: true,
+        browser_assist: { enabled: true },
+        browserAssist: { enabled: true },
       },
       theme: "general",
       preferences: {
@@ -20,7 +22,6 @@ describe("harnessRequestMetadata", () => {
         subagent: false,
       },
       sessionMode: "default",
-      browserAssistProfileKey: "general_browser_assist",
     });
 
     expect(metadata).toMatchObject({
@@ -31,15 +32,13 @@ describe("harnessRequestMetadata", () => {
         task: true,
         subagent: false,
       },
-      browser_assist: expect.objectContaining({
-        enabled: true,
-        profile_key: "general_browser_assist",
-      }),
     });
     expect(metadata.creation_mode).toBeUndefined();
     expect(metadata.chat_mode).toBeUndefined();
     expect(metadata.web_search_enabled).toBeUndefined();
     expect(metadata.task_mode_enabled).toBeUndefined();
+    expect(metadata.browser_assist).toBeUndefined();
+    expect(metadata.browserAssist).toBeUndefined();
   });
 
   it("应清理 base 中遗留的平铺状态字段", () => {
@@ -349,7 +348,6 @@ describe("harnessRequestMetadata", () => {
       browserRequirement: "required_with_user_step",
       browserRequirementReason: "需要登录站点后继续",
       browserLaunchUrl: "https://example.com/publish",
-      browserAssistProfileKey: "general_browser_assist",
     });
 
     expect(metadata).toMatchObject({
@@ -359,49 +357,22 @@ describe("harnessRequestMetadata", () => {
       browser_launch_url: "https://example.com/publish",
       browser_user_step_required: true,
     });
+    expect(metadata.browser_assist).toBeUndefined();
   });
 
-  it("应允许附着会话覆盖浏览器后端与自动拉起策略", () => {
-    const metadata = buildHarnessRequestMetadata({
-      theme: "general",
-      preferences: {
-        task: true,
-        subagent: true,
-      },
-      sessionMode: "default",
-      browserAssistProfileKey: "attached-xhs",
-      browserAssistPreferredBackend: "lime_extension_bridge",
-      browserAssistAutoLaunch: false,
-    });
-
-    expect(metadata).toMatchObject({
-      browser_assist: {
-        enabled: true,
-        profile_key: "attached-xhs",
-        preferred_backend: "lime_extension_bridge",
-        auto_launch: false,
-        stream_mode: "both",
-      },
-    });
-  });
-
-  it("应保留 Browser Assist 已注入的运行合同快照", () => {
+  it("应清理旧 Browser Assist 运行合同而只保留 current requirement", () => {
     const metadata = buildHarnessRequestMetadata({
       base: {
         browser_assist: {
           enabled: true,
-          modality_contract_key: "browser_control",
-          modality: "browser",
-          required_capabilities: [
-            "text_generation",
-            "browser_reasoning",
-            "browser_control_planning",
-          ],
-          routing_slot: "browser_reasoning_model",
-          runtime_contract: {
-            contract_key: "browser_control",
-          },
-          launch_url: "https://example.com",
+          profile_key: "attached-xhs",
+          preferred_backend: "lime_extension_bridge",
+          auto_launch: false,
+          runtime_contract: { contract_key: "browser_control" },
+        },
+        browserAssist: {
+          enabled: true,
+          sessionId: "legacy-session",
         },
       },
       theme: "general",
@@ -410,50 +381,16 @@ describe("harnessRequestMetadata", () => {
         subagent: true,
       },
       sessionMode: "default",
-      browserAssistProfileKey: "general_browser_assist",
+      browserRequirement: "required",
+      browserLaunchUrl: "https://example.com",
     });
 
     expect(metadata).toMatchObject({
-      browser_assist: {
-        enabled: true,
-        profile_key: "general_browser_assist",
-        modality_contract_key: "browser_control",
-        modality: "browser",
-        required_capabilities: expect.arrayContaining([
-          "browser_control_planning",
-        ]),
-        routing_slot: "browser_reasoning_model",
-        runtime_contract: expect.objectContaining({
-          contract_key: "browser_control",
-        }),
-        launch_url: "https://example.com",
-      },
+      browser_requirement: "required",
+      browser_launch_url: "https://example.com",
     });
-  });
-
-  it("未显式指定浏览器后端时不应强制写入 cdp_direct", () => {
-    const metadata = buildHarnessRequestMetadata({
-      theme: "general",
-      preferences: {
-        task: true,
-        subagent: true,
-      },
-      sessionMode: "default",
-      browserAssistProfileKey: "general_browser_assist",
-    });
-
-    expect(metadata).toMatchObject({
-      browser_assist: {
-        enabled: true,
-        profile_key: "general_browser_assist",
-        auto_launch: true,
-        stream_mode: "both",
-      },
-    });
-    expect(
-      (metadata.browser_assist as { preferred_backend?: string })
-        ?.preferred_backend,
-    ).toBeUndefined();
+    expect(metadata.browser_assist).toBeUndefined();
+    expect(metadata.browserAssist).toBeUndefined();
   });
 
   it("应能从 request metadata 中提取已有 harness metadata", () => {

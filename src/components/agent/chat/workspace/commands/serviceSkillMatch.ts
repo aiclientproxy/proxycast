@@ -47,13 +47,11 @@ export function resolveGrowthCommandServiceSkill(
     serviceSkills.find(
       (skill) =>
         (skill.id === "account-performance-tracking" ||
-          skill.skillKey === "account-performance-tracking") &&
-        skill.defaultExecutorBinding !== "browser_assist",
+          skill.skillKey === "account-performance-tracking"),
     ) ||
     serviceSkills.find(
       (skill) =>
         matchesGrowthCommandSkill(skill) &&
-        skill.defaultExecutorBinding !== "browser_assist" &&
         skill.slotSchema.some((slot) => slot.key === "platform") &&
         skill.slotSchema.some((slot) => slot.key === "account_list"),
     ) ||
@@ -69,7 +67,6 @@ export function resolveVoiceCommandServiceSkill(
     serviceSkills.find(
       (skill) =>
         matchesVoiceCommandSkill(skill) &&
-        skill.defaultExecutorBinding !== "browser_assist" &&
         skill.slotSchema.some((slot) =>
           ["reference_video", "target_language", "voice_style"].includes(
             slot.key,

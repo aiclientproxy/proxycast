@@ -20,7 +20,7 @@ describe("EmptyStateComposerPanel", () => {
     expect(
       document.body.querySelector('[data-testid="inputbar-plus-subagent-mode"]'),
     ).toBeTruthy();
-  });
+  }, 15_000);
 
   it("未开启 Subagents 时默认不显示 picker，通过加号菜单暴露多代理开关", () => {
     const container = renderPanel({

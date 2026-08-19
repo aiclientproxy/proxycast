@@ -23,6 +23,7 @@ import {
   ElectronEmbeddedBrowserHost,
   isEmbeddedBrowserCommand,
 } from "./embeddedBrowserHost";
+import { ElectronBrowserTabHost, isBrowserTabCommand } from "./browserTabHost";
 import { ElectronDevHttpBridge } from "./devHttpBridge";
 import { ElectronHostCommands } from "./hostCommands";
 import {
@@ -79,14 +80,27 @@ const desktopStorageRoots = resolveCurrentDesktopStorageRoots(
   app.getPath("userData"),
 );
 configureElectronSessionDataPath(desktopStorageRoots.hostSessionData);
-const appServerHost = new ElectronAppServerHost();
+const browserTabHostRef: { current: ElectronBrowserTabHost | null } = {
+  current: null,
+};
+const embeddedBrowserHost = new ElectronEmbeddedBrowserHost(
+  (event, payload) => {
+    browserTabHostRef.current?.observeEmbeddedEvent(event, payload);
+    broadcast(event, payload);
+  },
+);
+const browserTabHost = new ElectronBrowserTabHost(
+  embeddedBrowserHost,
+  broadcast,
+);
+browserTabHostRef.current = browserTabHost;
+const appServerHost = new ElectronAppServerHost(browserTabHost);
 const hostCommands = new ElectronHostCommands(
   appServerHost,
   app.getPath("userData"),
   broadcast,
   desktopStorageRoots.appDataRoot,
 );
-const embeddedBrowserHost = new ElectronEmbeddedBrowserHost(broadcast);
 const updateHost = new ElectronUpdateHost(broadcast, {
   open: openUpdateNotificationWindow,
   close: closeUpdateNotificationWindow,
@@ -1060,6 +1074,7 @@ async function handleHostInvoke(
         typeof request === "object" && request !== null
           ? (request as { lines: string[] })
           : { lines: [] },
+        event ? { ownerWebContentsId: event.sender.id } : null,
       );
     }
     return await appServerHost.drainEvents(
@@ -1074,6 +1089,13 @@ async function handleHostInvoke(
   }
   if (command === "take_pending_skill_package_open_requests") {
     return takePendingSkillPackageOpenRequests();
+  }
+  if (isBrowserTabCommand(command)) {
+    return await browserTabHost.invoke(
+      event ? currentWindow(event) : null,
+      command,
+      args,
+    );
   }
   if (isEmbeddedBrowserCommand(command)) {
     return await embeddedBrowserHost.invoke(

@@ -2,7 +2,6 @@ import {
   buildWorkspaceRightSurfaceFilePreviewIntents,
   buildWorkspaceRightSurfaceHarnessPendingIntents,
   buildWorkspaceRightSurfaceLauncherProjections,
-  buildWorkspaceRightSurfaceObjectCanvasCandidateIntents,
   type WorkspaceRightSurfaceIntent,
   type WorkspaceRightSurfaceKind,
   type WorkspaceRightSurfaceLauncherProjection,
@@ -11,7 +10,6 @@ import {
 export interface BuildWorkspaceRightSurfaceRuntimePendingIntentsParams {
   createdAt: number;
   harnessPendingCount: number;
-  objectCanvasCandidateId?: string | null;
   preferredServiceSkillResultFileTargetRelativePath?: string | null;
   showHarnessToggle: boolean;
   suppressHomeNavbarUtilityActions: boolean;
@@ -21,7 +19,6 @@ export interface BuildWorkspaceRightSurfaceRuntimeLaunchersParams {
   filesAvailable: boolean;
   appSurfaceAvailable?: boolean;
   hasExpertInfoPanel: boolean;
-  objectCanvasAvailable: boolean;
   articleWorkspaceAvailable?: boolean;
   pendingIntents: WorkspaceRightSurfaceIntent[];
   shellAvailable: boolean;
@@ -33,7 +30,6 @@ export interface BuildWorkspaceRightSurfaceRuntimeLaunchersParams {
 
 export function hasWorkspaceRightSurfaceRuntimePendingSignals({
   harnessPendingCount,
-  objectCanvasCandidateId,
   preferredServiceSkillResultFileTargetRelativePath,
   showHarnessToggle,
   suppressHomeNavbarUtilityActions,
@@ -48,16 +44,12 @@ export function hasWorkspaceRightSurfaceRuntimePendingSignals({
   if (preferredServiceSkillResultFileTargetRelativePath?.trim()) {
     return true;
   }
-  if (objectCanvasCandidateId?.trim()) {
-    return true;
-  }
   return false;
 }
 
 export function buildWorkspaceRightSurfaceRuntimePendingIntents({
   createdAt,
   harnessPendingCount,
-  objectCanvasCandidateId,
   preferredServiceSkillResultFileTargetRelativePath,
   showHarnessToggle,
   suppressHomeNavbarUtilityActions,
@@ -73,11 +65,6 @@ export function buildWorkspaceRightSurfaceRuntimePendingIntents({
       relativePath: preferredServiceSkillResultFileTargetRelativePath,
       createdAt,
     }),
-    ...buildWorkspaceRightSurfaceObjectCanvasCandidateIntents({
-      enabled: Boolean(objectCanvasCandidateId),
-      candidateId: objectCanvasCandidateId,
-      createdAt,
-    }),
   ];
 }
 
@@ -85,7 +72,6 @@ export function buildWorkspaceRightSurfaceRuntimeAvailableSurfaces({
   filesAvailable,
   appSurfaceAvailable = false,
   hasExpertInfoPanel,
-  objectCanvasAvailable,
   articleWorkspaceAvailable = false,
   shellAvailable,
   showHarnessToggle,
@@ -96,7 +82,6 @@ export function buildWorkspaceRightSurfaceRuntimeAvailableSurfaces({
   | "hasExpertInfoPanel"
   | "appSurfaceAvailable"
   | "filesAvailable"
-  | "objectCanvasAvailable"
   | "articleWorkspaceAvailable"
   | "shellAvailable"
   | "showHarnessToggle"
@@ -112,9 +97,6 @@ export function buildWorkspaceRightSurfaceRuntimeAvailableSurfaces({
   }
   if (hasExpertInfoPanel) {
     surfaces.push("expertInfo");
-  }
-  if (objectCanvasAvailable) {
-    surfaces.push("objectCanvas");
   }
   surfaces.push("browser");
   if (filesAvailable) {
@@ -136,7 +118,6 @@ export function buildWorkspaceRightSurfaceRuntimeLaunchers({
   filesAvailable,
   appSurfaceAvailable,
   hasExpertInfoPanel,
-  objectCanvasAvailable,
   articleWorkspaceAvailable,
   pendingIntents,
   shellAvailable,
@@ -152,7 +133,6 @@ export function buildWorkspaceRightSurfaceRuntimeLaunchers({
       filesAvailable,
       appSurfaceAvailable,
       hasExpertInfoPanel,
-      objectCanvasAvailable,
       articleWorkspaceAvailable,
       shellAvailable,
       showHarnessToggle,

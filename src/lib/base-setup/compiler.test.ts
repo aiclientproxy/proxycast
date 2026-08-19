@@ -54,7 +54,7 @@ function createBaseSetupPackage(): BaseSetupPackage {
     bindingProfiles: [
       {
         id: "browser-export",
-        bindingFamily: "browser_assist",
+        bindingFamily: "agent_turn",
         runnerType: "instant",
       },
     ],
@@ -83,7 +83,7 @@ function createBaseSetupPackage(): BaseSetupPackage {
     ],
     compatibility: {
       minAppVersion: "1.11.0",
-      requiredKernelCapabilities: ["browser_assist", "artifact_viewer"],
+      requiredKernelCapabilities: ["agent_turn", "artifact_viewer"],
       seededFallback: true,
       compatCatalogProjection: true,
     },
@@ -105,7 +105,7 @@ describe("compileBaseSetupPackage", () => {
         id: "article-export-skill",
         skillKey: "x-article-export",
         title: "文章转存",
-        defaultExecutorBinding: "browser_assist",
+        defaultExecutorBinding: "agent_turn",
         source: "cloud_catalog",
         outputDestination: "project_resource",
       }),

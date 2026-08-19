@@ -58,15 +58,6 @@ export function HarnessToolInventoryOverview({
               </Badge>
               <Badge variant="outline">
                 {agentText(
-                  "agentChat.harness.generated.4a68d070e6",
-                  "Browser Assist：",
-                )}
-                {toolInventory.request?.surface?.browser_assist
-                  ? "开启"
-                  : "关闭"}
-              </Badge>
-              <Badge variant="outline">
-                {agentText(
                   "agentChat.harness.generated.e96cdaadb1",
                   "默认允许：",
                 )}

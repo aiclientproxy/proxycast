@@ -20,7 +20,6 @@ function createRightSurfaceRuntime(
       },
     ],
     rightSurfaceState: buildRightSurfaceState(activeSurface, "user"),
-    handleToggleRightSurfaceObjectCanvas: vi.fn(),
     handleToggleRightSurfaceBrowser: vi.fn(),
     handleToggleRightSurfaceFiles: vi.fn(),
     handleToggleRightSurfaceTrace: vi.fn(),

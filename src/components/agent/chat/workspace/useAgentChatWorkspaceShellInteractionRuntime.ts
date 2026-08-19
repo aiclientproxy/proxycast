@@ -182,8 +182,7 @@ export function useAgentChatWorkspaceShellInteractionRuntime({
   const { applyProjectSelection } = projectSelectionRuntime;
   const { contextHarnessRuntime, effectiveThreadItems } = contextSurfaceRuntime;
   const { harnessPanelVisible, setHarnessPanelVisible } = contextHarnessRuntime;
-  const { canvasControl: browserAssistCanvasControl, currentCanvasArtifact } =
-    artifactCanvasRuntime;
+  const { currentCanvasArtifact } = artifactCanvasRuntime;
   const { resetLocalImageWorkbenchSessionScope } = imageWorkbenchSessionRuntime;
 
   const taskCenterSurfaceRuntime = useWorkspaceTaskCenterSurfaceRuntime({
@@ -265,8 +264,6 @@ export function useAgentChatWorkspaceShellInteractionRuntime({
       canvasState,
       generalCanvasState,
       hasCurrentCanvasArtifact: Boolean(currentCanvasArtifact),
-      currentCanvasArtifactType: currentCanvasArtifact?.type,
-      browserAssistCanvasControl,
       currentImageWorkbenchActive:
         imageWorkbenchSessionRuntime.currentImageWorkbenchState.active,
       onHasMessagesChange,

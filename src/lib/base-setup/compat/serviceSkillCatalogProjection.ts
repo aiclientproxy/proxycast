@@ -34,16 +34,10 @@ function mapBundleSourceToServiceSkillSource(
 
 function inferSkillType(
   projection: BaseSetupCatalogProjection,
-  bindingProfile: BaseSetupBindingProfile,
+  _bindingProfile: BaseSetupBindingProfile,
 ): ServiceSkillType {
   if (projection.skillType) {
     return projection.skillType;
-  }
-  if (
-    projection.siteCapabilityBinding ||
-    bindingProfile.bindingFamily === "browser_assist"
-  ) {
-    return "site";
   }
   return "service";
 }
@@ -110,34 +104,6 @@ function buildBundleSummary(
 
   if (policyProfile.surfaceScopes && policyProfile.surfaceScopes.length > 0) {
     metadata.Lime_surface_scopes = JSON.stringify(policyProfile.surfaceScopes);
-  }
-
-  if (projection.siteCapabilityBinding?.adapterName) {
-    metadata.Lime_site_adapter = projection.siteCapabilityBinding.adapterName;
-  }
-  if (projection.siteCapabilityBinding?.siteLabel) {
-    metadata.Lime_site_label = projection.siteCapabilityBinding.siteLabel;
-  }
-  if (projection.siteCapabilityBinding?.adapterMatch?.urlArgName) {
-    metadata.Lime_site_adapter_match_url_arg =
-      projection.siteCapabilityBinding.adapterMatch.urlArgName;
-  }
-  if (
-    projection.siteCapabilityBinding?.adapterMatch?.requiredCapabilities &&
-    projection.siteCapabilityBinding.adapterMatch.requiredCapabilities.length >
-      0
-  ) {
-    metadata.Lime_site_adapter_match_capabilities = JSON.stringify(
-      projection.siteCapabilityBinding.adapterMatch.requiredCapabilities,
-    );
-  }
-  if (
-    projection.siteCapabilityBinding?.adapterMatch?.hostAliases &&
-    projection.siteCapabilityBinding.adapterMatch.hostAliases.length > 0
-  ) {
-    metadata.Lime_site_adapter_match_host_aliases = JSON.stringify(
-      projection.siteCapabilityBinding.adapterMatch.hostAliases,
-    );
   }
 
   for (const [key, value] of Object.entries(metadata)) {
@@ -218,9 +184,6 @@ function createServiceSkillItem(params: {
       : undefined,
     examples: projection.examples ? [...projection.examples] : undefined,
     outputDestination: artifactProfile.outputDestination ?? undefined,
-    siteCapabilityBinding: projection.siteCapabilityBinding
-      ? cloneJsonValue(projection.siteCapabilityBinding)
-      : undefined,
     sceneBinding: projection.sceneBinding
       ? cloneJsonValue(projection.sceneBinding)
       : undefined,

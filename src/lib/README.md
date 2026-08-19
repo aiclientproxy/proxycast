@@ -18,7 +18,6 @@
 - `types/` - 类型定义模块
   - `provider.ts` - API Key Provider 系统类型定义（Requirements 5.1）
 - `utils/` - 通用工具函数
-- `webview-api.ts` - Webview 管理 API（Desktop Host / legacy webview adapter）
 - `utils.ts` - 通用工具函数
 
 ## 更新提醒

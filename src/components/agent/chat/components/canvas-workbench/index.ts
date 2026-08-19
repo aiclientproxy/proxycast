@@ -15,4 +15,3 @@ export { CanvasWorkbenchShell } from "./CanvasWorkbenchShell";
 export { CanvasWorkbenchUtilityPanel } from "./CanvasWorkbenchUtilityPanel";
 export { CanvasWorkbenchWorkspacePanel } from "./CanvasWorkbenchWorkspacePanel";
 export { CanvasWorkbenchProjectFilesPanel } from "./files/CanvasWorkbenchProjectFilesPanel";
-export { CanvasWorkbenchBrowserPanel } from "./browser/CanvasWorkbenchBrowserPanel";

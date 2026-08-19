@@ -168,13 +168,5 @@
     "workspaceRightSurface/pending/consume",
     "workspaceRightSurface/pending/dismiss",
     "workspaceRightSurface/pendingChanged"
-  ],
-  "appServerBrowserSessionMethods": [
-    "browserSession/target/list",
-    "browserSession/open",
-    "browserSession/read",
-    "browserSession/close",
-    "browserSession/event/list",
-    "browserSession/action/execute"
   ]
 }

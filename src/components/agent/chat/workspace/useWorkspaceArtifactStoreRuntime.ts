@@ -19,7 +19,6 @@ export type ArtifactStoreSetter<T> = (update: T | ((previous: T) => T)) => void;
 interface UseWorkspaceArtifactStoreRuntimeParams {
   activeTheme: string;
   artifacts: Artifact[];
-  browserAssistScopeKey: string | null;
   defaultSelectedArtifactId: string | null;
   isSending: boolean;
   liveArtifact: Artifact | null;
@@ -73,7 +72,6 @@ export function buildMessageArtifactsSignature(
 export function useWorkspaceArtifactStoreRuntime({
   activeTheme,
   artifacts,
-  browserAssistScopeKey,
   defaultSelectedArtifactId,
   isSending,
   liveArtifact,
@@ -121,18 +119,12 @@ export function useWorkspaceArtifactStoreRuntime({
         activeTheme,
         messages: messagesRef.current,
         currentArtifacts,
-        browserAssistScopeKey,
       });
       return areWorkspaceArtifactsEqual(currentArtifacts, nextArtifacts)
         ? currentArtifacts
         : nextArtifacts;
     });
-  }, [
-    activeTheme,
-    browserAssistScopeKey,
-    messageArtifactsSignature,
-    setArtifacts,
-  ]);
+  }, [activeTheme, messageArtifactsSignature, setArtifacts]);
 
   useEffect(() => {
     const correctedSelectedArtifactId =

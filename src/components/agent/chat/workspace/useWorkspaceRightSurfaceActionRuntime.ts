@@ -6,7 +6,6 @@ import {
 } from "react";
 import type { LayoutMode } from "@/lib/workspace/workbenchContract";
 import type { WorkspaceFilesSurfaceTarget } from "./WorkspaceFilesSurface";
-import type { WorkspaceObjectCanvasCandidate } from "./workspaceObjectCanvasModel";
 import type { WorkspaceArticleWorkspace } from "./workspaceArticleWorkspaceModel";
 import {
   closeWorkspacePluginSurfaceDescriptor,
@@ -43,8 +42,6 @@ interface UseWorkspaceRightSurfaceActionRuntimeParams {
   filesRightSurfaceTarget: WorkspaceFilesSurfaceTarget | null;
   handleToggleCanvas: () => void;
   manualRightSurface: WorkspaceRightSurfaceKind | null;
-  objectCanvasRightSurfaceAvailable: boolean;
-  objectCanvasRightSurfaceCandidate: WorkspaceObjectCanvasCandidate | null;
   pendingBrowserRightSurfaceIntent: WorkspaceRightSurfaceBrowserIntent | null;
   pendingPluginSurfaces: WorkspacePluginSurfaceDescriptor[];
   pluginSurfaceRightSurface: WorkspacePluginSurfaceDescriptor | null;
@@ -63,9 +60,6 @@ interface UseWorkspaceRightSurfaceActionRuntimeParams {
   >;
   setActiveFilesRightSurfaceTarget: Dispatch<
     SetStateAction<WorkspaceFilesSurfaceTarget | null>
-  >;
-  setActiveObjectCanvasRightSurfaceCandidate: Dispatch<
-    SetStateAction<WorkspaceObjectCanvasCandidate | null>
   >;
   setActivePluginSurfaceContainerId: Dispatch<SetStateAction<string | null>>;
   setActivePluginSurfaces: Dispatch<
@@ -97,7 +91,6 @@ interface WorkspaceRightSurfaceActionRuntime {
   handleToggleRightSurfaceBrowser: () => void;
   handleToggleRightSurfaceFiles: () => void;
   handleToggleRightSurfaceHarness: () => void;
-  handleToggleRightSurfaceObjectCanvas: () => void;
   handleToggleRightSurfaceShell: () => void;
   handleToggleRightSurfaceTrace: () => void;
 }
@@ -116,8 +109,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
   filesRightSurfaceTarget,
   handleToggleCanvas,
   manualRightSurface,
-  objectCanvasRightSurfaceAvailable,
-  objectCanvasRightSurfaceCandidate,
   pendingBrowserRightSurfaceIntent,
   pendingPluginSurfaces,
   pluginSurfaceRightSurface,
@@ -131,7 +122,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
   setActiveArticleWorkspace,
   setActiveBrowserRightSurfaceIntent,
   setActiveFilesRightSurfaceTarget,
-  setActiveObjectCanvasRightSurfaceCandidate,
   setActivePluginSurfaceContainerId,
   setActivePluginSurfaces,
   setDismissedPluginSurfaceContainerIds,
@@ -145,12 +135,10 @@ export function useWorkspaceRightSurfaceActionRuntime({
     setHarnessPanelVisible(false);
     setExpertInfoPanelCollapsed(true);
     setActiveFilesRightSurfaceTarget(null);
-    setActiveObjectCanvasRightSurfaceCandidate(null);
     setActiveArticleWorkspace(null);
   }, [
     setActiveArticleWorkspace,
     setActiveFilesRightSurfaceTarget,
-    setActiveObjectCanvasRightSurfaceCandidate,
     setExpertInfoPanelCollapsed,
     setHarnessPanelVisible,
   ]);
@@ -330,38 +318,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
     [setRightSurfaceBrowserTitle],
   );
 
-  const handleToggleRightSurfaceObjectCanvas = useCallback(() => {
-    if (!objectCanvasRightSurfaceAvailable) {
-      return;
-    }
-    const targetSurface = "objectCanvas";
-    const shouldOpenObjectCanvas = manualRightSurface !== targetSurface;
-    closeCompetingRightSurfaces();
-    setActiveObjectCanvasRightSurfaceCandidate(
-      shouldOpenObjectCanvas ? objectCanvasRightSurfaceCandidate : null,
-    );
-    setManualRightSurface(shouldOpenObjectCanvas ? targetSurface : null);
-    if (shouldOpenObjectCanvas) {
-      void refreshRightSurfacePendingRequests();
-      void consumePendingRequestsForSurface(targetSurface);
-    } else {
-      void dismissPendingRequestsForSurface(
-        targetSurface,
-        "user_closed_surface",
-      );
-    }
-  }, [
-    closeCompetingRightSurfaces,
-    consumePendingRequestsForSurface,
-    dismissPendingRequestsForSurface,
-    manualRightSurface,
-    objectCanvasRightSurfaceAvailable,
-    objectCanvasRightSurfaceCandidate,
-    refreshRightSurfacePendingRequests,
-    setActiveObjectCanvasRightSurfaceCandidate,
-    setManualRightSurface,
-  ]);
-
   const handleToggleRightSurfaceHarness = useCallback(() => {
     if (!rightSurfaceHarnessEnabled) {
       return;
@@ -412,7 +368,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
     setHarnessPanelVisible(false);
     setManualRightSurface(null);
     setActiveFilesRightSurfaceTarget(null);
-    setActiveObjectCanvasRightSurfaceCandidate(null);
     setActiveArticleWorkspace(null);
     const shouldOpenExpertInfo =
       expertInfoPanelCollapsed || sceneLayoutMode !== "chat";
@@ -435,7 +390,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
     sceneLayoutMode,
     setActiveArticleWorkspace,
     setActiveFilesRightSurfaceTarget,
-    setActiveObjectCanvasRightSurfaceCandidate,
     setExpertInfoPanelCollapsed,
     setHarnessPanelVisible,
     setLayoutMode,
@@ -462,18 +416,10 @@ export function useWorkspaceRightSurfaceActionRuntime({
       setActivePluginSurfaceContainerId(null);
     }
     if (
-      manualRightSurface === "objectCanvas" &&
-      !objectCanvasRightSurfaceAvailable
-    ) {
-      setManualRightSurface(null);
-      setActiveObjectCanvasRightSurfaceCandidate(null);
-    }
-    if (
       manualRightSurface === "articleWorkspace" &&
       !articleEditorRightSurfaceAvailable
     ) {
       setManualRightSurface(null);
-      setActiveObjectCanvasRightSurfaceCandidate(null);
       setActiveArticleWorkspace(null);
     }
     if (manualRightSurface === "browser" && !browserRightSurfaceAvailable) {
@@ -484,13 +430,11 @@ export function useWorkspaceRightSurfaceActionRuntime({
     browserRightSurfaceAvailable,
     filesRightSurfaceAvailable,
     manualRightSurface,
-    objectCanvasRightSurfaceAvailable,
     pluginSurfaceRightSurfaceAvailable,
     rightSurfaceHarnessEnabled,
     rightSurfaceTraceAvailable,
     setActiveArticleWorkspace,
     setActiveFilesRightSurfaceTarget,
-    setActiveObjectCanvasRightSurfaceCandidate,
     setActivePluginSurfaceContainerId,
     setActivePluginSurfaces,
     setManualRightSurface,
@@ -504,7 +448,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
       );
       setManualRightSurface(null);
       setActiveFilesRightSurfaceTarget(null);
-      setActiveObjectCanvasRightSurfaceCandidate(null);
       setActiveArticleWorkspace(null);
       return;
     }
@@ -517,7 +460,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
       );
     }
     setActiveFilesRightSurfaceTarget(null);
-    setActiveObjectCanvasRightSurfaceCandidate(null);
     setActiveArticleWorkspace(null);
     setManualRightSurface(null);
     handleToggleCanvas();
@@ -528,7 +470,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
     sceneLayoutMode,
     setActiveArticleWorkspace,
     setActiveFilesRightSurfaceTarget,
-    setActiveObjectCanvasRightSurfaceCandidate,
     setHarnessPanelVisible,
     setManualRightSurface,
   ]);
@@ -554,11 +495,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
           pluginSurfaceRightSurface.containerId,
         );
       }
-      setActiveObjectCanvasRightSurfaceCandidate(
-        kind === "articleWorkspace" || kind === "objectCanvas"
-          ? objectCanvasRightSurfaceCandidate
-          : null,
-      );
       setActiveArticleWorkspace(
         kind === "articleWorkspace" && articleEditorRightSurface
           ? articleEditorRightSurface
@@ -573,15 +509,11 @@ export function useWorkspaceRightSurfaceActionRuntime({
       setManualRightSurface(kind === "workbench" ? null : kind);
       void refreshRightSurfacePendingRequests();
       void consumePendingRequestsForSurface(kind);
-      if (kind === "articleWorkspace") {
-        void consumePendingRequestsForSurface("objectCanvas");
-      }
     },
     [
       articleEditorRightSurface,
       consumePendingRequestsForSurface,
       filesRightSurfaceTarget,
-      objectCanvasRightSurfaceCandidate,
       pendingBrowserRightSurfaceIntent,
       pluginSurfaceRightSurface,
       refreshRightSurfacePendingRequests,
@@ -589,7 +521,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
       setActiveArticleWorkspace,
       setActiveBrowserRightSurfaceIntent,
       setActiveFilesRightSurfaceTarget,
-      setActiveObjectCanvasRightSurfaceCandidate,
       setActivePluginSurfaceContainerId,
       setActivePluginSurfaces,
       setExpertInfoPanelCollapsed,
@@ -659,7 +590,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
     handleToggleRightSurfaceBrowser,
     handleToggleRightSurfaceFiles,
     handleToggleRightSurfaceHarness,
-    handleToggleRightSurfaceObjectCanvas,
     handleToggleRightSurfaceShell,
     handleToggleRightSurfaceTrace,
   };

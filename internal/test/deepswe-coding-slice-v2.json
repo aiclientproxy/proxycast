@@ -4,19 +4,19 @@
   "source": {
     "name": "DeepSWE",
     "repository": "https://github.com/datacurve-ai/deep-swe",
-    "commit": "3cda4081fed96103a6395de39c85e9b20275e307",
-    "taskSchemaVersion": "1.1",
+    "commit": "435ee89ec2f2e2289f33b0da4f992f0b7b7266b9",
+    "taskSchemaVersion": "1.3",
     "taskCount": 113,
     "localCacheRoot": ".lime/benchmark/sources/deep-swe/tasks",
-    "runner": "Pier >= 0.3.0",
-    "licensePolicy": "private-evaluation-only-until-source-and-task-repository-license-review"
+    "runner": "datacurve-pier==0.3.1",
+    "licensePolicy": "Apache-2.0 task contributions with upstream repository licenses documented in PROVENANCE.md"
   },
   "executionContract": {
-    "adapterVersion": "deepswe-current-chain-adapter-v5",
+    "adapterVersion": "deepswe-current-chain-adapter-v6",
     "adapterCommand": "npm run harness:deepswe:run",
     "agentPath": "Lime App Server JSON-RPC current chain",
     "workspace": "system temporary directory outside the Lime repository at the task base commit",
-    "network": "task policy plus explicit provider allowlist only",
+    "network": "task agent and verifier environments use no-network; Lime provider transport stays outside the task container",
     "solutionVisibility": "reference solution and verifier tests are hidden from the agent",
     "verifier": "Pier separate verifier environment with candidate patch replay",
     "primaryModel": "custom-637ea2d5-e430-43de-86de-39c5f1735438 / agnes-2.0-flash",
@@ -54,7 +54,6 @@
     ],
     "currentBlockers": [
       "Agnes produced no candidate in TS/Go/Rust diagnostics, including runtime-capped runs with a complete provider tool catalog",
-      "The local Pier wrapper cannot import its deleted editable package source",
       "No local Docker, Podman, nerdctl, or Colima container runtime is available"
     ]
   },

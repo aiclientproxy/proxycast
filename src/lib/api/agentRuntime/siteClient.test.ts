@@ -1,77 +1,28 @@
-import { describe, expect, it, vi } from "vitest";
-import { createSiteClient } from "./siteClient";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { cwd } from "node:process";
+import { describe, expect, it } from "vitest";
 
-describe("agentRuntime siteClient retired fail-closed", () => {
-  it("Site Adapter 发现与目录命令默认 fail closed，不能回到旧 bridge", async () => {
-    const bridgeInvoke = vi.fn();
-    const client = createSiteClient({ bridgeInvoke });
-
-    await expect(client.siteListAdapters()).rejects.toThrow(
-      "site_list_adapters is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(client.siteRecommendAdapters(3)).rejects.toThrow(
-      "site_recommend_adapters is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(client.siteSearchAdapters("news")).rejects.toThrow(
-      "site_search_adapters is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(client.siteGetAdapterInfo("news_reader")).rejects.toThrow(
-      "site_get_adapter_info is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(client.siteGetAdapterCatalogStatus()).rejects.toThrow(
-      "site_get_adapter_catalog_status is retired until Site Adapter moves to App Server current methods",
-    );
-
-    expect(bridgeInvoke).not.toHaveBeenCalled();
+describe("agentRuntime siteClient retired boundary", () => {
+  it("Site Adapter 客户端与旧聚合网关不得恢复", () => {
+    for (const path of [
+      "src/lib/api/agentRuntime/siteClient.ts",
+      "src/lib/api/agentRuntime/siteClient.d.ts",
+      "src/lib/webview-api.ts",
+      "src/lib/webview-api.d.ts",
+    ]) {
+      expect(existsSync(resolve(cwd(), path)), path).toBe(false);
+    }
   });
 
-  it("Site Adapter 管理与运行命令默认 fail closed，不能回到旧 bridge", async () => {
-    const bridgeInvoke = vi.fn();
-    const client = createSiteClient({ bridgeInvoke });
-
-    await expect(
-      client.siteGetAdapterLaunchReadiness({ adapter_name: "news_reader" }),
-    ).rejects.toThrow(
-      "site_get_adapter_launch_readiness is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(
-      client.siteApplyAdapterCatalogBootstrap({ adapters: [] }),
-    ).rejects.toThrow(
-      "site_apply_adapter_catalog_bootstrap is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(client.siteClearAdapterCatalogCache()).rejects.toThrow(
-      "site_clear_adapter_catalog_cache is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(
-      client.siteImportAdapterYamlBundle({ yaml_bundle: "adapters: []" }),
-    ).rejects.toThrow(
-      "site_import_adapter_yaml_bundle is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(
-      client.siteRunAdapter({ adapter_name: "news_reader" }),
-    ).rejects.toThrow(
-      "site_run_adapter is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(
-      client.siteDebugRunAdapter({ adapter_name: "news_reader" }),
-    ).rejects.toThrow(
-      "site_debug_run_adapter is retired until Site Adapter moves to App Server current methods",
-    );
-    await expect(
-      client.siteSaveAdapterResult({
-        run_request: { adapter_name: "news_reader" },
-        result: {
-          ok: true,
-          adapter: "news_reader",
-          domain: "example.com",
-          profile_key: "default",
-          entry_url: "https://example.com/article",
-        },
-      }),
-    ).rejects.toThrow(
-      "site_save_adapter_result is retired until Site Adapter moves to App Server current methods",
+  it("current client factory 不得重新暴露 Site Adapter 方法", () => {
+    const source = readFileSync(
+      resolve(cwd(), "src/lib/api/agentRuntime/clientFactory.ts"),
+      "utf8",
     );
 
-    expect(bridgeInvoke).not.toHaveBeenCalled();
+    expect(source).not.toContain("createSiteClient");
+    expect(source).not.toContain("siteListAdapters");
+    expect(source).not.toContain("siteRunAdapter");
   });
 });

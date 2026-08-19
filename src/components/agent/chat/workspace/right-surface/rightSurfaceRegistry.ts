@@ -60,13 +60,6 @@ export const WORKSPACE_RIGHT_SURFACE_SPECS: readonly WorkspaceRightSurfaceSpec[]
       collapseTarget: "topToolbar",
     },
     {
-      kind: "objectCanvas",
-      slot: "canvasPanel",
-      exclusiveGroup: "workspaceRightSurface",
-      openSources: ["user", "route", "runtime"],
-      collapseTarget: "topToolbar",
-    },
-    {
       kind: "browser",
       slot: "canvasPanel",
       exclusiveGroup: "workspaceRightSurface",

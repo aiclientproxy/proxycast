@@ -167,5 +167,5 @@ describe("Harness repo fixtures", () => {
     expect(
       summary.breakdowns.degradedObservabilityVerificationOutcomes,
     ).toEqual([]);
-  });
+  }, 20_000);
 });

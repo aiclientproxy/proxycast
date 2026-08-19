@@ -881,6 +881,66 @@ describe("ElectronAppServerHost", () => {
     ).rejects.toThrow("action token was already used");
   });
 
+  it("drainEvents 应隐藏 Electron Host 已消费请求的 resolved 通知", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    enqueueFakeNotifications([
+      {
+        method: "serverRequest/resolved",
+        params: { requestId: "host-consumed-request" },
+      },
+      {
+        method: "model/list/updated",
+        params: { generation: 18, providerId: "openai" },
+      },
+    ]);
+
+    const drained = await host.drainEvents({ limit: 1 });
+
+    expect(drained.lines).toHaveLength(1);
+    expect(decodeMessage(drained.lines[0] ?? "")).toEqual({
+      method: "model/list/updated",
+      params: { generation: 18, providerId: "openai" },
+    });
+  });
+
+  it("drainEvents 应保留 Renderer 请求的 tokenized resolved 通知", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    enqueueFakeNotifications([
+      {
+        id: "app-server-request:resolved-1",
+        method: "mcpServer/elicitation/request",
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          serverName: "form-server",
+          mode: "form",
+          message: "Choose a value",
+          requestedSchema: { type: "object", properties: {} },
+        },
+      },
+    ]);
+    const request = decodeMessage(
+      (await host.drainEvents({ limit: 1 })).lines[0] ?? "",
+    ) as JsonRpcRequest;
+    enqueueFakeNotifications([
+      {
+        method: "serverRequest/resolved",
+        params: { requestId: "app-server-request:resolved-1" },
+      },
+    ]);
+
+    const resolved = decodeMessage(
+      (await host.drainEvents({ limit: 1 })).lines[0] ?? "",
+    );
+
+    expect(resolved).toEqual({
+      method: "serverRequest/resolved",
+      params: { requestId: request.id },
+    });
+  });
+
   it("drainEvents 应在 Electron host 回答 currentTime/read 且不投递 Renderer", async () => {
     const { ElectronAppServerHost } = await import("./appServerHost");
     const host = new ElectronAppServerHost();

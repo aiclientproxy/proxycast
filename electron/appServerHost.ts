@@ -38,7 +38,11 @@ import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { tryHandleCurrentTimeRead } from "./appServerCurrentTimeHost";
-import { AppServerDynamicToolHost } from "./appServerDynamicToolHost";
+import {
+  AppServerDynamicToolHost,
+  type DynamicToolOwnerContext,
+} from "./appServerDynamicToolHost";
+import type { ElectronBrowserTabHost } from "./browserTabHost";
 
 const DEFAULT_APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
 const APP_SERVER_BACKEND_TIMEOUT_GRACE_MS = 30_000;
@@ -97,7 +101,14 @@ export class ElectronAppServerHost {
   #serverRequestRawIdsByToken = new Map<string, RequestId>();
   #serverRequestTokensByRawId = new Map<string, string>();
   #stopping = false;
-  #dynamicToolHost = new AppServerDynamicToolHost();
+  readonly #dynamicToolHost: AppServerDynamicToolHost;
+
+  constructor(browserHost: ElectronBrowserTabHost | null = null) {
+    this.#dynamicToolHost = new AppServerDynamicToolHost(
+      undefined,
+      browserHost,
+    );
+  }
 
   async warmup(): Promise<InitializeResponse> {
     const connected = await this.#connect();
@@ -123,6 +134,7 @@ export class ElectronAppServerHost {
 
   async handleJsonLines(
     request: HandleJsonLinesRequest,
+    owner: DynamicToolOwnerContext | null = null,
   ): Promise<{ lines: string[] }> {
     const connected = await this.#connect();
     const messages = request.lines.map(decodeMessage);
@@ -168,6 +180,7 @@ export class ElectronAppServerHost {
           this.#dynamicToolHost.observeClientResult(
             proxiedMessage.message.method,
             result.result,
+            owner,
           );
           responses.push(
             ...result.messages.map((response) =>
@@ -223,15 +236,19 @@ export class ElectronAppServerHost {
       if (tryHandleCurrentTimeRead(connected.connection, message)) {
         continue;
       }
-      if (this.#dynamicToolHost.tryHandle(connected.connection, message)) {
+      this.#dynamicToolHost.observeServerMessage(message);
+      if (
+        await this.#dynamicToolHost.tryHandle(connected.connection, message)
+      ) {
         continue;
       }
-      drained.push(message);
+      const projected = this.#projectServerMessageForRenderer(message);
+      if (projected) {
+        drained.push(projected);
+      }
     }
 
-    const rendererMessages = drained.map((message) =>
-      this.#projectServerMessageForRenderer(message),
-    );
+    const rendererMessages = drained;
     this.#rememberRecentNotifications(rendererMessages);
     const messages =
       request.includeRecent === true
@@ -248,6 +265,7 @@ export class ElectronAppServerHost {
 
   async stop(): Promise<void> {
     this.#stopping = true;
+    this.#dynamicToolHost.connectionLost("app-server-stopped");
     await this.#lifecycle?.stop();
     this.#lifecycle = null;
     this.#connected = null;
@@ -258,7 +276,9 @@ export class ElectronAppServerHost {
     this.#dynamicToolHost.reset();
   }
 
-  #projectServerMessageForRenderer(message: JsonRpcMessage): JsonRpcMessage {
+  #projectServerMessageForRenderer(
+    message: JsonRpcMessage,
+  ): JsonRpcMessage | null {
     if (isJsonRpcRequestLike(message)) {
       const token = this.#serverRequestToken(message.id);
       return { ...message, id: token };
@@ -282,7 +302,7 @@ export class ElectronAppServerHost {
           ...message,
           params: { ...params, requestId: token },
         }
-      : message;
+      : null;
   }
 
   #restoreServerRequestResponseId(message: JsonRpcMessage): JsonRpcMessage {
@@ -417,6 +437,7 @@ export class ElectronAppServerHost {
         },
         onExit: (event) => {
           if (this.#lifecycle === lifecycle) {
+            this.#dynamicToolHost.connectionLost("app-server-disconnected");
             this.#connected = null;
             this.#connectPromise = null;
           }
@@ -426,10 +447,12 @@ export class ElectronAppServerHost {
           if (this.#lifecycle === lifecycle) {
             this.#connected = connected;
             this.#connectPromise = null;
+            this.#installServerRequestHandler(connected);
           }
         },
         onRestartFailed: (event) => {
           if (this.#lifecycle === lifecycle) {
+            this.#dynamicToolHost.connectionLost("app-server-restart-failed");
             this.#connected = null;
             this.#connectPromise = null;
           }
@@ -439,7 +462,25 @@ export class ElectronAppServerHost {
     );
 
     this.#lifecycle = lifecycle;
-    return await lifecycle.start();
+    const connected = await lifecycle.start();
+    this.#installServerRequestHandler(connected);
+    return connected;
+  }
+
+  #installServerRequestHandler(connected: ConnectedAppServerSidecar): void {
+    if (typeof connected.connection.setServerRequestHandler !== "function") {
+      return;
+    }
+    connected.connection.setServerRequestHandler(async (message) => {
+      if (tryHandleCurrentTimeRead(connected.connection, message)) {
+        return true;
+      }
+      this.#dynamicToolHost.observeServerMessage(message);
+      return await this.#dynamicToolHost.tryHandle(
+        connected.connection,
+        message,
+      );
+    });
   }
 
   #proxyRequestMessage(message: JsonRpcRequest): {
@@ -521,6 +562,7 @@ export class ElectronAppServerHost {
     this.#lifecycle = null;
     this.#connected = null;
     this.#connectPromise = null;
+    this.#dynamicToolHost.connectionLost("app-server-stale-connection");
     try {
       await lifecycle?.stop();
     } catch (error) {

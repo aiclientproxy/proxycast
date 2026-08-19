@@ -182,8 +182,6 @@ interface UseWorkspaceArtifactPreviewActionsParams {
   taskFiles: TaskFile[];
   sessionFiles: SessionFile[];
   readSessionFile: (fileName: string) => Promise<string | null>;
-  suppressBrowserAssistCanvasAutoOpen: () => void;
-  onOpenBrowserRuntimeForArtifact?: (artifact: Artifact) => void;
   onRequestCanvasPreviewOpen?: (request: {
     filePath?: string | null;
     selectionKey?: string | null;
@@ -223,8 +221,6 @@ export function useWorkspaceArtifactPreviewActions({
   taskFiles,
   sessionFiles,
   readSessionFile,
-  suppressBrowserAssistCanvasAutoOpen,
-  onOpenBrowserRuntimeForArtifact,
   onRequestCanvasPreviewOpen,
   upsertGeneralArtifact,
   setSelectedArtifactId,
@@ -344,18 +340,7 @@ export function useWorkspaceArtifactPreviewActions({
 
   const openArtifactInWorkbench = useCallback(
     async (artifact: Artifact) => {
-      if (artifact.type === "browser_assist") {
-        onOpenBrowserRuntimeForArtifact?.(artifact);
-        if (!onOpenBrowserRuntimeForArtifact) {
-          toast.info(
-            t("agentChat.workspace.artifactPreview.toast.browserAssistMoved"),
-          );
-        }
-        return;
-      }
-
       if (activeTheme === "general") {
-        suppressBrowserAssistCanvasAutoOpen();
         setGeneralCanvasState((previous) =>
           previous.isOpen || previous.content.trim() || previous.filename
             ? {
@@ -431,13 +416,11 @@ export function useWorkspaceArtifactPreviewActions({
     [
       activeTheme,
       handleHarnessLoadFilePreview,
-      onOpenBrowserRuntimeForArtifact,
       onRequestCanvasPreviewOpen,
       setArtifactViewMode,
       setGeneralCanvasState,
       setLayoutMode,
       setSelectedArtifactId,
-      suppressBrowserAssistCanvasAutoOpen,
       t,
       upsertGeneralArtifact,
     ],

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "vitest";
@@ -652,7 +652,7 @@ describe("AgentChatWorkspace shell chrome boundary", () => {
 });
 
 describe("AgentChatWorkspace service skill execution card boundary", () => {
-  it("站点技能执行卡片组装必须由 service skill execution card runtime 提供", () => {
+  it("已删除的站点技能执行卡片 owner 不得回流", () => {
     const workspaceSource = [
       "src/components/agent/chat/useAgentChatWorkspaceRuntime.tsx",
       "src/components/agent/chat/workspace/useAgentChatWorkspaceEntryRuntime.ts",
@@ -662,51 +662,16 @@ describe("AgentChatWorkspace service skill execution card boundary", () => {
     ]
       .map((ownerPath) => readFileSync(join(process.cwd(), ownerPath), "utf8"))
       .join("\n");
-    const ownerSource = readFileSync(
-      join(
-        process.cwd(),
-        "src/components/agent/chat/workspace/useWorkspaceArtifactSurfaceRuntime.ts",
-      ),
-      "utf8",
-    );
-    const cardOwnerSource = readFileSync(
-      join(
-        process.cwd(),
-        "src/components/agent/chat/workspace/useWorkspaceServiceSkillExecutionCardRuntime.tsx",
-      ),
-      "utf8",
-    );
-    const interactionOwnerSource = readFileSync(
-      join(
-        process.cwd(),
-        "src/components/agent/chat/workspace/useAgentChatWorkspaceArtifactInteractionRuntime.ts",
-      ),
-      "utf8",
-    );
-
-    expect(workspaceSource).toContain(
-      "useAgentChatWorkspaceArtifactInteractionRuntime({",
-    );
+    for (const deletedOwnerPath of [
+      "src/components/agent/chat/workspace/ServiceSkillExecutionCard.tsx",
+      "src/components/agent/chat/workspace/useWorkspaceServiceSkillExecutionCardRuntime.tsx",
+    ]) {
+      expect(existsSync(join(process.cwd(), deletedOwnerPath))).toBe(false);
+    }
+    expect(workspaceSource).not.toContain("ServiceSkillExecutionCard");
     expect(workspaceSource).not.toContain(
-      "useWorkspaceArtifactSurfaceRuntime({",
-    );
-    expect(interactionOwnerSource).toContain(
-      "useWorkspaceArtifactSurfaceRuntime({",
-    );
-    expect(ownerSource).toContain(
       "useWorkspaceServiceSkillExecutionCardRuntime(",
     );
-    expect(workspaceSource).not.toContain(
-      'from "./workspace/ServiceSkillExecutionCard"',
-    );
-    expect(workspaceSource).not.toContain("<ServiceSkillExecutionCard");
-    expect(workspaceSource).not.toContain(
-      'siteSkillExecutionState.phase === "blocked"',
-    );
-    expect(cardOwnerSource).toContain("<ServiceSkillExecutionCard");
-    expect(cardOwnerSource).toContain('state.phase === "blocked"');
-    expect(cardOwnerSource).toContain("preferredResultFileTarget");
-    expect(cardOwnerSource).toContain("onOpenSavedSiteContent");
   });
 });
 
@@ -1001,7 +966,7 @@ describe("AgentChatWorkspace artifact open boundary", () => {
       "saveAgentRuntimeArtifactDocumentSnapshot(",
     );
     expect(serviceSkillOwnerSource).toContain(
-      "resolveSiteSavedContentTargetFromRunResult(",
+      "resolvePreferredServiceSkillResultFileTarget({",
     );
   });
 });

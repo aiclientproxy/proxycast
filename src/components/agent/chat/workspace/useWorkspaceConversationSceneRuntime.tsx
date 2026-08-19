@@ -117,7 +117,6 @@ type NavigationActions = Pick<
   | "handleOpenAppearanceSettings"
   | "handleOpenRuntimeMemoryWorkbench"
   | "handleOpenChannels"
-  | "handleOpenChromeRelay"
   | "handleBackToResources"
   | "handleCompactContext"
 >;
@@ -271,8 +270,6 @@ interface UseWorkspaceConversationSceneRuntimeParams {
   >;
   handleToggleCanvas: ConversationScenePresentationParams["scene"]["onToggleCanvas"];
   currentImageWorkbenchActive: ConversationScenePresentationParams["scene"]["currentImageWorkbenchActive"];
-  browserWorkbenchOpenRequest?: ConversationScenePresentationParams["canvasWorkbenchLayout"]["browserOpenRequest"];
-  onBrowserWorkbenchOpenRequestHandled?: ConversationScenePresentationParams["canvasWorkbenchLayout"]["onBrowserOpenRequestHandled"];
   canvasWorkbenchPreviewOpenRequest?: ConversationScenePresentationParams["canvasWorkbenchLayout"]["previewOpenRequest"];
   onCanvasWorkbenchPreviewOpenRequestHandled?: ConversationScenePresentationParams["canvasWorkbenchLayout"]["onPreviewOpenRequestHandled"];
   hideInlineStepProgress: ConversationScenePresentationParams["stepProgress"]["hidden"];
@@ -332,8 +329,6 @@ export function useWorkspaceConversationSceneRuntime({
   handlePendingA2UISubmit,
   handleToggleCanvas,
   currentImageWorkbenchActive,
-  browserWorkbenchOpenRequest,
-  onBrowserWorkbenchOpenRequestHandled,
   canvasWorkbenchPreviewOpenRequest,
   onCanvasWorkbenchPreviewOpenRequestHandled,
   hideInlineStepProgress,
@@ -540,7 +535,6 @@ export function useWorkspaceConversationSceneRuntime({
         codingWorkbenchViews.currentSessionTurn?.prompt_text || null,
       onOpenMemoryWorkbench: navigationActions.handleOpenRuntimeMemoryWorkbench,
       onOpenChannels: navigationActions.handleOpenChannels,
-      onOpenChromeRelay: navigationActions.handleOpenChromeRelay,
     });
   const sessionRuntimeCounters = codingWorkbenchViews.counters;
   const shouldUseCodingWorkbenchChrome =
@@ -720,8 +714,6 @@ export function useWorkspaceConversationSceneRuntime({
       onLayoutModeChange: shouldSyncCanvasWorkbenchLayoutMode
         ? setCanvasWorkbenchLayoutMode
         : undefined,
-      browserOpenRequest: browserWorkbenchOpenRequest,
-      onBrowserOpenRequestHandled: onBrowserWorkbenchOpenRequestHandled,
       previewOpenRequest: canvasWorkbenchPreviewOpenRequest,
       onPreviewOpenRequestHandled: onCanvasWorkbenchPreviewOpenRequestHandled,
     },

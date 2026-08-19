@@ -137,12 +137,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CONSUME,
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_DISMISS,
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED,
-            METHOD_BROWSER_SESSION_TARGET_LIST,
-            METHOD_BROWSER_SESSION_OPEN,
-            METHOD_BROWSER_SESSION_READ,
-            METHOD_BROWSER_SESSION_CLOSE,
-            METHOD_BROWSER_SESSION_EVENT_LIST,
-            METHOD_BROWSER_SESSION_ACTION_EXECUTE,
             METHOD_SOUL_STYLE_PACK_INSTALL,
             METHOD_SOUL_STYLE_PACK_LIST,
             METHOD_SOUL_STYLE_PACK_STATUS_SET,
@@ -307,18 +301,6 @@ fn app_server_method_catalog_keeps_all_method_kinds_together() {
         METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED
     ));
     assert!(is_app_server_request_method(
-        METHOD_BROWSER_SESSION_TARGET_LIST
-    ));
-    assert!(is_app_server_request_method(METHOD_BROWSER_SESSION_OPEN));
-    assert!(is_app_server_request_method(METHOD_BROWSER_SESSION_READ));
-    assert!(is_app_server_request_method(METHOD_BROWSER_SESSION_CLOSE));
-    assert!(is_app_server_request_method(
-        METHOD_BROWSER_SESSION_EVENT_LIST
-    ));
-    assert!(is_app_server_request_method(
-        METHOD_BROWSER_SESSION_ACTION_EXECUTE
-    ));
-    assert!(is_app_server_request_method(
         METHOD_VOICE_TRANSCRIPTION_TRANSCRIBE_AUDIO
     ));
     assert!(is_app_server_request_method(
@@ -442,10 +424,6 @@ fn app_server_request_serialization_scope_covers_high_risk_methods() {
         Some(AppServerRequestSerializationScope::McpResourceSubscription)
     );
     assert_eq!(
-        app_server_request_serialization_scope(METHOD_BROWSER_SESSION_ACTION_EXECUTE),
-        Some(AppServerRequestSerializationScope::BrowserSession)
-    );
-    assert_eq!(
         app_server_request_serialization_scope(METHOD_CAPABILITY_LIST),
         None
     );
@@ -458,7 +436,6 @@ fn app_server_request_serialization_scope_covers_high_risk_methods() {
 #[test]
 fn app_server_request_access_keeps_shared_reads_in_the_catalog() {
     for method in [
-        METHOD_BROWSER_SESSION_READ,
         METHOD_THREAD_READ,
         METHOD_THREAD_LIST,
         METHOD_THREAD_TURNS_LIST,

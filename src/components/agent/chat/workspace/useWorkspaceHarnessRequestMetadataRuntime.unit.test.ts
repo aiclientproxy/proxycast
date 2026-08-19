@@ -96,9 +96,6 @@ describe("workspace harness request metadata runtime", () => {
   it("应保持主组件原 harness metadata 映射语义", () => {
     const metadata = resolveWorkspaceHarnessRequestMetadata({
       agentResponseLanguage: "en-US",
-      browserAssistAutoLaunch: false,
-      browserAssistPreferredBackend: "lime_extension_bridge",
-      browserAssistProfileKey: "general_browser_assist",
       contentId: "content-1",
       currentGateKey: "write_mode",
       effectiveChatToolPreferences: {
@@ -126,13 +123,6 @@ describe("workspace harness request metadata runtime", () => {
       run_title: "修复导入渲染",
       content_id: "content-1",
       agent_response_language: "en-US",
-      browser_assist: {
-        enabled: true,
-        profile_key: "general_browser_assist",
-        preferred_backend: "lime_extension_bridge",
-        auto_launch: false,
-        stream_mode: "both",
-      },
       workspace_skill_bindings: {
         source: "p3c_runtime_binding",
         bindings: [
@@ -154,6 +144,7 @@ describe("workspace harness request metadata runtime", () => {
         ],
       },
     });
+    expect(metadata.browser_assist).toBeUndefined();
   });
 
   it("非主题工作台时不应写入 gate key", () => {

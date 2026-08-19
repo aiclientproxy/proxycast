@@ -378,42 +378,6 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
-      name: "listBrowserSessionTargets",
-      method: protocol.METHOD_BROWSER_SESSION_TARGET_LIST,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "openBrowserSession",
-      method: protocol.METHOD_BROWSER_SESSION_OPEN,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "readBrowserSession",
-      method: protocol.METHOD_BROWSER_SESSION_READ,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "closeBrowserSession",
-      method: protocol.METHOD_BROWSER_SESSION_CLOSE,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "listBrowserSessionEvents",
-      method: protocol.METHOD_BROWSER_SESSION_EVENT_LIST,
-      kind: "request",
-      params: "required",
-    },
-    {
-      name: "executeBrowserSessionAction",
-      method: protocol.METHOD_BROWSER_SESSION_ACTION_EXECUTE,
-      kind: "request",
-      params: "required",
-    },
-    {
       name: "listApps",
       method: protocol.METHOD_APP_LIST,
       kind: "request",

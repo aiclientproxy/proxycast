@@ -1336,7 +1336,6 @@ describe("Agent API 治理护栏", () => {
           caller: "assistant",
           surface: {
             workbench: true,
-            browser_assist: true,
           },
         },
         agent_initialized: true,
@@ -1412,7 +1411,6 @@ describe("Agent API 治理护栏", () => {
     await expect(
       getAgentRuntimeToolInventory({
         workbench: true,
-        browserAssist: true,
         caller: "assistant",
       }),
     ).resolves.toMatchObject({
@@ -1420,7 +1418,6 @@ describe("Agent API 治理护栏", () => {
         caller: "assistant",
         surface: {
           workbench: true,
-          browser_assist: true,
         },
       },
       counts: {
@@ -1440,7 +1437,6 @@ describe("Agent API 治理护栏", () => {
       APP_SERVER_METHOD_AGENT_SESSION_TOOL_INVENTORY_READ,
       {
         workbench: true,
-        browserAssist: true,
         caller: "assistant",
       },
     );
@@ -1453,7 +1449,6 @@ describe("Agent API 治理护栏", () => {
           caller: "assistant",
           surface: {
             workbench: false,
-            browser_assist: false,
           },
         },
         agent_initialized: true,
@@ -1528,7 +1523,6 @@ describe("Agent API 治理护栏", () => {
           caller: "assistant",
           surface: {
             workbench: false,
-            browser_assist: false,
           },
         },
         agent_initialized: false,

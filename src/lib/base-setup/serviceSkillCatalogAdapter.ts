@@ -7,7 +7,6 @@ import type {
   ServiceSkillPromptTemplateKey,
   ServiceSkillRunnerType,
   ServiceSkillSceneBinding,
-  ServiceSkillSiteCapabilityBinding,
   ServiceSkillSlotDefinition,
   ServiceSkillSource,
   ServiceSkillSurfaceScope,
@@ -723,9 +722,6 @@ function toCatalogProjection(
       "prompt_template_key",
     ) as ServiceSkillPromptTemplateKey | undefined,
     themeTarget: readString(record, "themeTarget", "theme_target"),
-    siteCapabilityBinding: cloneOptionalRecord(
-      readValue(record, "siteCapabilityBinding", "site_capability_binding"),
-    ) as ServiceSkillSiteCapabilityBinding | undefined,
     sceneBinding: cloneOptionalRecord(
       readValue(record, "sceneBinding", "scene_binding"),
     ) as ServiceSkillSceneBinding | undefined,

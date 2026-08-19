@@ -69,7 +69,6 @@ fn request_serialization_scope_name(scope: AppServerRequestSerializationScope) -
         AppServerRequestSerializationScope::Thread => "thread",
         AppServerRequestSerializationScope::McpOauth => "mcpOauth",
         AppServerRequestSerializationScope::McpResourceSubscription => "mcpResourceSubscription",
-        AppServerRequestSerializationScope::BrowserSession => "browserSession",
     }
 }
 

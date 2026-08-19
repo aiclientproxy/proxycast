@@ -128,6 +128,8 @@ function createDbLeaseReport({
     dbPath,
     `select attempts.id, attempts.batch_item_id, attempts.attempt_no, attempts.run_no, attempts.attempt_type, attempts.status, attempts.exit_code, attempts.tokens_used, attempts.started_at, attempts.finished_at, length(attempts.stdout) as stdout_len, length(attempts.stderr) as stderr_len, substr(attempts.stdout,1,700) as stdout_preview, substr(attempts.stderr,1,700) as stderr_preview from attempts join batch_items on batch_items.id=attempts.batch_item_id where batch_items.batch_job_id=${quotedJobId} order by attempts.started_at, attempts.id`,
   );
+  const activeItem = items.find((item) => item.status === "running") || null;
+  const activeScenario = extractScenarioId(activeItem?.item_preview);
   const processOwner = readJsonIfExists(processOwnerPath) || {
     qcloopProcesses: [],
   };
@@ -137,11 +139,10 @@ function createDbLeaseReport({
       return (
         command.includes(jobId) ||
         command.includes("18080") ||
-        command.includes("browser-runtime-site-adapter")
+        (activeScenario ? command.includes(activeScenario) : false)
       );
     },
   );
-  const activeItem = items.find((item) => item.status === "running") || null;
   const activeAttempt = activeItem
     ? attempts.find(
         (attempt) =>
@@ -149,10 +150,11 @@ function createDbLeaseReport({
           attempt.status === "running",
       ) || null
     : null;
-  const observedWorker =
-    processSnapshot.find((entry) =>
-      String(entry?.command || "").includes("browser-runtime-site-adapter"),
-    ) || null;
+  const observedWorker = activeScenario
+    ? processSnapshot.find((entry) =>
+        String(entry?.command || "").includes(activeScenario),
+      ) || null
+    : null;
   const observedQcloop =
     processSnapshot.find((entry) =>
       String(entry?.command || "").includes("serve --addr 127.0.0.1:18080"),
@@ -177,7 +179,7 @@ function createDbLeaseReport({
       status: jobStatus,
       terminal,
       activeItemId: activeItem?.id || null,
-      activeScenario: extractScenarioId(activeItem?.item_preview),
+      activeScenario,
       lockOwner: activeItem?.lock_owner || null,
       lockExpiresAt: activeItem?.lock_expires_at || null,
       activeAttemptId: activeAttempt?.id || null,

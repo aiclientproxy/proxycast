@@ -54,13 +54,6 @@ function getSkillBadge(
   if (isRecent) {
     return copy.badge.recent;
   }
-  if (
-    item.defaultExecutorBinding === "browser_assist" ||
-    item.execution.kind === "site_adapter"
-  ) {
-    return copy.badge.browserAssist;
-  }
-
   return copy.badge.readyMade;
 }
 

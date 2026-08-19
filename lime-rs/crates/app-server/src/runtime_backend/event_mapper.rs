@@ -60,6 +60,9 @@ pub(super) fn emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_s
     soul_style: Option<&SoulStyleMetadata>,
     model_route_evidence: Option<&ModelRouteEvidence>,
 ) -> Result<(), RuntimeCoreError> {
+    if let RuntimeAgentEvent::CodeCellTrace { event } = event {
+        return sink.emit_code_cell_trace(event.clone());
+    }
     if let RuntimeAgentEvent::RolloutBudgetReminder {
         durable_event_id, ..
     } = event

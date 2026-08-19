@@ -18,12 +18,6 @@ pub const LIME_CREATE_IMAGE_TASK_TOOL_NAME: &str = "lime_create_image_generation
 pub const LIME_CREATE_URL_PARSE_TASK_TOOL_NAME: &str = "lime_create_url_parse_task";
 pub const LIME_CREATE_TYPESETTING_TASK_TOOL_NAME: &str = "lime_create_typesetting_task";
 pub const LIME_RUN_SERVICE_SKILL_TOOL_NAME: &str = "lime_run_service_skill";
-pub const LIME_SITE_LIST_TOOL_NAME: &str = "lime_site_list";
-pub const LIME_SITE_RECOMMEND_TOOL_NAME: &str = "lime_site_recommend";
-pub const LIME_SITE_SEARCH_TOOL_NAME: &str = "lime_site_search";
-pub const LIME_SITE_INFO_TOOL_NAME: &str = "lime_site_info";
-pub const LIME_SITE_RUN_TOOL_NAME: &str = "lime_site_run";
-pub const BROWSER_RUNTIME_TOOL_PREFIX: &str = "mcp__lime-browser__";
 pub const VIEW_IMAGE_TOOL_NAME: &str = "view_image";
 pub const APPLY_PATCH_TOOL_NAME: &str = "apply_patch";
 pub const MEMORY_LIST_TOOL_NAME: &str = "memory_list";
@@ -39,7 +33,6 @@ pub enum ToolSurfaceProfile {
     Core,
     #[serde(rename = "workbench")]
     Workbench,
-    BrowserAssist,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -51,7 +44,6 @@ pub enum ToolCapability {
     SkillExecution,
     SessionControl,
     ContentCreation,
-    BrowserRuntime,
     WorkspaceIo,
     Memory,
     Execution,
@@ -71,7 +63,6 @@ pub enum ToolLifecycle {
 pub enum ToolSourceKind {
     RuntimeBuiltin,
     LimeInjected,
-    BrowserCompatibility,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -96,57 +87,32 @@ pub struct ToolCatalogEntry {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WorkspaceToolSurface {
     pub workbench: bool,
-    pub browser_assist: bool,
 }
 
 impl WorkspaceToolSurface {
     pub const fn core() -> Self {
-        Self {
-            workbench: false,
-            browser_assist: false,
-        }
+        Self { workbench: false }
     }
 
     pub const fn workbench() -> Self {
-        Self {
-            workbench: true,
-            browser_assist: false,
-        }
-    }
-
-    pub const fn browser_assist() -> Self {
-        Self {
-            workbench: false,
-            browser_assist: true,
-        }
-    }
-
-    pub const fn workbench_with_browser_assist() -> Self {
-        Self {
-            workbench: true,
-            browser_assist: true,
-        }
+        Self { workbench: true }
     }
 
     pub const fn includes_profile(self, profile: ToolSurfaceProfile) -> bool {
         match profile {
             ToolSurfaceProfile::Core => true,
             ToolSurfaceProfile::Workbench => self.workbench,
-            ToolSurfaceProfile::BrowserAssist => self.browser_assist,
         }
     }
 }
 
 const CORE_PROFILES: &[ToolSurfaceProfile] = &[ToolSurfaceProfile::Core];
 const WORKBENCH_PROFILES: &[ToolSurfaceProfile] = &[ToolSurfaceProfile::Workbench];
-const BROWSER_PROFILES: &[ToolSurfaceProfile] = &[ToolSurfaceProfile::BrowserAssist];
 
 const PLAN_CAP: &[ToolCapability] = &[ToolCapability::Planning];
 const SEARCH_CAP: &[ToolCapability] = &[ToolCapability::WebSearch];
 const SKILL_CAP: &[ToolCapability] = &[ToolCapability::SkillExecution];
 const CONTENT_CAP: &[ToolCapability] = &[ToolCapability::ContentCreation];
-const BROWSER_CAP: &[ToolCapability] = &[ToolCapability::BrowserRuntime];
-const SITE_CAP: &[ToolCapability] = &[ToolCapability::BrowserRuntime, ToolCapability::WebSearch];
 const SESSION_CAP: &[ToolCapability] = &[ToolCapability::SessionControl];
 const WORKSPACE_IO_CAP: &[ToolCapability] = &[ToolCapability::WorkspaceIo];
 const MEMORY_CAP: &[ToolCapability] = &[ToolCapability::Memory];
@@ -468,60 +434,6 @@ static NATIVE_TOOL_CATALOG: &[ToolCatalogEntry] = &[
         permission_plane: ToolPermissionPlane::SessionAllowlist,
         workspace_default_allow: true,
     },
-    ToolCatalogEntry {
-        name: LIME_SITE_LIST_TOOL_NAME,
-        profiles: BROWSER_PROFILES,
-        capabilities: SITE_CAP,
-        lifecycle: ToolLifecycle::Current,
-        source: ToolSourceKind::LimeInjected,
-        permission_plane: ToolPermissionPlane::SessionAllowlist,
-        workspace_default_allow: true,
-    },
-    ToolCatalogEntry {
-        name: LIME_SITE_RECOMMEND_TOOL_NAME,
-        profiles: BROWSER_PROFILES,
-        capabilities: SITE_CAP,
-        lifecycle: ToolLifecycle::Current,
-        source: ToolSourceKind::LimeInjected,
-        permission_plane: ToolPermissionPlane::SessionAllowlist,
-        workspace_default_allow: true,
-    },
-    ToolCatalogEntry {
-        name: LIME_SITE_SEARCH_TOOL_NAME,
-        profiles: BROWSER_PROFILES,
-        capabilities: SITE_CAP,
-        lifecycle: ToolLifecycle::Current,
-        source: ToolSourceKind::LimeInjected,
-        permission_plane: ToolPermissionPlane::SessionAllowlist,
-        workspace_default_allow: true,
-    },
-    ToolCatalogEntry {
-        name: LIME_SITE_INFO_TOOL_NAME,
-        profiles: BROWSER_PROFILES,
-        capabilities: SITE_CAP,
-        lifecycle: ToolLifecycle::Current,
-        source: ToolSourceKind::LimeInjected,
-        permission_plane: ToolPermissionPlane::SessionAllowlist,
-        workspace_default_allow: true,
-    },
-    ToolCatalogEntry {
-        name: LIME_SITE_RUN_TOOL_NAME,
-        profiles: BROWSER_PROFILES,
-        capabilities: SITE_CAP,
-        lifecycle: ToolLifecycle::Current,
-        source: ToolSourceKind::LimeInjected,
-        permission_plane: ToolPermissionPlane::SessionAllowlist,
-        workspace_default_allow: true,
-    },
-    ToolCatalogEntry {
-        name: BROWSER_RUNTIME_TOOL_PREFIX,
-        profiles: BROWSER_PROFILES,
-        capabilities: BROWSER_CAP,
-        lifecycle: ToolLifecycle::Current,
-        source: ToolSourceKind::BrowserCompatibility,
-        permission_plane: ToolPermissionPlane::CallerFiltered,
-        workspace_default_allow: false,
-    },
 ];
 
 pub fn native_tool_catalog() -> &'static [ToolCatalogEntry] {
@@ -640,27 +552,14 @@ pub fn workbench_tool_names() -> Vec<&'static str> {
     tool_catalog_entries_for_surface(WorkspaceToolSurface::workbench())
         .into_iter()
         .filter(|entry| entry.profiles.contains(&ToolSurfaceProfile::Workbench))
-        .filter(|entry| entry.name != BROWSER_RUNTIME_TOOL_PREFIX)
         .map(|entry| entry.name)
         .collect()
-}
-
-pub fn browser_runtime_tool_prefix() -> &'static str {
-    BROWSER_RUNTIME_TOOL_PREFIX
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
-
-    #[test]
-    fn test_tool_catalog_entry_matches_browser_prefix() {
-        let entry = tool_catalog_entry("mcp__lime-browser__navigate")
-            .expect("browser tool should match prefix catalog entry");
-        assert_eq!(entry.name, BROWSER_RUNTIME_TOOL_PREFIX);
-        assert_eq!(entry.source, ToolSourceKind::BrowserCompatibility);
-    }
 
     #[test]
     fn test_workspace_default_allowed_tool_names_excludes_parameter_restricted_tools() {
@@ -866,10 +765,6 @@ mod tests {
             .iter()
             .filter(|entry| entry.profiles.contains(&ToolSurfaceProfile::Workbench))
             .count();
-        let browser_increment = native_tool_catalog()
-            .iter()
-            .filter(|entry| entry.profiles.contains(&ToolSurfaceProfile::BrowserAssist))
-            .count();
         assert_eq!(
             core.iter()
                 .filter(|entry| entry.lifecycle == ToolLifecycle::Current)
@@ -909,31 +804,11 @@ mod tests {
         assert!(core
             .iter()
             .all(|entry| !entry.profiles.contains(&ToolSurfaceProfile::Workbench)));
-        assert!(core
-            .iter()
-            .all(|entry| !entry.profiles.contains(&ToolSurfaceProfile::BrowserAssist)));
-
         let workbench = tool_catalog_entries_for_surface(WorkspaceToolSurface::workbench());
         assert_eq!(workbench.len(), core.len() + workbench_increment);
         assert!(workbench
             .iter()
             .any(|entry| entry.name == SOCIAL_IMAGE_TOOL_NAME));
-        assert!(!workbench
-            .iter()
-            .any(|entry| entry.name == BROWSER_RUNTIME_TOOL_PREFIX));
-
-        let browser = tool_catalog_entries_for_surface(WorkspaceToolSurface::browser_assist());
-        assert_eq!(browser.len(), core.len() + browser_increment);
-        assert!(browser
-            .iter()
-            .any(|entry| entry.name == BROWSER_RUNTIME_TOOL_PREFIX));
-
-        let combined =
-            tool_catalog_entries_for_surface(WorkspaceToolSurface::workbench_with_browser_assist());
-        assert_eq!(
-            combined.len(),
-            core.len() + workbench_increment + browser_increment
-        );
     }
 
     #[test]
@@ -953,13 +828,11 @@ mod tests {
         assert!(names.contains(LIME_RUN_SERVICE_SKILL_TOOL_NAME));
         assert!(names.contains(LIME_SEARCH_WEB_IMAGES_TOOL_NAME));
         assert!(!names.contains(TOOL_SEARCH_TOOL_NAME));
-        assert!(!names.contains(BROWSER_RUNTIME_TOOL_PREFIX));
     }
 
     #[test]
-    fn test_workspace_default_allowed_tool_names_workbench_with_browser_assist_excludes_prefix_tool(
-    ) {
-        let surface = WorkspaceToolSurface::workbench_with_browser_assist();
+    fn test_workspace_default_allowed_tool_names_for_workbench() {
+        let surface = WorkspaceToolSurface::workbench();
         let names = workspace_default_allowed_tool_names(surface);
         let expected_len = tool_catalog_entries_for_surface(surface)
             .into_iter()
@@ -980,11 +853,6 @@ mod tests {
         assert!(names.contains(&LIME_CREATE_AUDIO_TASK_TOOL_NAME));
         assert!(!names.contains(&LIME_CREATE_VIDEO_TASK_TOOL_NAME));
         assert!(names.contains(&LIME_SEARCH_WEB_IMAGES_TOOL_NAME));
-        assert!(names.contains(&LIME_SITE_RECOMMEND_TOOL_NAME));
-        assert!(names.contains(&LIME_SITE_RUN_TOOL_NAME));
         assert!(!names.contains(&LIME_RUN_SERVICE_SKILL_TOOL_NAME));
-        assert!(!names
-            .iter()
-            .any(|name| name.starts_with(BROWSER_RUNTIME_TOOL_PREFIX)));
     }
 }

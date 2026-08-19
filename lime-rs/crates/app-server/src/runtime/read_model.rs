@@ -16,7 +16,6 @@ use super::coding_activity_projection;
 use super::event_request_id;
 use super::file_checkpoint_projection;
 use super::output_refs;
-use super::permission_state_projection;
 use super::read_model_turn_usage;
 use super::status::agent_session_status_label;
 use super::status::resolve_agent_session_runtime_state;
@@ -491,7 +490,6 @@ fn runtime_thread_read_from_stored_session_with_usage_events(
     usage_projection_events: &[AgentEvent],
 ) -> serde_json::Value {
     let coding_activity = coding_activity_projection::coding_activity_from_events(stored);
-    let permission_state = permission_state_projection::permission_state_from_events(stored);
     let model_routing = latest_model_routing_from_events(&stored.events);
     let service_model_slot = model_routing
         .as_ref()
@@ -541,7 +539,6 @@ fn runtime_thread_read_from_stored_session_with_usage_events(
         "execution_strategy": session_execution_strategy(&stored.session),
         "turns": turns,
         "pending_requests": coding_activity.pending_requests,
-        "permission_state": permission_state,
         "queued_turns": queued_turns,
         "active_turn_id": active_turn_id,
         "active_command_id": coding_activity.active_command_id,

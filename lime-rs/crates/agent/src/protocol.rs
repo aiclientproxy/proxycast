@@ -297,6 +297,13 @@ pub enum GuardianUserAuthorization {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AgentEvent {
+    /// Internal trace evidence. App Server consumes this before RuntimeEvent
+    /// projection, so it never becomes a public ThreadItem or GUI event.
+    #[serde(rename = "code_cell_trace")]
+    CodeCellTrace {
+        event: tool_runtime::tool_lifecycle::CodeCellTraceEvent,
+    },
+
     #[serde(rename = "thread_started")]
     ThreadStarted { thread_id: String },
 

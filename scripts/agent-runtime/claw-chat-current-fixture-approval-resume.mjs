@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
-  APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
   APP_SERVER_METHOD_SESSION_TURN_CANCEL,
   APPROVAL_REQUEST_CANCEL_DONE_TEXT,
   APPROVAL_REQUEST_DECLINE_DONE_TEXT,
@@ -14,10 +13,6 @@ import {
   APPROVAL_REQUEST_RESUME_PROMPT,
   APPROVAL_REQUEST_RESUME_REQUEST_ID,
   APPROVAL_REQUEST_RESUME_RESULT_TEXT,
-  APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT,
-  APPROVAL_REQUEST_RESUME_SECOND_PROMPT,
-  APPROVAL_REQUEST_RESUME_SECOND_PROMPT_MARKER,
-  APPROVAL_REQUEST_RESUME_SECOND_RESULT_TEXT,
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
   waitForBackendLedgerEntry,
@@ -28,18 +23,16 @@ import {
   clickApprovalApproveButton,
   waitForGuiApprovalPromptAbsent,
   waitForGuiApprovalPending,
-  waitForGuiApprovalPromptAbsentAfterSecondTurn,
 } from "./claw-chat-current-fixture-approval-gui.mjs";
 import {
   summarizeApprovalCompletedReadModel,
   summarizeApprovalDecisionReadModel,
-  summarizeApprovalSecondTurnStart,
-  summarizeApprovalSessionCacheReadModel,
   waitForApprovalPendingReadModel,
 } from "./claw-chat-current-fixture-approval-read-model.mjs";
 import {
+  readApprovalServerRequestLifecycleSnapshot,
   waitForApprovalHostInterruptLifecycle,
-  waitForActionRespondTrace,
+  waitForApprovalServerRequestResponse,
   waitForApprovalServerRequestLifecycle,
 } from "./claw-chat-current-fixture-approval-trace.mjs";
 import {
@@ -381,20 +374,47 @@ export async function runApprovalRequestDecisionScenario({
     decision,
   );
 
-  logStage(`wait-${scenarioStage}-action-respond-trace`);
-  const respondActionRequest = await waitForActionRespondTrace(page, options, {
-    decision,
-  });
+  logStage(`wait-${scenarioStage}-server-request-response`);
+  const serverRequestResponse = await waitForApprovalServerRequestResponse(
+    page,
+    options,
+    {
+      wireDecision: decision,
+      threadId: options.threadId,
+      turnId: backendTurnStart.entry.turnId,
+    },
+  );
+  if (serverRequestResponse.responseMatchesRequest !== true) {
+    throw new Error(
+      `审批 ${decision} reverse server request 未记录匹配响应: ${JSON.stringify(
+        serverRequestResponse,
+      )}`,
+    );
+  }
 
   logStage(`wait-${scenarioStage}-backend-action-respond`);
-  const backendActionRespond = await waitForBackendLedgerEntry(
-    runtimeEnv.backendLedgerPath,
-    (entry) =>
-      entry.kind === "approvalRequestResumeActionRespond" &&
-      entry.requestId === APPROVAL_REQUEST_RESUME_REQUEST_ID &&
-      entry.decision === decision,
-    options,
-  );
+  let backendActionRespond;
+  try {
+    backendActionRespond = await waitForBackendLedgerEntry(
+      runtimeEnv.backendLedgerPath,
+      (entry) =>
+        entry.kind === "approvalRequestResumeActionRespond" &&
+        entry.requestId === APPROVAL_REQUEST_RESUME_REQUEST_ID &&
+        entry.decision === decision,
+      options,
+    );
+  } catch (error) {
+    const lifecycle = await readApprovalServerRequestLifecycleSnapshot(page, {
+      wireDecision: decision,
+      threadId: options.threadId,
+      turnId: backendTurnStart.entry.turnId,
+    });
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}; ` +
+        `serverRequestLifecycle=${JSON.stringify(lifecycle)}`,
+      { cause: error },
+    );
+  }
 
   if (decision === "cancel") {
     logStage(`wait-gui-${scenarioStage}-canceled`);
@@ -437,18 +457,7 @@ export async function runApprovalRequestDecisionScenario({
       approvalRequestDecisionPendingGui: pendingGui,
       approvalRequestDecisionPendingReadModel: pendingReadModel,
       approvalRequestDecisionClick: decisionClick,
-      approvalRequestDecisionRespondActionRequest: respondActionRequest ?? {
-        method: APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-        params: {
-          sessionId: backendActionRespond.entry.sessionId,
-          requestId: backendActionRespond.entry.requestId,
-          actionType: backendActionRespond.entry.actionType,
-          decision: backendActionRespond.entry.decision,
-          decisionScope: backendActionRespond.entry.decisionScope,
-          response: backendActionRespond.entry.response,
-          actionScope: backendActionRespond.entry.actionScope,
-        },
-      },
+      approvalRequestDecisionServerRequestResponse: serverRequestResponse,
       approvalRequestDecisionBackendActionRespond:
         summarizeBackendActionRespond(backendActionRespond.entry),
       approvalRequestDecisionServerRequestLifecycle: serverRequestLifecycle,
@@ -505,18 +514,7 @@ export async function runApprovalRequestDecisionScenario({
     approvalRequestDecisionPendingGui: pendingGui,
     approvalRequestDecisionPendingReadModel: pendingReadModel,
     approvalRequestDecisionClick: decisionClick,
-    approvalRequestDecisionRespondActionRequest: respondActionRequest ?? {
-      method: APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-      params: {
-        sessionId: backendActionRespond.entry.sessionId,
-        requestId: backendActionRespond.entry.requestId,
-        actionType: backendActionRespond.entry.actionType,
-        decision: backendActionRespond.entry.decision,
-        decisionScope: backendActionRespond.entry.decisionScope,
-        response: backendActionRespond.entry.response,
-        actionScope: backendActionRespond.entry.actionScope,
-      },
-    },
+    approvalRequestDecisionServerRequestResponse: serverRequestResponse,
     approvalRequestDecisionBackendActionRespond: summarizeBackendActionRespond(
       backendActionRespond.entry,
     ),
@@ -559,17 +557,46 @@ export async function runApprovalRequestResumeScenario({
   logStage("click-approval-request-resume-approve");
   const approveClick = await clickApprovalApproveButton(page, options);
 
-  logStage("wait-approval-request-resume-action-respond-trace");
-  const respondActionRequest = await waitForActionRespondTrace(page, options);
+  logStage("wait-approval-request-resume-server-request-response");
+  const serverRequestResponse = await waitForApprovalServerRequestResponse(
+    page,
+    options,
+    {
+      wireDecision: "acceptForSession",
+      threadId: options.threadId,
+      turnId: backendTurnStart.entry.turnId,
+    },
+  );
+  if (serverRequestResponse.responseMatchesRequest !== true) {
+    throw new Error(
+      `审批 reverse server request 未记录匹配响应: ${JSON.stringify(
+        serverRequestResponse,
+      )}`,
+    );
+  }
 
   logStage("wait-approval-request-resume-backend-action-respond");
-  const backendActionRespond = await waitForBackendLedgerEntry(
-    runtimeEnv.backendLedgerPath,
-    (entry) =>
-      entry.kind === "approvalRequestResumeActionRespond" &&
-      entry.requestId === APPROVAL_REQUEST_RESUME_REQUEST_ID,
-    options,
-  );
+  let backendActionRespond;
+  try {
+    backendActionRespond = await waitForBackendLedgerEntry(
+      runtimeEnv.backendLedgerPath,
+      (entry) =>
+        entry.kind === "approvalRequestResumeActionRespond" &&
+        entry.requestId === APPROVAL_REQUEST_RESUME_REQUEST_ID,
+      options,
+    );
+  } catch (error) {
+    const lifecycle = await readApprovalServerRequestLifecycleSnapshot(page, {
+      wireDecision: "acceptForSession",
+      threadId: options.threadId,
+      turnId: backendTurnStart.entry.turnId,
+    });
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}; ` +
+        `serverRequestLifecycle=${JSON.stringify(lifecycle)}`,
+      { cause: error },
+    );
+  }
 
   logStage("wait-gui-approval-request-resume-completed");
   const guiCompleted = sanitizeJson(
@@ -603,54 +630,6 @@ export async function runApprovalRequestResumeScenario({
     },
   );
 
-  logStage("set-approval-request-resume-second-access-mode-current");
-  const secondAccessModeSet = await setInputbarAccessMode(
-    page,
-    options,
-    "current",
-  );
-
-  logStage("send-approval-request-resume-second-browser-prompt-from-gui");
-  const secondInputSend = sanitizeJson(
-    await sendPromptFromGui(
-      page,
-      options,
-      APPROVAL_REQUEST_RESUME_SECOND_PROMPT,
-    ),
-  );
-
-  logStage("wait-approval-request-resume-second-backend-turn-start");
-  const secondBackendTurnStart = await waitForBackendLedgerTurnStart(
-    runtimeEnv.backendLedgerPath,
-    APPROVAL_REQUEST_RESUME_SECOND_PROMPT,
-    options,
-  );
-
-  logStage("wait-gui-approval-request-resume-second-completed");
-  const secondGuiCompleted = sanitizeJson(
-    await waitForGuiChatCompleted(page, options, {
-      prompt: APPROVAL_REQUEST_RESUME_SECOND_PROMPT_MARKER,
-      doneText: APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT,
-      summaryText: APPROVAL_REQUEST_RESUME_SECOND_RESULT_TEXT,
-    }),
-  );
-
-  logStage("wait-gui-approval-request-resume-second-no-prompt");
-  const secondGuiNoApprovalPrompt =
-    await waitForGuiApprovalPromptAbsentAfterSecondTurn(page, options);
-
-  logStage("wait-read-model-approval-request-resume-second-completed");
-  const secondCompletedReadModel = await waitForSessionReadCompleted(
-    page,
-    options,
-    appServerRequests,
-    {
-      prompt: APPROVAL_REQUEST_RESUME_SECOND_PROMPT,
-      doneText: APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT,
-      summaryText: APPROVAL_REQUEST_RESUME_SECOND_RESULT_TEXT,
-    },
-  );
-
   return sanitizeJson({
     approvalRequestResumeInputSend: inputSend,
     approvalRequestResumeBackendTurnStart: {
@@ -662,18 +641,7 @@ export async function runApprovalRequestResumeScenario({
     approvalRequestResumePendingGui: pendingGui,
     approvalRequestResumePendingReadModel: pendingReadModel,
     approvalRequestResumeApproveClick: approveClick,
-    approvalRequestResumeRespondActionRequest: respondActionRequest ?? {
-      method: APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-      params: {
-        sessionId: backendActionRespond.entry.sessionId,
-        requestId: backendActionRespond.entry.requestId,
-        actionType: backendActionRespond.entry.actionType,
-        decision: backendActionRespond.entry.decision,
-        decisionScope: backendActionRespond.entry.decisionScope,
-        response: backendActionRespond.entry.response,
-        actionScope: backendActionRespond.entry.actionScope,
-      },
-    },
+    approvalRequestResumeServerRequestResponse: serverRequestResponse,
     approvalRequestResumeBackendActionRespond: summarizeBackendActionRespond(
       backendActionRespond.entry,
     ),
@@ -681,16 +649,5 @@ export async function runApprovalRequestResumeScenario({
     guiApprovalRequestResumeCompleted: guiCompleted,
     readModelApprovalRequestResumeCompleted:
       summarizeApprovalCompletedReadModel(completedReadModel),
-    approvalRequestResumeSecondAccessModeSet: secondAccessModeSet,
-    approvalRequestResumeSecondInputSend: secondInputSend,
-    approvalRequestResumeSecondBackendTurnStart:
-      summarizeApprovalSecondTurnStart(secondBackendTurnStart.entry),
-    guiApprovalRequestResumeSecondCompleted: secondGuiCompleted,
-    guiApprovalRequestResumeSecondNoApprovalPrompt: secondGuiNoApprovalPrompt,
-    readModelApprovalRequestResumeSecondCompleted:
-      summarizeApprovalSessionCacheReadModel(
-        secondCompletedReadModel,
-        secondBackendTurnStart.entry.turnId,
-      ),
   });
 }

@@ -723,29 +723,6 @@ const SEEDED_COMMAND_PROJECTION_SPECS: SeededCommandProjectionSpec[] = [
     commandRenderContract: COMMAND_ARTIFACT_CONTRACT,
   },
   {
-    commandKey: "site_search",
-    title: "站点搜索",
-    summary: "在指定站点内检索内容，优先复用 site adapter 与真实浏览器上下文。",
-    aliases: [
-      "site",
-      "site_search",
-      "zhandian",
-      "站点",
-      "站点搜索",
-      "GitHub 搜索",
-      "知乎搜索",
-      "B站搜索",
-    ],
-    trigger: "@站点搜索",
-    category: "研究分析",
-    outputHint: "站点搜索 timeline",
-    commandBinding: {
-      skillId: "site_search",
-      executionKind: "agent_turn",
-    },
-    commandRenderContract: COMMAND_TIMELINE_JSON_CONTRACT,
-  },
-  {
     commandKey: "read_pdf",
     title: "读PDF",
     summary:

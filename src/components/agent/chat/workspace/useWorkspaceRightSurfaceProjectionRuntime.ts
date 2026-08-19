@@ -22,8 +22,6 @@ interface UseWorkspaceRightSurfaceProjectionRuntimeParams {
   harnessPendingCount: number;
   hasExpertInfoPanel: boolean;
   manualRightSurface: WorkspaceRightSurfaceKind | null;
-  objectCanvasAvailable: boolean;
-  objectCanvasCandidateId?: string | null;
   preferredServiceSkillResultFileTargetRelativePath?: string | null;
   sceneLayoutMode: LayoutMode;
   shellAvailable: boolean;
@@ -43,7 +41,6 @@ function resolveWorkspaceRightSurfaceOpenSurfaces({
   filesAvailable,
   hasExpertInfoPanel,
   manualRightSurface,
-  objectCanvasAvailable,
   sceneLayoutMode,
   shellAvailable,
   harnessAvailable,
@@ -53,7 +50,6 @@ function resolveWorkspaceRightSurfaceOpenSurfaces({
   filesAvailable: boolean;
   hasExpertInfoPanel: boolean;
   manualRightSurface: WorkspaceRightSurfaceKind | null;
-  objectCanvasAvailable: boolean;
   sceneLayoutMode: LayoutMode;
   shellAvailable: boolean;
   harnessAvailable: boolean;
@@ -68,13 +64,11 @@ function resolveWorkspaceRightSurfaceOpenSurfaces({
 
   add("workbench", sceneLayoutMode !== "chat");
   add("appSurface", appSurfaceAvailable);
-  add("objectCanvas", objectCanvasAvailable);
   add("expertInfo", hasExpertInfoPanel);
   add("files", filesAvailable);
   add("shell", shellAvailable);
   add("harness", harnessAvailable);
   add("trace", traceAvailable);
-  add("objectCanvas", manualRightSurface === "objectCanvas");
   add("articleWorkspace", manualRightSurface === "articleWorkspace");
   add("files", manualRightSurface === "files");
   add("shell", manualRightSurface === "shell");
@@ -95,8 +89,6 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
   harnessPendingCount,
   hasExpertInfoPanel,
   manualRightSurface,
-  objectCanvasAvailable,
-  objectCanvasCandidateId,
   preferredServiceSkillResultFileTargetRelativePath,
   sceneLayoutMode,
   shellAvailable,
@@ -115,7 +107,6 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
         filesAvailable,
         hasExpertInfoPanel,
         manualRightSurface,
-        objectCanvasAvailable,
         sceneLayoutMode,
         shellAvailable,
         harnessAvailable,
@@ -128,7 +119,6 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
       harnessAvailable,
       hasExpertInfoPanel,
       manualRightSurface,
-      objectCanvasAvailable,
       sceneLayoutMode,
       shellAvailable,
     ],
@@ -155,7 +145,6 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
     const params = {
       createdAt: Date.now(),
       harnessPendingCount,
-      objectCanvasCandidateId,
       preferredServiceSkillResultFileTargetRelativePath,
       showHarnessToggle,
       suppressHomeNavbarUtilityActions,
@@ -165,7 +154,6 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
       : [];
   }, [
     harnessPendingCount,
-    objectCanvasCandidateId,
     preferredServiceSkillResultFileTargetRelativePath,
     showHarnessToggle,
     suppressHomeNavbarUtilityActions,
@@ -182,7 +170,6 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
         filesAvailable,
         appSurfaceAvailable,
         hasExpertInfoPanel,
-        objectCanvasAvailable,
         articleWorkspaceAvailable,
         shellAvailable,
         showHarnessToggle,
@@ -194,7 +181,6 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
       articleWorkspaceAvailable,
       filesAvailable,
       hasExpertInfoPanel,
-      objectCanvasAvailable,
       rightSurfacePendingIntents,
       rightSurfaceState,
       shellAvailable,

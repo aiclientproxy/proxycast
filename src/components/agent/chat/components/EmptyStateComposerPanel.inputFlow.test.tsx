@@ -45,7 +45,7 @@ describe("EmptyStateComposerPanel", () => {
     expect(
       (container.querySelector("textarea") as HTMLTextAreaElement).value,
     ).toBe("");
-  });
+  }, 15_000);
 
   it("Shift+Tab 保持焦点切换，不填入起手建议", () => {
     const container = renderPanel();

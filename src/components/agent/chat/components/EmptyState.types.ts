@@ -109,8 +109,6 @@ export interface EmptyStateProps extends SkillSelectionSourceProps {
   onOpenMemoryWorkbench?: () => void;
   /** 打开消息渠道 */
   onOpenChannels?: () => void;
-  /** 打开浏览器连接器 */
-  onOpenChromeRelay?: () => void;
   /** 当前带入的 creation replay 前台投影 */
   creationReplaySurface?: CreationReplaySurfaceModel | null;
   /** 当前结果模板默认带入的 memory 引用 id */

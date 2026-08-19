@@ -53,8 +53,6 @@ pub struct AgentSessionToolInventoryReadParams {
     pub caller: Option<String>,
     #[serde(default)]
     pub workbench: bool,
-    #[serde(default)]
-    pub browser_assist: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<serde_json::Value>,
 }

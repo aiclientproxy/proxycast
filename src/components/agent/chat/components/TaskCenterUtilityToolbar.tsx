@@ -5,7 +5,6 @@ import {
   Code2,
   FileText,
   Globe2,
-  Monitor,
   PanelRightClose,
   PanelRightOpen,
   PanelRight,
@@ -96,7 +95,6 @@ interface TaskCenterUtilityToolbarProps {
   onToggleBrowserPanel?: () => void;
   onToggleFilesPanel?: () => void;
   onToggleTracePanel?: () => void;
-  onToggleObjectCanvasPanel?: () => void;
   rightSurfaceLaunchers?: readonly WorkspaceRightSurfaceLauncherProjection[];
 }
 
@@ -234,7 +232,6 @@ export function TaskCenterUtilityToolbar({
   onToggleBrowserPanel,
   onToggleFilesPanel,
   onToggleTracePanel,
-  onToggleObjectCanvasPanel,
   rightSurfaceLaunchers,
 }: TaskCenterUtilityToolbarProps) {
   const { t } = useTranslation("agent");
@@ -264,42 +261,6 @@ export function TaskCenterUtilityToolbar({
   const filesLauncher = rightSurfaceLauncherByKind.get("files");
   const browserLauncher = rightSurfaceLauncherByKind.get("browser");
   const traceLauncher = rightSurfaceLauncherByKind.get("trace");
-  const articleEditorLauncher =
-    rightSurfaceLauncherByKind.get("articleWorkspace");
-  const objectCanvasLauncher = rightSurfaceLauncherByKind.get("objectCanvas");
-  const articleEditorHasVisibleSignal = Boolean(
-    articleEditorLauncher?.active ||
-    (articleEditorLauncher?.pendingCount ?? 0) > 0 ||
-    (!objectCanvasLauncher && articleEditorLauncher),
-  );
-  const objectProfileLauncher = articleEditorHasVisibleSignal
-    ? articleEditorLauncher
-    : (objectCanvasLauncher ?? articleEditorLauncher);
-  const objectProfilePendingCount =
-    (articleEditorLauncher?.pendingCount ?? 0) +
-    (objectCanvasLauncher?.pendingCount ?? 0);
-  const objectProfileActive = Boolean(
-    articleEditorLauncher?.active || objectCanvasLauncher?.active,
-  );
-  const objectProfileDisabled = Boolean(objectProfileLauncher?.disabled);
-  const objectProfileLabelKey = articleEditorHasVisibleSignal
-    ? "agentChat.navbar.articleWorkspace"
-    : "agentChat.navbar.objectCanvas";
-  const objectProfileDefaultLabel = articleEditorHasVisibleSignal
-    ? "文章编辑器"
-    : "对象画布";
-  const openObjectProfileLabelKey = articleEditorHasVisibleSignal
-    ? "agentChat.navbar.openArticleWorkspace"
-    : "agentChat.navbar.openObjectCanvas";
-  const closeObjectProfileLabelKey = articleEditorHasVisibleSignal
-    ? "agentChat.navbar.closeArticleWorkspace"
-    : "agentChat.navbar.closeObjectCanvas";
-  const shouldRenderObjectCanvasToggle =
-    Boolean(onToggleObjectCanvasPanel) &&
-    Boolean(objectProfileLauncher) &&
-    (!objectProfileLauncher?.disabled ||
-      objectProfileActive ||
-      objectProfilePendingCount > 0);
   const shouldRenderFilesToggle =
     Boolean(onToggleFilesPanel) &&
     Boolean(filesLauncher) &&
@@ -322,7 +283,6 @@ export function TaskCenterUtilityToolbar({
     shouldRenderHarnessToggle ||
     showExpertInfoToggle ||
     showCanvasToggle ||
-    shouldRenderObjectCanvasToggle ||
     shouldRenderTraceToggle ||
     shouldRenderBrowserToggle ||
     shouldRenderFilesToggle;
@@ -330,8 +290,6 @@ export function TaskCenterUtilityToolbar({
   const workbenchPendingCount = workbenchLauncher?.pendingCount ?? 0;
   const effectiveShellPanelOpen = shellLauncher?.active ?? shellPanelOpen;
   const shellPendingCount = shellLauncher?.pendingCount ?? 0;
-  const effectiveObjectCanvasPanelOpen = objectProfileActive;
-  const objectCanvasPendingCount = objectProfilePendingCount;
   const effectiveFilesPanelOpen = Boolean(filesLauncher?.active);
   const filesPendingCount = filesLauncher?.pendingCount ?? 0;
   const effectiveBrowserPanelOpen = Boolean(browserLauncher?.active);
@@ -685,43 +643,6 @@ export function TaskCenterUtilityToolbar({
               {expertInfoPendingCount > 0 ? (
                 <span className="absolute -right-1 -top-1 rounded-full border border-[color:var(--lime-surface-border-strong)] bg-[color:var(--lime-surface)] px-1 text-[9px] font-medium leading-4 text-[color:var(--lime-brand-strong)]">
                   {expertInfoPendingCount > 99 ? "99+" : expertInfoPendingCount}
-                </span>
-              ) : null}
-            </Button>
-          ) : null}
-
-          {shouldRenderObjectCanvasToggle ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                taskCenterIconOnlyButtonClassName,
-                "relative",
-                effectiveObjectCanvasPanelOpen &&
-                  "bg-[color:var(--lime-chrome-tab-active-surface)] text-[color:var(--lime-text)]",
-              )}
-              disabled={objectProfileDisabled}
-              onClick={onToggleObjectCanvasPanel}
-              aria-label={agentText(
-                effectiveObjectCanvasPanelOpen
-                  ? closeObjectProfileLabelKey
-                  : openObjectProfileLabelKey,
-                `${effectiveObjectCanvasPanelOpen ? "关闭" : "打开"}${objectProfileDefaultLabel}`,
-              )}
-              aria-expanded={effectiveObjectCanvasPanelOpen}
-              title={agentText(
-                objectProfileLabelKey,
-                objectProfileDefaultLabel,
-              )}
-              data-testid="task-center-object-canvas-toggle"
-            >
-              <Monitor className="h-4 w-4" />
-              {objectCanvasPendingCount > 0 ? (
-                <span className="absolute -right-1 -top-1 rounded-full border border-[color:var(--lime-surface-border-strong)] bg-[color:var(--lime-surface)] px-1 text-[9px] font-medium leading-4 text-[color:var(--lime-brand-strong)]">
-                  {objectCanvasPendingCount > 99
-                    ? "99+"
-                    : objectCanvasPendingCount}
                 </span>
               ) : null}
             </Button>

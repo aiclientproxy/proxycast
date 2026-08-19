@@ -20,9 +20,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
+mod code_cell;
 mod export;
 mod summary;
 
+pub(crate) use code_cell::CodeCellTraceProjection;
 pub(crate) use summary::summarize_trace_event_store;
 
 pub(crate) const RAW_TRACE_EVENT_SCHEMA_VERSION: u32 = 1;
@@ -127,6 +129,33 @@ impl TraceEventWriter {
         Ok(paths)
     }
 
+    pub(crate) fn append_code_cell_trace_event(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        event: tool_runtime::tool_lifecycle::CodeCellTraceEvent,
+    ) -> Result<(), String> {
+        code_cell::append(self, session_id, thread_id, event)
+    }
+
+    pub(crate) fn close_code_cells_for_turn(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        turn_id: &str,
+        status: tool_runtime::tool_lifecycle::CodeCellRuntimeStatus,
+    ) -> Result<(), String> {
+        code_cell::close_for_turn(self, session_id, thread_id, turn_id, status)
+    }
+
+    pub(crate) fn read_code_cell_trace(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+    ) -> Result<CodeCellTraceProjection, String> {
+        code_cell::read_projection(self, session_id, thread_id)
+    }
+
     pub fn clear_session(&self, session_id: &str) -> Result<(), String> {
         let session_dir = self
             .root
@@ -196,6 +225,26 @@ impl TraceEventWriter {
         }
 
         let records = read_trace_event_records(&path)?;
+        if records
+            .iter()
+            .any(|record| record.event.event_type.starts_with("code_cell."))
+        {
+            let thread_id = records
+                .iter()
+                .find_map(|record| record.event.thread_id.as_deref())
+                .ok_or_else(|| "CodeCell trace is missing thread identity".to_string())?;
+            if params.trace_id != code_cell::trace_id(thread_id) {
+                return Err(format!(
+                    "CodeCell trace id {} does not match thread {thread_id}",
+                    params.trace_id
+                ));
+            }
+            let projection = self.read_code_cell_trace(&params.session_id, thread_id)?;
+            let _validated_cell_count = projection
+                .code_cells
+                .len()
+                .saturating_add(projection.pending_code_cell_ids.len());
+        }
         let trace = trace_summary_from_records(&path, &records);
         let events = records
             .into_iter()

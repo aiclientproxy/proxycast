@@ -20,15 +20,13 @@ import {
   type ServiceSkillExecutorBinding,
   type ServiceSkillBundleSummary,
   type ServiceSkillItem,
-  type ServiceSkillSiteCapabilityBinding,
   type ServiceSkillSurfaceScope,
 } from "./serviceSkills";
 
 export type SkillCatalogExecutionKind =
   | "native_skill"
   | "agent_turn"
-  | "automation_job"
-  | "site_adapter";
+  | "automation_job";
 
 // legacy compat only：若远端或旧包仍返回 cloud_scene，解析层会先正规化为 agent_turn。
 export type SkillCatalogCompatExecutionKind = "cloud_scene";
@@ -38,7 +36,6 @@ type SkillCatalogAnyExecutionKind =
 
 export interface SkillCatalogExecution {
   kind: SkillCatalogExecutionKind;
-  siteAdapterBinding?: ServiceSkillSiteCapabilityBinding;
 }
 
 export type SkillCatalogEntryKind = "skill" | "command" | "scene";
@@ -317,12 +314,7 @@ function cloneSkillCatalog(catalog: SkillCatalog): SkillCatalog {
     groups: catalog.groups.map((group) => ({ ...group })),
     items: catalog.items.map((item) => ({
       ...cloneJsonValue(item),
-      execution: {
-        ...item.execution,
-        siteAdapterBinding: item.execution.siteAdapterBinding
-          ? cloneJsonValue(item.execution.siteAdapterBinding)
-          : undefined,
-      },
+      execution: { ...item.execution },
     })),
     entries: (catalog.entries || []).map((entry) => cloneJsonValue(entry)),
   };
@@ -506,11 +498,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function resolveSkillCatalogExecutionKind(
   binding: ServiceSkillExecutorBinding,
-  siteBinding?: ServiceSkillSiteCapabilityBinding,
 ): SkillCatalogExecutionKind {
-  if (siteBinding || binding === "browser_assist") {
-    return "site_adapter";
-  }
   switch (binding) {
     case "native_skill":
       return "native_skill";
@@ -542,7 +530,6 @@ function parseCommandBindingExecutionKind(
     normalized === "agent_turn" ||
     normalized === "automation_job" ||
     normalized === "cloud_scene" ||
-    normalized === "site_adapter" ||
     normalized === "task_queue" ||
     normalized === "server_api" ||
     normalized === "cli"
@@ -589,7 +576,6 @@ function parseSceneExecutionKind(
     normalized === "agent_turn" ||
     normalized === "automation_job" ||
     normalized === "cloud_scene" ||
-    normalized === "site_adapter" ||
     normalized === "scene"
   ) {
     return normalized === "cloud_scene" ? "agent_turn" : normalized;
@@ -868,7 +854,8 @@ function buildLegacyCatalogEntries(
 }
 
 function resolveSeededSkillGroupKey(item: ServiceSkillItem): string {
-  return resolveAdapterGroupKey(item.siteCapabilityBinding?.adapterName);
+  void item;
+  return "general";
 }
 
 function normalizeCategoryGroupKey(value?: string): string | null {
@@ -896,13 +883,7 @@ function buildSkillCatalogItemFromServiceSkillItem(
     ...clonedItem,
     groupKey: groupKeyOverride ?? resolveSkillCatalogGroupKey(clonedItem),
     execution: {
-      kind: resolveSkillCatalogExecutionKind(
-        clonedItem.defaultExecutorBinding,
-        clonedItem.siteCapabilityBinding,
-      ),
-      siteAdapterBinding: clonedItem.siteCapabilityBinding
-        ? cloneJsonValue(clonedItem.siteCapabilityBinding)
-        : undefined,
+      kind: resolveSkillCatalogExecutionKind(clonedItem.defaultExecutorBinding),
     },
   };
 }
@@ -961,16 +942,6 @@ function buildRawSeededSkillCatalog(): SkillCatalog {
 
 const RAW_SEEDED_SKILL_CATALOG = buildRawSeededSkillCatalog();
 const SEEDED_SKILL_CATALOG = normalizeSkillCatalog(RAW_SEEDED_SKILL_CATALOG);
-
-function resolveAdapterGroupKey(adapterName?: string | null): string {
-  const normalized = normalizeText(adapterName)?.toLowerCase();
-  if (!normalized) {
-    return "general";
-  }
-
-  const [prefix] = normalized.split("/");
-  return prefix || "general";
-}
 
 function titleCaseSegment(value: string): string {
   if (!value) {
@@ -1041,17 +1012,7 @@ function mergeCatalogGroups(
 }
 
 function shouldExposeSkillCatalogItem(item: SkillCatalogItem): boolean {
-  if (item.execution.kind === "site_adapter") {
-    return false;
-  }
-
-  if (
-    item.defaultExecutorBinding === "browser_assist" ||
-    item.siteCapabilityBinding
-  ) {
-    return false;
-  }
-
+  void item;
   return true;
 }
 
@@ -1072,10 +1033,7 @@ function normalizeSkillCatalog(catalog: SkillCatalog): SkillCatalog {
             if (catalog.items.some((item) => item.id === linkedSkillId)) {
               return true;
             }
-            return (
-              entry.executionKind === "site_adapter" ||
-              entry.executionKind === "scene"
-            );
+            return entry.executionKind === "scene";
           }
           return true;
         })
@@ -1103,41 +1061,13 @@ function parseSkillCatalogExecution(
     kind !== "native_skill" &&
     kind !== "agent_turn" &&
     kind !== "automation_job" &&
-    kind !== "cloud_scene" &&
-    kind !== "site_adapter"
+    kind !== "cloud_scene"
   ) {
     return null;
   }
 
-  const siteAdapterBindingEnvelope =
-    value.siteAdapterBinding === undefined
-      ? undefined
-      : parseServiceSkillCatalog({
-          version: "__internal__",
-          tenantId: "__internal__",
-          syncedAt: "__internal__",
-          items: [
-            {
-              id: "__internal__",
-              title: "__internal__",
-              summary: "__internal__",
-              category: "__internal__",
-              outputHint: "__internal__",
-              source: "cloud_catalog",
-              runnerType: "instant",
-              defaultExecutorBinding: "browser_assist",
-              executionLocation: "client_default",
-              slotSchema: [],
-              siteCapabilityBinding: value.siteAdapterBinding,
-              version: "__internal__",
-            },
-          ],
-        });
-
   return {
     kind: normalizeCompatSkillCatalogExecutionKind(kind),
-    siteAdapterBinding:
-      siteAdapterBindingEnvelope?.items[0]?.siteCapabilityBinding,
   };
 }
 

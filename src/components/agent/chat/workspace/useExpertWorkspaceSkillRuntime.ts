@@ -1,7 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AgentRuntimeWorkspaceSkillBinding } from "@/lib/api/agentRuntime/toolInventoryTypes";
-import { asRecord, readFirstString } from "./browserAssistArtifact";
 import { useWorkspaceSkillBindingsRuntime } from "./useWorkspaceSkillBindingsRuntime";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readFirstString(
+  candidates: Array<Record<string, unknown> | null>,
+  keys: readonly string[],
+): string | undefined {
+  for (const candidate of candidates) {
+    for (const key of keys) {
+      const value = candidate?.[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+  return undefined;
+}
 
 export interface ExpertWorkspaceSkillRuntimeEnableInput {
   workspaceRoot?: string | null;

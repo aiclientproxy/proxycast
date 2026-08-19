@@ -9,7 +9,6 @@ import {
   normalizeWorkspaceServiceSkillOptionalText,
   resolveServiceSkillLaunchUserInput,
   shouldCreateServiceSkillAutomationContent,
-  siteSkillRequiresProject,
 } from "./workspaceServiceSkillEntryActionsViewModel";
 
 function createServiceSkill(
@@ -23,23 +22,22 @@ function createServiceSkill(
     outputHint: "仓库列表 + 关键线索",
     source: "cloud_catalog",
     runnerType: "instant",
-    defaultExecutorBinding: "browser_assist",
+    defaultExecutorBinding: "agent_turn",
     executionLocation: "client_default",
     defaultArtifactKind: "analysis",
     themeTarget: "general",
     version: "seed-v1",
     slotSchema: [],
-    siteCapabilityBinding: {
-      adapterName: "github/search",
-      saveMode: "project_resource",
+    readinessRequirements: {
+      requiresProject: true,
     },
     badge: "云目录",
     recentUsedAt: null,
     isRecent: false,
-    runnerLabel: "浏览器站点执行",
-    runnerTone: "emerald",
-    runnerDescription: "复用真实登录态执行站点脚本。",
-    actionLabel: "启动采集",
+    runnerLabel: "Agent 调度",
+    runnerTone: "slate",
+    runnerDescription: "通过统一 Agent 发送链执行。",
+    actionLabel: "立即启动",
     automationStatus: null,
     ...overrides,
   } as ServiceSkillHomeItem;
@@ -129,38 +127,21 @@ describe("workspaceServiceSkillEntryActionsViewModel", () => {
     ).toBeUndefined();
   });
 
-  it("应只在站点技能确实需要项目保存时要求项目", () => {
-    expect(siteSkillRequiresProject(createServiceSkill())).toBe(true);
+  it("服务技能是否需要项目由 readinessRequirements 声明", () => {
+    expect(createServiceSkill().readinessRequirements?.requiresProject).toBe(
+      true,
+    );
     expect(
-      siteSkillRequiresProject(
-        createServiceSkill({
-          siteCapabilityBinding: {
-            adapterName: "github/search",
-            saveMode: "current_content",
-          },
-        }),
-      ),
-    ).toBe(false);
+      createServiceSkill({
+        readinessRequirements: undefined,
+      }).readinessRequirements?.requiresProject,
+    ).toBeUndefined();
     expect(
-      siteSkillRequiresProject(
-        createServiceSkill({
-          readinessRequirements: {
-            requiresProject: true,
-          },
-          siteCapabilityBinding: {
-            adapterName: "github/search",
-            saveMode: "current_content",
-          },
-        }),
-      ),
-    ).toBe(true);
-    expect(
-      siteSkillRequiresProject(
-        createServiceSkill({
-          defaultExecutorBinding: "agent_turn",
-          siteCapabilityBinding: undefined,
-        }),
-      ),
+      createServiceSkill({
+        readinessRequirements: {
+          requiresProject: false,
+        },
+      }).readinessRequirements?.requiresProject,
     ).toBe(false);
   });
 

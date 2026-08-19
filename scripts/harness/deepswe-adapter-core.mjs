@@ -17,7 +17,11 @@ import {
 
 export const DEEPSWE_MANIFEST_PATH =
   "internal/test/deepswe-coding-slice-v2.json";
-export const DEEPSWE_SOURCE_COMMIT = "3cda4081fed96103a6395de39c85e9b20275e307";
+export const DEEPSWE_SOURCE_COMMIT = "435ee89ec2f2e2289f33b0da4f992f0b7b7266b9";
+export const DEEPSWE_TASK_SCHEMA_VERSION = "1.3";
+export const DEEPSWE_PIER_VERSION = "0.3.1";
+export const DEEPSWE_PIER_PACKAGE = `datacurve-pier==${DEEPSWE_PIER_VERSION}`;
+export const DEEPSWE_ADAPTER_VERSION = "deepswe-current-chain-adapter-v6";
 export const DEFAULT_DEEPSWE_TASK = "happy-dom-abort-pending-body-reads";
 export const REQUIRED_VERIFIER_FILES = [
   "reward.json",
@@ -61,6 +65,11 @@ function nonNegativeInteger(value) {
 function positiveInteger(value) {
   const number = nonNegativeInteger(value);
   return number != null && number > 0 ? number : null;
+}
+
+function positiveNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
 }
 
 function commandOutput(command, args, options = {}) {
@@ -135,8 +144,12 @@ export function loadTaskDefinition({
   }
   const taskToml = readTaskToml(taskTomlPath);
   const metadata = taskToml.metadata || {};
+  const agent = taskToml.agent || {};
   const environment = taskToml.environment || {};
   const verifier = taskToml.verifier || {};
+  const verifierCollect = Array.isArray(verifier.collect)
+    ? verifier.collect.filter(isRecord)
+    : [];
   const repositoryUrl = normalizeString(metadata.repository_url);
   const baseCommit = normalizeString(metadata.base_commit_hash);
   if (!repositoryUrl || !baseCommit) {
@@ -151,16 +164,27 @@ export function loadTaskDefinition({
     repositoryUrl,
     baseCommit,
     schemaVersion: normalizeString(taskToml.schema_version),
+    artifacts: Array.isArray(taskToml.artifacts)
+      ? taskToml.artifacts.map(normalizeString).filter(Boolean)
+      : [],
+    agent: {
+      networkMode: normalizeString(agent.network_mode),
+      timeoutSec: positiveNumber(agent.timeout_sec),
+    },
     environment: {
       dockerImage: normalizeString(environment.docker_image),
-      allowInternet: environment.allow_internet === true,
       cpus: environment.cpus ?? null,
       memoryMb: environment.memory_mb ?? null,
       storageMb: environment.storage_mb ?? null,
     },
     verifier: {
+      networkMode: normalizeString(verifier.network_mode),
       environmentMode: normalizeString(verifier.environment_mode),
-      timeoutSec: verifier.timeout_sec ?? null,
+      timeoutSec: positiveNumber(verifier.timeout_sec),
+      collect: verifierCollect.map((collect) => ({
+        command: normalizeString(collect.command),
+        timeoutSec: positiveNumber(collect.timeout_sec),
+      })),
     },
   };
 }
@@ -181,6 +205,26 @@ export function preflightSelectedTasks({
       sourceHead === DEEPSWE_SOURCE_COMMIT,
     sourceHead,
   );
+  add(
+    "source-license",
+    fs.existsSync(path.join(sourceRoot, "LICENSE")),
+    "LICENSE",
+  );
+  add(
+    "source-provenance",
+    fs.existsSync(path.join(sourceRoot, "PROVENANCE.md")),
+    "PROVENANCE.md",
+  );
+  add(
+    "manifest-task-schema",
+    manifest.source.taskSchemaVersion === DEEPSWE_TASK_SCHEMA_VERSION,
+    manifest.source.taskSchemaVersion,
+  );
+  add(
+    "manifest-pier",
+    manifest.source.runner === DEEPSWE_PIER_PACKAGE,
+    manifest.source.runner,
+  );
   const taskIds = taskIdsForSlice(manifest, sliceName);
   for (const taskId of taskIds) {
     try {
@@ -190,7 +234,21 @@ export function preflightSelectedTasks({
         taskId,
         manifestPath,
       });
-      add(`${taskId}:schema`, task.schemaVersion === "1.1", task.schemaVersion);
+      add(
+        `${taskId}:schema`,
+        task.schemaVersion === DEEPSWE_TASK_SCHEMA_VERSION,
+        task.schemaVersion,
+      );
+      add(
+        `${taskId}:agent-network`,
+        task.agent.networkMode === "no-network",
+        task.agent.networkMode,
+      );
+      add(
+        `${taskId}:verifier-network`,
+        task.verifier.networkMode === "no-network",
+        task.verifier.networkMode,
+      );
       add(
         `${taskId}:verifier`,
         task.verifier.environmentMode === "separate",
@@ -200,6 +258,34 @@ export function preflightSelectedTasks({
         `${taskId}:image`,
         Boolean(task.environment.dockerImage),
         task.environment.dockerImage || "missing",
+      );
+      add(
+        `${taskId}:artifact`,
+        task.artifacts.includes("/logs/artifacts/model.patch"),
+        task.artifacts.join(",") || "missing",
+      );
+      add(
+        `${taskId}:collect-count`,
+        task.verifier.collect.length === 1,
+        String(task.verifier.collect.length),
+      );
+      const collect = task.verifier.collect[0];
+      const collectCommand = collect?.command || "";
+      add(
+        `${taskId}:collect-command`,
+        collectCommand.includes(`git diff --binary ${task.baseCommit} HEAD`) &&
+          collectCommand.includes("> /logs/artifacts/model.patch"),
+        collectCommand || "missing",
+      );
+      add(
+        `${taskId}:collect-timeout`,
+        collect?.timeoutSec != null,
+        collect?.timeoutSec ?? "missing",
+      );
+      add(
+        `${taskId}:pre-artifacts-deleted`,
+        !fs.existsSync(path.join(task.taskDir, "pre_artifacts.sh")),
+        path.join(task.taskDir, "pre_artifacts.sh"),
       );
     } catch (error) {
       add(
@@ -225,23 +311,27 @@ export function runtimePrerequisites({
   containerBin = "docker",
 } = {}) {
   const checks = [];
-  const checkCommand = (name, command, args) => {
+  const checkCommand = (name, command, args, expectedOutput = null) => {
     const result = spawnSync(command, args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
-      timeout: 15_000,
+      timeout: name === "pier" ? 60_000 : 15_000,
     });
+    const output =
+      normalizeString(result.stdout) || normalizeString(result.stderr);
+    const versionMatches = expectedOutput == null || output === expectedOutput;
     checks.push({
       name,
-      passed: result.status === 0,
+      passed: result.status === 0 && versionMatches,
       detail:
         normalizeString(result.error?.message) ||
-        normalizeString(result.stdout) ||
-        normalizeString(result.stderr) ||
+        (result.status === 0 && !versionMatches
+          ? `expected ${expectedOutput}; actual ${output || "empty"}`
+          : output) ||
         `exit=${result.status}${result.signal ? ` signal=${result.signal}` : ""}`,
     });
   };
-  checkCommand("pier", pierBin, ["--version"]);
+  checkCommand("pier", pierBin, ["--version"], DEEPSWE_PIER_VERSION);
   checkCommand("container", containerBin, ["info"]);
   return {
     status: checks.every((check) => check.passed) ? "pass" : "blocked",
@@ -425,7 +515,9 @@ function currentItems(currentFacts) {
     ...(Array.isArray(currentFacts?.threadRead?.threadItems)
       ? currentFacts.threadRead.threadItems
       : []),
-    ...(Array.isArray(currentFacts?.sessionRead?.detail?.thread_read?.thread_items)
+    ...(Array.isArray(
+      currentFacts?.sessionRead?.detail?.thread_read?.thread_items,
+    )
       ? currentFacts.sessionRead.detail.thread_read.thread_items
       : []),
     ...(Array.isArray(currentFacts?.sessionRead?.detail?.items)
@@ -484,8 +576,9 @@ function currentUsage(currentFacts) {
   const threadRead = currentFacts?.threadRead;
   const turn = currentTurns(currentFacts).find(
     (candidate) =>
-      normalizeString(candidate?.id || candidate?.turn_id || candidate?.turnId) ===
-      normalizeString(currentFacts?.turnId),
+      normalizeString(
+        candidate?.id || candidate?.turn_id || candidate?.turnId,
+      ) === normalizeString(currentFacts?.turnId),
   );
   return (
     turn?.usage ||
@@ -510,9 +603,12 @@ function providerStepRecord(record, index, toolNames) {
     sequence: nonNegativeInteger(
       runtimeEvent?.sequence ?? runtimeEvent?.ordinal,
     ),
-    timestamp: normalizeString(
-      runtimeEvent?.timestamp ?? runtimeEvent?.updatedAt ?? runtimeEvent?.updated_at,
-    ) || null,
+    timestamp:
+      normalizeString(
+        runtimeEvent?.timestamp ??
+          runtimeEvent?.updatedAt ??
+          runtimeEvent?.updated_at,
+      ) || null,
     attempt: positiveInteger(runtimeEvent?.attempt) ?? index + 1,
     completed:
       runtimeEvent?.completed === true ||
@@ -583,7 +679,9 @@ export function providerStepsFromCurrentFacts(
       budgetTokens: 0,
     },
   );
-  const fallbackUsage = providerStepUsage({ usage: currentUsage(currentFacts) });
+  const fallbackUsage = providerStepUsage({
+    usage: currentUsage(currentFacts),
+  });
   if (steps.length === 0 && fallbackUsage) {
     usage.stepsWithUsage = 0;
     usage.inputTokens = fallbackUsage.inputTokens;
@@ -749,8 +847,9 @@ async function writeCurrentChainFacts({
 export function terminalMessageFromCurrentFacts(currentFacts, turnId) {
   const turn = currentTurns(currentFacts).find(
     (candidate) =>
-      normalizeString(candidate?.id || candidate?.turn_id || candidate?.turnId) ===
-      normalizeString(turnId),
+      normalizeString(
+        candidate?.id || candidate?.turn_id || candidate?.turnId,
+      ) === normalizeString(turnId),
   );
   const diagnostics =
     currentFacts?.threadRead?.diagnostics ||
@@ -1284,4 +1383,52 @@ export function writeRunContext(runDir, context) {
     schemaVersion: "deepswe-run-context-v1",
     ...context,
   });
+}
+
+export function runContextBase(options, runId, task) {
+  return {
+    generatedAt: new Date().toISOString(),
+    runId,
+    scenarioId: "DSW-01",
+    sourceCommit: DEEPSWE_SOURCE_COMMIT,
+    task: {
+      id: task.id,
+      language: task.language,
+      repository: task.repository,
+      repositoryUrl: task.repositoryUrl,
+      baseCommit: task.baseCommit,
+      schemaVersion: task.schemaVersion,
+      environment: task.environment,
+      verifier: task.verifier,
+    },
+    executionContract: {
+      adapterVersion: DEEPSWE_ADAPTER_VERSION,
+      agentPath: "Lime App Server JSON-RPC current chain",
+      appServerMethods: [
+        "workspace/ensure",
+        "thread/start",
+        "thread/settings/update",
+        "turn/start",
+        "thread/read",
+      ],
+      verifier: "Pier separate verifier with patch replay",
+      transport: options.transport,
+      appServerDataIsolation:
+        options.transport === "stdio" ? "sqlite-vacuum-snapshot" : null,
+      taskWorkspaceIsolation: "system-temp-outside-repository",
+      liveProviderExplicitlyAllowed: options.allowLiveProvider,
+      providerBudget: {
+        maxProviderSteps: options.maxProviderSteps,
+        tokenBudget: options.tokenBudget,
+        tokenFormula: "max(0,input_tokens-cached_input_tokens)+output_tokens",
+        enforcementOwner:
+          "agent-runtime reply loop before tool execution and next sampling",
+      },
+      generationControls: {
+        maxOutputTokens: options.maxOutputTokens,
+        enableThinking: options.enableThinking,
+        projection: "runtimeRequest.metadata.harness.generation",
+      },
+    },
+  };
 }

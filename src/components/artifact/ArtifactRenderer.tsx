@@ -200,10 +200,6 @@ function resolveEmptyArtifactSkeletonKind(
 function resolveEmptyArtifactSurfaceState(
   artifact: Pick<Artifact, "content" | "error" | "meta" | "status" | "type">,
 ): EmptyArtifactSurfaceState | null {
-  if (artifact.type === "browser_assist") {
-    return null;
-  }
-
   if (
     artifact.meta.previewArtifact === true &&
     artifact.meta.renderMode === "media"

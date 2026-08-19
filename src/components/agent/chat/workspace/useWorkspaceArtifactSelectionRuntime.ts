@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   artifactsAtom,
@@ -7,7 +7,6 @@ import {
 } from "@/lib/artifact/store";
 import type { Artifact } from "@/lib/artifact/types";
 import type { CanvasState as GeneralCanvasState } from "@/components/general-chat/bridge";
-import { GENERAL_BROWSER_ASSIST_ARTIFACT_ID } from "./browserAssistArtifact";
 import { hasNamedGeneralCanvasFilePreview } from "./generalCanvasPreviewState";
 import {
   useWorkspaceGeneralArtifactUpsert,
@@ -36,33 +35,6 @@ export function useWorkspaceArtifactSelectionRuntime({
   const upsertGeneralArtifact = useWorkspaceGeneralArtifactUpsert({
     setArtifacts,
   });
-  const hasBrowserAssistArtifact = useMemo(
-    () =>
-      artifacts.some(
-        (artifact) =>
-          artifact.id === GENERAL_BROWSER_ASSIST_ARTIFACT_ID &&
-          artifact.type === "browser_assist",
-      ),
-    [artifacts],
-  );
-  const clearBrowserAssistCanvasArtifact = useCallback(() => {
-    setArtifacts((currentArtifacts) => {
-      const nextArtifacts = currentArtifacts.filter(
-        (artifact) =>
-          !(
-            artifact.id === GENERAL_BROWSER_ASSIST_ARTIFACT_ID &&
-            artifact.type === "browser_assist"
-          ),
-      );
-      return nextArtifacts.length === currentArtifacts.length
-        ? currentArtifacts
-        : nextArtifacts;
-    });
-
-    if (selectedArtifactId === GENERAL_BROWSER_ASSIST_ARTIFACT_ID) {
-      setSelectedArtifactId(null);
-    }
-  }, [selectedArtifactId, setArtifacts, setSelectedArtifactId]);
   const defaultSelectedArtifact = useMemo(
     () => resolveDefaultSelectedArtifact(activeTheme, artifacts),
     [activeTheme, artifacts],
@@ -84,9 +56,7 @@ export function useWorkspaceArtifactSelectionRuntime({
 
   return {
     artifacts,
-    clearBrowserAssistCanvasArtifact,
     defaultSelectedArtifactId,
-    hasBrowserAssistArtifact,
     liveArtifact,
     preferGeneralCanvasFilePreview,
     selectedArtifact,

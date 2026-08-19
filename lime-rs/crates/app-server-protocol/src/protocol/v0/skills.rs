@@ -488,8 +488,6 @@ pub struct WorkspaceSkillBindingsListParams {
     pub caller: Option<String>,
     #[serde(default)]
     pub workbench: bool,
-    #[serde(default)]
-    pub browser_assist: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]

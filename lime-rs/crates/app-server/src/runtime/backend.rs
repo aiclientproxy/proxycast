@@ -70,7 +70,6 @@ impl ExecutionBackend for MockBackend {
                 "caller": request.caller.unwrap_or_else(|| "assistant".to_string()),
                 "surface": {
                     "workbench": request.workbench,
-                    "browser_assist": request.browser_assist,
                 },
             },
             "agent_initialized": false,

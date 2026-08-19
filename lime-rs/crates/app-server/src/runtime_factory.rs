@@ -8,6 +8,7 @@ use crate::MockBackend;
 use crate::RuntimeBackend;
 use crate::RuntimeCore;
 use crate::UnavailableBackend;
+use crate::WorkspaceArtifactContentProvider;
 use lime_core::config::load_config;
 use lime_core::database::DbConnection;
 use std::sync::Arc;
@@ -94,9 +95,13 @@ impl AppServerRuntimeFactory {
 
     pub fn runtime_backend_core() -> RuntimeCore {
         let execution_process = ExecutionProcessServer::default();
-        let runtime = RuntimeCore::with_backend(Arc::new(
-            RuntimeBackend::with_execution_process_server(execution_process.clone()),
-        ))
+        let runtime = RuntimeCore::with_backend_capability_source_and_artifact_content_provider(
+            Arc::new(RuntimeBackend::with_execution_process_server(
+                execution_process.clone(),
+            )),
+            Arc::new(crate::CapabilityInventorySource::default()),
+            Arc::new(WorkspaceArtifactContentProvider),
+        )
         .with_code_mode_factory(
             agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
         )
@@ -118,9 +123,14 @@ impl AppServerRuntimeFactory {
 
     pub fn runtime_backend_core_with_db(db: DbConnection) -> RuntimeCore {
         let execution_process = ExecutionProcessServer::default();
-        let runtime = RuntimeCore::with_backend(Arc::new(
-            RuntimeBackend::with_db_and_execution_process_server(db, execution_process.clone()),
-        ))
+        let runtime = RuntimeCore::with_backend_capability_source_and_artifact_content_provider(
+            Arc::new(RuntimeBackend::with_db_and_execution_process_server(
+                db,
+                execution_process.clone(),
+            )),
+            Arc::new(crate::CapabilityInventorySource::default()),
+            Arc::new(WorkspaceArtifactContentProvider),
+        )
         .with_code_mode_factory(
             agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
         )
@@ -132,11 +142,12 @@ impl AppServerRuntimeFactory {
         capability_source: Arc<dyn CapabilitySource>,
     ) -> RuntimeCore {
         let execution_process = ExecutionProcessServer::default();
-        let runtime = RuntimeCore::with_backend_and_capability_source(
+        let runtime = RuntimeCore::with_backend_capability_source_and_artifact_content_provider(
             Arc::new(RuntimeBackend::with_execution_process_server(
                 execution_process.clone(),
             )),
             capability_source,
+            Arc::new(WorkspaceArtifactContentProvider),
         )
         .with_code_mode_factory(
             agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),
@@ -150,12 +161,13 @@ impl AppServerRuntimeFactory {
         capability_source: Arc<dyn CapabilitySource>,
     ) -> RuntimeCore {
         let execution_process = ExecutionProcessServer::default();
-        let runtime = RuntimeCore::with_backend_and_capability_source(
+        let runtime = RuntimeCore::with_backend_capability_source_and_artifact_content_provider(
             Arc::new(RuntimeBackend::with_db_and_execution_process_server(
                 db,
                 execution_process.clone(),
             )),
             capability_source,
+            Arc::new(WorkspaceArtifactContentProvider),
         )
         .with_code_mode_factory(
             agent_runtime::code_mode::RuntimeCodeModeServiceFactory::production(),

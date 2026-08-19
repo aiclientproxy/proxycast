@@ -1,9 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import type { AgentThreadItem } from "../types";
-import { resolveSiteSavedContentTargetFromRunResult } from "../utils/siteToolResultSummary";
 import type { TaskFile } from "../components/TaskFiles";
-import type { SiteSkillExecutionState } from "./useWorkspaceBrowserAssistRuntime";
 import {
   hasPreferredServiceSkillResultFileTargetSignals,
   resolvePreferredServiceSkillResultFileTarget,
@@ -21,7 +19,6 @@ interface UseWorkspaceServiceSkillResultFileRuntimeParams {
     isCancelled?: () => boolean;
   }) => Promise<boolean>;
   projectRootPath?: string | null;
-  siteSkillExecutionState: SiteSkillExecutionState | null;
   taskFiles: TaskFile[];
 }
 
@@ -31,39 +28,28 @@ export function useWorkspaceServiceSkillResultFileRuntime({
   handleWorkspaceFileClick,
   openProjectFilePreviewInCanvas,
   projectRootPath,
-  siteSkillExecutionState,
   taskFiles,
 }: UseWorkspaceServiceSkillResultFileRuntimeParams) {
-  const siteSkillSavedContentTarget = useMemo(
-    () =>
-      resolveSiteSavedContentTargetFromRunResult(
-        siteSkillExecutionState?.result || null,
-      ),
-    [siteSkillExecutionState?.result],
-  );
-
   const currentTurnThreadItems = useMemo(
     () =>
       currentTurnId &&
       hasPreferredServiceSkillResultFileTargetSignals({
         currentTurnId,
         threadItems: effectiveThreadItems,
-        savedContentTarget: siteSkillSavedContentTarget,
       })
         ? effectiveThreadItems.filter((item) => item.turn_id === currentTurnId)
         : [],
-    [currentTurnId, effectiveThreadItems, siteSkillSavedContentTarget],
+    [currentTurnId, effectiveThreadItems],
   );
 
   const preferredServiceSkillResultFileTarget = useMemo(
     () =>
-      currentTurnThreadItems.length > 0 || siteSkillSavedContentTarget
+      currentTurnThreadItems.length > 0
         ? resolvePreferredServiceSkillResultFileTarget({
             threadItems: currentTurnThreadItems,
-            savedContentTarget: siteSkillSavedContentTarget,
           })
         : null,
-    [currentTurnThreadItems, siteSkillSavedContentTarget],
+    [currentTurnThreadItems],
   );
 
   const handleOpenServiceSkillResultFile = useCallback(

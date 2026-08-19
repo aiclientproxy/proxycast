@@ -1,9 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import type {
-  CanvasWorkbenchBrowserOpenRequest,
-  CanvasWorkbenchPreviewOpenRequest,
-} from "../components/CanvasWorkbenchLayout";
+import type { CanvasWorkbenchPreviewOpenRequest } from "../components/CanvasWorkbenchLayout";
 
 export interface CanvasWorkbenchPreviewRequestInput {
   filePath?: string | null;
@@ -11,18 +8,13 @@ export interface CanvasWorkbenchPreviewRequestInput {
 }
 
 export interface WorkspaceWorkbenchRequestsController {
-  browserWorkbenchOpenRequest: CanvasWorkbenchBrowserOpenRequest | null;
   canvasWorkbenchPreviewOpenRequest: CanvasWorkbenchPreviewOpenRequest | null;
   focusedArtifactBlockId: string | null;
   artifactBlockFocusRequestKey: number;
   focusedTimelineItemId: string | null;
   timelineFocusRequestKey: number;
-  requestBrowserWorkbenchOpen: (url: string | null) => void;
   requestCanvasWorkbenchPreviewOpen: (
     request: CanvasWorkbenchPreviewRequestInput,
-  ) => void;
-  handleBrowserWorkbenchOpenRequestHandled: (
-    requestKey: string | number,
   ) => void;
   handleCanvasWorkbenchPreviewOpenRequestHandled: (
     requestKey: string | number,
@@ -33,8 +25,6 @@ export interface WorkspaceWorkbenchRequestsController {
 }
 
 export function useWorkspaceWorkbenchRequests(): WorkspaceWorkbenchRequestsController {
-  const [browserWorkbenchOpenRequest, setBrowserWorkbenchOpenRequest] =
-    useState<CanvasWorkbenchBrowserOpenRequest | null>(null);
   const [
     canvasWorkbenchPreviewOpenRequest,
     setCanvasWorkbenchPreviewOpenRequest,
@@ -48,16 +38,7 @@ export function useWorkspaceWorkbenchRequests(): WorkspaceWorkbenchRequestsContr
     string | null
   >(null);
   const [timelineFocusRequestKey, setTimelineFocusRequestKey] = useState(0);
-  const browserWorkbenchRequestKeyRef = useRef(0);
   const canvasWorkbenchPreviewRequestKeyRef = useRef(0);
-
-  const requestBrowserWorkbenchOpen = useCallback((url: string | null) => {
-    browserWorkbenchRequestKeyRef.current += 1;
-    setBrowserWorkbenchOpenRequest({
-      requestKey: browserWorkbenchRequestKeyRef.current,
-      url,
-    });
-  }, []);
 
   const requestCanvasWorkbenchPreviewOpen = useCallback(
     (request: CanvasWorkbenchPreviewRequestInput) => {
@@ -67,15 +48,6 @@ export function useWorkspaceWorkbenchRequests(): WorkspaceWorkbenchRequestsContr
         filePath: request.filePath || null,
         selectionKey: request.selectionKey || null,
       });
-    },
-    [],
-  );
-
-  const handleBrowserWorkbenchOpenRequestHandled = useCallback(
-    (requestKey: string | number) => {
-      setBrowserWorkbenchOpenRequest((current) =>
-        current?.requestKey === requestKey ? null : current,
-      );
     },
     [],
   );
@@ -93,38 +65,41 @@ export function useWorkspaceWorkbenchRequests(): WorkspaceWorkbenchRequestsContr
     setFocusedArtifactBlockId(null);
   }, []);
 
-  const focusArtifactBlock = useCallback((blockId: string | null | undefined) => {
-    const normalizedBlockId = blockId?.trim();
-    if (!normalizedBlockId) {
-      return;
-    }
+  const focusArtifactBlock = useCallback(
+    (blockId: string | null | undefined) => {
+      const normalizedBlockId = blockId?.trim();
+      if (!normalizedBlockId) {
+        return;
+      }
 
-    setFocusedArtifactBlockId(normalizedBlockId);
-    setArtifactBlockFocusRequestKey((current) => current + 1);
-  }, []);
+      setFocusedArtifactBlockId(normalizedBlockId);
+      setArtifactBlockFocusRequestKey((current) => current + 1);
+    },
+    [],
+  );
 
-  const jumpToTimelineItem = useCallback((itemId: string | null | undefined) => {
-    const normalizedItemId = itemId?.trim();
-    if (!normalizedItemId) {
-      return false;
-    }
+  const jumpToTimelineItem = useCallback(
+    (itemId: string | null | undefined) => {
+      const normalizedItemId = itemId?.trim();
+      if (!normalizedItemId) {
+        return false;
+      }
 
-    setFocusedTimelineItemId(normalizedItemId);
-    setTimelineFocusRequestKey((current) => current + 1);
-    return true;
-  }, []);
+      setFocusedTimelineItemId(normalizedItemId);
+      setTimelineFocusRequestKey((current) => current + 1);
+      return true;
+    },
+    [],
+  );
 
   return useMemo(
     () => ({
-      browserWorkbenchOpenRequest,
       canvasWorkbenchPreviewOpenRequest,
       focusedArtifactBlockId,
       artifactBlockFocusRequestKey,
       focusedTimelineItemId,
       timelineFocusRequestKey,
-      requestBrowserWorkbenchOpen,
       requestCanvasWorkbenchPreviewOpen,
-      handleBrowserWorkbenchOpenRequestHandled,
       handleCanvasWorkbenchPreviewOpenRequestHandled,
       clearFocusedArtifactBlock,
       focusArtifactBlock,
@@ -132,16 +107,13 @@ export function useWorkspaceWorkbenchRequests(): WorkspaceWorkbenchRequestsContr
     }),
     [
       artifactBlockFocusRequestKey,
-      browserWorkbenchOpenRequest,
       canvasWorkbenchPreviewOpenRequest,
       clearFocusedArtifactBlock,
       focusedArtifactBlockId,
       focusedTimelineItemId,
       focusArtifactBlock,
-      handleBrowserWorkbenchOpenRequestHandled,
       handleCanvasWorkbenchPreviewOpenRequestHandled,
       jumpToTimelineItem,
-      requestBrowserWorkbenchOpen,
       requestCanvasWorkbenchPreviewOpen,
       timelineFocusRequestKey,
     ],

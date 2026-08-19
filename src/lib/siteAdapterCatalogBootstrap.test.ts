@@ -1,186 +1,44 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  applyInitialSiteAdapterCatalogBootstrap,
-  clearSiteAdapterCatalogCache,
-  emitSiteAdapterCatalogBootstrap,
-  extractSiteAdapterCatalogFromBootstrapPayload,
-  subscribeSiteAdapterCatalogChanged,
-  subscribeSiteAdapterCatalogBootstrap,
-  syncSiteAdapterCatalogFromBootstrapPayload,
-} from "./siteAdapterCatalogBootstrap";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import process from "node:process";
+import { describe, expect, it } from "vitest";
 
-const {
-  mockSiteApplyAdapterCatalogBootstrap,
-  mockSiteClearAdapterCatalogCache,
-} = vi.hoisted(() => ({
-  mockSiteApplyAdapterCatalogBootstrap: vi.fn(),
-  mockSiteClearAdapterCatalogCache: vi.fn(),
-}));
+const repoRoot = process.cwd();
+const srcRoot = join(repoRoot, "src");
+const retiredSource = join(srcRoot, "lib/siteAdapterCatalogBootstrap.ts");
 
-vi.mock("@/lib/webview-api", () => ({
-  siteApplyAdapterCatalogBootstrap: mockSiteApplyAdapterCatalogBootstrap,
-  siteClearAdapterCatalogCache: mockSiteClearAdapterCatalogCache,
-}));
-
-function buildCatalogPayload() {
-  return {
-    catalogVersion: "tenant-sync-1",
-    tenantId: "tenant-demo",
-    syncedAt: "2026-03-25T12:00:00.000Z",
-    adapters: [
-      {
-        name: "github/search",
-        domain: "github.com",
-        description: "租户同步 GitHub 搜索",
-        read_only: true,
-        capabilities: ["search"],
-        args: [],
-        example: 'github/search {"query":"lime"}',
-        entry: {
-          kind: "fixed_url",
-          url: "https://github.com/search",
-        },
-        script: "async () => ({ items: [] })",
-        sourceVersion: "tenant-sync-1",
-      },
-    ],
-  };
+function listProductionSources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const absolutePath = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return listProductionSources(absolutePath);
+    }
+    if (
+      !entry.isFile() ||
+      !/\.(?:ts|tsx)$/u.test(entry.name) ||
+      /(?:\.test|\.testFixtures)\.(?:ts|tsx)$/u.test(entry.name)
+    ) {
+      return [];
+    }
+    return [absolutePath];
+  });
 }
 
-describe("siteAdapterCatalogBootstrap", () => {
-  beforeEach(() => {
-    delete window.__LIME_BOOTSTRAP__;
-    delete window.__LIME_SITE_ADAPTER_CATALOG__;
-    mockSiteApplyAdapterCatalogBootstrap.mockResolvedValue({
-      exists: true,
-      source_kind: "server_synced",
-      registry_version: 1,
-      directory: "/tmp/lime/site-adapters/server-synced",
-      catalog_version: "tenant-sync-1",
-      tenant_id: "tenant-demo",
-      synced_at: "2026-03-25T12:00:00.000Z",
-      adapter_count: 1,
-    });
-    mockSiteClearAdapterCatalogCache.mockResolvedValue({
-      exists: false,
-      source_kind: "server_synced",
-      registry_version: 1,
-      directory: "/tmp/lime/site-adapters/server-synced",
-      adapter_count: 0,
-    });
+describe("site adapter catalog bootstrap negative guard", () => {
+  it("已退役的 Renderer bootstrap owner 不得恢复", () => {
+    expect(existsSync(retiredSource)).toBe(false);
   });
 
-  afterEach(() => {
-    delete window.__LIME_BOOTSTRAP__;
-    delete window.__LIME_SITE_ADAPTER_CATALOG__;
-    vi.clearAllMocks();
-  });
+  it("生产源码不得重新引用已退役 bootstrap owner", () => {
+    const references = listProductionSources(srcRoot)
+      .filter((absolutePath) =>
+        readFileSync(absolutePath, "utf8").includes(
+          "siteAdapterCatalogBootstrap",
+        ),
+      )
+      .map((absolutePath) => relative(repoRoot, absolutePath))
+      .sort();
 
-  it("应支持从嵌套 bootstrap payload 提取站点适配器目录", () => {
-    const catalog = buildCatalogPayload();
-
-    expect(
-      extractSiteAdapterCatalogFromBootstrapPayload({
-        data: {
-          bootstrap: {
-            siteAdapterCatalog: catalog,
-          },
-        },
-      }),
-    ).toEqual(catalog);
-  });
-
-  it("启动时应在专用全局快照无效时回退读取 bootstrap payload", async () => {
-    const catalog = buildCatalogPayload();
-    window.__LIME_SITE_ADAPTER_CATALOG__ = {
-      invalid: true,
-    };
-    window.__LIME_BOOTSTRAP__ = {
-      siteAdapterCatalog: catalog,
-    };
-
-    const synced = await applyInitialSiteAdapterCatalogBootstrap();
-
-    expect(synced?.catalog_version).toBe("tenant-sync-1");
-    expect(mockSiteApplyAdapterCatalogBootstrap).toHaveBeenCalledTimes(1);
-    expect(mockSiteApplyAdapterCatalogBootstrap).toHaveBeenCalledWith(catalog);
-  });
-
-  it("收到 bootstrap 事件后应同步目录", async () => {
-    const catalog = buildCatalogPayload();
-    const listener = vi.fn();
-    const unsubscribe = subscribeSiteAdapterCatalogBootstrap(listener);
-
-    try {
-      emitSiteAdapterCatalogBootstrap({
-        siteAdapterCatalog: catalog,
-      });
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(mockSiteApplyAdapterCatalogBootstrap).toHaveBeenCalledWith(
-        catalog,
-      );
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          catalog_version: "tenant-sync-1",
-        }),
-      );
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  it("同步目录成功后应广播目录变更事件", async () => {
-    const listener = vi.fn();
-    const unsubscribe = subscribeSiteAdapterCatalogChanged(listener);
-
-    try {
-      await syncSiteAdapterCatalogFromBootstrapPayload({
-        siteAdapterCatalog: buildCatalogPayload(),
-      });
-
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          catalog_version: "tenant-sync-1",
-          adapter_count: 1,
-        }),
-      );
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  it("非法 payload 不应触发目录同步", async () => {
-    const synced = await syncSiteAdapterCatalogFromBootstrapPayload({
-      invalid: true,
-    });
-
-    expect(synced).toBeNull();
-    expect(mockSiteApplyAdapterCatalogBootstrap).not.toHaveBeenCalled();
-  });
-
-  it("应支持清理本地站点适配器缓存", async () => {
-    const listener = vi.fn();
-    const unsubscribe = subscribeSiteAdapterCatalogChanged(listener);
-    const status = await clearSiteAdapterCatalogCache();
-
-    try {
-      expect(status).toEqual(
-        expect.objectContaining({
-          exists: false,
-          adapter_count: 0,
-        }),
-      );
-      expect(mockSiteClearAdapterCatalogCache).toHaveBeenCalledTimes(1);
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          exists: false,
-          adapter_count: 0,
-        }),
-      );
-    } finally {
-      unsubscribe();
-    }
+    expect(references).toEqual([]);
   });
 });

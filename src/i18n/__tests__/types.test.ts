@@ -838,20 +838,6 @@ function assertI18nKeyTypes() {
   i18n.t("workspace.canvasAdapter.designPreview.visibleLayers", {
     ns: "workspace",
   });
-  i18n.t("workspace.browserAssistRenderer.launching.title", {
-    ns: "workspace",
-  });
-  i18n.t("workspace.browserAssistRenderer.launching.detail", {
-    ns: "workspace",
-  });
-  i18n.t("workspace.browserAssistRenderer.failed.attachedOnlyWithDetail", {
-    ns: "workspace",
-    target: "浏览器协助",
-    detail: "Chrome Bridge 未连接",
-  });
-  i18n.t("workspace.browserAssistRenderer.replay.title", {
-    ns: "workspace",
-  });
   i18n.t("workspace.artifactDocument.kind.report", { ns: "workspace" });
   i18n.t("workspace.artifactDocument.stats.blocks.label", {
     ns: "workspace",
@@ -963,10 +949,6 @@ function assertI18nKeyTypes() {
   i18n.t("settings.developerLab.tabs.experimental", { ns: "settings" });
   i18n.t("settings.developer.title", { ns: "settings" });
   i18n.t("settings.developer.serviceSkill.title", { ns: "settings" });
-  i18n.t("settings.developer.siteAdapterCatalog.message.injected", {
-    ns: "settings",
-    count: 2,
-  });
   i18n.t("settings.appearance.hero.title", { ns: "settings" });
   i18n.t("settings.appearance.colorScheme.options.lime-classic.label", {
     ns: "settings",

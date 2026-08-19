@@ -26,10 +26,7 @@ pub use media::MediaAppDataSource;
 pub use memory::MemoryAppDataSource;
 pub use model_providers::{ModelCatalogQuery, ModelProviderAppDataSource, ProviderModelCatalog};
 pub use plugins::{PluginDataSource, PluginTurnSnapshot};
-pub use right_surface::{
-    RightSurfaceAppDataSource, WorkspaceObjectCanvasSnapshot,
-    WorkspaceObjectCanvasSnapshotListParams,
-};
+pub use right_surface::RightSurfaceAppDataSource;
 pub use sessions::SessionAppDataSource;
 pub use skills::SkillAppDataSource;
 pub use skills::WorkspaceSkillBindingAppDataSource;

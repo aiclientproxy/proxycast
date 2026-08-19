@@ -79,7 +79,6 @@ interface UseDeepLinkReturn {
 }
 
 interface UseDeepLinkOptions {
-  onOpenBrowserConnectorSettings?: (params: { enable: boolean }) => void;
   onOpenWebsiteDeepLink?: (payload: OpenDeepLinkPayload) => void;
 }
 
@@ -93,28 +92,6 @@ export interface OpenDeepLinkPayload {
 
 interface OpenDeepLinkResult {
   payload: OpenDeepLinkPayload;
-}
-
-function parseBrowserConnectorDeepLink(
-  url: string,
-): { enable: boolean } | null {
-  try {
-    const parsed = new URL(url);
-    if (
-      parsed.protocol !== "lime:" ||
-      parsed.host !== "connectors" ||
-      parsed.pathname !== "/browser"
-    ) {
-      return null;
-    }
-
-    const enableParam = parsed.searchParams.get("enable");
-    return {
-      enable: enableParam === "true" || enableParam === "1",
-    };
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -158,8 +135,6 @@ function parseBrowserConnectorDeepLink(
  */
 export function useDeepLink(options?: UseDeepLinkOptions): UseDeepLinkReturn {
   const { t } = useTranslation("common");
-  const onOpenBrowserConnectorSettings =
-    options?.onOpenBrowserConnectorSettings;
   const onOpenWebsiteDeepLink = options?.onOpenWebsiteDeepLink;
 
   // 状态
@@ -303,12 +278,6 @@ export function useDeepLink(options?: UseDeepLinkOptions): UseDeepLinkReturn {
         }
       }
 
-      const connectorParams = parseBrowserConnectorDeepLink(normalizedUrl);
-      if (connectorParams) {
-        onOpenBrowserConnectorSettings?.(connectorParams);
-        return;
-      }
-
       if (await handleOauthCallbackUrl(normalizedUrl)) {
         return;
       }
@@ -369,7 +338,6 @@ export function useDeepLink(options?: UseDeepLinkOptions): UseDeepLinkReturn {
       handleDeepLinkEvent,
       handleOpenDeepLinkEvent,
       handleOauthCallbackUrl,
-      onOpenBrowserConnectorSettings,
       showReferralClaimResult,
       t,
     ],
@@ -534,7 +502,6 @@ export function useDeepLink(options?: UseDeepLinkOptions): UseDeepLinkReturn {
     handleOauthCallbackUrl,
     processDeepLinkUrl,
     tryClaimStoredReferralInvite,
-    onOpenBrowserConnectorSettings,
     onOpenWebsiteDeepLink,
   ]);
 

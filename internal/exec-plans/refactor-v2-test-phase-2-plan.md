@@ -1,9 +1,9 @@
 # Refactor v2 测试体系第二期执行计划
 
-> status: active / macOS local packaged closed; Windows/full L8 and DeepSWE scoring pending
+> status: active / DeepSWE score + desktop coding Gate B + Windows/full L8 pending
 > owner: quality-workflow
 > created: 2026-07-15
-> last_updated: 2026-07-17
+> last_updated: 2026-08-19
 > source: `internal/research/refactor/v2/**`
 > architecture_impact: confirmed in `internal/aiprompts/architecture.md` 6.1/6.2/6.3; developer/PR diagram confirmation still required
 
@@ -62,6 +62,7 @@ Electron Desktop Host
 | R9 Windows RC 自动化    | in_progress | Forge Squirrel lifecycle、N-1 -> candidate current updater、installed SHELL-01 与 fail-closed summary 已接入 Windows CI；真实 Windows receipt 待完成             |
 | R10 SOAK-01 缺陷发现    | completed   | 同生命周期 10x2 receipt 已关闭 Host admission、历史 timeline 与 SSE terminal HTTP body 延迟释放缺陷；冻结 RC 只复跑合同，不再扩建 runner                         |
 | R11 macOS local package | completed   | fresh Forge package 通过 deep/strict codesign，Helper/sidecar 为纯 ad-hoc，packaged SHELL-01 Gate B 通过；正式 Developer ID/notarization/DMG 仍属完整 RC blocker |
+| R12 Desktop coding eval | in_progress | DeepSWE schema/Pier current 化；Core Smoke 10 可计分；Desktop Smoke 5 的 Electron Gate B 与 separate verifier 同 run 双通过                                      |
 
 ## 5. 删除裁决
 
@@ -69,7 +70,7 @@ Electron Desktop Host
 - `dead`：旧 dataset selection、版本测试计划和按日期追加的 progress 日志。
 - `deprecated -> rewrite`：旧测试总览、单元/集成/E2E/Agent evaluation 指南。
 - `current`：Rust related tests、App Server public JSON-RPC integration、current runtime fixture、Gate A、真实 Electron Gate B、live provider 显式 lane。
-- `current / adapter v5`：DeepSWE v2 Smoke 10 / Release 20、仓库外 task workspace、current-chain adapter、逐步 provider usage、真实 request tool catalog、runtime step/token cap、单次 run generation controls、wall time 兜底、partial patch 和分层 failure evidence；诊断 true run 已完成，Pier verifier 阻塞。
+- `current / adapter v6`：DeepSWE v2 Smoke 10 / Release 20、仓库外 task workspace、current-chain adapter、逐步 provider usage、真实 request tool catalog、runtime step/token cap、单次 run generation controls、wall time 兜底、partial patch 和分层 failure evidence；schema 1.3 / Pier 0.3.1 固定源合同已完成，容器 verifier 阻塞。
 
 ## 6. 完成定义
 
@@ -89,7 +90,7 @@ Electron Desktop Host
 | `npm run test:contracts`                                                                                                                                                        | 通过                                                                                                                                                      |
 | `npm run governance:scripts`                                                                                                                                                    | 通过                                                                                                                                                      |
 | `npm run docs:boundary`                                                                                                                                                         | 通过                                                                                                                                                      |
-| `npm run governance:legacy-report`                                                                                                                                              | 通过；零引用候选 0、分类漂移 0、边界违规 0。此前并行写入期间的 `history_builder.rs` 瞬时违规已消失，历史过程仍保留在 7.2。                                     |
+| `npm run governance:legacy-report`                                                                                                                                              | 通过；零引用候选 0、分类漂移 0、边界违规 0。此前并行写入期间的 `history_builder.rs` 瞬时违规已消失，历史过程仍保留在 7.2。                                |
 | `npx vitest run scripts/harness/deepswe-coding-slice.test.mjs`                                                                                                                  | 3/3 通过；source、Smoke 10、Release 20 合同有效                                                                                                           |
 | `npx vitest run scripts/harness/deepswe-adapter.test.mjs scripts/harness/deepswe-coding-slice.test.mjs`                                                                         | 25/25 通过；精确 base、仓库外 workspace、runtime step/token/generation owner、wall-timeout 终态取消、累计 usage、failure owner 与 verifier blocker 有回归 |
 | `cargo test --manifest-path lime-rs/Cargo.toml -p agent-runtime`                                                                                                                | 118/118 通过；`max_turns=2` 在第三次 sampling 前停止，provider request/step 均严格为 2                                                                    |
@@ -166,7 +167,7 @@ Electron Desktop Host
 
 - 本轮“测试体系基线重建”完成度：`100%`。R0-R4 均已完成，旧基线已退出，v2/Codex 场景矩阵和 DeepSWE Coding 切片已落库。
 - “第二期测试实现”整体完成度仍为 `80%`。确定性 T0-T8 已形成主要 current 证据，CTX-02、PRV-06、App Server transport 与 LIV-03 已关闭；T9 仍是缺陷诊断而非有效评分。T11 已关闭 macOS 本地 packaged 三项缺陷与 SOAK-01 本地 controlled-provider 实现合同，Windows Squirrel 自动化也已实现，但正式 macOS RC、真实 Windows receipt、N-1 update 与冻结候选复跑未闭环，因此不增加完成度。
-- DeepSWE 当前状态：`diagnostic_true_runs_blocked`。adapter v5 缺陷发现链已完成；已有 Agnes TS/Go/Rust、thinking on/off 主测和 gpt-5.5 对照 trajectory，逐步 usage、真实 request tool catalog、runtime step/token cap 与显式 generation controls 证据完整。Agnes 能稳定消费 current coding tools，但在固定预算内无 patch；本机 Pier editable 安装失效且无容器 verifier，尚无有效 Lime App Server DeepSWE 分数。
+- DeepSWE 当前状态：`diagnostic_true_runs_blocked`。adapter v6 缺陷发现链已完成；已有 Agnes TS/Go/Rust、thinking on/off 主测和 gpt-5.5 对照 trajectory，逐步 usage、真实 request tool catalog、runtime step/token cap 与显式 generation controls 证据完整。Agnes 能稳定消费 current coding tools，但在固定预算内无 patch；`datacurve-pier==0.3.1` 已在隔离工具目录可执行，但本机无容器 verifier，尚无有效 Lime App Server DeepSWE 分数。
 - current App Server blocker、queue/restore Gate B 和 LIV-03 已关闭；第二期仍未达到完成口径，因为 DSW-02 未产生 non-empty candidate，DSW-03 Smoke 10 calibration 尚未开始，真实 Windows/L8 receipt 也未生成。
 - AGT-04 owner 场景与 Codex import 性能阻塞均已关闭；App Server related gate 当前为 1157/1157。性能修复没有提高 30s 阈值，而是把独立 1200-command commit 从 106.7s 降到 3.51s。
 - 下一刀：触发并消费首份 Windows RC receipt，在有正式凭证的冻结候选上补 macOS Developer ID/notarization/DMG receipt，并复跑已关闭的 SOAK-01 合同。DeepSWE scoring 只在 non-empty candidate、可用 Pier package 与容器 verifier 三者齐备后恢复。
@@ -467,3 +468,86 @@ Electron Desktop Host
 - `SOAK-01` 10 轮 / 2 次 cold restart 通过：`allRoundsPassed`、`roundSessionsIsolated`、`readModelsStableAcrossColdRestarts`、`everyPreviousProcessTreeExited`、`finalProcessTreeExited` 全为 `true`；总 RSS `561,312 -> 442,768 KiB`（delta `-118,544 KiB`），App Server RSS delta `+8,976 KiB`，10 轮 duration `2,820-5,371ms`。证据：`.lime/qc/soak-01/agent-control-soak-final.json`。
 - 验证：SOAK evidence 单测 `10/10`、单轮 cold-restart、10x2 SOAK、home-hotpath 及一致构建后的 cold-restart 全部通过；未执行 commit/push/reset/分支操作。
 - 分类与结论：v2 `thread/list` 字段归一化和 SOAK 观察器为 `current / closed`；旧 `threadId` 观察字段与 `includeArchived` 请求为 `dead / deleted / forbidden-to-restore`；历史失败 JSON/截图保留为诊断 evidence。当前本轮 Gate B 为 `passed`，但本地 controlled fixture 不能替代 live provider、Windows RC 或正式签名/notarization 证据。
+
+## 43. 2026-08-18 CodeMode 对齐后的 Developer ID package 验收
+
+- 主目标：在 CodeMode CodeCell 对齐与 `internal/roadmap/benchmark` 确定性门禁通过后，补 `PLT-01` macOS arm64 正式 Developer ID package、DMG/ZIP 和签名证据。写集仅为 benchmark/执行计划文档与 `.tmp/electron-forge-developer-id-20260818-retry`，避让并行的 `ModelSelector*`、`useProviderSelection.ts` 和其它源码改动。
+- 已通过：`npm run electron:build`；current `app-server`/`code-mode-host` sidecar 构建；manifest 与实际 binary SHA-256 一致，分别为 `72bd08cd15d69f238c55522153fac77117b5ee859bf8155bd92a58d240d9b14a`、`bb2b03be44dd6467d7ac067b7465b904de24c347b41af56350611aa887a72fcf`，权限均为 `0755`。pnpm 隔离布局导致 Forge 首次无法解析 `@floating-ui/react -> tabbable`；按 current release workflow 使用 pnpm 9.15.9 hoisted install 后 package/lockfile 零漂移，并通过文件复制与 native dependency preparation。
+- 签名环境 blocker 已关闭：System identity 的错误 `TrustAsRoot` 覆盖已移除，Forge 使用 `Developer ID Application: Digital Easy Inc. (93RF7VQ26C)` 完成 package，耗时约 `5m38s`。主 App、四个 Helper、`app-server`、`code-mode-host` 均为 `TeamIdentifier=93RF7VQ26C`、`flags=0x10000(runtime)`，通过 `codesign --verify --deep --strict`；资源 verifier 同时接受签名后 sidecar 的 `macos-signed-sidecar` 变换，最终 SHA-256 分别为 `e5d68b0edee74cb8a9d148f2684d6a3bf7479f7066a3659f24f63a6a13711bc0` 与 `d7aa0e6dbf1958068900e0a041929e4323e3001684a3652a43c2ae3080016c35`。
+- 产物证据：独立 DMG maker 整体退出码 `0`，最终 `.tmp/electron-forge-developer-id-20260818-retry/make/Lime.dmg` 为 `330311401` bytes、SHA-256 `18fcccac3175a383a755a13f6e502197b07f54db5f1e884d593242b54bab8481`，`hdiutil verify` 通过。组合 `dmg,zip` maker 在 ZIP 压缩后访问线上 `RELEASES.json` 时发生 TLS 断连；仓库 current `npm run electron:make:zip-local-feed` 随后整体退出码 `0`，产物 `.tmp/electron-forge-developer-id-20260818-retry-local-feed/make/zip/darwin/arm64/Lime-darwin-arm64-1.131.0.zip` 为 `331037460` bytes、SHA-256 `659ba14d9ed9a97225e81eb52c7e6fe88af774557ee75fb5943dbf448bbceeba`。同目录 `RELEASES.json` 仅为本地验证，不得发布。
+- 剩余边界：本机没有 `APPLE_ID`、app-specific password 与 `APPLE_TEAM_ID`，未执行 notarization/staple。`spctl` 对 App 返回 `rejected / Unnotarized Developer ID`，对 DMG 返回 `rejected / no usable signature`；也未执行 DMG 安装/升级和 Developer ID packaged Gate B。上述缺口使完整 `PLT-01` 保持未关闭；当前 macOS 机器也不能生成 `PLT-02` Windows receipt。
+- 仓库与产品门禁：CodeMode Electron Gate B `21/21`，证据为 `.lime/qc/gui-evidence/code-mode-electron-gate-b/code-mode-electron-gate-b-summary.json`；Forge config/resource/release workflow 定向测试 `55/55`、`npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version`、`npm run docs:boundary`、`npm run governance:scripts` 和 `git diff --check` 已通过。它们证明 CodeMode current 链和 packaging contract 未漂移，但不替代尚缺的 notarization、安装/升级与 Windows receipt。
+- 下一刀：为现有 Developer ID 候选补 Apple notarization/staple、DMG 安装/升级及 Developer ID packaged Gate B；并行在 Windows runner 生成 N-1 Squirrel receipt。第二期完成度保持 `80%`，不因只完成 package/maker 产物而提前关闭 `PLT-01/02`。
+
+## 44. 2026-08-18 DeepSWE 与桌面 coding benchmark 完整性审计
+
+- 主目标：把 DeepSWE 从 stdio 诊断 runner 推进为可计分 Core benchmark，并新增真实 Electron Desktop Smoke 5；不把 adapter、GUI 或 verifier 任一单边绿灯冒充桌面 coding 完成。
+- 历史证据：`.lime/benchmark/v2/runs` 曾有 16 个 adapter result，只覆盖 Release 20 的 4 个任务，transport 全为 `stdio`；10 个 `failed`、6 个 `product_failed`、2 个非空但已判无效环境的 patch、0 个 `verified`。这些 run、patch、partial evidence 和 batch summary 已按用户确认删除，不再作为当前事实输入；当前机器仍无 Pier separate verifier 的容器 runtime。
+- Upstream 审计：Lime 固定 `3cda408...`/schema `1.1`；DeepSWE upstream `435ee89...` 比当前 pin 前进 6 个 commit，新增 Apache-2.0 与 `PROVENANCE.md`，任务迁移到 schema `1.3`、`network_mode` 和 `[[verifier.collect]]`。PyPI current `datacurve-pier` 为 `0.3.1`。不得只改 commit；manifest、parser、preflight、Pier handoff、evidence 和 baseline 必须成组迁移。
+- Desktop 合同：从 Smoke 10 固定 TS `happy-dom`、Go `go-genai`、Python `httpx`、Rust `fd`、JS `yjs`。每个 trial 经真实 Electron GUI 输入原始 instruction，记录 workspace/session/thread/turn/patch identity、审批/取消/恢复、diff/artifact 可见性与零 production mock/error，再让同一 patch 进入 separate verifier。只有 Gate B 和 verifier 同时通过才写 `DesktopCodingPass=true`。
+- 补充矩阵：SWE-bench-Live MultiLang/Windows 用于滚动、多语言和 Windows/PowerShell；SWE-bench Multimodal 用于视觉 issue；Terminal-Bench 2.1 用于 shell/环境诊断。OSWorld V2/WindowsAgentArena V2 只在 computer-use 产品能力进入 scope 时启用。
+- 退出条件：`DSW-07` schema/Pier 迁移通过；`DSW-08` Smoke 10 三轮产生可复核 pass@1/pass@3/pass^3；`DSW-09/10/11` Desktop Smoke 5 三轮双门禁通过；基础设施失败为零。未满足前第二期完成度保持 `80%`。
+- 本轮写集仅为 benchmark 四份路线图文档与本执行计划；避让 Electron Browser、Rust/App Server、CodeMode、ModelSelector 和其它并行源码改动。已通过五份文档 Prettier、`npm run docs:boundary`、目标文档 `git diff --check`、DeepSWE adapter/slice `24/24`、Release 20 preflight `61/61`、`npm run test:contracts`、`npm run verify:gui-smoke`、`npm run smoke:agent-runtime-current-fixture`、`npm run smoke:code-mode-electron-gate-b`、`npm run typecheck`、`npm run test:bridge` 和 `npm run test:rust:changed`。Agent current fixture 明确为 controlled fixture、`liveProviderUsed=false`；CodeMode Gate B 证据为 `.lime/qc/gui-evidence/code-mode-electron-gate-b/code-mode-electron-gate-b-summary.json`。
+- 前端补验：本轮新增/变更的 Electron host 定向 `12/12`、Browser Workspace 与 ModelSelector 定向 `49/49` 通过。fresh `npm test` 的批次 37 曾因 Browser protocol 删除后 TS client 未同步而失败；owner 成组更新后该批 `170/170` 通过，resume 继续通过至 `109/119`。批次 110 在并行 landing runtime 移除 `onOpenChromeRelay` 后保留一条旧测试断言而失败；按原状态文件固定清单补跑时，111 与 113-119 全绿，112 在并行 `useWorkspaceServiceSkillEntryActions.ts` 重写后保留 7 条旧导航/文案断言而失败。两处合计 8 条失败均稳定复现，所有其它固定尾部批次通过；`.lime/test/vitest-smart-last-run.json` 保留 `status=failed`、`failed_batch=110`，本轮不夹写其它 owner 测试。`npm run test:changed` 还会在 Vitest `3.2.4` 收集阶段把 Electron 源码中的裸模块 `electron` 解析为仓库同名目录，报 `EISDIR .../lime/electron`，属于 changed collector blocker。
+- 最新独立 `npm run lint` 通过。`npm run verify:local` 通过版本一致性与 i18n 资源结构，随后在并行 Browser 删除后的 i18n unused 检查发现 446 个残留 key（`workspace=420`、`settings=24`、`common=2`）而停止；此前 Browser 的 `FrameRequestCallback` 和条件 `useMemo` lint blocker 已由 owner 关闭。上述失败均属于仍在变化的 Browser/service-skill 写集，本轮只记录归因，不恢复 dead BrowserSession、不放宽断言。Pier/live score 仍未执行：当前机器无 Pier/容器 runtime，且没有本轮 live provider 明确授权；不得生成或声称真实 DeepSWE/`DesktopCodingPass` 成绩。
+
+## 45. 2026-08-19 approval reverse 与 DeepSWE 桌面门禁 fresh 复验
+
+- 主目标：先关闭 approval reverse server-request 的真实 Electron 缺口，再复验 DeepSWE Core、桌面 GUI 基线与 CodeMode Gate B；写集限于 `claw-chat-current-fixture-approval-*`、对应常量/guard 与本执行记录，避让并行 Browser、Expert、ModelSelector、Rust/App Server 热区。
+- current 修复：resume/decline/cancel 均由 Renderer 回应 `item/commandExecution/requestApproval` reverse JSON-RPC；fixture 不再等待或合成 Renderer `agentSession/action/respond`。backend `actionRespond` 只保留为 App Server 到 RuntimeCore/external backend 的内部 continuation 证据，Renderer request method 列表对该 method 做显式零命中断言。旧正向 waiter、synthetic summary 与断言 key 为 `dead / deleted / forbidden-to-restore`。
+- approval 验证：read-model + smoke guard `86/86`；`approval-request-resume`、`approval-request-decline`、`approval-request-cancel` 三类真实 Electron Gate B 均通过。request/response id、thread/turn、pending interaction layer、`serverRequest/resolved`、backend continuation、terminal read model 与 GUI identity 一致，production mock、invoke error、console error 为零。
+- DeepSWE/桌面验证：adapter + coding slice `24/24`；Release 20 preflight `61/61`；`verify:gui-smoke` 通过；CodeMode Gate B 定向 `6/6` 与真实 Electron smoke 通过，证据 `.lime/qc/gui-evidence/code-mode-electron-gate-b/code-mode-electron-gate-b-summary.json` 的 21 项 assertion 全真，真实 Electron/preload/IPC/App Server/runtime/code-mode-host/read model/GUI 链闭环。
+- 聚合门禁：`smoke:agent-runtime-current-fixture` 已通过 history/streaming guard、unknown Item、首页热路径、Coding Workbench、图片、cancel/continue、approval 全矩阵、Plan、Skills、MCP 与 media 场景；随后在 `expert-panel-skills-runtime` 失败。真实候选为 `skill:user:capability-report`，fixture 仍期待 `skill:capability-report`，归因并行 Expert catalog identity 漂移；本轮不覆盖该脏热区，也不把部分通过写成聚合全绿。
+- Benchmark 结论：DeepSWE Core adapter/preflight 与受控 CodeMode Gate B 已可稳定回归，但 `DSW-09/10/11` 仍未关闭。Desktop Smoke 5 需要真实 Electron GUI 跑 TS/Go/Python/Rust/JavaScript 五题，并把同一 patch SHA-256 交给 Pier separate verifier；当前机器仍缺可用 Pier package 与容器 runtime，本轮也未获 live provider 明确授权，因此没有新 DeepSWE score 或 `DesktopCodingPass`。第二期完成度保持 `80%`。
+
+## 46. 2026-08-19 Desktop Smoke 5 合同与受控产品路径
+
+- 写集：新增 `internal/test/deepswe-desktop-smoke-v1.json`、`scripts/harness/deepswe-desktop-contract.mjs`、`scripts/harness/deepswe-desktop-benchmark.mjs`、`scripts/harness/deepswe-desktop-controlled-fixtures.mjs` 与 `scripts/harness/deepswe-desktop-controlled-smoke.mjs`；同步 `package.json` 与 `scripts/README.md`。未修改 Electron/Rust production owner。
+- 合同验证：Desktop manifest 五题固定为 TS/Go/Python/Rust/JavaScript，逐题 pin repository/base commit/instruction/task TOML/separate verifier；trial evidence 固定绑定 instruction SHA、workspace、session/thread/turn、provider/projected tool lifecycle、native test stdout、GUI/read model、patch SHA 与 verifier artifacts。12 条 fail-closed 合同测试、3 条 CLI 测试和 12 条五语言原生 fixture 测试通过。
+- 受控 Electron bring-up：`yjs-map-conflict-detection` fresh trial 真实经过 Electron/preload/IPC、`app_server_handle_json_lines`、App Server、RuntimeCore、Thread/Turn/Item 和 GUI；Read/Glob/Grep/apply_patch/exec_command 均有 provider lifecycle，native Node test、terminal、diff artifact、session reopen 通过，mock/invoke/console/page error 均为零。证据：`.lime/benchmark/v2/desktop/controlled-bringup/20260818T234548Z/yjs-map-conflict-detection.trial.json`。
+- 失败归因：首次 bring-up 的 GUI oracle 错把 canonical Read/file artifact projection 当作必须独立显示的 tool row，已按 current projection 记录 provider lifecycle 与 projected lifecycle 双事实源后修正；一次后续 run 在 attempt 6 provider response 未收敛，runner 按 terminal fail-closed 超时退出，未生成伪 pass。该现场说明 runner 仍需对五题全套执行做稳定性复跑，不放宽终态等待。
+- 当前边界：受控 trial `trialKind=controlled_product_smoke` 即使 `gateB=pass` 也固定 `verifier=not_run`、`desktopCodingPass=false`。`harness:deepswe:desktop:aggregate` 只有在 `live_deepswe + Gate B + Pier 三件 artifacts + patch SHA 一致 + recovery coverage` 全部满足时才能输出 `desktopCodingPass=true`；当前 Pier/container blocker 与 live provider 未授权仍使 DSW-09/10/11 未关闭，第二期保持 `80%`。
+
+## 47. 2026-08-19 Desktop Smoke 5 全题受控复验
+
+- 主目标：在不放宽 Gate B 的前提下完成 TS、Go、Python、Rust、JavaScript 五题真实 Electron controlled suite，并确认前次失败来自 runner/environment 而非产品链。
+- runner 修正：TypeScript fixture 不再依赖当前 Node 不支持的 `--experimental-strip-types`，改由 Node 内置 test 读取并执行 `src/abort.ts`；Rust fixture 使用 `cargo +stable`，runner 仅为临时 Electron 环境复用现有 `RUSTUP_HOME/CARGO_HOME`，不修改全局配置。
+- fresh 证据：`.lime/benchmark/v2/desktop/controlled-final/20260819T000134Z/summary.json`。五题均 `trialKind=controlled_product_smoke`、`gateBPass=true`；真实 Electron/preload/IPC/App Server/RuntimeCore/read model/GUI、native test、terminal、diff、session reopen 与零 mock/invoke/console/page error 全部通过。
+- 聚合结论：`status=product_path_only`、`controlledGateBComplete=true`、`liveTrialCount=0`、`recoveryCoverageComplete=false`、`desktopCodingPass=false`。受控 provider 不产生 DeepSWE score；五题 verifier 均为 `not_run`，没有 Pier `reward.json`、`ctrf.json`、`test-stdout.txt`，因此 DSW-09/10/11 仍未关闭，第二期完成度保持 `80%`。
+- 本轮验证：Desktop harness 合同/CLI/fixture `27/27`，fresh controlled suite 五题 Gate B 通过；此前失败的 happy-dom 与 fd 单题已在修正后分别复跑通过。live provider、Pier/container、取消+幽灵写入与 approval resume 仍是后续退出条件。
+
+## 48. 2026-08-19 Desktop artifact 正文与 recovery 收口
+
+- 主目标：修复截图中的 `App Server artifact 内容不可用`，并把 Desktop Smoke 5 从“artifact 卡片可见”提高到“真实 `artifact/read` 返回正文且 Code 面板可见”；同时完成 session reopen、approval resume、cancel no-ghost-write 的五题 recovery 覆盖。写集限于 App Server artifact content provider、Desktop controlled harness/contract、对应测试与 benchmark 事实源，避让其它并行 Electron/Browser/Expert 热区。
+- current 修复：新增 `WorkspaceArtifactContentProvider` 并注入四个 production runtime factory。provider 仅使用 artifact metadata 声明的 workspace root，canonical 后读取 workspace 内 UTF-8 文件；inline content 优先，拒绝 `..`、workspace 外绝对路径、非 UTF-8、超过 1 MiB 文件和进程 cwd fallback。mock/external constructor 的默认 inline provider 保持不变。
+- Gate B 补强：runner 真实点击 `message-artifact-card`，等待 `canvas-workbench-code-preview`，断言 fixture 修改后的正文 marker、`artifact/read` trace 和错误文案零出现，单独落 `*.artifact-preview.png`；合同新增 `artifactContentAvailable`。Electron fixture 清理限定 `app.close()` 5 秒，随后只对该 fixture PID 依次 `SIGTERM`/`SIGKILL`，避免单题完成后拖住 suite。
+- Yjs flake 诊断：失败现场停在第 6 次 provider request、无 `provider.first_event.received`。开启 fixture connection diagnostics 后，Yjs 单题第 6 次 SSE response 明确产生 `response-finish` 与 `response-close`，turn、artifact preview 和 recovery 全部通过；随后无自动重试的完整五题 suite 也通过。未复现 scripted index、tool availability defer 或 stream close 的确定性缺陷，因此保持终态 fail-closed，不增加重试掩盖。
+- fresh 证据：`.lime/benchmark/v2/desktop/controlled-artifact-final/20260819T022022Z/summary.json`。五题 `controlledGateBComplete=true`、`recoveryCoverageComplete=true`，逐题 `artifactContentAvailable=true`、native test/pass、session reopen/pass、approval resume/pass、cancel no-ghost-write/pass，mock/invoke/console/page error 均为零。Rust 截图 `fd-deterministic-multi-key-sorting.artifact-preview.png` 的右侧 Code 面板显示 `src/lib.rs` 修复后正文 `deterministic_sort() -> true`。
+- 验证：App Server workspace artifact provider 定向 Rust 测试 `1/1`；fixture server、Desktop contract 与 controlled smoke 定向为 `3 files / 40 tests` 全绿；Yjs 连接诊断单题 Gate B/recovery 通过；fresh 五题 Electron suite 通过；`verify:gui-smoke` 的 Gate B-F `21/21`；带 current renderer `--app-url` 的 code artifact workbench Electron fixture 39 项 assertion 全真，console/page error 为零；`docs:boundary`、Rustfmt 与目标文件 `git diff --check` 通过。专用 artifact workbench smoke 在写完 pass summary 后仍遇到已有的 Electron close 15 秒超时并遗留 helper，本轮按唯一临时目录精确清理，归测试 harness lifecycle residual，不归 artifact 正文产品失败，也不写成命令完整退出全绿。
+- 分类与边界：workspace artifact file content、`artifact/read` 正文 Gate B 和 recovery coverage 为 `current / closed`；进程 cwd 猜测读取、workspace 越界和把 artifact 卡片存在冒充正文可用的旧口径为 `dead / deleted / forbidden-to-restore`；mock/external inline provider 是 `test/explicit-constructor retained`，不是生产 fallback。live DeepSWE、Pier/container、同一 patch verifier 与三轮统计仍为 `blocked / evidence pending`，`desktopCodingPass=false`，第二期完成度保持 `80%`。
+
+## 49. 2026-08-19 DSW-07 schema 1.3 与 Pier 0.3.1 固定源迁移
+
+- 主目标：把 DeepSWE 固定源从旧 schema `1.1` 成组迁移到已审计的 upstream commit `435ee89ec2f2e2289f33b0da4f992f0b7b7266b9`，固定 `datacurve-pier==0.3.1`，并使 Core/Desktop preflight 能证明 task parser、network、collect、license/provenance 与 replay 合同一致。
+- 写集：`scripts/harness/deepswe-adapter-core.mjs`、adapter/coding-slice/Desktop contract 测试、`internal/test/deepswe-coding-slice-v2.json`、`internal/test/deepswe-desktop-smoke-v1.json`、benchmark README/DeepSWE slice/phase-2 plan 与本执行计划；source cache 仅在 `.lime/benchmark/sources/deep-swe` detached checkout 到固定 commit，不创建分支、不提交。
+- current / closed：parser 改为结构化读取 `agent.network_mode`、`verifier.network_mode`、`verifier.collect[]`、`artifacts`，删除旧 `allowInternet` 输出；Core Release 20 preflight `205/205`、Desktop Smoke 5 preflight `53/53`，均验证 schema `1.3`、双 no-network、separate verifier、image、base-commit binary collect、`/logs/artifacts/model.patch`、无 `pre_artifacts.sh`、LICENSE/PROVENANCE 与 manifest pin。
+- current / closed：`.lime/benchmark/tools` 已建立 Python 3.12 隔离环境并安装精确 `datacurve-pier==0.3.1`；`bin/pier --version` 返回 `0.3.1`。replay 保留上游 schema 1.3 task/collect 合同，只注入候选 `solution/model.patch` 与 `solve.sh`，不复制 reference solution。
+- 验证：Desktop contract/CLI/controlled smoke 定向测试通过；adapter 新增 schema/collect/Pier version 回归通过。adapter 组合运行期间机器上存在高负载 Electron/Vite/TypeScript 并行进程，两个既有临时 Git 大文件用例触发 20 秒测试超时；单独重跑仍受同一环境负载影响，未将其误报为 DSW-07 合同失败。`git diff --check` 通过。
+- blocked / evidence pending：本机无 Docker、Podman、nerdctl 或 Colima；Pier CLI 已可执行但无法启动 separate container verifier，尚无 `reward.json`、`ctrf.json`、`test-stdout.txt` 和 score。`desktopCodingPass=false`，第二期完成度保持 `80%`。
+- 分类：schema/parser/preflight/replay/Pier version contract 为 `current / closed`；旧 schema `1.1`、`allow_internet`、`pre_artifacts.sh` 及 editable wrapper 为 `dead / deleted / forbidden-to-restore`；无容器 verifier 与无 candidate 评分为 `blocked / evidence pending`。
+
+## 50. 2026-08-19 DSW-08 批量编排与 fail-closed 聚合
+
+- 主目标：把 DSW-08 从单题 adapter 推进为可复核的 Smoke 10/Release 20 batch plan、live runner 和三 trial aggregate；写集限于 `scripts/harness/deepswe-benchmark.mjs`、对应 Vitest、`package.json`、Harness/测试导航与四份 benchmark 事实源。
+- current / closed：batch CLI 已支持互斥 `--plan`/`--run`/`--aggregate`，`--run` 必须显式 `--allow-live-provider`；`--transport`、provider/model、预算和 generation controls 会传递到同一 adapter。聚合固定校验 source/schema/adapter identity，并要求非空 patch、current chain completed 与 Pier `reward.json`/`ctrf.json`/`test-stdout.txt` 三件 artifacts。
+- current / closed：聚合实现标准 `pass@1=c/n`、`pass@3`、`pass^3`，以及选中 trial 的 wall time、budget token、infra failure 和 identity 诊断；历史旧 identity 只计入 `invalidIdentityCount`，不占用当前 trial 槽位。benchmark 单测 `4/4`、Prettier、ESLint、`npm run test:contracts` 与 `npm run governance:scripts` 通过。
+- 验证证据：Smoke 10 plan `105/105` ready；清理后的空 Release 20 run 根目录聚合 `observedRunCount=0`、`invalidIdentityCount=0`，`status=blocked`、`scoreEligible=false`、score/时延/预算均为 `null`。这是预期的零样本与环境缺口，不是可计分的失败。
+- blocked / evidence pending：本机无 Docker、Podman、nerdctl、Colima；Pier `0.3.1` CLI 可执行但无法启动 separate verifier，且本轮未授权 live provider。因此没有新的 DeepSWE score，`desktopCodingPass=false`，第二期完成度保持 `80%`。
+- 分类：batch planner/aggregator、identity filtering 和 score contract 为 `current / closed`；已清理的历史旧 run 为 `dead / deleted`；缺容器、未授权 live provider、缺 Pier artifacts 和未形成 candidate 为 `blocked / evidence pending`，不得回退到 mock 或 controlled Electron fixture 计分。
+
+## 51. 2026-08-19 旧 benchmark 证据清理
+
+- 用户已明确确认删除旧 benchmark 资产：`internal/develop/lobsterai-business-benchmark.md`、`.lime/benchmark/v2/runs/**` 的 16 条历史 DeepSWE run 及 `.lime/benchmark/v2/runs/batch-summary.json`。
+- current 保留：DeepSWE source cache、schema `1.3` manifest、adapter v6、Pier `0.3.1` 工具目录、batch planner/aggregator、Desktop Smoke contract/controlled runner、路线图与执行计划。
+- 清理后回归：benchmark 单测改为临时 stale identity fixture，不再依赖仓库历史 run；空 run 根目录聚合保持 `blocked`，禁止把清理后的零样本当作 baseline。
+- 分类：已删除的旧对标文档、历史 run、patch、partial evidence 和 batch summary 为 `dead / deleted`；current adapter/manifest/contract 为 `current`；无新增 `compat` 或历史 fallback。

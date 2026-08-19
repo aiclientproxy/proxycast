@@ -39,13 +39,6 @@ function renderHook(props?: Partial<HookProps>) {
       isEditing: false,
     },
     hasCurrentCanvasArtifact: false,
-    currentCanvasArtifactType: null,
-    browserAssistCanvasControl: {
-      hasArtifact: false,
-      suppressGeneralArtifactAutoOpen: vi.fn(),
-      suppressAutoOpen: vi.fn(),
-      clearArtifact: vi.fn(),
-    },
     currentImageWorkbenchActive: false,
     onHasMessagesChange: vi.fn(),
     setShowSidebar: vi.fn(),
@@ -233,8 +226,6 @@ describe("useWorkspaceCanvasLayoutRuntime", () => {
   it("待处理 A2UI 存在时应主动收起主题工作台侧栏并回到聊天态", async () => {
     const setLayoutMode = vi.fn();
     const setShowSidebar = vi.fn();
-    const suppressGeneralCanvasArtifactAutoOpen = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const { render } = renderHook({
       activeTheme: "general",
       isThemeWorkbench: true,
@@ -243,20 +234,12 @@ describe("useWorkspaceCanvasLayoutRuntime", () => {
       showSidebar: true,
       setLayoutMode,
       setShowSidebar,
-      browserAssistCanvasControl: {
-        hasArtifact: false,
-        suppressGeneralArtifactAutoOpen: suppressGeneralCanvasArtifactAutoOpen,
-        suppressAutoOpen: suppressBrowserAssistCanvasAutoOpen,
-        clearArtifact: vi.fn(),
-      },
     });
 
     await render();
 
     expect(setLayoutMode).toHaveBeenCalledWith("chat");
     expect(setShowSidebar).toHaveBeenCalledWith(false);
-    expect(suppressGeneralCanvasArtifactAutoOpen).toHaveBeenCalledTimes(1);
-    expect(suppressBrowserAssistCanvasAutoOpen).toHaveBeenCalledTimes(1);
   });
 
   it("空白 new-task 首页在隐藏聊天面板时不应自动生成 fallback 画布", async () => {
@@ -284,20 +267,11 @@ describe("useWorkspaceCanvasLayoutRuntime", () => {
     expect(setCanvasState).not.toHaveBeenCalled();
   });
 
-  it("关闭通用画布时应一并移除残留的浏览器协助 artifact", async () => {
-    const suppressGeneralCanvasArtifactAutoOpen = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
-    const clearBrowserAssistCanvasArtifact = vi.fn();
+  it("关闭通用画布时应回到聊天态并保留草稿内容", async () => {
     const setLayoutMode = vi.fn();
     const setGeneralCanvasState = vi.fn();
     const { render, getValue } = renderHook({
       activeTheme: "general",
-      browserAssistCanvasControl: {
-        hasArtifact: true,
-        suppressGeneralArtifactAutoOpen: suppressGeneralCanvasArtifactAutoOpen,
-        suppressAutoOpen: suppressBrowserAssistCanvasAutoOpen,
-        clearArtifact: clearBrowserAssistCanvasArtifact,
-      },
       setLayoutMode,
       setGeneralCanvasState,
     });
@@ -308,9 +282,6 @@ describe("useWorkspaceCanvasLayoutRuntime", () => {
       getValue().handleCloseCanvas();
     });
 
-    expect(suppressGeneralCanvasArtifactAutoOpen).toHaveBeenCalledTimes(1);
-    expect(suppressBrowserAssistCanvasAutoOpen).toHaveBeenCalledTimes(1);
-    expect(clearBrowserAssistCanvasArtifact).toHaveBeenCalledTimes(1);
     expect(setLayoutMode).toHaveBeenCalledWith("chat");
 
     const updater = setGeneralCanvasState.mock.calls.at(-1)?.[0] as
@@ -321,13 +292,13 @@ describe("useWorkspaceCanvasLayoutRuntime", () => {
       updater?.({
         isOpen: true,
         contentType: "markdown",
-        content: "浏览器残留",
+        content: "保留的草稿",
         isEditing: false,
       }),
     ).toEqual({
       isOpen: false,
       contentType: "markdown",
-      content: "浏览器残留",
+      content: "保留的草稿",
       isEditing: false,
     });
   });

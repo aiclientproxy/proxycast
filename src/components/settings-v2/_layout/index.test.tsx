@@ -98,9 +98,6 @@ vi.mock("../system/execution-policy", () => ({
 vi.mock("../system/web-search", () => ({
   WebSearchSettings: () => <div>web-search</div>,
 }));
-vi.mock("../system/chrome-relay", () => ({
-  ChromeRelaySettings: () => <div>chrome-relay</div>,
-}));
 vi.mock("../home", () => ({
   SettingsHomePage: (props: unknown) => {
     mockSettingsHomePage(props);

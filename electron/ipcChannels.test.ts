@@ -127,6 +127,18 @@ describe("electron/ipcChannels", () => {
     expect(isElectronHostCommand("open_resource_manager_window")).toBe(true);
     expect(isElectronHostCommand("show_desktop_notification")).toBe(true);
     expect(isElectronHostCommand("embedded_browser_view_mount")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_mount")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_set_bounds")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_navigate")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_reload")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_stop")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_find_in_page")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_stop_find_in_page")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_set_zoom")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_go_back")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_go_forward")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_select")).toBe(true);
+    expect(isElectronHostCommand("browser_tab_close")).toBe(true);
     expect(isElectronHostCommand("embedded_browser_view_set_bounds")).toBe(
       true,
     );

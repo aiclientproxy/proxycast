@@ -554,7 +554,6 @@ impl RuntimeCore {
             .state
             .lock()
             .expect("runtime core state mutex poisoned");
-        super::approval_cache::remove_session(&mut state.session_approval_cache, &child_session_id);
         if let Some(thread_id) = state
             .sessions
             .get(&child_session_id)

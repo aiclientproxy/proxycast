@@ -180,9 +180,6 @@ describe("AgentChatWorkspace right surface state boundary", () => {
     expect(ownerSource).toContain(
       'consumePendingRequestsForSurface?.(\n          "articleWorkspace"',
     );
-    expect(ownerSource).toContain(
-      'consumePendingRequestsForSurface?.(\n          "objectCanvas"',
-    );
   });
 
   it("右侧 surface pending App Server runtime 必须由 pending bridge runtime 绑定", () => {

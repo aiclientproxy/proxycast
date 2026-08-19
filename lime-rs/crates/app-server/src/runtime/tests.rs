@@ -24,7 +24,6 @@ mod knowledge;
 mod media_context;
 mod memory_prompt;
 mod pending_work_recovery;
-mod permission_preflight;
 mod plugins;
 mod queue;
 mod queue_order;

@@ -2,7 +2,6 @@ import {
   getSeededServiceSkillCatalog,
   type ServiceSkillExecutorBinding,
   type ServiceSkillItem,
-  type ServiceSkillSiteCapabilityBinding,
 } from "@/lib/api/serviceSkills";
 import type { SkillCatalogExecutionKind } from "@/lib/api/skillCatalog";
 import { supportsServiceSkillEntrySurface } from "./entryAdapter";
@@ -17,7 +16,6 @@ import type { ServiceSkillHomeItem } from "./types";
 
 interface ServiceSkillHomeVisibilityCandidate {
   defaultExecutorBinding: ServiceSkillExecutorBinding;
-  siteCapabilityBinding?: ServiceSkillSiteCapabilityBinding;
   execution?: {
     kind?: SkillCatalogExecutionKind;
   } | null;
@@ -40,8 +38,6 @@ function resolveServiceSkillExecutionKind(
   skill: Pick<ServiceSkillItem, "defaultExecutorBinding" | "executionLocation">,
 ): SkillCatalogExecutionKind {
   switch (normalizeHomeServiceSkillBinding(skill.defaultExecutorBinding)) {
-    case "browser_assist":
-      return "site_adapter";
     case "automation_job":
       return "automation_job";
     case "native_skill":
@@ -93,17 +89,7 @@ function listFeaturedFromCandidates(
 export function shouldExposeServiceSkillHomeItem(
   item: ServiceSkillHomeVisibilityCandidate,
 ): boolean {
-  if (item.execution?.kind === "site_adapter") {
-    return false;
-  }
-
-  if (
-    item.defaultExecutorBinding === "browser_assist" ||
-    item.siteCapabilityBinding
-  ) {
-    return false;
-  }
-
+  void item;
   return true;
 }
 

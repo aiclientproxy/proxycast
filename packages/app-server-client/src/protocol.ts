@@ -1107,7 +1107,6 @@ export type WorkspaceSkillBindingsListParams = {
   workspaceRoot: string;
   caller?: string;
   workbench?: boolean;
-  browserAssist?: boolean;
 };
 
 export type WorkspaceSkillBindingsListResponse = {

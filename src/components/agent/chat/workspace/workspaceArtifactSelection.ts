@@ -35,12 +35,6 @@ export function resolveWorkspaceSelectedArtifactIdCorrection({
       : defaultSelectedArtifactId;
   }
 
-  if (selectedArtifact.type === "browser_assist") {
-    return selectedArtifactId === defaultSelectedArtifactId
-      ? undefined
-      : defaultSelectedArtifactId;
-  }
-
   const selectedStillExists = artifacts.some(
     (artifact) => artifact.id === selectedArtifact.id,
   );

@@ -2,9 +2,9 @@ import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildCatalogWithSceneEntry,
-  buildCatalogWithXSceneEntry,
+  buildCatalogWithStoryVideoSceneEntry,
   createSkill,
-  createXArticleSceneServiceSkill,
+  createStoryVideoSceneServiceSkill,
   getTextarea,
   mockListServiceSkills,
   renderHarness,
@@ -195,16 +195,16 @@ describe("CharacterMention slash recent entries", () => {
 
   it("选择最近使用的 scene 时应优先回填上次成功参数，而不是再次挂起补参卡", async () => {
     act(() => {
-      saveSkillCatalog(buildCatalogWithXSceneEntry(), "bootstrap_sync");
+      saveSkillCatalog(buildCatalogWithStoryVideoSceneEntry(), "bootstrap_sync");
       recordSlashEntryUsage({
         kind: "scene",
-        entryId: "x-article-export",
+        entryId: "story-video-suite",
         usedAt: 1_712_345_678_900,
-        replayText: "https://x.com/GoogleCloudTech/article/2033953579824758855",
+        replayText: "把城市露营咖啡节编排成 60 秒短视频",
       });
     });
     mockListServiceSkills.mockResolvedValueOnce([
-      createXArticleSceneServiceSkill(),
+      createStoryVideoSceneServiceSkill(),
     ]);
 
     const onChangeSpy = vi.fn<(value: string) => void>();
@@ -217,7 +217,7 @@ describe("CharacterMention slash recent entries", () => {
 
     const recentSceneButton = Array.from(
       document.body.querySelectorAll("button"),
-    ).find((button) => button.textContent?.includes("X文章转存"));
+    ).find((button) => button.textContent?.includes("短视频编排"));
     expect(recentSceneButton).toBeTruthy();
 
     act(() => {
@@ -225,7 +225,7 @@ describe("CharacterMention slash recent entries", () => {
     });
 
     expect(onChangeSpy).toHaveBeenLastCalledWith(
-      "/x文章转存 https://x.com/GoogleCloudTech/article/2033953579824758855",
+      "/story-video-suite 把城市露营咖啡节编排成 60 秒短视频",
     );
   });
 

@@ -83,6 +83,7 @@ const {
   mockSkillsGetAll,
   mockSkillsGetLocal,
   mockGetAgentRuntimeToolInventory,
+  mockRequestWorkspaceRightSurface,
   mockCanvasWorkbenchLayoutState,
   mockCanvasWorkbenchLayout,
   mockLaunchBrowserSession,
@@ -200,6 +201,7 @@ const {
   mockSkillsGetAll: vi.fn(),
   mockSkillsGetLocal: vi.fn(),
   mockGetAgentRuntimeToolInventory: vi.fn(),
+  mockRequestWorkspaceRightSurface: vi.fn(),
   mockCanvasWorkbenchLayoutState: {
     renderPreviewProbe: false,
   },
@@ -306,6 +308,7 @@ export function getIndexTestMocks() {
     mockSkillsGetAll,
     mockSkillsGetLocal,
     mockGetAgentRuntimeToolInventory,
+    mockRequestWorkspaceRightSurface,
     mockCanvasWorkbenchLayoutState,
     mockCanvasWorkbenchLayout,
     mockLaunchBrowserSession,
@@ -323,6 +326,15 @@ vi.mock("@/lib/dev-bridge", async (importOriginal) => {
   return {
     ...actual,
     safeListen: mockSafeListen,
+  };
+});
+
+vi.mock("@/lib/api/workspaceRightSurface", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/api/workspaceRightSurface")>();
+  return {
+    ...actual,
+    requestWorkspaceRightSurface: mockRequestWorkspaceRightSurface,
   };
 });
 
@@ -924,17 +936,6 @@ vi.mock("@/lib/webview-api", async () => {
     ...actual,
     launchBrowserSession: mockLaunchBrowserSession,
     browserExecuteAction: mockBrowserExecuteAction,
-  };
-});
-
-vi.mock("@/lib/api/browserRuntime", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/lib/api/browserRuntime")
-  >("@/lib/api/browserRuntime");
-
-  return {
-    ...actual,
-    executeBrowserSessionAction: mockExecuteBrowserSessionAction,
   };
 });
 
@@ -1615,6 +1616,8 @@ beforeEach(async () => {
     meta: null,
   });
   mockCanvasWorkbenchLayoutState.renderPreviewProbe = false;
+  mockRequestWorkspaceRightSurface.mockReset();
+  mockRequestWorkspaceRightSurface.mockResolvedValue(undefined);
 
   mockJotaiState.artifacts = [];
   mockJotaiState.selectedArtifact = null;

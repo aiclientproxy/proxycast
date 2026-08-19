@@ -1,19 +1,22 @@
 # DeepSWE Coding 测试切片 v2
 
-> status: DSW-06 write probe passed / full Agnes candidate + verifier blocked
+> status: DSW-07 schema 1.3 + Pier 0.3.1 contract passed / 0 verified score / Desktop Smoke 5 controlled Gate B passed
 > owner: evaluation + agent-runtime
-> source_commit: `3cda4081fed96103a6395de39c85e9b20275e307`
-> source_schema: `1.1`
+> source_commit: `435ee89ec2f2e2289f33b0da4f992f0b7b7266b9`
+> source_schema: `1.3`
+> pier: `datacurve-pier==0.3.1`
 > source_tasks: 113
+> upstream_audit: `435ee89ec2f2e2289f33b0da4f992f0b7b7266b9` / schema `1.3` / Pier `0.3.1`
 > manifest: `internal/test/deepswe-coding-slice-v2.json`
 
 ## 1. 定位
 
-DeepSWE 用于评估 Lime 的长程 coding 能力，不验证协议和 GUI 的确定性正确性。它属于 L7 coding eval：
+DeepSWE Core 用于评估 Lime 的长程 coding 能力，不单独验证协议和 GUI 的确定性正确性。它属于 L7 coding eval，并与 L6 Desktop Smoke 配对：
 
 - 不能替代 `test:contracts`、Rust/App Server integration、current runtime fixture 或 Gate A/B。
 - 必须通过 Lime App Server JSON-RPC current 链运行，不能用 Codex CLI、mini-swe-agent 或旧 Agent runtime 结果冒充 Lime 分数。
 - verifier 在独立环境中运行；reference solution 和 verifier tests 对 Agent 不可见。
+- 只有 DeepSWE/Pier verifier 与真实 Electron Gate B 同时通过，才能声明桌面 coding 成功；Core、Desktop 任一单边通过都必须保留自己的证据边界。
 
 本阶段的首要产出不是 pass@k，而是从真实 coding trajectory 中定位 Lime owner 缺陷。每个失败先区分 `Lime product`、`adapter`、`model`、`task environment` 和 `verifier`；只有 App Server current chain、任务隔离和 separate verifier 都有效时，结果才进入能力分数。
 
@@ -67,6 +70,32 @@ DeepSWE 用于评估 Lime 的长程 coding 能力，不验证协议和 GUI 的�
 
 用途：大版本 RC、默认 coding 模型或 tool policy 变更、RuntimeCore/coding tools 重大变更。
 
+### Desktop Smoke 5
+
+Desktop lane 不复制另一套题目，固定复用 Smoke 10 中五种语言各一题：
+
+| Task                                 | Lang   | 桌面主风险                                    |
+| ------------------------------------ | ------ | --------------------------------------------- |
+| `happy-dom-abort-pending-body-reads` | TS     | 长回合、取消、terminal 后零幽灵写入           |
+| `go-genai-streamed-function-args`    | Go     | streaming/tool loop、命令输出与 diff 投影     |
+| `httpx-multipart-response-parsing`   | Python | 多文件读取、同步/异步实现与测试结果可见性     |
+| `fd-deterministic-multi-key-sorting` | Rust   | CLI、文件系统、审批/sandbox 与确定性 patch    |
+| `yjs-map-conflict-detection`         | JS     | 冲突处理、历史恢复、artifact/workbench 一致性 |
+
+每题从真实 Electron 打开仓库外隔离 workspace，经 GUI 输入原始 DeepSWE instruction；必须证明 preload/contextBridge、Electron IPC、`app_server_handle_json_lines`、App Server、RuntimeCore、Thread/Turn/Item、GUI terminal 和 patch identity 一致，production mock、invoke error、console/page error 为零。完成后同一 patch 进入 Pier separate verifier。Desktop lane 默认每题 1 trial；冻结 RC 每题 3 trials。
+
+当前实现入口：
+
+```bash
+npm run harness:deepswe:desktop:preflight
+npm run harness:deepswe:desktop:controlled
+npm run harness:deepswe:desktop:aggregate -- .lime/benchmark/v2/desktop/controlled/<run-id>
+```
+
+`deepswe-desktop-trial-v1` 是单 trial 的唯一事实源，必须同时绑定原始 instruction SHA、仓库 base commit、workspace、session/thread/turn、provider tool lifecycle、projected lifecycle、test stdout、GUI/read model、patch SHA 与 verifier 状态。受控 runner 的 `trialKind=controlled_product_smoke` 只证明真实桌面产品链；只有 `trialKind=live_deepswe` 且 Gate B、Pier artifacts、同一 patch SHA 都通过，才允许 `DesktopCodingPass=true`。
+
+2026-08-19 的完整受控复验已覆盖五题：`happy-dom-abort-pending-body-reads`、`go-genai-streamed-function-args`、`httpx-multipart-response-parsing`、`fd-deterministic-multi-key-sorting`、`yjs-map-conflict-detection` 均通过 Electron Gate B。runner 对 TypeScript fixture 使用无依赖 Node test 执行 `.ts` 源码逻辑，并在临时 Electron 环境显式复用已安装的 Rust stable toolchain；这些只解决受控环境可复现性，不扩大能力声明。
+
 ## 4. Lime Adapter 合同
 
 新 adapter 必须：
@@ -82,7 +111,7 @@ DeepSWE 用于评估 Lime 的长程 coding 能力，不验证协议和 GUI 的�
 9. 将失败归类为 `agent-runtime`、`model`、`tool-runtime`、`app-server`、`transport`、`harness`、`environment`、`verifier` 或 `budget`。
 10. terminal 或失败后先固化 partial/candidate patch，再清理临时 clone；run evidence 留在 `.lime/benchmark/v2/runs`。
 
-生产 GUI 不是 DeepSWE runner 的必经入口，但 adapter 必须使用与 GUI 相同的 App Server/runtime 公共链，不能建立 benchmark-only runtime。
+生产 GUI 不是 DeepSWE Core runner 的必经入口，但 Core adapter 必须使用与 GUI 相同的 App Server/runtime 公共链，不能建立 benchmark-only runtime。任何“桌面端 coding”声明必须额外运行 Desktop Smoke 5，不能用 Core 的 `stdio` 或 dev-bridge 结果替代 Electron Gate B。
 
 当前 adapter 已落在：
 
@@ -98,9 +127,19 @@ npm run harness:deepswe:run -- --task happy-dom-abort-pending-body-reads --allow
 npm run harness:deepswe:run -- --verifier-only --run-dir <existing-run-dir>
 ```
 
+Pier 本地工具必须使用隔离 Python 3.12 环境安装固定版本：
+
+```bash
+uv venv --python 3.12 --allow-existing .lime/benchmark/tools
+uv pip install --python .lime/benchmark/tools/bin/python datacurve-pier==0.3.1
+.lime/benchmark/tools/bin/pier --version
+```
+
+最后一条必须输出 `0.3.1`；它只证明 Pier CLI 可加载，不代表 verifier 已运行。`runtimePrerequisites` 会另外检查容器 CLI，缺少 Docker/Podman/nerdctl/Colima 时保持 blocked。
+
 adapter 不把 reference solution 复制到 Agent workspace。Lime current chain 结束后只把 `patch.diff` 放入临时 Pier replay task，由 Pier 在 separate verifier environment 应用并判分。Verifier preflight 在 candidate patch 固化后执行，这样缺少容器运行时时仍保留 Lime 缺陷证据；但该 trial 不得产生或冒充 DeepSWE 分数。`--verifier-only` 会保留既有 product failure，并单独记录 verifier blocker。
 
-adapter v5 默认最多运行 32 个 provider step、消耗 500,000 budget tokens，并每 30 秒捕获一次 current evidence。step/token 预算通过 `runtimeRequest.metadata.harness.provider_budget` 投影到 `AgentSessionConfig`，token 计算为 `max(0, input_tokens - cached_input_tokens) + output_tokens`；current reply loop 在工具执行和下一次 sampling 前停止。adapter 只为 timeout race 保留 token evidence polling，不再成为预算执行 owner。诊断时可以显式收紧预算，并用 `--max-output-tokens`、`--enable-thinking true|false` 覆盖单次 run 的 generation controls；实际值和 enforcement owner 必须写入 run context。wall time 只作为最后的环境保护，触发后调用 `agentSession/turn/cancel` 并最多等待 10 秒真实 terminal，不能留下 running turn。
+adapter v6 默认最多运行 32 个 provider step、消耗 500,000 budget tokens，并每 30 秒捕获一次 current evidence。step/token 预算通过 `runtimeRequest.metadata.harness.provider_budget` 投影到 `AgentSessionConfig`，token 计算为 `max(0, input_tokens - cached_input_tokens) + output_tokens`；current reply loop 在工具执行和下一次 sampling 前停止。adapter 只为 timeout race 保留 token evidence polling，不再成为预算执行 owner。诊断时可以显式收紧预算，并用 `--max-output-tokens`、`--enable-thinking true|false` 覆盖单次 run 的 generation controls；实际值和 enforcement owner 必须写入 run context。wall time 只作为最后的环境保护，触发后调用 `agentSession/turn/cancel` 并最多等待 10 秒真实 terminal，不能留下 running turn。
 
 ## 5. 指标
 
@@ -113,6 +152,8 @@ adapter v5 默认最多运行 32 个 provider step、消耗 500,000 budget token
 - patch size、changed files、test result；
 - no-op、build failure、timeout、verifier failure；
 - 按语言和 focus 聚合的通过率。
+- Desktop lane 的 Gate B assertion、mock/invoke/console/page error、GUI terminal、diff/artifact 可见性和 restart/cancel 后写入完整性。
+- `DesktopCodingPass = DeepSWEVerifierPass && ElectronGateBPass`；基础设施不完整时为 invalid，不降格为 pass，也不混入模型失败。
 
 只比较相同 source commit、task slice、模型、provider、tool policy、预算和 adapter version 的运行。任一维度变化必须重建 baseline。
 
@@ -132,10 +173,17 @@ adapter 首次完成后运行 Smoke 10 三个独立批次。此阶段只做信�
 
 阈值可在三轮 calibration 后收紧，不能为了让候选通过而临时放宽。
 
+### Desktop Candidate Gate
+
+- Desktop Smoke 5 每题先完成 1 次 bring-up，再完成 3 trials；基础设施、transport、GUI observer 与 verifier failure 必须为零。
+- 同一 trial 必须关联一个 task/base commit、workspace、session/thread/turn、patch SHA-256、Gate B summary 与 Pier result，禁止拼接不同 run 的证据。
+- 任一题 verifier 通过但 Gate B 失败，归桌面产品失败；Gate B 通过但 verifier 失败，归 coding/model/tool 结果失败；缺 Pier、容器、凭证或平台时整批为 invalid。
+- macOS 与 Windows packaged claim 仍需各自 L8 receipt；开发态 Electron 通过不能替代 packaged parity。
+
 ## 7. 版本与合规
 
 - 本地 source cache 不进入 Git；版本化 manifest 只记录 source commit、任务 ID 和策略。
-- 当前 DeepSWE clone 未在仓库根提供可直接确认的统一 license 文件；完成 source 与各 task repository license/usage 审查前，仅允许私有评估，不分发任务内容或镜像。
+- 旧固定 commit `3cda408...` 未包含仓库根 license；DSW-07 已将 source 固定到 `435ee89...`，并完成 Apache-2.0 `LICENSE`、`PROVENANCE.md`、schema `1.3`、`network_mode`、`[[verifier.collect]]`、Pier 与 verifier evidence 的成组迁移。当前不分发任务内容或镜像，评分仍需 live candidate 与 separate verifier。
 - 不保存 API key、Authorization、真实用户数据或 reference solution 到 evidence。
 - 公开 benchmark prompt 不进入 Lime system prompt、skill 或 task-specific routing，防止过拟合和数据泄漏。
 
@@ -182,16 +230,26 @@ adapter 首次完成后运行 Smoke 10 三个独立批次。此阶段只做信�
 - gpt-5.5 固定对照 `20260717T111350Z-happy-dom-abort-pending-body-reads` 同配置运行 6 step，在 97,164 budget tokens 后以 `token_budget` 终止；patch 为 0 字节，尚未形成 candidate。该结果只说明本次预算不足以完成题目，不替代历史 candidate，也不计入模型能力分数。
 - Agnes `20260717T112458Z-superjson-error-stack-serialization` 换用 Smoke 10 的短题，在 5 step / 80,000 token budget 后由 runtime 取消；5/5 request catalog 含 `apply_patch`，9 个 lifecycle item 中只有 Glob/Grep 与 file artifact，没有实际写调用，patch 仍为 0 字节。
 - 三次复测的 current Thread/Turn/Item、provider usage、tool lifecycle 和 terminal evidence 均完整；没有发现新的 `agent-runtime`、`tool-runtime`、`app-server` 或 `transport` owner 缺陷。结论仍是 Agnes 在当前路由/预算下只读探索，不能将无 patch 归咎 Lime。
-- 这三次 run 保留为 diagnostic evidence：`20260717T111006Z-happy-dom-abort-pending-body-reads`、`20260717T111350Z-happy-dom-abort-pending-body-reads`、`20260717T112458Z-superjson-error-stack-serialization`。Pier editable package 已失效且本机无容器 runtime，仍不生成 `reward.json`、`ctrf.json` 或 DeepSWE score。
+- 这三次 run 保留为 diagnostic evidence：`20260717T111006Z-happy-dom-abort-pending-body-reads`、`20260717T111350Z-happy-dom-abort-pending-body-reads`、`20260717T112458Z-superjson-error-stack-serialization`。当时的 Pier editable package 已失效；当前已切换到 `datacurve-pier==0.3.1`，但本机仍无容器 runtime，因此仍不生成 `reward.json`、`ctrf.json` 或 DeepSWE score。
+
+## 16. 2026-08-19 DSW-08 批量计划与聚合器
+
+- `scripts/harness/deepswe-benchmark.mjs` 提供互斥的 `--plan`、`--run`、`--aggregate` 模式；真实运行必须显式传 `--allow-live-provider`，并把 `--transport`、provider/model、budget 和 generation controls 原样传给 adapter。
+- 当前 identity 固定为 source commit `435ee89ec2f2e2289f33b0da4f992f0b7b7266b9`、task schema `1.3`、adapter `deepswe-current-chain-adapter-v6`。聚合器只从当前 identity 的 trial 选择样本；旧 identity 只记入 `invalidIdentityCount`，不占用当前 trial 槽位。
+- `npm run harness:deepswe:batch:plan` 已验证 Smoke 10 的 `105/105` preflight checks；旧 adapter run 和 batch summary 已清理，`npm run harness:deepswe:batch:aggregate` 对空的 Release 20 run 根目录保持 `blocked`，`observedRunCount=0`，所有 score/时延/预算均为 `null`。
+- 退出条件仍是 Smoke 10/Release 20 产生同一 identity、非空 patch、current chain completed 和 Pier 三件 artifacts 的可复核三 trial；缺容器、缺 verifier evidence 或未授权 live provider 均保持 fail-closed。
 
 ## 10. 实施顺序
 
 1. `DSW-00`：已完成；source commit、20 个 task path、task schema 和 verifier metadata 共 61 项检查通过。
-2. `DSW-01`：adapter v5、仓库外隔离、runtime step/token cap、显式 generation 诊断参数、partial evidence、真实 tool catalog、逐步 usage 和 DSW-06 写入探针已完成；等待完整 DeepSWE 题产生非空 candidate 且 Pier verifier 可运行后关闭评分链。
+2. `DSW-01`：adapter v6、仓库外隔离、runtime step/token cap、显式 generation 诊断参数、partial evidence、真实 tool catalog、逐步 usage 和 DSW-06 写入探针已完成；等待完整 DeepSWE 题产生非空 candidate 且容器可用的 Pier verifier 后关闭评分链。
 3. `DSW-02`：TS/Go/Rust 及 Smoke 10 短题、thinking on/off 对照已证明 Agnes 能稳定使用 current coding tools，但会在固定预算内只读探索、无 patch；暂停继续刷同类题，直到 Agnes 路由能产生 non-empty candidate。
 4. `DSW-03`：完成 Smoke 10 三轮 calibration 并冻结 baseline。
 5. `DSW-04`：运行 Release 20，建立语言/focus 分层结果。
 6. `DSW-05`：把真实失败中可确定复现的 runtime/tool 缺陷回写为 L2-L6 内部回归场景。
+7. `DSW-07`：固定审计后的 DeepSWE schema `1.3` commit 与 Pier `0.3.1`，迁移 `network_mode`、`verifier.collect`、license/provenance 和 preflight。
+8. `DSW-08`：实现 Smoke 10/Release 20 批量编排与三 trial 聚合，输出 pass@1/pass@3/pass^3、成本、时延和 infra validity。
+9. `DSW-09` 至 `DSW-11`：完成 Desktop Smoke 5 的真实 Electron Gate B、取消/恢复与 Gate B + Pier 双门禁。
 
 ## 11. 2026-07-17 wall-timeout terminal cleanup
 
@@ -199,3 +257,24 @@ adapter 首次完成后运行 Smoke 10 三个独立批次。此阶段只做信�
 - current adapter 在 wall/turn-start transport timeout 后调用 public cancel，继续读取同一 session/turn，只有观察到 `completed/failed/interrupted/canceled/cancelled/aborted` 才标记 terminal evidence；10 秒内未收敛则保留 partial 和取消错误。
 - timeout 仍按 `budget` failure 分类，`currentChain.status=timeout`，并单独记录 `terminalStatus` 与 `timeoutCancellation`；不能因为取消成功就把 trial 当成 completed candidate。
 - `npx vitest run scripts/harness/deepswe-adapter.test.mjs` 为 21/21，新增回归精确断言 `cancelStatus=canceled`、terminal evidence 和无成功冒充。
+
+## 13. 2026-08-18 完整性审计与外部补充集
+
+- 原 `.lime/benchmark/v2/runs` 的 16 个历史 adapter result、patch、partial evidence 和 batch summary 已按确认删除；当前目录为空，不能再作为 DeepSWE baseline 或 score 输入。新的 run 必须从 current source/schema/adapter identity 重新开始。
+- 当前机器找不到 Pier、Docker、Podman、nerdctl 或 Colima，不能执行 separate verifier。该环境缺口不阻止 adapter/preflight 回归，但阻止任何真实 DeepSWE score 和 `DesktopCodingPass`。
+- DeepSWE 继续作为主要长程 coding benchmark。SWE-bench-Live MultiLang/Windows 用于滚动、多语言和 Windows/PowerShell 补充；SWE-bench Multimodal 用于视觉软件 issue；Terminal-Bench 2.1 用于 shell、依赖和环境诊断。它们各自保留 source/grader/version，不合并成一个失去归因能力的总分。
+- OSWorld V2 与 WindowsAgentArena V2 测量 computer-use。只有 Lime 产品明确支持通过视觉/鼠标键盘操作其它桌面应用时，才选择其中 VS Code 场景；当前不作为 coding release gate。
+
+## 14. 2026-08-19 Desktop Smoke 5 全题受控复验
+
+- fresh suite：`.lime/benchmark/v2/desktop/controlled-final/20260819T000134Z/summary.json`，五题 `controlledTrialCount=5`、`controlledGateBComplete=true`，每题真实 Electron/preload/IPC/App Server/RuntimeCore/read model/GUI、native test、terminal、diff、session reopen 与零 mock/invoke/console/page error 均通过。
+- 受控失败修复：Node 23.4 不接受 `--experimental-strip-types`，TypeScript fixture 改为 Node 内置 test 读取并执行 `.ts` 函数；Electron 临时 `HOME` 使 rustup 找不到 stable，runner 仅在该受控环境注入现有 `RUSTUP_HOME/CARGO_HOME`，Rust fixture 使用 `cargo +stable`。
+- 结论仍为 `status=product_path_only`、`desktopCodingPass=false`：受控 provider 没有 live DeepSWE sampling，`verifier=not_run` 且没有 Pier `reward.json`、`ctrf.json`、`test-stdout.txt`，因此不产生分数，也不关闭 DSW-09/10/11。
+
+## 15. 2026-08-19 Artifact 正文与 Recovery 完整复验
+
+- App Server production runtime 的 artifact content owner 改为 `WorkspaceArtifactContentProvider`：inline content 优先；无 inline 时只从 artifact metadata 声明的 `cwd`、`workingDir`、`working_dir` 或 `environments[].cwd` 解析 workspace，canonical 后读取 workspace 内相对/绝对路径。它拒绝 `..` 越界、workspace 外绝对路径、非 UTF-8 和超过 1 MiB 的文件，也不回退进程 cwd。
+- Desktop Gate B 新增 `artifactContentAvailable`：真实点击消息 artifact card，等待 `canvas-workbench-code-preview`，断言修改后的独有正文 marker 可见、错误文案 `App Server artifact 内容不可用` 不可见、Electron IPC trace 命中 `artifact/read`，并单独保存 `*.artifact-preview.png`。
+- fresh suite：`.lime/benchmark/v2/desktop/controlled-artifact-final/20260819T022022Z/summary.json`。TS、Go、Python、Rust、JavaScript 五题均 `gateBPass=true`、`artifactContentAvailable=true`；`controlledGateBComplete=true`、`recoveryCoverageComplete=true`，每题 session reopen、approval resume、cancel no-ghost-write 通过，native test 通过，mock/invoke/console/page error 均为零。
+- 前一次 Yjs attempt 6 无首事件的现场保留为一次性 transport/进程时序诊断：连接诊断单题证明第 6 次 SSE response 正常 `finish/close`，随后无重试的完整五题 suite 也通过。未找到可重复的 fixture index、tool defer 或 stream close 缺陷，因此不增加掩盖失败的自动重试，也不放宽 terminal fail-closed。
+- 证据边界不变：完整 suite 仍为 `status=product_path_only`、`liveTrialCount=0`、`desktopCodingPass=false`。受控 provider、artifact 正文与 recovery 只能证明真实产品链，不能替代 live DeepSWE sampling、Pier verifier、同一 patch SHA 或三轮能力统计。

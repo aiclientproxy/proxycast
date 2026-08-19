@@ -172,24 +172,6 @@ export interface AppServerClient {
   dismissWorkspaceRightSurfacePending(
     params: protocol.WorkspaceRightSurfacePendingDismissParams,
   ): protocol.JsonRpcRequest;
-  listBrowserSessionTargets(
-    params: protocol.BrowserSessionTargetListParams,
-  ): protocol.JsonRpcRequest;
-  openBrowserSession(
-    params: protocol.BrowserSessionOpenParams,
-  ): protocol.JsonRpcRequest;
-  readBrowserSession(
-    params: protocol.BrowserSessionIdParams,
-  ): protocol.JsonRpcRequest;
-  closeBrowserSession(
-    params: protocol.BrowserSessionIdParams,
-  ): protocol.JsonRpcRequest;
-  listBrowserSessionEvents(
-    params: protocol.BrowserSessionEventListParams,
-  ): protocol.JsonRpcRequest;
-  executeBrowserSessionAction(
-    params: protocol.BrowserSessionActionExecuteParams,
-  ): protocol.JsonRpcRequest;
   listApps(params?: protocol.AppsListParams): protocol.JsonRpcRequest;
   readApps(params: protocol.AppsReadParams): protocol.JsonRpcRequest;
   listInstalledApps(

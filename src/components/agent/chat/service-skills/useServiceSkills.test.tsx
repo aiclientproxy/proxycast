@@ -419,28 +419,28 @@ describe("useServiceSkills", () => {
     }
   });
 
-  it("旧版站点技能目录项不应再出现在首页列表", async () => {
-    saveSkillCatalog(buildLegacySiteCatalog(), "bootstrap_sync");
+  it("旧版站点技能目录应被拒绝且不污染首页列表", async () => {
+    expect(() =>
+      saveSkillCatalog(buildLegacySiteCatalog(), "bootstrap_sync"),
+    ).toThrow("invalid skill catalog");
 
     const harness = mountHook();
 
     try {
       await flushEffects();
 
-      expect(harness.getValue().skills).toHaveLength(1);
-      expect(harness.getValue().skills[0]).toEqual(
-        expect.objectContaining({
-          id: "tenant-general-skill",
-        }),
-      );
+      expect(harness.getValue().skills.length).toBeGreaterThan(0);
       expect(
         harness
           .getValue()
           .skills.some((skill) => skill.id === "legacy-site-skill"),
       ).toBe(false);
-      expect(harness.getValue().groups.map((group) => group.key)).toEqual([
-        "general",
-      ]);
+      expect(harness.getValue().catalogMeta).toEqual(
+        expect.objectContaining({
+          tenantId: "local-seeded",
+          isSeeded: true,
+        }),
+      );
     } finally {
       harness.unmount();
     }

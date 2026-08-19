@@ -166,7 +166,6 @@ interface BuildWorkspaceEmptyStatePropsParams {
     typeof EmptyState
   >["onOpenMemoryWorkbench"];
   onOpenChannels?: ComponentProps<typeof EmptyState>["onOpenChannels"];
-  onOpenChromeRelay?: ComponentProps<typeof EmptyState>["onOpenChromeRelay"];
   creationReplaySurface?: CreationReplaySurfaceModel | null;
   defaultCuratedTaskReferenceMemoryIds?: ComponentProps<
     typeof EmptyState
@@ -266,7 +265,6 @@ export function buildWorkspaceEmptyStateProps({
   runtimeTaskCard,
   onOpenMemoryWorkbench,
   onOpenChannels,
-  onOpenChromeRelay,
   creationReplaySurface,
   defaultCuratedTaskReferenceMemoryIds,
   defaultCuratedTaskReferenceEntries,
@@ -359,7 +357,6 @@ export function buildWorkspaceEmptyStateProps({
     runtimeTaskCard,
     onOpenMemoryWorkbench,
     onOpenChannels,
-    onOpenChromeRelay,
     creationReplaySurface,
     defaultCuratedTaskReferenceMemoryIds,
     defaultCuratedTaskReferenceEntries,

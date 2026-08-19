@@ -488,18 +488,6 @@ impl RequestProcessor {
             METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_DISMISS => self
                 .handle_workspace_right_surface_pending_dismiss_impl(params)
                 .boxed(),
-            METHOD_BROWSER_SESSION_TARGET_LIST => {
-                self.handle_browser_session_target_list_impl(params).boxed()
-            }
-            METHOD_BROWSER_SESSION_OPEN => self.handle_browser_session_open_impl(params).boxed(),
-            METHOD_BROWSER_SESSION_READ => self.handle_browser_session_read_impl(params).boxed(),
-            METHOD_BROWSER_SESSION_CLOSE => self.handle_browser_session_close_impl(params).boxed(),
-            METHOD_BROWSER_SESSION_EVENT_LIST => {
-                self.handle_browser_session_event_list_impl(params).boxed()
-            }
-            METHOD_BROWSER_SESSION_ACTION_EXECUTE => self
-                .handle_browser_session_action_execute_impl(params)
-                .boxed(),
             app_server_protocol::protocol::v2::METHOD_PLUGIN_LIST => {
                 self.handle_plugin_catalog_list_v2_impl(params).boxed()
             }

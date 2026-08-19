@@ -79,28 +79,6 @@ const {
   mockExtractServiceSkillCatalogFromBootstrapPayload: vi.fn(),
 }));
 
-const {
-  mockClearSiteAdapterCatalogCache,
-  mockEmitSiteAdapterCatalogBootstrap,
-  mockExtractSiteAdapterCatalogFromBootstrapPayload,
-  mockSubscribeSiteAdapterCatalogChanged,
-} = vi.hoisted(() => ({
-  mockClearSiteAdapterCatalogCache: vi.fn(),
-  mockEmitSiteAdapterCatalogBootstrap: vi.fn(),
-  mockExtractSiteAdapterCatalogFromBootstrapPayload: vi.fn(),
-  mockSubscribeSiteAdapterCatalogChanged: vi.fn(),
-}));
-
-const {
-  mockSiteGetAdapterCatalogStatus,
-  mockSiteImportAdapterYamlBundle,
-  mockSiteListAdapters,
-} = vi.hoisted(() => ({
-  mockSiteGetAdapterCatalogStatus: vi.fn(),
-  mockSiteImportAdapterYamlBundle: vi.fn(),
-  mockSiteListAdapters: vi.fn(),
-}));
-
 vi.mock("@/contexts/ComponentDebugContext", () => ({
   useComponentDebug: mockUseComponentDebug,
 }));
@@ -152,20 +130,6 @@ vi.mock("@/lib/serviceSkillCatalogBootstrap", () => ({
   emitServiceSkillCatalogBootstrap: mockEmitServiceSkillCatalogBootstrap,
   extractServiceSkillCatalogFromBootstrapPayload:
     mockExtractServiceSkillCatalogFromBootstrapPayload,
-}));
-
-vi.mock("@/lib/siteAdapterCatalogBootstrap", () => ({
-  clearSiteAdapterCatalogCache: mockClearSiteAdapterCatalogCache,
-  emitSiteAdapterCatalogBootstrap: mockEmitSiteAdapterCatalogBootstrap,
-  extractSiteAdapterCatalogFromBootstrapPayload:
-    mockExtractSiteAdapterCatalogFromBootstrapPayload,
-  subscribeSiteAdapterCatalogChanged: mockSubscribeSiteAdapterCatalogChanged,
-}));
-
-vi.mock("@/lib/webview-api", () => ({
-  siteGetAdapterCatalogStatus: mockSiteGetAdapterCatalogStatus,
-  siteImportAdapterYamlBundle: mockSiteImportAdapterYamlBundle,
-  siteListAdapters: mockSiteListAdapters,
 }));
 
 vi.mock("../shared/ClipboardPermissionGuideCard", () => ({
@@ -223,39 +187,6 @@ const seededCatalog = {
     },
   ],
 };
-
-const siteCatalogStatus = {
-  exists: false,
-  source_kind: "bundled" as const,
-  registry_version: 1,
-  directory: "/tmp/lime/site-adapters/server-synced",
-  adapter_count: 2,
-};
-
-const siteAdapters = [
-  {
-    name: "github/search",
-    domain: "github.com",
-    description: "GitHub 搜索",
-    read_only: true,
-    capabilities: ["search"],
-    input_schema: { type: "object" },
-    example_args: {},
-    example: 'github/search {"query":"lime"}',
-    source_kind: "bundled" as const,
-  },
-  {
-    name: "zhihu/hot",
-    domain: "www.zhihu.com",
-    description: "知乎热榜",
-    read_only: true,
-    capabilities: ["hot"],
-    input_schema: { type: "object" },
-    example_args: {},
-    example: 'zhihu/hot {"limit":10}',
-    source_kind: "bundled" as const,
-  },
-];
 
 const mounted: Mounted[] = [];
 
@@ -587,25 +518,6 @@ beforeEach(async () => {
   mockExtractServiceSkillCatalogFromBootstrapPayload.mockReturnValue(
     remoteCatalog,
   );
-  mockSiteGetAdapterCatalogStatus.mockResolvedValue(siteCatalogStatus);
-  mockSiteImportAdapterYamlBundle.mockResolvedValue({
-    directory: "/tmp/lime/site-adapters/imported",
-    adapter_count: 1,
-    catalog_version: null,
-  });
-  mockSiteListAdapters.mockResolvedValue(siteAdapters);
-  mockClearSiteAdapterCatalogCache.mockResolvedValue(siteCatalogStatus);
-  mockSubscribeSiteAdapterCatalogChanged.mockImplementation(() => vi.fn());
-  mockExtractSiteAdapterCatalogFromBootstrapPayload.mockImplementation(
-    (payload) =>
-      (
-        payload as {
-          siteAdapterCatalog?: {
-            adapters?: unknown[];
-          };
-        }
-      ).siteAdapterCatalog ?? null,
-  );
 });
 
 afterEach(async () => {
@@ -667,8 +579,6 @@ describe("DeveloperSettings", () => {
     expect(text).toContain("Export support bundle with Trace");
     expect(text).toContain("Load Trace timeline");
     expect(text).toContain("Service Skill Catalog Debugging");
-    expect(text).toContain("Site Script Catalog Debugging");
-    expect(text).toContain("Preparing Site Script Catalog Debugging");
     expect(text).toContain("Component view debug");
     expect(text).toContain("Diagnostic Logs");
     expect(text).toContain("Workspace Repair History");
@@ -1627,179 +1537,4 @@ describe("DeveloperSettings", () => {
     );
   });
 
-  it("应展示站点脚本目录摘要", async () => {
-    const container = renderComponent();
-    await waitForLazyPanels();
-
-    expect(container.textContent).toContain("Site Script Catalog Debugging");
-    expect(container.textContent).toContain("Bundled");
-    expect(container.textContent).toContain("github/search");
-    expect(container.textContent).toContain("zhihu/hot");
-  });
-
-  it("导入外部来源 YAML 后应调用 Lime 标准导入命令并刷新摘要", async () => {
-    const container = renderComponent();
-    await waitForLazyPanels();
-    const textarea = findTextarea(container, "Site source YAML import input");
-
-    mockSiteGetAdapterCatalogStatus.mockResolvedValueOnce({
-      exists: true,
-      source_kind: "imported",
-      registry_version: 1,
-      directory: "/tmp/lime/site-adapters/imported",
-      catalog_version: "imported-2026-03-28",
-      adapter_count: 1,
-    });
-    mockSiteListAdapters.mockResolvedValueOnce([
-      {
-        name: "reddit/hot",
-        domain: "www.reddit.com",
-        description: "Reddit 热门帖子",
-        read_only: true,
-        capabilities: ["research", "hot"],
-        input_schema: { type: "object" },
-        example_args: {},
-        example: 'reddit/hot {"subreddit":"rust"}',
-        source_kind: "imported" as const,
-      },
-    ]);
-
-    await inputTextarea(
-      textarea,
-      [
-        "site: reddit",
-        "name: hot",
-        "description: Reddit 热门帖子",
-        "domain: www.reddit.com",
-        "pipeline:",
-        "  - navigate: https://www.reddit.com",
-        "  - evaluate: |",
-        "      (() => [])()",
-      ].join("\n"),
-    );
-    await clickButton(findButton(container, "Import to Lime Standard"));
-    await flushEffects();
-
-    expect(mockSiteImportAdapterYamlBundle).toHaveBeenCalledWith(
-      expect.objectContaining({
-        yaml_bundle: expect.stringContaining("site: reddit"),
-      }),
-    );
-    expect(mockSiteGetAdapterCatalogStatus).toHaveBeenCalledTimes(2);
-    expect(mockSiteListAdapters).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain(
-      "Imported 1 external adapters to the Lime standard; 1 are currently effective",
-    );
-    expect(container.textContent).toContain("Imported");
-    expect(container.textContent).toContain("reddit/hot");
-  });
-
-  it("输入 JSON 后注入站点脚本目录应调用 bootstrap 桥接", async () => {
-    const container = renderComponent();
-    await waitForLazyPanels();
-    const textarea = findTextarea(
-      container,
-      "Site adapter catalog debug input",
-    );
-
-    await inputTextarea(
-      textarea,
-      JSON.stringify(
-        {
-          siteAdapterCatalog: {
-            adapters: [{ name: "github/search" }, { name: "zhihu/hot" }],
-          },
-        },
-        null,
-        2,
-      ),
-    );
-    await clickButton(findButton(container, "Inject Site Catalog"));
-    await flushEffects();
-
-    expect(
-      mockExtractSiteAdapterCatalogFromBootstrapPayload,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        siteAdapterCatalog: expect.objectContaining({
-          adapters: expect.any(Array),
-        }),
-      }),
-    );
-    expect(mockEmitSiteAdapterCatalogBootstrap).toHaveBeenCalledWith(
-      expect.objectContaining({
-        siteAdapterCatalog: expect.objectContaining({
-          adapters: expect.any(Array),
-        }),
-      }),
-    );
-    expect(container.textContent).toContain(
-      "Injected site adapter catalog through bootstrap event: 2 items",
-    );
-  });
-
-  it("清空站点脚本目录缓存后应提示回退到Bundled", async () => {
-    const container = renderComponent();
-    await waitForLazyPanels();
-
-    await clickButton(findButton(container, "Clear Site Catalog Cache"));
-    await flushEffects();
-
-    expect(mockClearSiteAdapterCatalogCache).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain(
-      "Site adapter catalog cache cleared; falling back to bundled: 2 items",
-    );
-  });
-
-  it("站点目录变更事件后应自动刷新开发页摘要", async () => {
-    const container = renderComponent();
-    await waitForLazyPanels();
-
-    expect(mockSiteGetAdapterCatalogStatus).toHaveBeenCalledTimes(1);
-    expect(mockSiteListAdapters).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("Bundled");
-
-    mockSiteGetAdapterCatalogStatus.mockResolvedValueOnce({
-      exists: true,
-      source_kind: "server_synced",
-      registry_version: 2,
-      directory: "/tmp/lime/site-adapters/server-synced",
-      catalog_version: "tenant-site-2026-03-27",
-      tenant_id: "tenant-demo",
-      synced_at: "2026-03-27T08:00:00.000Z",
-      adapter_count: 1,
-    });
-    mockSiteListAdapters.mockResolvedValueOnce([
-      {
-        name: "bilibili/hot",
-        domain: "www.bilibili.com",
-        description: "B 站热榜",
-        read_only: true,
-        capabilities: ["hot"],
-        input_schema: { type: "object" },
-        example_args: {},
-        example: 'bilibili/hot {"limit":10}',
-        source_kind: "server_synced" as const,
-      },
-    ]);
-
-    const changedListener =
-      mockSubscribeSiteAdapterCatalogChanged.mock.calls[0]?.[0];
-    expect(changedListener).toBeTypeOf("function");
-
-    await act(async () => {
-      changedListener?.({
-        exists: true,
-        source_kind: "server_synced",
-        adapter_count: 1,
-      });
-      await flushEffects();
-    });
-
-    expect(mockSiteGetAdapterCatalogStatus).toHaveBeenCalledTimes(2);
-    expect(mockSiteListAdapters).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain("Server Synced");
-    expect(container.textContent).toContain("bilibili/hot");
-    expect(container.textContent).toContain("tenant-site-2026-03-27");
-  });
 });

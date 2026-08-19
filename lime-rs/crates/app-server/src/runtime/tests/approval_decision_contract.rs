@@ -68,7 +68,7 @@ impl ExecutionBackend for ShellApprovalOnceOnlyBackend {
 }
 
 #[tokio::test]
-async fn shell_allow_for_session_fails_without_cache_owner() {
+async fn shell_allow_for_session_fails_when_contract_does_not_support_it() {
     let backend = Arc::new(ShellApprovalOnceOnlyBackend {
         respond_count: AtomicUsize::new(0),
     });
@@ -125,10 +125,10 @@ async fn shell_allow_for_session_fails_without_cache_owner() {
             RuntimeHostContext::default(),
         )
         .await
-        .expect_err("shell allow_for_session without cache owner must fail closed");
+        .expect_err("unsupported shell allow_for_session must fail closed");
 
     assert!(error.to_string().contains(
-        "allow_for_session requires session approval cache owner for tool_confirmation request 'shell-approval-1'"
+        "approval decision 'allow_for_session' is not available for tool_confirmation request 'shell-approval-1'"
     ));
     assert_eq!(backend.respond_count.load(Ordering::SeqCst), 0);
 }

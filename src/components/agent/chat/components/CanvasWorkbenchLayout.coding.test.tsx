@@ -12,16 +12,7 @@ import {
   flushEffects,
   mockListProjectGitCommits,
   mount,
-  mockDestroyEmbeddedBrowserView,
-  mockListenEmbeddedBrowserViewState,
-  mockListenEmbeddedBrowserViewLoadFailed,
   mockReadProjectGitDiff,
-  mockMountEmbeddedBrowserView,
-  mockIsEmbeddedBrowserHostAvailable,
-  mockNavigateEmbeddedBrowserView,
-  mockOpenExternalUrlWithSystemBrowser,
-  mockReloadEmbeddedBrowserView,
-  mockSetEmbeddedBrowserViewBounds,
   mockExecCommand,
   mockToast,
   mountHarness,
@@ -222,8 +213,8 @@ describe("CanvasWorkbenchLayout coding mode", () => {
       ),
     ).not.toBeNull();
     expectNewWorkbenchToolInMenu(container, "终端");
-    expectNewWorkbenchToolInMenu(container, "浏览器");
     expectNewWorkbenchToolInMenu(container, "文件");
+    expectWorkbenchTabNotInNewMenu(container, "浏览器");
     expectWorkbenchTabNotInNewMenu(container, "Markdown");
     expectWorkbenchTabNotInNewMenu(container, "HTML");
     expectWorkbenchTabNotInNewMenu(container, "Code");
@@ -396,7 +387,9 @@ describe("CanvasWorkbenchLayout coding mode", () => {
     expect(onStartReview).toHaveBeenCalledTimes(1);
     expect(button?.disabled).toBe(false);
     expect(
-      container.querySelector('[data-testid="code-review-summary-review-status"]'),
+      container.querySelector(
+        '[data-testid="code-review-summary-review-status"]',
+      ),
     ).toBeNull();
   });
 
@@ -478,8 +471,8 @@ describe("CanvasWorkbenchLayout coding mode", () => {
       container.querySelector('button[aria-label="切换画布标签-HTML"]'),
     ).toBeNull();
     expectNewWorkbenchToolInMenu(container, "终端");
-    expectNewWorkbenchToolInMenu(container, "浏览器");
     expectNewWorkbenchToolInMenu(container, "文件");
+    expectWorkbenchTabNotInNewMenu(container, "浏览器");
     expectWorkbenchTabNotInNewMenu(container, "Code");
     expectWorkbenchTabNotInNewMenu(container, "审查");
     expectWorkbenchTabNotInNewMenu(container, "输出");
@@ -602,150 +595,6 @@ describe("CanvasWorkbenchLayout coding mode", () => {
       }),
     );
 
-    clickNewWorkbenchTool(container, "浏览器");
-    await flushEffects();
-    expect(
-      container.querySelector('[data-testid="canvas-workbench-panel-browser"]'),
-    ).not.toBeNull();
-    expect(mockMountEmbeddedBrowserView).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: "https://www.google.com/",
-      }),
-    );
-    const browserViewport = container.querySelector(
-      '[data-testid="canvas-workbench-browser-viewport"]',
-    ) as HTMLElement | null;
-    expect(browserViewport).not.toBeNull();
-    Object.defineProperty(browserViewport, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({
-        bottom: 380,
-        height: 360,
-        left: 10,
-        right: 650,
-        top: 20,
-        width: 640,
-        x: 10,
-        y: 20,
-        toJSON: () => ({}),
-      }),
-    });
-    mockSetEmbeddedBrowserViewBounds.mockClear();
-    clickByAriaLabel(container, "打开工作台切换菜单");
-    await flushEffects();
-    expect(
-      container.querySelector('[data-testid="canvas-workbench-tab-menu"]')
-        ?.className,
-    ).toContain("z-[80]");
-    expect(
-      container
-        .querySelector('[data-testid="canvas-workbench-header-row"]')
-        ?.closest("header")?.className,
-    ).toContain("z-[90]");
-    expect(
-      container.querySelector('[data-testid="canvas-workbench-layout"]')
-        ?.className,
-    ).toContain("z-0");
-    expect(mockSetEmbeddedBrowserViewBounds).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        bounds: {
-          x: 10,
-          y: 20,
-          width: 640,
-          height: 360,
-        },
-        visible: false,
-      }),
-    );
-    clickByAriaLabel(container, "打开工作台切换菜单");
-    await flushEffects();
-    expect(
-      container.querySelector('[data-testid="canvas-workbench-tab-menu"]'),
-    ).toBeNull();
-    expect(mockSetEmbeddedBrowserViewBounds).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        bounds: {
-          x: 10,
-          y: 20,
-          width: 640,
-          height: 360,
-        },
-        visible: true,
-      }),
-    );
-    const browserAddress = container.querySelector(
-      '[aria-label="输入网址或搜索"]',
-    ) as HTMLInputElement;
-    act(() => {
-      updateInputValue(browserAddress, "example.com");
-      browserAddress.form?.dispatchEvent(
-        new Event("submit", { bubbles: true, cancelable: true }),
-      );
-    });
-    await flushEffects();
-    expect(mockNavigateEmbeddedBrowserView).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: "https://example.com/",
-      }),
-    );
-    expect(mockMountEmbeddedBrowserView).toHaveBeenCalledTimes(1);
-    expect(mockDestroyEmbeddedBrowserView).not.toHaveBeenCalled();
-    const stateHandler =
-      mockListenEmbeddedBrowserViewState.mock.calls.at(-1)?.[0];
-    const loadFailedHandler =
-      mockListenEmbeddedBrowserViewLoadFailed.mock.calls.at(-1)?.[0];
-    const mountedBrowserViewId =
-      mockMountEmbeddedBrowserView.mock.calls.at(-1)?.[0]?.viewId;
-    expect(stateHandler).toBeTypeOf("function");
-    expect(loadFailedHandler).toBeTypeOf("function");
-    expect(mountedBrowserViewId).toBeTypeOf("string");
-    act(() => {
-      stateHandler?.({
-        viewId: mountedBrowserViewId,
-        url: "https://example.com/",
-        title: "Example Domain",
-        canGoBack: false,
-        canGoForward: false,
-        isLoading: false,
-      });
-    });
-    await flushEffects();
-    expect(
-      container.querySelector('[aria-label="切换画布标签-Example Domain"]'),
-    ).not.toBeNull();
-    act(() => {
-      loadFailedHandler?.({
-        viewId: mountedBrowserViewId,
-        url: "https://example.com/",
-        title: "Example",
-        canGoBack: false,
-        canGoForward: false,
-        isLoading: false,
-        errorCode: -105,
-        errorDescription: "NAME_NOT_RESOLVED",
-      });
-    });
-    await vi.waitFor(() => {
-      expect(
-        container.querySelector(
-          '[data-testid="canvas-workbench-browser-error"]',
-        )?.textContent,
-      ).toContain("NAME_NOT_RESOLVED");
-    });
-    clickByAriaLabel(container, "在系统浏览器打开");
-    await flushEffects();
-    expect(mockOpenExternalUrlWithSystemBrowser).toHaveBeenCalled();
-    clickByAriaLabel(container, "关闭工作台标签-Example Domain");
-    await flushEffects();
-    expect(
-      container.querySelector('[data-testid="canvas-workbench-panel-browser"]'),
-    ).toBeNull();
-    expect(
-      container.querySelector(
-        '[data-testid="canvas-workbench-panel-terminal"]',
-      ),
-    ).not.toBeNull();
-
     clickNewWorkbenchTool(container, "文件");
     await flushEffects();
     expect(
@@ -823,99 +672,6 @@ describe("CanvasWorkbenchLayout coding mode", () => {
       "当前目录不是 Git 仓库，无法读取文件变更。",
     );
     expect(container.textContent).not.toContain("还没有可对比的文件变更。");
-  });
-
-  it("coding 模式应响应对话侧浏览器打开请求并激活右侧浏览器标签", async () => {
-    const handleBrowserRequestHandled = vi.fn();
-    const harnessProps = {
-      artifacts: [],
-      canvasState: null,
-      taskFiles: [],
-      selectedFileId: undefined,
-      workspaceRoot: "/workspace",
-      workspaceUnavailable: false,
-      defaultPreview: null,
-      loadFilePreview: vi.fn(async (path: string) => ({
-        path,
-        content: "",
-        isBinary: false,
-        size: 0,
-        error: null,
-      })),
-      onOpenPath: vi.fn(async () => undefined),
-      onRevealPath: vi.fn(async () => undefined),
-      workbenchMode: "coding" as const,
-      browserOpenRequest: {
-        requestKey: 1,
-        url: "https://example.com/docs",
-      },
-      onBrowserOpenRequestHandled: handleBrowserRequestHandled,
-    };
-    const container = mount(harnessProps);
-
-    await flushEffects();
-
-    expect(
-      container.querySelector('[data-testid="canvas-workbench-panel-browser"]'),
-    ).not.toBeNull();
-    expect(mockMountEmbeddedBrowserView).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: "https://example.com/docs",
-      }),
-    );
-    expect(handleBrowserRequestHandled).toHaveBeenCalledWith(1);
-  });
-
-  it("浏览器标签在非桌面宿主中应 fail closed 且不调用内嵌浏览器命令", async () => {
-    mockIsEmbeddedBrowserHostAvailable.mockReturnValue(false);
-    const container = mount({
-      artifacts: [],
-      canvasState: null,
-      taskFiles: [],
-      selectedFileId: undefined,
-      workspaceRoot: "/workspace",
-      workspaceUnavailable: false,
-      defaultPreview: null,
-      loadFilePreview: vi.fn(async (path: string) => ({
-        path,
-        content: "",
-        isBinary: false,
-        size: 0,
-        error: null,
-      })),
-      onOpenPath: vi.fn(async () => undefined),
-      onRevealPath: vi.fn(async () => undefined),
-      workbenchMode: "coding",
-    });
-
-    clickNewWorkbenchTool(container, "浏览器");
-    await flushEffects();
-
-    expect(
-      container.querySelector(
-        '[data-testid="canvas-workbench-browser-host-unavailable"]',
-      ),
-    ).not.toBeNull();
-    expect(container.textContent).toContain("需要桌面宿主");
-    expect(mockMountEmbeddedBrowserView).not.toHaveBeenCalled();
-
-    const browserAddress = container.querySelector(
-      '[aria-label="输入网址或搜索"]',
-    ) as HTMLInputElement;
-    act(() => {
-      updateInputValue(browserAddress, "example.com");
-      browserAddress.form?.dispatchEvent(
-        new Event("submit", { bubbles: true, cancelable: true }),
-      );
-    });
-    await flushEffects();
-
-    expect(mockNavigateEmbeddedBrowserView).not.toHaveBeenCalled();
-    const refreshButton = container.querySelector(
-      '[aria-label="刷新浏览器标签"]',
-    ) as HTMLButtonElement | null;
-    expect(refreshButton?.disabled).toBe(true);
-    expect(mockReloadEmbeddedBrowserView).not.toHaveBeenCalled();
   });
 
   it("coding 模式的变更标签应展示本轮多文件变更队列", async () => {

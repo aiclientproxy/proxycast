@@ -172,7 +172,6 @@ function main() {
     "browser_requirement:",
     "browser_requirement_reason:",
     "browser_launch_url:",
-    "browser_assist:",
   ];
 
   const forbiddenLegacyOutputKeys = [
@@ -212,6 +211,8 @@ function main() {
     "selectedTeamRoles:",
     "team_memory_shadow:",
     "teamMemoryShadow:",
+    "browser_assist:",
+    "browserAssist:",
   ];
 
   const requiredLegacyCleanupKeys = [
@@ -233,6 +234,8 @@ function main() {
     "selected_team_summary",
     "selected_team_roles",
     "team_memory_shadow",
+    "browser_assist",
+    "browserAssist",
   ];
 
   const requiredRuntimeFields = [

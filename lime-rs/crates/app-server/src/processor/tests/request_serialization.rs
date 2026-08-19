@@ -10,9 +10,8 @@ use crate::{
 };
 use app_server_protocol::{
     AgentSessionStartParams, ClientCapabilities, ClientInfo, InitializeParams, JsonRpcMessage,
-    JsonRpcNotification, JsonRpcRequest, RequestId, METHOD_BROWSER_SESSION_READ,
-    METHOD_CAPABILITY_LIST, METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ,
-    METHOD_TURN_START,
+    JsonRpcNotification, JsonRpcRequest, RequestId, METHOD_CAPABILITY_LIST, METHOD_INITIALIZE,
+    METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_TURN_START,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -252,19 +251,6 @@ async fn request_scope_uses_catalog_domain_key_and_access_policy() {
         Ok(Some(RequestSerializationScope {
             key: RequestSerializationQueueKey::Thread("thread-a".to_string()),
             access: RequestSerializationAccess::Exclusive,
-        }))
-    );
-
-    let browser_read = JsonRpcRequest::new(
-        RequestId::Integer(2),
-        METHOD_BROWSER_SESSION_READ,
-        Some(json!({ "sessionId": "browser-a" })),
-    );
-    assert_eq!(
-        request_serialization_scope(&runtime, &browser_read).await,
-        Ok(Some(RequestSerializationScope {
-            key: RequestSerializationQueueKey::BrowserSession("browser-a".to_string()),
-            access: RequestSerializationAccess::SharedRead,
         }))
     );
 

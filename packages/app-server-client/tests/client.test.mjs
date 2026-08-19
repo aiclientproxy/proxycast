@@ -105,12 +105,6 @@ const {
   METHOD_WORKFLOW_RESPOND,
   METHOD_WORKFLOW_RETRY,
   METHOD_ARTIFACT_READ,
-  METHOD_BROWSER_SESSION_ACTION_EXECUTE,
-  METHOD_BROWSER_SESSION_CLOSE,
-  METHOD_BROWSER_SESSION_EVENT_LIST,
-  METHOD_BROWSER_SESSION_OPEN,
-  METHOD_BROWSER_SESSION_READ,
-  METHOD_BROWSER_SESSION_TARGET_LIST,
   METHOD_CAPABILITY_LIST,
   METHOD_CONNECT_CALLBACK_SEND,
   METHOD_CONNECT_DEEP_LINK_RESOLVE,
@@ -769,30 +763,6 @@ test("builds workspace and skill read requests with current methods", () => {
     requestIds: ["right-surface:req-4"],
     reason: "user_closed_surface",
   });
-  const browserTargets = client.listBrowserSessionTargets({
-    remoteDebuggingPort: 9222,
-  });
-  const browserOpen = client.openBrowserSession({
-    profileKey: "task-profile",
-    remoteDebuggingPort: 9222,
-    targetId: "target-1",
-    launchUrl: "https://example.com",
-  });
-  const browserRead = client.readBrowserSession({
-    sessionId: "browser-session-1",
-  });
-  const browserClose = client.closeBrowserSession({
-    sessionId: "browser-session-1",
-  });
-  const browserEvents = client.listBrowserSessionEvents({
-    sessionId: "browser-session-1",
-    cursor: 3,
-  });
-  const browserAction = client.executeBrowserSessionAction({
-    sessionId: "browser-session-1",
-    action: "get_page_info",
-    args: { includeMarkdown: true },
-  });
   const skills = client.listSkills({
     cwds: ["/workspace/project"],
     forceReload: true,
@@ -810,7 +780,6 @@ test("builds workspace and skill read requests with current methods", () => {
     workspaceRoot: "/workspace/project",
     caller: "agent-chat",
     workbench: true,
-    browserAssist: false,
   });
   const registeredSkills = client.listWorkspaceRegisteredSkills({
     workspaceRoot: "/workspace/project",
@@ -891,30 +860,6 @@ test("builds workspace and skill read requests with current methods", () => {
     requestIds: ["right-surface:req-4"],
     reason: "user_closed_surface",
   });
-  assert.equal(browserTargets.method, METHOD_BROWSER_SESSION_TARGET_LIST);
-  assert.deepEqual(browserTargets.params, { remoteDebuggingPort: 9222 });
-  assert.equal(browserOpen.method, METHOD_BROWSER_SESSION_OPEN);
-  assert.deepEqual(browserOpen.params, {
-    profileKey: "task-profile",
-    remoteDebuggingPort: 9222,
-    targetId: "target-1",
-    launchUrl: "https://example.com",
-  });
-  assert.equal(browserRead.method, METHOD_BROWSER_SESSION_READ);
-  assert.deepEqual(browserRead.params, { sessionId: "browser-session-1" });
-  assert.equal(browserClose.method, METHOD_BROWSER_SESSION_CLOSE);
-  assert.deepEqual(browserClose.params, { sessionId: "browser-session-1" });
-  assert.equal(browserEvents.method, METHOD_BROWSER_SESSION_EVENT_LIST);
-  assert.deepEqual(browserEvents.params, {
-    sessionId: "browser-session-1",
-    cursor: 3,
-  });
-  assert.equal(browserAction.method, METHOD_BROWSER_SESSION_ACTION_EXECUTE);
-  assert.deepEqual(browserAction.params, {
-    sessionId: "browser-session-1",
-    action: "get_page_info",
-    args: { includeMarkdown: true },
-  });
   assert.equal(skills.method, METHOD_SKILLS_LIST);
   assert.equal(hooks.method, METHOD_HOOKS_LIST);
   assert.deepEqual(hooks.params, { cwds: ["/workspace/project"] });
@@ -938,7 +883,6 @@ test("builds workspace and skill read requests with current methods", () => {
     workspaceRoot: "/workspace/project",
     caller: "agent-chat",
     workbench: true,
-    browserAssist: false,
   });
   assert.equal(
     registeredSkills.method,
@@ -2616,10 +2560,6 @@ test("exports app-server method catalog from checked-in Rust manifest", () => {
     "mcpOauth",
   );
   assert.equal(
-    getAppServerRequestSerializationScope(METHOD_BROWSER_SESSION_OPEN),
-    "browserSession",
-  );
-  assert.equal(
     getAppServerRequestSerializationScope(METHOD_FS_REMOVE),
     undefined,
   );
@@ -2988,6 +2928,64 @@ test("connection bounds request read slices so event drain is not starved", asyn
     },
   });
   await turnPromise;
+});
+
+test("connection server request handler keeps the read pump active without an event drain", async () => {
+  const sent = [];
+  let reads = 0;
+  const connection = new AppServerConnection({
+    send(message) {
+      sent.push(message);
+    },
+    async nextMessage() {
+      reads += 1;
+      return {
+        id: "server-request-dynamic-tool",
+        method: "item/tool/call",
+        params: {},
+      };
+    },
+  });
+
+  connection.setServerRequestHandler((message) => {
+    connection.respondServerRequest(message.id, { success: true });
+    connection.setServerRequestHandler(null);
+    return true;
+  });
+
+  await waitFor(() => sent.length === 1);
+  assert.equal(reads, 1);
+  assert.deepEqual(sent, [
+    {
+      id: "server-request-dynamic-tool",
+      result: { success: true },
+    },
+  ]);
+});
+
+test("connection buffers server requests declined by the host handler", async () => {
+  let handled = false;
+  const connection = new AppServerConnection({
+    send() {},
+    async nextMessage() {
+      return {
+        id: "server-request-user-input",
+        method: "item/tool/requestUserInput",
+        params: {},
+      };
+    },
+  });
+
+  connection.setServerRequestHandler(() => {
+    handled = true;
+    connection.setServerRequestHandler(null);
+    return false;
+  });
+
+  await waitFor(() => handled);
+  const request = await connection.nextServerMessage(100);
+  assert.equal(request.id, "server-request-user-input");
+  assert.equal(request.method, "item/tool/requestUserInput");
 });
 
 test("connection dispatches notifications to event drain without waiting for concurrent requests", async () => {

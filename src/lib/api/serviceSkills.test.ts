@@ -227,47 +227,6 @@ describe("serviceSkills API", () => {
       }),
     );
     expect(
-      catalog.items.find((item) => item.id === "x-article-export"),
-    ).toEqual(
-      expect.objectContaining({
-        source: "local_custom",
-        runnerType: "instant",
-        defaultExecutorBinding: "browser_assist",
-        sceneBinding: expect.objectContaining({
-          sceneKey: "x-article-export",
-          commandPrefix: "/x文章转存",
-        }),
-        siteCapabilityBinding: expect.objectContaining({
-          siteLabel: "X",
-          saveMode: "project_resource",
-          adapterMatch: expect.objectContaining({
-            urlArgName: "url",
-            requiredCapabilities: expect.arrayContaining([
-              "article_export",
-              "markdown_bundle",
-            ]),
-          }),
-          slotArgMap: expect.objectContaining({
-            target_language: "target_language",
-          }),
-        }),
-        slotSchema: expect.arrayContaining([
-          expect.objectContaining({
-            key: "target_language",
-            defaultValue: "中文",
-          }),
-        ]),
-        skillBundle: expect.objectContaining({
-          metadata: expect.objectContaining({
-            Lime_base_setup_package_id:
-              "lime-seeded-local-custom-service-skills",
-            Lime_executor_binding: "browser_assist",
-            Lime_runner_type: "instant",
-          }),
-        }),
-      }),
-    );
-    expect(
       catalog.items.find((item) => item.id === "account-performance-tracking"),
     ).toEqual(
       expect.objectContaining({
@@ -296,7 +255,7 @@ describe("serviceSkills API", () => {
     expect(catalog.tenantId).toBe("tenant-demo");
     expect(catalog.version).toBe("tenant-2026-03-24");
     expect(skills.map((item) => item.id)).toEqual(
-      expect.arrayContaining(["tenant-remote-skill", "x-article-export"]),
+      expect.arrayContaining(["tenant-remote-skill"]),
     );
   });
 

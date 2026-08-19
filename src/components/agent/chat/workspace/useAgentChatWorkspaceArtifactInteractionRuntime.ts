@@ -12,12 +12,6 @@ type ArtifactSurfaceParams = UseWorkspaceArtifactSurfaceRuntimeParams;
 export type UseAgentChatWorkspaceArtifactInteractionRuntimeParams = {
   action: ArtifactActionParams;
   surface: {
-    serviceSkillExecution: Omit<
-      ArtifactSurfaceParams["serviceSkillExecution"],
-      | "onOpenResultFile"
-      | "onOpenSavedSiteContent"
-      | "preferredResultFileTarget"
-    >;
     sceneAppExecution: Omit<
       ArtifactSurfaceParams["sceneAppExecution"],
       "onOpenArtifact" | "onOpenTaskFile" | "onOpenWorkspaceFile"
@@ -34,14 +28,6 @@ export function useAgentChatWorkspaceArtifactInteractionRuntime({
 }: UseAgentChatWorkspaceArtifactInteractionRuntimeParams) {
   const artifactActionRuntime = useWorkspaceArtifactActionRuntime(action);
   const artifactSurfaceRuntime = useWorkspaceArtifactSurfaceRuntime({
-    serviceSkillExecution: {
-      ...surface.serviceSkillExecution,
-      onOpenBrowserRuntime: surface.serviceSkillExecution.onOpenBrowserRuntime,
-      onOpenResultFile: artifactActionRuntime.handleOpenServiceSkillResultFile,
-      onOpenSavedSiteContent: artifactActionRuntime.handleOpenSavedSiteContent,
-      preferredResultFileTarget:
-        artifactActionRuntime.preferredServiceSkillResultFileTarget,
-    },
     sceneAppExecution: {
       ...surface.sceneAppExecution,
       onOpenArtifact: artifactActionRuntime.handleArtifactClick,

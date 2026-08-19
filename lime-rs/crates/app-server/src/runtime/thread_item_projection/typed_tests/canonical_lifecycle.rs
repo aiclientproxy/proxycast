@@ -638,60 +638,6 @@ fn resolved_user_input_without_decision_is_terminal_and_clears_pending() {
 }
 
 #[test]
-fn approval_session_cache_hit_remains_audit_only_before_auto_resolution() {
-    let changes = materialize_events(
-        &[
-            event(
-                "approval-cache-hit",
-                1,
-                "approval.session_cache.hit",
-                "turn-1",
-                json!({
-                    "request_id": "provider-request-1",
-                    "sourceRequestId": "approval-turn-initial",
-                    "decision": "allow_for_session",
-                    "decisionScope": "session",
-                }),
-            ),
-            event(
-                "approval-auto-resolved",
-                2,
-                "action.resolved",
-                "turn-1",
-                json!({
-                    "requestId": "permission-turn-1",
-                    "actionId": "permission-turn-1",
-                    "actionType": "tool_confirmation",
-                    "source": "approval_session_cache",
-                    "decision": "allow_for_session",
-                    "decisionScope": "session",
-                }),
-            ),
-        ],
-        "session-1",
-        "thread-1",
-    )
-    .expect("materialize cache-backed approval resolution");
-
-    assert_eq!(changes.changed_items.len(), 1);
-    assert!(matches!(
-        &changes.changed_items[0].payload,
-        ThreadItemPayload::Approval {
-            request_id,
-            decision: Some(ApprovalDecision::ApprovedForSession),
-            requested_at_ms: None,
-            resolved_at_ms: Some(_),
-            ..
-        } if request_id == "permission-turn-1"
-    ));
-    assert_eq!(changes.changed_items[0].status, ItemStatus::Completed);
-    assert_eq!(
-        changes.changed_turns[0].approval,
-        TurnApprovalState::Approved
-    );
-}
-
-#[test]
 fn approval_uses_top_level_identity_when_data_and_trace_request_id_are_present() {
     let changes = materialize_events(
         &[event(
@@ -702,9 +648,9 @@ fn approval_uses_top_level_identity_when_data_and_trace_request_id_are_present()
             json!({
                 "request_id": "trace-request-1",
                 "actionType": "tool_confirmation",
-                "actionKind": "permission_preflight",
+                "actionKind": "tool_execution_policy",
                 "data": {
-                    "prompt": "allow browser control",
+                    "prompt": "allow command execution",
                     "availableDecisions": ["allow_once", "decline", "cancel"]
                 },
                 "runtimeEvent": {
@@ -712,7 +658,7 @@ fn approval_uses_top_level_identity_when_data_and_trace_request_id_are_present()
                     "request_id": "approval-1",
                     "action_type": "tool_confirmation",
                     "data": {
-                        "prompt": "allow browser control",
+                        "prompt": "allow command execution",
                         "availableDecisions": ["allow_once", "decline", "cancel"]
                     }
                 }
@@ -737,7 +683,7 @@ fn approval_uses_top_level_identity_when_data_and_trace_request_id_are_present()
             ..
         } if request_id == "approval-1"
             && kind == "tool_confirmation"
-            && description == "allow browser control"
+            && description == "allow command execution"
             && available_decisions == &vec![
                 ApprovalDecision::Approved,
                 ApprovalDecision::Denied,

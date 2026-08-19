@@ -24,7 +24,9 @@ use tool_runtime::tool_definition::RuntimeToolExposure;
 use tool_runtime::tool_executor::{
     RuntimeToolExecutionContext, RuntimeToolExecutionContextInput, RuntimeToolExecutorHandle,
 };
-use tool_runtime::tool_lifecycle::{ToolLifecycleEmitter, ToolOutputDeltaEvent};
+use tool_runtime::tool_lifecycle::{
+    CodeCellRuntimeStatus, CodeCellTraceEvent, ToolLifecycleEmitter, ToolOutputDeltaEvent,
+};
 use tool_runtime::tool_result_projection::NormalizedToolOutput;
 
 pub(super) enum PendingProviderToolCall {
@@ -223,6 +225,13 @@ async fn execute_wait_call(
     let result = match serde_json::from_value::<RuntimeCodeModeWaitArgs>(call.arguments.clone()) {
         Ok(args) => {
             let cell_id = RuntimeCodeModeCellId::new(args.cell_id);
+            lifecycle_emitter
+                .emit_code_cell_trace(CodeCellTraceEvent::WaitToolObserved {
+                    turn_id: tool_call.turn_id().to_string(),
+                    runtime_cell_id: cell_id.as_str().to_string(),
+                    tool_call_id: call.id.clone(),
+                })
+                .await;
             let max_tokens = args
                 .max_tokens
                 .unwrap_or(DEFAULT_CODE_MODE_MAX_OUTPUT_TOKENS);
@@ -245,9 +254,20 @@ async fn execute_wait_call(
                 }
             };
             match outcome {
-                Ok(outcome) => outcome
-                    .into_response()
-                    .into_tool_result_with_max_tokens(max_tokens),
+                Ok(outcome) => {
+                    let response = outcome.into_response();
+                    if response.is_terminal() {
+                        lifecycle_emitter
+                            .emit_code_cell_trace(CodeCellTraceEvent::Ended {
+                                turn_id: tool_call.turn_id().to_string(),
+                                runtime_cell_id: response.cell_id().as_str().to_string(),
+                                status: code_cell_response_status(&response),
+                                response_chars: code_cell_response_chars(&response),
+                            })
+                            .await;
+                    }
+                    response.into_tool_result_with_max_tokens(max_tokens)
+                }
                 Err(error) => RuntimeCodeModeToolResult::failure(cell_id, error),
             }
         }
@@ -296,6 +316,7 @@ async fn execute_call(
     let max_output_tokens = parsed
         .max_output_tokens
         .unwrap_or(DEFAULT_CODE_MODE_MAX_OUTPUT_TOKENS);
+    let source_js = parsed.code.clone();
     let started = match session
         .execute_with_delegate(
             RuntimeCodeModeExecuteRequest {
@@ -320,6 +341,14 @@ async fn execute_call(
         }
     };
     let cell_id = started.cell_id.clone();
+    lifecycle_emitter
+        .emit_code_cell_trace(CodeCellTraceEvent::Started {
+            turn_id: tool_call.turn_id().to_string(),
+            runtime_cell_id: cell_id.as_str().to_string(),
+            model_visible_call_id: call.id.clone(),
+            source_js,
+        })
+        .await;
     let response = match cancel_token.as_ref() {
         Some(cancel_token) => {
             tokio::select! {
@@ -334,13 +363,84 @@ async fn execute_call(
         None => started.initial_response().await,
     };
     let result = match response {
-        Ok(response) => response.into_tool_result_with_max_tokens(max_output_tokens),
-        Err(error) => RuntimeCodeModeToolResult::failure(cell_id, error),
+        Ok(response) => {
+            let status = code_cell_response_status(&response);
+            let response_chars = code_cell_response_chars(&response);
+            lifecycle_emitter
+                .emit_code_cell_trace(CodeCellTraceEvent::InitialResponse {
+                    turn_id: tool_call.turn_id().to_string(),
+                    runtime_cell_id: response.cell_id().as_str().to_string(),
+                    status,
+                    response_chars,
+                })
+                .await;
+            if response.is_terminal() {
+                lifecycle_emitter
+                    .emit_code_cell_trace(CodeCellTraceEvent::Ended {
+                        turn_id: tool_call.turn_id().to_string(),
+                        runtime_cell_id: response.cell_id().as_str().to_string(),
+                        status,
+                        response_chars,
+                    })
+                    .await;
+            }
+            response.into_tool_result_with_max_tokens(max_output_tokens)
+        }
+        Err(error) => {
+            let response_chars = error.chars().count();
+            for trace_event in [
+                CodeCellTraceEvent::InitialResponse {
+                    turn_id: tool_call.turn_id().to_string(),
+                    runtime_cell_id: cell_id.as_str().to_string(),
+                    status: CodeCellRuntimeStatus::Failed,
+                    response_chars,
+                },
+                CodeCellTraceEvent::Ended {
+                    turn_id: tool_call.turn_id().to_string(),
+                    runtime_cell_id: cell_id.as_str().to_string(),
+                    status: CodeCellRuntimeStatus::Failed,
+                    response_chars,
+                },
+            ] {
+                lifecycle_emitter.emit_code_cell_trace(trace_event).await;
+            }
+            RuntimeCodeModeToolResult::failure(cell_id, error)
+        }
     };
     tool_call
         .emit_completed(normalized_code_mode_output(&result, started_at))
         .await;
     custom_provider_result(call, result)
+}
+
+fn code_cell_response_status(
+    response: &tool_runtime::code_mode::RuntimeCodeModeResponse,
+) -> CodeCellRuntimeStatus {
+    match response {
+        tool_runtime::code_mode::RuntimeCodeModeResponse::Yielded { .. } => {
+            CodeCellRuntimeStatus::Yielded
+        }
+        tool_runtime::code_mode::RuntimeCodeModeResponse::Terminated { .. } => {
+            CodeCellRuntimeStatus::Terminated
+        }
+        tool_runtime::code_mode::RuntimeCodeModeResponse::Result { error_text, .. } => {
+            if error_text.is_some() {
+                CodeCellRuntimeStatus::Failed
+            } else {
+                CodeCellRuntimeStatus::Completed
+            }
+        }
+    }
+}
+
+fn code_cell_response_chars(response: &tool_runtime::code_mode::RuntimeCodeModeResponse) -> usize {
+    match response {
+        tool_runtime::code_mode::RuntimeCodeModeResponse::Yielded { output, .. }
+        | tool_runtime::code_mode::RuntimeCodeModeResponse::Terminated { output, .. }
+        | tool_runtime::code_mode::RuntimeCodeModeResponse::Result { output, .. } => {
+            output.chars().count()
+        }
+    }
 }
 
 fn normalized_code_mode_output(
@@ -417,6 +517,19 @@ impl RuntimeCodeModeSessionDelegate for RuntimeCodeModeNestedToolDelegate {
                         invocation.tool_name
                     )
                 })?;
+            let runtime_cell_id = invocation.cell_id.as_str().to_string();
+            let runtime_tool_call_id = invocation.runtime_tool_call_id.clone();
+            let tool_call_id = format!("code-mode-{runtime_tool_call_id}");
+            self.lifecycle_emitter
+                .emit_code_cell_trace(CodeCellTraceEvent::NestedToolStarted {
+                    turn_id: self.turn_id.clone(),
+                    runtime_cell_id: runtime_cell_id.clone(),
+                    tool_call_id: tool_call_id.clone(),
+                    runtime_tool_call_id,
+                    tool_name: tool.definition.name.clone(),
+                })
+                .await;
+            let nested_cancellation = cancellation_token.clone();
             let context = RuntimeToolExecutionContext::new(RuntimeToolExecutionContextInput {
                 working_directory: self.working_directory.clone(),
                 session_id: self.session_id.clone(),
@@ -425,7 +538,7 @@ impl RuntimeCodeModeSessionDelegate for RuntimeCodeModeNestedToolDelegate {
             });
             let call = ToolCall::new(
                 self.turn_id.clone(),
-                format!("code-mode-{}", invocation.runtime_tool_call_id),
+                tool_call_id.clone(),
                 tool.definition.name.clone(),
                 invocation.input.unwrap_or(serde_json::Value::Null),
                 vec![ToolEnvironment::new(
@@ -440,6 +553,22 @@ impl RuntimeCodeModeSessionDelegate for RuntimeCodeModeNestedToolDelegate {
                 .bind(tool.definition.clone(), RuntimeToolExposure::Direct);
             let output = runtime_tool
                 .execute_call(&call, &context, self.turn_context.as_ref())
+                .await;
+            let nested_status =
+                if nested_cancellation.is_cancelled() || self.closed.load(Ordering::Acquire) {
+                    "terminated"
+                } else if output.success {
+                    "completed"
+                } else {
+                    "failed"
+                };
+            self.lifecycle_emitter
+                .emit_code_cell_trace(CodeCellTraceEvent::NestedToolEnded {
+                    turn_id: self.turn_id.clone(),
+                    runtime_cell_id,
+                    tool_call_id,
+                    status: nested_status.to_string(),
+                })
                 .await;
             if self.closed.load(Ordering::Acquire) {
                 return Err(format!(

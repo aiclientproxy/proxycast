@@ -19,7 +19,6 @@ import {
 import type { LayoutMode, ThemeType } from "@/lib/workspace/workbenchContract";
 import { isSpecializedWorkbenchTheme } from "@/lib/workspace/workbenchContract";
 import type { CanvasWorkbenchLayoutMode } from "../components/CanvasWorkbenchLayout";
-import type { WorkspaceBrowserAssistCanvasControl } from "./workspaceBrowserAssistCanvasControl";
 
 const FALLBACK_CANVAS_CONTENT = "";
 
@@ -41,8 +40,6 @@ interface UseWorkspaceCanvasLayoutRuntimeParams {
   canvasState: CanvasStateUnion | null;
   generalCanvasState: GeneralCanvasState;
   hasCurrentCanvasArtifact: boolean;
-  currentCanvasArtifactType?: string | null;
-  browserAssistCanvasControl: WorkspaceBrowserAssistCanvasControl;
   currentImageWorkbenchActive: boolean;
   onHasMessagesChange?: (hasMessages: boolean) => void;
   setShowSidebar: Dispatch<SetStateAction<boolean>>;
@@ -72,8 +69,6 @@ export function useWorkspaceCanvasLayoutRuntime({
   canvasState,
   generalCanvasState,
   hasCurrentCanvasArtifact,
-  currentCanvasArtifactType,
-  browserAssistCanvasControl,
   currentImageWorkbenchActive,
   onHasMessagesChange,
   setShowSidebar,
@@ -83,12 +78,6 @@ export function useWorkspaceCanvasLayoutRuntime({
   setCanvasWorkbenchLayoutMode,
 }: UseWorkspaceCanvasLayoutRuntimeParams) {
   const previousThemeWorkbenchStateRef = useRef(false);
-  const {
-    clearArtifact: clearBrowserAssistCanvasArtifact,
-    hasArtifact: hasBrowserAssistArtifact,
-    suppressAutoOpen: suppressBrowserAssistCanvasAutoOpen,
-    suppressGeneralArtifactAutoOpen: suppressGeneralCanvasArtifactAutoOpen,
-  } = browserAssistCanvasControl;
 
   useEffect(() => {
     autoCollapsedTopicSidebarRef.current = false;
@@ -205,9 +194,6 @@ export function useWorkspaceCanvasLayoutRuntime({
       return;
     }
 
-    suppressGeneralCanvasArtifactAutoOpen();
-    suppressBrowserAssistCanvasAutoOpen();
-
     if (isThemeWorkbench && showSidebar) {
       setShowSidebar(false);
     }
@@ -230,8 +216,6 @@ export function useWorkspaceCanvasLayoutRuntime({
     setLayoutMode,
     setShowSidebar,
     showSidebar,
-    suppressBrowserAssistCanvasAutoOpen,
-    suppressGeneralCanvasArtifactAutoOpen,
   ]);
 
   useEffect(() => {
@@ -340,7 +324,6 @@ export function useWorkspaceCanvasLayoutRuntime({
         !hasCurrentCanvasArtifact && !currentImageWorkbenchActive;
 
       if (layoutMode !== "chat") {
-        suppressGeneralCanvasArtifactAutoOpen();
         if (shouldManageStandaloneGeneralCanvas) {
           setGeneralCanvasState((previous) => ({ ...previous, isOpen: false }));
         }
@@ -387,34 +370,14 @@ export function useWorkspaceCanvasLayoutRuntime({
     setCanvasState,
     setGeneralCanvasState,
     setLayoutMode,
-    suppressGeneralCanvasArtifactAutoOpen,
   ]);
 
   const handleCloseCanvas = useCallback(() => {
-    if (activeTheme === "general") {
-      suppressGeneralCanvasArtifactAutoOpen();
-      if (
-        hasBrowserAssistArtifact ||
-        currentCanvasArtifactType === "browser_assist"
-      ) {
-        suppressBrowserAssistCanvasAutoOpen();
-        clearBrowserAssistCanvasArtifact();
-      }
-    }
     setLayoutMode("chat");
     if (activeTheme === "general") {
       setGeneralCanvasState((previous) => ({ ...previous, isOpen: false }));
     }
-  }, [
-    activeTheme,
-    clearBrowserAssistCanvasArtifact,
-    currentCanvasArtifactType,
-    hasBrowserAssistArtifact,
-    setGeneralCanvasState,
-    setLayoutMode,
-    suppressBrowserAssistCanvasAutoOpen,
-    suppressGeneralCanvasArtifactAutoOpen,
-  ]);
+  }, [activeTheme, setGeneralCanvasState, setLayoutMode]);
 
   const resolvedCanvasState = useMemo<CanvasStateUnion | null>(() => {
     if (canvasState) {

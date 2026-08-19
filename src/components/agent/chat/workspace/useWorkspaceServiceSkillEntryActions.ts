@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { siteGetAdapterLaunchReadiness } from "@/lib/webview-api";
 import { scheduledTasksApi } from "@/lib/api/scheduledTasks";
 import { createContent } from "@/lib/api/project";
 import type { ScheduledTaskFormState } from "@/components/scheduled-tasks/scheduledTaskViewModel";
@@ -9,7 +8,7 @@ import type {
   A2UIFormData,
   A2UIResponse,
 } from "@/components/workspace/a2ui/types";
-import type { BrowserRuntimePageParams, Page, PageParams } from "@/types/page";
+import type { Page, PageParams } from "@/types/page";
 import type { ChatToolPreferences } from "../utils/chatToolPreferences";
 import type { CreationMode } from "../components/types";
 import type { PendingA2UISource } from "../types";
@@ -29,18 +28,6 @@ import {
   readServiceSkillLaunchSlotValuesFromFormData,
 } from "../service-skills/serviceSkillLaunchA2UI";
 import { buildServiceSkillWorkspaceSeed } from "../service-skills/workspaceLaunch";
-import {
-  buildSiteLaunchBlockedMessage,
-  buildServiceSkillClawLaunchContext,
-  buildServiceSkillClawLaunchRequestMetadata,
-  buildServiceSkillSiteCapabilitySaveTitle,
-  composeServiceSkillClawLaunchPrompt,
-  isServiceSkillExecutableAsSiteAdapter,
-  isSiteLaunchReadinessReady,
-  resolveServiceSkillSiteCapabilityExecution,
-  type ResolvedServiceSkillSiteCapabilityExecution,
-} from "../service-skills/siteCapabilityBinding";
-import type { AutoMatchedSiteSkill } from "../service-skills/autoMatchSiteSkill";
 import type { CreationReplayMetadata } from "../utils/creationReplayMetadata";
 import type {
   RecordServiceSkillUsageInput,
@@ -58,7 +45,6 @@ import {
   resolveServiceSkillLaunchUserInput,
   type ServiceSkillSelectionOptions,
   shouldCreateServiceSkillAutomationContent,
-  siteSkillRequiresProject,
 } from "./workspaceServiceSkillEntryActionsViewModel";
 
 interface ServiceSkillLaunchOptions {
@@ -204,21 +190,6 @@ export function useWorkspaceServiceSkillEntryActions({
     [activeTheme, currentProjectId],
   );
 
-  const resolveSiteSkillProjectId = useCallback(
-    async (skill: ServiceSkillHomeItem): Promise<string | undefined> => {
-      if (!siteSkillRequiresProject(skill)) {
-        return undefined;
-      }
-
-      if (currentProjectId) {
-        return currentProjectId;
-      }
-
-      throw new Error("当前技能需要项目工作区，请先进入项目工作。");
-    },
-    [currentProjectId],
-  );
-
   const prepareServiceSkillWorkspacePayload = useCallback(
     async (
       skill: ServiceSkillHomeItem,
@@ -287,195 +258,6 @@ export function useWorkspaceServiceSkillEntryActions({
     ],
   );
 
-  const prepareServiceSkillSiteWorkspacePayload = useCallback(
-    async (
-      skill: ServiceSkillHomeItem,
-      slotValues: ServiceSkillSlotValues,
-      resolvedCapability: ResolvedServiceSkillSiteCapabilityExecution,
-      launchReadiness: Awaited<
-        ReturnType<typeof siteGetAdapterLaunchReadiness>
-      > | null,
-      options?: ServiceSkillLaunchOptions,
-    ): Promise<WorkspaceEntryPayload> => {
-      if (!isServiceSkillExecutableAsSiteAdapter(skill)) {
-        throw new Error("当前技能未绑定站点执行能力");
-      }
-
-      if (!isSiteLaunchReadinessReady(launchReadiness)) {
-        throw new Error(buildSiteLaunchBlockedMessage(launchReadiness));
-      }
-
-      const resolvedProjectId = await resolveSiteSkillProjectId(skill);
-      const binding = skill.siteCapabilityBinding;
-      const saveMode = binding.saveMode ?? "project_resource";
-      const initialSaveTitle = buildServiceSkillSiteCapabilitySaveTitle(
-        skill,
-        slotValues,
-        {
-          adapterName: resolvedCapability.adapterName,
-        },
-      );
-      let nextContentId = currentContentId || undefined;
-
-      if (
-        saveMode === "current_content" &&
-        !nextContentId &&
-        resolvedProjectId
-      ) {
-        const created = await createServiceSkillSeededContent(
-          skill,
-          resolvedProjectId,
-        );
-        nextContentId = created?.id ?? undefined;
-      }
-
-      const clawLaunchContext = {
-        ...buildServiceSkillClawLaunchContext(skill, slotValues, {
-          adapterName: resolvedCapability.adapterName,
-          contentId: nextContentId,
-          projectId: resolvedProjectId,
-          launchReadiness,
-        }),
-        saveTitle: nextContentId ? undefined : initialSaveTitle,
-      };
-      const prompt = composeServiceSkillClawLaunchPrompt({
-        skill,
-        slotValues,
-        userInput: resolveServiceSkillLaunchUserInput(input, options),
-        context: clawLaunchContext,
-      });
-
-      return {
-        prompt,
-        projectId: resolvedProjectId,
-        contentId: nextContentId,
-        themeOverride: "general",
-        initialAutoSendRequestMetadata:
-          buildServiceSkillClawLaunchRequestMetadata(clawLaunchContext),
-        autoRunInitialPromptOnMount: true,
-      };
-    },
-    [
-      createServiceSkillSeededContent,
-      currentContentId,
-      input,
-      resolveSiteSkillProjectId,
-    ],
-  );
-
-  const handleServiceSkillBrowserRuntimeLaunch = useCallback(
-    async (
-      skill: ServiceSkillHomeItem,
-      slotValues: ServiceSkillSlotValues,
-    ): Promise<void> => {
-      if (!isServiceSkillExecutableAsSiteAdapter(skill)) {
-        return;
-      }
-
-      if (!onNavigate) {
-        toast.error("当前入口暂不支持打开浏览器工作台，请从桌面主界面重试。");
-        return;
-      }
-
-      let resolvedProjectId: string | undefined;
-      try {
-        resolvedProjectId = await resolveSiteSkillProjectId(skill);
-      } catch (error) {
-        toast.error(getWorkspaceServiceSkillErrorMessage(error));
-        return;
-      }
-
-      const binding = skill.siteCapabilityBinding;
-      let launchReadiness: Awaited<
-        ReturnType<typeof siteGetAdapterLaunchReadiness>
-      > | null = null;
-      let resolvedCapability: ResolvedServiceSkillSiteCapabilityExecution;
-      try {
-        resolvedCapability = await resolveServiceSkillSiteCapabilityExecution(
-          skill,
-          slotValues,
-        );
-      } catch (error) {
-        toast.error(
-          `解析站点技能失败：${getWorkspaceServiceSkillErrorMessage(error)}`,
-        );
-        return;
-      }
-
-      try {
-        launchReadiness = await siteGetAdapterLaunchReadiness({
-          adapter_name: resolvedCapability.adapterName,
-        });
-      } catch {
-        launchReadiness = null;
-      }
-      const saveMode = binding.saveMode ?? "project_resource";
-      const initialArgs = resolvedCapability.args;
-      const initialSaveTitle = buildServiceSkillSiteCapabilitySaveTitle(
-        skill,
-        slotValues,
-        {
-          adapterName: resolvedCapability.adapterName,
-        },
-      );
-      let nextContentId = currentContentId || undefined;
-
-      if (
-        saveMode === "current_content" &&
-        !nextContentId &&
-        resolvedProjectId
-      ) {
-        try {
-          const created = await createServiceSkillSeededContent(
-            skill,
-            resolvedProjectId,
-          );
-          nextContentId = created?.id ?? undefined;
-        } catch (error) {
-          toast.error(
-            `准备浏览器采集主稿失败：${getWorkspaceServiceSkillErrorMessage(
-              error,
-            )}`,
-          );
-          return;
-        }
-      }
-
-      const navigationParams: BrowserRuntimePageParams = {
-        projectId: resolvedProjectId,
-        contentId: nextContentId,
-        initialProfileKey:
-          launchReadiness?.status === "ready"
-            ? launchReadiness.profile_key
-            : undefined,
-        initialTargetId:
-          launchReadiness?.status === "ready"
-            ? launchReadiness.target_id
-            : undefined,
-        initialAdapterName: resolvedCapability.adapterName,
-        initialArgs,
-        initialAutoRun: binding.autoRun ?? false,
-        initialRequireAttachedSession: binding.requireAttachedSession ?? false,
-        initialSaveTitle: nextContentId ? undefined : initialSaveTitle,
-      };
-
-      onNavigate("browser-runtime", navigationParams);
-      recordServiceSkillUsage({
-        skillId: skill.id,
-        runnerType: skill.runnerType,
-        slotValues,
-      });
-      setPendingServiceSkillLaunchInput(null);
-    },
-    [
-      createServiceSkillSeededContent,
-      currentContentId,
-      onNavigate,
-      recordServiceSkillUsage,
-      resolveSiteSkillProjectId,
-    ],
-  );
-
   const handleServiceSkillLaunch = useCallback(
     async (
       skill: ServiceSkillHomeItem,
@@ -486,71 +268,6 @@ export function useWorkspaceServiceSkillEntryActions({
         options && "launchUserInput" in options
           ? normalizeWorkspaceServiceSkillOptionalText(options.launchUserInput)
           : undefined;
-
-      if (isServiceSkillExecutableAsSiteAdapter(skill)) {
-        let resolvedCapability: ResolvedServiceSkillSiteCapabilityExecution;
-        try {
-          resolvedCapability = await resolveServiceSkillSiteCapabilityExecution(
-            skill,
-            slotValues,
-          );
-        } catch (error) {
-          toast.error(
-            `解析站点技能失败：${getWorkspaceServiceSkillErrorMessage(error)}`,
-          );
-          return false;
-        }
-
-        let launchReadiness: Awaited<
-          ReturnType<typeof siteGetAdapterLaunchReadiness>
-        > | null = null;
-        try {
-          launchReadiness = await siteGetAdapterLaunchReadiness({
-            adapter_name: resolvedCapability.adapterName,
-          });
-        } catch {
-          // 门禁检查失败时保持当前入口态，由后续阻断提示兜底。
-        }
-
-        if (!isSiteLaunchReadinessReady(launchReadiness)) {
-          toast.info(buildSiteLaunchBlockedMessage(launchReadiness));
-          return false;
-        }
-
-        let workspacePayload: WorkspaceEntryPayload;
-        try {
-          workspacePayload = await prepareServiceSkillSiteWorkspacePayload(
-            skill,
-            slotValues,
-            resolvedCapability,
-            launchReadiness,
-            options,
-          );
-        } catch (error) {
-          toast.error(
-            `准备站点技能失败：${getWorkspaceServiceSkillErrorMessage(error)}`,
-          );
-          return false;
-        }
-
-        const entered = navigateToServiceSkillWorkspace(workspacePayload);
-        if (!entered) {
-          return false;
-        }
-
-        recordServiceSkillUsage({
-          skillId: skill.id,
-          runnerType: skill.runnerType,
-          slotValues,
-          ...(persistedLaunchUserInput
-            ? {
-                launchUserInput: persistedLaunchUserInput,
-              }
-            : {}),
-        });
-        setPendingServiceSkillLaunchInput(null);
-        return true;
-      }
 
       const launchUserInput = resolveServiceSkillLaunchUserInput(
         input,
@@ -601,7 +318,6 @@ export function useWorkspaceServiceSkillEntryActions({
       input,
       navigateToServiceSkillWorkspace,
       setPendingServiceSkillLaunchInput,
-      prepareServiceSkillSiteWorkspacePayload,
       prepareServiceSkillWorkspacePayload,
       recordServiceSkillUsage,
     ],
@@ -697,15 +413,6 @@ export function useWorkspaceServiceSkillEntryActions({
       setPendingServiceSkillLaunchInput(selectionPlan.pendingInput);
     },
     [creationReplay, handleServiceSkillLaunch],
-  );
-
-  const handleAutoLaunchMatchedSiteSkill = useCallback(
-    async (match: AutoMatchedSiteSkill<ServiceSkillHomeItem>) => {
-      await handleServiceSkillLaunch(match.skill, match.slotValues, {
-        launchUserInput: match.launchUserInput,
-      });
-    },
-    [handleServiceSkillLaunch],
   );
 
   const handleServiceSkillAutomationSetup = useCallback(
@@ -869,8 +576,6 @@ export function useWorkspaceServiceSkillEntryActions({
     handlePendingServiceSkillLaunchSubmit,
     clearPendingServiceSkillLaunch,
     handleServiceSkillLaunch,
-    handleAutoLaunchMatchedSiteSkill,
-    handleServiceSkillBrowserRuntimeLaunch,
     handleServiceSkillAutomationSetup,
     handleAutomationDialogOpenChange,
     handleAutomationDialogSubmit,

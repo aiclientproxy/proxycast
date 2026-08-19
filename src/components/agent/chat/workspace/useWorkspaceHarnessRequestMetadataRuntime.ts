@@ -1,18 +1,12 @@
 import { useMemo } from "react";
 import type { AgentRuntimeWorkspaceSkillBinding } from "@/lib/api/agentRuntime/toolInventoryTypes";
-import {
-  buildHarnessRequestMetadata,
-  type BuildHarnessRequestMetadataOptions,
-} from "../utils/harnessRequestMetadata";
+import { buildHarnessRequestMetadata } from "../utils/harnessRequestMetadata";
 import type { ChatToolPreferences } from "../utils/chatToolPreferences";
 import type { WorkspaceSkillRuntimeEnableInput } from "../utils/workspaceSkillBindingsMetadata";
 
 interface WorkspaceHarnessRequestMetadataParams {
   enabled?: boolean;
   agentResponseLanguage?: string | null;
-  browserAssistAutoLaunch?: boolean | null;
-  browserAssistPreferredBackend?: BuildHarnessRequestMetadataOptions["browserAssistPreferredBackend"];
-  browserAssistProfileKey?: string | null;
   contentId?: string | null;
   currentGateKey?: string | null;
   effectiveChatToolPreferences: Pick<ChatToolPreferences, "task" | "subagent">;
@@ -29,9 +23,6 @@ const EMPTY_WORKSPACE_HARNESS_REQUEST_METADATA: Record<string, unknown> =
 export function resolveWorkspaceHarnessRequestMetadata({
   enabled = true,
   agentResponseLanguage,
-  browserAssistAutoLaunch,
-  browserAssistPreferredBackend,
-  browserAssistProfileKey,
   contentId,
   currentGateKey,
   effectiveChatToolPreferences,
@@ -55,9 +46,6 @@ export function resolveWorkspaceHarnessRequestMetadata({
     gateKey: isThemeWorkbench ? currentGateKey : undefined,
     runTitle: themeWorkbenchActiveQueueTitle?.trim() || undefined,
     contentId: contentId || undefined,
-    browserAssistProfileKey,
-    browserAssistPreferredBackend,
-    browserAssistAutoLaunch,
     workspaceSkillBindings:
       workspaceSkillBindings && workspaceSkillBindings.length > 0
         ? workspaceSkillBindings
@@ -73,9 +61,6 @@ export function useWorkspaceHarnessRequestMetadataRuntime(
   const {
     enabled = true,
     agentResponseLanguage,
-    browserAssistAutoLaunch,
-    browserAssistPreferredBackend,
-    browserAssistProfileKey,
     contentId,
     currentGateKey,
     effectiveChatToolPreferences,
@@ -93,9 +78,6 @@ export function useWorkspaceHarnessRequestMetadataRuntime(
       resolveWorkspaceHarnessRequestMetadata({
         enabled,
         agentResponseLanguage,
-        browserAssistAutoLaunch,
-        browserAssistPreferredBackend,
-        browserAssistProfileKey,
         contentId,
         currentGateKey,
         effectiveChatToolPreferences: {
@@ -110,9 +92,6 @@ export function useWorkspaceHarnessRequestMetadataRuntime(
       }),
     [
       agentResponseLanguage,
-      browserAssistAutoLaunch,
-      browserAssistPreferredBackend,
-      browserAssistProfileKey,
       contentId,
       currentGateKey,
       enabled,

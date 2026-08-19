@@ -9,7 +9,6 @@
 
 ## 文件索引
 
-- `browser-runtime-debugger.tsx` - 浏览器运行时调试页面（可独立窗口打开）
 - `update-notification.tsx` - 更新提醒悬浮窗口页面（独立 Desktop Host 小面板，支持稍后提醒与安装进度）
 - `update-notification.css` - 更新提醒窗口样式（窄面板 + 进入/退出动画）
 - `index.ts` - 页面导出入口

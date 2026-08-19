@@ -1,38 +1,40 @@
-## Lime v1.131.0
+## Lime v1.132.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- Shipped the Scheduled Tasks current workspace with create, edit, pause, run-now, run history, and conversation lineage flows.
-- Added typed `scheduledTask/changed` and `scheduledTask/run/updated` notifications projected through the App Server, Renderer bridge, and Electron Desktop Host.
-- Added a soft-delete contract for deleting tasks while a run is active: Agent Run and canonical Thread/Turn history remain, and terminal writes cannot resurrect a tombstone.
+- Added the Right Surface Browser Workspace, unifying the user-visible page and Agent operations on one Electron `WebContentsView`, tab identity, and BrowserRoute.
+- Added the Browser dynamic-tool and Electron Desktop Host reverse-request path for page observation, actions, downloads, permissions, and takeover state projection.
+- Added an App Server owner for CodeCell trace/evidence with JSONL lifecycle writes, reducer/replay, and `diagnostics/trace/read` access.
+- Added controlled desktop Deepswe smoke, contract, and benchmark harnesses with a real Electron Gate B evidence entry point.
 
 ### Fixes
 
-- Fixed `new_thread` Scheduled Task runs with `modelId=null` bypassing canonical model selection and failing the real Runtime backend provider/model-selection contract.
-- Fixed the run-now page staying stale after a failed run; failed Runs, terminal notifications, and error messages now appear immediately.
-- Fixed Host `unsupported/failed` notification results being presented as success, and aligned task refresh and delete-confirmation behavior.
+- Fixed Browser opening remaining in a loading state when the canonical Thread had not been created before the Right Surface identity request.
+- Fixed missing Browser route validation; stale, cross-window, duplicate, and unknown calls now fail closed across thread/turn/session/tab/view/webContents identities.
+- Fixed CodeCell trace joining and closure for late source/output Items, yielded cells spanning Turns, nested invokes, and events arriving after terminal state.
+- Fixed provider/model selection, tool inventory, App Server serialization, and workspace skill projection boundaries across the current product chain.
 
 ### Improvements and Refactoring
 
-- Migrated the old Automation management surface to the Scheduled Tasks current protocol, single storage mapping, and typed Renderer gateway; removed retired pages, fixtures, and API dual paths.
-- Converged manual/due/catch-up/missed/recovery terminal states, overlap policy, one-shot CAS, DST, and startup recovery in the scheduler worker while keeping RuntimeCore/Thread/Turn/Agent Run as the single product chain.
-- Updated five locales, protocol schemas, generated clients, governance catalogs, and execution plans, with a real Electron current fixture.
+- Removed the retired Browser Runtime, Canvas Browser, external Chrome/CDP, BrowserSessionRef, site-adapter, and connector paths, converging on the Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> GUI product chain.
+- Refactored Right Surface, Workbench, Artifact, Service Skill, and five-locale resources to remove duplicate state machines and retired compat entries.
+- Updated App Server protocol/schema, generated clients, command catalogs, governance inventories, architecture documentation, and the Browser roadmap.
 
 ### Testing and Quality
 
-- Passed App Server protocol/client contracts, Scheduled Tasks focused Vitest, and affected Rust related/changed validation.
-- Passed the Scheduled Tasks Electron Gate B, Agent runtime current fixture, GUI smoke, governance report, `verify:local`, formatting, and diff checks.
+- Added focused tests for BrowserTabHost, Browser Workspace, dynamic tools, CodeCell trace, protocol contracts, and desktop harnesses.
+- Release validation covers version consistency, TypeScript typecheck, protocol contracts, affected Rust/frontend tests, GUI smoke, the Agent current fixture, governance, and local gates; exact results are recorded in the release execution plan.
 
 ### Documentation
 
-- Updated Scheduled Tasks architecture, command boundaries, migration ledger, roadmap, and implementation plan to record notification, soft-delete, and provider-route owners.
-- Added the v1.131.0 release execution plan, including platform evidence and remaining retired Automation cleanup boundaries.
+- Documented the Browser single owner, shared-tab identity, turn cleanup, CodeCell trace owner, and Gate A/Gate B evidence contracts.
+- Added the v1.132.0 release execution plan with candidate scope, validation results, and platform evidence boundaries.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.131.0`.
-- Windows Notification Center, real macOS/Windows sleep-resume, signing, notarization, and formal release-asset evidence still require the corresponding platform or CI runners and are not claimed locally.
+- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.132.0`.
+- Windows, packaged signing, notarization, release assets, and live-provider evidence still require the corresponding platform or CI runner and are not claimed locally.
 
-**Full changes**: `v1.130.0` -> `v1.131.0`
+**Full changes**: `v1.131.0` -> `v1.132.0`

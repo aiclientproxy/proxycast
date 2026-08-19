@@ -1,5 +1,4 @@
 import { resolveServiceSkillEntryDescription } from "./entryAdapter";
-import { isServiceSkillExecutableAsSiteAdapter } from "./siteCapabilityBinding";
 import { formatNumber } from "@/i18n/format";
 import { agentZhCNResource as agentSourceResource } from "@/i18n/agentResources";
 import type {
@@ -24,10 +23,7 @@ export interface ServiceSkillPresentationCopy {
   fallbackRequiredInputs?: string;
   requiredPrefix?: string;
   outputPrefix?: string;
-  siteRunnerLabel?: string;
-  siteRunnerDescription?: string;
   requiredSlotActionLabel?: string;
-  siteActionLabel?: string;
   automationActionLabel?: string;
   outputProjectResource?: string;
   outputCurrentContent?: string;
@@ -121,9 +117,6 @@ const SOURCE_SERVICE_SKILL_PRESENTATION_COPY: ServiceSkillPresentationCopy = {
     service: translateServiceSkillSourceKey(
       "skills.workspace.serviceSkill.type.service",
     ),
-    site: translateServiceSkillSourceKey(
-      "skills.workspace.serviceSkill.type.site",
-    ),
   },
   fallbackRequiredInputs: translateServiceSkillSourceKey(
     "skills.workspace.serviceSkill.requiredInputs.empty",
@@ -134,17 +127,8 @@ const SOURCE_SERVICE_SKILL_PRESENTATION_COPY: ServiceSkillPresentationCopy = {
   outputPrefix: translateServiceSkillSourceKey(
     "skills.workspace.serviceSkill.outputPrefix",
   ),
-  siteRunnerLabel: translateServiceSkillSourceKey(
-    "skills.workspace.serviceSkill.runner.site.label",
-  ),
-  siteRunnerDescription: translateServiceSkillSourceKey(
-    "skills.workspace.serviceSkill.runner.site.description",
-  ),
   requiredSlotActionLabel: translateServiceSkillSourceKey(
     "skills.workspace.serviceSkill.action.requiredSlot",
-  ),
-  siteActionLabel: translateServiceSkillSourceKey(
-    "skills.workspace.serviceSkill.action.site",
   ),
   automationActionLabel: translateServiceSkillSourceKey(
     "skills.workspace.serviceSkill.action.automation",
@@ -275,7 +259,6 @@ function resolveServiceSkillTypeFromBundle(
   const skillType = readServiceSkillBundleMetadata(item, "Lime_skill_type");
   if (
     skillType === "service" ||
-    skillType === "site" ||
     skillType === "prompt"
   ) {
     return skillType;
@@ -288,7 +271,6 @@ export function resolveServiceSkillType(
     ServiceSkillItem,
     | "skillType"
     | "defaultExecutorBinding"
-    | "siteCapabilityBinding"
     | "skillBundle"
   >,
 ): ServiceSkillType {
@@ -299,13 +281,6 @@ export function resolveServiceSkillType(
   const skillTypeFromBundle = resolveServiceSkillTypeFromBundle(item);
   if (skillTypeFromBundle) {
     return skillTypeFromBundle;
-  }
-
-  if (
-    item.defaultExecutorBinding === "browser_assist" ||
-    isServiceSkillExecutableAsSiteAdapter(item)
-  ) {
-    return "site";
   }
 
   return "service";
@@ -396,11 +371,6 @@ export function getServiceSkillRunnerLabel(
   options: ServiceSkillPresentationOptions = {},
 ): string {
   const copy = resolveServiceSkillPresentationCopy(options.copy);
-  if (resolveServiceSkillType(item) === "site") {
-    return (
-      copy.siteRunnerLabel ?? "skills.workspace.serviceSkill.runner.site.label"
-    );
-  }
   return (
     copy.runnerLabels?.[item.runnerType] ??
     `skills.workspace.serviceSkill.runner.${item.runnerType}.label`
@@ -418,12 +388,6 @@ export function getServiceSkillRunnerDescription(
   options: ServiceSkillPresentationOptions = {},
 ): string {
   const copy = resolveServiceSkillPresentationCopy(options.copy);
-  if (resolveServiceSkillType(item) === "site") {
-    return (
-      copy.siteRunnerDescription ??
-      "skills.workspace.serviceSkill.runner.site.description"
-    );
-  }
   return (
     copy.runnerDescriptions?.[item.runnerType] ??
     `skills.workspace.serviceSkill.runner.${item.runnerType}.description`
@@ -442,9 +406,6 @@ export function getServiceSkillActionLabel(
     );
   }
 
-  if (resolveServiceSkillType(item) === "site") {
-    return copy.siteActionLabel ?? "skills.workspace.serviceSkill.action.site";
-  }
   return (
     copy.actionLabels?.[item.runnerType] ??
     `skills.workspace.serviceSkill.action.${item.runnerType}`
@@ -466,14 +427,6 @@ export function getServiceSkillOutputDestination(
   );
   if (outputDestinationFromBundle) {
     return outputDestinationFromBundle;
-  }
-
-  if (isServiceSkillExecutableAsSiteAdapter(item)) {
-    return item.siteCapabilityBinding.saveMode === "project_resource"
-      ? (copy.outputProjectResource ??
-          "skills.workspace.serviceSkill.output.projectResource")
-      : (copy.outputCurrentContent ??
-          "skills.workspace.serviceSkill.output.currentContent");
   }
 
   if (item.runnerType === "scheduled") {

@@ -22,12 +22,6 @@ vi.mock("./pages/update-notification", () => ({
   UpdateNotificationPage: () => <div data-testid="update-notification-page" />,
 }));
 
-vi.mock("./pages", () => ({
-  BrowserRuntimeDebuggerPage: () => (
-    <div data-testid="browser-runtime-debugger-page" />
-  ),
-}));
-
 vi.mock("./features/resource-manager", () => ({
   ResourceManagerPage: () => <div data-testid="resource-manager-page" />,
 }));

@@ -72,13 +72,6 @@ export function buildCanvasWorkbenchToolTabProjection({
         shortcut: "^`",
       },
       {
-        key: "browser",
-        label: translateCanvasWorkbenchText(
-          translateWorkbench,
-          "agentChat.canvasWorkbench.newTabs.browser",
-        ),
-      },
-      {
         key: "project-files",
         label: translateCanvasWorkbenchText(
           translateWorkbench,
@@ -126,12 +119,7 @@ function buildCanvasWorkbenchToolTab(
   );
   return {
     key: tab.id,
-    label:
-      tab.kind === "browser" && tab.browserTitle?.trim()
-        ? tab.browserTitle.trim()
-        : tab.sequence > 1
-          ? `${baseLabel} ${tab.sequence}`
-          : baseLabel,
+    label: tab.sequence > 1 ? `${baseLabel} ${tab.sequence}` : baseLabel,
     closable: true,
   };
 }
@@ -141,9 +129,6 @@ function resolveCanvasWorkbenchToolTabLabelKey(
 ): string {
   if (tab === "terminal") {
     return "agentChat.canvasWorkbench.newTabs.terminalTab";
-  }
-  if (tab === "browser") {
-    return "agentChat.canvasWorkbench.newTabs.browserTab";
   }
   return "agentChat.canvasWorkbench.newTabs.filesTab";
 }

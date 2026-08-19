@@ -16,6 +16,7 @@ import type { CanvasState as GeneralCanvasState } from "@/components/general-cha
 import { normalizeArtifactProtocolPath } from "@/lib/artifact-protocol";
 import type { SessionFile } from "@/lib/api/session-files";
 import type { Artifact } from "@/lib/artifact/types";
+import { requestWorkspaceRightSurface } from "@/lib/api/workspaceRightSurface";
 import { createPreviewArtifact } from "@/lib/artifact/previewArtifact";
 import type { ArtifactDocumentV1 } from "@/lib/artifact-document";
 import type { LayoutMode, ThemeType } from "@/lib/workspace/workbenchContract";
@@ -48,7 +49,6 @@ import {
 } from "./useWorkspaceArtifactDocumentSaveRuntime";
 import { useWorkspaceArtifactPreviewActions } from "./useWorkspaceArtifactPreviewActions";
 import { useWorkspaceArtifactWorkbenchActions } from "./useWorkspaceArtifactWorkbenchActions";
-import type { SiteSkillExecutionState } from "./useWorkspaceBrowserAssistRuntime";
 import { useWorkspaceMediaReferencePreviewRuntime } from "./useWorkspaceMediaReferencePreviewRuntime";
 import { useWorkspaceRightSurfaceArtifactOpenRuntime } from "./useWorkspaceRightSurfaceArtifactOpenRuntime";
 import { useWorkspaceServiceSkillResultFileRuntime } from "./useWorkspaceServiceSkillResultFileRuntime";
@@ -61,7 +61,6 @@ import {
   resolveAbsoluteWorkspacePath,
 } from "./workspacePath";
 import type { WorkspaceImageWorkbenchSessionRuntimeState } from "./useWorkspaceImageWorkbenchSessionRuntime";
-import type { WorkspaceBrowserAssistArtifactOpenControl } from "./workspaceBrowserAssistCanvasControl";
 
 type SetBoolean = (value: boolean) => void;
 
@@ -73,8 +72,6 @@ export interface UseWorkspaceArtifactOpenRuntimeParams {
   currentTurnId?: string | null;
   effectiveThreadItems: AgentThreadItem[];
   generalCanvasState: GeneralCanvasState;
-  browserAssistArtifactOpenControl: WorkspaceBrowserAssistArtifactOpenControl;
-  handleToggleCanvas: () => void;
   handleWriteFile: WorkspaceArtifactWriteFile;
   initialProjectFileOpenTarget?: AgentChatWorkspaceProps["initialProjectFileOpenTarget"];
   isInitialContentLoading: boolean;
@@ -103,7 +100,6 @@ export interface UseWorkspaceArtifactOpenRuntimeParams {
   setSelectedArtifactId: (artifactId: string | null) => void;
   setSelectedFileId: (fileId: string) => void;
   setTaskFiles: Dispatch<SetStateAction<TaskFile[]>>;
-  siteSkillExecutionState: SiteSkillExecutionState | null;
   syncGeneralArtifactToResource: (input: {
     rawFilePath: string;
     preferredName?: string;
@@ -122,8 +118,6 @@ export function useWorkspaceArtifactOpenRuntime({
   currentTurnId,
   effectiveThreadItems,
   generalCanvasState,
-  browserAssistArtifactOpenControl,
-  handleToggleCanvas,
   handleWriteFile,
   initialProjectFileOpenTarget,
   isInitialContentLoading,
@@ -148,7 +142,6 @@ export function useWorkspaceArtifactOpenRuntime({
   setSelectedArtifactId,
   setSelectedFileId,
   setTaskFiles,
-  siteSkillExecutionState,
   syncGeneralArtifactToResource,
   taskFiles,
   updateCurrentImageWorkbenchState,
@@ -158,13 +151,8 @@ export function useWorkspaceArtifactOpenRuntime({
   const { t } = useTranslation("agent");
   const handledInitialProjectFileOpenSignatureRef = useRef("");
   const {
-    openRuntimeForArtifact: handleOpenBrowserRuntimeForBrowserAssist,
-    suppressAutoOpen: suppressBrowserAssistCanvasAutoOpen,
-  } = browserAssistArtifactOpenControl;
-  const {
     clearFocusedArtifactBlock,
     focusArtifactBlock,
-    requestBrowserWorkbenchOpen,
     requestCanvasWorkbenchPreviewOpen,
   } = workbenchRequests;
 
@@ -200,8 +188,6 @@ export function useWorkspaceArtifactOpenRuntime({
     taskFiles,
     sessionFiles,
     readSessionFile,
-    suppressBrowserAssistCanvasAutoOpen,
-    onOpenBrowserRuntimeForArtifact: handleOpenBrowserRuntimeForBrowserAssist,
     onRequestCanvasPreviewOpen: requestCanvasWorkbenchPreviewOpen,
     upsertGeneralArtifact,
     setSelectedArtifactId,
@@ -514,20 +500,31 @@ export function useWorkspaceArtifactOpenRuntime({
       if (!url) {
         return;
       }
-      if (layoutMode === "chat") {
-        handleToggleCanvas();
-      } else if (layoutMode === "canvas") {
-        setLayoutMode("chat-canvas");
-      }
-      setCanvasWorkbenchLayoutMode("split");
-      requestBrowserWorkbenchOpen(url);
+      void requestWorkspaceRightSurface({
+        surfaceKind: "browser",
+        origin: "user",
+        priority: "foreground",
+        reason: "open_url_preview",
+        sessionId: threadId ?? null,
+        workspaceId: projectId ?? null,
+        candidateId: item.id,
+        metadata: {
+          browser: {
+            launchUrl: url,
+            title: item.title.trim() || null,
+          },
+        },
+      }).catch((error) => {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "无法打开浏览器工作区，请稍后重试。",
+        );
+      });
     },
     [
-      handleToggleCanvas,
-      layoutMode,
-      requestBrowserWorkbenchOpen,
-      setCanvasWorkbenchLayoutMode,
-      setLayoutMode,
+      projectId,
+      threadId,
     ],
   );
 
@@ -666,7 +663,6 @@ export function useWorkspaceArtifactOpenRuntime({
     handleWorkspaceFileClick,
     openProjectFilePreviewInCanvas,
     projectRootPath,
-    siteSkillExecutionState,
     taskFiles,
   });
 

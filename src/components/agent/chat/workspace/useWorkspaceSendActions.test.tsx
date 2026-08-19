@@ -18,7 +18,6 @@ import {
   upsertLocalModelBoundImageCommandBinding,
 } from "@/lib/api/skillCatalog";
 
-const mockPreheatBrowserAssistInBackground = vi.hoisted(() => vi.fn());
 const mockGetSkillCatalog = vi.hoisted(() => vi.fn());
 const mockListSkillCatalogSceneEntries = vi.hoisted(() => vi.fn());
 const mockGetOrCreateDefaultProject = vi.hoisted(() => vi.fn());
@@ -26,10 +25,6 @@ const mockResolveOemCloudRuntimeContext = vi.hoisted(() => vi.fn());
 const mockGetOemCloudBootstrapSnapshot = vi.hoisted(() => vi.fn());
 const mockUseGlobalMediaGenerationDefaults = vi.hoisted(() => vi.fn());
 const mockInstallSkillFromPromptInstruction = vi.hoisted(() => vi.fn());
-
-vi.mock("../utils/browserAssistPreheat", () => ({
-  preheatBrowserAssistInBackground: mockPreheatBrowserAssistInBackground,
-}));
 
 vi.mock("@/lib/api/skillCatalog", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api/skillCatalog")>(
@@ -103,8 +98,6 @@ const mockSetInput = vi.fn();
 const mockSetMentionedCharacters = vi.fn();
 const mockSetChatMessages = vi.fn();
 const mockSetChatToolPreferences = vi.fn();
-const mockEnsureBrowserAssistCanvas = vi.fn(async () => true);
-const mockHandleAutoLaunchMatchedSiteSkill = vi.fn(async () => undefined);
 const mockOpenRuntimeSceneGate = vi.fn(async () => undefined);
 const mockCreateImageGenerationTask = vi.fn();
 const mockEnsureSessionForCommandMetadata = vi.fn<
@@ -136,16 +129,16 @@ function createGithubSiteSkill(): ServiceSkillHomeItem {
     outputHint: "仓库列表 + 关键线索",
     source: "cloud_catalog",
     runnerType: "instant",
-    defaultExecutorBinding: "browser_assist",
+    defaultExecutorBinding: "agent_turn",
     executionLocation: "client_default",
     version: "seed-v1",
     badge: "云目录",
     recentUsedAt: null,
     isRecent: false,
-    runnerLabel: "浏览器站点执行",
-    runnerTone: "emerald",
-    runnerDescription: "直接复用浏览器登录态执行。",
-    actionLabel: "启动采集",
+    runnerLabel: "Agent 调度",
+    runnerTone: "slate",
+    runnerDescription: "通过统一 Agent 发送链执行。",
+    actionLabel: "立即启动",
     automationStatus: null,
     slotSchema: [
       {
@@ -156,18 +149,6 @@ function createGithubSiteSkill(): ServiceSkillHomeItem {
         placeholder: "例如 AI Agent",
       },
     ],
-    siteCapabilityBinding: {
-      adapterName: "github/search",
-      autoRun: true,
-      requireAttachedSession: true,
-      saveMode: "current_content",
-      slotArgMap: {
-        repository_query: "query",
-      },
-      fixedArgs: {
-        limit: 10,
-      },
-    },
   };
 }
 
@@ -197,7 +178,7 @@ function createCloudSceneSkill(): ServiceSkillHomeItem {
         key: "reference_video",
         label: "参考视频链接/素材",
         type: "url",
-        required: true,
+        required: false,
         placeholder: "输入视频链接",
       },
     ],
@@ -273,16 +254,16 @@ function createXArticleExportSkill(): ServiceSkillHomeItem {
     outputHint: "Markdown 正文 + 图片目录",
     source: "local_custom",
     runnerType: "instant",
-    defaultExecutorBinding: "browser_assist",
+    defaultExecutorBinding: "agent_turn",
     executionLocation: "client_default",
     version: "seed-v1",
     badge: "本地技能",
     recentUsedAt: null,
     isRecent: false,
-    runnerLabel: "浏览器站点执行",
-    runnerTone: "emerald",
-    runnerDescription: "直接复用浏览器登录态执行。",
-    actionLabel: "启动采集",
+    runnerLabel: "Agent 调度",
+    runnerTone: "slate",
+    runnerDescription: "通过统一 Agent 发送链执行。",
+    actionLabel: "立即启动",
     automationStatus: null,
     slotSchema: [
       {
@@ -304,18 +285,7 @@ function createXArticleExportSkill(): ServiceSkillHomeItem {
       },
     ],
     readinessRequirements: {
-      requiresBrowser: true,
       requiresProject: true,
-    },
-    siteCapabilityBinding: {
-      adapterName: "x/article-export",
-      autoRun: true,
-      requireAttachedSession: true,
-      saveMode: "project_resource",
-      slotArgMap: {
-        article_url: "url",
-        target_language: "target_language",
-      },
     },
     sceneBinding: {
       sceneKey: "x-article-export",
@@ -412,10 +382,6 @@ function mountHook(initialProps?: Partial<HookProps>): HookHarness {
       mockFinalizeAfterSendSuccess as HookProps["finalizeAfterSendSuccess"],
     rollbackAfterSendFailure:
       mockRollbackAfterSendFailure as HookProps["rollbackAfterSendFailure"],
-    ensureBrowserAssistCanvas:
-      mockEnsureBrowserAssistCanvas as HookProps["ensureBrowserAssistCanvas"],
-    handleAutoLaunchMatchedSiteSkill:
-      mockHandleAutoLaunchMatchedSiteSkill as HookProps["handleAutoLaunchMatchedSiteSkill"],
     openRuntimeSceneGate:
       mockOpenRuntimeSceneGate as HookProps["openRuntimeSceneGate"],
     ensureSessionForCommandMetadata:
@@ -657,10 +623,7 @@ describe("useWorkspaceSendActions", () => {
   });
 
   it("首轮普通对话不应在 renderer 注入模型路由指令", async () => {
-    const harness = mountHook({
-      browserAssistProfileKey: "general_browser_assist",
-      browserAssistAutoLaunch: true,
-    });
+    const harness = mountHook();
 
     try {
       await act(async () => {
@@ -676,18 +639,12 @@ describe("useWorkspaceSendActions", () => {
       expect(sendOptions?.systemPromptOverride).toBeUndefined();
       expect(sendOptions?.providerOverride).toBeUndefined();
       expect(sendOptions?.modelOverride).toBeUndefined();
-      const browserAssistHarness = ((sendOptions?.requestMetadata
-        ?.harness as Record<string, unknown>) || {}) as Record<string, unknown>;
-      expect(browserAssistHarness.fast_response_routing).toBeUndefined();
-      expect(browserAssistHarness.browser_assist).toEqual(
-        expect.objectContaining({
-          enabled: true,
-          profile_key: "general_browser_assist",
-          auto_launch: true,
-        }),
-      );
-      expect(mockPreheatBrowserAssistInBackground).not.toHaveBeenCalled();
-      expect(mockEnsureBrowserAssistCanvas).not.toHaveBeenCalled();
+      const requestHarness = ((sendOptions?.requestMetadata?.harness as Record<
+        string,
+        unknown
+      >) || {}) as Record<string, unknown>;
+      expect(requestHarness.fast_response_routing).toBeUndefined();
+      expect(requestHarness.browser_assist).toBeUndefined();
     } finally {
       harness.unmount();
     }
@@ -1730,7 +1687,7 @@ Extract it into the Agent Skills directory.`,
     }
   });
 
-  it("普通自然句命中站点 service skill 时应直接走自动启动链", async () => {
+  it("普通自然句不再隐式命中已删除的站点技能自动启动链", async () => {
     const harness = mountHook({
       input: "请帮我使用 GitHub 查一下 AI Agent 项目",
       serviceSkills: [createGithubSiteSkill()],
@@ -1742,19 +1699,10 @@ Extract it into the Agent Skills directory.`,
         expect(started).toBe(true);
       });
 
-      expect(mockHandleAutoLaunchMatchedSiteSkill).toHaveBeenCalledTimes(1);
-      expect(mockHandleAutoLaunchMatchedSiteSkill).toHaveBeenCalledWith(
-        expect.objectContaining({
-          skill: expect.objectContaining({
-            id: "github-repo-radar",
-          }),
-          slotValues: {
-            repository_query: "AI Agent",
-          },
-          launchUserInput: undefined,
-        }),
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+      expect(mockSendMessage.mock.calls[0]?.[0]).toBe(
+        "请帮我使用 GitHub 查一下 AI Agent 项目",
       );
-      expect(mockSendMessage).not.toHaveBeenCalled();
     } finally {
       harness.unmount();
     }
@@ -4270,7 +4218,6 @@ Extract it into the Agent Skills directory.`,
         "@站点搜索 站点:GitHub 关键词:openai agents sdk issue 数量:8",
       );
       expect(mockSendMessage.mock.calls[0]?.[2]).toBe(false);
-      expect(mockPreheatBrowserAssistInBackground).not.toHaveBeenCalled();
       expect(mockSendMessage.mock.calls[0]?.[8]).toMatchObject({
         requestMetadata: {
           harness: {
@@ -7155,39 +7102,18 @@ Extract it into the Agent Skills directory.`,
         "@浏览器 打开 https://news.baidu.com 并提炼页面主要内容",
       );
       expect(mockSendMessage.mock.calls[0]?.[2]).toBe(false);
-      expect(mockEnsureBrowserAssistCanvas).toHaveBeenCalledWith(
-        "https://news.baidu.com",
-        {
-          silent: true,
-          navigationMode: "explicit-url",
-        },
-      );
-      expect(mockPreheatBrowserAssistInBackground).not.toHaveBeenCalled();
       expect(mockSendMessage.mock.calls[0]?.[8]).toMatchObject({
         requestMetadata: {
           harness: {
             browser_requirement: "required",
             browser_launch_url: "https://news.baidu.com",
             browser_user_step_required: false,
-            browser_assist: expect.objectContaining({
-              enabled: true,
-              profile_key: "general_browser_assist",
-              modality_contract_key: "browser_control",
-              modality: "browser",
-              required_capabilities: expect.arrayContaining([
-                "browser_control_planning",
-              ]),
-              routing_slot: "browser_reasoning_model",
-              runtime_contract: expect.objectContaining({
-                contract_key: "browser_control",
-                routing_slot: "browser_reasoning_model",
-              }),
-              entry_source: "at_browser_command",
-              launch_url: "https://news.baidu.com",
-            }),
           },
         },
       });
+      const sentHarness = mockSendMessage.mock.calls[0]?.[8]?.requestMetadata
+        ?.harness as Record<string, unknown>;
+      expect(sentHarness.browser_assist).toBeUndefined();
       expect(listMentionEntryUsage()).toEqual([
         expect.objectContaining({
           kind: "builtin_command",
@@ -7200,22 +7126,9 @@ Extract it into the Agent Skills directory.`,
     }
   });
 
-  it("@浏览器 应把当前可见 Browser Assist session 写入 harness metadata", async () => {
+  it("@浏览器 不应把 Renderer 可见 session 写入 harness metadata", async () => {
     const harness = mountHook({
       input: "@浏览器 打开 https://example.com/current 并总结当前页面",
-      browserAssistProfileKey: "visible-profile",
-      browserAssistSessionState: {
-        sessionId: "browser-session-visible",
-        profileKey: "visible-profile",
-        url: "https://example.com/current",
-        title: "Visible Page",
-        targetId: "target-visible",
-        transportKind: "existing_session",
-        lifecycleState: "live",
-        controlMode: "human_takeover",
-        source: "runtime_launch",
-        updatedAt: 1710000000000,
-      },
     });
 
     try {
@@ -7226,34 +7139,18 @@ Extract it into the Agent Skills directory.`,
 
       expect(mockSendMessage).toHaveBeenCalledTimes(1);
       expect(mockSendMessage.mock.calls[0]?.[2]).toBe(false);
-      expect(mockEnsureBrowserAssistCanvas).toHaveBeenCalledWith(
-        "https://example.com/current",
-        {
-          silent: true,
-          navigationMode: "explicit-url",
-        },
-      );
       expect(mockSendMessage.mock.calls[0]?.[8]).toMatchObject({
         requestMetadata: {
           harness: {
             browser_requirement: "required",
             browser_launch_url: "https://example.com/current",
-            browser_assist: expect.objectContaining({
-              enabled: true,
-              session_id: "browser-session-visible",
-              profile_key: "visible-profile",
-              launch_url: "https://example.com/current",
-              title: "Visible Page",
-              target_id: "target-visible",
-              transport_kind: "existing_session",
-              lifecycle_state: "live",
-              control_mode: "human_takeover",
-              entry_source: "at_browser_command",
-            }),
+            browser_user_step_required: false,
           },
         },
       });
-      expect(mockPreheatBrowserAssistInBackground).not.toHaveBeenCalled();
+      const sentHarness = mockSendMessage.mock.calls[0]?.[8]?.requestMetadata
+        ?.harness as Record<string, unknown>;
+      expect(sentHarness.browser_assist).toBeUndefined();
     } finally {
       harness.unmount();
     }
@@ -7284,22 +7181,12 @@ Extract it into the Agent Skills directory.`,
             browser_requirement: "required",
             browser_launch_url: "https://openai.com/pricing",
             browser_user_step_required: false,
-            browser_assist: expect.objectContaining({
-              enabled: true,
-              profile_key: "general_browser_assist",
-              modality_contract_key: "browser_control",
-              required_capabilities: expect.arrayContaining([
-                "browser_control_planning",
-              ]),
-              routing_slot: "browser_reasoning_model",
-              runtime_contract: expect.objectContaining({
-                contract_key: "browser_control",
-              }),
-              entry_source: "at_browser_agent_command",
-            }),
           },
         },
       });
+      const sentHarness = mockSendMessage.mock.calls[0]?.[8]?.requestMetadata
+        ?.harness as Record<string, unknown>;
+      expect(sentHarness.browser_assist).toBeUndefined();
       expect(listMentionEntryUsage()).toEqual([
         expect.objectContaining({
           kind: "builtin_command",
@@ -7336,22 +7223,12 @@ Extract it into the Agent Skills directory.`,
             browser_requirement: "required",
             browser_launch_url: "https://example.com",
             browser_user_step_required: false,
-            browser_assist: expect.objectContaining({
-              enabled: true,
-              profile_key: "general_browser_assist",
-              modality_contract_key: "browser_control",
-              required_capabilities: expect.arrayContaining([
-                "browser_control_planning",
-              ]),
-              routing_slot: "browser_reasoning_model",
-              runtime_contract: expect.objectContaining({
-                contract_key: "browser_control",
-              }),
-              entry_source: "at_mini_tester_command",
-            }),
           },
         },
       });
+      const sentHarness = mockSendMessage.mock.calls[0]?.[8]?.requestMetadata
+        ?.harness as Record<string, unknown>;
+      expect(sentHarness.browser_assist).toBeUndefined();
       expect(listMentionEntryUsage()).toEqual([
         expect.objectContaining({
           kind: "builtin_command",
@@ -7430,7 +7307,6 @@ Extract it into the Agent Skills directory.`,
           replayText: "帮我做一版新品活动启动方案",
         }),
       ]);
-      expect(mockHandleAutoLaunchMatchedSiteSkill).not.toHaveBeenCalled();
     } finally {
       harness.unmount();
     }
@@ -7511,13 +7387,12 @@ Extract it into the Agent Skills directory.`,
           replayText: "收口 workspace 发送链的硬编码分支，并补治理 guard",
         }),
       ]);
-      expect(mockHandleAutoLaunchMatchedSiteSkill).not.toHaveBeenCalled();
     } finally {
       harness.unmount();
     }
   });
 
-  it("site scene 应从 skill 声明推导 service_skill_launch metadata 并继续发送", async () => {
+  it("service scene 应从 skill 声明推导 local_service_skill metadata 并继续发送", async () => {
     mockGetSkillCatalog.mockResolvedValueOnce({
       entries: [
         {
@@ -7535,7 +7410,7 @@ Extract it into the Agent Skills directory.`,
         commandPrefix: "/x文章转存",
         aliases: ["x文章转存", "x转存"],
         linkedSkillId: "x-article-export",
-        executionKind: "site_adapter",
+        executionKind: "agent_turn",
       },
     ]);
     const harness = mountHook({
@@ -7555,27 +7430,20 @@ Extract it into the Agent Skills directory.`,
       expect(mockSendMessage.mock.calls[0]?.[8]).toMatchObject({
         requestMetadata: {
           harness: {
-            allow_model_skills: true,
-            browser_requirement: "required",
-            service_skill_launch: {
-              kind: "site_adapter",
-              skill_id: "x-article-export",
-              adapter_name: "x/article-export",
-              save_mode: "project_resource",
-              project_id: "project-1",
-              args: {
-                url: "https://x.com/GoogleCloudTech/article/2033953579824758855",
-                target_language: "中文",
-              },
-            },
-            translation_skill_launch: {
-              skill_name: "translation",
-              kind: "translation_request",
-              translation_request: {
-                target_language: "中文",
+            service_scene_launch: {
+              kind: "local_service_skill",
+              service_scene_run: expect.objectContaining({
+                scene_key: "x-article-export",
+                skill_id: "x-article-export",
+                skill_title: "X 文章转存",
+                user_input:
+                  "https://x.com/GoogleCloudTech/article/2033953579824758855",
                 project_id: "project-1",
-                entry_source: "service_skill_site_export_followup",
-              },
+                slot_values: {
+                  article_url:
+                    "https://x.com/GoogleCloudTech/article/2033953579824758855",
+                },
+              }),
             },
           },
         },
@@ -7593,7 +7461,7 @@ Extract it into the Agent Skills directory.`,
     }
   });
 
-  it("site scene 缺少当前项目时应拦截发送并提示先选择项目", async () => {
+  it("service scene 缺少当前项目时应拦截发送并提示先选择项目", async () => {
     mockGetSkillCatalog.mockResolvedValueOnce({
       entries: [
         {
@@ -7611,7 +7479,7 @@ Extract it into the Agent Skills directory.`,
         commandPrefix: "/x文章转存",
         aliases: ["x文章转存", "x转存"],
         linkedSkillId: "x-article-export",
-        executionKind: "site_adapter",
+        executionKind: "agent_turn",
       },
     ]);
     const harness = mountHook({
@@ -7647,7 +7515,7 @@ Extract it into the Agent Skills directory.`,
     }
   });
 
-  it("site scene 缺少必填 slot 时应打开 scene gate，而不是直接发送", async () => {
+  it("service scene 缺少必填 slot 时应打开 scene gate，而不是直接发送", async () => {
     mockGetSkillCatalog.mockResolvedValueOnce({
       entries: [
         {
@@ -7665,7 +7533,7 @@ Extract it into the Agent Skills directory.`,
         commandPrefix: "/x文章转存",
         aliases: ["x文章转存", "x转存"],
         linkedSkillId: "x-article-export",
-        executionKind: "site_adapter",
+        executionKind: "agent_turn",
       },
     ]);
     const harness = mountHook({
@@ -7700,13 +7568,10 @@ Extract it into the Agent Skills directory.`,
     }
   });
 
-  it("已携带 service_skill_launch metadata 时不应再被前端二次命中站点技能或浏览器预热", async () => {
+  it("已携带 service_scene_launch metadata 时不应再被前端二次路由或浏览器预热", async () => {
     const harness = mountHook({
       input: "请帮我使用 GitHub 查一下 AI Agent 项目",
       serviceSkills: [createGithubSiteSkill()],
-      browserAssistProfileKey: "attached-github",
-      browserAssistPreferredBackend: "lime_extension_bridge",
-      browserAssistAutoLaunch: false,
       resolveSendBoundary: (({ sourceText }) => ({
         sourceText,
         browserRequirementMatch: {
@@ -7727,17 +7592,13 @@ Extract it into the Agent Skills directory.`,
           .handleSend([], false, false, undefined, undefined, undefined, {
             requestMetadata: {
               harness: {
-                service_skill_launch: {
-                  adapter_name: "github/search",
-                  args: {
-                    query: "AI Agent",
+                service_scene_launch: {
+                  kind: "local_service_skill",
+                  service_scene_run: {
+                    skill_id: "github-repo-radar",
+                    scene_key: "github-research",
+                    user_input: "请帮我使用 GitHub 查一下 AI Agent 项目",
                   },
-                },
-                browser_assist: {
-                  enabled: true,
-                  profile_key: "attached-github",
-                  preferred_backend: "lime_extension_bridge",
-                  auto_launch: false,
                 },
               },
             },
@@ -7745,9 +7606,6 @@ Extract it into the Agent Skills directory.`,
         expect(started).toBe(true);
       });
 
-      expect(mockHandleAutoLaunchMatchedSiteSkill).not.toHaveBeenCalled();
-      expect(mockPreheatBrowserAssistInBackground).not.toHaveBeenCalled();
-      expect(mockEnsureBrowserAssistCanvas).not.toHaveBeenCalled();
       expect(mockSendMessage).toHaveBeenCalledTimes(1);
       const args = mockSendMessage.mock.calls[0] as Parameters<
         HookProps["sendMessage"]
@@ -7756,17 +7614,17 @@ Extract it into the Agent Skills directory.`,
       expect(args?.[8]).toMatchObject({
         requestMetadata: {
           harness: expect.objectContaining({
-            service_skill_launch: expect.objectContaining({
-              adapter_name: "github/search",
-            }),
-            browser_assist: expect.objectContaining({
-              profile_key: "attached-github",
-              preferred_backend: "lime_extension_bridge",
-              auto_launch: false,
+            service_scene_launch: expect.objectContaining({
+              kind: "local_service_skill",
             }),
           }),
         },
       });
+      const sentHarness = args?.[8]?.requestMetadata?.harness as Record<
+        string,
+        unknown
+      >;
+      expect(sentHarness.browser_assist).toBeUndefined();
     } finally {
       harness.unmount();
     }

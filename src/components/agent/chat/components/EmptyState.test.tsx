@@ -556,25 +556,25 @@ function expectHomeDrawerButton(
   return button;
 }
 
-function createGithubSearchServiceSkill(): ServiceSkillHomeItem {
+function createRepositoryResearchServiceSkill(): ServiceSkillHomeItem {
   return {
-    id: "github-repo-radar",
-    title: "GitHub 仓库线索检索",
-    summary: "复用 GitHub 登录态检索项目。",
+    id: "repository-research",
+    title: "仓库线索研究",
+    summary: "围绕仓库主题整理项目线索。",
     category: "情报研究",
     outputHint: "仓库列表 + 关键线索",
     source: "cloud_catalog",
     runnerType: "instant",
-    defaultExecutorBinding: "browser_assist",
+    defaultExecutorBinding: "agent_turn",
     executionLocation: "client_default",
     version: "seed-v1",
     badge: "云目录",
     recentUsedAt: null,
     isRecent: false,
-    runnerLabel: "浏览器站点执行",
+    runnerLabel: "先做这一轮",
     runnerTone: "emerald",
-    runnerDescription: "直接复用浏览器登录态执行。",
-    actionLabel: "启动采集",
+    runnerDescription: "先在当前工作区整理一版仓库研究结果。",
+    actionLabel: "补齐这一步",
     automationStatus: null,
     slotSchema: [
       {
@@ -585,18 +585,6 @@ function createGithubSearchServiceSkill(): ServiceSkillHomeItem {
         placeholder: "例如 AI Agent",
       },
     ],
-    siteCapabilityBinding: {
-      adapterName: "github/search",
-      autoRun: true,
-      requireAttachedSession: true,
-      saveMode: "current_content",
-      slotArgMap: {
-        repository_query: "query",
-      },
-      fixedArgs: {
-        limit: 10,
-      },
-    },
   };
 }
 
@@ -2247,11 +2235,11 @@ describe("EmptyState", () => {
     );
   });
 
-  it("首页可见 service skill 即使未从运行时目录注入，也应从 seeded 目录拼接到首页精选区尾部", async () => {
+  it("首页注入 current service skill 时仍应把 seeded 目录拼接到精选区尾部", async () => {
     const onSelectServiceSkill = vi.fn<(skill: ServiceSkillHomeItem) => void>();
     const container = renderEmptyState({
       activeTheme: "general",
-      serviceSkills: [createGithubSearchServiceSkill()],
+      serviceSkills: [createRepositoryResearchServiceSkill()],
       onSelectServiceSkill,
     });
 
@@ -2260,7 +2248,7 @@ describe("EmptyState", () => {
     });
 
     expect(container.textContent).toContain("复制轮播帖");
-    expect(container.textContent).not.toContain("GitHub 仓库线索检索");
+    expect(container.textContent).toContain("仓库线索研究");
 
     const card = container.querySelector(
       '[data-testid="home-gallery-entry-service-skill-carousel-post-replication"]',
@@ -3263,16 +3251,16 @@ describe("EmptyState", () => {
           outputHint: "摘要",
           source: "cloud_catalog",
           runnerType: "instant",
-          defaultExecutorBinding: "browser_assist",
+          defaultExecutorBinding: "agent_turn",
           executionLocation: "client_default",
           slotSchema: [],
           version: "seed-v1",
           badge: "云目录",
           recentUsedAt: null,
           isRecent: false,
-          runnerLabel: "浏览器执行",
+          runnerLabel: "先做这一轮",
           runnerTone: "emerald",
-          runnerDescription: "复用登录态完成情报任务。",
+          runnerDescription: "先在当前工作区完成情报任务。",
           actionLabel: "开始执行",
           automationStatus: null,
         },
@@ -3287,9 +3275,9 @@ describe("EmptyState", () => {
     expect(container.textContent).not.toContain("按需挂上常用做法");
   });
 
-  it("通用对话且存在站点型 service skill 时，应展示自然句占位示例", async () => {
+  it("通用对话存在 current service skill 时仍应展示稳定占位文案", async () => {
     const container = renderEmptyState({
-      serviceSkills: [createGithubSearchServiceSkill()],
+      serviceSkills: [createRepositoryResearchServiceSkill()],
     });
 
     await act(async () => {
@@ -3297,11 +3285,8 @@ describe("EmptyState", () => {
     });
 
     const textarea = container.querySelector("textarea");
-    expect(textarea?.getAttribute("placeholder")).toContain(
-      "直接说一句话，例如：",
-    );
-    expect(textarea?.getAttribute("placeholder")).toContain(
-      "帮我用 GitHub 查一下 AI Agent 项目",
+    expect(textarea?.getAttribute("placeholder")).toBe(
+      "先说这轮要做什么，目标、对象或限制都可以。",
     );
   });
 
@@ -3621,7 +3606,7 @@ describe("EmptyState", () => {
       installed: true,
       sourceKind: "builtin",
     };
-    const serviceSkill = createGithubSearchServiceSkill();
+    const serviceSkill = createRepositoryResearchServiceSkill();
 
     const container = renderEmptyState({
       input: "整理最近发布计划",

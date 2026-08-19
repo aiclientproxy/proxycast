@@ -166,17 +166,12 @@ describe("workbenchPreview", () => {
     );
   });
 
-  it("ArtifactWorkbenchPreview 在文稿、浏览器协助和普通 artifact 间切换时保持 Hook 顺序稳定", () => {
+  it("ArtifactWorkbenchPreview 在文稿和普通 artifact 间切换时保持 Hook 顺序稳定", () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
     const documentArtifact = createDocumentArtifact();
-    const browserArtifact = createArtifactVariant(
-      "browser-preview",
-      "browser_assist",
-      "{}",
-    );
     const codeArtifact = createArtifactVariant(
       "code-preview",
       "code",
@@ -184,7 +179,6 @@ describe("workbenchPreview", () => {
     );
 
     const mounted = renderArtifactPreview(documentArtifact);
-    mounted.rerender(browserArtifact);
     mounted.rerender(codeArtifact);
 
     const hookOrderErrors = consoleError.mock.calls.filter(([message]) =>

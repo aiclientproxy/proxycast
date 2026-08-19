@@ -1,6 +1,6 @@
 /** Agent runtime/read-model bootstrap current owner。 */
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useAgentChatUnified } from "../hooks";
 import type { AgentChatWorkspaceProps } from "../agentChatWorkspaceContract";
 import { useWorkspaceHarnessInventoryRuntime } from "./useWorkspaceHarnessInventoryRuntime";
@@ -12,7 +12,6 @@ import { useWorkspaceTeamRuntime } from "./useWorkspaceTeamRuntime";
 import { useWorkspaceGeneralWorkbenchDocumentPersistenceRuntime } from "./useWorkspaceGeneralWorkbenchDocumentPersistenceRuntime";
 import { useWorkspaceServiceSkillEntryActions } from "./useWorkspaceServiceSkillEntryActions";
 import { useWorkspaceHealthRuntime } from "./useWorkspaceHealthRuntime";
-import { resolveBrowserRuntimeNavigationFromSiteSkill } from "./workspaceBrowserRuntimeNavigation";
 import { useWorkspaceContextSurfaceRuntime } from "./useWorkspaceContextSurfaceRuntime";
 import {
   createRestoredInteractiveMessageSnapshot,
@@ -27,10 +26,7 @@ import { useWorkspaceSubagentNavigationRuntime } from "./useWorkspaceSubagentNav
 import { useWorkspaceContextDetailRuntime } from "./useWorkspaceContextDetailRuntime";
 import { useWorkspaceHarnessRequestMetadataRuntime } from "./useWorkspaceHarnessRequestMetadataRuntime";
 import { useWorkspacePendingInputRuntime } from "./useWorkspacePendingInputRuntime";
-import {
-  GENERAL_BROWSER_ASSIST_PROFILE_KEY,
-  NOOP_SET_CHAT_MESSAGES,
-} from "./agentChatWorkspaceHelpers";
+import { NOOP_SET_CHAT_MESSAGES } from "./agentChatWorkspaceHelpers";
 
 import type { useAgentChatWorkspaceEntryRuntime } from "./useAgentChatWorkspaceEntryRuntime";
 
@@ -55,14 +51,11 @@ export function useAgentChatWorkspaceSetupRuntime({
     theme: initialTheme,
     initialCreationMode,
     lockTheme = false,
-    initialUserPrompt,
     initialPendingServiceSkillLaunch,
     newChatAt,
     expertAgentLaunch,
     onSessionChange,
     onAgentStreamingChange,
-    openBrowserAssistOnMount = false,
-    initialSiteSkillLaunch,
   } = props;
 
   const {
@@ -128,7 +121,6 @@ export function useAgentChatWorkspaceSetupRuntime({
     sceneGateResumeHandlerRef,
     mappedTheme,
     isSpecializedThemeMode,
-    workbenchRequests,
   } = entryRuntime;
 
   const { chatMode, generalHarnessEntryEnabled, systemPrompt } =
@@ -212,6 +204,7 @@ export function useAgentChatWorkspaceSetupRuntime({
     isSessionHydrating = false,
     sessionId,
     ensureSession = async () => null,
+    getThreadIdForSubmit = () => undefined,
     switchTopic: originalSwitchTopic,
     loadFullSessionHistory = async () => false,
     refreshSessionReadModel = async () => false,
@@ -398,68 +391,25 @@ export function useAgentChatWorkspaceSetupRuntime({
   });
   const artifactCanvasRuntime = useWorkspaceArtifactCanvasRuntime({
     activeTheme,
-    contentId,
-    generalBrowserAssistProfileKey: GENERAL_BROWSER_ASSIST_PROFILE_KEY,
     generalCanvasState,
-    input,
-    initialAutoSendRequestMetadata,
-    initialSiteSkillLaunch,
-    initialUserPrompt,
-    mappedTheme,
     messages,
-    onNavigate: _onNavigate,
-    openBrowserAssistOnMount,
     projectId,
     sessionId,
-    setLayoutMode,
-    siteSkillLaunchNonce: newChatAt,
     isSending,
-    workbenchRequests,
   });
   const {
     artifacts,
     artifactDisplayState,
-    artifactOpenControl: browserAssistArtifactOpenControl,
     artifactViewMode,
     applyAutoArtifactViewMode,
-    browserAssistLaunching,
-    browserAssistRequestAutoLaunch,
-    browserAssistRequestPreferredBackend,
-    browserAssistRequestProfileKey,
-    browserAssistSessionRef,
-    browserAssistSessionState,
     currentCanvasArtifact,
-    currentBrowserAssistScopeKey,
     displayedCanvasArtifact,
-    ensureBrowserAssistCanvas,
     handleArtifactViewModeChange,
     handleOpenBrowserRuntimeForBrowserAssist,
     setSelectedArtifactId,
     settledWorkbenchArtifacts,
-    siteSkillExecutionState,
     upsertGeneralArtifact,
   } = artifactCanvasRuntime;
-  const handleOpenBrowserRuntimeForSiteSkillExecution = useCallback(() => {
-    if (!_onNavigate || !initialSiteSkillLaunch?.adapterName?.trim()) {
-      return;
-    }
-
-    _onNavigate(
-      "browser-runtime",
-      resolveBrowserRuntimeNavigationFromSiteSkill({
-        contentId,
-        initialSiteSkillLaunch,
-        projectId,
-        siteSkillExecutionState,
-      }),
-    );
-  }, [
-    contentId,
-    initialSiteSkillLaunch,
-    _onNavigate,
-    projectId,
-    siteSkillExecutionState,
-  ]);
   const contextSurfaceRuntime = useWorkspaceContextSurfaceRuntime({
     activeTheme,
     generalHarnessEntryEnabled,
@@ -606,9 +556,6 @@ export function useAgentChatWorkspaceSetupRuntime({
   const harnessRequestMetadata = useWorkspaceHarnessRequestMetadataRuntime({
     enabled: workspaceHarnessEnabled && harnessRuntimeVisible,
     agentResponseLanguage,
-    browserAssistAutoLaunch: browserAssistRequestAutoLaunch,
-    browserAssistPreferredBackend: browserAssistRequestPreferredBackend,
-    browserAssistProfileKey: browserAssistRequestProfileKey,
     contentId,
     currentGateKey: currentGate.key,
     effectiveChatToolPreferences,
@@ -621,7 +568,6 @@ export function useAgentChatWorkspaceSetupRuntime({
   const harnessInventoryRuntime = useWorkspaceHarnessInventoryRuntime({
     enabled: workspaceHarnessEnabled,
     chatMode,
-    mappedTheme,
     harnessPanelVisible: harnessRuntimeVisible,
     harnessRequestMetadata,
     isThemeWorkbench,
@@ -678,6 +624,7 @@ export function useAgentChatWorkspaceSetupRuntime({
     isSessionHydrating,
     sessionId,
     ensureSession,
+    getThreadIdForSubmit,
     originalSwitchTopic,
     loadFullSessionHistory,
     refreshSessionReadModel,
@@ -721,26 +668,15 @@ export function useAgentChatWorkspaceSetupRuntime({
     artifactCanvasRuntime,
     artifacts,
     artifactDisplayState,
-    browserAssistArtifactOpenControl,
     artifactViewMode,
     applyAutoArtifactViewMode,
-    browserAssistLaunching,
-    browserAssistRequestAutoLaunch,
-    browserAssistRequestPreferredBackend,
-    browserAssistRequestProfileKey,
-    browserAssistSessionRef,
-    browserAssistSessionState,
     currentCanvasArtifact,
-    currentBrowserAssistScopeKey,
     displayedCanvasArtifact,
-    ensureBrowserAssistCanvas,
     handleArtifactViewModeChange,
     handleOpenBrowserRuntimeForBrowserAssist,
     setSelectedArtifactId,
     settledWorkbenchArtifacts,
-    siteSkillExecutionState,
     upsertGeneralArtifact,
-    handleOpenBrowserRuntimeForSiteSkillExecution,
     contextSurfaceRuntime,
     contextHarnessRuntime,
     effectiveThreadItems,

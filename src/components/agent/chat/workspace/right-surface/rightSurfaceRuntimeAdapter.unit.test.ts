@@ -4,7 +4,6 @@ import {
   buildWorkspaceRightSurfaceFilePreviewIntents,
   buildWorkspaceRightSurfaceHarnessPendingIntents,
   buildWorkspaceRightSurfaceMcpShellOutputIntents,
-  buildWorkspaceRightSurfaceObjectCanvasCandidateIntents,
   buildWorkspaceRightSurfaceRuntimeOpenIntents,
 } from "./rightSurfaceRuntimeAdapter";
 import type { WorkspaceRightSurfacePendingRequest } from "@/lib/api/workspaceRightSurface";
@@ -56,16 +55,6 @@ describe("rightSurfaceRuntimeAdapter", () => {
   it("应把 App Server pending request 投影到统一 surface intent", () => {
     const pending: WorkspaceRightSurfacePendingRequest[] = [
       {
-        requestId: "right_surface_1",
-        surfaceKind: "objectCanvas",
-        origin: "mcpTool",
-        priority: "foreground",
-        status: "pending",
-        reason: "browser_assist_candidate",
-        requestedAt: "2026-06-23T00:00:00.000Z",
-        ttlMs: 30_000,
-      },
-      {
         requestId: "right_surface_article_workspace",
         surfaceKind: "articleWorkspace",
         origin: "runtime",
@@ -99,18 +88,6 @@ describe("rightSurfaceRuntimeAdapter", () => {
     );
 
     expect(intents).toEqual([
-      expect.objectContaining({
-        id: "app-server:right_surface_1",
-        priority: "foreground",
-        createdAt: Date.parse("2026-06-23T00:00:00.000Z"),
-        ttlMs: 30_000,
-        command: expect.objectContaining({
-          action: "open",
-          kind: "objectCanvas",
-          origin: "mcpTool",
-          reason: "browser_assist_candidate",
-        }),
-      }),
       expect.objectContaining({
         id: "app-server:right_surface_article_workspace",
         priority: "foreground",
@@ -285,42 +262,12 @@ describe("rightSurfaceRuntimeAdapter", () => {
     ]);
   });
 
-  it("应把 objectCanvas 候选投影为 objectCanvas surface pending intent", () => {
-    const intents = buildWorkspaceRightSurfaceObjectCanvasCandidateIntents({
-      enabled: true,
-      candidateId: "diagram candidate",
-      origin: "skill",
-      createdAt: 180,
-    });
-
-    expect(intents).toEqual([
-      expect.objectContaining({
-        id: "skill:object-canvas:diagram-candidate",
-        priority: "background",
-        ttlMs: 60_000,
-        command: expect.objectContaining({
-          action: "open",
-          kind: "objectCanvas",
-          origin: "skill",
-          reason: "object_canvas_candidate_ready",
-        }),
-      }),
-    ]);
-  });
-
-  it("shell 输出或 objectCanvas 候选为空时不应生成 intent", () => {
+  it("shell 输出为空时不应生成 intent", () => {
     expect(
       buildWorkspaceRightSurfaceMcpShellOutputIntents({
         enabled: true,
         outputId: "",
         createdAt: 160,
-      }),
-    ).toEqual([]);
-    expect(
-      buildWorkspaceRightSurfaceObjectCanvasCandidateIntents({
-        enabled: false,
-        candidateId: "candidate",
-        createdAt: 180,
       }),
     ).toEqual([]);
   });

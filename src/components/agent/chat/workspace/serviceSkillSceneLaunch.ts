@@ -7,14 +7,6 @@ import {
   listServiceSkills,
   type ServiceSkillItem,
 } from "@/lib/api/serviceSkills";
-import { siteGetAdapterLaunchReadiness } from "@/lib/webview-api";
-import {
-  buildServiceSkillClawLaunchContext,
-  buildServiceSkillClawLaunchRequestMetadata,
-  isServiceSkillSiteCapabilityBound,
-  resolveServiceSkillSiteCapabilityExecution,
-  type ServiceSkillClawLaunchContext,
-} from "../service-skills/siteCapabilityBinding";
 import {
   matchesRuntimeSceneEntry,
   resolveRuntimeSceneSkillFromEntry,
@@ -49,9 +41,7 @@ interface ParsedRuntimeSceneCommand {
   userInput: string;
 }
 
-type ServiceSceneLaunchRequestContext =
-  | Record<string, unknown>
-  | ServiceSkillClawLaunchContext;
+type ServiceSceneLaunchRequestContext = Record<string, unknown>;
 
 interface ServiceSceneLaunchRequest {
   skill: ServiceSkillItem;
@@ -71,20 +61,6 @@ export class RuntimeSceneLaunchValidationError extends Error {
     this.name = "RuntimeSceneLaunchValidationError";
     this.gateRequest = options?.gateRequest;
   }
-}
-
-function isServiceSkillClawLaunchContext(
-  value: ServiceSceneLaunchRequestContext,
-): value is ServiceSkillClawLaunchContext {
-  return (
-    value.kind === "site_adapter" &&
-    typeof value.skillId === "string" &&
-    typeof value.skillTitle === "string" &&
-    typeof value.adapterName === "string" &&
-    value.args !== null &&
-    typeof value.args === "object" &&
-    !Array.isArray(value.args)
-  );
 }
 
 export function parseRuntimeSceneCommand(
@@ -125,7 +101,7 @@ function extractFirstUrl(value: string): string | undefined {
   return normalizeOptionalText(match?.[0]);
 }
 
-export function resolveSiteSceneSlotValues(params: {
+export function resolveSceneSlotValues(params: {
   skill: ServiceSkillItem;
   userInput: string;
   slotValueOverrides?: ServiceSkillSlotValues;
@@ -167,38 +143,6 @@ export function resolveSiteSceneSlotValues(params: {
   return {
     resolvedSlotValues,
     missingRequiredSlots,
-  };
-}
-
-function resolveSiteSceneProjectId(
-  skill: ServiceSkillItem,
-  projectId?: string | null,
-): {
-  projectId?: string;
-  missingProject: boolean;
-} {
-  const normalizedProjectId = normalizeOptionalText(projectId);
-  if (normalizedProjectId) {
-    return {
-      projectId: normalizedProjectId,
-      missingProject: false,
-    };
-  }
-
-  const requiresProject =
-    skill.readinessRequirements?.requiresProject ||
-    (skill.siteCapabilityBinding?.saveMode ?? "project_resource") ===
-      "project_resource";
-  if (!requiresProject) {
-    return {
-      projectId: undefined,
-      missingProject: false,
-    };
-  }
-
-  return {
-    projectId: undefined,
-    missingProject: true,
   };
 }
 
@@ -265,66 +209,10 @@ function buildServiceSceneLaunchRequestContext(params: {
   };
 }
 
-function buildSiteSceneLaunchRequestContext(params: {
-  skill: ServiceSkillItem;
-  slotValues: ServiceSkillSlotValues;
-  resolvedAdapterName: string;
-  projectId?: string;
-  contentId?: string | null;
-  launchReadiness?: Awaited<
-    ReturnType<typeof siteGetAdapterLaunchReadiness>
-  > | null;
-}): ServiceSkillClawLaunchContext {
-  const { skill, slotValues, projectId, contentId, launchReadiness } = params;
-
-  if (!isServiceSkillSiteCapabilityBound(skill)) {
-    throw new RuntimeSceneLaunchValidationError(
-      "当前这套做法没有绑定站点执行能力。",
-    );
-  }
-
-  const saveMode = skill.siteCapabilityBinding.saveMode ?? "project_resource";
-
-  return buildServiceSkillClawLaunchContext(skill, slotValues, {
-    adapterName: params.resolvedAdapterName,
-    projectId,
-    contentId: saveMode === "current_content" ? contentId : undefined,
-    launchReadiness,
-  });
-}
-
-async function resolveSiteSceneLaunchReadiness(
-  adapterName: string,
-): Promise<Awaited<ReturnType<typeof siteGetAdapterLaunchReadiness>> | null> {
-  try {
-    return await siteGetAdapterLaunchReadiness({
-      adapter_name: adapterName,
-    });
-  } catch {
-    return null;
-  }
-}
-
 export function buildServiceSceneLaunchRequestMetadata(
   existingMetadata: Record<string, unknown> | undefined,
   requestContext: ServiceSceneLaunchRequestContext,
 ): Record<string, unknown> {
-  if (isServiceSkillClawLaunchContext(requestContext)) {
-    const existingHarness = asRecord(existingMetadata?.harness);
-    const siteMetadata =
-      buildServiceSkillClawLaunchRequestMetadata(requestContext);
-    const siteHarness = asRecord(siteMetadata.harness);
-
-    return {
-      ...(existingMetadata || {}),
-      ...siteMetadata,
-      harness: {
-        ...(existingHarness || {}),
-        ...(siteHarness || {}),
-      },
-    };
-  }
-
   const serviceSceneRun = asRecord(requestContext.service_scene_run);
   const existingHarness = asRecord(existingMetadata?.harness);
 
@@ -378,74 +266,43 @@ export async function resolveRuntimeSceneLaunchRequest(params: {
     return null;
   }
 
-  let requestContext: ServiceSceneLaunchRequestContext;
-  let dispatchText: string | undefined;
-  if (matchedSkill.defaultExecutorBinding === "browser_assist") {
-    const slotResolution = resolveSiteSceneSlotValues({
-      skill: matchedSkill,
-      userInput: parsedSceneCommand.userInput,
-      slotValueOverrides: params.slotValueOverrides,
-    });
-    const projectResolution = resolveSiteSceneProjectId(
-      matchedSkill,
-      params.projectIdOverride ?? params.projectId,
+  const slotResolution = resolveSceneSlotValues({
+    skill: matchedSkill,
+    userInput: parsedSceneCommand.userInput,
+    slotValueOverrides: params.slotValueOverrides,
+  });
+  const requireProject = Boolean(
+    matchedSkill.readinessRequirements?.requiresProject &&
+      !normalizeOptionalText(params.projectIdOverride ?? params.projectId),
+  );
+  const gateRequest = buildRuntimeSceneGateRequest({
+    rawText: params.rawText,
+    sceneEntry,
+    skill: matchedSkill,
+    missingSlots: slotResolution.missingRequiredSlots,
+    requireProject,
+  });
+  if (gateRequest) {
+    throw new RuntimeSceneLaunchValidationError(
+      formatRuntimeSceneGateValidationMessage(gateRequest),
+      { gateRequest },
     );
-    const gateRequest = buildRuntimeSceneGateRequest({
-      rawText: params.rawText,
-      sceneEntry,
-      skill: matchedSkill,
-      missingSlots: slotResolution.missingRequiredSlots,
-      requireProject: projectResolution.missingProject,
-    });
-    if (gateRequest) {
-      throw new RuntimeSceneLaunchValidationError(
-        formatRuntimeSceneGateValidationMessage(gateRequest),
-        { gateRequest },
-      );
-    }
-    let resolvedCapability;
-    try {
-      resolvedCapability = await resolveServiceSkillSiteCapabilityExecution(
-        matchedSkill,
-        slotResolution.resolvedSlotValues,
-      );
-    } catch (error) {
-      throw new RuntimeSceneLaunchValidationError(
-        error instanceof Error ? error.message : "当前站点技能暂时无法解析。",
-      );
-    }
-
-    requestContext = buildSiteSceneLaunchRequestContext({
-      skill: matchedSkill,
-      slotValues: slotResolution.resolvedSlotValues,
-      resolvedAdapterName: resolvedCapability.adapterName,
-      projectId: projectResolution.projectId,
-      contentId: params.contentId,
-      launchReadiness: await resolveSiteSceneLaunchReadiness(
-        resolvedCapability.adapterName,
-      ),
-    });
-  } else {
-    const slotResolution = resolveSiteSceneSlotValues({
-      skill: matchedSkill,
-      userInput: parsedSceneCommand.userInput,
-      slotValueOverrides: params.slotValueOverrides,
-    });
-    requestContext = buildServiceSceneLaunchRequestContext({
-      rawText: params.rawText,
-      parsedCommand: parsedSceneCommand,
-      sceneEntry,
-      skill: matchedSkill,
-      slotValues: slotResolution.resolvedSlotValues,
-      projectId: params.projectId,
-      contentId: params.contentId,
-    });
-    dispatchText = composeServiceSkillPrompt({
-      skill: matchedSkill,
-      slotValues: slotResolution.resolvedSlotValues,
-      userInput: normalizeOptionalText(parsedSceneCommand.userInput),
-    });
   }
+
+  const requestContext = buildServiceSceneLaunchRequestContext({
+    rawText: params.rawText,
+    parsedCommand: parsedSceneCommand,
+    sceneEntry,
+    skill: matchedSkill,
+    slotValues: slotResolution.resolvedSlotValues,
+    projectId: params.projectIdOverride ?? params.projectId,
+    contentId: params.contentId,
+  });
+  const dispatchText = composeServiceSkillPrompt({
+    skill: matchedSkill,
+    slotValues: slotResolution.resolvedSlotValues,
+    userInput: normalizeOptionalText(parsedSceneCommand.userInput),
+  });
 
   return {
     skill: matchedSkill,

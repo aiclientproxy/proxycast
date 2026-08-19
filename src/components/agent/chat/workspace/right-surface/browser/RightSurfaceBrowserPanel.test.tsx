@@ -3,27 +3,30 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RightSurfaceBrowserPanel } from "./RightSurfaceBrowserPanel";
 
-vi.mock(
-  "../../../components/canvas-workbench/browser/CanvasWorkbenchBrowserPanel",
-  () => ({
-    CanvasWorkbenchBrowserPanel: ({
-      initialUrl,
-      onNavigate,
-    }: {
-      initialUrl?: string | null;
-      onNavigate?: (url: string, title?: string | null) => void;
-    }) => (
-      <button
-        type="button"
-        data-testid="mock-canvas-browser-panel"
-        data-initial-url={initialUrl ?? ""}
-        onClick={() => onNavigate?.("https://example.com/", "Example")}
-      >
-        browser panel
-      </button>
-    ),
-  }),
-);
+vi.mock("./BrowserWorkspace", () => ({
+  BrowserWorkspace: ({
+    initialUrl,
+    runtimeSessionId,
+    threadId,
+    onNavigate,
+  }: {
+    initialUrl?: string | null;
+    runtimeSessionId?: string | null;
+    threadId: string;
+    onNavigate?: (url: string, title?: string | null) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="mock-browser-workspace"
+      data-initial-url={initialUrl ?? ""}
+      data-runtime-session-id={runtimeSessionId ?? ""}
+      data-thread-id={threadId}
+      onClick={() => onNavigate?.("https://example.com/", "Example")}
+    >
+      browser panel
+    </button>
+  ),
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -56,16 +59,10 @@ describe("RightSurfaceBrowserPanel", () => {
       root.render(
         <RightSurfaceBrowserPanel
           initialUrl="https://example.com"
+          runtimeSessionId="session-1"
           controlMode="human_takeover"
           lifecycleState="human_controlling"
-          sessionRef={{
-            sourceRequestId: "right_surface_browser_1",
-            browserSessionId: "browser-session-1",
-            profileKey: "general_browser_assist",
-            adapterKind: "cdp",
-            launchUrl: "https://example.com",
-            title: "Example",
-          }}
+          threadId="thread-1"
         />,
       );
     });
@@ -74,9 +71,7 @@ describe("RightSurfaceBrowserPanel", () => {
       '[data-testid="right-surface-browser-panel"]',
     );
     expect(panel).toBeTruthy();
-    expect(panel?.getAttribute("data-browser-session-id")).toBe(
-      "browser-session-1",
-    );
+    expect(panel?.getAttribute("data-browser-session-id")).toBe("");
     expect(panel?.getAttribute("data-browser-control-mode")).toBe(
       "human_takeover",
     );
@@ -85,18 +80,20 @@ describe("RightSurfaceBrowserPanel", () => {
     expect(panel?.getAttribute("data-browser-lifecycle-state")).toBe(
       "human_controlling",
     );
-    expect(panel?.getAttribute("data-browser-profile-key")).toBe(
-      "general_browser_assist",
-    );
-    expect(panel?.getAttribute("data-browser-adapter-kind")).toBe("cdp");
+    expect(panel?.getAttribute("data-browser-thread-id")).toBe("thread-1");
     expect(
       container.querySelector('[data-testid="right-surface-browser-panel"]'),
     ).toBeTruthy();
     expect(
       container
-        .querySelector('[data-testid="mock-canvas-browser-panel"]')
-      ?.getAttribute("data-initial-url"),
+        .querySelector('[data-testid="mock-browser-workspace"]')
+        ?.getAttribute("data-initial-url"),
     ).toBe("https://example.com");
+    expect(
+      container
+        .querySelector('[data-testid="mock-browser-workspace"]')
+        ?.getAttribute("data-runtime-session-id"),
+    ).toBe("session-1");
     expect(
       container.querySelector(
         '[data-testid="right-surface-browser-control-overlay"]',
@@ -106,7 +103,9 @@ describe("RightSurfaceBrowserPanel", () => {
 
   it("未激活时不挂载浏览器 view", () => {
     act(() => {
-      root.render(<RightSurfaceBrowserPanel active={false} />);
+      root.render(
+        <RightSurfaceBrowserPanel active={false} threadId="thread-1" />,
+      );
     });
 
     expect(
@@ -118,16 +117,10 @@ describe("RightSurfaceBrowserPanel", () => {
     act(() => {
       root.render(
         <RightSurfaceBrowserPanel
+          runtimeSessionId="session-2"
           controlMode="agent"
           lifecycleState="live"
-          sessionRef={{
-            sourceRequestId: "right_surface_browser_2",
-            browserSessionId: "browser-session-2",
-            profileKey: "general_browser_assist",
-            adapterKind: "cdp",
-            launchUrl: "https://example.com",
-            title: "Example",
-          }}
+          threadId="thread-2"
         />,
       );
     });

@@ -125,10 +125,9 @@ impl CapabilityInventorySource {
 
     pub fn default_current_surface() -> Self {
         let mut records = vec![CapabilityInventoryRecord::agent_session()];
-        for tool in
-            tool_catalog_entries_for_surface(WorkspaceToolSurface::workbench_with_browser_assist())
-                .into_iter()
-                .filter(|tool| tool.lifecycle == ToolLifecycle::Current)
+        for tool in tool_catalog_entries_for_surface(WorkspaceToolSurface::workbench())
+            .into_iter()
+            .filter(|tool| tool.lifecycle == ToolLifecycle::Current)
         {
             records.push(current_tool_capability_record(tool.name));
         }

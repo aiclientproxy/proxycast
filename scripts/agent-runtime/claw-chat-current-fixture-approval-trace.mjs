@@ -1,7 +1,5 @@
 import {
   APP_SERVER_HANDLE_JSON_LINES_COMMAND,
-  APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-  APPROVAL_REQUEST_RESUME_REQUEST_ID,
 } from "./claw-chat-current-fixture-constants.mjs";
 import {
   decodeJsonRpcLines,
@@ -13,25 +11,6 @@ const METHOD_SERVER_REQUEST_RESOLVED = "serverRequest/resolved";
 const SERVER_REQUEST_LIFECYCLE_TRACE_KEY =
   "lime:debug:app-server-server-request-lifecycle:v1";
 const RUNTIME_TERMINAL_METHODS = new Set(["item/completed", "turn/completed"]);
-
-function collectActionRespondRequestsFromTrace(traceMessages) {
-  return traceMessages
-    .filter((entry) => entry?.command === APP_SERVER_HANDLE_JSON_LINES_COMMAND)
-    .flatMap((entry) =>
-      decodeJsonRpcLines(entry?.args_preview?.request?.lines).map(
-        (message) => ({
-          transport: entry.transport ?? null,
-          status: entry.status ?? null,
-          method: message.method,
-          params: message.params ?? null,
-        }),
-      ),
-    )
-    .filter(
-      (message) =>
-        message.method === APP_SERVER_METHOD_AGENT_SESSION_ACTION_RESPOND,
-    );
-}
 
 function collectApprovalServerRequestResponses(traceMessages) {
   return traceMessages
@@ -133,6 +112,12 @@ export function summarizeApprovalServerRequestLifecycle({
   return sanitizeJson({
     request: request ?? null,
     response: response ?? null,
+    responseMatchesRequest:
+      request != null &&
+      response != null &&
+      request.id === response.id &&
+      request.threadId === threadId &&
+      request.turnId === turnId,
     resolved: resolved
       ? {
           method: resolved.method,
@@ -153,6 +138,57 @@ export function summarizeApprovalServerRequestLifecycle({
       lifecycleResolvedIndex >= 0 &&
       lifecycleTerminalIndex > lifecycleResolvedIndex,
   });
+}
+
+async function readApprovalServerRequestLifecycleEntries(page) {
+  return await page.evaluate((key) => {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, SERVER_REQUEST_LIFECYCLE_TRACE_KEY);
+}
+
+export async function readApprovalServerRequestLifecycleSnapshot(
+  page,
+  { wireDecision, threadId, turnId },
+) {
+  const [traceRaw, lifecycleEntries] = await Promise.all([
+    page.evaluate(() =>
+      window.localStorage.getItem("lime_invoke_trace_buffer_v1"),
+    ),
+    readApprovalServerRequestLifecycleEntries(page),
+  ]);
+  return summarizeApprovalServerRequestLifecycle({
+    traceMessages: readTraceMessages(traceRaw),
+    lifecycleEntries,
+    notifications: [],
+    wireDecision,
+    threadId,
+    turnId,
+  });
+}
+
+export async function waitForApprovalServerRequestResponse(
+  page,
+  options,
+  identity,
+) {
+  const startedAt = Date.now();
+  let lastSummary = null;
+  while (Date.now() - startedAt < Math.min(options.timeoutMs, 30_000)) {
+    lastSummary = await readApprovalServerRequestLifecycleSnapshot(
+      page,
+      identity,
+    );
+    if (lastSummary.responseMatchesRequest === true) {
+      return lastSummary;
+    }
+    await sleep(options.intervalMs);
+  }
+  return sanitizeJson(lastSummary);
 }
 
 export function summarizeApprovalHostInterruptLifecycle({
@@ -245,21 +281,7 @@ export async function waitForApprovalServerRequestLifecycle(
   const startedAt = Date.now();
   let lastSummary = null;
   while (Date.now() - startedAt < Math.min(options.timeoutMs, 30_000)) {
-    const traceRaw = await page.evaluate(() =>
-      window.localStorage.getItem("lime_invoke_trace_buffer_v1"),
-    );
-    const lifecycleEntries = await page.evaluate((key) => {
-      try {
-        const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    }, SERVER_REQUEST_LIFECYCLE_TRACE_KEY);
-    lastSummary = summarizeApprovalServerRequestLifecycle({
-      traceMessages: readTraceMessages(traceRaw),
-      lifecycleEntries,
-      notifications: [],
+    lastSummary = await readApprovalServerRequestLifecycleSnapshot(page, {
       wireDecision,
       threadId,
       turnId,
@@ -274,33 +296,4 @@ export async function waitForApprovalServerRequestLifecycle(
     await sleep(options.intervalMs);
   }
   return sanitizeJson(lastSummary);
-}
-
-export async function waitForActionRespondTrace(
-  page,
-  options,
-  { requestId = APPROVAL_REQUEST_RESUME_REQUEST_ID, decision = null } = {},
-) {
-  const startedAt = Date.now();
-  let lastRequests = [];
-  while (Date.now() - startedAt < Math.min(options.timeoutMs, 30_000)) {
-    const traceRaw = await page.evaluate(() =>
-      window.localStorage.getItem("lime_invoke_trace_buffer_v1"),
-    );
-    const requests = collectActionRespondRequestsFromTrace(
-      readTraceMessages(traceRaw),
-    );
-    lastRequests = requests;
-    const matched = requests.find(
-      (request) =>
-        request.params?.requestId === requestId &&
-        request.params?.actionType === "tool_confirmation" &&
-        (!decision || request.params?.decision === decision),
-    );
-    if (matched) {
-      return sanitizeJson(matched);
-    }
-    await sleep(options.intervalMs);
-  }
-  return sanitizeJson(lastRequests.at(-1) ?? null);
 }

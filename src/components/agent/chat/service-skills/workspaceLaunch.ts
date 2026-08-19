@@ -16,17 +16,14 @@ export interface ServiceSkillWorkspaceSeed {
 function shouldSeedArtifactDraft(
   skill: Pick<
     ServiceSkillItem,
-    "defaultArtifactKind" | "defaultExecutorBinding" | "siteCapabilityBinding"
+    "defaultArtifactKind"
   >,
 ): boolean {
   if (!skill.defaultArtifactKind) {
     return false;
   }
 
-  return (
-    skill.defaultExecutorBinding !== "browser_assist" &&
-    !skill.siteCapabilityBinding
-  );
+  return true;
 }
 
 function resolveServiceSkillArtifactRequestMetadata(

@@ -49,24 +49,12 @@ export interface WorkspaceRightSurfaceMcpShellOutputInput {
   ttlMs?: number;
 }
 
-export interface WorkspaceRightSurfaceObjectCanvasCandidateInput {
-  enabled: boolean;
-  candidateId?: string | null;
-  createdAt: number;
-  origin?: Extract<
-    WorkspaceRightSurfaceCommandOrigin,
-    "runtime" | "skill" | "mcpTool"
-  >;
-  ttlMs?: number;
-}
-
 const DEFAULT_RUNTIME_PENDING_INTENT_TTL_MS = 60_000;
 const KNOWN_RIGHT_SURFACE_KINDS = new Set<WorkspaceRightSurfaceKind>([
   "workbench",
   "appSurface",
   "articleWorkspace",
   "expertInfo",
-  "objectCanvas",
   "browser",
   "files",
   "shell",
@@ -194,31 +182,6 @@ export function buildWorkspaceRightSurfaceMcpShellOutputIntents({
       priority,
       ttlMs,
       reason: "mcp_shell_output_ready",
-    },
-  ]);
-}
-
-export function buildWorkspaceRightSurfaceObjectCanvasCandidateIntents({
-  enabled,
-  candidateId,
-  createdAt,
-  origin = "runtime",
-  ttlMs = DEFAULT_RUNTIME_PENDING_INTENT_TTL_MS,
-}: WorkspaceRightSurfaceObjectCanvasCandidateInput): WorkspaceRightSurfaceIntent[] {
-  const normalizedCandidateId = normalizeIntentKey(candidateId);
-  if (!enabled || !normalizedCandidateId) {
-    return [];
-  }
-
-  return buildWorkspaceRightSurfaceRuntimeOpenIntents([
-    {
-      id: `${origin}:object-canvas:${normalizedCandidateId}`,
-      kind: "objectCanvas",
-      origin,
-      createdAt,
-      priority: "background",
-      ttlMs,
-      reason: "object_canvas_candidate_ready",
     },
   ]);
 }

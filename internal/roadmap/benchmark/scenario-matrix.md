@@ -2,7 +2,7 @@
 
 > status: current planning contract
 > owner: quality-workflow + domain owners
-> last_verified: 2026-07-17
+> last_verified: 2026-08-18
 
 ## 1. 使用规则
 
@@ -61,7 +61,7 @@
 | ------ | --- | -------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | PRV-01 | P0  | L2       | Responses request lowering   | captured request 与 capability/parts/tool schema 匹配                                                                                             |
 | PRV-02 | P0  | L2       | Chat/Anthropic lowering      | provider-specific wire shape 不泄漏到 runtime algebra                                                                                             |
-| PRV-03 | P0  | L2       | stream delta + terminal      | usage、finish reason、response identity 完整；terminal event 交付前释放 HTTP body                                                                  |
+| PRV-03 | P0  | L2       | stream delta + terminal      | usage、finish reason、response identity 完整；terminal event 交付前释放 HTTP body                                                                 |
 | PRV-04 | P0  | L2       | unsupported capability/media | 发送前 fail closed，错误可见                                                                                                                      |
 | PRV-05 | P0  | L2       | auth/rate-limit/server error | 401/403 与 429 请求层零重试；5xx 有界重试；terminal 分类与 retryable 分离                                                                         |
 | PRV-06 | P1  | L2/L4/L6 | websocket/SSE fallback       | capability 贯穿 TS/Rust；真实 Upgrade/response.create；连接串行复用；426/重试耗尽/首事件前断线 HTTP replay；跨 Turn sticky；完整 Electron fixture |
@@ -116,35 +116,52 @@
 
 ## 9. Live、平台与非功能
 
-| ID      | Pri | 主要层   | 场景                    | 核心断言                                                                                                                                   |
-| ------- | --- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| LIV-01  | P1  | L7       | live text turn          | provider/model/config/usage/latency/transcript 可复核                                                                                      |
-| LIV-02  | P1  | L7       | live tool loop          | 多轮工具成功率、恢复率和成本                                                                                                               |
-| LIV-03  | P1  | L2/L3/L7 | live multimodal         | 图片只在 provider wire hydrate；direct-answer tools=0；generation controls 下沉；read/evidence 无 inline payload；live turn 真实 completed |
-| EVAL-01 | P2  | L7       | product task suite      | outcome grader + pass@k/pass^k + 样本版本                                                                                                  |
-| PLT-01  | P0  | L8       | macOS RC                | 本地 Forge package 严格签名与 packaged Gate B；正式 Developer ID/notarization/DMG 的 install/update/path/permissions/current chain         |
+| ID      | Pri | 主要层   | 场景                    | 核心断言                                                                                                                                     |
+| ------- | --- | -------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| LIV-01  | P1  | L7       | live text turn          | provider/model/config/usage/latency/transcript 可复核                                                                                        |
+| LIV-02  | P1  | L7       | live tool loop          | 多轮工具成功率、恢复率和成本                                                                                                                 |
+| LIV-03  | P1  | L2/L3/L7 | live multimodal         | 图片只在 provider wire hydrate；direct-answer tools=0；generation controls 下沉；read/evidence 无 inline payload；live turn 真实 completed   |
+| EVAL-01 | P2  | L7       | product task suite      | outcome grader + pass@k/pass^k + 样本版本                                                                                                    |
+| PLT-01  | P0  | L8       | macOS RC                | 本地 Forge package 严格签名与 packaged Gate B；正式 Developer ID/notarization/DMG 的 install/update/path/permissions/current chain           |
 | PLT-02  | P0  | L8       | Windows RC              | Forge Squirrel N-1 install；真实 preload/IPC updater 请求隔离候选 feed，downloaded/restarting 与 candidate path 可证；候选 `Lime.exe` Gate B |
-| PERF-01 | P1  | L8       | long thread/read model  | pagination、内存、首帧/首 token 不随历史失控；1200-command Codex import 在 30s owner budget 内完成且 fidelity 不丢项                       |
-| SOAK-01 | P1  | L8       | repeated turns/restarts | 同一 Electron/App Server 生命周期逐轮记录 Thread/Turn/Item、唯一 terminal、PID/RSS 趋势；至少两次 cold restart 后无幽灵进程或数据漂移      |
+| PERF-01 | P1  | L8       | long thread/read model  | pagination、内存、首帧/首 token 不随历史失控；1200-command Codex import 在 30s owner budget 内完成且 fidelity 不丢项                         |
+| SOAK-01 | P1  | L8       | repeated turns/restarts | 同一 Electron/App Server 生命周期逐轮记录 Thread/Turn/Item、唯一 terminal、PID/RSS 趋势；至少两次 cold restart 后无幽灵进程或数据漂移        |
 
 ## 10. DeepSWE Coding
 
-| ID     | Pri | 主要层 | 场景                       | 核心断言                                                                 |
-| ------ | --- | ------ | -------------------------- | ------------------------------------------------------------------------ |
-| DSW-00 | P1  | L7     | source/slice preflight     | source commit、20 个 task、schema、verifier metadata 一致                |
-| DSW-01 | P1  | L7     | single-task adapter        | App Server current chain、真实 terminal、patch 和 verifier evidence 完整 |
-| DSW-02 | P1  | L7     | Smoke 10                   | 五语言各两题，基础设施失败为零，pass@1/成本/失败类别完整                 |
-| DSW-03 | P1  | L7     | Release 20                 | 语言与 focus 分层，不低于冻结 baseline 的 non-inferiority 门槛           |
-| DSW-04 | P2  | L7     | three-trial bake-off       | pass@3/pass^3、成本和稳定性在相同配置下可比较                            |
-| DSW-05 | P1  | L2/L7  | runtime budget enforcement | token 用尽后零工具执行、零额外 sampling，adapter 只记录终态而不抢先取消  |
+| ID     | Pri | 主要层 | 场景                       | 核心断言                                                                                                                                                 |
+| ------ | --- | ------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DSW-00 | P1  | L7     | source/slice preflight     | source commit、20 个 task、schema、verifier metadata 一致                                                                                                |
+| DSW-01 | P1  | L7     | single-task adapter        | App Server current chain、真实 terminal、patch 和 verifier evidence 完整                                                                                 |
+| DSW-02 | P1  | L7     | Smoke 10                   | 五语言各两题，基础设施失败为零，pass@1/成本/失败类别完整                                                                                                 |
+| DSW-03 | P1  | L7     | Release 20                 | 语言与 focus 分层，不低于冻结 baseline 的 non-inferiority 门槛                                                                                           |
+| DSW-04 | P2  | L7     | three-trial bake-off       | pass@3/pass^3、成本和稳定性在相同配置下可比较                                                                                                            |
+| DSW-05 | P1  | L2/L7  | runtime budget enforcement | token 用尽后零工具执行、零额外 sampling，adapter 只记录终态而不抢先取消                                                                                  |
 | DSW-06 | P1  | L2/L7  | apply_patch write probe    | 真实 provider tool catalog 含 `apply_patch`；patch 生命周期成功、文件精确变更、git patch 非空，最后一步仍为 `tool_call` 时归 `provider_steps` exhaustion |
+| DSW-07 | P1  | L7     | upstream/schema migration  | 固定 DeepSWE schema 1.3 commit 与 Pier 0.3.1；network_mode、verifier.collect、license/provenance 和 preflight 一致                                       |
+| DSW-08 | P1  | L7     | batch score aggregation    | Smoke 10/Release 20 三 trial；pass@1/pass@3/pass^3、成本、时延、失败 owner 与 infra validity 可复核                                                      |
+| DSW-09 | P1  | L6/L7  | Desktop Smoke 5            | 五语言原始 instruction 从真实 Electron 发起；IPC/current chain/GUI terminal/patch identity 一致，mock/error 为零                                         |
+| DSW-10 | P1  | L6/L7  | desktop cancel/restart     | approval、取消、cold restart 后状态可恢复；terminal 后零幽灵工具、delta 或文件写入                                                                       |
+| DSW-11 | P1  | L6/L7  | desktop combined verdict   | 同一 run 的 Gate B summary 与 patch SHA-256 关联同一 Pier result；两者同时通过才为 DesktopCodingPass                                                     |
 
 具体任务见 [deepswe-coding-slice.md](./deepswe-coding-slice.md)。
 
-## 11. 首批交付顺序
+## 11. Coding 补充集
+
+| ID     | Pri | 主要层 | 场景                         | 核心断言                                                                |
+| ------ | --- | ------ | ---------------------------- | ----------------------------------------------------------------------- |
+| CDE-01 | P2  | L7     | SWE-bench-Live MultiLang     | 固定月度/版本切片、镜像和 grader；补 C/C++、C#、Java、TS/JS、Go、Rust   |
+| CDE-02 | P2  | L7/L8  | SWE-bench-Live Windows       | Windows/PowerShell 任务在真实 Windows runner 评分，不用 Linux 结果外推  |
+| CDE-03 | P2  | L7     | SWE-bench Multimodal         | image asset 可见但 verifier/test 不泄漏；视觉 issue patch 独立评分      |
+| CDE-04 | P2  | L7     | Terminal-Bench 2.1           | shell、依赖、环境与安全任务使用固定 Harbor dataset，多 trial 轨迹可复核 |
+| CDE-05 | P2  | L8     | OSWorld/WAA VS Code optional | 仅 computer-use 产品声明启用；桌面操作分数不得冒充代码 verifier 分数    |
+
+## 12. 首批交付顺序
 
 1. `THR-01`、`TRN-01`、`TRN-04`、`ITM-03`、`RCV-01`：验证 T1 harness。
 2. `TOL-01`、`APR-01`、`APR-02`、`CTX-02`：验证工具/审批/context 主链。
 3. `AGT-01`、`AGT-02`、`MCP-02`、`MCP-03`：验证高级 runtime 能力。
 4. `GUI-01`、`GUI-02`、`ELN-01`、`ELN-03`：形成首个完整 Gate A/B vertical slice。
-5. 再扩展 P1、live 和平台矩阵。
+5. `DSW-07`、`DSW-08`：恢复 DeepSWE current verifier 与首个可计分 Core baseline。
+6. `DSW-09`、`DSW-10`、`DSW-11`：完成 Desktop Smoke 5 双门禁。
+7. 再扩展 CDE、其它 P1、live 和平台矩阵。

@@ -202,9 +202,6 @@ describe("electron fixture build freshness", () => {
         status: "rebuilt",
         rebuiltSegments: ["appServer"],
       });
-      expect(commandLines).toContain(
-        "npm run generate:extension-site-adapters",
-      );
       expect(commandLines).toContain("npm run verify:app-version");
       expect(commandLines).toContain(
         "npm run electron:build:app-server-assets",

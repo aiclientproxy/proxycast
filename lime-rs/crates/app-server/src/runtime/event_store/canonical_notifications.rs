@@ -108,8 +108,7 @@ fn canonical_notification_target(event: &AgentEvent) -> Option<CanonicalNotifica
     }
     if matches!(
         event_type,
-        "approval.session_cache.hit"
-            | "hook.started"
+        "hook.started"
             | "hook.completed"
             | "item.removed"
             | "item.deleted"
@@ -190,11 +189,6 @@ mod tests {
             events: Vec::new(),
             output_blobs: HashMap::new(),
         }
-    }
-
-    #[test]
-    fn approval_session_cache_hit_is_audit_only_notification() {
-        assert!(canonical_notification_target(&event("approval.session_cache.hit")).is_none());
     }
 
     #[test]

@@ -167,12 +167,6 @@ export function useWorkspaceNavigationActions({
     onNavigate?.("channels");
   }, [onNavigate]);
 
-  const handleOpenChromeRelay = useCallback(() => {
-    onNavigate?.("settings", {
-      tab: SettingsTabs.ChromeRelay,
-    });
-  }, [onNavigate]);
-
   const handleCompactContext = useCallback(() => {
     void compactSession();
   }, [compactSession]);
@@ -197,7 +191,6 @@ export function useWorkspaceNavigationActions({
     handleDismissWorkspaceAlert,
     handleManageProviders,
     handleOpenChannels,
-    handleOpenChromeRelay,
     handleOpenExecutionPolicySettings,
     handleOpenKnowledgeManagement,
     handleOpenRuntimeMemoryWorkbench,

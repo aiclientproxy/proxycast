@@ -130,6 +130,15 @@ const {
             webContentsEventHandlers.set(eventName, handlers);
           },
         ),
+        off: vi.fn(
+          (eventName: string, handler: (...args: unknown[]) => void) => {
+            const handlers = webContentsEventHandlers.get(eventName) || [];
+            webContentsEventHandlers.set(
+              eventName,
+              handlers.filter((item) => item !== handler),
+            );
+          },
+        ),
         reload: reloadMock,
         setZoomFactor: setZoomFactorMock,
         stop: stopMock,
@@ -599,6 +608,60 @@ describe("ElectronEmbeddedBrowserHost", () => {
     ).resolves.toEqual({});
     expect(removeChildViewMock).toHaveBeenCalled();
     expect(closeMock).not.toHaveBeenCalled();
+  });
+
+  it("原生 WebContents destroyed 时会发出 Browser 关闭终态", async () => {
+    resetMocks();
+    const emitted: Array<{ event: string; payload?: unknown }> = [];
+    const host = new ElectronEmbeddedBrowserHost((event, payload) => {
+      emitted.push({ event, payload });
+    });
+    const window = createWindow();
+
+    await host.invoke(window as never, "embedded_browser_view_mount", {
+      viewId: "browser-1",
+      url: "https://example.com",
+      bounds: { x: 0, y: 0, width: 300, height: 200 },
+    });
+
+    webContentsState.destroyed = true;
+    emitWebContentsEvent("destroyed");
+
+    expect(emitted).toContainEqual({
+      event: "embedded-browser-view-destroyed",
+      payload: expect.objectContaining({
+        reason: "webcontents-destroyed",
+        viewId: "browser-1",
+      }),
+    });
+    expect(removeChildViewMock).toHaveBeenCalled();
+    expect(closeMock).not.toHaveBeenCalled();
+  });
+
+  it("渲染进程退出时同样会回收 Browser route", async () => {
+    resetMocks();
+    const emitted: Array<{ event: string; payload?: unknown }> = [];
+    const host = new ElectronEmbeddedBrowserHost((event, payload) => {
+      emitted.push({ event, payload });
+    });
+    const window = createWindow();
+
+    await host.invoke(window as never, "embedded_browser_view_mount", {
+      viewId: "browser-1",
+      url: "https://example.com",
+      bounds: { x: 0, y: 0, width: 300, height: 200 },
+    });
+
+    webContentsState.destroyed = true;
+    emitWebContentsEvent("render-process-gone", {}, { reason: "crashed" });
+
+    expect(emitted).toContainEqual({
+      event: "embedded-browser-view-destroyed",
+      payload: expect.objectContaining({
+        reason: "webcontents-destroyed",
+        viewId: "browser-1",
+      }),
+    });
   });
 
   it("拒绝非 http/https 地址", async () => {

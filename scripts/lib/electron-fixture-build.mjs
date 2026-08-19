@@ -37,7 +37,6 @@ const RENDERER_SOURCE_FILES = [
   "scripts/electron/build-renderer-smoke.mjs",
   "scripts/electron/build-renderer.mjs",
   "scripts/electron/renderer-build-env.mjs",
-  "scripts/generate-extension-site-adapter-runners.mjs",
 ];
 const HOST_SOURCE_DIRS = [
   "electron",
@@ -478,11 +477,6 @@ function buildStaleElectronFixtureSegments({
     LIME_REAL_API_TEST: "0",
   };
   const preflightSteps = [
-    {
-      label: "generate extension site adapters",
-      command: npmCommand(),
-      args: ["run", "generate:extension-site-adapters"],
-    },
     {
       label: "verify app version",
       command: npmCommand(),

@@ -558,14 +558,14 @@ Runtime prompt 层的禁止证据：
 5. 再点击 `清空站点目录缓存`，确认来源恢复为 `应用内置`，列表回退到 bundled 目录
 6. 导入与清理全过程都不应出现后台自动拉起浏览器、自动唤醒 Chrome 或常驻浏览器控制进程
 
-### 连接器页验证
+### Browser Workspace 同页控制验证
 
-1. 进入 `设置 -> 浏览器`
-2. 填入隔离 Chrome 的远程调试端口并点击“检测页面”，确认只展示带 debugger endpoint 的普通 `page` target，不展示 extension background page、service worker 或其它内部 target
-3. 选择目标页面并点击“连接所选页面”，确认可见状态进入“已连接”且出现当前连接区
-4. 从 trace 确认动作经 `electron-ipc -> app_server_handle_json_lines` 命中 `browserSession/target/list`、`browserSession/open` 与 `browserSession/read`
-5. 点击“断开连接”，确认可见状态进入“已断开”、当前连接区消失，并命中 `browserSession/close`
-6. 全程不得命中旧 connector install、Chrome relay endpoint、backend policy、renderer mock 或 Electron diagnostic facade
+1. 在 Claw Right Surface 打开 Browser，确认只有一个选中 tab、一个 native viewport mount point，收起、恢复和 resize 不改变 session/tab/view identity。
+2. Gate A 只验证 Renderer/Workspace projection：tab、地址栏、导航、查找、缩放、错误、权限、下载和人工接管状态必须布局稳定，五语言最长文案不得溢出；不得把 DOM `data-*` 当成 Host identity。
+3. Gate B 必须启动真实 Electron Desktop Host，经 preload/IPC 和 `app_server_handle_json_lines` 建立 current App Server turn，再由 `item/tool/call -> AppServerDynamicToolHost -> BrowserTabHost` 操作用户可见的同一个 `WebContentsView`。
+4. 取证必须证明 Agent action 与可见页面共享 `threadId/turnId/browserSessionId/tabId/viewId/webContentsId/windowId/ownerWebContentsId`，并校验 observe 后的 URL/title 与页面可见状态一致。
+5. 用户人工导航或交互后，旧 Agent 控制必须失效；重新 claim/observe 读取同一 tab 的新状态，不能创建替代 session/view。turn terminal 后 Agent tab close、User tab release、debugger detach 必须符合生命周期合同。
+6. 外部 Chrome/CDP、`browserSession/*`、Canvas 镜像、静态截图、renderer mock 和 Host 单测单独通过都不能作为 Browser Gate B 证据。
 
 ### 已安排任务验证
 

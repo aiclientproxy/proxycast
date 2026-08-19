@@ -5,7 +5,6 @@ const RESOURCE_PROJECT_CHANGE_EVENT = "lime:resource-project-change";
 export type ResourceProjectChangeSource =
   | "resources"
   | "general-chat"
-  | "browser-runtime"
   | "image-gen-save"
   | "unknown";
 

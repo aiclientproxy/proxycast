@@ -218,7 +218,6 @@ impl RuntimeCore {
             .read_tool_inventory(ToolInventoryReadRequest {
                 caller: params.caller,
                 workbench: params.workbench,
-                browser_assist: params.browser_assist,
                 metadata: params.metadata,
             })
             .await?;

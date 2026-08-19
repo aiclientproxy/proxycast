@@ -8,7 +8,6 @@ pub(in crate::runtime::tests) struct TestSessionDataSource {
     memory_backend: Option<crate::LocalMemoryBackend>,
     knowledge_compile_requests: Mutex<Vec<lime_knowledge::KnowledgeCompilePackRequest>>,
     right_surface_pending: Mutex<Vec<WorkspaceRightSurfacePendingRequest>>,
-    object_canvas_snapshots: Mutex<Vec<WorkspaceObjectCanvasSnapshot>>,
     media_task_artifacts: Mutex<Vec<MediaTaskArtifactResponse>>,
     media_task_list_requests: Mutex<Vec<MediaTaskArtifactListParams>>,
     model_catalogs: Vec<ProviderModelCatalog>,
@@ -25,7 +24,6 @@ impl TestSessionDataSource {
             memory_backend: None,
             knowledge_compile_requests: Mutex::new(Vec::new()),
             right_surface_pending: Mutex::new(Vec::new()),
-            object_canvas_snapshots: Mutex::new(Vec::new()),
             media_task_artifacts: Mutex::new(Vec::new()),
             media_task_list_requests: Mutex::new(Vec::new()),
             model_catalogs: Vec::new(),
@@ -108,15 +106,6 @@ impl TestSessionDataSource {
         self.memory_store_read_requests
             .lock()
             .expect("test memory requests mutex poisoned")
-            .clone()
-    }
-
-    pub(in crate::runtime::tests) fn object_canvas_snapshots(
-        &self,
-    ) -> Vec<WorkspaceObjectCanvasSnapshot> {
-        self.object_canvas_snapshots
-            .lock()
-            .expect("test object canvas snapshot mutex poisoned")
             .clone()
     }
 
@@ -385,54 +374,6 @@ impl RightSurfaceAppDataSource for TestSessionDataSource {
             }
         });
         Ok(deleted)
-    }
-
-    async fn save_workspace_object_canvas_snapshot(
-        &self,
-        snapshot: WorkspaceObjectCanvasSnapshot,
-    ) -> Result<(), RuntimeCoreError> {
-        let mut snapshots = self
-            .object_canvas_snapshots
-            .lock()
-            .expect("test object canvas snapshot mutex poisoned");
-        snapshots.retain(|item| {
-            item.persistence_key != snapshot.persistence_key || item.revision != snapshot.revision
-        });
-        snapshots.push(snapshot);
-        Ok(())
-    }
-
-    async fn list_workspace_object_canvas_snapshots(
-        &self,
-        params: WorkspaceObjectCanvasSnapshotListParams,
-    ) -> Result<Vec<WorkspaceObjectCanvasSnapshot>, RuntimeCoreError> {
-        let workspace_id = optional_trimmed(params.workspace_id);
-        let workspace_root = optional_trimmed(params.workspace_root);
-        let session_id = optional_trimmed(params.session_id);
-        let board_id = optional_trimmed(params.board_id);
-        let persistence_key = optional_trimmed(params.persistence_key);
-        let mut snapshots = self
-            .object_canvas_snapshots
-            .lock()
-            .expect("test object canvas snapshot mutex poisoned")
-            .iter()
-            .filter(|snapshot| {
-                optional_filter_matches(&workspace_id, snapshot.workspace_id.as_deref())
-            })
-            .filter(|snapshot| {
-                optional_filter_matches(&workspace_root, snapshot.workspace_root.as_deref())
-            })
-            .filter(|snapshot| optional_filter_matches(&session_id, snapshot.session_id.as_deref()))
-            .filter(|snapshot| optional_filter_matches(&board_id, Some(snapshot.board_id.as_str())))
-            .filter(|snapshot| {
-                optional_filter_matches(&persistence_key, Some(snapshot.persistence_key.as_str()))
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        if let Some(limit) = params.limit.map(|value| value as usize) {
-            snapshots.truncate(limit);
-        }
-        Ok(snapshots)
     }
 }
 

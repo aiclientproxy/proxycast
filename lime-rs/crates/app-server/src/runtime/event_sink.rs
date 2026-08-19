@@ -56,6 +56,15 @@ pub(super) type RuntimeEventCallback<'a> =
 pub trait RuntimeEventSink: Send {
     fn emit(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError>;
 
+    /// Persists internal CodeMode evidence without creating a RuntimeEvent or
+    /// public ThreadItem.
+    fn emit_code_cell_trace(
+        &mut self,
+        _event: tool_runtime::tool_lifecycle::CodeCellTraceEvent,
+    ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+
     fn emit_transient(&mut self, event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
         self.emit(event)
     }

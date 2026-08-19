@@ -13,7 +13,6 @@ import {
   Bug,
   DatabaseZap,
   Code2,
-  Globe,
   ScrollText,
   ShieldAlert,
   Sparkles,
@@ -68,11 +67,6 @@ const WorkspaceRepairHistoryCard = lazy(() =>
 const ServiceSkillCatalogTools = lazy(() =>
   import("./ServiceSkillCatalogTools").then((module) => ({
     default: module.ServiceSkillCatalogTools,
-  })),
-);
-const SiteAdapterCatalogTools = lazy(() =>
-  import("./SiteAdapterCatalogTools").then((module) => ({
-    default: module.SiteAdapterCatalogTools,
   })),
 );
 
@@ -692,22 +686,6 @@ export function DeveloperSettings({
               }
             >
               <ServiceSkillCatalogTools />
-            </Suspense>
-          </AdvancedDetails>
-
-          <AdvancedDetails
-            icon={Globe}
-            title={t("settings.developer.siteAdapter.title")}
-            description={t("settings.developer.siteAdapter.description")}
-          >
-            <Suspense
-              fallback={
-                <DeferredPanelFallback
-                  label={t("settings.developer.siteAdapter.title")}
-                />
-              }
-            >
-              <SiteAdapterCatalogTools />
             </Suspense>
           </AdvancedDetails>
 

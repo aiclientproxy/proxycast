@@ -72,8 +72,6 @@ function renderHook(props?: Partial<HookProps>) {
     taskFiles: [],
     sessionFiles: [],
     readSessionFile: vi.fn(async () => null),
-    suppressBrowserAssistCanvasAutoOpen: vi.fn(),
-    onOpenBrowserRuntimeForArtifact: undefined,
     upsertGeneralArtifact: vi.fn(),
     setSelectedArtifactId: vi.fn(),
     setArtifactViewMode: vi.fn(),
@@ -142,15 +140,13 @@ afterEach(() => {
 });
 
 describe("useWorkspaceArtifactPreviewActions", () => {
-  it("打开普通 artifact 时应先抑制浏览器协助自动抢焦点", async () => {
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
+  it("打开普通 artifact 时应进入工作台预览", async () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
     const setGeneralCanvasState = vi.fn();
     const artifact = createArtifact();
     const { render, getValue } = renderHook({
-      suppressBrowserAssistCanvasAutoOpen,
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
@@ -167,7 +163,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       await Promise.resolve();
     });
 
-    expect(suppressBrowserAssistCanvasAutoOpen).toHaveBeenCalledTimes(1);
     expect(setSelectedArtifactId).toHaveBeenCalledWith("artifact-doc-1");
     expect(setLayoutMode).toHaveBeenCalledWith("chat-canvas");
     expect(setArtifactViewMode).toHaveBeenCalledWith("preview", {
@@ -176,46 +171,7 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     expect(setGeneralCanvasState).toHaveBeenCalledTimes(1);
   });
 
-  it("显式打开浏览器协助 artifact 时应改走浏览器工作台入口", async () => {
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
-    const onOpenBrowserRuntimeForArtifact = vi.fn();
-    const setSelectedArtifactId = vi.fn();
-    const setLayoutMode = vi.fn();
-    const artifact = createArtifact({
-      id: "browser-assist:general",
-      type: "browser_assist",
-      title: "浏览器协助",
-      content: "",
-      meta: {
-        profileKey: "general_browser_assist",
-        sessionId: "browser-session-1",
-      },
-    });
-    const { render, getValue } = renderHook({
-      suppressBrowserAssistCanvasAutoOpen,
-      onOpenBrowserRuntimeForArtifact,
-      setSelectedArtifactId,
-      setLayoutMode,
-    });
-
-    await render();
-
-    act(() => {
-      getValue().handleArtifactClick(artifact);
-    });
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(suppressBrowserAssistCanvasAutoOpen).not.toHaveBeenCalled();
-    expect(onOpenBrowserRuntimeForArtifact).toHaveBeenCalledWith(artifact);
-    expect(setSelectedArtifactId).not.toHaveBeenCalled();
-    expect(setLayoutMode).not.toHaveBeenCalled();
-  });
-
   it("文章编辑器 详情页里的打开预览按钮仍应进入 workbench", async () => {
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
@@ -228,7 +184,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       },
     });
     const { render, getValue } = renderHook({
-      suppressBrowserAssistCanvasAutoOpen,
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
@@ -240,7 +195,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       await getValue().openArtifactInWorkbench(artifact);
     });
 
-    expect(suppressBrowserAssistCanvasAutoOpen).toHaveBeenCalledTimes(1);
     expect(setSelectedArtifactId).toHaveBeenCalledWith("preview-article-workspace-2");
     expect(setArtifactViewMode).toHaveBeenCalledWith("preview", {
       artifactId: "preview-article-workspace-2",
@@ -254,7 +208,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const onRequestCanvasPreviewOpen = vi.fn();
     const { render, getValue } = renderHook({
       upsertGeneralArtifact,
@@ -262,7 +215,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
-      suppressBrowserAssistCanvasAutoOpen,
       onRequestCanvasPreviewOpen,
     });
 
@@ -297,7 +249,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
         }),
       }),
     );
-    expect(suppressBrowserAssistCanvasAutoOpen).toHaveBeenCalledTimes(1);
     expect(setSelectedArtifactId).toHaveBeenCalledWith(artifact.id);
     expect(onRequestCanvasPreviewOpen).toHaveBeenCalledWith({
       filePath: ".lime/artifacts/thread-1/report.md",
@@ -371,7 +322,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const onRequestCanvasPreviewOpen = vi.fn();
     const artifact = createArtifact({
       id: "preview-session_file-message-attachment",
@@ -397,7 +347,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
-      suppressBrowserAssistCanvasAutoOpen,
       onRequestCanvasPreviewOpen,
       isGeneralCanvasOpen: true,
     });
@@ -425,7 +374,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
         }),
       }),
     );
-    expect(suppressBrowserAssistCanvasAutoOpen).toHaveBeenCalledTimes(1);
     expect(setGeneralCanvasState).toHaveBeenCalledWith(expect.any(Function));
     const resetGeneralCanvas = setGeneralCanvasState.mock
       .calls[0]?.[0] as (state: {
@@ -471,7 +419,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const onRequestCanvasPreviewOpen = vi.fn();
     const artifact = createArtifact({
       id: "preview-url-example",
@@ -495,7 +442,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
-      suppressBrowserAssistCanvasAutoOpen,
       onRequestCanvasPreviewOpen,
       isGeneralCanvasOpen: true,
     });
@@ -537,7 +483,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const designJson = JSON.stringify({
       id: "main-app-layered-design",
       title: "主应用图层设计",
@@ -566,7 +511,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
-      suppressBrowserAssistCanvasAutoOpen,
     });
 
     await render();
@@ -598,7 +542,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
         }),
       }),
     );
-    expect(suppressBrowserAssistCanvasAutoOpen).toHaveBeenCalledTimes(1);
     expect(setSelectedArtifactId).toHaveBeenCalledWith(artifact.id);
     expect(setSelectedArtifactId).not.toHaveBeenCalledWith(null);
     expect(setArtifactViewMode).toHaveBeenCalledWith("preview", {
@@ -873,7 +816,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const upsertGeneralArtifact = vi.fn();
     const placeholderFile = {
       id: "session-file:content-posts/draft.md",
@@ -904,7 +846,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
-      suppressBrowserAssistCanvasAutoOpen,
     });
 
     await render();
@@ -932,7 +873,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
         updatedAt: 200,
       }),
     ]);
-    expect(suppressBrowserAssistCanvasAutoOpen).toHaveBeenCalledTimes(1);
     expect(upsertGeneralArtifact).toHaveBeenCalledTimes(1);
     const openedArtifact = upsertGeneralArtifact.mock.calls[0]?.[0] as Artifact;
     expect(openedArtifact).toEqual(
@@ -969,7 +909,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const upsertGeneralArtifact = vi.fn();
     const onRequestCanvasPreviewOpen = vi.fn();
     const { render, getValue } = renderHook({
@@ -978,7 +917,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
-      suppressBrowserAssistCanvasAutoOpen,
       onRequestCanvasPreviewOpen,
     });
 
@@ -1040,7 +978,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const upsertGeneralArtifact = vi.fn();
     const onRequestCanvasPreviewOpen = vi.fn();
     const { render, getValue } = renderHook({
@@ -1049,7 +986,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
-      suppressBrowserAssistCanvasAutoOpen,
       onRequestCanvasPreviewOpen,
     });
 
@@ -1108,7 +1044,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const upsertGeneralArtifact = vi.fn();
     const onRequestCanvasPreviewOpen = vi.fn();
     const { render, getValue } = renderHook({
@@ -1117,7 +1052,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
-      suppressBrowserAssistCanvasAutoOpen,
       onRequestCanvasPreviewOpen,
     });
 
@@ -1180,7 +1114,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
     const setSelectedArtifactId = vi.fn();
     const setArtifactViewMode = vi.fn();
     const setLayoutMode = vi.fn();
-    const suppressBrowserAssistCanvasAutoOpen = vi.fn();
     const upsertGeneralArtifact = vi.fn();
     const onRequestCanvasPreviewOpen = vi.fn();
     const { render, getValue } = renderHook({
@@ -1189,7 +1122,6 @@ describe("useWorkspaceArtifactPreviewActions", () => {
       setSelectedArtifactId,
       setArtifactViewMode,
       setLayoutMode,
-      suppressBrowserAssistCanvasAutoOpen,
       onRequestCanvasPreviewOpen,
     });
 

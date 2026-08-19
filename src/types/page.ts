@@ -23,7 +23,6 @@ export type Page =
   | "scheduled-tasks"
   | "channels"
   | "resources"
-  | "browser-runtime"
   | "settings";
 
 export interface AgentPendingServiceSkillLaunchParams {
@@ -215,19 +214,6 @@ export interface ScheduledTasksPageParams {
   threadId?: string;
 }
 
-export interface BrowserRuntimePageParams {
-  projectId?: string;
-  contentId?: string;
-  initialProfileKey?: string;
-  initialSessionId?: string;
-  initialTargetId?: string;
-  initialAdapterName?: string;
-  initialArgs?: Record<string, unknown>;
-  initialAutoRun?: boolean;
-  initialRequireAttachedSession?: boolean;
-  initialSaveTitle?: string;
-}
-
 export interface ResourcesPageParams {
   projectId?: string;
   contentId?: string;
@@ -261,7 +247,6 @@ export interface AgentProjectFileOpenTarget {
 export type PageParams =
   | AgentPageParams
   | ScheduledTasksPageParams
-  | BrowserRuntimePageParams
   | ExpertsPageParams
   | ResourcesPageParams
   | SettingsPageParams

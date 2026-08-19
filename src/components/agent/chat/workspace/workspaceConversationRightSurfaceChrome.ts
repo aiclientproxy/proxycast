@@ -13,8 +13,6 @@ export type WorkspaceConversationRightSurfaceAttentionLevel =
 export interface WorkspaceConversationRightSurfaceChromeRuntime {
   content?: ReactNode;
   launchers?: readonly WorkspaceRightSurfaceLauncherProjection[];
-  objectCanvasOpen?: boolean;
-  onToggleObjectCanvas?: () => void;
   browserOpen?: boolean;
   onToggleBrowser?: () => void;
   filesOpen?: boolean;
@@ -37,8 +35,6 @@ export interface WorkspaceConversationRightSurfaceChromeRuntime {
 export interface WorkspaceConversationRightSurfaceSceneProps {
   rightSurfaceContent?: ReactNode;
   rightSurfaceLaunchers?: readonly WorkspaceRightSurfaceLauncherProjection[];
-  rightSurfaceObjectCanvasOpen?: boolean;
-  onToggleRightSurfaceObjectCanvas?: () => void;
   rightSurfaceBrowserOpen?: boolean;
   onToggleRightSurfaceBrowser?: () => void;
   rightSurfaceFilesOpen?: boolean;
@@ -62,7 +58,6 @@ type WorkspaceConversationRightSurfaceChromeRuntimeInput = Pick<
   WorkspaceRightSurfaceCoordinatorRuntime,
   | "rightSurfaceLaunchers"
   | "rightSurfaceState"
-  | "handleToggleRightSurfaceObjectCanvas"
   | "handleToggleRightSurfaceBrowser"
   | "handleToggleRightSurfaceFiles"
   | "handleToggleRightSurfaceTrace"
@@ -106,12 +101,6 @@ export function buildWorkspaceConversationRightSurfaceChrome({
   return {
     content,
     launchers: rightSurfaceRuntime.rightSurfaceLaunchers,
-    objectCanvasOpen: isWorkspaceRightSurfaceActive(
-      rightSurfaceRuntime.rightSurfaceState,
-      "objectCanvas",
-    ),
-    onToggleObjectCanvas:
-      rightSurfaceRuntime.handleToggleRightSurfaceObjectCanvas,
     browserOpen: isWorkspaceRightSurfaceActive(
       rightSurfaceRuntime.rightSurfaceState,
       "browser",
@@ -165,10 +154,6 @@ export function buildWorkspaceConversationRightSurfaceSceneProps({
   return {
     rightSurfaceContent: rightSurfaceChrome.content,
     rightSurfaceLaunchers: rightSurfaceChrome.launchers,
-    rightSurfaceObjectCanvasOpen: open(rightSurfaceChrome.objectCanvasOpen),
-    onToggleRightSurfaceObjectCanvas: action(
-      rightSurfaceChrome.onToggleObjectCanvas,
-    ),
     rightSurfaceBrowserOpen: open(rightSurfaceChrome.browserOpen),
     onToggleRightSurfaceBrowser: action(rightSurfaceChrome.onToggleBrowser),
     rightSurfaceFilesOpen: open(rightSurfaceChrome.filesOpen),

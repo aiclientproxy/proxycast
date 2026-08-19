@@ -202,11 +202,6 @@ export function createBaseParams(overrides: Record<string, unknown> = {}) {
     rightSurfaceChrome: {
       content: overrides.rightSurfaceContent as React.ReactNode,
       launchers: overrides.rightSurfaceLaunchers as React.ReactNode,
-      objectCanvasOpen: Boolean(overrides.rightSurfaceObjectCanvasOpen),
-      onToggleObjectCanvas:
-        (overrides.onToggleRightSurfaceObjectCanvas as
-          | (() => void)
-          | undefined) ?? noop,
       browserOpen: Boolean(overrides.rightSurfaceBrowserOpen),
       onToggleBrowser:
         (overrides.onToggleRightSurfaceBrowser as (() => void) | undefined) ??

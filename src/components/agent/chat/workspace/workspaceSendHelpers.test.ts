@@ -104,7 +104,6 @@ describe("workspaceSendHelpers", () => {
         reason: "需要在微信公众号后台完成发布流程。",
         launchUrl: "https://mp.weixin.qq.com/",
       },
-      browserAssistProfileKey: "general_browser_assist",
     });
 
     expect(metadata).toMatchObject({
@@ -116,12 +115,10 @@ describe("workspaceSendHelpers", () => {
         browser_requirement_reason: "需要在微信公众号后台完成发布流程。",
         browser_launch_url: "https://mp.weixin.qq.com/",
         browser_user_step_required: true,
-        browser_assist: expect.objectContaining({
-          enabled: true,
-          profile_key: "general_browser_assist",
-        }),
       }),
     });
+    const harnessMetadata = metadata.harness as Record<string, unknown>;
+    expect(harnessMetadata.browser_assist).toBeUndefined();
   });
 
   it("workspace skill runtime enable 应进入发送 metadata 且不打开 allow_model_skills", () => {
@@ -553,7 +550,7 @@ describe("workspaceSendHelpers", () => {
     });
   });
 
-  it("自动首发 metadata 中已有浏览器协助参数时应继续保留", () => {
+  it("自动首发 metadata 中已有浏览器协助参数时应主动剔除", () => {
     const metadata = buildWorkspaceRequestMetadata({
       sendOptions: {
         requestMetadata: {
@@ -580,7 +577,6 @@ describe("workspaceSendHelpers", () => {
         reason: "需要在微信公众号后台完成发布流程。",
         launchUrl: "https://mp.weixin.qq.com/",
       },
-      browserAssistProfileKey: "general_browser_assist",
     });
 
     expect(metadata).toMatchObject({
@@ -588,14 +584,10 @@ describe("workspaceSendHelpers", () => {
         content_id: "content-browser-required-bootstrap",
         browser_requirement: "required_with_user_step",
         browser_user_step_required: true,
-        browser_assist: expect.objectContaining({
-          enabled: true,
-          profile_key: "general_browser_assist",
-          preferred_backend: "lime_extension_bridge",
-          auto_launch: false,
-        }),
       }),
     });
+    const harnessMetadata = metadata.harness as Record<string, unknown>;
+    expect(harnessMetadata.browser_assist).toBeUndefined();
   });
 
   it("run-state 应生成 resume prompt", () => {

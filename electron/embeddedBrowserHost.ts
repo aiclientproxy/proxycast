@@ -22,6 +22,7 @@ type EmbeddedBrowserDestroyReason =
   | "renderer-cleanup"
   | "renderer-navigation"
   | "window-closed"
+  | "webcontents-destroyed"
   | "host-dispose";
 
 export const EMBEDDED_BROWSER_COMMANDS = [
@@ -79,6 +80,8 @@ interface EmbeddedBrowserEntry {
     isInPlace: boolean,
     isMainFrame: boolean,
   ) => void;
+  webContentsDestroyedListener: () => void;
+  webContentsGoneListener: () => void;
   leaseIds: Set<string>;
   pendingUrl?: string;
   sourceUri?: string;
@@ -87,6 +90,12 @@ interface EmbeddedBrowserEntry {
   loadProgress: number;
   find: EmbeddedBrowserFindState;
   findRequestId: number | null;
+}
+
+export interface EmbeddedBrowserNativeView {
+  state: EmbeddedBrowserViewState;
+  view: WebContentsView;
+  window: BrowserWindow;
 }
 
 const EMBEDDED_BROWSER_PARTITION = "persist:embedded-browser";
@@ -152,6 +161,22 @@ export class ElectronEmbeddedBrowserHost {
     for (const viewId of [...this.#entries.keys()]) {
       this.#destroy({ viewId }, "host-dispose");
     }
+  }
+
+  resolveNativeView(viewId: string): EmbeddedBrowserNativeView | null {
+    const entry = this.#entries.get(viewId);
+    if (
+      !entry ||
+      entry.window.isDestroyed() ||
+      entry.view.webContents.isDestroyed()
+    ) {
+      return null;
+    }
+    return {
+      state: readState(entry),
+      view: entry.view,
+      window: entry.window,
+    };
   }
 
   async #mount(
@@ -354,6 +379,10 @@ export class ElectronEmbeddedBrowserHost {
       closeListener: () => this.#destroy({ viewId }, "window-closed"),
       rendererNavigationListener:
         this.#createRendererNavigationListener(viewId),
+      webContentsDestroyedListener: () =>
+        this.#destroy({ viewId }, "webcontents-destroyed"),
+      webContentsGoneListener: () =>
+        this.#destroy({ viewId }, "webcontents-destroyed"),
       leaseIds: new Set<string>(),
       navigationToken: 0,
       faviconUrl: null,
@@ -743,6 +772,11 @@ function attachEntryToWindow(
     "did-start-navigation",
     entry.rendererNavigationListener,
   );
+  entry.view.webContents.on("destroyed", entry.webContentsDestroyedListener);
+  entry.view.webContents.on(
+    "render-process-gone",
+    entry.webContentsGoneListener,
+  );
   window.contentView.addChildView(entry.view);
 }
 
@@ -756,6 +790,14 @@ function detachEntryFromWindow(entry: EmbeddedBrowserEntry): void {
       );
       entry.window.contentView.removeChildView(entry.view);
     }
+    entry.view.webContents.off(
+      "destroyed",
+      entry.webContentsDestroyedListener,
+    );
+    entry.view.webContents.off(
+      "render-process-gone",
+      entry.webContentsGoneListener,
+    );
   } catch (error) {
     ignoreElectronDestroyedObject(error);
   }

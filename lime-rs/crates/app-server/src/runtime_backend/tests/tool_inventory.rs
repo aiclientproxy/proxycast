@@ -133,7 +133,6 @@ async fn read_inventory_with_metadata(
         ToolInventoryReadRequest {
             caller: Some("assistant".to_string()),
             workbench: true,
-            browser_assist: false,
             metadata,
         },
     )
@@ -154,7 +153,6 @@ async fn read_inventory_without_initialized_agent(
         ToolInventoryReadRequest {
             caller: Some("assistant".to_string()),
             workbench: true,
-            browser_assist: false,
             metadata: None,
         },
     )

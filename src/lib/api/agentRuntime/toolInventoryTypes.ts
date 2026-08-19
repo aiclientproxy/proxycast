@@ -1,4 +1,4 @@
-export type AgentToolSurfaceProfile = "core" | "workbench" | "browser_assist";
+export type AgentToolSurfaceProfile = "core" | "workbench";
 
 export type AgentToolCapability =
   | "planning"
@@ -7,7 +7,6 @@ export type AgentToolCapability =
   | "skill_execution"
   | "session_control"
   | "content_creation"
-  | "browser_runtime"
   | "workspace_io"
   | "execution"
   | "vision";
@@ -16,8 +15,7 @@ export type AgentToolLifecycle = "current" | "compat" | "deprecated";
 
 export type AgentToolSourceKind =
   | "agent_builtin"
-  | "lime_injected"
-  | "browser_compatibility";
+  | "lime_injected";
 
 export type AgentToolPermissionPlane =
   | "session_allowlist"
@@ -53,7 +51,6 @@ export type AgentRuntimeToolInventoryRuntimeSourceKind =
 export interface AgentRuntimeToolInventoryRequest {
   caller?: string;
   workbench?: boolean;
-  browserAssist?: boolean;
   metadata?: Record<string, unknown>;
 }
 
@@ -61,12 +58,10 @@ export interface AgentRuntimeListWorkspaceSkillBindingsRequest {
   workspaceRoot: string;
   caller?: string;
   workbench?: boolean;
-  browserAssist?: boolean;
 }
 
 export interface AgentRuntimeToolInventorySurface {
   workbench: boolean;
-  browser_assist: boolean;
 }
 
 export interface AgentRuntimeWorkspaceSkillBindingRequest {

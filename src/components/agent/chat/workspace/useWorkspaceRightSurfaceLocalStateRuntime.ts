@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import type { WorkspaceFilesSurfaceTarget } from "./WorkspaceFilesSurface";
 import type { WorkspaceRightSurfaceKind } from "./right-surface";
-import type { WorkspaceObjectCanvasCandidate } from "./workspaceObjectCanvasModel";
 import type { WorkspaceArticleWorkspace } from "./workspaceArticleWorkspaceModel";
 import type { WorkspacePluginSurfaceDescriptor } from "./workspacePluginSurfaceModel";
 import type { WorkspaceRightSurfaceBrowserIntent } from "./workspaceRightSurfaceBrowserIntent";
@@ -11,10 +10,6 @@ export function useWorkspaceRightSurfaceLocalStateRuntime() {
     useState<WorkspaceRightSurfaceKind | null>(null);
   const [activeFilesRightSurfaceTarget, setActiveFilesRightSurfaceTarget] =
     useState<WorkspaceFilesSurfaceTarget | null>(null);
-  const [
-    activeObjectCanvasRightSurfaceCandidate,
-    setActiveObjectCanvasRightSurfaceCandidate,
-  ] = useState<WorkspaceObjectCanvasCandidate | null>(null);
   const [activeArticleWorkspace, setActiveArticleWorkspace] =
     useState<WorkspaceArticleWorkspace | null>(null);
   const [rightSurfaceBrowserTitle, setRightSurfaceBrowserTitle] = useState<
@@ -35,14 +30,12 @@ export function useWorkspaceRightSurfaceLocalStateRuntime() {
   const clearActiveRightSurfaceTargets = useCallback(() => {
     setManualRightSurface(null);
     setActiveFilesRightSurfaceTarget(null);
-    setActiveObjectCanvasRightSurfaceCandidate(null);
     setActiveArticleWorkspace(null);
   }, []);
 
   const openArticleWorkspaceRightSurface = useCallback(
     (articleWorkspace: WorkspaceArticleWorkspace) => {
       setActiveFilesRightSurfaceTarget(null);
-      setActiveObjectCanvasRightSurfaceCandidate(null);
       setActiveArticleWorkspace(articleWorkspace);
       setManualRightSurface("articleWorkspace");
     },
@@ -53,7 +46,6 @@ export function useWorkspaceRightSurfaceLocalStateRuntime() {
     activeArticleWorkspace,
     activeBrowserRightSurfaceIntent,
     activeFilesRightSurfaceTarget,
-    activeObjectCanvasRightSurfaceCandidate,
     activePluginSurfaceContainerId,
     activePluginSurfaces,
     clearActiveRightSurfaceTargets,
@@ -64,7 +56,6 @@ export function useWorkspaceRightSurfaceLocalStateRuntime() {
     setActiveArticleWorkspace,
     setActiveBrowserRightSurfaceIntent,
     setActiveFilesRightSurfaceTarget,
-    setActiveObjectCanvasRightSurfaceCandidate,
     setActivePluginSurfaceContainerId,
     setActivePluginSurfaces,
     setDismissedPluginSurfaceContainerIds,

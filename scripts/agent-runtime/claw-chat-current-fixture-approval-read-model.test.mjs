@@ -67,6 +67,8 @@ describe("claw approval pending read model", () => {
       itemId: APPROVAL_REQUEST_RESUME_TOOL_CALL_ID,
       latestTurnStatus: "inProgress",
       outerRequestId: "outer-approval-1",
+      hasCanonicalToolItem: true,
+      canonicalToolItemScoped: true,
       payloadActionType: "tool_confirmation",
       payloadToolName: "exec_command",
       pendingRequestCount: 1,
@@ -76,6 +78,52 @@ describe("claw approval pending read model", () => {
       requestType: "item/commandExecution/requestApproval",
       threadId: "thread-1",
       turnId: "turn-1",
+    });
+  });
+
+  it("v2 dynamicToolCall 参数未暴露 command 时仍按 typed identity 精确绑定", () => {
+    const summary = summarizeApprovalPendingReadModel(
+      {
+        thread: {
+          turns: [
+            {
+              id: "turn-1",
+              status: "inProgress",
+              items: [
+                {
+                  id: APPROVAL_REQUEST_RESUME_TOOL_CALL_ID,
+                  type: "dynamicToolCall",
+                  tool: "exec_command",
+                  arguments: { redacted: true },
+                  status: "inProgress",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      [
+        {
+          kind: "request",
+          id: "outer-approval-1",
+          method: "item/commandExecution/requestApproval",
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: APPROVAL_REQUEST_RESUME_TOOL_CALL_ID,
+          approvalId: APPROVAL_REQUEST_RESUME_REQUEST_ID,
+        },
+      ],
+    );
+
+    expect(summary).toMatchObject({
+      hasPendingRequest: true,
+      hasCanonicalToolItem: true,
+      canonicalToolItemScoped: true,
+      canonicalToolItemType: "dynamicToolCall",
+      canonicalToolItemStatus: "inProgress",
+      payloadToolName: "exec_command",
+      includesCommand: false,
+      includesToolCallId: true,
     });
   });
 

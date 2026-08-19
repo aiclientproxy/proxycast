@@ -44,11 +44,6 @@ export const SETTINGS_GATE_B_SCENARIOS = Object.freeze([
     owner: "settings/app-server",
   },
   {
-    id: "chrome-relay-lifecycle",
-    tab: "chrome-relay",
-    owner: "settings/app-server/browser-runtime",
-  },
-  {
     id: "automation-lifecycle",
     tab: "automation",
     owner: "settings/app-server",

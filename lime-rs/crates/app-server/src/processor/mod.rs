@@ -3,7 +3,6 @@ mod app;
 mod artifact;
 mod automation;
 mod background_terminal;
-mod browser_session;
 mod collaboration_mode;
 mod command_exec;
 mod config;

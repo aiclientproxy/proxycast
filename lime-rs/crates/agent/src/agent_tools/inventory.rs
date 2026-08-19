@@ -1,8 +1,8 @@
 use crate::agent_tools::catalog::{
     tool_catalog_entries_for_surface, tool_catalog_entry, workspace_default_allowed_tool_names,
     ToolCapability, ToolCatalogEntry, ToolLifecycle, ToolPermissionPlane, ToolSourceKind,
-    ToolSurfaceProfile, WorkspaceToolSurface, BROWSER_RUNTIME_TOOL_PREFIX,
-    LIST_MCP_RESOURCES_TOOL_NAME, READ_MCP_RESOURCE_TOOL_NAME,
+    ToolSurfaceProfile, WorkspaceToolSurface, LIST_MCP_RESOURCES_TOOL_NAME,
+    READ_MCP_RESOURCE_TOOL_NAME,
 };
 use crate::agent_tools::execution::{
     resolve_tool_execution_policy_resolution, ToolExecutionPolicySource,
@@ -20,55 +20,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashSet};
 use tool_runtime::tool_definition::RuntimeToolDefinition;
 use tool_runtime::tool_extension::RuntimeExtensionConfig;
-
-fn extract_harness_object(
-    request_metadata: Option<&serde_json::Value>,
-) -> Option<&serde_json::Map<String, serde_json::Value>> {
-    let metadata = request_metadata?;
-    let object = metadata.as_object()?;
-    if let Some(harness) = object.get("harness").and_then(serde_json::Value::as_object) {
-        return Some(harness);
-    }
-    Some(object)
-}
-
-fn extract_harness_nested_object<'a>(
-    request_metadata: Option<&'a serde_json::Value>,
-    keys: &[&str],
-) -> Option<&'a serde_json::Map<String, serde_json::Value>> {
-    let harness = extract_harness_object(request_metadata)?;
-    keys.iter()
-        .filter_map(|key| harness.get(*key))
-        .find_map(serde_json::Value::as_object)
-}
-
-fn extract_object_string(
-    object: &serde_json::Map<String, serde_json::Value>,
-    keys: &[&str],
-) -> Option<String> {
-    keys.iter()
-        .filter_map(|key| object.get(*key))
-        .find_map(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-}
-
-fn should_lock_service_skill_launch_to_site_tools(
-    request_metadata: Option<&serde_json::Value>,
-) -> bool {
-    let Some(launch) = extract_harness_nested_object(
-        request_metadata,
-        &["service_skill_launch", "serviceSkillLaunch"],
-    ) else {
-        return false;
-    };
-
-    let kind =
-        extract_object_string(launch, &["kind"]).unwrap_or_else(|| "site_adapter".to_string());
-    kind == "site_adapter"
-        && extract_object_string(launch, &["adapter_name", "adapterName"]).is_some()
-}
 
 fn resource_helper_visibility_allowed(tool_name: &str, resources_supported: bool) -> bool {
     !matches!(
@@ -91,14 +42,12 @@ pub enum RuntimeExtensionSourceKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolInventorySurfaceSnapshot {
     pub workbench: bool,
-    pub browser_assist: bool,
 }
 
 impl From<WorkspaceToolSurface> for ToolInventorySurfaceSnapshot {
     fn from(value: WorkspaceToolSurface) -> Self {
         Self {
             workbench: value.workbench,
-            browser_assist: value.browser_assist,
         }
     }
 }
@@ -316,8 +265,6 @@ pub(crate) fn build_tool_inventory(
         persisted_policy: persisted_execution_policy.as_ref(),
         request_metadata: request_metadata.as_ref(),
     };
-    let lock_service_skill_launch_to_site_tools =
-        should_lock_service_skill_launch_to_site_tools(request_metadata.as_ref());
     let native_tool_policy_gate =
         NativeToolPolicyGate::from_request_metadata(request_metadata.as_ref());
 
@@ -341,9 +288,6 @@ pub(crate) fn build_tool_inventory(
 
     let catalog_tools = tool_catalog_entries_for_surface(surface)
         .into_iter()
-        .filter(|entry| {
-            !lock_service_skill_launch_to_site_tools || entry.name != BROWSER_RUNTIME_TOOL_PREFIX
-        })
         .filter(|entry| native_tool_policy_gate.allows_catalog_entry(entry))
         .map(|entry| {
             let resolution =
@@ -371,7 +315,6 @@ pub(crate) fn build_tool_inventory(
         &current_tool_definitions,
         &caller,
         execution_policy_input,
-        lock_service_skill_launch_to_site_tools,
         resource_helpers_supported,
         &native_tool_policy_gate,
     );
@@ -470,16 +413,11 @@ fn build_native_inventory(
     definitions: &[RuntimeToolDefinition],
     caller: &str,
     execution_policy_input: ToolExecutionResolverInput<'_>,
-    lock_service_skill_launch_to_site_tools: bool,
     resource_helpers_supported: bool,
     native_tool_policy_gate: &NativeToolPolicyGate,
 ) -> Vec<NativeToolInventoryEntry> {
     let mut result = definitions
         .iter()
-        .filter(|definition| {
-            !lock_service_skill_launch_to_site_tools
-                || !definition.name.starts_with(BROWSER_RUNTIME_TOOL_PREFIX)
-        })
         .filter(|definition| native_tool_policy_gate.allows_tool_name(&definition.name))
         .map(|definition| {
             let metadata =
@@ -1459,11 +1397,10 @@ mod tests {
     }
 
     #[test]
-    fn test_build_tool_inventory_workbench_with_browser_surface_keeps_small_default_allowlist() {
-        let expected_catalog =
-            tool_catalog_entries_for_surface(WorkspaceToolSurface::workbench_with_browser_assist());
+    fn test_build_tool_inventory_workbench_keeps_small_default_allowlist() {
+        let expected_catalog = tool_catalog_entries_for_surface(WorkspaceToolSurface::workbench());
         let inventory = build_tool_inventory(AgentToolInventoryBuildInput {
-            surface: WorkspaceToolSurface::workbench_with_browser_assist(),
+            surface: WorkspaceToolSurface::workbench(),
             caller: "assistant".to_string(),
             agent_initialized: true,
             warnings: Vec::new(),
@@ -1477,12 +1414,11 @@ mod tests {
             visible_extension_tools: Vec::new(),
             searchable_extension_tools: Vec::new(),
         });
-        let expected_default_allowed = workspace_default_allowed_tool_names(
-            WorkspaceToolSurface::workbench_with_browser_assist(),
-        )
-        .into_iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
+        let expected_default_allowed =
+            workspace_default_allowed_tool_names(WorkspaceToolSurface::workbench())
+                .into_iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>();
 
         assert_eq!(inventory.counts.catalog_total, expected_catalog.len());
         assert_eq!(
@@ -1516,71 +1452,6 @@ mod tests {
         assert!(inventory
             .default_allowed_tools
             .contains(&"social_generate_cover_image".to_string()));
-        assert!(!inventory
-            .default_allowed_tools
-            .iter()
-            .any(|name| name.starts_with("mcp__lime-browser__")));
-    }
-
-    #[test]
-    fn test_build_tool_inventory_hides_browser_compat_tools_for_service_skill_launch() {
-        let inventory = build_tool_inventory(AgentToolInventoryBuildInput {
-            surface: WorkspaceToolSurface::browser_assist(),
-            caller: "assistant".to_string(),
-            agent_initialized: true,
-            warnings: Vec::new(),
-            persisted_execution_policy: None,
-            request_metadata: Some(json!({
-                "harness": {
-                    "browser_assist": {
-                        "enabled": true,
-                        "profile_key": "attached-github"
-                    },
-                    "service_skill_launch": {
-                        "kind": "site_adapter",
-                        "adapter_name": "github/search",
-                        "args": {
-                            "query": "AI Agent"
-                        }
-                    }
-                }
-            })),
-            mcp_server_names: Vec::new(),
-            mcp_tools: Vec::new(),
-            current_tool_definitions: vec![
-                definition(
-                    "mcp__lime-browser__browser_navigate",
-                    "browser navigate",
-                    json!({ "type": "object" }),
-                ),
-                definition(
-                    "lime_site_run",
-                    "run site adapter",
-                    json!({ "type": "object" }),
-                ),
-            ],
-            resource_helpers_supported: false,
-            extension_configs: Vec::new(),
-            visible_extension_tools: Vec::new(),
-            searchable_extension_tools: Vec::new(),
-        });
-
-        assert!(!inventory
-            .catalog_tools
-            .iter()
-            .any(|entry| entry.name == BROWSER_RUNTIME_TOOL_PREFIX));
-        assert!(!inventory
-            .native_tools
-            .iter()
-            .any(|entry| entry.name.starts_with(BROWSER_RUNTIME_TOOL_PREFIX)));
-        assert!(inventory
-            .catalog_tools
-            .iter()
-            .any(|entry| entry.name == "lime_site_run"));
-        assert!(inventory
-            .native_tools
-            .iter()
-            .any(|entry| entry.name == "lime_site_run"));
     }
 
     #[test]

@@ -345,6 +345,28 @@ async function readThread(page, threadId, requestLog) {
   return response.result?.thread || null;
 }
 
+async function readCodeCellTrace(page, identity, requestLog) {
+  const response = await invokeAppServerFromPage(
+    page,
+    "diagnostics/trace/read",
+    {
+      sessionId: identity.sessionId,
+      traceId: `code-cell-${identity.threadId}`,
+      maxEvents: 100,
+    },
+    requestLog,
+  );
+  return {
+    ...summarizeCodeCellTrace(response.result),
+    bridgeCall: {
+      command: "app_server_handle_json_lines",
+      method: "diagnostics/trace/read",
+      transport: "electron-ipc",
+      status: "success",
+    },
+  };
+}
+
 function turnStatus(turn) {
   return String(turn?.status || "")
     .trim()
@@ -535,7 +557,64 @@ export function summarizeProviderEvidence(fixture) {
   };
 }
 
+export function summarizeCodeCellTrace(response) {
+  const events = Array.isArray(response?.events) ? response.events : [];
+  const eventType = (event) =>
+    String(event?.eventType || event?.event_type || "");
+  const event = (type) =>
+    events.find((candidate) => eventType(candidate) === type);
+  const source = event("code_cell.source_item_observed");
+  const started = event("code_cell.started");
+  const initial = event("code_cell.initial_response");
+  const ended = event("code_cell.ended");
+  const output = event("code_cell.output_item_observed");
+  const eventTypes = events.map(eventType);
+  const requiredEventTypes = [
+    "code_cell.source_item_observed",
+    "code_cell.started",
+    "code_cell.initial_response",
+    "code_cell.ended",
+    "code_cell.output_item_observed",
+  ];
+  const startedMetrics = started?.metrics || {};
+  const serialized = JSON.stringify(response || {});
+  const sourceJsChars = Number(startedMetrics.source_js_chars || 0);
+  const sourceJsSha256 = String(startedMetrics.source_js_sha256 || "");
+  const redaction = response?.redaction || null;
+  return {
+    available: response?.available === true,
+    traceId: response?.trace?.traceId || response?.trace?.trace_id || null,
+    eventTypes,
+    lifecycleOrdered: requiredEventTypes.every(
+      (type, index) =>
+        eventTypes.indexOf(type) >= 0 &&
+        (index === 0 ||
+          eventTypes.indexOf(type) >
+            eventTypes.indexOf(requiredEventTypes[index - 1])),
+    ),
+    runtimeCellId: startedMetrics.runtime_cell_id || null,
+    source: {
+      modelVisibleCallId: source?.metrics?.model_visible_call_id || null,
+      itemId: source?.metrics?.source_item_id || null,
+    },
+    output: {
+      itemId: output?.metrics?.output_item_id || null,
+    },
+    initialStatus: initial?.metrics?.status || null,
+    endedStatus: ended?.metrics?.status || null,
+    sourceJsChars,
+    sourceJsSha256,
+    sourceSummaryOnly:
+      sourceJsChars > 0 &&
+      /^[a-f0-9]{64}$/u.test(sourceJsSha256) &&
+      !Object.hasOwn(startedMetrics, "source_js") &&
+      !serialized.includes(EXEC_OUTPUT_MARKER),
+    redaction,
+  };
+}
+
 export function buildAssertions({
+  codeCellTrace,
   diagnostics,
   errors,
   model,
@@ -558,6 +637,7 @@ export function buildAssertions({
       call.transport === "electron-ipc" &&
       call.status === "success",
   );
+  const traceReadCall = codeCellTrace?.bridgeCall;
   return {
     realElectronHost:
       rendererSnapshot?.electron === true &&
@@ -588,6 +668,26 @@ export function buildAssertions({
       provider.customToolOutputContainsMarker,
     canonicalOuterExecCompleted:
       Boolean(outerExec) && itemStatus(outerExec) === "completed",
+    codeCellTraceLifecycleComplete:
+      codeCellTrace?.available === true &&
+      codeCellTrace?.lifecycleOrdered === true &&
+      codeCellTrace?.initialStatus === "completed" &&
+      codeCellTrace?.endedStatus === "completed",
+    codeCellTraceCanonicalItems:
+      codeCellTrace?.source?.modelVisibleCallId === EXEC_CALL_ID &&
+      codeCellTrace?.source?.itemId === outerExec?.id &&
+      codeCellTrace?.output?.itemId === outerExec?.id,
+    codeCellTraceSummaryOnly:
+      codeCellTrace?.sourceSummaryOnly === true &&
+      codeCellTrace?.redaction?.mode === "summary_only" &&
+      codeCellTrace?.redaction?.rawAgentEventPayload === false &&
+      codeCellTrace?.redaction?.promptText === false &&
+      codeCellTrace?.redaction?.providerPayload === false,
+    codeCellTraceReadViaCurrentBridge:
+      traceReadCall?.command === "app_server_handle_json_lines" &&
+      traceReadCall?.method === "diagnostics/trace/read" &&
+      traceReadCall?.transport === "electron-ipc" &&
+      traceReadCall?.status === "success",
     publicCodeCellAbsent: !turnItems.some((item) =>
       String(item?.type || "")
         .toLowerCase()
@@ -757,6 +857,8 @@ export async function runGateB(options) {
       fixture,
       requestLog,
     );
+    logStage("trace");
+    const codeCellTrace = await readCodeCellTrace(page, identity, requestLog);
     const visible = await readVisibleState(page, options, identity.sessionId);
     const diagnostics = await readInvokeDiagnostics(page);
     const provider = summarizeProviderEvidence(fixture);
@@ -774,6 +876,7 @@ export async function runGateB(options) {
     await page.screenshot({ path: screenshotPath, fullPage: true });
 
     const assertions = buildAssertions({
+      codeCellTrace,
       diagnostics,
       errors,
       model: provisioned.model,
@@ -813,6 +916,7 @@ export async function runGateB(options) {
           [],
       },
       provider,
+      codeCellTrace,
       processes: processEvidence,
       canonical: {
         turnStatus: turnStatus(terminal.turn),

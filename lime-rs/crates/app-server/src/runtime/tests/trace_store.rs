@@ -3,6 +3,7 @@ use app_server_protocol::AgentEvent;
 use serde_json::json;
 use std::fs;
 use std::io::Read;
+use tool_runtime::tool_lifecycle::{CodeCellRuntimeStatus, CodeCellTraceEvent};
 use zip::ZipArchive;
 
 fn traced_event(trace_id: &str, session_id: &str, sequence: u64) -> AgentEvent {
@@ -272,5 +273,183 @@ fn trace_writer_keeps_recent_trace_files_per_session() {
             .events
             .len()
             == 1
+    );
+}
+
+#[test]
+fn code_cell_trace_replays_pending_source_nested_wait_and_output_links() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let writer = TraceEventWriter::new(temp.path()).expect("writer");
+    let append = |event| {
+        writer
+            .append_code_cell_trace_event("session-code", "thread-code", event)
+            .expect("append CodeCell trace")
+    };
+
+    append(CodeCellTraceEvent::Started {
+        turn_id: "turn-1".to_string(),
+        runtime_cell_id: "cell-1".to_string(),
+        model_visible_call_id: "call-exec".to_string(),
+        source_js: "await tools.read({ path: 'README.md' });".to_string(),
+    });
+    append(CodeCellTraceEvent::InitialResponse {
+        turn_id: "turn-1".to_string(),
+        runtime_cell_id: "cell-1".to_string(),
+        status: CodeCellRuntimeStatus::Yielded,
+        response_chars: 7,
+    });
+    append(CodeCellTraceEvent::NestedToolStarted {
+        turn_id: "turn-1".to_string(),
+        runtime_cell_id: "cell-1".to_string(),
+        tool_call_id: "code-mode-read-1".to_string(),
+        runtime_tool_call_id: "read-1".to_string(),
+        tool_name: "read".to_string(),
+    });
+    append(CodeCellTraceEvent::NestedToolEnded {
+        turn_id: "turn-1".to_string(),
+        runtime_cell_id: "cell-1".to_string(),
+        tool_call_id: "code-mode-read-1".to_string(),
+        status: "completed".to_string(),
+    });
+
+    let pending = writer
+        .read_code_cell_trace("session-code", "thread-code")
+        .expect("pending projection");
+    assert!(pending.code_cells.is_empty());
+    assert_eq!(pending.pending_code_cell_ids, vec!["thread-code:call-exec"]);
+
+    append(CodeCellTraceEvent::SourceItemObserved {
+        turn_id: "turn-1".to_string(),
+        model_visible_call_id: "call-exec".to_string(),
+        source_item_id: "item_call-exec".to_string(),
+    });
+    append(CodeCellTraceEvent::OutputItemObserved {
+        turn_id: "turn-1".to_string(),
+        runtime_cell_id: "cell-1".to_string(),
+        output_item_id: "item_call-exec".to_string(),
+    });
+    append(CodeCellTraceEvent::WaitToolObserved {
+        turn_id: "turn-2".to_string(),
+        runtime_cell_id: "cell-1".to_string(),
+        tool_call_id: "wait-call-1".to_string(),
+    });
+    append(CodeCellTraceEvent::Ended {
+        turn_id: "turn-2".to_string(),
+        runtime_cell_id: "cell-1".to_string(),
+        status: CodeCellRuntimeStatus::Completed,
+        response_chars: 4,
+    });
+
+    let projection = writer
+        .read_code_cell_trace("session-code", "thread-code")
+        .expect("CodeCell projection");
+    assert!(projection.pending_code_cell_ids.is_empty());
+    let cell = &projection.code_cells["thread-code:call-exec"];
+    assert_eq!(cell.code_cell_id, "thread-code:call-exec");
+    assert_eq!(cell.model_visible_call_id, "call-exec");
+    assert_eq!(cell.thread_id, "thread-code");
+    assert_eq!(cell.started_by_turn_id, "turn-1");
+    assert_eq!(cell.source_item_id, "item_call-exec");
+    assert_eq!(cell.output_item_ids, vec!["item_call-exec"]);
+    assert_eq!(cell.runtime_cell_id, "cell-1");
+    assert_eq!(cell.runtime_status, CodeCellRuntimeStatus::Completed);
+    assert_eq!(cell.nested_tool_call_ids, vec!["code-mode-read-1"]);
+    assert_eq!(cell.nested_tool_statuses["code-mode-read-1"], "completed");
+    assert_eq!(cell.wait_tool_call_ids, vec!["wait-call-1"]);
+    assert!(cell.initial_response_seq.is_some());
+    assert!(cell.yielded_seq.is_some());
+    assert!(cell.ended_seq.is_some());
+    assert_eq!(cell.source_js_chars, 40);
+    assert_eq!(cell.source_js_sha256.len(), 64);
+    assert!(cell.started_seq < cell.ended_seq.expect("ended sequence"));
+
+    let raw = writer
+        .read_raw_trace_events("session-code", "code-cell-thread-code")
+        .expect("raw CodeCell trace");
+    assert_eq!(raw.len(), 8);
+    let raw_text = fs::read_to_string(&raw[0].path).expect("raw trace file");
+    assert!(!raw_text.contains("README.md"));
+    assert!(!raw_text.contains("await tools.read"));
+    assert!(raw_text.contains("source_js_sha256"));
+
+    let diagnostics = writer
+        .read_trace_events(DiagnosticsTraceReadParams {
+            session_id: "session-code".to_string(),
+            trace_id: "code-cell-thread-code".to_string(),
+            max_events: None,
+        })
+        .expect("diagnostics CodeCell trace");
+    assert_eq!(diagnostics.events.len(), 8);
+    assert!(diagnostics
+        .events
+        .iter()
+        .any(|event| event.event_type == "code_cell.ended"));
+    assert!(!serde_json::to_string(&diagnostics)
+        .expect("serialize diagnostics trace")
+        .contains("README.md"));
+}
+
+#[test]
+fn interrupted_turn_closes_running_code_cell_and_rejects_late_terminal() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let writer = TraceEventWriter::new(temp.path()).expect("writer");
+    for event in [
+        CodeCellTraceEvent::SourceItemObserved {
+            turn_id: "turn-cancel".to_string(),
+            model_visible_call_id: "call-cancel".to_string(),
+            source_item_id: "call-cancel".to_string(),
+        },
+        CodeCellTraceEvent::Started {
+            turn_id: "turn-cancel".to_string(),
+            runtime_cell_id: "cell-cancel".to_string(),
+            model_visible_call_id: "call-cancel".to_string(),
+            source_js: "await new Promise(() => {});".to_string(),
+        },
+        CodeCellTraceEvent::InitialResponse {
+            turn_id: "turn-cancel".to_string(),
+            runtime_cell_id: "cell-cancel".to_string(),
+            status: CodeCellRuntimeStatus::Yielded,
+            response_chars: 0,
+        },
+    ] {
+        writer
+            .append_code_cell_trace_event("session-cancel", "thread-cancel", event)
+            .expect("append running cell trace");
+    }
+    writer
+        .close_code_cells_for_turn(
+            "session-cancel",
+            "thread-cancel",
+            "turn-cancel",
+            CodeCellRuntimeStatus::Terminated,
+        )
+        .expect("close interrupted cell");
+
+    let late = writer.append_code_cell_trace_event(
+        "session-cancel",
+        "thread-cancel",
+        CodeCellTraceEvent::Ended {
+            turn_id: "turn-cancel".to_string(),
+            runtime_cell_id: "cell-cancel".to_string(),
+            status: CodeCellRuntimeStatus::Completed,
+            response_chars: 4,
+        },
+    );
+    assert!(late
+        .expect_err("late terminal must fail closed")
+        .contains("terminal cell"));
+
+    let projection = writer
+        .read_code_cell_trace("session-cancel", "thread-cancel")
+        .expect("terminal projection");
+    let cell = &projection.code_cells["thread-cancel:call-cancel"];
+    assert_eq!(cell.runtime_status, CodeCellRuntimeStatus::Terminated);
+    assert!(cell.ended_seq.is_some());
+    assert_eq!(
+        writer
+            .read_raw_trace_events("session-cancel", "code-cell-thread-cancel")
+            .expect("raw terminal trace")
+            .len(),
+        4
     );
 }

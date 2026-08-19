@@ -18,7 +18,6 @@ export {
   buildWorkspaceRightSurfaceFilePreviewIntents,
   buildWorkspaceRightSurfaceHarnessPendingIntents,
   buildWorkspaceRightSurfaceMcpShellOutputIntents,
-  buildWorkspaceRightSurfaceObjectCanvasCandidateIntents,
   buildWorkspaceRightSurfaceRuntimeOpenIntents,
 } from "./rightSurfaceRuntimeAdapter";
 export {
@@ -57,7 +56,6 @@ export type {
   WorkspaceRightSurfaceFilePreviewInput,
   WorkspaceRightSurfaceHarnessPendingInput,
   WorkspaceRightSurfaceMcpShellOutputInput,
-  WorkspaceRightSurfaceObjectCanvasCandidateInput,
   WorkspaceRightSurfaceRuntimeOpenSignal,
 } from "./rightSurfaceRuntimeAdapter";
 export type {

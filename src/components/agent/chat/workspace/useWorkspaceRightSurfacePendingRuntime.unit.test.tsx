@@ -18,11 +18,11 @@ const pendingRequest: WorkspaceRightSurfacePendingRequest = {
   workspaceId: "workspace-main",
   workspaceRoot: "/workspace/project",
   sessionId: "session-main",
-  surfaceKind: "objectCanvas",
+  surfaceKind: "workbench",
   origin: "mcpTool",
   priority: "foreground",
   status: "pending",
-  reason: "browser_assist_candidate",
+  reason: "workbench_ready",
   requestedAt: "2026-06-23T00:00:00.000Z",
 };
 const filesPendingRequest: WorkspaceRightSurfacePendingRequest = {
@@ -117,11 +117,10 @@ const browserPendingRequest: WorkspaceRightSurfacePendingRequest = {
   reason: "browser_requirement",
   candidateId: "https://example.com/fallback",
   metadata: {
-    title: "Example Browser",
-    launchUrl: "https://example.com/dashboard",
-    browserSessionId: "browser-session-1",
-    profileKey: "task-profile",
-    targetId: "target-1",
+    browser: {
+      title: "Example Browser",
+      launchUrl: "https://example.com/dashboard",
+    },
   },
 };
 
@@ -370,20 +369,12 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
         priority: "foreground",
         command: expect.objectContaining({
           action: "open",
-          kind: "objectCanvas",
+          kind: "workbench",
           origin: "mcpTool",
-          reason: "browser_assist_candidate",
+          reason: "workbench_ready",
         }),
       }),
     ]);
-    expect(getValue().pendingObjectCanvasCandidate).toEqual(
-      expect.objectContaining({
-        candidateId: "right_surface_1",
-        sessionId: "session-main",
-        sourceKind: "rightSurfacePending",
-        sourceRequestId: "right_surface_1",
-      }),
-    );
   });
 
   it("应把 Article Editor pending metadata 投影为文章编辑器", async () => {
@@ -502,21 +493,8 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
         origin: "runtime",
         reason: "browser_requirement",
         priority: "foreground",
-        browserSessionId: "browser-session-1",
         launchUrl: "https://example.com/dashboard",
         title: "Example Browser",
-        profileKey: "task-profile",
-        targetId: "target-1",
-        lifecycleState: null,
-        controlMode: null,
-        sessionRef: {
-          sourceRequestId: "right_surface_browser_1",
-          browserSessionId: "browser-session-1",
-          profileKey: "task-profile",
-          adapterKind: "cdp",
-          launchUrl: "https://example.com/dashboard",
-          title: "Example Browser",
-        },
       });
     });
     expect(getValue().pendingIntents).toEqual([
@@ -685,7 +663,7 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
     });
 
     await act(async () => {
-      await getValue().consumePendingRequestsForSurface("objectCanvas");
+      await getValue().consumePendingRequestsForSurface("workbench");
     });
 
     expect(consumePending).toHaveBeenCalledWith({
@@ -715,7 +693,7 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
 
     await render();
     await act(async () => {
-      await getValue().consumePendingRequestsForSurface("objectCanvas");
+      await getValue().consumePendingRequestsForSurface("workbench");
     });
 
     expect(consumePending).not.toHaveBeenCalled();
@@ -735,7 +713,7 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
     });
 
     await act(async () => {
-      await getValue().consumePendingRequestsForSurface("objectCanvas");
+      await getValue().consumePendingRequestsForSurface("workbench");
     });
 
     expect(getValue().pendingRequests).toEqual([pendingRequest]);
@@ -762,7 +740,7 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
 
     await act(async () => {
       await getValue().dismissPendingRequestsForSurface(
-        "objectCanvas",
+        "workbench",
         " user_closed_surface ",
       );
     });
@@ -787,7 +765,7 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
 
     await render();
     await act(async () => {
-      await getValue().dismissPendingRequestsForSurface("objectCanvas");
+      await getValue().dismissPendingRequestsForSurface("workbench");
     });
 
     expect(dismissPending).not.toHaveBeenCalled();
@@ -807,7 +785,7 @@ describe("useWorkspaceRightSurfacePendingRuntime", () => {
     });
 
     await act(async () => {
-      await getValue().dismissPendingRequestsForSurface("objectCanvas");
+      await getValue().dismissPendingRequestsForSurface("workbench");
     });
 
     expect(getValue().pendingRequests).toEqual([pendingRequest]);

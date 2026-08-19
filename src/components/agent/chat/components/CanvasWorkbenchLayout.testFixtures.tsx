@@ -22,23 +22,6 @@ const hoisted = vi.hoisted(() => ({
   mockListProjectGitCommits: vi.fn(),
   mockReadProjectGitDiff: vi.fn(),
   mockReadProjectGitStatus: vi.fn(),
-  mockDestroyEmbeddedBrowserView: vi.fn(),
-  mockGoBackEmbeddedBrowserView: vi.fn(),
-  mockGoForwardEmbeddedBrowserView: vi.fn(),
-  mockFindInEmbeddedBrowserView: vi.fn(),
-  mockListenEmbeddedBrowserDownload: vi.fn(),
-  mockListenEmbeddedBrowserPermissionRequest: vi.fn(),
-  mockListenEmbeddedBrowserViewLoadFailed: vi.fn(),
-  mockListenEmbeddedBrowserViewState: vi.fn(),
-  mockMountEmbeddedBrowserView: vi.fn(),
-  mockNavigateEmbeddedBrowserView: vi.fn(),
-  mockIsEmbeddedBrowserHostAvailable: vi.fn(),
-  mockReloadEmbeddedBrowserView: vi.fn(),
-  mockSetEmbeddedBrowserViewZoom: vi.fn(),
-  mockStopLoadingEmbeddedBrowserView: vi.fn(),
-  mockStopFindInEmbeddedBrowserView: vi.fn(),
-  mockSetEmbeddedBrowserViewBounds: vi.fn(),
-  mockOpenExternalUrlWithSystemBrowser: vi.fn(),
   mockTerminateCommandExec: vi.fn(),
   mockSubscribeCommandExecOutput: vi.fn(),
   mockResizeCommandExec: vi.fn(),
@@ -67,40 +50,6 @@ export const mockListDirectory = hoisted.mockListDirectory;
 export const mockListProjectGitCommits = hoisted.mockListProjectGitCommits;
 export const mockReadProjectGitDiff = hoisted.mockReadProjectGitDiff;
 export const mockReadProjectGitStatus = hoisted.mockReadProjectGitStatus;
-export const mockDestroyEmbeddedBrowserView =
-  hoisted.mockDestroyEmbeddedBrowserView;
-export const mockGoBackEmbeddedBrowserView =
-  hoisted.mockGoBackEmbeddedBrowserView;
-export const mockGoForwardEmbeddedBrowserView =
-  hoisted.mockGoForwardEmbeddedBrowserView;
-export const mockFindInEmbeddedBrowserView =
-  hoisted.mockFindInEmbeddedBrowserView;
-export const mockListenEmbeddedBrowserDownload =
-  hoisted.mockListenEmbeddedBrowserDownload;
-export const mockListenEmbeddedBrowserPermissionRequest =
-  hoisted.mockListenEmbeddedBrowserPermissionRequest;
-export const mockListenEmbeddedBrowserViewLoadFailed =
-  hoisted.mockListenEmbeddedBrowserViewLoadFailed;
-export const mockListenEmbeddedBrowserViewState =
-  hoisted.mockListenEmbeddedBrowserViewState;
-export const mockMountEmbeddedBrowserView =
-  hoisted.mockMountEmbeddedBrowserView;
-export const mockNavigateEmbeddedBrowserView =
-  hoisted.mockNavigateEmbeddedBrowserView;
-export const mockIsEmbeddedBrowserHostAvailable =
-  hoisted.mockIsEmbeddedBrowserHostAvailable;
-export const mockReloadEmbeddedBrowserView =
-  hoisted.mockReloadEmbeddedBrowserView;
-export const mockSetEmbeddedBrowserViewZoom =
-  hoisted.mockSetEmbeddedBrowserViewZoom;
-export const mockStopLoadingEmbeddedBrowserView =
-  hoisted.mockStopLoadingEmbeddedBrowserView;
-export const mockStopFindInEmbeddedBrowserView =
-  hoisted.mockStopFindInEmbeddedBrowserView;
-export const mockSetEmbeddedBrowserViewBounds =
-  hoisted.mockSetEmbeddedBrowserViewBounds;
-export const mockOpenExternalUrlWithSystemBrowser =
-  hoisted.mockOpenExternalUrlWithSystemBrowser;
 export const mockTerminateCommandExec = hoisted.mockTerminateCommandExec;
 export const mockSubscribeCommandExecOutput =
   hoisted.mockSubscribeCommandExecOutput;
@@ -152,10 +101,8 @@ vi.mock("react-i18next", () => ({
           options?.label ?? "",
         )}`,
         "agentChat.canvasWorkbench.newTabs.terminal": "终端",
-        "agentChat.canvasWorkbench.newTabs.browser": "浏览器",
         "agentChat.canvasWorkbench.newTabs.files": "文件",
         "agentChat.canvasWorkbench.newTabs.terminalTab": "终端",
-        "agentChat.canvasWorkbench.newTabs.browserTab": "新选项卡",
         "agentChat.canvasWorkbench.newTabs.filesTab": "打开文件",
         "agentChat.canvasWorkbench.projectFiles.treeTitle": "项目文件",
         "agentChat.canvasWorkbench.projectFiles.empty":
@@ -166,37 +113,6 @@ vi.mock("react-i18next", () => ({
         "agentChat.canvasWorkbench.projectFiles.openHint":
           "从右侧项目目录树中选择文件进行预览。",
         "agentChat.canvasWorkbench.projectFiles.resizeTree": "调整项目文件宽度",
-        "agentChat.canvasWorkbench.browser.refresh": "刷新浏览器标签",
-        "agentChat.canvasWorkbench.browser.stop": "停止加载",
-        "agentChat.canvasWorkbench.browser.back": "后退",
-        "agentChat.canvasWorkbench.browser.forward": "前进",
-        "agentChat.canvasWorkbench.browser.find": "在页面中查找",
-        "agentChat.canvasWorkbench.browser.findInput": "查找页面文字",
-        "agentChat.canvasWorkbench.browser.findMatchCount": `${String(
-          options?.active ?? "",
-        )}/${String(options?.total ?? "")}`,
-        "agentChat.canvasWorkbench.browser.findNext": "下一个匹配项",
-        "agentChat.canvasWorkbench.browser.findPlaceholder": "查找",
-        "agentChat.canvasWorkbench.browser.findPrevious": "上一个匹配项",
-        "agentChat.canvasWorkbench.browser.address": "输入网址或搜索",
-        "agentChat.canvasWorkbench.browser.addressPlaceholder":
-          "输入网址或搜索",
-        "agentChat.canvasWorkbench.browser.title": "新选项卡",
-        "agentChat.canvasWorkbench.browser.loading": "正在打开网页...",
-        "agentChat.canvasWorkbench.browser.empty":
-          "浏览器标签已打开。接入网页预览后将在这里显示页面内容。",
-        "agentChat.canvasWorkbench.browser.openExternal": "在系统浏览器打开",
-        "agentChat.canvasWorkbench.browser.openExternalFailed": `系统浏览器打开失败：${String(
-          options?.message ?? "",
-        )}`,
-        "agentChat.canvasWorkbench.browser.loadFailedTitle": "网页加载失败",
-        "agentChat.canvasWorkbench.browser.hostUnavailableTitle":
-          "需要桌面宿主",
-        "agentChat.canvasWorkbench.browser.zoomIn": "放大页面",
-        "agentChat.canvasWorkbench.browser.zoomOut": "缩小页面",
-        "agentChat.canvasWorkbench.browser.zoomReset": "重置缩放",
-        "agentChat.canvasWorkbench.browser.hostUnavailableBody":
-          "内嵌网页通过 Electron 原生浏览器视图加载。请在桌面应用或最新开发宿主中打开，普通浏览器预览不会伪造网页内容。",
         "agentChat.canvasWorkbench.title.fallback": "工作台",
         "agentChat.canvasWorkbench.tools.columns": "切换列布局",
         "agentChat.canvasWorkbench.tools.editor": "编辑器",
@@ -397,32 +313,6 @@ vi.mock("@/lib/api/projectGit", () => ({
   listProjectGitCommits: hoisted.mockListProjectGitCommits,
   readProjectGitDiff: hoisted.mockReadProjectGitDiff,
   readProjectGitStatus: hoisted.mockReadProjectGitStatus,
-}));
-
-vi.mock("@/lib/api/embeddedBrowser", () => ({
-  destroyEmbeddedBrowserView: hoisted.mockDestroyEmbeddedBrowserView,
-  findInEmbeddedBrowserView: hoisted.mockFindInEmbeddedBrowserView,
-  goBackEmbeddedBrowserView: hoisted.mockGoBackEmbeddedBrowserView,
-  goForwardEmbeddedBrowserView: hoisted.mockGoForwardEmbeddedBrowserView,
-  listenEmbeddedBrowserDownload: hoisted.mockListenEmbeddedBrowserDownload,
-  listenEmbeddedBrowserPermissionRequest:
-    hoisted.mockListenEmbeddedBrowserPermissionRequest,
-  listenEmbeddedBrowserViewLoadFailed:
-    hoisted.mockListenEmbeddedBrowserViewLoadFailed,
-  listenEmbeddedBrowserViewState: hoisted.mockListenEmbeddedBrowserViewState,
-  mountEmbeddedBrowserView: hoisted.mockMountEmbeddedBrowserView,
-  navigateEmbeddedBrowserView: hoisted.mockNavigateEmbeddedBrowserView,
-  isEmbeddedBrowserHostAvailable: hoisted.mockIsEmbeddedBrowserHostAvailable,
-  reloadEmbeddedBrowserView: hoisted.mockReloadEmbeddedBrowserView,
-  setEmbeddedBrowserViewZoom: hoisted.mockSetEmbeddedBrowserViewZoom,
-  stopLoadingEmbeddedBrowserView: hoisted.mockStopLoadingEmbeddedBrowserView,
-  stopFindInEmbeddedBrowserView: hoisted.mockStopFindInEmbeddedBrowserView,
-  setEmbeddedBrowserViewBounds: hoisted.mockSetEmbeddedBrowserViewBounds,
-}));
-
-vi.mock("@/lib/api/externalUrl", () => ({
-  openExternalUrlWithSystemBrowser:
-    hoisted.mockOpenExternalUrlWithSystemBrowser,
 }));
 
 vi.mock("@/lib/api/commandExec", () => ({
@@ -726,40 +616,6 @@ beforeEach(() => {
       },
     ],
   });
-  const embeddedBrowserState = {
-    viewId: "canvas-workbench-browser-test",
-    url: "https://www.google.com/",
-    title: "Google",
-    canGoBack: false,
-    canGoForward: false,
-    isLoading: false,
-  };
-  mockDestroyEmbeddedBrowserView.mockResolvedValue(undefined);
-  mockFindInEmbeddedBrowserView.mockResolvedValue({
-    activeMatchOrdinal: 0,
-    matches: 0,
-  });
-  mockGoBackEmbeddedBrowserView.mockResolvedValue(embeddedBrowserState);
-  mockGoForwardEmbeddedBrowserView.mockResolvedValue(embeddedBrowserState);
-  mockListenEmbeddedBrowserDownload.mockResolvedValue(vi.fn());
-  mockListenEmbeddedBrowserPermissionRequest.mockResolvedValue(vi.fn());
-  mockListenEmbeddedBrowserViewLoadFailed.mockResolvedValue(vi.fn());
-  mockListenEmbeddedBrowserViewState.mockResolvedValue(vi.fn());
-  mockIsEmbeddedBrowserHostAvailable.mockReturnValue(true);
-  mockMountEmbeddedBrowserView.mockResolvedValue(embeddedBrowserState);
-  mockNavigateEmbeddedBrowserView.mockImplementation(
-    async ({ viewId, url }) => ({
-      ...embeddedBrowserState,
-      viewId,
-      url,
-    }),
-  );
-  mockReloadEmbeddedBrowserView.mockResolvedValue(embeddedBrowserState);
-  mockSetEmbeddedBrowserViewZoom.mockResolvedValue(embeddedBrowserState);
-  mockStopLoadingEmbeddedBrowserView.mockResolvedValue(embeddedBrowserState);
-  mockStopFindInEmbeddedBrowserView.mockResolvedValue(embeddedBrowserState);
-  mockSetEmbeddedBrowserViewBounds.mockResolvedValue(embeddedBrowserState);
-  mockOpenExternalUrlWithSystemBrowser.mockResolvedValue(undefined);
   mockTerminateCommandExec.mockResolvedValue({});
   mockSubscribeCommandExecOutput.mockReturnValue(vi.fn());
   mockResizeCommandExec.mockResolvedValue({});

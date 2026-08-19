@@ -128,7 +128,6 @@ import {
   type OemCloudBootstrapResponse,
   type OemCloudReferralDashboard,
 } from "@/lib/api/oemCloudControlPlane";
-import { clearSiteAdapterCatalogCache } from "@/lib/siteAdapterCatalogBootstrap";
 import {
   buildOemCloudUserCenterUrl,
   createExternalBrowserOpenTarget,
@@ -1298,7 +1297,6 @@ export function AppSidebar({
       clearOemCloudBootstrapSnapshot();
       clearSkillCatalogCache();
       clearServiceSkillCatalogCache();
-      void clearSiteAdapterCatalogCache();
       setAccountMenuOpen(false);
       setLanguageMenuOpen(false);
       setAccountLogoutPending(false);

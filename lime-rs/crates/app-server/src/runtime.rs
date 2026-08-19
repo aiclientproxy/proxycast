@@ -6,7 +6,6 @@ mod agent_mailbox_delivery;
 mod agent_residency;
 mod agent_terminal_activity;
 mod app_data;
-pub(crate) mod approval_cache;
 mod approval_decision_contract;
 mod article_workspace_action_projection;
 mod article_workspace_artifact_document_projection;
@@ -19,7 +18,6 @@ mod artifact_sidecar;
 mod automation;
 mod backend;
 mod background_terminal;
-mod browser_session;
 mod canonical_rollout;
 mod canonical_thread_store;
 #[cfg(test)]
@@ -58,7 +56,6 @@ mod model_providers;
 mod output_media;
 mod output_refs;
 pub(crate) mod pending_action_descriptor;
-mod permission_state_projection;
 mod plugins;
 mod project_git;
 mod projection_item_events;
@@ -152,12 +149,11 @@ pub use app_data::SkillAppDataSource;
 pub use app_data::UsageStatsAppDataSource;
 pub use app_data::VoiceAppDataSource;
 pub use app_data::WorkspaceAppDataSource;
-pub use app_data::WorkspaceObjectCanvasSnapshot;
-pub use app_data::WorkspaceObjectCanvasSnapshotListParams;
 pub use app_data::WorkspaceSkillBindingAppDataSource;
 pub use app_data::{ModelCatalogQuery, ModelProviderAppDataSource, ProviderModelCatalog};
 pub use artifact_content::FilesystemArtifactContentProvider;
 pub use artifact_content::InlineArtifactContentProvider;
+pub use artifact_content::WorkspaceArtifactContentProvider;
 pub use backend::MockBackend;
 pub use backend::UnavailableBackend;
 pub use error::RuntimeCoreError;
@@ -174,8 +170,6 @@ pub use output_refs::OutputSnapshotSaveRequest;
 pub use output_refs::OutputSnapshotStore;
 pub use projection_repair::ProjectionRepair;
 pub use projection_store::ProjectionStore;
-pub use right_surface::WorkspaceObjectCanvasReplayReadiness;
-pub use right_surface::WorkspaceObjectCanvasReplayReadinessListParams;
 pub use sidecar_store::SidecarRef;
 pub use sidecar_store::SidecarStore;
 pub use sidecar_store::SidecarWriteRequest;
@@ -205,7 +199,6 @@ use app_server_protocol::ArtifactSummary;
 use app_server_protocol::ClientInfo;
 use app_server_protocol::RuntimeOptions;
 use async_trait::async_trait;
-use lime_browser_runtime::{BrowserProfileScope, BrowserRuntimeManager};
 use lime_infra::telemetry::TelemetryStore;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -305,7 +298,6 @@ impl ActionRespondRequest {
 pub struct ToolInventoryReadRequest {
     pub caller: Option<String>,
     pub workbench: bool,
-    pub browser_assist: bool,
     pub metadata: Option<serde_json::Value>,
 }
 
@@ -483,7 +475,6 @@ pub struct RuntimeCore {
     pub(in crate::runtime) projection_store: Option<Arc<ProjectionStore>>,
     pub(in crate::runtime) telemetry_store: Option<Arc<TelemetryStore>>,
     pub(in crate::runtime) event_hub: RuntimeEventHub,
-    pub(in crate::runtime) browser_runtime: Arc<BrowserRuntimeManager>,
     knowledge_builder_runtime_executor: Arc<dyn KnowledgeBuilderRuntimeExecutor>,
     app_data_source: Arc<dyn AppDataSource>,
     pub(crate) execution_process_server: Option<ExecutionProcessServer>,
@@ -503,14 +494,14 @@ pub struct RuntimeCoreEventAppender {
 
 #[derive(Debug, Default)]
 pub(in crate::runtime) struct RuntimeCoreState {
+    pub(in crate::runtime) browser_workspaces:
+        HashMap<String, right_surface::BrowserWorkspaceIdentityRecord>,
     pub(in crate::runtime) sessions: HashMap<String, StoredSession>,
     pub(in crate::runtime) thread_elicitation_counts: HashMap<String, i64>,
     pub(in crate::runtime) thread_goal_continuations: HashSet<String>,
     pub(in crate::runtime) import_jobs: HashMap<String, conversation_import::ImportJobRecord>,
-    pub(in crate::runtime) session_approval_cache: approval_cache::SessionApprovalCache,
     pub(in crate::runtime) right_surface_pending:
         Vec<app_server_protocol::WorkspaceRightSurfacePendingRequest>,
-    pub(in crate::runtime) browser_profile_scopes: Vec<BrowserProfileScope>,
 }
 
 #[derive(Debug, Clone)]
@@ -583,7 +574,6 @@ impl RuntimeCore {
             projection_store: None,
             telemetry_store: None,
             event_hub: RuntimeEventHub::new(),
-            browser_runtime: Arc::new(BrowserRuntimeManager::new()),
             knowledge_builder_runtime_executor: Arc::new(
                 NativeKnowledgeBuilderRuntimeExecutor::new(),
             ),

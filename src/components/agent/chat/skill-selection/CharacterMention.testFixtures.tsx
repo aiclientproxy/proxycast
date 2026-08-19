@@ -617,49 +617,40 @@ export function createServiceSkill(
   };
 }
 
-export function createXArticleSceneServiceSkill(
+export function createStoryVideoSceneServiceSkill(
   overrides: Partial<ServiceSkillHomeItem> = {},
 ): ServiceSkillHomeItem {
   return createServiceSkill({
-    id: "x-article-export",
-    skillKey: "x-article-export",
-    title: "X 文章转存",
-    summary: "复用 X 登录态把长文导出成 Markdown。",
-    category: "站点采集",
-    outputHint: "Markdown 正文 + 图片目录",
-    source: "local_custom",
+    id: "story-video-suite",
+    skillKey: "story-video-suite",
+    title: "短视频编排",
+    summary: "把活动介绍、脚本、分镜和发布节奏串成短视频执行稿。",
+    category: "视频创作",
+    outputHint: "短视频结构 + 分镜 + 执行清单",
+    source: "cloud_catalog",
     runnerType: "instant",
-    defaultExecutorBinding: "browser_assist",
+    defaultExecutorBinding: "agent_turn",
     executionLocation: "client_default",
     slotSchema: [
       {
-        key: "article_url",
-        label: "X 文章链接",
-        type: "url",
+        key: "source_material",
+        label: "活动 / 内容素材",
+        type: "textarea",
         required: true,
-        placeholder: "https://x.com/<账号>/article/<文章ID>",
+        placeholder: "粘贴活动介绍、产品卖点、文章摘要或脚本素材",
       },
     ],
     sceneBinding: {
-      sceneKey: "x-article-export",
-      commandPrefix: "/x文章转存",
-      title: "X文章转存",
-      summary: "把 X 长文导出成 Markdown。",
-      aliases: ["x文章转存", "x转存"],
+      sceneKey: "story-video-suite",
+      commandPrefix: "/story-video-suite",
+      title: "短视频编排",
+      summary: "把文本、分镜、配乐和执行步骤串成一条本地场景链。",
+      aliases: ["story-video", "短视频编排"],
     },
-    siteCapabilityBinding: {
-      adapterName: "x/article-export",
-      autoRun: true,
-      requireAttachedSession: true,
-      saveMode: "project_resource",
-      slotArgMap: {
-        article_url: "url",
-      },
-    },
-    runnerLabel: "浏览器站点执行",
+    runnerLabel: "先做这一轮",
     runnerTone: "emerald",
-    runnerDescription: "直接复用浏览器登录态执行。",
-    actionLabel: "启动采集",
+    runnerDescription: "先在当前工作区产出一版可继续加工的执行稿。",
+    actionLabel: "补齐这一步",
     ...overrides,
   });
 }
@@ -694,30 +685,13 @@ export function buildCatalogWithSceneEntry(): SkillCatalog {
   };
 }
 
-export function buildCatalogWithXSceneEntry(): SkillCatalog {
+export function buildCatalogWithStoryVideoSceneEntry(): SkillCatalog {
   const seeded = getSeededSkillCatalog();
 
   return {
     ...seeded,
-    tenantId: "tenant-x-scene-demo",
-    version: "tenant-x-scene-demo-2026-04-07",
+    tenantId: "tenant-story-video-scene-demo",
+    version: "tenant-story-video-scene-demo-2026-04-07",
     syncedAt: "2026-04-07T12:00:00.000Z",
-    entries: [
-      ...seeded.entries.filter(
-        (entry) =>
-          entry.kind !== "scene" || entry.sceneKey !== "x-article-export",
-      ),
-      {
-        id: "scene:x-article-export",
-        kind: "scene",
-        title: "X文章转存",
-        summary: "把 X 长文导出成 Markdown。",
-        sceneKey: "x-article-export",
-        commandPrefix: "/x文章转存",
-        aliases: ["x文章转存", "x转存"],
-        linkedSkillId: "x-article-export",
-        executionKind: "site_adapter",
-      },
-    ],
   };
 }

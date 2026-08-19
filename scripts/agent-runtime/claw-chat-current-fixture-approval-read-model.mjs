@@ -9,13 +9,15 @@ import {
   APPROVAL_REQUEST_RESUME_RESULT_TEXT,
   APPROVAL_REQUEST_DECLINE_DONE_TEXT,
   APPROVAL_REQUEST_DECLINE_RESULT_TEXT,
-  APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT,
-  APPROVAL_REQUEST_RESUME_SECOND_PROMPT,
-  APPROVAL_REQUEST_RESUME_SECOND_RESULT_TEXT,
   APPROVAL_REQUEST_RESUME_TOOL_CALL_ID,
   SESSION_ID,
 } from "./claw-chat-current-fixture-constants.mjs";
 import { invokeAppServerFromPage } from "./claw-chat-current-fixture-rpc.mjs";
+import {
+  collectReadModelItems,
+  collectReadModelTurns,
+  readModelTurnId,
+} from "./claw-chat-current-fixture-read-model-core.mjs";
 import { sanitizeJson, sleep } from "./claw-chat-current-fixture-utils.mjs";
 
 const METHOD_COMMAND_EXECUTION_REQUEST_APPROVAL =
@@ -41,22 +43,6 @@ function collectPendingRequests(readModel) {
     ...(Array.isArray(threadRead?.pendingRequests)
       ? threadRead.pendingRequests
       : []),
-  ].filter(Boolean);
-}
-
-function collectReadModelItems(readModel) {
-  const detail = readModel?.detail ?? readModel ?? {};
-  const threadRead = detail?.thread_read ?? detail?.threadRead ?? {};
-  return [
-    ...(Array.isArray(readModel?.items) ? readModel.items : []),
-    ...(Array.isArray(readModel?.thread_items) ? readModel.thread_items : []),
-    ...(Array.isArray(readModel?.threadItems) ? readModel.threadItems : []),
-    ...(Array.isArray(detail?.items) ? detail.items : []),
-    ...(Array.isArray(detail?.thread_items) ? detail.thread_items : []),
-    ...(Array.isArray(detail?.threadItems) ? detail.threadItems : []),
-    ...(Array.isArray(threadRead?.items) ? threadRead.items : []),
-    ...(Array.isArray(threadRead?.thread_items) ? threadRead.thread_items : []),
-    ...(Array.isArray(threadRead?.threadItems) ? threadRead.threadItems : []),
   ].filter(Boolean);
 }
 
@@ -97,10 +83,65 @@ function findPendingApprovalServerRequest(lifecycleEntries) {
   return settled ? null : request;
 }
 
+function readCanonicalToolIdentity(readModel, request) {
+  if (!request?.itemId) {
+    return null;
+  }
+  for (const turn of collectReadModelTurns(readModel)) {
+    const item = (Array.isArray(turn?.items) ? turn.items : []).find(
+      (candidate) =>
+        (candidate?.id ?? candidate?.item_id ?? candidate?.itemId) ===
+        request.itemId,
+    );
+    if (item) {
+      return {
+        item,
+        turnId: readModelTurnId(turn),
+      };
+    }
+  }
+  const item = collectReadModelItems(readModel).find(
+    (candidate) =>
+      (candidate?.id ?? candidate?.item_id ?? candidate?.itemId) ===
+      request.itemId,
+  );
+  return item
+    ? {
+        item,
+        turnId: item?.turn_id ?? item?.turnId ?? null,
+      }
+    : null;
+}
+
+function containsStringValue(value, expected) {
+  if (typeof value === "string") {
+    return value.includes(expected);
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) => containsStringValue(item, expected));
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value).some((item) =>
+      containsStringValue(item, expected),
+    );
+  }
+  return false;
+}
+
 export function summarizeApprovalPendingReadModel(readModel, lifecycleEntries) {
   const readModelPendingRequests = collectPendingRequests(readModel);
   const request = findPendingApprovalServerRequest(lifecycleEntries);
-  const readModelSerialized = JSON.stringify(readModel || {});
+  const canonicalTool = readCanonicalToolIdentity(readModel, request);
+  const canonicalToolItem = canonicalTool?.item ?? null;
+  const canonicalToolName =
+    canonicalToolItem?.tool ??
+    canonicalToolItem?.tool_name ??
+    canonicalToolItem?.toolName ??
+    canonicalToolItem?.name ??
+    (canonicalToolItem?.type === "commandExecution"
+      ? "exec_command"
+      : null) ??
+    null;
   return sanitizeJson({
     pendingRequestCount: request ? 1 : 0,
     readModelPendingRequestCount: readModelPendingRequests.length,
@@ -114,20 +155,29 @@ export function summarizeApprovalPendingReadModel(readModel, lifecycleEntries) {
     turnId: request?.turnId ?? null,
     itemId: request?.itemId ?? null,
     payloadActionType: request ? "tool_confirmation" : null,
-    payloadToolName: request ? "exec_command" : null,
-    includesPrompt: readModelSerialized.includes(
+    payloadToolName: canonicalToolName,
+    hasCanonicalToolItem: Boolean(canonicalToolItem),
+    canonicalToolItemType:
+      canonicalToolItem?.type ?? canonicalToolItem?.item_type ?? null,
+    canonicalToolItemStatus: canonicalToolItem?.status ?? null,
+    canonicalToolItemScoped:
+      Boolean(request?.turnId) && canonicalTool?.turnId === request?.turnId,
+    includesPrompt: containsStringValue(
+      readModel,
       APPROVAL_REQUEST_RESUME_PROMPT,
     ),
-    includesApprovalPrompt: readModelSerialized.includes(
+    includesApprovalPrompt: containsStringValue(
+      readModel,
       APPROVAL_REQUEST_RESUME_APPROVAL_PROMPT,
     ),
-    includesCommand: readModelSerialized.includes(
+    includesCommand: containsStringValue(
+      readModel,
       APPROVAL_REQUEST_RESUME_COMMAND,
     ),
     includesRequestId:
       request?.approvalId === APPROVAL_REQUEST_RESUME_REQUEST_ID,
     includesToolCallId:
-      readModelSerialized.includes(APPROVAL_REQUEST_RESUME_TOOL_CALL_ID) &&
+      containsStringValue(readModel, APPROVAL_REQUEST_RESUME_TOOL_CALL_ID) &&
       request?.itemId === APPROVAL_REQUEST_RESUME_TOOL_CALL_ID,
   });
 }
@@ -283,123 +333,6 @@ function eventPayloadRequestId(payload) {
   );
 }
 
-export function summarizeApprovalSessionCacheReadModel(
-  readModel,
-  secondTurnId,
-) {
-  const serialized = JSON.stringify(readModel || {});
-  const pendingRequests = collectPendingRequests(readModel);
-  const secondPermissionRequestId = secondTurnId
-    ? `permission-${secondTurnId}`
-    : null;
-  const secondPermissionEvents = collectEventLikeRecords(readModel).filter(
-    (event) =>
-      secondPermissionRequestId &&
-      eventPayloadRequestId(event.payload) === secondPermissionRequestId,
-  );
-  const includesApprovalSessionCacheMetadata = serialized.includes(
-    "approval_session_cache",
-  );
-  const includesCacheResolvedSource = serialized.includes(
-    "approval_session_cache",
-  );
-  const includesAllowForSession =
-    serialized.includes("allow_for_session") ||
-    serialized.includes("approvedForSession");
-  const includesSecondPermissionRequestId = secondPermissionRequestId
-    ? secondPermissionEvents.length > 0 ||
-      serialized.includes(secondPermissionRequestId)
-    : false;
-  const includesActionRequiredForSecondPermission = secondPermissionEvents.some(
-    (event) =>
-      event.eventType === "action.required" ||
-      event.eventType === "action_required",
-  );
-  const includesActionResolvedForSecondPermission =
-    secondPermissionEvents.some(
-      (event) =>
-        ((event.eventType === "action.resolved" ||
-          event.eventType === "action_resolved") &&
-          (event.payload?.source === "approval_session_cache" ||
-            event.payload?.decision === "allow_for_session")) ||
-        (event.eventType === "approval" &&
-          ["completed", "failed", "interrupted", "cancelled"].includes(
-            event.status,
-          ) &&
-          event.payload?.decision === "approvedForSession"),
-    ) ||
-    (includesSecondPermissionRequestId &&
-      includesAllowForSession &&
-      !includesActionRequiredForSecondPermission);
-  return sanitizeJson({
-    pendingRequestCount: pendingRequests.length,
-    latestTurnStatus: readLatestTurnStatus(readModel),
-    includesSecondPrompt: serialized.includes(
-      APPROVAL_REQUEST_RESUME_SECOND_PROMPT,
-    ),
-    includesSecondResult: serialized.includes(
-      APPROVAL_REQUEST_RESUME_SECOND_RESULT_TEXT,
-    ),
-    includesSecondDone: serialized.includes(
-      APPROVAL_REQUEST_RESUME_SECOND_DONE_TEXT,
-    ),
-    includesApprovalSessionCacheHit:
-      serialized.includes("approval.session_cache.hit") ||
-      includesActionResolvedForSecondPermission,
-    includesApprovalSessionCacheMetadata,
-    includesCacheResolvedSource,
-    includesAllowForSession,
-    includesSecondPermissionRequestId,
-    includesActionRequiredForSecondPermission,
-    includesActionResolvedForSecondPermission,
-  });
-}
-
-function approvalCacheHarnessFromTurnStart(entry) {
-  const harness = entry?.runtimeRequest?.metadata?.harness ?? {};
-  return harness && typeof harness === "object" ? harness : {};
-}
-
-export function summarizeApprovalSecondTurnStart(entry) {
-  const harness = approvalCacheHarnessFromTurnStart(entry);
-  const browserAssist = harness.browser_assist ?? harness.browserAssist ?? {};
-  const runtimeContract =
-    browserAssist?.runtime_contract ?? browserAssist?.runtimeContract ?? {};
-  const cache =
-    harness.approval_session_cache ?? harness.approvalSessionCache ?? null;
-  const cacheKey = cache?.key ?? {};
-  const runtimeRequest = entry?.runtimeRequest ?? {};
-  return sanitizeJson({
-    sessionId: entry?.sessionId ?? null,
-    threadId: entry?.threadId ?? null,
-    turnId: entry?.turnId ?? null,
-    inputText: entry?.inputText ?? null,
-    approvalPolicy:
-      runtimeRequest?.approval_policy ?? runtimeRequest?.approvalPolicy,
-    sandboxPolicy:
-      runtimeRequest?.sandbox_policy ?? runtimeRequest?.sandboxPolicy,
-    browserAssistEnabled: browserAssist?.enabled ?? null,
-    browserAssistProfileKey:
-      browserAssist?.profile_key ?? browserAssist?.profileKey ?? null,
-    browserAssistContractKey:
-      runtimeContract?.contract_key ?? runtimeContract?.contractKey ?? null,
-    approvalSessionCacheDecision: cache?.decision ?? null,
-    approvalSessionCacheDecisionScope:
-      cache?.decisionScope ?? cache?.decision_scope ?? null,
-    approvalSessionCacheSourceRequestId:
-      cache?.sourceRequestId ?? cache?.source_request_id ?? null,
-    approvalSessionCacheKey: {
-      actionKind: cacheKey?.actionKind ?? cacheKey?.action_kind ?? null,
-      toolFamily: cacheKey?.toolFamily ?? cacheKey?.tool_family ?? null,
-      approvalPolicy:
-        cacheKey?.approvalPolicy ?? cacheKey?.approval_policy ?? null,
-      sandboxPolicy:
-        cacheKey?.sandboxPolicy ?? cacheKey?.sandbox_policy ?? null,
-      contractKey: cacheKey?.contractKey ?? cacheKey?.contract_key ?? null,
-    },
-  });
-}
-
 export async function waitForApprovalPendingReadModel(
   page,
   options,
@@ -433,7 +366,9 @@ export async function waitForApprovalPendingReadModel(
       lastSummary.hasPendingRequest === true &&
       lastSummary.readModelPendingRequestCount === 0 &&
       lastSummary.payloadActionType === "tool_confirmation" &&
-      lastSummary.includesCommand === true &&
+      lastSummary.payloadToolName === "exec_command" &&
+      lastSummary.hasCanonicalToolItem === true &&
+      lastSummary.canonicalToolItemScoped === true &&
       lastSummary.threadId === options.threadId &&
       typeof lastSummary.turnId === "string" &&
       lastSummary.turnId.length > 0 &&

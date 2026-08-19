@@ -1,88 +1,62 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 import type { Artifact } from "@/lib/artifact/types";
-import type {
-  AgentSiteSkillLaunchParams,
-  Page,
-  PageParams,
-} from "@/types/page";
-import type { BrowserAssistSessionState } from "../types";
-import { GENERAL_BROWSER_ASSIST_PROFILE_KEY } from "./agentChatWorkspaceHelpers";
-import { resolveWorkspaceBrowserAssistRequest } from "./workspaceBrowserAssistRequest";
-import { resolveBrowserRuntimeNavigationFromBrowserAssist } from "./workspaceBrowserRuntimeNavigation";
-import { buildBrowserSessionRefFromBrowserAssistSessionState } from "./workspaceBrowserSessionRef";
-
-type WorkspaceNavigate = (page: Page, params?: PageParams) => void;
+import { requestWorkspaceRightSurface } from "@/lib/api/workspaceRightSurface";
 
 interface UseWorkspaceBrowserAssistRequestRuntimeParams {
-  browserAssistSessionState: BrowserAssistSessionState | null;
-  contentId?: string | null;
-  initialAutoSendRequestMetadata?: Record<string, unknown> | null;
-  initialSiteSkillLaunch?: AgentSiteSkillLaunchParams;
-  mappedTheme: string;
-  onNavigate?: WorkspaceNavigate;
   projectId?: string | null;
+  sessionId?: string | null;
 }
 
 export function useWorkspaceBrowserAssistRequestRuntime({
-  browserAssistSessionState,
-  contentId,
-  initialAutoSendRequestMetadata,
-  initialSiteSkillLaunch,
-  mappedTheme,
-  onNavigate,
   projectId,
+  sessionId,
 }: UseWorkspaceBrowserAssistRequestRuntimeParams) {
-  const browserAssistSessionRef = useMemo(
-    () =>
-      buildBrowserSessionRefFromBrowserAssistSessionState(
-        browserAssistSessionState,
-      ),
-    [browserAssistSessionState],
-  );
-  const {
-    browserAssistRequestProfileKey,
-    browserAssistRequestPreferredBackend,
-    browserAssistRequestAutoLaunch,
-  } = resolveWorkspaceBrowserAssistRequest({
-    mappedTheme,
-    initialAutoSendRequestMetadata,
-    initialSiteSkillLaunch,
-    browserAssistSessionState,
-  });
   const handleOpenBrowserRuntimeForBrowserAssist = useCallback(
-    (artifact?: Artifact) => {
-      if (!onNavigate) {
-        toast.error("当前入口暂不支持打开浏览器工作台，请从桌面主界面重试。");
-        return;
+    async (artifact?: Artifact) => {
+      const launchUrl = readArtifactString(artifact, ["url", "launchUrl"]);
+      const title = artifact?.title?.trim() || null;
+      try {
+        await requestWorkspaceRightSurface({
+          surfaceKind: "browser",
+          origin: "user",
+          priority: "foreground",
+          reason: "open_browser_workspace",
+          sessionId: sessionId ?? null,
+          workspaceId: projectId ?? null,
+          candidateId: artifact?.id ?? launchUrl ?? null,
+          metadata: {
+            browser: {
+              launchUrl,
+              title,
+            },
+          },
+        });
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "无法打开浏览器工作区，请稍后重试。",
+        );
       }
-
-      onNavigate(
-        "browser-runtime",
-        resolveBrowserRuntimeNavigationFromBrowserAssist({
-          artifact,
-          browserSessionRef: browserAssistSessionRef,
-          browserAssistSessionState,
-          contentId,
-          generalBrowserAssistProfileKey: GENERAL_BROWSER_ASSIST_PROFILE_KEY,
-          projectId,
-        }),
-      );
     },
-    [
-      browserAssistSessionRef,
-      browserAssistSessionState,
-      contentId,
-      onNavigate,
-      projectId,
-    ],
+    [projectId, sessionId],
   );
 
   return {
-    browserAssistRequestAutoLaunch,
-    browserAssistRequestPreferredBackend,
-    browserAssistRequestProfileKey,
-    browserAssistSessionRef,
     handleOpenBrowserRuntimeForBrowserAssist,
   };
+}
+
+function readArtifactString(
+  artifact: Artifact | undefined,
+  keys: readonly string[],
+): string | null {
+  for (const key of keys) {
+    const value = artifact?.meta?.[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
 }

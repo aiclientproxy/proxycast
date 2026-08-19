@@ -29,7 +29,8 @@ use tool_runtime::tool_executor::{
     RuntimeToolExecutor,
 };
 use tool_runtime::tool_lifecycle::{
-    ToolLifecycleEmissionFuture, ToolLifecycleEvent, ToolLifecyclePhase, ToolOutputDeltaEvent,
+    CodeCellRuntimeStatus, CodeCellTraceEvent, ToolLifecycleEmissionFuture, ToolLifecycleEvent,
+    ToolLifecyclePhase, ToolOutputDeltaEvent,
 };
 
 #[test]
@@ -887,6 +888,7 @@ impl RuntimeToolExecutor for ParallelProbe {
 struct RecordingLifecycleEmitter {
     events: Mutex<Vec<ToolLifecycleEvent>>,
     output_deltas: Mutex<Vec<ToolOutputDeltaEvent>>,
+    code_cell_traces: Mutex<Vec<CodeCellTraceEvent>>,
 }
 
 impl RecordingLifecycleEmitter {
@@ -897,6 +899,13 @@ impl RecordingLifecycleEmitter {
     fn output_deltas(&self) -> Vec<ToolOutputDeltaEvent> {
         self.output_deltas.lock().expect("output deltas").clone()
     }
+
+    fn code_cell_traces(&self) -> Vec<CodeCellTraceEvent> {
+        self.code_cell_traces
+            .lock()
+            .expect("code cell traces")
+            .clone()
+    }
 }
 
 impl ToolLifecycleEmitter for RecordingLifecycleEmitter {
@@ -905,6 +914,18 @@ impl ToolLifecycleEmitter for RecordingLifecycleEmitter {
             self.events
                 .lock()
                 .expect("record lifecycle event")
+                .push(event);
+        })
+    }
+
+    fn emit_code_cell_trace<'a>(
+        &'a self,
+        event: CodeCellTraceEvent,
+    ) -> ToolLifecycleEmissionFuture<'a> {
+        Box::pin(async move {
+            self.code_cell_traces
+                .lock()
+                .expect("record code cell trace")
                 .push(event);
         })
     }
@@ -3158,6 +3179,29 @@ async fn custom_exec_uses_code_mode_session_and_resamples_with_typed_result() {
         .output
         .as_ref()
         .is_some_and(|output| output.success));
+    assert_eq!(
+        lifecycle_emitter.code_cell_traces(),
+        vec![
+            CodeCellTraceEvent::Started {
+                turn_id: "turn-custom".to_string(),
+                runtime_cell_id: "1".to_string(),
+                model_visible_call_id: "custom-call-1".to_string(),
+                source_js: "text(40 + 2);".to_string(),
+            },
+            CodeCellTraceEvent::InitialResponse {
+                turn_id: "turn-custom".to_string(),
+                runtime_cell_id: "1".to_string(),
+                status: CodeCellRuntimeStatus::Completed,
+                response_chars: 2,
+            },
+            CodeCellTraceEvent::Ended {
+                turn_id: "turn-custom".to_string(),
+                runtime_cell_id: "1".to_string(),
+                status: CodeCellRuntimeStatus::Completed,
+                response_chars: 2,
+            },
+        ]
+    );
 }
 
 #[tokio::test]
@@ -3264,6 +3308,21 @@ async fn custom_exec_nested_tool_reuses_the_frozen_executor_and_lifecycle() {
             .and_then(serde_json::Value::as_str),
         Some("cell-nested-provider-turn")
     );
+    let traces = lifecycle_emitter.code_cell_traces();
+    assert!(matches!(
+        traces.as_slice(),
+        [
+            CodeCellTraceEvent::Started { runtime_cell_id, .. },
+            CodeCellTraceEvent::NestedToolStarted { tool_call_id, .. },
+            CodeCellTraceEvent::NestedToolEnded { status, .. },
+            CodeCellTraceEvent::InitialResponse { status: initial_status, .. },
+            CodeCellTraceEvent::Ended { status: end_status, .. },
+        ] if runtime_cell_id == "cell-nested-provider-turn"
+            && tool_call_id == "code-mode-nested-read-1"
+            && status == "completed"
+            && *initial_status == CodeCellRuntimeStatus::Completed
+            && *end_status == CodeCellRuntimeStatus::Completed
+    ));
     let requests = requests.lock().expect("provider requests");
     assert!(matches!(
         requests[1].messages.last(),
@@ -3329,6 +3388,7 @@ async fn wait_function_uses_the_same_code_mode_session_and_resamples() {
             }),
         )]),
     );
+    let lifecycle_emitter = Arc::new(RecordingLifecycleEmitter::default());
 
     let execution = run_current_provider_turn(
         CurrentProviderTurnInput {
@@ -3352,7 +3412,7 @@ async fn wait_function_uses_the_same_code_mode_session_and_resamples() {
             ),
             hook_snapshot_source: None,
             model_request_policy: None,
-            tool_lifecycle_emitter: Arc::new(RecordingLifecycleEmitter::default()),
+            tool_lifecycle_emitter: lifecycle_emitter.clone(),
             working_directory: PathBuf::from("."),
             cancel_token: None,
             pending_input: None,
@@ -3366,6 +3426,22 @@ async fn wait_function_uses_the_same_code_mode_session_and_resamples() {
     assert_eq!(
         code_mode.wait_requests(),
         vec![("cell-running".to_string(), 250)]
+    );
+    assert_eq!(
+        lifecycle_emitter.code_cell_traces(),
+        vec![
+            CodeCellTraceEvent::WaitToolObserved {
+                turn_id: "turn-wait".to_string(),
+                runtime_cell_id: "cell-running".to_string(),
+                tool_call_id: "wait-call-1".to_string(),
+            },
+            CodeCellTraceEvent::Ended {
+                turn_id: "turn-wait".to_string(),
+                runtime_cell_id: "cell-running".to_string(),
+                status: CodeCellRuntimeStatus::Completed,
+                response_chars: 8,
+            },
+        ]
     );
     let requests = requests.lock().expect("provider requests");
     assert!(matches!(

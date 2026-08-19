@@ -11,12 +11,11 @@ import {
 } from "@/lib/base-setup/storage";
 import {
   createSeededCloudServiceSkillCatalog,
-  createSeededLocalCustomServiceSkillCatalog,
 } from "@/lib/base-setup/seededServiceSkillPackage";
 
 export type ServiceSkillSource = "cloud_catalog" | "local_custom";
 
-export type ServiceSkillType = "service" | "site" | "prompt";
+export type ServiceSkillType = "service" | "prompt";
 
 export type ServiceSkillRunnerType = "instant" | "scheduled" | "managed";
 
@@ -42,7 +41,6 @@ export type ServiceSkillArtifactKind =
 export type ServiceSkillCurrentExecutorBinding =
   | "native_skill"
   | "agent_turn"
-  | "browser_assist"
   | "automation_job";
 // legacy compat only：仅允许作为旧目录输入，不再代表 current 执行面。
 export type ServiceSkillCompatExecutorBinding = "cloud_scene";
@@ -90,28 +88,6 @@ export interface ServiceSkillReadinessRequirements {
   requiresBrowser?: boolean;
   requiresSkillKey?: string;
   requiresProject?: boolean;
-}
-
-export type ServiceSkillSiteCapabilitySaveMode =
-  | "current_content"
-  | "project_resource";
-
-export interface ServiceSkillSiteCapabilityAdapterMatch {
-  urlArgName: string;
-  requiredCapabilities?: string[];
-  hostAliases?: string[];
-}
-
-export interface ServiceSkillSiteCapabilityBinding {
-  adapterName?: string;
-  adapterMatch?: ServiceSkillSiteCapabilityAdapterMatch;
-  autoRun?: boolean;
-  requireAttachedSession?: boolean;
-  saveMode?: ServiceSkillSiteCapabilitySaveMode;
-  slotArgMap?: Record<string, string>;
-  fixedArgs?: Record<string, unknown>;
-  suggestedTitleTemplate?: string;
-  siteLabel?: string;
 }
 
 export interface ServiceSkillSceneBinding {
@@ -166,7 +142,6 @@ export interface ServiceSkillItem {
   setupRequirements?: string[];
   examples?: string[];
   outputDestination?: string;
-  siteCapabilityBinding?: ServiceSkillSiteCapabilityBinding;
   sceneBinding?: ServiceSkillSceneBinding;
   slotSchema: ServiceSkillSlotDefinition[];
   surfaceScopes?: ServiceSkillSurfaceScope[];
@@ -255,7 +230,7 @@ const SERVICE_SKILL_SURFACE_SCOPES: ServiceSkillSurfaceScope[] = [
   "workspace",
 ];
 
-const SERVICE_SKILL_TYPES: ServiceSkillType[] = ["service", "site", "prompt"];
+const SERVICE_SKILL_TYPES: ServiceSkillType[] = ["service", "prompt"];
 
 const SERVICE_SKILL_PROMPT_TEMPLATE_KEYS: ServiceSkillPromptTemplateKey[] = [
   "generic",
@@ -294,7 +269,6 @@ function toServiceSkillBundleMetadata(
     ServiceSkillCompatItem,
     | "skillType"
     | "defaultExecutorBinding"
-    | "siteCapabilityBinding"
     | "category"
     | "runnerType"
     | "executionLocation"
@@ -307,12 +281,7 @@ function toServiceSkillBundleMetadata(
   >,
 ): Record<string, string> | undefined {
   const metadata: Record<string, string> = {};
-  const skillType =
-    item.skillType ??
-    (item.defaultExecutorBinding === "browser_assist" ||
-    item.siteCapabilityBinding
-      ? "site"
-      : "service");
+  const skillType = item.skillType ?? "service";
   const outputDestination = resolveDerivedServiceSkillOutputDestination(item);
   const executionLocation = resolveCurrentServiceSkillExecutionLocation(item);
   const executorBinding = resolveCurrentServiceSkillExecutorBinding(item);
@@ -328,23 +297,6 @@ function toServiceSkillBundleMetadata(
     Lime_entry_hint: trimToUndefined(item.entryHint),
     Lime_prompt_template_key: item.promptTemplateKey,
     Lime_theme_target: trimToUndefined(item.themeTarget),
-    Lime_site_adapter: trimToUndefined(item.siteCapabilityBinding?.adapterName),
-    Lime_site_label: trimToUndefined(item.siteCapabilityBinding?.siteLabel),
-    Lime_site_adapter_match_url_arg: trimToUndefined(
-      item.siteCapabilityBinding?.adapterMatch?.urlArgName,
-    ),
-    Lime_site_adapter_match_capabilities:
-      item.siteCapabilityBinding?.adapterMatch?.requiredCapabilities &&
-      item.siteCapabilityBinding.adapterMatch.requiredCapabilities.length > 0
-        ? JSON.stringify(
-            item.siteCapabilityBinding.adapterMatch.requiredCapabilities,
-          )
-        : undefined,
-    Lime_site_adapter_match_host_aliases:
-      item.siteCapabilityBinding?.adapterMatch?.hostAliases &&
-      item.siteCapabilityBinding.adapterMatch.hostAliases.length > 0
-        ? JSON.stringify(item.siteCapabilityBinding.adapterMatch.hostAliases)
-        : undefined,
     Lime_surface_scopes:
       item.surfaceScopes && item.surfaceScopes.length > 0
         ? JSON.stringify(item.surfaceScopes)
@@ -365,7 +317,6 @@ function resolveDerivedServiceSkillOutputDestination(
     ServiceSkillCompatItem,
     | "outputDestination"
     | "executionLocation"
-    | "siteCapabilityBinding"
     | "runnerType"
   >,
 ): string {
@@ -377,12 +328,6 @@ function resolveDerivedServiceSkillOutputDestination(
     resolveServiceSkillExecutionLocationPresentation(item.executionLocation);
   if (executionLocationPresentation?.legacyCompat) {
     return `结果仍会写回当前工作区；${LEGACY_SERVICE_SKILL_EXECUTION_COMPAT_NOTE}`;
-  }
-
-  if (item.siteCapabilityBinding) {
-    return item.siteCapabilityBinding.saveMode === "project_resource"
-      ? "结果会收进当前项目资料，后面还能继续拿来用。"
-      : "结果会先回到当前内容里，方便接着往下改。";
   }
 
   if (item.runnerType === "scheduled") {
@@ -419,10 +364,6 @@ function buildDerivedServiceSkillCompatibility(
   ) {
     parts.push(LEGACY_SERVICE_SKILL_EXECUTION_COMPAT_SUMMARY);
   }
-  if (item.defaultExecutorBinding === "browser_assist") {
-    parts.push("会复用浏览器站点上下文");
-  }
-
   const compatibility = parts.join("；");
   return compatibility.length > MAX_SERVICE_SKILL_BUNDLE_COMPATIBILITY_LENGTH
     ? compatibility
@@ -534,15 +475,9 @@ function normalizeServiceSkillItem(
 
 const SEEDED_CLOUD_SERVICE_SKILL_CATALOG =
   createSeededCloudServiceSkillCatalog();
-const SEEDED_LOCAL_CUSTOM_SERVICE_SKILL_CATALOG =
-  createSeededLocalCustomServiceSkillCatalog();
 
 const SEEDED_SERVICE_SKILL_CATALOG: ServiceSkillCatalog = {
   ...SEEDED_CLOUD_SERVICE_SKILL_CATALOG,
-  items: [
-    ...SEEDED_CLOUD_SERVICE_SKILL_CATALOG.items,
-    ...SEEDED_LOCAL_CUSTOM_SERVICE_SKILL_CATALOG.items,
-  ],
 };
 
 function isStringArray(value: unknown): value is string[] {
@@ -660,53 +595,6 @@ export function isServiceSkillBundleSummary(
   );
 }
 
-function isServiceSkillSiteCapabilityBinding(
-  value: unknown,
-): value is ServiceSkillSiteCapabilityBinding {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const binding = value as Partial<ServiceSkillSiteCapabilityBinding>;
-  const saveModeValid =
-    binding.saveMode === undefined ||
-    binding.saveMode === "current_content" ||
-    binding.saveMode === "project_resource";
-  const adapterNameValid =
-    binding.adapterName === undefined ||
-    (typeof binding.adapterName === "string" &&
-      binding.adapterName.trim().length > 0);
-  const adapterMatchValid =
-    binding.adapterMatch === undefined ||
-    (typeof binding.adapterMatch === "object" &&
-      binding.adapterMatch !== null &&
-      typeof binding.adapterMatch.urlArgName === "string" &&
-      binding.adapterMatch.urlArgName.trim().length > 0 &&
-      (binding.adapterMatch.requiredCapabilities === undefined ||
-        isStringArray(binding.adapterMatch.requiredCapabilities)) &&
-      (binding.adapterMatch.hostAliases === undefined ||
-        isStringArray(binding.adapterMatch.hostAliases)));
-  const hasAdapterSelector =
-    (typeof binding.adapterName === "string" &&
-      binding.adapterName.trim().length > 0) ||
-    binding.adapterMatch !== undefined;
-
-  return (
-    hasAdapterSelector &&
-    adapterNameValid &&
-    adapterMatchValid &&
-    (binding.autoRun === undefined || typeof binding.autoRun === "boolean") &&
-    (binding.requireAttachedSession === undefined ||
-      typeof binding.requireAttachedSession === "boolean") &&
-    saveModeValid &&
-    (binding.slotArgMap === undefined || isStringRecord(binding.slotArgMap)) &&
-    (binding.fixedArgs === undefined || isPlainRecord(binding.fixedArgs)) &&
-    (binding.suggestedTitleTemplate === undefined ||
-      typeof binding.suggestedTitleTemplate === "string") &&
-    (binding.siteLabel === undefined || typeof binding.siteLabel === "string")
-  );
-}
-
 function isServiceSkillSceneBinding(
   value: unknown,
 ): value is ServiceSkillSceneBinding {
@@ -776,8 +664,6 @@ function isServiceSkillCompatItem(
     (item.examples === undefined || isStringArray(item.examples)) &&
     (item.outputDestination === undefined ||
       typeof item.outputDestination === "string") &&
-    (item.siteCapabilityBinding === undefined ||
-      isServiceSkillSiteCapabilityBinding(item.siteCapabilityBinding)) &&
     (item.sceneBinding === undefined ||
       isServiceSkillSceneBinding(item.sceneBinding)) &&
     Array.isArray(item.slotSchema) &&
@@ -830,33 +716,6 @@ function cloneServiceSkillCatalog(
       surfaceScopes: item.surfaceScopes ? [...item.surfaceScopes] : undefined,
       readinessRequirements: item.readinessRequirements
         ? { ...item.readinessRequirements }
-        : undefined,
-      siteCapabilityBinding: item.siteCapabilityBinding
-        ? {
-            ...item.siteCapabilityBinding,
-            adapterMatch: item.siteCapabilityBinding.adapterMatch
-              ? {
-                  ...item.siteCapabilityBinding.adapterMatch,
-                  requiredCapabilities: item.siteCapabilityBinding.adapterMatch
-                    .requiredCapabilities
-                    ? [
-                        ...item.siteCapabilityBinding.adapterMatch
-                          .requiredCapabilities,
-                      ]
-                    : undefined,
-                  hostAliases: item.siteCapabilityBinding.adapterMatch
-                    .hostAliases
-                    ? [...item.siteCapabilityBinding.adapterMatch.hostAliases]
-                    : undefined,
-                }
-              : undefined,
-            slotArgMap: item.siteCapabilityBinding.slotArgMap
-              ? { ...item.siteCapabilityBinding.slotArgMap }
-              : undefined,
-            fixedArgs: item.siteCapabilityBinding.fixedArgs
-              ? JSON.parse(JSON.stringify(item.siteCapabilityBinding.fixedArgs))
-              : undefined,
-          }
         : undefined,
       sceneBinding: item.sceneBinding
         ? {
@@ -1002,34 +861,14 @@ function shouldIgnoreServerSyncedCatalog(
   return compareCatalogVersion(incoming.version, current.version) < 0;
 }
 
-function mergeSeededLocalCustomServiceSkillItems(
-  catalog: ServiceSkillCatalog,
-): ServiceSkillCatalog {
-  const localCustomItems = SEEDED_LOCAL_CUSTOM_SERVICE_SKILL_CATALOG.items;
-  if (localCustomItems.length === 0) {
-    return catalog;
-  }
-
-  const localCustomIds = new Set(localCustomItems.map((item) => item.id));
-  return {
-    ...catalog,
-    items: [
-      ...catalog.items.filter((item) => !localCustomIds.has(item.id)),
-      ...localCustomItems.map(
-        (item) => JSON.parse(JSON.stringify(item)) as ServiceSkillItem,
-      ),
-    ],
-  };
-}
-
 function normalizeServiceSkillCatalog(
   catalog: ServiceSkillCompatCatalog,
 ): ServiceSkillCatalog {
   return cloneServiceSkillCatalog(
-    mergeSeededLocalCustomServiceSkillItems({
+    {
       ...catalog,
       items: catalog.items.map((item) => normalizeServiceSkillItem(item)),
-    }),
+    },
   );
 }
 

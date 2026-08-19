@@ -39,11 +39,11 @@ describe("artifactToolSources", () => {
     ]);
   });
 
-  it("应从浏览器工具结果提取 browser 来源", () => {
+  it("应从 current 浏览器工具结果提取 browser 来源", () => {
     const sources = collectArtifactDocumentSourcesFromToolCalls([
       {
         id: "tool-browser-1",
-        name: "browser_navigate",
+        name: "browser__navigate",
         arguments: JSON.stringify({ url: "https://example.com/publish" }),
         result: {
           success: true,

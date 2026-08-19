@@ -71,7 +71,6 @@ const {
   mockOpenExternalUrl,
   mockStartOemCloudLogin,
   mockGetClientReferralDashboard,
-  mockClearSiteAdapterCatalogCache,
   mockToastSuccess,
   mockToastError,
   mockToastInfo,
@@ -125,7 +124,6 @@ const {
   mockOpenExternalUrl: vi.fn(),
   mockStartOemCloudLogin: vi.fn(),
   mockGetClientReferralDashboard: vi.fn(),
-  mockClearSiteAdapterCatalogCache: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
   mockToastInfo: vi.fn(),
@@ -151,7 +149,6 @@ const {
 
 export {
   mockBuildOemCloudUserCenterUrl,
-  mockClearSiteAdapterCatalogCache,
   mockCheckForUpdates,
   mockCreateExternalBrowserOpenTarget,
   mockDeleteAgentRuntimeSession,
@@ -314,10 +311,6 @@ vi.mock("sonner", () => ({
     error: mockToastError,
     info: mockToastInfo,
   },
-}));
-
-vi.mock("@/lib/siteAdapterCatalogBootstrap", () => ({
-  clearSiteAdapterCatalogCache: mockClearSiteAdapterCatalogCache,
 }));
 
 vi.mock("@/lib/utils/scheduleMinimumDelayIdleTask", () => ({
@@ -954,7 +947,6 @@ export async function resetAppSidebarTest() {
   mockGetClientReferralDashboard.mockResolvedValue(
     buildMockReferralDashboard(),
   );
-  mockClearSiteAdapterCatalogCache.mockResolvedValue(null);
   mockScheduleMinimumDelayIdleTask.mockImplementation((task: () => void) => {
     task();
     return () => undefined;

@@ -1,6 +1,4 @@
 use super::super::*;
-use crate::WorkspaceObjectCanvasSnapshot;
-use crate::WorkspaceObjectCanvasSnapshotListParams;
 use async_trait::async_trait;
 
 #[async_trait]
@@ -28,19 +26,5 @@ impl RightSurfaceAppDataSource for LocalAppDataSource {
         request_ids: Vec<String>,
     ) -> Result<Vec<String>, RuntimeCoreError> {
         right_surface::delete_pending_requests(&self.db, request_ids)
-    }
-
-    async fn save_workspace_object_canvas_snapshot(
-        &self,
-        snapshot: WorkspaceObjectCanvasSnapshot,
-    ) -> Result<(), RuntimeCoreError> {
-        right_surface::save_object_canvas_snapshot(&self.db, snapshot)
-    }
-
-    async fn list_workspace_object_canvas_snapshots(
-        &self,
-        params: WorkspaceObjectCanvasSnapshotListParams,
-    ) -> Result<Vec<WorkspaceObjectCanvasSnapshot>, RuntimeCoreError> {
-        right_surface::list_object_canvas_snapshots(&self.db, params)
     }
 }

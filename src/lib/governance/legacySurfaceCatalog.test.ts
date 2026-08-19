@@ -4413,17 +4413,6 @@ describe("legacySurfaceCatalog", () => {
     ]);
   });
 
-  it("应记录 Browser Session current App Server 方法目录", () => {
-    expect(agentCommandCatalog.appServerBrowserSessionMethods).toEqual([
-      "browserSession/target/list",
-      "browserSession/open",
-      "browserSession/read",
-      "browserSession/close",
-      "browserSession/event/list",
-      "browserSession/action/execute",
-    ]);
-  });
-
   it("旧 Plugin lifecycle 命令不应继续作为 current 或 deprecated catalog surface", () => {
     expect(agentCommandCatalog.runtimeGatewayCommands).not.toEqual(
       expect.arrayContaining([

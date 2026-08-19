@@ -12,12 +12,8 @@ import type { WorkspaceArticleWorkspaceActionIntent } from "./workspaceArticleWo
 type RightSurfaceHostRuntimeProjection = Pick<
   WorkspaceRightSurfaceCoordinatorRuntime,
   | "activePluginSurfaceContainerId"
-  | "browserAssistObjectCanvasCandidate"
   | "browserRightSurfaceAvailable"
-  | "browserRightSurfaceControlMode"
   | "browserRightSurfaceIntent"
-  | "browserRightSurfaceLifecycleState"
-  | "browserRightSurfaceSessionRef"
   | "filesRightSurfaceAvailable"
   | "filesRightSurfaceTarget"
   | "handleClosePluginSurface"
@@ -25,8 +21,6 @@ type RightSurfaceHostRuntimeProjection = Pick<
   | "handleRightSurfaceBrowserNavigate"
   | "handleSelectPluginSurface"
   | "handleSelectRightSurfaceTab"
-  | "objectCanvasRightSurfaceAvailable"
-  | "objectCanvasRightSurfaceCandidate"
   | "pluginSurfaceRightSurface"
   | "pluginSurfaceRightSurfaces"
   | "rightSurfaceBrowserTitle"
@@ -36,36 +30,30 @@ type RightSurfaceHostRuntimeProjection = Pick<
   | "rightSurfaceTraceEnabled"
 >;
 
-interface UseWorkspaceRightSurfaceHostRuntimeParams
-  extends Omit<
-    RenderWorkspaceRightSurfaceHostRuntimeParams,
-    | "activePluginSurfaceContainerId"
-    | "browserAssistObjectCanvasCandidate"
-    | "browserRightSurfaceAvailable"
-    | "browserRightSurfaceControlMode"
-    | "browserRightSurfaceIntentTitle"
-    | "browserRightSurfaceLifecycleState"
-    | "browserRightSurfaceSessionRef"
-    | "filesRightSurfaceAvailable"
-    | "filesRightSurfaceTarget"
-    | "objectCanvasRightSurfaceAvailable"
-    | "objectCanvasRightSurfaceCandidate"
-    | "pluginSurfaceRightSurface"
-    | "pluginSurfaceRightSurfaces"
-    | "rightSurfaceBrowserTitle"
-    | "rightSurfaceHarnessEnabled"
-    | "rightSurfaceState"
-    | "rightSurfaceTraceAvailable"
-    | "rightSurfaceTraceEnabled"
-    | "onArticleActionIntent"
-    | "onArticleSelectedObjectChange"
-    | "onClosePluginSurface"
-    | "onCloseRightSurfaceShell"
-    | "onOpenArticlePreviewArtifact"
-    | "onRightSurfaceBrowserNavigate"
-    | "onSelectPluginSurface"
-    | "onSelectRightSurfaceTab"
-  > {
+interface UseWorkspaceRightSurfaceHostRuntimeParams extends Omit<
+  RenderWorkspaceRightSurfaceHostRuntimeParams,
+  | "activePluginSurfaceContainerId"
+  | "browserRightSurfaceAvailable"
+  | "browserRightSurfaceInitialUrl"
+  | "browserRightSurfaceIntentTitle"
+  | "filesRightSurfaceAvailable"
+  | "filesRightSurfaceTarget"
+  | "pluginSurfaceRightSurface"
+  | "pluginSurfaceRightSurfaces"
+  | "rightSurfaceBrowserTitle"
+  | "rightSurfaceHarnessEnabled"
+  | "rightSurfaceState"
+  | "rightSurfaceTraceAvailable"
+  | "rightSurfaceTraceEnabled"
+  | "onArticleActionIntent"
+  | "onArticleSelectedObjectChange"
+  | "onClosePluginSurface"
+  | "onCloseRightSurfaceShell"
+  | "onOpenArticlePreviewArtifact"
+  | "onRightSurfaceBrowserNavigate"
+  | "onSelectPluginSurface"
+  | "onSelectRightSurfaceTab"
+> {
   handleSendRef: MutableRefObject<WorkspaceHandleSend>;
   onOpenArticlePreviewArtifact: RenderWorkspaceRightSurfaceHostRuntimeParams["onOpenArticlePreviewArtifact"];
   restoreInput: (prompt: string) => void;
@@ -106,35 +94,20 @@ export function useWorkspaceRightSurfaceHostRuntime({
     ...hostRuntimeParams,
     activePluginSurfaceContainerId:
       rightSurfaceRuntime.activePluginSurfaceContainerId,
-    browserAssistObjectCanvasCandidate:
-      rightSurfaceRuntime.browserAssistObjectCanvasCandidate,
     browserRightSurfaceAvailable:
       rightSurfaceRuntime.browserRightSurfaceAvailable,
-    browserRightSurfaceControlMode:
-      rightSurfaceRuntime.browserRightSurfaceControlMode,
+    browserRightSurfaceInitialUrl:
+      rightSurfaceRuntime.browserRightSurfaceIntent?.launchUrl ?? null,
     browserRightSurfaceIntentTitle:
       rightSurfaceRuntime.browserRightSurfaceIntent?.title ?? null,
-    browserRightSurfaceLifecycleState:
-      rightSurfaceRuntime.browserRightSurfaceLifecycleState,
-    browserRightSurfaceSessionRef:
-      rightSurfaceRuntime.browserRightSurfaceSessionRef,
-    filesRightSurfaceAvailable:
-      rightSurfaceRuntime.filesRightSurfaceAvailable,
+    filesRightSurfaceAvailable: rightSurfaceRuntime.filesRightSurfaceAvailable,
     filesRightSurfaceTarget: rightSurfaceRuntime.filesRightSurfaceTarget,
-    objectCanvasRightSurfaceAvailable:
-      rightSurfaceRuntime.objectCanvasRightSurfaceAvailable,
-    objectCanvasRightSurfaceCandidate:
-      rightSurfaceRuntime.objectCanvasRightSurfaceCandidate,
-    pluginSurfaceRightSurface:
-      rightSurfaceRuntime.pluginSurfaceRightSurface,
-    pluginSurfaceRightSurfaces:
-      rightSurfaceRuntime.pluginSurfaceRightSurfaces,
+    pluginSurfaceRightSurface: rightSurfaceRuntime.pluginSurfaceRightSurface,
+    pluginSurfaceRightSurfaces: rightSurfaceRuntime.pluginSurfaceRightSurfaces,
     rightSurfaceBrowserTitle: rightSurfaceRuntime.rightSurfaceBrowserTitle,
-    rightSurfaceHarnessEnabled:
-      rightSurfaceRuntime.rightSurfaceHarnessEnabled,
+    rightSurfaceHarnessEnabled: rightSurfaceRuntime.rightSurfaceHarnessEnabled,
     rightSurfaceState: rightSurfaceRuntime.rightSurfaceState,
-    rightSurfaceTraceAvailable:
-      rightSurfaceRuntime.rightSurfaceTraceAvailable,
+    rightSurfaceTraceAvailable: rightSurfaceRuntime.rightSurfaceTraceAvailable,
     rightSurfaceTraceEnabled: rightSurfaceRuntime.rightSurfaceTraceEnabled,
     onArticleActionIntent: handleArticleWorkspaceActionIntent,
     onArticleSelectedObjectChange: undefined,

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { containsForbiddenTraceEvidenceFragment } from "./claw-chat-current-fixture-agent-ui-trace.mjs";
 import {
   APP_SERVER_METHOD_SESSION_TURN_CANCEL,
-  APPROVAL_REQUEST_RESUME_REQUEST_ID,
   CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO,
   CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO,
   HOME_HOTPATH_GREETING_SCENARIO,
@@ -25,7 +24,6 @@ import {
 } from "./claw-chat-current-fixture-backend-script.mjs";
 import {
   summarizeApprovalDecisionReadModel,
-  summarizeApprovalSessionCacheReadModel,
 } from "./claw-chat-current-fixture-approval-read-model.mjs";
 import { summarizeHostInterruptCanonicalEventSequence } from "./claw-chat-current-fixture-approval-resume.mjs";
 import {
@@ -1149,7 +1147,7 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain("backendRecordedCancelThenContinue");
   });
 
-  it("covers approval decline and cancel decision semantics through current action/respond", () => {
+  it("covers approval decline and cancel through reverse server requests", () => {
     const content = readSmokeScript();
     const backendScript = fs.readFileSync(
       "scripts/agent-runtime/claw-chat-current-fixture-backend-script.mjs",
@@ -1163,6 +1161,10 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain("clickApprovalDecisionButton");
     expect(content).toContain('decision === "cancel"');
     expect(content).toContain('decision === "decline"');
+    expect(content).toContain("waitForApprovalServerRequestResponse");
+    expect(content).toContain(
+      "approvalRequestDecisionNoRendererActionRespond",
+    );
     const approvalBackendEvents = fs.readFileSync(
       "scripts/agent-runtime/claw-chat-current-fixture-approval-backend-events.mjs",
       "utf8",
@@ -1198,46 +1200,9 @@ describe("claw chat current Electron fixture smoke guard", () => {
     );
   });
 
-  it("requires the resumed turn to clear its own pending approval status", () => {
-    const content = readSmokeScript();
-
-    expect(content).toContain("waitForGuiApprovalPromptAbsentAfterSecondTurn");
-    expect(content).toContain('[data-testid="message-turn-group"]');
-    expect(content).toContain("hasPendingApprovalStatus");
-    expect(content).toMatch(
-      /hasPendingApprovalStatus:\s*\(secondTurnGroup\?\.innerText \|\| ""\)\.includes\(\s*"待确认"/u,
-    );
-    expect(content).toContain("snapshot?.hasPendingApprovalStatus === false");
-    expect(content).toContain("?.hasPendingApprovalStatus === false");
-  });
-
-  it("fails the resumed approval assertion when its turn remains pending", () => {
-    const buildAssertions = (hasPendingApprovalStatus) =>
-      buildApprovalRequestResumeScenarioAssertions({
-        appServerRequestMethods: [],
-        approvalRequestResumeTurnStart: null,
-        pageText: "",
-        summary: {
-          guiApprovalRequestResumeSecondNoApprovalPrompt: {
-            approvalPromptVisible: false,
-            includesRuntimePermissionPrompt: false,
-            hasPendingApprovalStatus,
-            textareaVisible: true,
-            textareaDisabled: false,
-          },
-        },
-      });
-
-    expect(
-      buildAssertions(false).approvalRequestResumeSecondNoPendingApproval,
-    ).toBe(true);
-    expect(
-      buildAssertions(true).approvalRequestResumeSecondNoPendingApproval,
-    ).toBe(false);
-  });
-
-  it("binds approval response scope to the canonical generated session", () => {
+  it("binds approval backend continuation to the canonical generated scope", () => {
     const sessionId = "sess_generated";
+    const threadId = "thread_generated";
     const turnId = "turn_generated";
     const buildAssertions = (requestSessionId) =>
       buildApprovalRequestResumeScenarioAssertions({
@@ -1246,55 +1211,60 @@ describe("claw chat current Electron fixture smoke guard", () => {
         pageText: "",
         summary: {
           sessionId,
-          approvalRequestResumeRespondActionRequest: {
-            params: {
-              sessionId: requestSessionId,
-              requestId: APPROVAL_REQUEST_RESUME_REQUEST_ID,
-              actionType: "tool_confirmation",
-              decision: "allow_for_session",
-              actionScope: { turnId },
-            },
+          threadId,
+          approvalRequestResumeBackendActionRespond: {
+            sessionId: requestSessionId,
+            threadId,
+            actionScope: { threadId, turnId },
           },
         },
       });
 
     expect(
-      buildAssertions(sessionId).approvalRequestResumeRespondPayloadScoped,
+      buildAssertions(sessionId).approvalRequestResumeBackendResponseScoped,
     ).toBe(true);
     expect(
-      buildAssertions("sess_other").approvalRequestResumeRespondPayloadScoped,
+      buildAssertions("sess_other").approvalRequestResumeBackendResponseScoped,
     ).toBe(false);
   });
 
-  it("binds decline response scope to the canonical generated session", () => {
-    const sessionId = "sess_generated";
+  it("binds decline reverse response to the canonical generated turn", () => {
+    const threadId = "thread_generated";
     const turnId = "turn_generated";
-    const buildAssertions = (requestSessionId) =>
+    const buildAssertions = (requestThreadId) =>
       buildApprovalRequestDecisionScenarioAssertions({
         appServerRequestMethods: [],
-        approvalRequestResumeTurnStart: { sessionId, turnId },
+        approvalRequestResumeTurnStart: { turnId },
         backendLedger: [],
         isApprovalRequestCancelScenario: false,
         isApprovalRequestDeclineScenario: true,
         summary: {
-          sessionId,
-          approvalRequestDecisionRespondActionRequest: {
-            params: {
-              sessionId: requestSessionId,
-              requestId: APPROVAL_REQUEST_RESUME_REQUEST_ID,
-              actionType: "tool_confirmation",
-              decision: "decline",
-              actionScope: { turnId },
+          threadId,
+          approvalRequestDecisionServerRequestResponse: {
+            request: {
+              id: "server-request-1",
+              method: "item/commandExecution/requestApproval",
+              threadId: requestThreadId,
+              turnId,
             },
+            response: {
+              id: "server-request-1",
+              threadId: requestThreadId,
+              turnId,
+              decision: "decline",
+            },
+            responseMatchesRequest: true,
           },
         },
       });
 
     expect(
-      buildAssertions(sessionId).approvalRequestDecisionRespondPayloadScoped,
+      buildAssertions(threadId)
+        .approvalRequestDecisionServerRequestResponseScoped,
     ).toBe(true);
     expect(
-      buildAssertions("sess_other").approvalRequestDecisionRespondPayloadScoped,
+      buildAssertions("thread_other")
+        .approvalRequestDecisionServerRequestResponseScoped,
     ).toBe(false);
   });
 
@@ -1507,8 +1477,8 @@ describe("claw chat current Electron fixture smoke guard", () => {
         itemId: "tool-1",
         ordinal: 2,
         callId: "tool-1",
-        name: "browser_control",
-        arguments: { command: "open https://example.com" },
+        name: "exec_command",
+        arguments: { command: "npm test" },
       }),
     ).toMatchObject({
       item: {
@@ -1522,8 +1492,8 @@ describe("claw chat current Electron fixture smoke guard", () => {
         payload: {
           type: "tool",
           call_id: "tool-1",
-          name: "browser_control",
-          arguments: [{ name: "command", value: "open https://example.com" }],
+          name: "exec_command",
+          arguments: [{ name: "command", value: "npm test" }],
           output: null,
         },
       },
@@ -1542,56 +1512,6 @@ describe("claw chat current Electron fixture smoke guard", () => {
     for (const source of backendEventSources) {
       expect(source).not.toMatch(retiredToolWire);
     }
-  });
-
-  it("keeps session-cache control audit out of the current v2 read model", () => {
-    expect(
-      summarizeApprovalSessionCacheReadModel(
-        {
-          thread: {
-            turns: [{ id: "turn-2", items: [], status: "completed" }],
-          },
-        },
-        "turn-2",
-      ),
-    ).toMatchObject({
-      includesApprovalSessionCacheHit: false,
-      includesAllowForSession: false,
-      includesSecondPermissionRequestId: false,
-      includesActionRequiredForSecondPermission: false,
-      includesActionResolvedForSecondPermission: false,
-    });
-  });
-
-  it("proves session-cache auto-resolution with backend audit and filtered read model", () => {
-    const secondTurnId = "turn-2";
-    const assertions = buildApprovalRequestResumeScenarioAssertions({
-      appServerRequestMethods: [],
-      approvalRequestResumeTurnStart: null,
-      backendLedger: [
-        {
-          kind: "backendEmit",
-          turnId: secondTurnId,
-          eventTypes: ["approval.session_cache.hit", "action.resolved"],
-        },
-      ],
-      pageText: "",
-      summary: {
-        approvalRequestResumeSecondBackendTurnStart: { turnId: secondTurnId },
-        readModelApprovalRequestResumeSecondCompleted: {
-          pendingRequestCount: 0,
-          includesApprovalSessionCacheHit: false,
-          includesAllowForSession: false,
-          includesSecondPermissionRequestId: false,
-          includesActionRequiredForSecondPermission: false,
-          includesActionResolvedForSecondPermission: false,
-        },
-      },
-    });
-
-    expect(assertions.approvalRequestResumeSecondReadModelAutoResolved).toBe(
-      true,
-    );
   });
 
   it("matches approval reverse response with resolved before runtime terminal", () => {
@@ -1665,6 +1585,7 @@ describe("claw chat current Electron fixture smoke guard", () => {
         id: "app-server-request:boot:1",
         decision: "acceptForSession",
       },
+      responseMatchesRequest: true,
       resolved: {
         method: "serverRequest/resolved",
         requestId: "app-server-request:boot:1",
@@ -1675,6 +1596,16 @@ describe("claw chat current Electron fixture smoke guard", () => {
       runtimeTerminalMethod: "item/completed",
       resolvedBeforeRuntimeTerminal: true,
     });
+  });
+
+  it("declares session approval support before offering allow-for-session", () => {
+    const content = fs.readFileSync(
+      "scripts/agent-runtime/claw-chat-current-fixture-approval-backend-events.mjs",
+      "utf8",
+    );
+
+    expect(content).toContain("session_cache_supported: true");
+    expect(content).toContain('"allow_for_session"');
   });
 
   it("aborts a pending approval through turn/interrupt without a renderer response", () => {

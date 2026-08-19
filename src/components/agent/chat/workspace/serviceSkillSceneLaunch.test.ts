@@ -13,7 +13,6 @@ const mockListSkillCatalogSceneEntries = vi.hoisted(() => vi.fn());
 const mockListServiceSkills = vi.hoisted(() => vi.fn());
 const mockGetOrCreateDefaultProject = vi.hoisted(() => vi.fn());
 const mockResolveOemCloudRuntimeContext = vi.hoisted(() => vi.fn());
-const mockSiteGetAdapterLaunchReadiness = vi.hoisted(() => vi.fn());
 const mockSiteListAdapters = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api/skillCatalog", () => ({
@@ -42,8 +41,6 @@ vi.mock("@/lib/api/oemCloudRuntime", () => ({
 
 vi.mock("@/lib/webview-api", () => ({
   siteListAdapters: (...args: unknown[]) => mockSiteListAdapters(...args),
-  siteGetAdapterLaunchReadiness: (...args: unknown[]) =>
-    mockSiteGetAdapterLaunchReadiness(...args),
 }));
 
 function createCloudSceneSkill(): ServiceSkillHomeItem {
@@ -150,7 +147,6 @@ describe("serviceSkillSceneLaunch", () => {
       id: "project-default",
     });
     mockResolveOemCloudRuntimeContext.mockReturnValue(null);
-    mockSiteGetAdapterLaunchReadiness.mockResolvedValue(null);
     mockSiteListAdapters.mockResolvedValue([
       {
         name: "x/article-export",
@@ -273,7 +269,7 @@ describe("serviceSkillSceneLaunch", () => {
     expect(request?.dispatchText).toContain("[技能任务] 视频配音");
   });
 
-  it("site skill scene 应根据 skill 声明注入 service_skill_launch metadata", async () => {
+  it("service scene 应根据 skill 声明注入 service_scene_launch metadata", async () => {
     mockGetSkillCatalog.mockResolvedValueOnce({ entries: [] });
     mockListSkillCatalogSceneEntries.mockReturnValueOnce([
       {
@@ -288,15 +284,6 @@ describe("serviceSkillSceneLaunch", () => {
         executionKind: "site_adapter",
       },
     ]);
-    mockSiteGetAdapterLaunchReadiness.mockResolvedValueOnce({
-      status: "ready",
-      domain: "x.com",
-      profile_key: "existing-session-x",
-      target_id: "target-x-article",
-      message: "已复用当前附着的 X 会话",
-      report_hint: "将自动打开目标文章页。",
-    });
-
     const request = await resolveRuntimeSceneLaunchRequest({
       rawText:
         "/x文章转存 https://x.com/GoogleCloudTech/article/2033953579824758855",
@@ -318,42 +305,17 @@ describe("serviceSkillSceneLaunch", () => {
     expect(requestMetadata).toMatchObject({
       harness: {
         chat_mode: "general",
-        allow_model_skills: true,
-        browser_requirement: "required",
-        browser_assist: {
-          enabled: true,
-          profile_key: "existing-session-x",
-          preferred_backend: "lime_extension_bridge",
-          auto_launch: false,
-          stream_mode: "both",
-        },
-        service_skill_launch: {
-          kind: "site_adapter",
-          skill_id: "x-article-export",
-          adapter_name: "x/article-export",
-          save_mode: "project_resource",
-          project_id: "project-1",
-          content_id: undefined,
-          args: {
-            url: "https://x.com/GoogleCloudTech/article/2033953579824758855",
-            target_language: "中文",
-          },
-          launch_readiness: {
-            status: "ready",
-            profile_key: "existing-session-x",
-            target_id: "target-x-article",
-            domain: "x.com",
-            message: "已复用当前附着的 X 会话",
-            report_hint: "将自动打开目标文章页。",
-          },
-        },
-        translation_skill_launch: {
-          skill_name: "translation",
-          kind: "translation_request",
-          translation_request: {
-            target_language: "中文",
+        service_scene_launch: {
+          kind: "local_service_skill",
+          service_scene_run: {
+            scene_key: "x-article-export",
+            skill_id: "x-article-export",
             project_id: "project-1",
-            entry_source: "service_skill_site_export_followup",
+            content_id: "content-1",
+            slot_values: {
+              article_url:
+                "https://x.com/GoogleCloudTech/article/2033953579824758855",
+            },
           },
         },
       },
@@ -475,9 +437,12 @@ describe("serviceSkillSceneLaunch", () => {
 
     expect(request?.skill.id).toBe("x-article-export");
     expect(request?.requestContext).toMatchObject({
-      kind: "site_adapter",
-      adapterName: "x/article-export",
-      projectId: "project-1",
+      kind: "local_service_skill",
+      service_scene_run: expect.objectContaining({
+        scene_key: "x-article-export",
+        skill_id: "x-article-export",
+        project_id: "project-1",
+      }),
     });
   });
 
@@ -526,15 +491,14 @@ describe("serviceSkillSceneLaunch", () => {
     });
 
     expect(request?.requestContext).toMatchObject({
-      kind: "site_adapter",
-      adapterName: "x/article-export",
-      args: {
-        url: "https://twitter.com/GoogleCloudTech/article/2033953579824758855",
-        target_language: "中文",
-      },
-    });
-    expect(mockSiteGetAdapterLaunchReadiness).toHaveBeenCalledWith({
-      adapter_name: "x/article-export",
+      kind: "local_service_skill",
+      service_scene_run: expect.objectContaining({
+        scene_key: "x-article-export",
+        slot_values: {
+          article_url:
+            "https://twitter.com/GoogleCloudTech/article/2033953579824758855",
+        },
+      }),
     });
   });
 });

@@ -32,7 +32,6 @@ function mountHook(initialProps?: Partial<HookProps>): HookHarness {
   let currentProps: HookProps = {
     enabled: true,
     chatMode: "agent",
-    mappedTheme: "general",
     harnessPanelVisible: false,
     harnessRequestMetadata: {},
     isThemeWorkbench: true,

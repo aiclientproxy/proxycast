@@ -502,41 +502,6 @@ describe("shouldAutoRecoverWorkspacePathMissing", () => {
 });
 
 describe("resolveDefaultSelectedArtifact", () => {
-  it("通用工作区默认回退不应把浏览器协助 artifact 当作首选", () => {
-    const browserAssistArtifact = createArtifact({
-      id: "browser-assist:general",
-      type: "browser_assist",
-      title: "浏览器协助",
-      content: "",
-      meta: {
-        persistOutsideMessages: true,
-        browserAssistScopeKey: "workspace:session-1",
-      },
-      createdAt: 3,
-      updatedAt: 4,
-    });
-    const documentArtifact = createArtifact({
-      id: "artifact-doc-1",
-      title: "需求草稿",
-      content: "# 需求草稿",
-      meta: {
-        filePath: "internal/prd.md",
-      },
-      createdAt: 1,
-      updatedAt: 2,
-    });
-
-    expect(
-      resolveDefaultSelectedArtifact("general", [
-        browserAssistArtifact,
-        documentArtifact,
-      ])?.id,
-    ).toBe("artifact-doc-1");
-    expect(
-      resolveDefaultSelectedArtifact("general", [browserAssistArtifact]),
-    ).toBeNull();
-  });
-
   it("通用工作区应把用户可消费的文章文档 artifact 作为默认右侧画布", () => {
     const generatedDocument = createArtifact({
       id: "artifact-generated-doc-1",

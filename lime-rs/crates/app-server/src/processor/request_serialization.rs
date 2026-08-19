@@ -17,7 +17,6 @@ pub(super) enum RequestSerializationQueueKey {
     Thread(String),
     McpOauth(String),
     McpResourceSubscription(String),
-    BrowserSession(String),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -64,16 +63,6 @@ pub(super) async fn request_serialization_scope(
                 return Ok(None);
             };
             RequestSerializationQueueKey::McpResourceSubscription(key)
-        }
-        AppServerRequestSerializationScope::BrowserSession => {
-            let Some(key) = scope_param(
-                params,
-                &["sessionId", "session_id", "profileKey", "profile_key"],
-            )?
-            else {
-                return Ok(None);
-            };
-            RequestSerializationQueueKey::BrowserSession(key)
         }
     };
     let access = match app_server_request_access(&request.method) {

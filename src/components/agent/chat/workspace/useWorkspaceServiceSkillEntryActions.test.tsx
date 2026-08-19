@@ -11,7 +11,6 @@ const mockCreateContent = vi.fn();
 const mockListProjects = vi.fn();
 const mockGetOrCreateDefaultProject = vi.fn();
 const mockRecordServiceSkillAutomationLink = vi.fn();
-const mockSiteGetAdapterLaunchReadiness = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 const mockToastInfo = vi.fn();
@@ -55,11 +54,6 @@ vi.mock("@/lib/api/project", () => ({
   },
 }));
 
-vi.mock("@/lib/webview-api", () => ({
-  siteGetAdapterLaunchReadiness: (...args: unknown[]) =>
-    mockSiteGetAdapterLaunchReadiness(...args),
-}));
-
 vi.mock("../service-skills/automationLinkStorage", () => ({
   recordServiceSkillAutomationLink: (input: unknown) =>
     mockRecordServiceSkillAutomationLink(input),
@@ -97,27 +91,13 @@ function createBrowserServiceSkill(): ServiceSkillHomeItem {
     outputHint: "仓库列表 + 关键线索",
     source: "cloud_catalog",
     runnerType: "instant",
-    defaultExecutorBinding: "browser_assist",
+    defaultExecutorBinding: "agent_turn",
     executionLocation: "client_default",
     defaultArtifactKind: "analysis",
     themeTarget: "general",
     version: "seed-v1",
     readinessRequirements: {
-      requiresBrowser: true,
       requiresProject: true,
-    },
-    siteCapabilityBinding: {
-      adapterName: "github/search",
-      autoRun: true,
-      requireAttachedSession: true,
-      saveMode: "current_content",
-      slotArgMap: {
-        repository_query: "query",
-      },
-      fixedArgs: {
-        limit: 10,
-      },
-      suggestedTitleTemplate: "GitHub 仓库线索 · {{repository_query}}",
     },
     slotSchema: [
       {
@@ -131,11 +111,11 @@ function createBrowserServiceSkill(): ServiceSkillHomeItem {
     badge: "云目录",
     recentUsedAt: null,
     isRecent: false,
-    runnerLabel: "浏览器站点执行",
-    runnerTone: "emerald",
+    runnerLabel: "Agent 调度",
+    runnerTone: "slate",
     runnerDescription:
-      "直接进入浏览器工作台，复用真实登录态执行站点脚本并沉淀结果。",
-    actionLabel: "启动采集",
+      "通过统一 Agent 发送链执行并沉淀结果。",
+    actionLabel: "立即启动",
     automationStatus: null,
   };
 }
@@ -280,15 +260,6 @@ beforeEach(() => {
       IS_REACT_ACT_ENVIRONMENT?: boolean;
     }
   ).IS_REACT_ACT_ENVIRONMENT = true;
-  mockSiteGetAdapterLaunchReadiness.mockResolvedValue({
-    status: "ready",
-    adapter: "github/search",
-    domain: "github.com",
-    profile_key: "attached-github",
-    target_id: "tab-github",
-    message:
-      "已检测到 github.com 的真实浏览器页面，Claw 可以直接复用当前会话执行。",
-  });
   mockCreateScheduledTask.mockResolvedValue({
     id: "automation-job-1",
     title: "每日趋势摘要｜定时执行",
@@ -437,8 +408,16 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
     expect(onNavigate).toHaveBeenCalledWith(
       "agent",
       expect.objectContaining({
-        initialUserPrompt:
-          "你帮我在 GitHub 找一下和“browser assist mcp”相关的项目。",
+        initialUserPrompt: expect.stringContaining(
+          "[技能任务] GitHub 仓库线索检索",
+        ),
+        initialRequestMetadata: {
+          artifact: {
+            artifact_mode: "draft",
+            artifact_kind: "analysis",
+            workbench_surface: "right_panel",
+          },
+        },
       }),
     );
     expect(recordServiceSkillUsage).toHaveBeenCalledWith(
@@ -470,7 +449,7 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
     expect(getValue().pendingServiceSkillLaunchSource).toBeNull();
   });
 
-  it("站点型技能主按钮应进入 Claw 工作区并复用当前主稿", async () => {
+  it("服务型技能主按钮应进入 Claw 工作区并复用当前主稿", async () => {
     const onNavigate = vi.fn();
     const recordServiceSkillUsage = vi.fn();
     const { render, getValue } = renderHook({
@@ -492,57 +471,28 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
         projectId: "project-1",
         contentId: "content-current",
         theme: "general",
-        lockTheme: true,
-        initialRequestMetadata: undefined,
+        lockTheme: false,
+        initialRequestMetadata: {
+          artifact: {
+            artifact_mode: "draft",
+            artifact_kind: "analysis",
+            workbench_surface: "right_panel",
+          },
+        },
         initialCreationMode: "guided",
         newChatAt: expect.any(Number),
         autoRunInitialPromptOnMount: true,
-        initialUserPrompt:
-          "你帮我在 GitHub 找一下和“browser assist mcp”相关的项目。",
-        initialAutoSendRequestMetadata: {
-          harness: {
-            browser_requirement: "required",
-            browser_requirement_reason:
-              expect.stringContaining("真实浏览器页面"),
-            browser_assist: {
-              enabled: true,
-              profile_key: "attached-github",
-              preferred_backend: "lime_extension_bridge",
-              auto_launch: false,
-              stream_mode: "both",
-            },
-            service_skill_launch: expect.objectContaining({
-              adapter_name: "github/search",
-              skill_title: "GitHub 仓库线索检索",
-              content_id: "content-current",
-              project_id: "project-1",
-              save_mode: "current_content",
-              args: {
-                query: "browser assist mcp",
-                limit: 10,
-              },
-              launch_readiness: expect.objectContaining({
-                status: "ready",
-                profile_key: "attached-github",
-                target_id: "tab-github",
-              }),
-            }),
-          },
-        },
+        initialUserPrompt: expect.stringContaining(
+          "[技能任务] GitHub 仓库线索检索",
+        ),
       }),
     );
     const firstSiteSkillLaunchPayload = onNavigate.mock.calls.find(
       ([route]) => route === "agent",
     )?.[1];
-    expect(firstSiteSkillLaunchPayload?.initialUserPrompt).not.toContain(
-      "[站点技能启动上下文]",
-    );
-    expect(firstSiteSkillLaunchPayload?.initialUserPrompt).not.toContain(
-      "adapter_name",
-    );
     expect(
       firstSiteSkillLaunchPayload?.initialAutoSendRequestMetadata,
-    ).not.toHaveProperty("artifact");
+    ).toBeUndefined();
     expect(recordServiceSkillUsage).toHaveBeenCalledWith({
       skillId: "github-repo-radar",
       runnerType: "instant",
@@ -552,7 +502,7 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
     });
   });
 
-  it("站点型技能进入工作区时应保留真实 service skill metadata", async () => {
+  it("服务型技能进入工作区时应保留真实 artifact metadata", async () => {
     const onNavigate = vi.fn();
     const { render, getValue } = renderHook({
       onNavigate,
@@ -569,18 +519,18 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
     expect(onNavigate).toHaveBeenCalledWith(
       "agent",
       expect.objectContaining({
-        initialAutoSendRequestMetadata: {
-          harness: expect.objectContaining({
-            service_skill_launch: expect.objectContaining({
-              adapter_name: "github/search",
-            }),
-          }),
+        initialRequestMetadata: {
+          artifact: {
+            artifact_kind: "analysis",
+            artifact_mode: "draft",
+            workbench_surface: "right_panel",
+          },
         },
       }),
     );
   });
 
-  it("站点型技能缺少当前项目时应提示进入项目，不再回退默认项目", async () => {
+  it("服务型技能缺少当前项目时应提示选择项目", async () => {
     const onNavigate = vi.fn();
     const { render, getValue } = renderHook({
       onNavigate,
@@ -600,49 +550,18 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
     expect(mockCreateContent).not.toHaveBeenCalled();
     expect(onNavigate).not.toHaveBeenCalled();
     expect(mockToastError).toHaveBeenCalledWith(
-      expect.stringContaining("当前技能需要项目工作区，请先进入项目工作。"),
+      "缺少项目工作区，请先选择项目后再启动技能。",
     );
   });
 
-  it("站点型技能次级动作才应跳到浏览器工作台", async () => {
-    const onNavigate = vi.fn();
-    const recordServiceSkillUsage = vi.fn();
-    const { render, getValue } = renderHook({
-      onNavigate,
-      recordServiceSkillUsage,
-    });
+  it("服务型技能入口不再暴露浏览器右侧面板启动方法", async () => {
+    const { render, getValue } = renderHook();
     await render();
 
-    await act(async () => {
-      await getValue().handleServiceSkillBrowserRuntimeLaunch(
-        createBrowserServiceSkill(),
-        {
-          repository_query: "browser assist mcp",
-        },
-      );
-    });
-
-    expect(onNavigate).toHaveBeenCalledWith("browser-runtime", {
-      projectId: "project-1",
-      contentId: "content-current",
-      initialProfileKey: "attached-github",
-      initialTargetId: "tab-github",
-      initialAdapterName: "github/search",
-      initialArgs: {
-        query: "browser assist mcp",
-        limit: 10,
-      },
-      initialAutoRun: true,
-      initialRequireAttachedSession: true,
-      initialSaveTitle: undefined,
-    });
-    expect(recordServiceSkillUsage).toHaveBeenCalledWith({
-      skillId: "github-repo-radar",
-      runnerType: "instant",
-      slotValues: {
-        repository_query: "browser assist mcp",
-      },
-    });
+    expect(
+      (getValue() as Record<string, unknown>)
+        .handleServiceSkillBrowserRuntimeLaunch,
+    ).toBeUndefined();
   });
 
   it("显式透传的 launchUserInput 应随 recent usage 一起记录下来", async () => {
@@ -676,18 +595,11 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
     });
   });
 
-  it("站点型技能缺少附着会话时应留在入口层并提示先准备浏览器", async () => {
+  it("服务型技能不应再依赖外部浏览器 readiness", async () => {
     const onNavigate = vi.fn();
     const { render, getValue } = renderHook({
       onNavigate,
       recordServiceSkillUsage: vi.fn(),
-    });
-    mockSiteGetAdapterLaunchReadiness.mockResolvedValueOnce({
-      status: "requires_browser_runtime",
-      adapter: "github/search",
-      domain: "github.com",
-      message: "当前没有检测到已附着到真实浏览器的 github.com 页面。",
-      report_hint: "请先去浏览器工作台连接真实浏览器。",
     });
     await render();
 
@@ -697,10 +609,17 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
       });
     });
 
-    expect(onNavigate).not.toHaveBeenCalledWith("agent", expect.anything());
-    expect(mockToastInfo).toHaveBeenCalledWith(
-      expect.stringContaining("请先去浏览器工作台连接真实浏览器"),
+    expect(onNavigate).toHaveBeenCalledWith(
+      "agent",
+      expect.objectContaining({
+        initialRequestMetadata: expect.objectContaining({
+          artifact: expect.objectContaining({
+            artifact_mode: "draft",
+          }),
+        }),
+      }),
     );
+    expect(mockToastInfo).not.toHaveBeenCalled();
     expect(mockToastError).not.toHaveBeenCalled();
   });
 

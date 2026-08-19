@@ -782,8 +782,8 @@ describe("i18n namespace loader", () => {
       expect(resources[locale].agent).toHaveProperty(
         "agentChat.incidentPanel.priorityBadge",
       );
-      expect(resources[locale].workspace).toHaveProperty(
-        "workspace.browserExistingSession.presentation.status.attached.label",
+      expect(resources[locale].agent).toHaveProperty(
+        "agentChat.browserWorkspace.address",
       );
       expect(resources[locale].workspace).toHaveProperty(
         "workspace.video.promptInput.title",
@@ -888,18 +888,6 @@ describe("i18n namespace loader", () => {
       }
       expect(resources[locale].workspace).toHaveProperty(
         "workspace.canvasAdapter.designPreview.visibleLayers",
-      );
-      expect(resources[locale].workspace).toHaveProperty(
-        "workspace.browserAssistRenderer.launching.title",
-      );
-      expect(resources[locale].workspace).toHaveProperty(
-        "workspace.browserAssistRenderer.launching.detail",
-      );
-      expect(resources[locale].workspace).toHaveProperty(
-        "workspace.browserAssistRenderer.failed.attachedOnlyWithDetail",
-      );
-      expect(resources[locale].workspace).toHaveProperty(
-        "workspace.browserAssistRenderer.replay.title",
       );
       expect(resources[locale].workspace).toHaveProperty(
         "workspace.artifactDocument.kind.report",
@@ -1025,15 +1013,6 @@ describe("i18n namespace loader", () => {
         "settings.about.update.errorDownload",
       );
       expect(resources[locale].settings).toHaveProperty(
-        "settings.browserConnection.title",
-      );
-      expect(resources[locale].settings).toHaveProperty(
-        "settings.browserConnection.action.check",
-      );
-      expect(resources[locale].settings).toHaveProperty(
-        "settings.browserConnection.error.unavailable",
-      );
-      expect(resources[locale].settings).toHaveProperty(
         "settings.group.system",
       );
       expect(resources[locale].settings).toHaveProperty(
@@ -1050,9 +1029,6 @@ describe("i18n namespace loader", () => {
       );
       expect(resources[locale].settings).toHaveProperty(
         "settings.developer.serviceSkill.title",
-      );
-      expect(resources[locale].settings).toHaveProperty(
-        "settings.developer.siteAdapterCatalog.message.injected",
       );
       expect(resources[locale].settings).toHaveProperty(
         "settings.appearance.hero.title",
@@ -1496,10 +1472,10 @@ describe("i18n namespace loader", () => {
       ],
     ).toBe("Lime Desktop Cloud Model Key");
     expect(
-      loadNamespaceResource("fr-FR", "workspace")[
-        "workspace.browserExistingSession.presentation.status.attached.label"
+      loadNamespaceResource("fr-FR", "agent")[
+        "agentChat.browserWorkspace.address"
       ],
-    ).toBe("附着当前 Chrome");
+    ).toBe("输入网址或搜索");
     expect(
       loadNamespaceResource("fr-FR", "workspace")[
         "workspace.video.promptInput.title"
@@ -1606,21 +1582,6 @@ describe("i18n namespace loader", () => {
       ],
     ).toBe("暂时无法自动安装更新，请使用网页下载最新版。");
     expect(
-      loadNamespaceResource("fr-FR", "settings")[
-        "settings.browserConnection.title"
-      ],
-    ).toBe("浏览器连接");
-    expect(
-      loadNamespaceResource("fr-FR", "settings")[
-        "settings.browserConnection.action.check"
-      ],
-    ).toBe("检测页面");
-    expect(
-      loadNamespaceResource("fr-FR", "settings")[
-        "settings.browserConnection.error.unavailable"
-      ],
-    ).toBe("请确认 Chrome 已开启远程调试后重试。");
-    expect(
       loadNamespaceResource("fr-FR", "settings")["settings.developer.title"],
     ).toBe("开发者");
     expect(
@@ -1628,11 +1589,6 @@ describe("i18n namespace loader", () => {
         "settings.developer.serviceSkill.title"
       ],
     ).toBe("服务型技能目录联调");
-    expect(
-      loadNamespaceResource("fr-FR", "settings")[
-        "settings.developer.siteAdapterCatalog.message.injected"
-      ],
-    ).toBe("已通过 bootstrap 事件注入站点脚本目录：{{count}} 项");
     expect(
       loadNamespaceResource("fr-FR", "settings")[
         "settings.appearance.hero.title"

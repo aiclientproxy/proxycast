@@ -9,7 +9,6 @@ import {
 } from "@/lib/oemCloudSession";
 import { syncSkillCatalogFromBootstrapPayload } from "@/lib/skillCatalogBootstrap";
 import { syncServiceSkillCatalogFromBootstrapPayload } from "@/lib/serviceSkillCatalogBootstrap";
-import { syncSiteAdapterCatalogFromBootstrapPayload } from "@/lib/siteAdapterCatalogBootstrap";
 
 export const OEM_CLOUD_OAUTH_COMPLETED_EVENT = "lime:oem-cloud-oauth-completed";
 
@@ -189,7 +188,6 @@ export async function completeOemCloudDesktopOAuthLogin(
     setOemCloudBootstrapSnapshot(nextBootstrap);
     syncSkillCatalogFromBootstrapPayload(nextBootstrap);
     syncServiceSkillCatalogFromBootstrapPayload(nextBootstrap);
-    void syncSiteAdapterCatalogFromBootstrapPayload(nextBootstrap);
     dispatchOemCloudOAuthCompleted({
       tenantId: payload.tenantId,
       nextPath: payload.nextPath,

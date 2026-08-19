@@ -146,34 +146,6 @@ describe("project Gate SETTINGS-01 Gate B-F evidence", () => {
     ).toThrow(/duplicate SETTINGS-01 Gate B scenarios/);
   });
 
-  it("accepts stronger Gate B-R owner evidence for the browser lifecycle", () => {
-    const evidence = build([
-      source(
-        "settings-scenario",
-        genericScenarioSummary("chrome-relay-lifecycle", {
-          proofLevel: "Gate B-R",
-          bridge: {
-            electron: true,
-            preloadInvoke: true,
-            transport: "electron-ipc",
-            command: "app_server_handle_json_lines",
-            appServerIpcHitCount: 4,
-            methods: [
-              "browserSession/target/list",
-              "browserSession/open",
-              "browserSession/read",
-              "browserSession/close",
-            ],
-          },
-        }),
-      ),
-    ]);
-
-    expect(evidence.coverage.completedScenarios).toEqual([
-      "chrome-relay-lifecycle",
-    ]);
-  });
-
   it("rejects unsafe run ids and empty source sets", () => {
     expect(() => validateSettingsGateBRunId("../escape")).toThrow(
       /invalid SETTINGS-01 Gate B run-id/,

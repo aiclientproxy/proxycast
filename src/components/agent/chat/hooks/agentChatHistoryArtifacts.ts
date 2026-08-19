@@ -42,7 +42,6 @@ const HISTORY_ARTIFACT_TYPES = new Set<ArtifactType>([
   "svg",
   "mermaid",
   "react",
-  "browser_assist",
   "canvas:document",
   "canvas:video",
   "canvas:design",

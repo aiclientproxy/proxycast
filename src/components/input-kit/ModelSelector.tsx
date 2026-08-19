@@ -50,6 +50,11 @@ import type {
   EnhancedModelMetadata,
   ModelReasoningEffortLevel,
 } from "@/lib/types/modelRegistry";
+import {
+  resolvePendingProviderModel,
+  useCommitPendingProviderSelection,
+  useProviderSelection,
+} from "./useProviderSelection";
 
 const compactTriggerClassName =
   "h-8 min-w-[104px] max-w-[224px] justify-start gap-1.5 rounded-full border-slate-200/80 bg-white/92 px-2.5 text-slate-600 shadow-none transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-800";
@@ -251,6 +256,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     },
     [setModel, setProviderAndModel, setProviderType],
   );
+  const {
+    pendingProviderSelection,
+    effectiveProviderType,
+    queueOrCommitProviderSelection,
+    clearPendingProviderSelection,
+  } = useProviderSelection({ providerType, commitProviderAndModel });
   const shouldBackgroundLoadModels =
     backgroundPreload === "immediate" ||
     backgroundProviderLoadReady ||
@@ -327,8 +338,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     [visibleProviders],
   );
   const selectedProvider = useMemo(() => {
-    return findConfiguredProviderBySelection(configuredProviders, providerType);
-  }, [configuredProviders, providerType]);
+    return findConfiguredProviderBySelection(
+      configuredProviders,
+      effectiveProviderType,
+    );
+  }, [configuredProviders, effectiveProviderType]);
   const selectedProviderLoginRequired =
     selectedProvider?.authStatus === "login_required";
   const selectedProviderHasDeclaredModel = selectedProvider
@@ -404,7 +418,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     () =>
       visibleModels.flatMap((item) => {
         const compatibilityIssue = getProviderModelCompatibilityIssue({
-          providerType,
+          providerType: effectiveProviderType,
           configuredProviderType: selectedProvider?.type,
           model: item.id,
           capabilityProvenance: item.capability_provenance,
@@ -429,7 +443,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           },
         ];
       }),
-    [providerType, selectedProvider, visibleModels],
+    [effectiveProviderType, selectedProvider, visibleModels],
   );
 
   const currentModels = useMemo(
@@ -442,13 +456,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const selectedPromptCacheNotice = useMemo(
     () =>
       resolvePromptCacheSupportNotice({
-        providerType,
+        providerType: effectiveProviderType,
         configuredProviderType: selectedProvider?.type,
         configuredApiHost: selectedProvider?.apiHost,
         configuredPromptCacheMode: selectedProvider?.promptCacheMode,
       }),
     [
-      providerType,
+      effectiveProviderType,
       selectedProvider?.apiHost,
       selectedProvider?.promptCacheMode,
       selectedProvider?.type,
@@ -470,6 +484,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     () => modelOptions.find((item) => item.id === model) ?? null,
     [model, modelOptions],
   );
+  const pendingProviderModel = resolvePendingProviderModel({
+    pendingProviderSelection,
+    selectedProvider,
+    modelOptions,
+  });
   const selectedReasoningEffortOptions = useMemo(
     () => resolveReasoningEffortOptions(selectedModelOption?.metadata),
     [selectedModelOption?.metadata],
@@ -489,6 +508,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   useEffect(() => {
     if (!setReasoningEffort) {
+      return;
+    }
+    if (pendingProviderSelection) {
       return;
     }
     if (!shouldLoadModels) {
@@ -511,6 +533,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }
   }, [
     reasoningEffort,
+    pendingProviderSelection,
     selectedModelOption,
     selectedReasoningEffortOptions,
     setReasoningEffort,
@@ -529,7 +552,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       const nextProvider = autoSelectableProviders[0];
       if (nextProvider) {
         const nextModel = resolveInitialProviderModel(nextProvider);
-        commitProviderAndModel(
+        queueOrCommitProviderSelection(
           nextProvider.providerId ?? nextProvider.key,
           nextModel,
         );
@@ -540,7 +563,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   }, [
     allowAutoProvider,
     autoSelectableProviders,
-    commitProviderAndModel,
+    queueOrCommitProviderSelection,
     providerType,
     providersLoading,
     shouldLoadProviders,
@@ -548,8 +571,22 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     visibleProviders,
   ]);
 
+  useCommitPendingProviderSelection({
+    pendingProviderSelection,
+    pendingProviderModel,
+    ready:
+      shouldLoadModels &&
+      Boolean(selectedProvider) &&
+      !selectedProviderBlocksModelLoad &&
+      !modelsLoading,
+    commitProviderAndModel,
+    clearPendingProviderSelection,
+    setReasoningEffort,
+  });
+
   useEffect(() => {
     if (!shouldLoadModels) return;
+    if (pendingProviderSelection) return;
     if (!selectedProvider) return;
     if (selectedProviderBlocksModelLoad) return;
     if (modelsLoading) return;
@@ -576,6 +613,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     allowAutoModel,
     currentModels,
     modelsLoading,
+    pendingProviderSelection,
     preserveUnknownModelSelection,
     selectedProvider,
     selectedModelKnownOption,
@@ -884,6 +922,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   {allowAutoProvider ? (
                     <button
                       onClick={() => {
+                        clearPendingProviderSelection();
                         commitProviderAndModel("", "");
                         setReasoningEffort?.("");
                         setOpen(false);
@@ -950,11 +989,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                     currentModelOptions: modelOptions,
                                   },
                                 );
-                                commitProviderAndModel(
-                                  resolveProviderSelectionValue(provider),
-                                  nextModel,
-                                );
-                                setReasoningEffort?.("");
+                                const didCommit =
+                                  queueOrCommitProviderSelection(
+                                    resolveProviderSelectionValue(provider),
+                                    nextModel,
+                                  );
+                                if (didCommit) {
+                                  setReasoningEffort?.("");
+                                }
                               }}
                               className={cn(
                                 itemClassName,

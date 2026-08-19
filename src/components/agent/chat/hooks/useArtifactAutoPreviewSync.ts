@@ -110,10 +110,6 @@ export function shouldAutoSyncArtifactPreview(
     return false;
   }
 
-  if (artifact.type === "browser_assist") {
-    return false;
-  }
-
   const artifactPath = resolveArtifactProtocolFilePath(artifact);
   if (!artifactPath.trim()) {
     return false;

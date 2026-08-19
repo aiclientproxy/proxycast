@@ -8,7 +8,7 @@ audio/video/file 的逐 Provider chat wire 属于后续细节，不计入本阶�
 
 ## 2026-08-11 P1-01 provider tool-call repair 接线
 
-状态：`completed / current`（provider sampling + JSON Schema repair + 组合竞态 + 跨协议 capture 四刀；CodeMode 规划、provider custom canonical contract、catalog/readiness、Agent loop executable boundary、thread-owned lazy service、per-cell nested dispatch、lifecycle/notify projection、late terminal guard、projection scope correction与 production in-process V8/factory 第五至十三刀为 `current foundation`，P1-01 总项未关闭）。
+状态：`completed / current`（provider sampling + JSON Schema repair + 组合竞态 + 跨协议 capture，以及 CodeMode planning、custom-tool contract、standalone process host、CodeCell trace/evidence 与专项 Electron Gate B 均已关闭；P1-01 总项完成）。
 
 主目标：把已经存在于 `tool-runtime` 的 typed repair outcome 接入 current provider sampling
 step，确保 provider 返回的 malformed/scalar/unknown tool call 不再提前中止整步，也绝不进入
@@ -113,8 +113,9 @@ request capture；CodeMode exposure/mode/plan、provider freeform/custom-tool ca
 catalog/readiness gate、transport-neutral session contract 与测试注入下的 Agent loop `exec/wait` boundary 为
 `current foundation`；canonical thread-owned lazy service、actor identity/interrupt/shutdown owner 同属
 `current foundation`；per-cell nested dispatch、outer `exec/wait` canonical Tool lifecycle 与 notify Desktop event
-projection 也同属 `current foundation`。P1-01 总项仍保留 standalone CodeMode host 的 OS 进程隔离、thread-owned
-CodeCell trace/evidence owner、CodeMode 专项 Electron Gate B，以及 extension/background terminal 组合证据。
+projection 也同属 `current foundation`。该阶段保留的 standalone CodeMode host OS 进程隔离、thread-owned
+CodeCell trace/evidence owner、CodeMode 专项 Electron Gate B 与 terminal 组合证据，已分别由 2026-08-12
+standalone process host 和 2026-08-18 CodeCell trace/evidence 切片关闭；P1-01 不再保留 alignment-open 项。
 
 本文件是并行执行的协调面，不定义新的 runtime owner。目标是让多个进程同时推进
 Codex v2 对齐时保持窄写集、可编译、可回滚和可验证。所有实现仍服从：
@@ -5147,3 +5148,46 @@ settings RPC 永久 pending，却等待 `sendMessage()` 完成后才释放 promi
 修复后 `npm test -- --resume` 从第 50 批续跑至第 120 批全部通过；随后 fresh `npm run verify:local` 全绿，覆盖 120 个
 Vitest smart batches、App Server client `303` checks、13 个 current/反向依赖 Rust crate、真实 Electron/App Server GUI
 smoke、lint、typecheck、i18n、scripts/docs/version 门禁。Rust 仅保留既有 App Server test helper `dead_code` warning。
+
+### 2026-08-18 CodeMode CodeCell trace/evidence owner 与 benchmark 收尾
+
+状态：`completed / current`（P1-01 CodeCell trace/evidence 对齐刀；整体发布仍受 Windows、live/eval 与 DeepSWE verifier
+平台证据约束）。
+
+主目标：按 Codex rollout-trace 的生命周期语义，把 CodeCell evidence 接入 Lime 唯一 App Server trace owner，并证明
+真实 Electron Gate B 能通过既有 diagnostics 读取该 trace；不新增公开 `ThreadItem`、`RuntimeEvent`、GUI card 或第二套
+trace store。
+
+完成结果：`tool-runtime` 发出 typed `CodeCellTraceEvent`，`agent-runtime` CodeMode lifecycle 和 Lime Agent emitter
+转发到 App Server `RuntimeEventSink`；`TraceEventWriter` 以 JSONL 保存 summary-only record，内部 `code_cell` reducer/replay
+关联 `source_item_observed -> started -> initial_response -> ended -> output_item_observed`，支持 source 晚到、yield 跨 Turn、
+nested tool/wait、failed/canceled 自动闭合和 terminal late-event fail closed。源码只记录字符数与 SHA-256；source/output 使用
+canonical `item_*` ID，model-visible call 保留 provider call ID；`diagnostics/trace/read` 真实消费 reducer。
+
+真实 Gate B evidence：`.lime/qc/gui-evidence/code-mode-electron-gate-b/code-mode-electron-gate-b-summary.json`；fresh
+thread/turn identity 与 Electron -> App Server -> `code-mode-host` process ownership 均由该机器可读文件记录，不在计划中
+复制易变运行值。Electron/preload/IPC、App Server、
+standalone `code-mode-host` parent、official-host Responses fixture、完整 CodeCell lifecycle、canonical item identity、
+summary-only redaction、GUI terminal 与 zero mock/invoke/console/page/provider error 全部通过。
+
+benchmark 适用项已完成：
+
+- `SBX-01/02`：`npm run test:rust:unit -- -p tool-runtime`，356/356；覆盖 Seatbelt/Bubblewrap 权限 lowering、network
+  denial、workspace path guard 与 sandbox retry。
+- `DSW-05`：`npm run test:rust:unit -- -p agent-runtime provider_token_budget_stops_before_tool_execution_and_next_sampling`，1/1；
+  token budget 终止在工具执行和下一次 sampling 之前。
+- `DSW-06`：`npm run test:rust:unit -- -p tool-runtime` 已覆盖 `apply_patch` owner contract，`npx vitest run
+  scripts/harness/deepswe-adapter.test.mjs` 为 21/21，`npm run harness:deepswe:preflight` 为 Release 20 20 题、61/61。
+
+2026-08-18 收尾复跑：CodeMode Gate B 6/6 脚本合同与真实 Electron fixture 再次通过；DeepSWE adapter 21/21、
+Release 20 preflight 61/61、App Server client contract 299 checks、`npm run test:contracts`、
+`npm run smoke:agent-runtime-current-fixture`、legacy/scripts governance、`cargo fmt --all -- --check` 与
+`git diff --check` 均通过。Rust fresh 复跑统一使用仓库 `npm run test:rust:unit` runner，由
+`scripts/lib/rusty-v8-artifacts.mjs` 下载并校验 Codex release 的 V8 archive/binding；tool-runtime 356/356、
+agent-runtime DSW-05 1/1 与 App Server 1686/1686 全部通过。直接运行 Cargo 曾遇到的 V8 archive 404 是绕过
+仓库 runner 的无效验证路径，不再作为环境阻塞。
+
+验证边界：本轮没有调用 live provider，不生成 DeepSWE score；Pier editable package 指向已删除 source，且本机无 Docker/
+Podman/nerdctl/Colima，verifier 仍为 `blocked / environment`。Windows packaged/N-1 与 Developer ID/notarization 继续由
+对应平台 runner 提供 evidence。分类：CodeCell trace/replay、diagnostics read 和 Gate B 为 `current`；公开 CodeCell
+ThreadItem/GUI card/第二套 RuntimeEvent 为 `dead / forbidden-to-restore`；无 `compat`/`deprecated`。

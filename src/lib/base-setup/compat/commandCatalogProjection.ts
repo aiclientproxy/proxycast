@@ -21,13 +21,6 @@ function resolveCommandExecutionKind(
       : explicitExecutionKind;
   }
 
-  if (
-    projection.siteCapabilityBinding ||
-    bindingProfile.bindingFamily === "browser_assist"
-  ) {
-    return "site_adapter";
-  }
-
   switch (bindingProfile.bindingFamily) {
     case "native_skill":
       return "native_skill";

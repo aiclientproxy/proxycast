@@ -25,15 +25,16 @@ describe("skillCatalog", () => {
     clearSkillCatalogCache();
   });
 
-  it("读取旧版远端目录时应过滤 site_adapter 和 browser assist 项", async () => {
-    saveSkillCatalog(buildLegacyCatalogWithSiteEntries(), "bootstrap_sync");
+  it("含已退役站点 adapter 的旧目录应被拒绝", async () => {
+    expect(() =>
+      saveSkillCatalog(buildLegacyCatalogWithSiteEntries(), "bootstrap_sync"),
+    ).toThrow("invalid skill catalog");
 
     const catalog = await getSkillCatalog();
 
-    expect(catalog.items.map((item) => item.id)).toEqual([
-      "tenant-daily-briefing",
-    ]);
-    expect(catalog.groups.map((group) => group.key)).toEqual(["general"]);
+    expect(catalog.items.some((item) => item.id === "legacy-site-skill")).toBe(
+      false,
+    );
 
     const stored = window.localStorage.getItem("lime:skill-catalog:v1");
     expect(stored).not.toContain("legacy-site-skill");

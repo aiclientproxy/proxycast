@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   Code2,
   FileText,
@@ -45,7 +45,6 @@ interface CanvasWorkbenchTopTabsProps {
   onSelectTab: (tab: CanvasWorkbenchTab) => void;
   onNewToolTab: (tab: CanvasWorkbenchNewToolTab) => void;
   onCloseTab?: (tab: CanvasWorkbenchTab) => void;
-  onMenuOpenChange?: (open: boolean) => void;
 }
 
 function resolveTabIcon(key: CanvasWorkbenchTab | CanvasWorkbenchNewToolTab) {
@@ -53,7 +52,7 @@ function resolveTabIcon(key: CanvasWorkbenchTab | CanvasWorkbenchNewToolTab) {
   if (key === "markdown") {
     return <FileText className="h-3.5 w-3.5 shrink-0" />;
   }
-  if (key === "html" || toolTabKind === "browser") {
+  if (key === "html") {
     return <Globe2 className="h-3.5 w-3.5 shrink-0" />;
   }
   if (key === "code") {
@@ -92,28 +91,13 @@ export const CanvasWorkbenchTopTabs = memo(function CanvasWorkbenchTopTabs({
   onSelectTab,
   onNewToolTab,
   onCloseTab,
-  onMenuOpenChange,
 }: CanvasWorkbenchTopTabsProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const visibleTabs = useMemo(() => tabs, [tabs]);
-  const setMenuOpenAndNotify = useCallback(
-    (open: boolean) => {
-      setMenuOpen(open);
-      onMenuOpenChange?.(open);
-    },
-    [onMenuOpenChange],
-  );
 
   useEffect(() => {
-    setMenuOpenAndNotify(false);
-  }, [activeTab, setMenuOpenAndNotify]);
-
-  useEffect(
-    () => () => {
-      onMenuOpenChange?.(false);
-    },
-    [onMenuOpenChange],
-  );
+    setMenuOpen(false);
+  }, [activeTab]);
 
   if (visibleTabs.length === 0) {
     return null;
@@ -178,7 +162,7 @@ export const CanvasWorkbenchTopTabs = memo(function CanvasWorkbenchTopTabs({
                 return;
               }
               onSelectTab(key);
-              setMenuOpenAndNotify(false);
+              setMenuOpen(false);
             }}
             className="inline-flex min-w-0 flex-1 items-center gap-1.5 outline-none"
           >
@@ -197,7 +181,7 @@ export const CanvasWorkbenchTopTabs = memo(function CanvasWorkbenchTopTabs({
             onClick={(event) => {
               event.stopPropagation();
               onCloseTab(key);
-              setMenuOpenAndNotify(false);
+              setMenuOpen(false);
             }}
             className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
@@ -224,7 +208,7 @@ export const CanvasWorkbenchTopTabs = memo(function CanvasWorkbenchTopTabs({
             return;
           }
           onSelectTab(key);
-          setMenuOpenAndNotify(false);
+          setMenuOpen(false);
         }}
         data-canvas-tab-key={key}
         data-canvas-tab-kind={toolTabKind || key}
@@ -259,7 +243,7 @@ export const CanvasWorkbenchTopTabs = memo(function CanvasWorkbenchTopTabs({
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           data-testid="canvas-workbench-tab-menu-trigger"
-          onClick={() => setMenuOpenAndNotify(!menuOpen)}
+          onClick={() => setMenuOpen((open) => !open)}
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] border border-transparent text-slate-500 transition-colors hover:border-slate-200 hover:bg-white/70 hover:text-slate-950"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -280,7 +264,7 @@ export const CanvasWorkbenchTopTabs = memo(function CanvasWorkbenchTopTabs({
                 )}
                 onClick={() => {
                   onNewToolTab(action.key);
-                  setMenuOpenAndNotify(false);
+                  setMenuOpen(false);
                 }}
                 role="menuitem"
                 className="flex h-8 w-full items-center justify-between gap-3 rounded-[7px] px-2 text-left text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-950"

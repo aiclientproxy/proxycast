@@ -78,9 +78,6 @@ export function useWorkspaceRightSurfaceArtifactOpenRuntime({
         void rightSurfacePendingActionsRef.current.consumePendingRequestsForSurface?.(
           "articleWorkspace",
         );
-        void rightSurfacePendingActionsRef.current.consumePendingRequestsForSurface?.(
-          "objectCanvas",
-        );
         return;
       }
 

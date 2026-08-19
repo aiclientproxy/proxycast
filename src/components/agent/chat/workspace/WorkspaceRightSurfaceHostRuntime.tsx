@@ -4,7 +4,6 @@ import { ExpertInfoPanel } from "../experts/ExpertInfoPanel";
 import { GeneralWorkbenchHarnessSurfaceSection } from "./WorkspaceHarnessDialogs";
 import { WorkspaceArticleEditorRightSurface } from "./WorkspaceArticleEditorRightSurface";
 import { WorkspaceFilesSurface } from "./WorkspaceFilesSurface";
-import { WorkspaceObjectCanvasSurface } from "./WorkspaceObjectCanvasSurface";
 import { WorkspacePluginSurface } from "./WorkspacePluginSurface";
 import { WorkspaceTraceTab } from "./WorkspaceTraceTab";
 import {
@@ -24,24 +23,18 @@ type FilesSurfaceProps = ComponentProps<typeof WorkspaceFilesSurface>;
 type GeneralWorkbenchHarnessSurfaceProps = ComponentProps<
   typeof GeneralWorkbenchHarnessSurfaceSection
 >;
-type ObjectCanvasSurfaceProps = ComponentProps<
-  typeof WorkspaceObjectCanvasSurface
->;
 type PluginSurfaceProps = ComponentProps<typeof WorkspacePluginSurface>;
 type ShellPanelProps = ComponentProps<typeof TaskCenterShellPanel>;
-
 export interface RenderWorkspaceRightSurfaceHostRuntimeParams {
   activePluginSurfaceContainerId: string | null;
   articleActionsDisabled: boolean;
   articleEditorRightSurface:
     | ArticleEditorRightSurfaceProps["articleWorkspace"]
     | null;
-  browserAssistObjectCanvasCandidate: ObjectCanvasSurfaceProps["candidate"];
   browserRightSurfaceAvailable: boolean;
-  browserRightSurfaceControlMode: BrowserPanelProps["controlMode"];
+  ensureBrowserWorkspaceOwner?: BrowserPanelProps["ensureOwner"];
+  browserRightSurfaceInitialUrl?: string | null;
   browserRightSurfaceIntentTitle?: string | null;
-  browserRightSurfaceLifecycleState: BrowserPanelProps["lifecycleState"];
-  browserRightSurfaceSessionRef: BrowserPanelProps["sessionRef"];
   canvasWorkbenchRootPath: ShellPanelProps["projectRootPath"];
   expertInfoPanelProps: ExpertInfoPanelProps;
   filesRightSurfaceAvailable: boolean;
@@ -51,8 +44,6 @@ export interface RenderWorkspaceRightSurfaceHostRuntimeParams {
     "enabled" | "harnessState"
   >;
   harnessState: GeneralWorkbenchHarnessSurfaceProps["harnessState"];
-  objectCanvasRightSurfaceAvailable: boolean;
-  objectCanvasRightSurfaceCandidate: ObjectCanvasSurfaceProps["candidate"];
   pluginSurfaceRightSurface: PluginSurfaceProps["surface"];
   pluginSurfaceRightSurfaces: PluginSurfaceProps["surfaces"];
   preferredServiceSkillResultFileTarget: FilesSurfaceProps["target"];
@@ -70,7 +61,6 @@ export interface RenderWorkspaceRightSurfaceHostRuntimeParams {
   onClosePluginSurface: PluginSurfaceProps["onCloseSurface"];
   onCloseRightSurfaceShell: ShellPanelProps["onClose"];
   onOpenArticlePreviewArtifact: ArticleEditorRightSurfaceProps["onOpenPreviewArtifact"];
-  onOpenBrowserRuntimeForBrowserAssist?: ObjectCanvasSurfaceProps["onOpenBrowserRuntime"];
   onOpenServiceSkillResultFile?: FilesSurfaceProps["onOpenResultFile"];
   onRightSurfaceBrowserNavigate: BrowserPanelProps["onNavigate"];
   onSelectPluginSurface: PluginSurfaceProps["onSelectSurface"];
@@ -81,20 +71,16 @@ export function renderWorkspaceRightSurfaceHostRuntime({
   activePluginSurfaceContainerId,
   articleActionsDisabled,
   articleEditorRightSurface,
-  browserAssistObjectCanvasCandidate,
   browserRightSurfaceAvailable,
-  browserRightSurfaceControlMode,
+  ensureBrowserWorkspaceOwner,
+  browserRightSurfaceInitialUrl,
   browserRightSurfaceIntentTitle,
-  browserRightSurfaceLifecycleState,
-  browserRightSurfaceSessionRef,
   canvasWorkbenchRootPath,
   expertInfoPanelProps,
   filesRightSurfaceAvailable,
   filesRightSurfaceTarget,
   generalWorkbenchHarnessPanelBaseProps,
   harnessState,
-  objectCanvasRightSurfaceAvailable,
-  objectCanvasRightSurfaceCandidate,
   pluginSurfaceRightSurface,
   pluginSurfaceRightSurfaces,
   preferredServiceSkillResultFileTarget,
@@ -112,7 +98,6 @@ export function renderWorkspaceRightSurfaceHostRuntime({
   onClosePluginSurface,
   onCloseRightSurfaceShell,
   onOpenArticlePreviewArtifact,
-  onOpenBrowserRuntimeForBrowserAssist,
   onOpenServiceSkillResultFile,
   onRightSurfaceBrowserNavigate,
   onSelectPluginSurface,
@@ -152,20 +137,6 @@ export function renderWorkspaceRightSurfaceHostRuntime({
           ),
         }
       : {}),
-    ...(objectCanvasRightSurfaceAvailable
-      ? {
-          objectCanvas: () => (
-            <WorkspaceObjectCanvasSurface
-              candidate={objectCanvasRightSurfaceCandidate}
-              onOpenBrowserRuntime={
-                browserAssistObjectCanvasCandidate
-                  ? onOpenBrowserRuntimeForBrowserAssist
-                  : undefined
-              }
-            />
-          ),
-        }
-      : {}),
     ...(filesRightSurfaceAvailable
       ? {
           files: () => (
@@ -186,15 +157,14 @@ export function renderWorkspaceRightSurfaceHostRuntime({
             label:
               rightSurfaceBrowserTitle ??
               browserRightSurfaceIntentTitle ??
-              browserRightSurfaceSessionRef?.title ??
               null,
             render: () => (
               <RightSurfaceBrowserPanel
                 active={rightSurfaceState.activeSurface === "browser"}
-                controlMode={browserRightSurfaceControlMode}
-                initialUrl={browserRightSurfaceSessionRef?.launchUrl ?? null}
-                lifecycleState={browserRightSurfaceLifecycleState}
-                sessionRef={browserRightSurfaceSessionRef}
+                ensureOwner={ensureBrowserWorkspaceOwner}
+                initialUrl={browserRightSurfaceInitialUrl ?? null}
+                runtimeSessionId={sceneSessionId}
+                threadId={sceneThreadId || ""}
                 onNavigate={onRightSurfaceBrowserNavigate}
               />
             ),

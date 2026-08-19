@@ -347,8 +347,6 @@ interface WorkspaceConversationSceneProps extends WorkspaceMainAreaProps {
   rightSurfaceLaunchers?: ComponentProps<
     typeof TaskCenterUtilityToolbar
   >["rightSurfaceLaunchers"];
-  rightSurfaceObjectCanvasOpen?: boolean;
-  onToggleRightSurfaceObjectCanvas?: () => void;
   rightSurfaceBrowserOpen?: boolean;
   onToggleRightSurfaceBrowser?: () => void;
   rightSurfaceFilesOpen?: boolean;
@@ -417,8 +415,6 @@ export function WorkspaceConversationScene({
   liveCanvasPreview,
   rightSurfaceContent,
   rightSurfaceLaunchers,
-  rightSurfaceObjectCanvasOpen,
-  onToggleRightSurfaceObjectCanvas,
   rightSurfaceBrowserOpen,
   onToggleRightSurfaceBrowser,
   rightSurfaceFilesOpen,
@@ -515,11 +511,6 @@ export function WorkspaceConversationScene({
       harnessAttentionLevel={harnessAttentionLevel ?? "idle"}
       harnessToggleLabel={harnessToggleLabel ?? "Harness"}
       shellPanelOpen={shellPanelOpen}
-      onToggleObjectCanvasPanel={
-        rightSurfaceObjectCanvasOpen || onToggleRightSurfaceObjectCanvas
-          ? onToggleRightSurfaceObjectCanvas
-          : undefined
-      }
       onToggleBrowserPanel={
         rightSurfaceBrowserOpen || onToggleRightSurfaceBrowser
           ? onToggleRightSurfaceBrowser

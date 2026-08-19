@@ -59,11 +59,7 @@ function hasFiniteNumberField(
 }
 
 function isToolInventorySurface(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.workbench === "boolean" &&
-    typeof value.browser_assist === "boolean"
-  );
+  return isRecord(value) && typeof value.workbench === "boolean";
 }
 
 function isToolInventoryRequest(value: unknown): boolean {
@@ -311,9 +307,6 @@ function workspaceSkillBindingsListParamsFromRequest(
     ...(request.workbench === undefined
       ? {}
       : { workbench: request.workbench }),
-    ...(request.browserAssist === undefined
-      ? {}
-      : { browserAssist: request.browserAssist }),
   };
 }
 
@@ -325,9 +318,6 @@ function toolInventoryParamsFromRequest(
     ...(request.workbench === undefined
       ? {}
       : { workbench: request.workbench }),
-    ...(request.browserAssist === undefined
-      ? {}
-      : { browserAssist: request.browserAssist }),
     ...(request.metadata === undefined ? {} : { metadata: request.metadata }),
   };
 }

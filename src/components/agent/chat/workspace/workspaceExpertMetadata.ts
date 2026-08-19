@@ -3,7 +3,12 @@ import {
   type ExpertCatalog,
   type ExpertProfile,
 } from "@/features/experts";
-import { asRecord } from "./browserAssistArtifact";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
 
 export interface ResolveExpertPanelRequestMetadataParams {
   initialAutoSendRequestMetadata?: Record<string, unknown>;

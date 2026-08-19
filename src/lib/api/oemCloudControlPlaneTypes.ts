@@ -230,7 +230,6 @@ export interface OemCloudBootstrapResponse {
   providerPreference: OemCloudProviderPreference;
   skillCatalog?: unknown;
   serviceSkillCatalog?: unknown;
-  siteAdapterCatalog?: unknown;
   sceneCatalog?: Array<{ id: string }>;
   features: OemCloudFeatureFlags;
   gateway?: OemCloudGatewayConfig;

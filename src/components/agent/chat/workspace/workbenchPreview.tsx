@@ -102,7 +102,6 @@ export function ArtifactWorkbenchPreview({
     isLiveSelectedArtifact && displayedCanvasArtifact
       ? displayedCanvasArtifact
       : artifact;
-  const isBrowserAssistArtifact = previewArtifact.type === "browser_assist";
   const isArtifactStreaming = Boolean(
     isLiveSelectedArtifact &&
     currentCanvasArtifact &&
@@ -150,26 +149,6 @@ export function ArtifactWorkbenchPreview({
       {stackedWorkbenchTrigger}
     </>
   );
-
-  if (isBrowserAssistArtifact) {
-    return wrapPreviewWithWorkbenchTrigger(
-      <div className="relative h-full min-h-0 overflow-hidden bg-white">
-        <ArtifactRenderer
-          artifact={previewArtifact}
-          isStreaming={isArtifactStreaming}
-          hideToolbar={true}
-          viewMode={artifactViewMode}
-          previewSize={artifactPreviewSize}
-          tone="light"
-          canvasFactoryProps={canvasFactoryProps}
-        />
-        {isLiveSelectedArtifact && artifactOverlay ? (
-          <ArtifactCanvasOverlay overlay={artifactOverlay} />
-        ) : null}
-      </div>,
-      stackedWorkbenchTrigger,
-    );
-  }
 
   if (artifactDocument) {
     return (

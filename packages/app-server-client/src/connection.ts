@@ -11,6 +11,10 @@ export type AppServerServerMessage =
   | protocol.JsonRpcRequest
   | protocol.JsonRpcNotification;
 
+export type AppServerServerRequestHandler = (
+  message: protocol.JsonRpcRequest,
+) => Promise<boolean> | boolean;
+
 export type AppServerRequestOptions = {
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -114,6 +118,7 @@ export class AppServerConnection {
   #pendingServerRequestIds = new Set<protocol.RequestId>();
   #readPump: Promise<void> | null = null;
   #resolvedServerRequestIds = new Set<protocol.RequestId>();
+  #serverRequestHandler: AppServerServerRequestHandler | null = null;
 
   constructor(
     transport: AppServerMessageTransport,
@@ -202,6 +207,19 @@ export class AppServerConnection {
   respondServerRequest<T>(id: protocol.RequestId, result: T): void {
     this.#consumeServerRequestId(id);
     this.transport.send(protocol.response(id, result));
+  }
+
+  /**
+   * Installs an optional host-side interceptor for reverse requests.
+   * Returning true consumes the request; false keeps it available to drainEvents.
+   */
+  setServerRequestHandler(
+    handler: AppServerServerRequestHandler | null,
+  ): void {
+    this.#serverRequestHandler = handler;
+    if (handler) {
+      this.#ensureReadPump();
+    }
   }
 
   /** Sends a JSON-RPC error for an App Server initiated request. */
@@ -381,6 +399,19 @@ export class AppServerConnection {
       return;
     }
 
+    if (protocol.isJsonRpcRequest(message) && this.#serverRequestHandler) {
+      void Promise.resolve(this.#serverRequestHandler(message))
+        .then((handled) => {
+          if (!handled) {
+            this.#dispatchBufferedMessage(message);
+          }
+        })
+        .catch(() => {
+          this.#dispatchBufferedMessage(message);
+        });
+      return;
+    }
+
     if (
       protocol.isJsonRpcResponse(message) ||
       protocol.isJsonRpcErrorResponse(message)
@@ -491,7 +522,11 @@ export class AppServerConnection {
   }
 
   #hasReadDemand(): boolean {
-    return this.#pendingRequests.size > 0 || this.#messageReads.length > 0;
+    return (
+      this.#pendingRequests.size > 0 ||
+      this.#messageReads.length > 0 ||
+      this.#serverRequestHandler !== null
+    );
   }
 
   #observeServerMessage(message: protocol.JsonRpcMessage): void {

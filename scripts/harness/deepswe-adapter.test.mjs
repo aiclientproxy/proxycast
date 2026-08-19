@@ -18,6 +18,7 @@ import {
   providerStepExhaustion,
   providerStepsFromCurrentFacts,
   readJson,
+  runContextBase,
   runCurrentChainTask,
   runtimePrerequisites,
   terminalMessageFromCurrentFacts,
@@ -56,6 +57,30 @@ afterEach(() => {
 });
 
 describe("DeepSWE current-chain adapter", () => {
+  it("writes the current source and adapter identity into run context", () => {
+    const context = runContextBase(
+      { allowLiveProvider: false, transport: "stdio" },
+      "run-identity",
+      {
+        id: "task-identity",
+        language: "typescript",
+        repository: "example/repository",
+        repositoryUrl: "https://example.test/repository.git",
+        baseCommit: "0123456789012345678901234567890123456789",
+        schemaVersion: "1.3",
+        environment: {},
+        verifier: {},
+      },
+    );
+
+    expect(context).toMatchObject({
+      sourceCommit: "435ee89ec2f2e2289f33b0da4f992f0b7b7266b9",
+      executionContract: {
+        adapterVersion: "deepswe-current-chain-adapter-v6",
+      },
+    });
+  });
+
   it("validates all selected Release 20 tasks against the pinned source", () => {
     const result = preflightSelectedTasks({
       repoRoot,
@@ -65,8 +90,18 @@ describe("DeepSWE current-chain adapter", () => {
 
     expect(result.status).toBe("pass");
     expect(result.taskCount).toBe(20);
-    expect(result.checks).toHaveLength(61);
+    expect(result.checks).toHaveLength(205);
     expect(result.checks.every((check) => check.passed)).toBe(true);
+    expect(result.checks.map((check) => check.name)).toEqual(
+      expect.arrayContaining([
+        "source-license",
+        "source-provenance",
+        "happy-dom-abort-pending-body-reads:agent-network",
+        "happy-dom-abort-pending-body-reads:verifier-network",
+        "happy-dom-abort-pending-body-reads:collect-command",
+        "happy-dom-abort-pending-body-reads:pre-artifacts-deleted",
+      ]),
+    );
   }, 20_000);
 
   it("loads task metadata with TOML semantics instead of ad hoc line parsing", () => {
@@ -78,11 +113,23 @@ describe("DeepSWE current-chain adapter", () => {
 
     expect(task).toMatchObject({
       id: "happy-dom-abort-pending-body-reads",
-      schemaVersion: "1.1",
+      schemaVersion: "1.3",
       repository: "capricorn86/happy-dom",
       baseCommit: "82a0888cb2c87a6123e05424b528f8e8c9b3e426",
-      verifier: { environmentMode: "separate" },
-      environment: { allowInternet: false },
+      artifacts: ["/logs/artifacts/model.patch"],
+      agent: { networkMode: "no-network", timeoutSec: 5400 },
+      verifier: {
+        networkMode: "no-network",
+        environmentMode: "separate",
+        collect: [
+          {
+            command: expect.stringContaining(
+              "git diff --binary 82a0888cb2c87a6123e05424b528f8e8c9b3e426 HEAD",
+            ),
+            timeoutSec: 300,
+          },
+        ],
+      },
     });
     expect(task.instruction).toContain("AbortError");
   });
@@ -296,37 +343,37 @@ describe("DeepSWE current-chain adapter", () => {
       {
         threadRead: {
           providerSteps: [
-          {
-            sequence: 10,
-            timestamp: "2026-07-16T00:00:00Z",
-            attempt: 1,
-            completed: true,
-            finish_reason: "tool_call",
-            toolNames: ["Read", "apply_patch", "Read"],
-            text_output_chars: 7,
-            reasoning_output_chars: 40,
-            tool_call_count: 1,
-            usage: {
-              input_tokens: 100,
-              output_tokens: 20,
-              cached_input_tokens: 40,
+            {
+              sequence: 10,
+              timestamp: "2026-07-16T00:00:00Z",
+              attempt: 1,
+              completed: true,
+              finish_reason: "tool_call",
+              toolNames: ["Read", "apply_patch", "Read"],
+              text_output_chars: 7,
+              reasoning_output_chars: 40,
+              tool_call_count: 1,
+              usage: {
+                input_tokens: 100,
+                output_tokens: 20,
+                cached_input_tokens: 40,
+              },
             },
-          },
-          {
-            sequence: 20,
-            attempt: 2,
-            completed: true,
-            finish_reason: "stop",
-            toolNames: ["exec_command", "apply_patch"],
-            text_output_chars: 12,
-            reasoning_output_chars: 60,
-            tool_call_count: 0,
-            usage: {
-              input_tokens: 200,
-              output_tokens: 30,
-              cached_input_tokens: 50,
+            {
+              sequence: 20,
+              attempt: 2,
+              completed: true,
+              finish_reason: "stop",
+              toolNames: ["exec_command", "apply_patch"],
+              text_output_chars: 12,
+              reasoning_output_chars: 60,
+              tool_call_count: 0,
+              usage: {
+                input_tokens: 200,
+                output_tokens: 30,
+                cached_input_tokens: 50,
+              },
             },
-          },
           ],
         },
       },
@@ -645,7 +692,17 @@ describe("DeepSWE current-chain adapter", () => {
     fs.mkdirSync(path.join(taskDir, "tests"), { recursive: true });
     fs.writeFileSync(
       path.join(taskDir, "task.toml"),
-      "schema_version = '1.1'\n",
+      [
+        'schema_version = "1.3"',
+        'artifacts = ["/logs/artifacts/model.patch"]',
+        "[verifier]",
+        'network_mode = "no-network"',
+        'environment_mode = "separate"',
+        "[[verifier.collect]]",
+        'command = "cd /app && git diff --binary base HEAD > /logs/artifacts/model.patch"',
+        "timeout_sec = 300.0",
+        "",
+      ].join("\n"),
     );
     fs.writeFileSync(
       path.join(taskDir, "solution", "reference.patch"),
@@ -675,6 +732,9 @@ describe("DeepSWE current-chain adapter", () => {
     expect(fs.readFileSync(replay.solvePath, "utf8")).toContain(
       "git apply --binary --index /solution/model.patch",
     );
+    expect(
+      fs.readFileSync(path.join(replay.replayTaskDir, "task.toml"), "utf8"),
+    ).toBe(fs.readFileSync(path.join(taskDir, "task.toml"), "utf8"));
   });
 
   it("collects the three verifier outputs required by the v2 contract", () => {
@@ -707,6 +767,23 @@ describe("DeepSWE current-chain adapter", () => {
     });
     expect(result.status).toBe("blocked");
     expect(result.checks.every((check) => check.passed === false)).toBe(true);
+  });
+
+  it("rejects a Pier binary that does not report the pinned 0.3.1 version", () => {
+    const root = temporaryRoot();
+    const pierBin = path.join(root, "pier");
+    fs.writeFileSync(pierBin, "#!/bin/sh\necho 0.3.0\n", { mode: 0o755 });
+    const result = runtimePrerequisites({
+      pierBin,
+      containerBin: "/path/that/does/not/exist/docker",
+    });
+    const pier = result.checks.find((check) => check.name === "pier");
+
+    expect(result.status).toBe("blocked");
+    expect(pier).toMatchObject({
+      passed: false,
+      detail: "expected 0.3.1; actual 0.3.0",
+    });
   });
 
   it("classifies current-chain and verifier failures by owner", () => {

@@ -30,6 +30,7 @@ const {
   mockInputbar,
   mockIsSpecializedWorkbenchTheme,
   mockMessageList,
+  mockRequestWorkspaceRightSurface,
   mockUseAgentChatUnified,
   mockUseDeveloperFeatureFlags,
   mockUseThemeContextWorkspace,
@@ -390,7 +391,7 @@ describe("AgentChatPage 通用工作台", { timeout: 20_000 }, () => {
     ).not.toBeNull();
   });
 
-  it("点击 WebSearch 来源应在右侧 Browser 工作台打开 URL，而不是 URL 预览", async () => {
+  it("点击 WebSearch 来源应请求右侧 Browser，而不是打开旧 Canvas 预览", async () => {
     installMockAgentChatUnifiedState(
       createMockAgentChatUnifiedState({
         messages: [
@@ -442,22 +443,23 @@ describe("AgentChatPage 通用工作台", { timeout: 20_000 }, () => {
       mounted.container
         .querySelector('[data-testid="layout-transition"]')
         ?.getAttribute("data-mode"),
-    ).toBe("chat-canvas");
+    ).toBe("chat");
 
-    const latestWorkbenchProps = mockCanvasWorkbenchLayout.mock.calls.at(
-      -1,
-    )?.[0] as
-      | {
-          browserOpenRequest?: { url?: string | null } | null;
-          previewOpenRequest?: unknown;
-        }
-      | undefined;
-    expect(latestWorkbenchProps?.browserOpenRequest).toEqual(
-      expect.objectContaining({
-        url: "https://www.reuters.com/world/",
-      }),
-    );
-    expect(latestWorkbenchProps?.previewOpenRequest ?? null).toBeNull();
+    expect(mockRequestWorkspaceRightSurface).toHaveBeenCalledWith({
+      surfaceKind: "browser",
+      origin: "user",
+      priority: "foreground",
+      reason: "open_url_preview",
+      sessionId: null,
+      workspaceId: null,
+      candidateId: "source-1",
+      metadata: {
+        browser: {
+          launchUrl: "https://www.reuters.com/world/",
+          title: "Reuters World News",
+        },
+      },
+    });
   });
 
   it("通用模式空闲时应保留顶部 Harness 入口", async () => {
@@ -559,7 +561,6 @@ describe("AgentChatPage 通用工作台", { timeout: 20_000 }, () => {
     expect(toolbar?.dataset.harnessPanelVisible).toBe("true");
     expect(mockGetAgentRuntimeToolInventory).toHaveBeenCalledWith(
       expect.objectContaining({
-        browserAssist: true,
         caller: "assistant",
         workbench: false,
       }),

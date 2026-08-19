@@ -2,7 +2,7 @@ import {
   getSlashEntryUsageMap,
   getSlashEntryUsageRecordKey,
 } from "../skill-selection/slashEntryUsage";
-import { resolveSiteSceneSlotValues } from "../workspace/serviceSkillSceneLaunch";
+import { resolveSceneSlotValues } from "../workspace/serviceSkillSceneLaunch";
 import type { CreationReplayMetadata } from "../utils/creationReplayMetadata";
 import { formatNumber } from "@/i18n/format";
 import { agentZhCNResource as agentSourceResource } from "@/i18n/agentResources";
@@ -264,7 +264,7 @@ function resolveRecentScenePrefill(
   }
 
   const slotValues = compactSlotValues(
-    resolveSiteSceneSlotValues({
+    resolveSceneSlotValues({
       skill,
       userInput: replayText,
     }).resolvedSlotValues,

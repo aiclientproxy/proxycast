@@ -271,7 +271,6 @@ describe("useWorkspaceConversationLandingSessionRuntime", () => {
   it("非聊天布局应由 landing owner 补齐任务卡和运行时入口", () => {
     const onOpenMemoryWorkbench = vi.fn();
     const onOpenChannels = vi.fn();
-    const onOpenChromeRelay = vi.fn();
     const baseRuntime = renderHook(createDefaultProps()).getValue();
     const { getValue } = renderSessionHook({
       landingSurface: baseRuntime,
@@ -331,7 +330,6 @@ describe("useWorkspaceConversationLandingSessionRuntime", () => {
       currentUserMessage: "整理项目进度",
       onOpenMemoryWorkbench,
       onOpenChannels,
-      onOpenChromeRelay,
     });
 
     const emptyStateProps = getValue().emptyStateProps;
@@ -344,7 +342,6 @@ describe("useWorkspaceConversationLandingSessionRuntime", () => {
 
     emptyStateProps.onOpenMemoryWorkbench?.();
     emptyStateProps.onOpenChannels?.();
-    emptyStateProps.onOpenChromeRelay?.();
 
     expect(onOpenMemoryWorkbench).toHaveBeenCalledWith({
       sessionId: "session-1",
@@ -352,7 +349,6 @@ describe("useWorkspaceConversationLandingSessionRuntime", () => {
       userMessage: "整理项目进度",
     });
     expect(onOpenChannels).toHaveBeenCalledTimes(1);
-    expect(onOpenChromeRelay).toHaveBeenCalledTimes(1);
   });
 
   it("聊天布局不应生成重复的首页任务卡", () => {
@@ -363,7 +359,6 @@ describe("useWorkspaceConversationLandingSessionRuntime", () => {
       messages: [],
       onOpenMemoryWorkbench: vi.fn(),
       onOpenChannels: vi.fn(),
-      onOpenChromeRelay: vi.fn(),
     });
 
     expect(getValue().emptyStateProps.runtimeTaskCard).toBeNull();

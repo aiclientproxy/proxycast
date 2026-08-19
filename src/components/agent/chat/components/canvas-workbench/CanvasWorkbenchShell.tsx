@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Copy, Download, ExternalLink, FolderOpen, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DirectoryListing } from "@/lib/api/fileBrowser";
@@ -32,7 +32,6 @@ import {
   type CanvasWorkbenchWorkspacePanelProps,
 } from "./CanvasWorkbenchWorkspacePanel";
 import { CanvasWorkbenchProjectFilesPanel } from "./files/CanvasWorkbenchProjectFilesPanel";
-import { CanvasWorkbenchBrowserPanel } from "./browser/CanvasWorkbenchBrowserPanel";
 import { ProjectShellSurface } from "../ProjectShellSurface";
 
 type CanvasWorkbenchTranslation = (
@@ -68,8 +67,6 @@ interface CanvasWorkbenchShellProps {
   previewModeState: CanvasWorkbenchPreviewModeState;
   changeView?: CanvasWorkbenchChangeView | null;
   changesFilesPanelOpen?: boolean;
-  browserInitialUrl?: string | null;
-  onBrowserNavigate?: (url: string, title?: string | null) => void;
   loadFilePreview?: (path: string) => Promise<HarnessFilePreviewResult>;
   workspaceUnavailable: boolean;
   workspaceRoot?: string | null;
@@ -157,8 +154,6 @@ export const CanvasWorkbenchShell = memo(function CanvasWorkbenchShell({
   previewModeState,
   changeView,
   changesFilesPanelOpen = true,
-  browserInitialUrl = null,
-  onBrowserNavigate,
   loadFilePreview,
   workspaceUnavailable,
   workspaceRoot,
@@ -184,7 +179,6 @@ export const CanvasWorkbenchShell = memo(function CanvasWorkbenchShell({
   onSelectProjectFilesPreviewMode,
   onToggleChangesFilesPanel,
 }: CanvasWorkbenchShellProps) {
-  const [topTabsMenuOpen, setTopTabsMenuOpen] = useState(false);
   const contentToolTabKind = resolveCanvasWorkbenchToolTabKind(contentTab);
   const workspacePanel = (
     <CanvasWorkbenchWorkspacePanel
@@ -236,7 +230,6 @@ export const CanvasWorkbenchShell = memo(function CanvasWorkbenchShell({
               onSelectTab={onSelectTab}
               onNewToolTab={onNewToolTab}
               onCloseTab={onCloseTab}
-              onMenuOpenChange={setTopTabsMenuOpen}
             />
           </div>
 
@@ -408,14 +401,6 @@ export const CanvasWorkbenchShell = memo(function CanvasWorkbenchShell({
               bodyClassName="px-3 py-2"
             />
           </section>
-        ) : contentToolTabKind === "browser" ? (
-          <CanvasWorkbenchBrowserPanel
-            ghostButtonClassName={ghostButtonClassName}
-            translateWorkbench={translateWorkbench}
-            initialUrl={browserInitialUrl}
-            obscuredByChromeOverlay={topTabsMenuOpen}
-            onNavigate={onBrowserNavigate}
-          />
         ) : (
           workspacePanel
         )}

@@ -19,7 +19,6 @@ import {
   Search,
   ShieldCheck,
   Variable,
-  Monitor,
   Code,
   Info,
   LucideIcon,
@@ -151,11 +150,6 @@ export function useSettingsCategory(): CategoryGroup[] {
           key: SettingsTabs.ExecutionPolicy,
           label: t("settings.tab.executionPolicy"),
           icon: ShieldCheck,
-        },
-        {
-          key: SettingsTabs.ChromeRelay,
-          label: t("settings.tab.chromeRelay"),
-          icon: Monitor,
         },
         {
           key: SettingsTabs.Developer,

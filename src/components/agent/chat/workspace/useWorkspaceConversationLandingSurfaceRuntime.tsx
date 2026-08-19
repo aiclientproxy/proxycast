@@ -61,7 +61,6 @@ type UseWorkspaceConversationLandingSessionRuntimeParams = Parameters<
   currentUserMessage?: string | null;
   onOpenMemoryWorkbench: (params: OpenRuntimeMemoryWorkbenchParams) => void;
   onOpenChannels: () => void;
-  onOpenChromeRelay: () => void;
 };
 
 interface UseWorkspaceConversationLandingSurfaceRuntimeParams {
@@ -207,7 +206,6 @@ export function useWorkspaceConversationLandingSessionRuntime({
   currentUserMessage,
   onOpenMemoryWorkbench,
   onOpenChannels,
-  onOpenChromeRelay,
 }: UseWorkspaceConversationLandingSessionRuntimeParams): WorkspaceConversationLandingSurfaceRuntime {
   const runtimeTaskCard = useMemo(
     () =>
@@ -255,14 +253,12 @@ export function useWorkspaceConversationLandingSessionRuntime({
         runtimeTaskCard,
         onOpenMemoryWorkbench: handleOpenMemoryWorkbench,
         onOpenChannels,
-        onOpenChromeRelay,
       },
     }),
     [
       handleOpenMemoryWorkbench,
       landingSurface,
       onOpenChannels,
-      onOpenChromeRelay,
       runtimeTaskCard,
     ],
   );
@@ -451,7 +447,6 @@ export function useWorkspaceConversationLandingSurfaceRuntime({
         runtimeTaskCard: null,
         onOpenMemoryWorkbench: undefined,
         onOpenChannels: undefined,
-        onOpenChromeRelay: undefined,
         creationReplaySurface,
         defaultCuratedTaskReferenceMemoryIds,
         defaultCuratedTaskReferenceEntries,

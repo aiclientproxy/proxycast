@@ -154,14 +154,8 @@ describe("skillCatalog pure catalog projection", () => {
     );
   });
 
-  it("解析旧版远端目录时应过滤 site_adapter 和 browser assist 项", () => {
-    const catalog = parseSkillCatalog(buildLegacyCatalogWithSiteEntries());
-
-    expect(catalog?.items.map((item) => item.id)).toEqual([
-      "tenant-daily-briefing",
-    ]);
-    expect(catalog?.groups.map((group) => group.key)).toEqual(["general"]);
-    expect(JSON.stringify(catalog)).not.toContain("legacy-site-skill");
+  it("含已退役站点 adapter 的旧目录应被拒绝", () => {
+    expect(parseSkillCatalog(buildLegacyCatalogWithSiteEntries())).toBeNull();
   });
 
   it("应解析服务端下发的首页展示协议并允许 home-only command 无触发词", () => {
@@ -317,7 +311,6 @@ describe("skillCatalog pure catalog projection", () => {
         "deep_search",
         "research_report",
         "competitor_research",
-        "site_search",
         "read_pdf",
         "file_read_runtime",
         "summary",
@@ -536,7 +529,10 @@ describe("skillCatalog pure catalog projection", () => {
 
   it("解析远端 scene entry 时保留模板、占位和 request defaults", () => {
     const remoteCatalog: SkillCatalog = {
-      ...buildLegacyCatalogWithSiteEntries(),
+      ...getSeededSkillCatalog(),
+      tenantId: "tenant-demo",
+      version: "tenant-2026-03-30",
+      syncedAt: "2026-03-30T12:00:00.000Z",
       entries: [
         {
           id: "scene:campaign-launch",
@@ -567,22 +563,6 @@ describe("skillCatalog pure catalog projection", () => {
             supportsTimeline: true,
           },
         },
-        {
-          id: "scene:legacy-site-export",
-          kind: "scene",
-          title: "旧版站点导出",
-          summary: "把站点技能包装成 slash scene。",
-          sceneKey: "legacy-site-export",
-          commandPrefix: "/legacy-site-export",
-          linkedSkillId: "legacy-site-skill",
-          executionKind: "site_adapter",
-          renderContract: {
-            resultKind: "tool_timeline",
-            detailKind: "scene_detail",
-            supportsStreaming: true,
-            supportsTimeline: true,
-          },
-        },
       ],
     };
 
@@ -590,13 +570,10 @@ describe("skillCatalog pure catalog projection", () => {
 
     expect(
       listSkillCatalogSceneEntries(catalog!).map((entry) => entry.sceneKey),
-    ).toEqual(
-      expect.arrayContaining([
-        "campaign-launch",
-        "legacy-site-export",
-        "x-article-export",
-      ]),
-    );
+    ).toEqual(expect.arrayContaining(["campaign-launch", "story-video-suite"]));
+    expect(
+      listSkillCatalogSceneEntries(catalog!).map((entry) => entry.sceneKey),
+    ).not.toContain("legacy-site-export");
     expect(
       listSkillCatalogSceneEntries(catalog!).find(
         (entry) => entry.sceneKey === "campaign-launch",

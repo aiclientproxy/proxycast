@@ -1,4 +1,5 @@
 use super::*;
+use crate::runtime::artifact_content::DEFAULT_ARTIFACT_CONTENT_MAX_BYTES;
 use app_server_protocol::ArtifactContentStatus;
 use app_server_protocol::ArtifactReadParams;
 use std::fs;
@@ -394,4 +395,158 @@ fn filesystem_artifact_content_provider_rejects_escape_and_oversized_files() {
         },
     });
     assert_eq!(escaped.as_deref(), Some("inline fallback"));
+}
+
+#[test]
+fn workspace_artifact_content_provider_reads_declared_workspace_files() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let source_dir = workspace.path().join("src");
+    fs::create_dir_all(&source_dir).expect("source dir");
+    let source_path = source_dir.join("lib.rs");
+    fs::write(&source_path, "pub fn answer() -> u32 { 42 }").expect("source file");
+
+    let session = AgentSession {
+        session_id: "sess_workspace".to_string(),
+        thread_id: "thread_workspace".to_string(),
+        app_id: "coding".to_string(),
+        workspace_id: Some("workspace-main".to_string()),
+        business_object_ref: None,
+        status: AgentSessionStatus::Idle,
+        created_at: timestamp(),
+        updated_at: timestamp(),
+    };
+    let provider = WorkspaceArtifactContentProvider;
+    let metadata = json!({
+        "environments": [{ "cwd": workspace.path().to_string_lossy() }]
+    });
+
+    let relative = provider.read_content(&ArtifactContentRequest {
+        session: session.clone(),
+        artifact: ArtifactSummary {
+            artifact_ref: "relative".to_string(),
+            event_id: "evt-relative".to_string(),
+            sequence: 1,
+            turn_id: None,
+            artifact_id: Some("relative".to_string()),
+            path: Some("src/lib.rs".to_string()),
+            title: None,
+            kind: None,
+            status: None,
+            content: None,
+            content_status: ArtifactContentStatus::NotRequested,
+            metadata: Some(metadata.clone()),
+        },
+    });
+    assert_eq!(relative.as_deref(), Some("pub fn answer() -> u32 { 42 }"));
+
+    let absolute = provider.read_content(&ArtifactContentRequest {
+        session: session.clone(),
+        artifact: ArtifactSummary {
+            artifact_ref: "absolute".to_string(),
+            event_id: "evt-absolute".to_string(),
+            sequence: 2,
+            turn_id: None,
+            artifact_id: Some("absolute".to_string()),
+            path: Some(source_path.to_string_lossy().into_owned()),
+            title: None,
+            kind: None,
+            status: None,
+            content: None,
+            content_status: ArtifactContentStatus::NotRequested,
+            metadata: Some(metadata.clone()),
+        },
+    });
+    assert_eq!(absolute.as_deref(), Some("pub fn answer() -> u32 { 42 }"));
+
+    let outside = tempfile::NamedTempFile::new_in(workspace.path().parent().expect("temp parent"))
+        .expect("outside file");
+    fs::write(outside.path(), "outside").expect("outside content");
+    let escaped = provider.read_content(&ArtifactContentRequest {
+        session: session.clone(),
+        artifact: ArtifactSummary {
+            artifact_ref: "escaped".to_string(),
+            event_id: "evt-escaped".to_string(),
+            sequence: 3,
+            turn_id: None,
+            artifact_id: Some("escaped".to_string()),
+            path: Some(format!(
+                "../{}",
+                outside
+                    .path()
+                    .file_name()
+                    .expect("outside file name")
+                    .to_string_lossy()
+            )),
+            title: None,
+            kind: None,
+            status: None,
+            content: None,
+            content_status: ArtifactContentStatus::NotRequested,
+            metadata: Some(metadata.clone()),
+        },
+    });
+    assert_eq!(escaped, None);
+
+    let large_path = workspace.path().join("large.bin");
+    fs::write(
+        &large_path,
+        vec![b'x'; (DEFAULT_ARTIFACT_CONTENT_MAX_BYTES + 1) as usize],
+    )
+    .expect("large file");
+    let oversized = provider.read_content(&ArtifactContentRequest {
+        session: session.clone(),
+        artifact: ArtifactSummary {
+            artifact_ref: "oversized".to_string(),
+            event_id: "evt-oversized".to_string(),
+            sequence: 4,
+            turn_id: None,
+            artifact_id: Some("oversized".to_string()),
+            path: Some("large.bin".to_string()),
+            title: None,
+            kind: None,
+            status: None,
+            content: None,
+            content_status: ArtifactContentStatus::NotRequested,
+            metadata: Some(metadata),
+        },
+    });
+    assert_eq!(oversized, None);
+
+    let inline = provider.read_content(&ArtifactContentRequest {
+        session: session.clone(),
+        artifact: ArtifactSummary {
+            artifact_ref: "inline".to_string(),
+            event_id: "evt-inline".to_string(),
+            sequence: 5,
+            turn_id: None,
+            artifact_id: Some("inline".to_string()),
+            path: None,
+            title: None,
+            kind: None,
+            status: None,
+            content: Some("inline content".to_string()),
+            content_status: ArtifactContentStatus::NotRequested,
+            metadata: None,
+        },
+    });
+    assert_eq!(inline.as_deref(), Some("inline content"));
+
+    let empty_inline = provider.read_content(&ArtifactContentRequest {
+        session,
+        artifact: ArtifactSummary {
+            artifact_ref: "empty-inline".to_string(),
+            event_id: "evt-empty-inline".to_string(),
+            sequence: 6,
+            turn_id: None,
+            artifact_id: Some("empty-inline".to_string()),
+            path: Some("missing.txt".to_string()),
+            title: None,
+            kind: None,
+            status: None,
+            content: Some(String::new()),
+            content_status: ArtifactContentStatus::NotRequested,
+            metadata: Some(json!({ "cwd": workspace.path().to_string_lossy() })),
+        },
+    });
+    assert_eq!(empty_inline.as_deref(), Some(""));
 }

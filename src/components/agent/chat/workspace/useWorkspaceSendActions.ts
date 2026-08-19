@@ -61,10 +61,6 @@ import { resolvePlainInputIntentConfirmation } from "../utils/plainInputIntentCo
 import { detectBrowserTaskRequirement } from "../utils/browserTaskRequirement";
 import { isTeamRuntimeRecommendation } from "../utils/contextualRecommendations";
 import {
-  matchAutoLaunchSiteSkillFromText,
-  type AutoMatchedSiteSkill,
-} from "../service-skills/autoMatchSiteSkill";
-import {
   saveChatToolPreferences,
   type ChatToolPreferences,
 } from "../utils/chatToolPreferences";
@@ -72,11 +68,7 @@ import type { HandleSendOptions } from "../hooks/handleSendTypes";
 import { extractAgentUiPerformanceTraceMetadata } from "../hooks/agentStreamPerformanceMetrics";
 import type { SendMessageFn } from "../hooks/agentChatShared";
 import { normalizeExecutionStrategy } from "../hooks/agentChatCoreUtils";
-import type {
-  BrowserAssistSessionState,
-  Message,
-  MessageImage,
-} from "../types";
+import type { Message, MessageImage } from "../types";
 import type { AgentAccessMode } from "../hooks/agentChatStorage";
 import {
   buildSubmissionPreviewMessages,
@@ -89,9 +81,7 @@ import {
   hasModelSkillLaunchRequestMetadata,
   hasServiceSkillLaunchRequestMetadata,
   serviceSkillLaunchRequiresProject,
-  primeBrowserAssistBeforeSend,
   type ContextWorkspaceSummary,
-  type EnsureBrowserAssistCanvasOptions,
 } from "./workspaceSendHelpers";
 import type { Character } from "@/lib/api/projectMemory";
 import type { ThemeType } from "@/lib/workspace/workbenchContract";
@@ -169,7 +159,6 @@ import {
   shouldRefreshServiceModelsBeforeSend,
   withConfiguredModelSlots,
 } from "./commands/serviceModelHelpers";
-import { shouldSkipBrowserAssistPrimeForPlainFirstTurn } from "./commands/browserAssistHelpers";
 import { buildImageWorkbenchAssistantDraft } from "./commands/imageWorkbenchHelpers";
 import { resolveSkillInstallPromptConfirmation } from "./commands/skillInstallHelpers";
 import {
@@ -250,14 +239,6 @@ interface UseWorkspaceSendActionsParams {
   currentGateKey: string;
   themeWorkbenchActiveQueueTitle?: string;
   contentId?: string | null;
-  browserAssistProfileKey?: string | null;
-  browserAssistPreferredBackend?:
-    | "current"
-    | "lime_extension_bridge"
-    | "cdp_direct"
-    | null;
-  browserAssistAutoLaunch?: boolean | null;
-  browserAssistSessionState?: BrowserAssistSessionState | null;
   workspaceRequestMetadataBase?: Record<string, unknown>;
   savedSoulArtifactVoiceGenerationBrief?: Record<string, unknown> | null;
   soulArtifactVoiceEnabledForTurn?: boolean;
@@ -281,13 +262,6 @@ interface UseWorkspaceSendActionsParams {
   rollbackAfterSendFailure: (
     boundary: GeneralWorkbenchSendBoundaryState,
   ) => void;
-  ensureBrowserAssistCanvas: (
-    target: string,
-    options?: EnsureBrowserAssistCanvasOptions,
-  ) => Promise<boolean>;
-  handleAutoLaunchMatchedSiteSkill: (
-    match: AutoMatchedSiteSkill<ServiceSkillHomeItem>,
-  ) => Promise<void>;
   openRuntimeSceneGate?: (
     request: RuntimeSceneGateRequest,
   ) => Promise<void> | void;
@@ -401,10 +375,6 @@ export function useWorkspaceSendActions({
   currentGateKey,
   themeWorkbenchActiveQueueTitle,
   contentId,
-  browserAssistProfileKey,
-  browserAssistPreferredBackend,
-  browserAssistAutoLaunch,
-  browserAssistSessionState,
   workspaceRequestMetadataBase,
   savedSoulArtifactVoiceGenerationBrief,
   soulArtifactVoiceEnabledForTurn,
@@ -417,8 +387,6 @@ export function useWorkspaceSendActions({
   resolveSendBoundary,
   finalizeAfterSendSuccess,
   rollbackAfterSendFailure,
-  ensureBrowserAssistCanvas,
-  handleAutoLaunchMatchedSiteSkill,
   openRuntimeSceneGate,
   ensureSessionForCommandMetadata,
   prepareImageWorkbenchSkillSend,
@@ -2572,7 +2540,6 @@ export function useWorkspaceSendActions({
           requestMetadata: buildBrowserControlLaunchRequestMetadata(
             sendOptions?.requestMetadata,
             parsedBrowserWorkbenchCommand,
-            browserAssistSessionState,
           ),
         };
         markCompletedMentionCommand(
@@ -2644,27 +2611,6 @@ export function useWorkspaceSendActions({
         }
       }
 
-      const trimmedSourceText = sourceText.trim();
-      if (
-        activeTheme === "general" &&
-        !sendOptions?.purpose &&
-        !hasBoundSkillLaunch &&
-        !images?.length &&
-        trimmedSourceText &&
-        !trimmedSourceText.startsWith("/") &&
-        !trimmedSourceText.startsWith("@")
-      ) {
-        const matchedSiteSkill = matchAutoLaunchSiteSkillFromText({
-          inputText: trimmedSourceText,
-          serviceSkills,
-        });
-        if (matchedSiteSkill) {
-          clearSubmissionPreview();
-          await handleAutoLaunchMatchedSiteSkill(matchedSiteSkill);
-          return { kind: "done", result: true };
-        }
-      }
-
       const mergedRequestMetadataAfterLaunch = {
         ...(workspaceRequestMetadataBase || {}),
         ...(sendOptions?.requestMetadata || {}),
@@ -2686,26 +2632,6 @@ export function useWorkspaceSendActions({
         sendOptions?.skipSessionRestore !== true &&
         sendOptions?.skipSessionStartHooks !== true &&
         Boolean(ensureSessionForCommandMetadata);
-
-      const shouldSkipBrowserAssistPrime =
-        shouldSkipBrowserAssistPrimeForPlainFirstTurn({
-          activeTheme,
-          browserRequirementMatch: browserRequirementForSend,
-          hasBoundSkillLaunch,
-          imagesCount: images?.length ?? 0,
-          messagesCount,
-          sendOptions,
-          sourceText,
-        });
-
-      if (!hasBoundSkillLaunch && !shouldSkipBrowserAssistPrime) {
-        primeBrowserAssistBeforeSend({
-          activeTheme,
-          sourceText,
-          browserRequirementMatch: browserRequirementForSend,
-          ensureBrowserAssistCanvas,
-        });
-      }
 
       let text: string;
       try {
@@ -2816,15 +2742,11 @@ export function useWorkspaceSendActions({
       };
     },
     [
-      activeTheme,
-      browserAssistSessionState,
       chatToolPreferences,
       contentId,
       contextWorkspace,
       ensureSessionForCommandMetadata,
-      ensureBrowserAssistCanvas,
       executionStrategy,
-      handleAutoLaunchMatchedSiteSkill,
       isThemeWorkbench,
       resolveImageWorkbenchCommandRequest,
       input,
@@ -2930,9 +2852,6 @@ export function useWorkspaceSendActions({
           themeWorkbenchActiveQueueTitle,
           contentId,
           browserRequirementMatch: browserRequirementForSend,
-          browserAssistProfileKey,
-          browserAssistPreferredBackend,
-          browserAssistAutoLaunch,
           workspaceSkillBindings,
           workspaceSkillRuntimeEnable,
           agentResponseLanguage,
@@ -2967,9 +2886,6 @@ export function useWorkspaceSendActions({
             themeWorkbenchActiveQueueTitle,
             contentId,
             browserRequirementMatch: browserRequirementForSend,
-            browserAssistProfileKey,
-            browserAssistPreferredBackend,
-            browserAssistAutoLaunch,
             workspaceSkillBindings,
             workspaceSkillRuntimeEnable,
             agentResponseLanguage: effectiveAgentResponseLanguage,
@@ -3065,9 +2981,6 @@ export function useWorkspaceSendActions({
     },
     [
       agentResponseLanguage,
-      browserAssistAutoLaunch,
-      browserAssistPreferredBackend,
-      browserAssistProfileKey,
       contentId,
       currentGateKey,
       finalizeAfterSendSuccess,

@@ -6,7 +6,6 @@ const emptyToolInventory = {
     caller: "assistant",
     surface: {
       workbench: true,
-      browser_assist: false,
     },
   },
   agent_initialized: true,
@@ -49,7 +48,6 @@ describe("agentRuntime inventoryClient", () => {
               caller: "assistant",
               surface: {
                 workbench: true,
-                browser_assist: false,
               },
             },
             warnings: [],

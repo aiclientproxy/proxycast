@@ -3,10 +3,7 @@ import {
   buildServiceSkillCapabilityDescription,
   getServiceSkillActionLabel,
   getServiceSkillOutputDestination,
-  getServiceSkillRunnerDescription,
-  getServiceSkillRunnerLabel,
   getServiceSkillTypeLabel,
-  listServiceSkillDependencies,
   summarizeServiceSkillRequiredInputs,
 } from "./skillPresentation";
 import type { ServiceSkillItem } from "./types";
@@ -91,11 +88,10 @@ describe("skillPresentation", () => {
     ).toBe("需要：当前无必填信息 · 交付：研究摘要");
   });
 
-  it("带必填槽位的站点技能应提示先补齐这一步", () => {
+  it("带必填槽位的即时技能应提示先补齐这一步", () => {
     expect(
       getServiceSkillActionLabel(
         createServiceSkill({
-          defaultExecutorBinding: "browser_assist",
           slotSchema: [
             {
               key: "query",
@@ -105,52 +101,9 @@ describe("skillPresentation", () => {
               placeholder: "例如 AI Agent",
             },
           ],
-          siteCapabilityBinding: {
-            adapterName: "github/search",
-            autoRun: true,
-            slotArgMap: {},
-          },
         }),
       ),
     ).toBe("补齐这一步");
-  });
-
-  it("无必填槽位的站点技能应直接提示接着继续", () => {
-    expect(
-      getServiceSkillActionLabel(
-        createServiceSkill({
-          defaultExecutorBinding: "browser_assist",
-          slotSchema: [],
-          siteCapabilityBinding: {
-            adapterName: "github/search",
-            autoRun: true,
-            slotArgMap: {},
-          },
-        }),
-      ),
-    ).toBe("接着继续");
-  });
-
-  it("站点做法的运行语义应改成接着浏览器继续，而不是暴露采集与登录态术语", () => {
-    const siteSkill = createServiceSkill({
-      defaultExecutorBinding: "browser_assist",
-      siteCapabilityBinding: {
-        adapterName: "github/search",
-        autoRun: true,
-        slotArgMap: {},
-      },
-      readinessRequirements: {
-        requiresBrowser: true,
-      },
-    });
-
-    expect(getServiceSkillRunnerLabel(siteSkill)).toBe("接着浏览器继续");
-    expect(getServiceSkillRunnerDescription(siteSkill)).toBe(
-      "会接着当前浏览器里已经打开的页面把这一步做完，并把结果带回生成。",
-    );
-    expect(listServiceSkillDependencies(siteSkill)).toContain(
-      "需要当前浏览器里已经打开并登录对应站点。",
-    );
   });
 
   it("允许调用方注入本地化 presentation copy", () => {

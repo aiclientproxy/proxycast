@@ -75,10 +75,6 @@ import {
 } from "@/lib/oemCloudSession";
 import { syncServiceSkillCatalogFromBootstrapPayload } from "@/lib/serviceSkillCatalogBootstrap";
 import { syncSkillCatalogFromBootstrapPayload } from "@/lib/skillCatalogBootstrap";
-import {
-  clearSiteAdapterCatalogCache,
-  syncSiteAdapterCatalogFromBootstrapPayload,
-} from "@/lib/siteAdapterCatalogBootstrap";
 import { resolveOemLimeHubProviderName } from "@/lib/oemLimeHubProvider";
 
 type OemCloudLoginMode = "password" | "email_code";
@@ -593,7 +589,6 @@ export function useOemCloudAccess() {
       clearOemCloudBootstrapSnapshot();
       clearSkillCatalogCache();
       clearServiceSkillCatalogCache();
-      void clearSiteAdapterCatalogCache();
       setSession(null);
       setBootstrap(null);
       setOffers([]);
@@ -633,10 +628,6 @@ export function useOemCloudAccess() {
         session: nextSession,
       });
       syncServiceSkillCatalogFromBootstrapPayload({
-        ...nextBootstrap,
-        session: nextSession,
-      });
-      void syncSiteAdapterCatalogFromBootstrapPayload({
         ...nextBootstrap,
         session: nextSession,
       });

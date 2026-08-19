@@ -6,7 +6,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "1.131.0"
+version = "1.132.0"
 edition = "2021"
 authors = ["coso"]
 repository = "https://github.com/aiclientproxy/lime"
@@ -33,7 +33,6 @@ tool-runtime = { path = "crates/tool-runtime" }
 lime-scheduler = { path = "crates/scheduler" }
 lime-embedding = { path = "crates/embedding", default-features = false }
 lime-gateway = { path = "crates/gateway" }
-lime-browser-runtime = { path = "crates/browser-runtime" }
 lime-media-runtime = { path = "crates/media-runtime" }
 runtime-core = { path = "crates/runtime-core" }
 lime-knowledge = { path = "crates/knowledge" }

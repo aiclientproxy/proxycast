@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   createSeededCloudServiceSkillCatalog,
-  createSeededLocalCustomServiceSkillBaseSetupPackage,
-  createSeededLocalCustomServiceSkillCatalog,
   createSeededServiceSkillBaseSetupPackage,
   SEEDED_SERVICE_SKILL_CATALOG_TENANT_ID,
   SEEDED_SERVICE_SKILL_CATALOG_VERSION,
@@ -78,30 +76,6 @@ describe("seededServiceSkillPackage", () => {
     );
     expect(pkg.compatibility.requiredKernelCapabilities).not.toContain(
       "cloud_scene",
-    );
-  });
-
-  it("应提供 seeded 本地定制场景的基础设置包事实源", () => {
-    const pkg = createSeededLocalCustomServiceSkillBaseSetupPackage();
-
-    expect(pkg.id).toBe("lime-seeded-local-custom-service-skills");
-    expect(pkg.version).toBe(SEEDED_SERVICE_SKILL_CATALOG_VERSION);
-    expect(pkg.catalogProjections).toHaveLength(1);
-    expect(pkg.catalogProjections).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "x-article-export",
-          targetCatalog: "service_skill_catalog",
-          bindingProfileRef: "browser-assist-instant",
-        }),
-      ]),
-    );
-    expect(pkg.catalogProjections[0]).toEqual(
-      expect.objectContaining({
-        id: "x-article-export",
-        targetCatalog: "service_skill_catalog",
-        bindingProfileRef: "browser-assist-instant",
-      }),
     );
   });
 
@@ -232,34 +206,4 @@ describe("seededServiceSkillPackage", () => {
     );
   });
 
-  it("应把 seeded 本地定制基础设置包编译成 local_custom 目录项", () => {
-    const catalog = createSeededLocalCustomServiceSkillCatalog();
-
-    expect(catalog.tenantId).toBe(SEEDED_SERVICE_SKILL_CATALOG_TENANT_ID);
-    expect(catalog.version).toBe(SEEDED_SERVICE_SKILL_CATALOG_VERSION);
-    expect(catalog.items).toHaveLength(1);
-    expect(catalog.items[0]).toEqual(
-      expect.objectContaining({
-        id: "x-article-export",
-        source: "local_custom",
-        runnerType: "instant",
-        defaultExecutorBinding: "browser_assist",
-        sceneBinding: expect.objectContaining({
-          sceneKey: "x-article-export",
-          commandPrefix: "/x文章转存",
-        }),
-        skillBundle: expect.objectContaining({
-          metadata: expect.objectContaining({
-            Lime_base_setup_package_id:
-              "lime-seeded-local-custom-service-skills",
-            Lime_executor_binding: "browser_assist",
-            Lime_runner_type: "instant",
-          }),
-        }),
-      }),
-    );
-    expect(catalog.items.map((item) => item.id)).not.toContain(
-      "personal-ip-knowledge-builder",
-    );
-  });
 });

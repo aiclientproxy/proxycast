@@ -23,7 +23,7 @@ import {
 import {
   buildServiceSceneLaunchRequestMetadata,
   parseRuntimeSceneCommand,
-  resolveSiteSceneSlotValues,
+  resolveSceneSlotValues,
   RuntimeSceneLaunchValidationError,
   resolveRuntimeSceneLaunchRequest,
 } from "./serviceSkillSceneLaunch";
@@ -108,7 +108,7 @@ function resolveRecentSceneGateReplayPrefill(params: {
   }
 
   const slotValues = compactSceneGateSlotValues(
-    resolveSiteSceneSlotValues({
+    resolveSceneSlotValues({
       skill: params.skill,
       userInput: replayText,
     }).resolvedSlotValues,

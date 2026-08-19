@@ -857,6 +857,7 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
     sessionId: session.sessionId,
     createFreshSession: session.createFreshSession,
     ensureSession: session.ensureSession,
+    getThreadIdForSubmit: session.getThreadIdForSubmit,
     switchTopic: session.switchTopic,
     loadFullSessionHistory: session.loadFullSessionHistory,
     refreshSessionReadModel: session.refreshSessionReadModel,

@@ -84,30 +84,6 @@
     },
     {
       "kind": "request",
-      "method": "browserSession/action/execute"
-    },
-    {
-      "kind": "request",
-      "method": "browserSession/close"
-    },
-    {
-      "kind": "request",
-      "method": "browserSession/event/list"
-    },
-    {
-      "kind": "request",
-      "method": "browserSession/open"
-    },
-    {
-      "kind": "request",
-      "method": "browserSession/read"
-    },
-    {
-      "kind": "request",
-      "method": "browserSession/target/list"
-    },
-    {
-      "kind": "request",
       "method": "capability/list"
     },
     {
@@ -1506,22 +1482,6 @@
       "scope": "thread"
     },
     {
-      "method": "browserSession/action/execute",
-      "scope": "browserSession"
-    },
-    {
-      "method": "browserSession/close",
-      "scope": "browserSession"
-    },
-    {
-      "method": "browserSession/open",
-      "scope": "browserSession"
-    },
-    {
-      "method": "browserSession/read",
-      "scope": "browserSession"
-    },
-    {
       "method": "mcpResource/subscribe",
       "scope": "mcpResourceSubscription"
     },
@@ -1708,21 +1668,6 @@
       "ArtifactSummary",
       "AuthKind",
       "AuthMaterialRef",
-      "BrowserSessionActionExecuteParams",
-      "BrowserSessionActionExecuteResponse",
-      "BrowserSessionCloseResponse",
-      "BrowserSessionEventItem",
-      "BrowserSessionEventListParams",
-      "BrowserSessionEventListResponse",
-      "BrowserSessionIdParams",
-      "BrowserSessionOpenParams",
-      "BrowserSessionOpenResponse",
-      "BrowserSessionPageInfo",
-      "BrowserSessionReadResponse",
-      "BrowserSessionState",
-      "BrowserSessionTargetInfo",
-      "BrowserSessionTargetListParams",
-      "BrowserSessionTargetListResponse",
       "BusinessObjectRef",
       "CapabilityDescriptor",
       "CapabilityListParams",

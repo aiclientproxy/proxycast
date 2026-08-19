@@ -31,13 +31,6 @@ export const METHOD_APP_LIST_UPDATED = "app/list/updated";
 export const METHOD_APP_READ = "app/read";
 export const METHOD_ARTIFACT_READ = "artifact/read";
 export const METHOD_ARTIFACT_WRITE = "artifact/write";
-export const METHOD_BROWSER_SESSION_ACTION_EXECUTE =
-  "browserSession/action/execute";
-export const METHOD_BROWSER_SESSION_CLOSE = "browserSession/close";
-export const METHOD_BROWSER_SESSION_EVENT_LIST = "browserSession/event/list";
-export const METHOD_BROWSER_SESSION_OPEN = "browserSession/open";
-export const METHOD_BROWSER_SESSION_READ = "browserSession/read";
-export const METHOD_BROWSER_SESSION_TARGET_LIST = "browserSession/target/list";
 export const METHOD_CAPABILITY_LIST = "capability/list";
 export const METHOD_COLLABORATION_MODE_LIST = "collaborationMode/list";
 export const METHOD_COMMAND_EXEC = "command/exec";
@@ -530,30 +523,6 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "artifact/write",
-  },
-  {
-    kind: "request",
-    method: "browserSession/action/execute",
-  },
-  {
-    kind: "request",
-    method: "browserSession/close",
-  },
-  {
-    kind: "request",
-    method: "browserSession/event/list",
-  },
-  {
-    kind: "request",
-    method: "browserSession/open",
-  },
-  {
-    kind: "request",
-    method: "browserSession/read",
-  },
-  {
-    kind: "request",
-    method: "browserSession/target/list",
   },
   {
     kind: "request",
@@ -1960,22 +1929,6 @@ export const GENERATED_APP_SERVER_REQUEST_SERIALIZATION_SCOPES = [
     scope: "thread",
   },
   {
-    method: "browserSession/action/execute",
-    scope: "browserSession",
-  },
-  {
-    method: "browserSession/close",
-    scope: "browserSession",
-  },
-  {
-    method: "browserSession/open",
-    scope: "browserSession",
-  },
-  {
-    method: "browserSession/read",
-    scope: "browserSession",
-  },
-  {
     method: "mcpResource/subscribe",
     scope: "mcpResourceSubscription",
   },
@@ -2479,7 +2432,6 @@ export type AgentSessionStatus =
   | "waitingAction";
 
 export interface AgentSessionToolInventoryReadParams {
-  browserAssist?: boolean;
   caller?: null | string;
   metadata?: unknown;
   workbench?: boolean;
@@ -3224,36 +3176,6 @@ export type AppServerClientRequest =
     }
   | {
       id: number | string;
-      method: "browserSession/target/list";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "browserSession/open";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "browserSession/read";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "browserSession/close";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "browserSession/event/list";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
-      method: "browserSession/action/execute";
-      params?: unknown;
-    }
-  | {
-      id: number | string;
       method: "soulStylePack/install";
       params?: unknown;
     }
@@ -3775,12 +3697,6 @@ export type AppServerRequestMethod =
   | "agentSession/reviewDecisionTemplate/export"
   | "agentSession/toolInventory/read"
   | "artifact/read"
-  | "browserSession/action/execute"
-  | "browserSession/close"
-  | "browserSession/event/list"
-  | "browserSession/open"
-  | "browserSession/read"
-  | "browserSession/target/list"
   | "capability/list"
   | "connectCallback/send"
   | "connectDeepLink/resolve"
@@ -3992,7 +3908,6 @@ export type AppServerRequestMethod =
   | "workspaceSkillBindings/list";
 
 export type AppServerRequestSerializationScope =
-  | "browserSession"
   | "mcpOauth"
   | "mcpResourceSubscription"
   | "thread";
@@ -4126,109 +4041,6 @@ export interface AuthMaterialRef {
 }
 
 export type AutoReviewDecisionSource = "agent";
-
-export interface BrowserSessionActionExecuteParams {
-  action: string;
-  args?: unknown;
-  sessionId: string;
-}
-
-export interface BrowserSessionActionExecuteResponse {
-  action: string;
-  result?: unknown;
-  sessionId: string;
-}
-
-export interface BrowserSessionCloseResponse {
-  sessionId: string;
-  status: string;
-}
-
-export interface BrowserSessionEventItem {
-  occurredAt: string;
-  payload?: unknown;
-  sequence: number;
-  sessionId: string;
-}
-
-export interface BrowserSessionEventListParams {
-  cursor?: number | null;
-  sessionId: string;
-}
-
-export interface BrowserSessionEventListResponse {
-  events?: BrowserSessionEventItem[];
-  nextCursor: number;
-}
-
-export interface BrowserSessionIdParams {
-  sessionId: string;
-}
-
-export interface BrowserSessionOpenParams {
-  environmentPresetId?: null | string;
-  environmentPresetName?: null | string;
-  launchUrl?: null | string;
-  profileKey: string;
-  remoteDebuggingPort: number;
-  targetId?: null | string;
-}
-
-export interface BrowserSessionOpenResponse {
-  session: BrowserSessionState;
-}
-
-export interface BrowserSessionPageInfo {
-  markdown: string;
-  title: string;
-  updatedAt: string;
-  url: string;
-}
-
-export interface BrowserSessionReadResponse {
-  session: BrowserSessionState;
-}
-
-export interface BrowserSessionState {
-  connected: boolean;
-  controlMode: string;
-  createdAt: string;
-  devtoolsFrontendUrl?: null | string;
-  environmentPresetId?: null | string;
-  environmentPresetName?: null | string;
-  humanReason?: null | string;
-  lastError?: null | string;
-  lastEventAt?: null | string;
-  lastFrameAt?: null | string;
-  lastPageInfo?: BrowserSessionPageInfo | null;
-  lifecycleState: string;
-  profileKey: string;
-  remoteDebuggingPort: number;
-  sessionId: string;
-  streamMode?: null | string;
-  targetId: string;
-  targetTitle: string;
-  targetUrl: string;
-  transportKind: string;
-  wsDebuggerUrl: string;
-}
-
-export interface BrowserSessionTargetInfo {
-  devtoolsFrontendUrl?: null | string;
-  id: string;
-  targetType?: string;
-  title?: string;
-  url?: string;
-  webSocketDebuggerUrl?: null | string;
-}
-
-export interface BrowserSessionTargetListParams {
-  remoteDebuggingPort: number;
-}
-
-export interface BrowserSessionTargetListResponse {
-  targets?: BrowserSessionTargetInfo[];
-}
 
 export interface BusinessObjectRef {
   id: string;
@@ -10759,7 +10571,6 @@ export interface WorkspaceRightSurfaceRequestResponse {
 }
 
 export interface WorkspaceSkillBindingsListParams {
-  browserAssist?: boolean;
   caller?: null | string;
   workbench?: boolean;
   workspaceRoot: string;

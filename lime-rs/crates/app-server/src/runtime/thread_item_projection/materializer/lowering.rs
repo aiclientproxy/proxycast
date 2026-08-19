@@ -159,9 +159,6 @@ pub(super) fn item_family(event_type: &str, payload: &Value) -> Option<ItemFamil
     if normalized.starts_with("mcp.") {
         return Some(ItemFamily::McpToolCall);
     }
-    if normalized == "approval.session_cache.hit" {
-        return None;
-    }
     if normalized.starts_with("action.") || normalized.starts_with("approval.") {
         return Some(ItemFamily::Approval);
     }

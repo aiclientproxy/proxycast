@@ -7,10 +7,8 @@ import {
 } from "react";
 import type { LayoutMode } from "@/lib/workspace/workbenchContract";
 import type { AgentThreadItem } from "@/lib/api/agentProtocol";
-import type { BrowserAssistSessionState } from "../types";
 import type { WorkspaceFilesSurfaceTarget } from "./WorkspaceFilesSurface";
 import type { WorkspaceArticleWorkspace } from "./workspaceArticleWorkspaceModel";
-import type { BrowserSessionRef } from "./workspaceBrowserSessionRef";
 import { useWorkspaceRightSurfaceActionRuntime } from "./useWorkspaceRightSurfaceActionRuntime";
 import type { WorkspaceRightSurfacePendingActions } from "./useWorkspaceRightSurfaceArtifactOpenRuntime";
 import { useWorkspaceRightSurfaceDerivedRuntime } from "./useWorkspaceRightSurfaceDerivedRuntime";
@@ -31,12 +29,8 @@ interface UseWorkspaceRightSurfaceCoordinatorRuntimeParams {
   bindRightSurfacePendingActions: (
     actions: WorkspaceRightSurfacePendingActions,
   ) => void;
-  browserAssistLaunching: boolean;
-  browserAssistSessionRef: BrowserSessionRef | null;
-  browserAssistSessionState: BrowserAssistSessionState | null;
   canvasWorkbenchRootPath: string | null;
   clawTraceEnabled: boolean;
-  currentBrowserAssistScopeKey: string | null;
   expertInfoPanelCollapsed: boolean;
   expertInfoPanelVisible: boolean;
   handleToggleCanvas: () => void;
@@ -65,12 +59,8 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
   articleEditorRightSurface,
   articleEditorRightSurfaceAvailable,
   bindRightSurfacePendingActions,
-  browserAssistLaunching,
-  browserAssistSessionRef,
-  browserAssistSessionState,
   canvasWorkbenchRootPath,
   clawTraceEnabled,
-  currentBrowserAssistScopeKey,
   expertInfoPanelCollapsed,
   expertInfoPanelVisible,
   handleToggleCanvas,
@@ -170,17 +160,10 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
   const derivedRuntime = useWorkspaceRightSurfaceDerivedRuntime({
     activeBrowserRightSurfaceIntent: localState.activeBrowserRightSurfaceIntent,
     activeFilesRightSurfaceTarget: localState.activeFilesRightSurfaceTarget,
-    activeObjectCanvasRightSurfaceCandidate:
-      localState.activeObjectCanvasRightSurfaceCandidate,
     activePluginSurfaceContainerId: localState.activePluginSurfaceContainerId,
     activePluginSurfaces: localState.activePluginSurfaces,
-    browserAssistLaunching,
-    browserAssistSessionRef,
-    browserAssistSessionState,
-    currentBrowserAssistScopeKey,
     pendingBrowserRightSurfaceIntent: pendingRuntime.pendingBrowserIntent,
     pendingFileTarget: pendingRuntime.pendingFileTarget,
-    pendingObjectCanvasCandidate: pendingRuntime.pendingObjectCanvasCandidate,
     pendingPluginSurfaces: mergedIncomingPluginSurfaces,
     preferredServiceSkillResultFileTarget,
   });
@@ -199,9 +182,6 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
       harnessPendingCount,
       hasExpertInfoPanel,
       manualRightSurface: localState.manualRightSurface,
-      objectCanvasAvailable: derivedRuntime.objectCanvasRightSurfaceAvailable,
-      objectCanvasCandidateId:
-        derivedRuntime.browserAssistObjectCanvasCandidateId,
       preferredServiceSkillResultFileTargetRelativePath:
         preferredServiceSkillResultFileTarget?.relativePath,
       sceneLayoutMode,
@@ -226,10 +206,6 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
     filesRightSurfaceTarget: derivedRuntime.filesRightSurfaceTarget,
     handleToggleCanvas,
     manualRightSurface: localState.manualRightSurface,
-    objectCanvasRightSurfaceAvailable:
-      derivedRuntime.objectCanvasRightSurfaceAvailable,
-    objectCanvasRightSurfaceCandidate:
-      derivedRuntime.objectCanvasRightSurfaceCandidate,
     pendingBrowserRightSurfaceIntent: pendingRuntime.pendingBrowserIntent,
     pendingPluginSurfaces: mergedIncomingPluginSurfaces,
     pluginSurfaceRightSurface: derivedRuntime.pluginSurfaceRightSurface,
@@ -246,8 +222,6 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
       localState.setActiveBrowserRightSurfaceIntent,
     setActiveFilesRightSurfaceTarget:
       localState.setActiveFilesRightSurfaceTarget,
-    setActiveObjectCanvasRightSurfaceCandidate:
-      localState.setActiveObjectCanvasRightSurfaceCandidate,
     setActivePluginSurfaceContainerId:
       localState.setActivePluginSurfaceContainerId,
     setActivePluginSurfaces: localState.setActivePluginSurfaces,

@@ -34,7 +34,6 @@ pub(crate) async fn read_tool_inventory(
         AgentToolInventoryReadInput {
             surface: WorkspaceToolSurface {
                 workbench: request.workbench,
-                browser_assist: request.browser_assist,
             },
             caller,
             warnings: mcp_snapshot.warnings.clone(),
@@ -201,7 +200,6 @@ mod tests {
         ToolInventoryReadRequest {
             caller: Some("assistant".to_string()),
             workbench: true,
-            browser_assist: false,
             metadata,
         }
     }

@@ -1,6 +1,5 @@
 type DeveloperDeferredSection =
   | "service-skill-catalog"
-  | "site-adapter-catalog"
   | "workspace-repair-history"
   | "clipboard-guide";
 
@@ -11,7 +10,6 @@ const developerDeferredLoaders: Record<
   () => DeveloperDeferredModule
 > = {
   "service-skill-catalog": () => import("./ServiceSkillCatalogTools"),
-  "site-adapter-catalog": () => import("./SiteAdapterCatalogTools"),
   "workspace-repair-history": () =>
     import("../shared/WorkspaceRepairHistoryCard"),
   "clipboard-guide": () => import("../shared/ClipboardPermissionGuideCard"),
@@ -24,7 +22,6 @@ function preloadDeveloperSection(section: DeveloperDeferredSection) {
 export function preloadDeveloperDefaultSections() {
   return Promise.all([
     preloadDeveloperSection("service-skill-catalog"),
-    preloadDeveloperSection("site-adapter-catalog"),
     preloadDeveloperSection("workspace-repair-history"),
   ]);
 }

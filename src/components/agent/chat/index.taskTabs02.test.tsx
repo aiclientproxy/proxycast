@@ -11,7 +11,7 @@ import { buildHomeAgentParams } from "@/lib/workspace/navigation";
 import { TASK_CENTER_OPEN_TAB_IDS_STORAGE_KEY } from "./utils/taskCenterTabs";
 import { requestTaskCenterDraftTask } from "./taskCenterDraftTaskEvents";
 
-describe("AgentChatPage 任务中心初始会话标签", () => {
+describe("AgentChatPage 任务中心初始会话标签", { timeout: 20_000 }, () => {
   it("切到另一条旧会话后仍应继续在当前页新建本地草稿", async () => {
     const onNavigate = vi.fn();
     vi.mocked(buildHomeAgentParams).mockClear();

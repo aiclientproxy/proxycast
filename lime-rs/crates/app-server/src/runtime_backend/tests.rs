@@ -47,6 +47,7 @@ struct TestRuntimeEventSink {
     events: Vec<RuntimeEvent>,
     transient_events: Vec<RuntimeEvent>,
     preappended_event_ids: Vec<String>,
+    code_cell_traces: Vec<tool_runtime::tool_lifecycle::CodeCellTraceEvent>,
 }
 
 impl RuntimeEventSink for TestRuntimeEventSink {
@@ -64,6 +65,46 @@ impl RuntimeEventSink for TestRuntimeEventSink {
         self.preappended_event_ids.push(event_id.to_string());
         Ok(())
     }
+
+    fn emit_code_cell_trace(
+        &mut self,
+        event: tool_runtime::tool_lifecycle::CodeCellTraceEvent,
+    ) -> Result<(), RuntimeCoreError> {
+        self.code_cell_traces.push(event);
+        Ok(())
+    }
+}
+
+#[test]
+fn code_cell_trace_bypasses_runtime_event_and_item_projection() {
+    let mut sink = TestRuntimeEventSink::default();
+    let mut coding_event_mirror = coding_events::CodingEventMirror::default();
+    let mut proposed_plan_parser = proposed_plan_parser::ProposedPlanParser::default();
+    let mut reasoning_event_state = reasoning_events::ReasoningEventState::default();
+    let trace = tool_runtime::tool_lifecycle::CodeCellTraceEvent::Started {
+        turn_id: "turn-code".to_string(),
+        runtime_cell_id: "cell-1".to_string(),
+        model_visible_call_id: "call-1".to_string(),
+        source_js: "text('ok')".to_string(),
+    };
+
+    emit_runtime_agent_event_with_coding_mirror_and_plan_parser_with_soul_style(
+        &RuntimeAgentEvent::CodeCellTrace {
+            event: trace.clone(),
+        },
+        &mut sink,
+        &mut coding_event_mirror,
+        &mut proposed_plan_parser,
+        &mut reasoning_event_state,
+        None,
+        None,
+    )
+    .expect("CodeCell trace should use internal sink");
+
+    assert!(sink.events.is_empty());
+    assert!(sink.transient_events.is_empty());
+    assert!(sink.preappended_event_ids.is_empty());
+    assert_eq!(sink.code_cell_traces, vec![trace]);
 }
 
 #[test]

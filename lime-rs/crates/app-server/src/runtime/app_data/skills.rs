@@ -162,8 +162,7 @@ pub trait WorkspaceSkillBindingAppDataSource: Send + Sync {
                     "workspace_root": "",
                     "caller": "assistant",
                     "surface": {
-                        "workbench": false,
-                        "browser_assist": false
+                        "workbench": false
                     }
                 },
                 "warnings": [],
