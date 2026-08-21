@@ -67,26 +67,37 @@ impl RuntimeCore {
         if self.is_pending_agent_control_thread(&stored.session.thread_id)? {
             return Ok(None);
         }
+        let active_turn_id = self
+            .active_turn_id_for_session(&params.session_id)
+            .await?;
+        let mut read_snapshot = stored.clone();
+        super::status::normalize_agent_session_runtime_snapshot(
+            &mut read_snapshot.session,
+            &mut read_snapshot.turns,
+            active_turn_id.as_deref(),
+        );
         let workflow_audit_events =
             self.read_workflow_audit_events_for_session(&params.session_id)?;
         let detail = match self.projection_store.as_deref() {
             Some(projection_store) => read_model::runtime_session_read_detail_from_thread_store(
-                &stored,
+                &read_snapshot,
                 read_model::ReadDetailOptions::from_params(params),
                 &workflow_audit_events,
                 projection_store,
+                active_turn_id.as_deref(),
             )
             .await
             .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?,
             None => read_model::runtime_session_read_detail_with_options(
-                &stored,
+                &read_snapshot,
                 read_model::ReadDetailOptions::from_params(params),
                 &workflow_audit_events,
+                active_turn_id.as_deref(),
             ),
         };
         let response = AgentSessionReadResponse {
-            session: stored.session.clone(),
-            turns: stored.turns.clone(),
+            session: read_snapshot.session,
+            turns: read_snapshot.turns,
             detail: Some(detail),
         };
         Ok(Some(SessionLoadContext {
@@ -126,6 +137,9 @@ impl RuntimeCore {
         } else {
             Vec::new()
         };
+        let active_turn_id = self
+            .active_turn_id_for_session(&params.session_id)
+            .await?;
         Ok(Some(
             projection_load_context(
                 projection,
@@ -134,6 +148,7 @@ impl RuntimeCore {
                 workflow_audit_events,
                 projection_support_events,
                 projection_store,
+                active_turn_id.as_deref(),
             )
             .await?,
         ))
@@ -211,6 +226,7 @@ pub(in crate::runtime) async fn projection_load_context(
     workflow_audit_events: Vec<AgentEvent>,
     projection_support_events: Vec<AgentEvent>,
     projection_store: &super::ProjectionStore,
+    active_turn_id: Option<&str>,
 ) -> Result<SessionLoadContext, RuntimeCoreError> {
     let stored = StoredSession {
         session: projection.session.clone(),
@@ -228,7 +244,13 @@ pub(in crate::runtime) async fn projection_load_context(
             .map(|record| (record.output_ref.clone(), record))
             .collect(),
     };
-    let mut detail = if stored.events.is_empty() && params.history_limit.is_some() {
+    let mut read_snapshot = stored.clone();
+    super::status::normalize_agent_session_runtime_snapshot(
+        &mut read_snapshot.session,
+        &mut read_snapshot.turns,
+        active_turn_id,
+    );
+    let mut detail = if read_snapshot.events.is_empty() && params.history_limit.is_some() {
         let (mut usage_events, notification_events): (Vec<_>, Vec<_>) = projection_support_events
             .into_iter()
             .partition(is_turn_completed_usage_event);
@@ -239,20 +261,22 @@ pub(in crate::runtime) async fn projection_load_context(
                 .cloned(),
         );
         projection_summary_detail(
-            &stored,
+            &read_snapshot,
             &projection,
             params,
             &usage_events,
             &notification_events,
             projection_store,
+            active_turn_id,
         )
         .await?
     } else {
         read_model::runtime_session_read_detail_from_thread_store(
-            &stored,
+            &read_snapshot,
             read_model::ReadDetailOptions::from_params(params),
             &workflow_audit_events,
             projection_store,
+            active_turn_id,
         )
         .await
         .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?
@@ -272,8 +296,8 @@ pub(in crate::runtime) async fn projection_load_context(
         );
     }
     let response = AgentSessionReadResponse {
-        session: stored.session.clone(),
-        turns: stored.turns.clone(),
+        session: read_snapshot.session,
+        turns: read_snapshot.turns,
         detail: Some(detail),
     };
     Ok(SessionLoadContext {
@@ -290,9 +314,10 @@ async fn projection_summary_detail(
     usage_events: &[AgentEvent],
     notification_events: &[AgentEvent],
     projection_store: &super::ProjectionStore,
+    active_turn_id: Option<&str>,
 ) -> Result<serde_json::Value, RuntimeCoreError> {
     let messages = projection.messages.clone();
-    let process_detail = projection_process_detail(stored, projection);
+    let process_detail = projection_process_detail(stored, projection, active_turn_id);
     let process_thread_read = process_detail
         .as_ref()
         .and_then(|detail| detail.get("thread_read"))
@@ -439,6 +464,7 @@ fn is_turn_completed_usage_event(event: &AgentEvent) -> bool {
 fn projection_process_detail(
     stored: &StoredSession,
     projection: &ProjectionReadSession,
+    active_turn_id: Option<&str>,
 ) -> Option<Value> {
     if projection.item_events.is_empty() {
         return None;
@@ -455,6 +481,7 @@ fn projection_process_detail(
         &process_stored,
         read_model::ReadDetailOptions::default(),
         &[],
+        active_turn_id,
     ))
 }
 

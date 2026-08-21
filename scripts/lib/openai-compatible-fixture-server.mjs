@@ -227,22 +227,25 @@ function sendStreamingToolCalls(response, { model, toolCalls }) {
     "cache-control": "no-cache",
     connection: "keep-alive",
   });
-  writeSse(response, buildChatChunk({
-    id,
-    model,
-    delta: {
-      role: "assistant",
-      tool_calls: toolCalls.map((toolCall, index) => ({
-        index,
-        id: toolCall.id,
-        type: "function",
-        function: {
-          name: toolCall.function.name,
-          arguments: "",
-        },
-      })),
-    },
-  }));
+  writeSse(
+    response,
+    buildChatChunk({
+      id,
+      model,
+      delta: {
+        role: "assistant",
+        tool_calls: toolCalls.map((toolCall, index) => ({
+          index,
+          id: toolCall.id,
+          type: "function",
+          function: {
+            name: toolCall.function.name,
+            arguments: "",
+          },
+        })),
+      },
+    }),
+  );
   writeSse(
     response,
     buildChatChunk({
@@ -606,9 +609,12 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
   const requests = [];
   const modelRequests = [];
   const connectionDiagnostics = [];
-  const connectionDiagnosticsEnabled =
+  const connectionDiagnosticsLogged =
     options.connectionDiagnostics === true ||
     process.env.LIME_FIXTURE_CONNECTION_DIAGNOSTICS === "1";
+  const connectionDiagnosticsEnabled =
+    connectionDiagnosticsLogged ||
+    options.captureConnectionDiagnostics === true;
   const socketIds = new Map();
   const socketRequestCounts = new Map();
   let nextSocketId = 1;
@@ -633,7 +639,9 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
       ...details,
     };
     connectionDiagnostics.push(entry);
-    console.error(`[fixture:connection] ${JSON.stringify(entry)}`);
+    if (connectionDiagnosticsLogged) {
+      console.error(`[fixture:connection] ${JSON.stringify(entry)}`);
+    }
   };
 
   const server = http.createServer(async (request, response) => {

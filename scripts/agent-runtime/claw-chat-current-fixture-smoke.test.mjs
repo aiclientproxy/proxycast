@@ -1121,6 +1121,32 @@ describe("claw chat current Electron fixture smoke guard", () => {
       turnId: "turn-1",
       type: "turn.completed",
     });
+    expect(
+      runtimeEventFromDirectNotification({
+        method: "turn/completed",
+        params: {
+          threadId: "thread-1",
+          turn: { id: "turn-1", status: "failed" },
+        },
+      }),
+    ).toMatchObject({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      type: "turn.failed",
+    });
+    expect(
+      runtimeEventFromDirectNotification({
+        method: "turn/completed",
+        params: {
+          threadId: "thread-1",
+          turn: { id: "turn-1", status: "interrupted" },
+        },
+      }),
+    ).toMatchObject({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      type: "turn.canceled",
+    });
   });
 
   it("keeps scenario-specific assertions out of unrelated evidence", () => {

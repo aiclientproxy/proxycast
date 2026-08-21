@@ -3,6 +3,15 @@ import type { Message } from "../types";
 
 export const INTERRUPTED_PLACEHOLDER_TEXT = "(已停止)";
 
+export function stripInterruptedPlaceholderText(
+  value: string | null | undefined,
+): string {
+  const trimmed = typeof value === "string" ? value.trimEnd() : "";
+  return trimmed.endsWith(INTERRUPTED_PLACEHOLDER_TEXT)
+    ? trimmed.slice(0, -INTERRUPTED_PLACEHOLDER_TEXT.length).trimEnd()
+    : trimmed;
+}
+
 export function contentHasInterruptedPlaceholder(
   content?: string | null,
 ): boolean {
@@ -66,17 +75,33 @@ export function buildInterruptedMessageContentPatch(
 
 function appendInterruptedPlaceholderThreadContentParts(
   parts: Extract<AgentThreadItem, { type: "agent_message" }>["contentParts"],
+  visibleText: string,
 ): Extract<AgentThreadItem, { type: "agent_message" }>["contentParts"] {
+  const existingParts = parts || [];
+  const visibleContent = stripInterruptedPlaceholderText(visibleText);
+  const hasVisibleTextPart = existingParts.some(
+    (part) =>
+      part.type === "text" &&
+      stripInterruptedPlaceholderText(part.text).trim().length > 0,
+  );
+  const normalizedParts =
+    visibleContent.trim() && !hasVisibleTextPart
+      ? [{ type: "text" as const, text: visibleContent }, ...existingParts]
+      : existingParts;
+
   if (
-    parts?.some(
+    normalizedParts.some(
       (part) =>
         part.type === "text" && contentHasInterruptedPlaceholder(part.text),
     )
   ) {
-    return parts;
+    return normalizedParts;
   }
 
-  return [...(parts || []), { type: "text", text: INTERRUPTED_PLACEHOLDER_TEXT }];
+  return [
+    ...normalizedParts,
+    { type: "text", text: INTERRUPTED_PLACEHOLDER_TEXT },
+  ];
 }
 
 export function appendInterruptedPlaceholderToThreadItem(
@@ -91,6 +116,7 @@ export function appendInterruptedPlaceholderToThreadItem(
     text: appendInterruptedPlaceholderText(item.text),
     contentParts: appendInterruptedPlaceholderThreadContentParts(
       item.contentParts,
+      item.text,
     ),
   };
 }

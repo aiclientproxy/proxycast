@@ -1153,6 +1153,166 @@ describe("agentSessionState", () => {
     );
   });
 
+  it("terminal reconcile 应从本地 canonical item 恢复 marker-only detail 丢失的 partial", () => {
+    const turnId = "turn-interrupted-partial";
+    const partialText = "以下是今日国际新闻简要整理：";
+    const currentItem = createItem({
+      id: "agent-message-final-interrupted-partial",
+      turn_id: turnId,
+      phase: "final_answer",
+      status: "in_progress",
+      text: partialText,
+    } as Partial<AgentThreadItem>);
+    const detail = {
+      id: "topic-interrupted-partial",
+      thread_id: "topic-interrupted-partial",
+      created_at: 1700000000,
+      updated_at: 1700000001,
+      messages: [
+        {
+          id: "history-user-interrupted",
+          role: "user",
+          runtimeTurnId: turnId,
+          timestamp: 1710000000,
+          content: [{ type: "text", text: "整理今天的国际新闻" }],
+        },
+        {
+          id: "history-marker-only",
+          role: "assistant",
+          runtimeTurnId: turnId,
+          timestamp: 1710000001,
+          content: [{ type: "text", text: "(已停止)" }],
+        },
+      ],
+      turns: [
+        createTurn({
+          id: turnId,
+          thread_id: "topic-interrupted-partial",
+          status: "interrupted",
+        }),
+      ],
+      items: [
+        {
+          ...currentItem,
+          status: "completed",
+          text: "(已停止)",
+        },
+      ],
+      thread_read: {
+        thread_id: "topic-interrupted-partial",
+        status: "interrupted",
+        thread_items: [
+          {
+            ...currentItem,
+            text: partialText,
+            status: "completed",
+          },
+        ],
+      },
+    } satisfies AgentSessionDetail;
+
+    const result = buildHydratedAgentSessionSnapshot({
+      topicId: "topic-interrupted-partial",
+      detail,
+      currentSessionId: "topic-interrupted-partial",
+      currentMessages: [
+        createMessage({
+          id: "local-user",
+          role: "user",
+          content: "整理今天的国际新闻",
+          runtimeTurnId: turnId,
+        }),
+        createMessage({
+          id: "local-marker-only",
+          content: "(已停止)",
+          contentParts: [{ type: "text", text: "(已停止)" }],
+          runtimeTurnId: turnId,
+        }),
+      ],
+      currentThreadTurns: [
+        createTurn({ id: turnId, status: "running" }),
+      ],
+      currentThreadItems: [currentItem],
+      currentExecutionRuntime: null,
+      currentExecutionStrategy: "react",
+      topics: [],
+      detailMergeMode: "terminal_reconcile",
+    });
+
+    expect(result.snapshot.messages[1]?.content).toBe(
+      `${partialText}\n\n(已停止)`,
+    );
+    expect(
+      result.snapshot.threadItems.find((item) => item.id === currentItem.id),
+    ).toMatchObject({
+      text: `${partialText}\n\n(已停止)`,
+      status: "completed",
+    });
+  });
+
+  it("terminal reconcile 应从 canonical partial 恢复只有 marker 的本地消息", () => {
+    const turnId = "turn-terminal-canonical-partial";
+    const partialText = "以下是今日国际新闻简要整理：";
+    const canonicalItem = createItem({
+      id: "agent-message-terminal-canonical-partial",
+      type: "agent_message",
+      turn_id: turnId,
+      phase: "final_answer",
+      status: "completed",
+      text: partialText,
+    } as Partial<AgentThreadItem>);
+    const detail = {
+      id: "topic-terminal-canonical-partial",
+      thread_id: "topic-terminal-canonical-partial",
+      created_at: 1700000000,
+      updated_at: 1700000001,
+      messages: [],
+      turns: [
+        createTurn({
+          id: turnId,
+          thread_id: "topic-terminal-canonical-partial",
+          status: "interrupted",
+        }),
+      ],
+      items: [canonicalItem],
+      thread_read: {
+        thread_id: "topic-terminal-canonical-partial",
+        status: "interrupted",
+        thread_items: [canonicalItem],
+      },
+    } satisfies AgentSessionDetail;
+
+    const result = buildHydratedAgentSessionSnapshot({
+      topicId: "topic-terminal-canonical-partial",
+      detail,
+      currentSessionId: "topic-terminal-canonical-partial",
+      currentMessages: [
+        createMessage({
+          id: "local-user-terminal-canonical-partial",
+          role: "user",
+          content: "整理今天的国际新闻",
+          runtimeTurnId: turnId,
+        }),
+        createMessage({
+          id: "local-marker-terminal-canonical-partial",
+          content: "(已停止)",
+          contentParts: [{ type: "text", text: "(已停止)" }],
+          runtimeTurnId: turnId,
+        }),
+      ],
+      currentThreadTurns: [createTurn({ id: turnId, status: "running" })],
+      currentThreadItems: [],
+      currentExecutionRuntime: null,
+      currentExecutionStrategy: "react",
+      topics: [],
+      detailMergeMode: "terminal_reconcile",
+    });
+
+    expect(result.snapshot.messages[1]?.content).toBe(
+      `${partialText}\n\n(已停止)`,
+    );
+  });
+
   it("应从历史恢复快照中过滤辅助标题 turn，保留真实用户 turn 作为当前回合", () => {
     const detail = {
       id: "topic-with-auxiliary-turn",

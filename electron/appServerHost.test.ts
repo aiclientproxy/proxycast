@@ -8,6 +8,8 @@ import {
 
 const {
   fakeConnection,
+  fakeSidecarChild,
+  createFakeConnected,
   lifecycleConfigs,
   lifecycleInitializeParams,
   lifecycleOptions,
@@ -29,6 +31,13 @@ const {
   const lifecycleInitializeParams: unknown[] = [];
   const lifecycleOptions: Array<{
     env?: Record<string, string | undefined>;
+    onExit?: (event: {
+      attempt: number;
+      code: number | null;
+      signal: NodeJS.Signals | null;
+      stderrLines: string[];
+    }) => void;
+    onRestarted?: (connected: unknown) => void;
   }> = [];
   const mirroredNotifications: JsonRpcMessage[] = [];
   const delayedStaleErrorReadyResolvers: Array<() => void> = [];
@@ -150,6 +159,28 @@ const {
       return message;
     }),
   };
+  const fakeSidecarChild = {
+    exitCode: null,
+    kill: vi.fn(() => true),
+    pid: 4321,
+    signalCode: null,
+  };
+  const createFakeConnected = () => ({
+    initializeResponse: {
+      serverInfo: {
+        name: "app-server",
+        version: "0.0.0-test",
+        protocolVersion: "appserver.v0",
+      },
+      platform: {
+        family: "desktop",
+        os: "macos",
+      },
+      capabilities: {},
+    },
+    connection: fakeConnection,
+    sidecar: { child: fakeSidecarChild },
+  });
 
   function enqueueFakeNotifications(notifications: JsonRpcMessage[]): void {
     mirroredNotifications.push(...notifications);
@@ -171,6 +202,7 @@ const {
             capabilities: Record<string, unknown>;
           };
           connection: typeof fakeConnection;
+          sidecar: { child: typeof fakeSidecarChild };
         }
       | undefined;
 
@@ -180,7 +212,7 @@ const {
         dataDir?: string;
       },
       initializeParams: unknown,
-      options: { env?: Record<string, string | undefined> } = {},
+      options: (typeof lifecycleOptions)[number] = {},
     ) {
       lifecycleConfigs.push(config);
       lifecycleInitializeParams.push(initializeParams);
@@ -188,21 +220,7 @@ const {
     }
 
     async start() {
-      this.connected = {
-        initializeResponse: {
-          serverInfo: {
-            name: "app-server",
-            version: "0.0.0-test",
-            protocolVersion: "appserver.v0",
-          },
-          platform: {
-            family: "desktop",
-            os: "macos",
-          },
-          capabilities: {},
-        },
-        connection: fakeConnection,
-      };
+      this.connected = createFakeConnected();
       return this.connected;
     }
 
@@ -214,6 +232,8 @@ const {
 
   return {
     fakeConnection,
+    fakeSidecarChild,
+    createFakeConnected,
     lifecycleConfigs,
     lifecycleInitializeParams,
     lifecycleOptions,
@@ -236,6 +256,7 @@ const {
       fakeConnection.rejectServerRequest.mockClear();
       fakeConnection.nextNotification.mockClear();
       fakeConnection.nextServerMessage.mockClear();
+      fakeSidecarChild.kill.mockClear();
     },
     setSystemProxyRules: (rules: string) => {
       systemProxyRules = rules;
@@ -408,6 +429,49 @@ describe("ElectronAppServerHost", () => {
         ]),
       },
     });
+  });
+
+  it("只允许 E2E 模式终止当前 App Server sidecar", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    await host.warmup();
+
+    expect(() => host.terminateSidecarForE2e()).toThrow(
+      "App Server sidecar termination is only available in E2E mode",
+    );
+    expect(fakeSidecarChild.kill).not.toHaveBeenCalled();
+
+    process.env.LIME_ELECTRON_E2E = "1";
+    expect(host.terminateSidecarForE2e()).toEqual({
+      pid: 4321,
+      requested: true,
+      signal: "SIGTERM",
+    });
+    expect(fakeSidecarChild.kill).toHaveBeenCalledWith("SIGTERM");
+  });
+
+  it("sidecar 断连期间 drain 应等待当前 lifecycle 重启", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await host.warmup();
+
+    lifecycleOptions[0].onExit?.({
+      attempt: 1,
+      code: null,
+      signal: "SIGTERM",
+      stderrLines: [],
+    });
+    const drain = host.drainEvents();
+    await expect(
+      Promise.race([drain.then(() => "resolved"), Promise.resolve("pending")]),
+    ).resolves.toBe("pending");
+    expect(lifecycleConfigs).toHaveLength(1);
+
+    lifecycleOptions[0].onRestarted?.(createFakeConnected());
+    await expect(drain).resolves.toEqual({ lines: [] });
+    expect(lifecycleConfigs).toHaveLength(1);
+    warnSpy.mockRestore();
   });
 
   it("显式 AgentRoot override 时 App Server 不再写默认 userData root", async () => {

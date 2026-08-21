@@ -6,6 +6,7 @@ import {
   METHOD_TURN_COMPLETED,
   type AppServerConnection,
   type DynamicToolCallParams,
+  type DynamicToolCallPhase,
   type DynamicToolCallResponse,
   type JsonRpcMessage,
   type JsonRpcRequest,
@@ -57,6 +58,8 @@ type ThreadHostBinding = {
   ownerWebContentsId: number;
   tools: Map<string, DynamicToolBinding>;
 };
+
+type DynamicToolCallState = "awaitingApproval" | "completed";
 
 const APP_INFO_BINDING = Object.freeze<DynamicToolBinding>({
   namespace: DESKTOP_NAMESPACE,
@@ -187,7 +190,7 @@ const BROWSER_BINDINGS = new Map<string, DynamicToolBinding>(
 export class AppServerDynamicToolHost {
   readonly #bindingsByThread = new Map<string, ThreadHostBinding>();
   readonly #browserHost: ElectronBrowserTabHost | null;
-  readonly #consumedCalls = new Set<string>();
+  readonly #callStates = new Map<string, DynamicToolCallState>();
   readonly #readAppInfo: () => AppInfo;
 
   constructor(
@@ -254,6 +257,12 @@ export class AppServerDynamicToolHost {
     const turnId = nonEmptyString(params?.turnId) ?? nonEmptyString(turn?.id);
     const status = nonEmptyString(turn?.status);
     if (threadId && turnId && status && TERMINAL_TURN_STATUSES.has(status)) {
+      const prefix = `${threadId}\u0000${turnId}\u0000`;
+      for (const key of this.#callStates.keys()) {
+        if (key.startsWith(prefix)) {
+          this.#callStates.delete(key);
+        }
+      }
       this.#browserHost.turnEnded(threadId, turnId);
     }
   }
@@ -305,16 +314,29 @@ export class AppServerDynamicToolHost {
       params.value.turnId,
       params.value.callId,
     ].join("\u0000");
-    if (this.#consumedCalls.has(callKey)) {
+    const callState = this.#callStates.get(callKey);
+    const validTransition =
+      (params.value.phase === "preflight" && callState === undefined) ||
+      (params.value.phase === "approvedExecute" &&
+        callState === "awaitingApproval");
+    if (!validTransition) {
       connection.rejectServerRequest(message.id, {
         code: ERROR_CODES.invalidParams,
-        message: "item/tool/call identity was already consumed",
+        message: "item/tool/call phase is stale or already consumed",
       });
       return true;
     }
-    this.#consumedCalls.add(callKey);
+    this.#callStates.set(callKey, "completed");
 
     try {
+      if (
+        binding.namespace !== BROWSER_NAMESPACE &&
+        params.value.phase !== "preflight"
+      ) {
+        throw new Error(
+          "Desktop host capability does not support approved execution",
+        );
+      }
       const response =
         binding.namespace === BROWSER_NAMESPACE
           ? await this.#executeBrowserTool(
@@ -322,6 +344,15 @@ export class AppServerDynamicToolHost {
               params.value,
             )
           : appInfoResponse(this.#readAppInfo());
+      if (response.approval) {
+        if (
+          binding.namespace !== BROWSER_NAMESPACE ||
+          params.value.phase !== "preflight"
+        ) {
+          throw new Error("Host returned approval outside Browser preflight");
+        }
+        this.#callStates.set(callKey, "awaitingApproval");
+      }
       connection.respondServerRequest<DynamicToolCallResponse>(
         message.id,
         response,
@@ -342,7 +373,7 @@ export class AppServerDynamicToolHost {
 
   reset(): void {
     this.#bindingsByThread.clear();
-    this.#consumedCalls.clear();
+    this.#callStates.clear();
   }
 
   connectionLost(reason?: string): void {
@@ -357,9 +388,11 @@ export class AppServerDynamicToolHost {
       throw new Error("Browser workspace is not bound to this desktop thread");
     }
     const call: BrowserToolCall = {
+      ...(params.approvalToken ? { approvalToken: params.approvalToken } : {}),
       arguments: params.arguments,
       callId: params.callId,
       ownerWebContentsId,
+      phase: params.phase,
       threadId: params.threadId,
       tool: params.tool,
       turnId: params.turnId,
@@ -383,6 +416,8 @@ function parseCallParams(value: unknown): ParsedCallParams {
   const callId = nonEmptyString(params?.callId);
   const tool = nonEmptyString(params?.tool);
   const namespace = nonEmptyString(params?.namespace);
+  const phase = dynamicToolCallPhase(params?.phase);
+  const approvalToken = optionalNonEmptyString(params?.approvalToken);
   const argumentsValue = asRecord(params?.arguments);
   if (
     !threadId ||
@@ -390,12 +425,23 @@ function parseCallParams(value: unknown): ParsedCallParams {
     !callId ||
     !tool ||
     !namespace ||
+    !phase ||
     !argumentsValue
   ) {
     return {
       ok: false,
       error:
-        "item/tool/call requires threadId, turnId, callId, namespace, tool, and object arguments",
+        "item/tool/call requires threadId, turnId, callId, namespace, tool, phase, and object arguments",
+    };
+  }
+  if (
+    (phase === "preflight" && approvalToken !== null) ||
+    (phase === "approvedExecute" && approvalToken === null)
+  ) {
+    return {
+      ok: false,
+      error:
+        "item/tool/call approvalToken must be absent for preflight and present for approvedExecute",
     };
   }
   return {
@@ -407,6 +453,8 @@ function parseCallParams(value: unknown): ParsedCallParams {
       namespace,
       tool,
       arguments: argumentsValue,
+      phase,
+      ...(approvalToken ? { approvalToken } : {}),
     },
   };
 }
@@ -467,6 +515,13 @@ function appInfoResponse(info: AppInfo): DynamicToolCallResponse {
 function browserToolResponse(
   result: BrowserToolResult,
 ): DynamicToolCallResponse {
+  if (result.approval) {
+    return {
+      approval: result.approval,
+      contentItems: [],
+      success: false,
+    };
+  }
   const contentItems: DynamicToolCallResponse["contentItems"] = [
     {
       type: "inputText",
@@ -487,6 +542,17 @@ function browserToolResponse(
     contentItems,
     success: result.status === "completed",
   };
+}
+
+function dynamicToolCallPhase(value: unknown): DynamicToolCallPhase | null {
+  return value === "preflight" || value === "approvedExecute" ? value : null;
+}
+
+function optionalNonEmptyString(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  return nonEmptyString(value);
 }
 
 function tool(

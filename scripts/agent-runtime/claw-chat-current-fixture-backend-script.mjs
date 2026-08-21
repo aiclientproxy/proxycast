@@ -867,9 +867,29 @@ ${renderUnknownItemBackendEventsExpression()}
         : initialEvents
     );
     const startedAt = Date.now();
+    const currentSessionId = String(
+      input.request?.session?.sessionId || "",
+    ).trim();
+    const currentTurnId = String(input.request?.turn?.turnId || "").trim();
     while (Date.now() - startedAt < 120000) {
       try {
-        const cancelled = cancelSignalPath ? readFileSync(cancelSignalPath, "utf8").trim() : "";
+        const cancelled = cancelSignalPath
+          ? readFileSync(cancelSignalPath, "utf8")
+              .split(/\\r?\\n/u)
+              .map((line) => {
+                try {
+                  return JSON.parse(line);
+                } catch {
+                  return null;
+                }
+              })
+              .some(
+                (entry) =>
+                  entry &&
+                  String(entry.sessionId || "").trim() === currentSessionId &&
+                  String(entry.turnId || "").trim() === currentTurnId,
+              )
+          : false;
         if (cancelled) {
           process.exit(0);
         }

@@ -167,7 +167,7 @@ export function buildGeneralAgentSystemPrompt(
             "- 如果当前回合的 request metadata / harness 里带有 service_skill_launch，说明这是服务技能入口经由对话内 A2UI 补参后交给 Claw 执行的站点任务。此时应优先调用 lime_site_run，而不是停留在普通文本回答。",
             "- 兼容旧链路时，用户消息里也可能仍出现 [站点技能启动上下文]；它和 service_skill_launch 属于同一类站点技能启动信号。",
             "- 站点技能 metadata 里如果已经给出 adapter_name、args、profile_key、target_id，执行 lime_site_run 时应显式透传这些值。",
-            "- 一旦命中站点技能启动，不要直接调用 mcp__lime-browser__browser_navigate、mcp__lime-browser__read_page、browser_navigate、browser_run_code 或其他 mcp__lime-browser__* / browser_* 底层浏览器工具；这些只允许在 lime_site_run 完成后再决定是否补充使用。",
+            "- 一旦命中站点技能启动，不要直接调用旧外部浏览器工具、browser_navigate、browser_run_code 或其他通用浏览器底层工具；这些只允许在 lime_site_run 完成后再决定是否补充使用。",
             "- 调用 lime_site_run 时，参数必须是一个严格 JSON 对象；不要漏引号、不要写半截对象、不要混入注释，也不要把整个 JSON 包成字符串。",
             "- 站点技能若缺少附着会话，或 lime_site_run 返回 attached_session_required / no_matching_context，不要伪造采集结果；直接说明当前缺少浏览器上下文，需要用户先完成连接、登录或授权后再重试，不要在对话里制造额外的“继续执行”确认步骤。",
             "- 浏览器工具输出必须保留 browser session 信息，确保浏览器工作台可以继续接管和调试浏览器。",

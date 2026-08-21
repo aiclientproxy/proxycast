@@ -6,7 +6,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  attachElectronHostLifecycleDiagnostics,
+  buildControlledFailureEvidence,
   captureControlledPatch,
+  classifyElectronHostLifecycleConsole,
+  collectControlledFailureDiagnostics,
   parseArgs,
 } from "./deepswe-desktop-controlled-smoke.mjs";
 import {
@@ -33,6 +37,158 @@ function runCommand(cwd, command) {
 }
 
 describe("DeepSWE desktop controlled product smoke", () => {
+  it("captures only allowlisted Electron App Server lifecycle console events", () => {
+    let listener = null;
+    const events = [];
+    attachElectronHostLifecycleDiagnostics(
+      {
+        on(event, callback) {
+          expect(event).toBe("console");
+          listener = callback;
+        },
+      },
+      events,
+    );
+
+    listener?.({
+      text: () =>
+        "[electron-host] app-server exited { stderrLines: ['secret'] }",
+    });
+    listener?.({ text: () => "unrelated warning with private prompt" });
+    listener?.({
+      text: () =>
+        "[electron-host] app-server restart failed token=private-token",
+    });
+
+    expect(events).toHaveLength(2);
+    expect(events.map((event) => event.event)).toEqual([
+      "app-server-exited",
+      "app-server-restart-failed",
+    ]);
+    expect(JSON.stringify(events)).not.toContain("secret");
+    expect(JSON.stringify(events)).not.toContain("private-token");
+    expect(
+      classifyElectronHostLifecycleConsole("ordinary renderer warning"),
+    ).toBeNull();
+  });
+
+  it("probes Electron, renderer, preload and thread/read on failure", async () => {
+    let evaluationCount = 0;
+    const diagnostics = await collectControlledFailureDiagnostics({
+      electronHandle: {
+        app: { process: () => ({ pid: process.pid }) },
+        page: {
+          async evaluate() {
+            evaluationCount += 1;
+            if (evaluationCount === 1) {
+              return {
+                url: "file:///fixture/index.html",
+                electron: true,
+                hasInvokeBridge: true,
+                supportsAppServer: true,
+              };
+            }
+            return {
+              result: {
+                thread: {
+                  id: "thread-1",
+                  turns: [{ id: "turn-1", status: "inProgress" }],
+                },
+              },
+              messages: [],
+            };
+          },
+        },
+      },
+      identity: { threadId: "thread-1" },
+      probeTimeoutMs: 100,
+    });
+
+    expect(diagnostics).toEqual({
+      schemaVersion: "deepswe-desktop-controlled-runtime-diagnostics-v1",
+      probeTimeoutMs: 100,
+      electron: {
+        pid: process.pid,
+        processAlive: true,
+      },
+      renderer: {
+        status: "ok",
+        url: "file:///fixture/index.html",
+        electron: true,
+        hasInvokeBridge: true,
+        supportsAppServer: true,
+      },
+      bridge: {
+        method: "thread/read",
+        status: "ok",
+        threadFound: true,
+        threadIdMatches: true,
+        latestTurn: {
+          idPresent: true,
+          status: "inprogress",
+        },
+      },
+    });
+  });
+
+  it("captures provider connection diagnostics without retaining request secrets", () => {
+    const runtimeDiagnostics = {
+      electron: { pid: 123, processAlive: true },
+      renderer: { status: "ok", electron: true, hasInvokeBridge: true },
+      bridge: { method: "thread/read", status: "timeout", timeoutMs: 2_000 },
+    };
+    const failure = buildControlledFailureEvidence({
+      error: new Error("terminal timeout"),
+      fixtureServer: {
+        requests: [
+          {
+            path: "/v1/chat/completions",
+            authorization: "Bearer secret",
+            body: {
+              messages: [{ role: "user", content: "private prompt" }],
+              stream: true,
+              tools: [{ type: "function" }],
+            },
+            responseKind: "text",
+          },
+        ],
+        connectionDiagnostics: [{ event: "response-finish", requestId: 1 }],
+      },
+      runId: "run-1",
+      runtimeDiagnostics,
+      sidecarLifecycleEvents: [
+        { event: "app-server-exited", source: "electron-main-console" },
+      ],
+      stage: "terminal-wait",
+      taskId: "task-1",
+    });
+
+    expect(failure).toMatchObject({
+      schemaVersion: "deepswe-desktop-controlled-failure-v1",
+      runId: "run-1",
+      taskId: "task-1",
+      stage: "terminal-wait",
+      error: "terminal timeout",
+      providerRequestCount: 1,
+      providerRequests: [
+        {
+          index: 1,
+          responseKind: "text",
+          stream: true,
+          messageCount: 1,
+          toolCount: 1,
+        },
+      ],
+      connectionDiagnostics: [{ event: "response-finish", requestId: 1 }],
+      runtimeDiagnostics,
+      sidecarLifecycleEvents: [
+        { event: "app-server-exited", source: "electron-main-console" },
+      ],
+    });
+    expect(JSON.stringify(failure)).not.toContain("secret");
+    expect(JSON.stringify(failure)).not.toContain("private prompt");
+  });
+
   it("parses one-task and all-task execution options", () => {
     expect(parseArgs([])).toMatchObject({
       task: "all",

@@ -42,7 +42,91 @@ pub(crate) enum ThreadUnloadResult {
     Unloaded,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ThreadExecutionState {
+    loaded: bool,
+    active_turn_id: Option<String>,
+}
+
+fn normalize_thread_runtime_snapshot(
+    thread: &mut agent_protocol::Thread,
+    execution: &ThreadExecutionState,
+) {
+    for turn in &mut thread.turns {
+        if turn.status != agent_protocol::TurnStatus::InProgress {
+            continue;
+        }
+        if turn_is_orphaned(turn.turn_id.as_str(), execution) {
+            turn.status = agent_protocol::TurnStatus::Interrupted;
+        }
+    }
+
+    let terminal_projection_pending = execution.loaded
+        && execution.active_turn_id.is_none()
+        && thread
+            .turns
+            .iter()
+            .any(|turn| turn.status == agent_protocol::TurnStatus::InProgress);
+    thread.status = if execution.active_turn_id.is_some() || terminal_projection_pending {
+        let active_flags = match &thread.status {
+            agent_protocol::ThreadStatus::Active { active_flags } => active_flags.clone(),
+            _ => Vec::new(),
+        };
+        agent_protocol::ThreadStatus::Active { active_flags }
+    } else if matches!(thread.status, agent_protocol::ThreadStatus::SystemError) {
+        agent_protocol::ThreadStatus::SystemError
+    } else if execution.loaded {
+        agent_protocol::ThreadStatus::Idle
+    } else {
+        agent_protocol::ThreadStatus::NotLoaded
+    };
+}
+
+fn normalize_turn_runtime_snapshots(
+    turns: &mut [agent_protocol::Turn],
+    execution: &ThreadExecutionState,
+) {
+    for turn in turns {
+        if turn.status == agent_protocol::TurnStatus::InProgress
+            && turn_is_orphaned(turn.turn_id.as_str(), execution)
+        {
+            turn.status = agent_protocol::TurnStatus::Interrupted;
+        }
+    }
+}
+
+fn turn_is_orphaned(turn_id: &str, execution: &ThreadExecutionState) -> bool {
+    match execution.active_turn_id.as_deref() {
+        Some(active_turn_id) => active_turn_id != turn_id,
+        None => !execution.loaded,
+    }
+}
+
 impl RuntimeCore {
+    async fn thread_execution_state(
+        &self,
+        thread_id: &str,
+    ) -> Result<ThreadExecutionState, RuntimeCoreError> {
+        let session_id = self.loaded_session_id_for_thread(thread_id);
+        let Some(session_id) = session_id else {
+            return Ok(ThreadExecutionState::default());
+        };
+        let active_turn_id = self
+            .session_loops
+            .snapshot(session_id.as_str())
+            .await
+            .map_err(|error| {
+                RuntimeCoreError::Backend(format!(
+                    "read runtime session snapshot for thread state: {error}"
+                ))
+            })?
+            .and_then(|snapshot| snapshot.active_turn_id);
+        Ok(ThreadExecutionState {
+            loaded: true,
+            active_turn_id,
+        })
+    }
+
     pub(crate) fn loaded_session_id_for_thread(&self, thread_id: &str) -> Option<String> {
         self.state
             .lock()
@@ -424,6 +508,10 @@ impl RuntimeCore {
         {
             merge_thread_product_projection(&mut thread.metadata, product);
         }
+        let execution = self
+            .thread_execution_state(thread.thread_id.as_str())
+            .await?;
+        normalize_thread_runtime_snapshot(&mut thread, &execution);
         Ok(ThreadReadResponse { thread })
     }
 
@@ -461,6 +549,12 @@ impl RuntimeCore {
                 };
                 *thread = hydrated;
             }
+        }
+        for thread in &mut data {
+            let execution = self
+                .thread_execution_state(thread.thread_id.as_str())
+                .await?;
+            normalize_thread_runtime_snapshot(thread, &execution);
         }
         Ok(ThreadListResponse {
             data,
@@ -569,8 +663,9 @@ impl RuntimeCore {
         &self,
         params: ThreadTurnsListParams,
     ) -> Result<ThreadTurnsListResponse, RuntimeCoreError> {
+        let thread_id = params.thread_id.clone();
         let store = self.canonical_thread_store()?;
-        let page = store
+        let mut page = store
             .list_turns(ListTurnsParams {
                 thread_id: params.thread_id,
                 include_archived: true,
@@ -579,6 +674,8 @@ impl RuntimeCore {
             })
             .await
             .map_err(store_error)?;
+        let execution = self.thread_execution_state(thread_id.as_str()).await?;
+        normalize_turn_runtime_snapshots(&mut page.data, &execution);
         Ok(ThreadTurnsListResponse {
             data: page.data,
             next_cursor: page.next_cursor.map(StoreCursor::into_string),
@@ -1039,6 +1136,182 @@ mod tests {
             .await
             .expect("list items");
         assert_eq!(items.data[0].item_id.as_str(), "item_item-current");
+    }
+
+    #[tokio::test]
+    async fn cold_runtime_interrupts_orphan_in_progress_turns_without_mutating_history() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Arc::new(
+            ProjectionStore::initialize(temp.path().join("projection.sqlite")).expect("store"),
+        );
+        let mut thread = make_thread("thread-orphan", 10);
+        thread.status = ThreadStatus::Active {
+            active_flags: Vec::new(),
+        };
+        store
+            .create_thread(CreateThreadParams {
+                thread: thread.clone(),
+            })
+            .await
+            .expect("create orphan thread");
+        let turn = Turn {
+            session_id: thread.session_id.clone(),
+            thread_id: thread.thread_id.clone(),
+            turn_id: TurnId::new("turn-orphan"),
+            status: TurnStatus::InProgress,
+            admission: TurnAdmissionState::Accepted,
+            queue: TurnQueueState::Running,
+            approval: TurnApprovalState::NotRequired,
+            items: Vec::new(),
+            items_view: TurnItemsView::NotLoaded,
+            error: None,
+            created_at_ms: 10,
+            updated_at_ms: 11,
+            started_at_ms: Some(10),
+            completed_at_ms: None,
+            duration_ms: None,
+        };
+        store
+            .apply_history(ApplyThreadHistoryParams {
+                session_id: thread.session_id.clone(),
+                thread_id: thread.thread_id.clone(),
+                changes: ThreadHistoryChangeSet {
+                    sequence: 1,
+                    changed_turns: vec![turn],
+                    ..Default::default()
+                },
+            })
+            .await
+            .expect("apply orphan turn");
+
+        let restarted = RuntimeCore::default().with_projection_store(store.clone());
+        let read = restarted
+            .read_thread(ThreadReadParams {
+                thread_id: thread.thread_id.clone(),
+                turns_view: ThreadTurnsView::Full,
+            })
+            .await
+            .expect("read orphan thread");
+        assert_eq!(read.thread.status, ThreadStatus::NotLoaded);
+        assert_eq!(read.thread.turns[0].status, TurnStatus::Interrupted);
+
+        let listed = restarted
+            .list_threads(ThreadListParams {
+                page: page(),
+                include_archived: false,
+                turns_view: ThreadTurnsView::Full,
+                section: None,
+                sort_by_section_position: false,
+            })
+            .await
+            .expect("list orphan thread");
+        assert_eq!(listed.data[0].status, ThreadStatus::NotLoaded);
+        assert_eq!(listed.data[0].turns[0].status, TurnStatus::Interrupted);
+
+        let turns = restarted
+            .list_thread_turns(ThreadTurnsListParams {
+                thread_id: thread.thread_id.clone(),
+                page: page(),
+                items_view: TurnItemsView::NotLoaded,
+            })
+            .await
+            .expect("list orphan turns");
+        assert_eq!(turns.data[0].status, TurnStatus::Interrupted);
+
+        let persisted = store
+            .read_thread(ReadThreadParams {
+                thread_id: thread.thread_id,
+                include_archived: false,
+                turns_view: ThreadTurnsView::Full,
+            })
+            .await
+            .expect("read persisted orphan thread")
+            .expect("persisted orphan thread");
+        assert_eq!(
+            persisted.status,
+            ThreadStatus::Active {
+                active_flags: Vec::new(),
+            }
+        );
+        assert_eq!(persisted.turns[0].status, TurnStatus::InProgress);
+    }
+
+    #[test]
+    fn runtime_snapshot_keeps_only_the_live_turn_in_progress() {
+        let mut thread = make_thread("thread-live", 10);
+        thread.status = ThreadStatus::Idle;
+        let orphan = Turn {
+            session_id: thread.session_id.clone(),
+            thread_id: thread.thread_id.clone(),
+            turn_id: TurnId::new("turn-orphan"),
+            status: TurnStatus::InProgress,
+            admission: TurnAdmissionState::Accepted,
+            queue: TurnQueueState::Running,
+            approval: TurnApprovalState::NotRequired,
+            items: Vec::new(),
+            items_view: TurnItemsView::NotLoaded,
+            error: None,
+            created_at_ms: 10,
+            updated_at_ms: 11,
+            started_at_ms: Some(10),
+            completed_at_ms: None,
+            duration_ms: None,
+        };
+        let live = Turn {
+            turn_id: TurnId::new("turn-live"),
+            created_at_ms: 12,
+            updated_at_ms: 13,
+            started_at_ms: Some(12),
+            ..orphan.clone()
+        };
+        thread.turns = vec![orphan, live];
+
+        normalize_thread_runtime_snapshot(
+            &mut thread,
+            &ThreadExecutionState {
+                loaded: true,
+                active_turn_id: Some("turn-live".to_string()),
+            },
+        );
+
+        assert!(matches!(thread.status, ThreadStatus::Active { .. }));
+        assert_eq!(thread.turns[0].status, TurnStatus::Interrupted);
+        assert_eq!(thread.turns[1].status, TurnStatus::InProgress);
+    }
+
+    #[test]
+    fn loaded_runtime_preserves_turn_until_terminal_projection_converges() {
+        let mut thread = make_thread("thread-converging", 10);
+        thread.status = ThreadStatus::Idle;
+        thread.turns = vec![Turn {
+            session_id: thread.session_id.clone(),
+            thread_id: thread.thread_id.clone(),
+            turn_id: TurnId::new("turn-converging"),
+            status: TurnStatus::InProgress,
+            admission: TurnAdmissionState::Accepted,
+            queue: TurnQueueState::Running,
+            approval: TurnApprovalState::NotRequired,
+            items: Vec::new(),
+            items_view: TurnItemsView::NotLoaded,
+            error: None,
+            created_at_ms: 10,
+            updated_at_ms: 11,
+            started_at_ms: Some(10),
+            completed_at_ms: None,
+            duration_ms: None,
+        }];
+        let execution = ThreadExecutionState {
+            loaded: true,
+            active_turn_id: None,
+        };
+
+        normalize_thread_runtime_snapshot(&mut thread, &execution);
+
+        assert!(matches!(thread.status, ThreadStatus::Active { .. }));
+        assert_eq!(thread.turns[0].status, TurnStatus::InProgress);
+
+        normalize_turn_runtime_snapshots(&mut thread.turns, &execution);
+        assert_eq!(thread.turns[0].status, TurnStatus::InProgress);
     }
 
     fn make_thread(thread_id: &str, timestamp: i64) -> Thread {

@@ -5267,15 +5267,18 @@ export type DynamicToolCallOutputContentItem =
     };
 
 export interface DynamicToolCallParams {
+  approvalToken?: null | string;
   arguments: unknown;
   callId: string;
   namespace?: null | string;
+  phase: DynamicToolCallPhase;
   threadId: string;
   tool: string;
   turnId: string;
 }
 
 export interface DynamicToolCallResponse {
+  approval?: DynamicToolCallApproval | null;
   contentItems: DynamicToolCallOutputContentItem[];
   success: boolean;
 }
@@ -10664,6 +10667,21 @@ export type MultiAgentMode =
 export interface TextElement {
   byteRange: ByteRange;
   placeholder?: null | string;
+}
+
+export type DynamicToolCallPhase = "approvedExecute" | "preflight";
+
+export interface DynamicToolCallApproval {
+  actionKind: string;
+  approvalToken: string;
+  backendNodeId?: number | null;
+  browserSessionId: string;
+  reason: string;
+  riskClass: string;
+  snapshotId: string;
+  tabId: string;
+  viewId: string;
+  webContentsId: number;
 }
 
 export type HookEventName =

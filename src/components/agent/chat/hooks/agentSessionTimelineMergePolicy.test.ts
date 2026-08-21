@@ -376,4 +376,47 @@ describe("agentSessionTimelineMergePolicy", () => {
       updated_at: "2026-07-01T00:00:05.000Z",
     });
   });
+
+  it("read model 的 partial 应覆盖终态事件留下的停止标记正文", () => {
+    const result = mergeRuntimeSyncThreadItems(
+      [
+        createAgentMessageItem({
+          text: "(已停止)",
+          status: "completed",
+        }),
+      ],
+      [
+        createAgentMessageItem({
+          text: "以下是今日国际新闻简要整理：",
+          status: "completed",
+        }),
+      ],
+    );
+
+    expect(result[0]).toMatchObject({
+      text: "以下是今日国际新闻简要整理：",
+      status: "completed",
+    });
+  });
+
+  it("read model 的 partial 与本地停止标记合并时应保留更长正文", () => {
+    const result = mergeRuntimeSyncThreadItems(
+      [
+        createAgentMessageItem({
+          text: "以下是今日国际新闻简要整理：\n\n(已停止)",
+          status: "completed",
+        }),
+      ],
+      [
+        createAgentMessageItem({
+          text: "(已停止)",
+          status: "completed",
+        }),
+      ],
+    );
+
+    expect(result[0]?.text).toBe(
+      "以下是今日国际新闻简要整理：\n\n(已停止)",
+    );
+  });
 });

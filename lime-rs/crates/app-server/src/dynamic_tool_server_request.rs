@@ -1,8 +1,8 @@
 use crate::approval_server_request::WaitServerRequestError;
 use crate::{AppServer, DynamicToolRespondRequest};
 use app_server_protocol::protocol::v2::{
-    DynamicToolCallOutputContentItem, DynamicToolCallParams, DynamicToolCallResponse,
-    METHOD_ITEM_TOOL_CALL,
+    DynamicToolCallOutputContentItem, DynamicToolCallParams, DynamicToolCallPhase,
+    DynamicToolCallResponse, METHOD_ITEM_TOOL_CALL,
 };
 use app_server_protocol::AgentEvent;
 use serde_json::Value;
@@ -79,6 +79,27 @@ fn dynamic_tool_server_request(
     if !arguments.is_object() {
         return Err("dynamic_tool.requested arguments must be an object".to_string());
     }
+    let phase = event
+        .payload
+        .get("phase")
+        .cloned()
+        .ok_or_else(|| "dynamic_tool.requested has no phase".to_string())
+        .and_then(|value| {
+            serde_json::from_value::<DynamicToolCallPhase>(value)
+                .map_err(|_| "dynamic_tool.requested phase is invalid".to_string())
+        })?;
+    let approval_token = optional_payload_text(&event.payload, "approval_token", "approvalToken")?;
+    match phase {
+        DynamicToolCallPhase::Preflight if approval_token.is_some() => {
+            return Err("dynamic_tool.requested preflight cannot carry approvalToken".to_string());
+        }
+        DynamicToolCallPhase::ApprovedExecute if approval_token.is_none() => {
+            return Err(
+                "dynamic_tool.requested approvedExecute requires approvalToken".to_string(),
+            );
+        }
+        _ => {}
+    }
     Ok(Some(DynamicToolServerRequest {
         session_id,
         params: DynamicToolCallParams {
@@ -88,11 +109,18 @@ fn dynamic_tool_server_request(
             namespace,
             tool,
             arguments,
+            phase,
+            approval_token,
         },
     }))
 }
 
 fn validate_response(response: DynamicToolCallResponse) -> DynamicToolCallResponse {
+    if response.approval.is_some() && (response.success || !response.content_items.is_empty()) {
+        return failed_response(
+            "dynamic tool approval response must be unsuccessful and contain no output items",
+        );
+    }
     let invalid = response.content_items.iter().find_map(|item| match item {
         DynamicToolCallOutputContentItem::InputText { .. } => None,
         DynamicToolCallOutputContentItem::InputImage { image_url }
@@ -116,6 +144,19 @@ fn failed_response(message: impl Into<String>) -> DynamicToolCallResponse {
             text: message.into(),
         }],
         success: false,
+        approval: None,
+    }
+}
+
+fn optional_payload_text(
+    payload: &Value,
+    key: &str,
+    field: &str,
+) -> Result<Option<String>, String> {
+    match payload.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) => required_text(value, field).map(Some),
+        Some(_) => Err(format!("dynamic_tool.requested {field} is invalid")),
     }
 }
 
@@ -160,7 +201,8 @@ mod tests {
                 "call_id": "call-1",
                 "namespace": "desktop",
                 "tool": "appInfo",
-                "arguments": {}
+                "arguments": {},
+                "phase": "preflight"
             }),
         };
         let request = dynamic_tool_server_request(&event)
@@ -168,12 +210,14 @@ mod tests {
             .expect("request");
         assert_eq!(request.params.call_id, "call-1");
         assert_eq!(request.params.namespace.as_deref(), Some("desktop"));
+        assert_eq!(request.params.phase, DynamicToolCallPhase::Preflight);
 
         let response = validate_response(DynamicToolCallResponse {
             content_items: vec![DynamicToolCallOutputContentItem::InputImage {
                 image_url: "https://example.com/image.png".to_string(),
             }],
             success: true,
+            approval: None,
         });
         assert!(!response.success);
         assert!(matches!(

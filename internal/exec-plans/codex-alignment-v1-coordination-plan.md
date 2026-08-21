@@ -5191,3 +5191,123 @@ agent-runtime DSW-05 1/1 与 App Server 1686/1686 全部通过。直接运行 Ca
 Podman/nerdctl/Colima，verifier 仍为 `blocked / environment`。Windows packaged/N-1 与 Developer ID/notarization 继续由
 对应平台 runner 提供 evidence。分类：CodeCell trace/replay、diagnostics read 和 Gate B 为 `current`；公开 CodeCell
 ThreadItem/GUI card/第二套 RuntimeEvent 为 `dead / forbidden-to-restore`；无 `compat`/`deprecated`。
+
+### 2026-08-21 Agent 本地执行环境 Codex 对齐
+
+状态：`completed / current`。
+
+主目标：对齐 Codex 默认 shell environment policy，阻止 Desktop App Server 的敏感宿主环境被
+`exec_command` 子进程隐式继承，同时保留受信任调用方的显式环境覆盖能力。
+
+窄写集：`tool-runtime::execution_process` 的 environment owner、pipe/PTY/Windows restricted-token 消费路径、
+对应测试与本计划。不新增 App Server method、Electron IPC、远端 environment API、配置 UI、兼容层或第二套
+执行 runtime；不调用 live Provider，不运行 Docker，不安装依赖。
+
+Agent Verification Contract：
+
+```text
+改动名称：Agent 本地执行环境 Codex 对齐
+执行计划文件：internal/exec-plans/codex-alignment-v1-coordination-plan.md
+负责人：root
+预算标签：budget:tight
+风险等级：P1
+影响模块：tool-runtime local execution process
+不做范围：协议、Bridge、GUI、Provider route、远端执行体
+```
+
+Current 主链保持 `Agent chat -> Electron Desktop Host -> App Server -> RuntimeCore ->
+tool-runtime::execution_process -> tool lifecycle projection -> GUI`；本刀不改 gateway、JSON-RPC method、read model、
+runtime event、Evidence Pack schema 或 GUI surface。
+
+Happy Path：pipe、PTY 和 Windows restricted-token 从同一 resolver 取得环境；默认继承 `PATH/HOME/LANG` 等普通
+变量，移除名称大小写不敏感地包含 `KEY`、`SECRET`、`TOKEN` 的继承变量，最后应用显式 override。
+`env_clear=true` 时只保留显式 override。失败必须停在本地进程启动层，不回退第二套执行路径。
+
+Evidence Layers：deterministic smoke 使用 tool-runtime unit/related tests，runtime transcript 使用 current fixture；
+本刀不需要 GUI trace、release artifact 或 LLM supervisor。P1 Agent QC 只映射 current Agent fixture 的
+`exec_command` 工具生命周期，不进入其它 P0、full qcloop、live Provider、DeepSWE score 或 official release evidence。
+
+必跑命令：
+
+```bash
+npm run test:rust:unit -- -p tool-runtime execution_process
+npm run test:rust:related -- lime-rs/crates/tool-runtime/src/execution_process.rs lime-rs/crates/tool-runtime/src/execution_process/environment.rs lime-rs/crates/tool-runtime/src/execution_process/tests.rs
+npm run smoke:agent-runtime-current-fixture
+git diff --check
+```
+
+回写规则：resolver 语义失败回写 Rust 单元测试；真实子进程泄漏回写 execution process 集成测试；current 主链失败
+回写 fixture smoke。关闭条件为定向、related 与 current fixture 全绿。
+
+退出条件：Unix 保留变量名大小写，Windows key 统一为大小写不敏感语义；继承值先过滤，显式 override 后应用；
+三条执行路径不再各自决定继承策略；不保留旧 resolver 或双轨。
+
+架构影响：非重大。本刀不改变 crate/package、跨层 owner、协议、read model、Provider 或 Electron Host；只在既有
+`tool-runtime::execution_process` owner 内收口子进程环境策略，因此不更新架构图。
+
+完成结果：新增单一 `execution_process::environment` owner，在执行路径分流前完成环境解析，并让 pipe、PTY 与
+Windows restricted-token 只消费最终环境。继承变量按 Codex 默认规则移除 `*KEY*`、`*SECRET*`、`*TOKEN*`；
+显式 override 最后应用。Unix 保留变量名大小写，Windows 统一大小写不敏感 key。旧 Windows 专用 resolver 与各路径
+直接继承 App Server ambient environment 的行为已删除，不保留 compat 或 fallback。
+
+验证结果：
+
+- 红灯回归先证明旧 resolver 会继承 `OPENAI_API_KEY`，随后实现转绿。
+- `npm run test:rust:unit -- -p tool-runtime execution_process`：16/16，通过纯 resolver、真实子进程、PTY 与既有
+  unified exec 覆盖。
+- `npm run test:rust:related -- ...execution_process...`：退出码 0；`agent-runtime 210/210`、App Server
+  `1664/1664`、`lime-agent 258/258`、`tool-runtime 360/360` 及 selected 反向依赖均通过。
+- `npm run smoke:agent-runtime-current-fixture`：通过；真实 Electron/preload/App Server/runtime/read model/GUI
+  聚合 fixture 全绿，`liveProviderUsed=false`。
+- 直接 `cargo test` 在测试执行前命中仓库已知 rusty_v8 upstream archive 404；按仓库事实源切换到
+  `test:rust:unit` runner 后完成实际验证，不安装依赖、不把该无效入口记为产品阻塞。
+
+未跑：`npm run test:contracts`，因为本刀未改 App Server/Electron/JSON-RPC contract；未跑 full GUI smoke、live
+Provider、DeepSWE score、Docker/Pier verifier 与 Windows packaged runner，因为本刀的最低合同已由 current Electron
+fixture 覆盖，且用户明确跳过安装和 Docker。Windows key 语义由平台无关单元测试覆盖，restricted-token 实机证据仍归
+Windows runner。
+
+分类与完成度：环境 resolver、pipe/PTY/Windows 消费路径和回归为 `current`；旧 Windows resolver 与未过滤的 ambient
+inheritance 为 `dead / deleted / forbidden-to-restore`；无 `compat / deprecated`。本刀完成度 `100%`。
+
+### 2026-08-21 DeepSWE Desktop Smoke 5 approval-resume 收口
+
+状态：`completed / current`（受控 Desktop Gate B）。
+
+根因：App Server loaded runtime 在 active turn 已结束但 canonical persisted Turn 尚未完成投影收敛的窗口，
+`thread/read` 可能短暂返回 `interrupted`。Desktop harness 的 recovery helper 原先接受所有 terminal status，
+approval 因此会在该中间投影提前返回，误报 approval resume 失败；canonical rollout 随后实际为 `completed`。
+
+完成结果：`app-server::runtime::thread_read` 保留 loaded runtime 的 in-progress persisted Turn，直到 terminal
+projection 收敛；冷启动 orphan 与被新 active Turn 取代的旧 Turn 仍按 interrupted 处理。新增回归
+`loaded_runtime_preserves_turn_until_terminal_projection_converges`。`waitForSpecificTerminalThread` 增加
+`acceptableStatuses`，approval resume 只接受 `completed`，cancel 场景继续接受既有取消终态集合；超时诊断回写实际
+接受集合，避免测试 oracle 放宽。
+
+写集：`lime-rs/crates/app-server/src/runtime/thread_read.rs`、
+`scripts/harness/deepswe-desktop-controlled-smoke.mjs`，与前一刀的
+`tool-runtime/src/execution_process*.rs` 测试注入修正共同验证；无新增协议、bridge、provider 或兼容入口。
+
+验证结果：
+
+- `npm run test:rust:unit -- -p tool-runtime execution_process`：16/16。
+- `npm run test:rust:unit -- -p app-server loaded_runtime_preserves_turn_until_terminal_projection_converges`：1/1。
+- `./node_modules/.bin/vitest run scripts/harness/deepswe-desktop-contract.test.mjs --silent=passed-only --disableConsoleIntercept`：13/13。
+- `npm run test:contracts`：954 generated protocol types 零漂移、App Server client 299 checks，command/harness/
+  modality/scripts/Electron release/cleanup/docs 全部通过。
+- 单题 `happy-dom-abort-pending-body-reads`：Gate B pass；approval `completed`、tool `completed`、marker 存在，
+  `doneInReadModel=true`；cancel `interrupted` 且无幽灵写入。
+- 完整 `npm run harness:deepswe:desktop:controlled`：5/5 controlled tasks `gateBPass=true`、`claimConsistent=true`，
+  `session_reopen`、`approval_resume`、`cancel_no_ghost_write` 覆盖完整；证据目录
+  `.lime/benchmark/v2/desktop/controlled/20260821T011259Z/`，suite 状态 `product_path_only`。
+- 复跑 `npm run smoke:agent-runtime-current-fixture`：通过；真实 Electron/preload/IPC/App Server/runtime/read model/GUI
+  聚合覆盖 history、Coding Workbench、approval resume/decline/cancel、Plan、Skills、MCP、media、typed error 与
+  Content Factory，`liveProviderUsed=false`。
+- DeepSWE 合同复验：Desktop preflight `53/53`、Release 20 preflight `205/205`、Smoke 10 batch plan `105/105`；
+  adapter 与 Desktop contract `36/36`，controlled smoke/desktop benchmark/coding slice/batch benchmark/provider fixture
+  回归 `41/41`。最新 Desktop aggregate 只得到 `product_path_only`，`liveTrialCount=0`，未提升为 `DesktopCodingPass`。
+
+边界：controlled provider fixture 不等于 live DeepSWE/Pier verifier；本轮 `liveTrialCount=0`、
+`desktopCodingPass=false` 是显式 claim boundary，不生成 DeepSWE score，不运行 Docker/容器，不安装依赖。
+分类：approval terminal convergence、受控 Gate B 与 harness oracle 为 `current`；旧的宽泛 approval terminal
+判定为 `dead / deleted`；无 `compat / deprecated`。本切片完成度 `100%`。

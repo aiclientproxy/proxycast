@@ -70,6 +70,31 @@ describe("agentThreadState", () => {
     });
   });
 
+  it("取消 marker-only 更新不得覆盖 agent message partial 正文", () => {
+    const partial = createItem({
+      id: "agent-message-1",
+      type: "agent_message",
+      text: "以下是今日国际新闻简要整理：",
+      status: "in_progress",
+    });
+    const interrupted = createItem({
+      id: "agent-message-1",
+      type: "agent_message",
+      text: "(已停止)",
+      status: "completed",
+      completed_at: "2026-04-27T01:01:00.000Z",
+    });
+
+    expect(upsertThreadItemState([partial], interrupted)).toMatchObject([
+      {
+        type: "agent_message",
+        text: "以下是今日国际新闻简要整理：\n\n(已停止)",
+        status: "completed",
+        completed_at: "2026-04-27T01:01:00.000Z",
+      },
+    ]);
+  });
+
   it("迟到的非终态快照不应回退 terminal item", () => {
     const completed = createItem({ sequence: 4, status: "completed" });
     const items = [completed];

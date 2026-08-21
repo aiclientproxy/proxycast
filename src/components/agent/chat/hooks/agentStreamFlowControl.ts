@@ -12,13 +12,19 @@ import { updateMessageArtifactsStatus } from "../utils/messageArtifacts";
 import {
   removeThreadItemState,
   removeThreadTurnState,
+  upsertThreadItemState,
 } from "./agentThreadState";
 import { rememberLocallyInterruptedAgentStreamBinding } from "./agentStreamResumeBinding";
-import { clearAgentStreamTextOverlay } from "./agentStreamTextOverlayStore";
+import {
+  clearAgentStreamTextOverlay,
+  getAgentStreamTextOverlay,
+} from "./agentStreamTextOverlayStore";
+import { buildAgentStreamProcessBoundaryTextCommitPatch } from "./agentStreamProcessBoundaryCommit";
 import { resolveInterruptedInputRestorePlan } from "./agentStreamInputRestorePlan";
 import {
   buildInterruptedMessageContentPatch,
   markInterruptedAgentMessageThreadItems,
+  stripInterruptedPlaceholderText,
 } from "./agentInterruptedMessageContent";
 
 export { buildInterruptedMessageContentPatch } from "./agentInterruptedMessageContent";
@@ -129,6 +135,7 @@ function resolveInterruptedRuntimeTurnId(options: {
   activeStream: ActiveStreamState | null;
   activeSessionId?: string | null;
   assistantMessage?: Message | null;
+  currentTurnId?: string | null;
   interruptTurnId?: string;
   threadItems: readonly AgentThreadItem[];
 }): string | undefined {
@@ -136,6 +143,7 @@ function resolveInterruptedRuntimeTurnId(options: {
     activeStream,
     activeSessionId,
     assistantMessage,
+    currentTurnId,
     interruptTurnId,
     threadItems,
   } = options;
@@ -151,8 +159,252 @@ function resolveInterruptedRuntimeTurnId(options: {
       activeStream,
       activeSessionId,
       threadItems,
-    })
+    }) ??
+    readTurnId(currentTurnId)
   );
+}
+
+function messageVisibleTextLength(message?: Message | null): number {
+  if (!message) {
+    return 0;
+  }
+
+  const contentLength = message.content?.trim().length ?? 0;
+  const contentPartsLength =
+    message.contentParts?.reduce(
+      (length, part) =>
+        part.type === "text" ? length + part.text.trim().length : length,
+      0,
+    ) ?? 0;
+  return Math.max(contentLength, contentPartsLength);
+}
+
+function resolveMessageVisibleText(message?: Message | null): string {
+  if (!message) {
+    return "";
+  }
+
+  const contentPartsText = (message.contentParts ?? [])
+    .filter(
+      (
+        part,
+      ): part is Extract<
+        NonNullable<Message["contentParts"]>[number],
+        { type: "text" }
+      > => part.type === "text",
+    )
+    .map((part) => part.text)
+    .join("");
+  return [message.content ?? "", contentPartsText]
+    .map(stripInterruptedPlaceholderText)
+    .reduce(
+      (longest, candidate) =>
+        candidate.trim().length > longest.trim().length ? candidate : longest,
+      "",
+    );
+}
+
+function resolveInterruptedCanonicalText(options: {
+  activeSessionId?: string | null;
+  canonicalThreadId?: string | null;
+  runtimeTurnId?: string;
+  threadItems: readonly AgentThreadItem[];
+}): string {
+  const {
+    activeSessionId,
+    canonicalThreadId,
+    runtimeTurnId,
+    threadItems,
+  } = options;
+  if (!runtimeTurnId) {
+    return "";
+  }
+
+  const acceptedThreadIds = new Set(
+    [activeSessionId?.trim(), canonicalThreadId?.trim()].filter(
+      (value): value is string => Boolean(value),
+    ),
+  );
+  let visibleText = "";
+  let visibleTextLength = 0;
+  for (const item of threadItems) {
+    const itemThreadId = item.thread_id?.trim();
+    if (
+      item.type !== "agent_message" ||
+      item.turn_id !== runtimeTurnId ||
+      (itemThreadId &&
+        acceptedThreadIds.size > 0 &&
+        !acceptedThreadIds.has(itemThreadId))
+    ) {
+      continue;
+    }
+    const candidateText = stripInterruptedPlaceholderText(item.text);
+    if (candidateText.trim().length <= visibleTextLength) {
+      continue;
+    }
+    visibleText = candidateText;
+    visibleTextLength = candidateText.trim().length;
+  }
+  return visibleText;
+}
+
+function resolveInterruptedVisibleMessage(options: {
+  activeMessage?: Message | null;
+  messages: readonly Message[];
+  runtimeTurnId?: string;
+}): Message | null {
+  const { activeMessage, messages, runtimeTurnId } = options;
+  if (!runtimeTurnId) {
+    return activeMessage ?? null;
+  }
+
+  let visibleMessage = activeMessage ?? null;
+  for (const message of messages) {
+    if (
+      message.role !== "assistant" ||
+      message.runtimeTurnId !== runtimeTurnId ||
+      messageVisibleTextLength(message) <= messageVisibleTextLength(visibleMessage)
+    ) {
+      continue;
+    }
+    visibleMessage = message;
+  }
+  return visibleMessage;
+}
+
+function patchInterruptedAssistantMessage(options: {
+  message: Message;
+  runtimeTurnId?: string;
+  visibleText: string;
+}): Message {
+  const { message, runtimeTurnId, visibleText } = options;
+  const visiblePatch = visibleText.trim()
+    ? buildAgentStreamProcessBoundaryTextCommitPatch({
+        accumulatedContent: visibleText,
+        parts: message.contentParts,
+        renderedContent: visibleText,
+        shouldRetainThinkingPart: () => true,
+        surfaceThinkingDeltas: true,
+      })
+    : {};
+  const merged = {
+    ...settleInterruptedMessageProcess({
+      ...message,
+      ...(runtimeTurnId ? { runtimeTurnId } : {}),
+    }),
+    ...visiblePatch,
+  };
+  return {
+    ...updateMessageArtifactsStatus(merged, "complete"),
+    ...buildInterruptedMessageContentPatch(merged),
+    isThinking: false,
+    runtimeTurnId: runtimeTurnId ?? merged.runtimeTurnId,
+    runtimeStatus: undefined,
+  };
+}
+
+function upsertInterruptedAssistantMessage(options: {
+  messages: Message[];
+  messageId: string;
+  runtimeTurnId?: string;
+  visibleText: string;
+}): Message[] {
+  const { messages, messageId, runtimeTurnId, visibleText } = options;
+  const exactIndex = messages.findIndex((message) => message.id === messageId);
+  const sameTurnIndex =
+    exactIndex >= 0 || !runtimeTurnId
+      ? -1
+      : messages.findIndex(
+          (message) =>
+            message.role === "assistant" &&
+            message.runtimeTurnId === runtimeTurnId,
+        );
+  const targetIndex = exactIndex >= 0 ? exactIndex : sameTurnIndex;
+  if (targetIndex >= 0) {
+    return messages.map((message, index) =>
+      index === targetIndex
+        ? patchInterruptedAssistantMessage({
+            message,
+            runtimeTurnId,
+            visibleText,
+          })
+        : message,
+    );
+  }
+
+  const message: Message = {
+    id: messageId,
+    role: "assistant",
+    content: "",
+    contentParts: [],
+    timestamp: new Date(),
+    runtimeTurnId,
+  };
+  return [
+    ...messages,
+    patchInterruptedAssistantMessage({
+      message,
+      runtimeTurnId,
+      visibleText,
+    }),
+  ];
+}
+
+function mergeInterruptedAgentMessageText(
+  item: AgentThreadItem,
+  runtimeTurnId: string | undefined,
+  visibleText: string,
+): AgentThreadItem {
+  if (
+    item.type !== "agent_message" ||
+    !runtimeTurnId ||
+    item.turn_id !== runtimeTurnId ||
+    !visibleText.trim() ||
+    item.text.trim().length >= visibleText.trim().length
+  ) {
+    return item;
+  }
+
+  return {
+    ...item,
+    text: visibleText,
+  };
+}
+
+function ensureInterruptedAgentMessageItem(options: {
+  items: AgentThreadItem[];
+  activeMessageId: string;
+  threadId?: string | null;
+  turnId?: string;
+  text: string;
+}): AgentThreadItem[] {
+  const { items, activeMessageId, threadId, turnId, text } = options;
+  if (!turnId || !text.trim()) {
+    return items;
+  }
+  const existing = items.some(
+    (item) => item.type === "agent_message" && item.turn_id === turnId,
+  );
+  if (existing) {
+    return items;
+  }
+  const now = new Date().toISOString();
+  const sequence = items.reduce(
+    (max, item) => Math.max(max, item.sequence),
+    0,
+  ) + 1;
+  return upsertThreadItemState(items, {
+    id: activeMessageId,
+    thread_id: threadId?.trim() || "",
+    turn_id: turnId,
+    sequence,
+    status: "in_progress",
+    started_at: now,
+    updated_at: now,
+    type: "agent_message",
+    text,
+    phase: "final_answer",
+  });
 }
 
 const INTERRUPTED_TOOL_RESULT_TEXT = "本轮已中止";
@@ -240,9 +492,21 @@ export async function stopActiveAgentStream(options: StopAgentStreamOptions) {
     activeStream,
     activeSessionId,
     assistantMessage,
+    currentTurnId,
     interruptTurnId,
     threadItems: currentThreadItems,
   });
+  const interruptedVisibleMessage = resolveInterruptedVisibleMessage({
+    activeMessage: assistantMessage,
+    messages: getMessages?.() ?? [],
+    runtimeTurnId: interruptedRuntimeTurnId,
+  });
+  const interruptedAssistantMessageId =
+    interruptedVisibleMessage?.id ??
+    activeStream?.assistantMsgId ??
+    (interruptedRuntimeTurnId
+      ? `interrupted-assistant:${interruptedRuntimeTurnId}`
+      : null);
   logAgentDebug("AgentStream", "inputRestorePlan", {
     assistantMessageContentLength:
       assistantMessage?.content?.trim().length ?? 0,
@@ -303,22 +567,121 @@ export async function stopActiveAgentStream(options: StopAgentStreamOptions) {
     } catch (error) {
       onInterruptError?.(error);
     }
+    let refreshedReadModelItems: AgentThreadItem[] = [];
+    try {
+      const refreshedReadModel = await runtime.getSessionReadModel(
+        activeSessionId,
+      );
+      refreshedReadModelItems = Array.isArray(
+        refreshedReadModel?.thread_items,
+      )
+        ? refreshedReadModel.thread_items
+        : [];
+    } catch (error) {
+      onInterruptError?.(error);
+    }
+    let replayedThreadItems: AgentThreadItem[] = [];
+    const canonicalThreadId = threadId?.trim();
+    if (
+      canonicalThreadId &&
+      typeof runtime.resumeThread === "function"
+    ) {
+      try {
+        await runtime.resumeThread(canonicalThreadId, (reducer) => {
+          replayedThreadItems = [...reducer.getProjection().items];
+        });
+      } catch (error) {
+        onInterruptError?.(error);
+      }
+    }
+    const refreshedThreadItems = [
+      ...(getThreadItems?.() ?? []),
+      ...refreshedReadModelItems,
+      ...replayedThreadItems,
+    ];
+    const refreshedCanonicalText = resolveInterruptedCanonicalText({
+      activeSessionId,
+      canonicalThreadId: threadId,
+      runtimeTurnId: interruptedRuntimeTurnId,
+      threadItems: refreshedThreadItems,
+    });
+    if (interruptedRuntimeTurnId && refreshedCanonicalText.trim()) {
+      setThreadItems((prev) =>
+        markInterruptedAgentMessageThreadItems(
+          [...refreshedReadModelItems, ...replayedThreadItems].reduce(
+            (items, item) => upsertThreadItemState(items, item),
+            prev,
+          ).map((item) =>
+            mergeInterruptedAgentMessageText(
+              item,
+              interruptedRuntimeTurnId,
+              refreshedCanonicalText,
+            ),
+          ),
+          new Set([interruptedRuntimeTurnId]),
+        ),
+      );
+    }
+    if (interruptedAssistantMessageId && refreshedCanonicalText.trim()) {
+      setMessages((prev) =>
+        upsertInterruptedAssistantMessage({
+          messages: prev,
+          messageId: interruptedAssistantMessageId,
+          runtimeTurnId: interruptedRuntimeTurnId,
+          visibleText: refreshedCanonicalText,
+        }),
+      );
+    }
   };
 
-  if (activeStream?.assistantMsgId) {
-    clearAgentStreamTextOverlay(activeStream.assistantMsgId);
-    if (activeStream.pendingItemKey || interruptedRuntimeTurnId) {
+  if (interruptedAssistantMessageId) {
+    const visibleTextOverlay = getAgentStreamTextOverlay(
+      interruptedAssistantMessageId,
+    );
+    const canonicalVisibleText = resolveInterruptedCanonicalText({
+      activeSessionId,
+      canonicalThreadId: threadId,
+      runtimeTurnId: interruptedRuntimeTurnId,
+      threadItems: currentThreadItems,
+    });
+    const visibleMessage = resolveInterruptedVisibleMessage({
+      activeMessage: interruptedVisibleMessage,
+      messages: getMessages?.() ?? [],
+      runtimeTurnId: interruptedRuntimeTurnId,
+    });
+    const visibleTextCandidate = [
+      visibleTextOverlay?.content ?? "",
+      canonicalVisibleText,
+      resolveMessageVisibleText(visibleMessage),
+    ].reduce((longest, candidate) =>
+      candidate.trim().length > longest.trim().length ? candidate : longest,
+    );
+    clearAgentStreamTextOverlay(interruptedAssistantMessageId);
+    if (activeStream?.pendingItemKey || interruptedRuntimeTurnId) {
       setThreadItems((prev) => {
-        const nextItems = activeStream.pendingItemKey
+        let nextItems = activeStream?.pendingItemKey
           ? removeThreadItemState(prev, activeStream.pendingItemKey)
           : prev;
+        nextItems = ensureInterruptedAgentMessageItem({
+          items: nextItems,
+          activeMessageId: interruptedAssistantMessageId,
+          threadId: threadId || activeSessionId,
+          turnId: interruptedRuntimeTurnId,
+          text: visibleTextCandidate,
+        });
         return markInterruptedAgentMessageThreadItems(
-          nextItems,
+          nextItems.map((item) =>
+            mergeInterruptedAgentMessageText(
+              item,
+              interruptedRuntimeTurnId,
+              visibleTextCandidate,
+            ),
+          ),
           new Set(interruptedRuntimeTurnId ? [interruptedRuntimeTurnId] : []),
         );
       });
     }
-    if (activeStream.pendingTurnKey) {
+    if (activeStream?.pendingTurnKey) {
       setThreadTurns((prev) =>
         removeThreadTurnState(prev, activeStream.pendingTurnKey!),
       );
@@ -327,23 +690,14 @@ export async function stopActiveAgentStream(options: StopAgentStreamOptions) {
       );
     }
     setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === activeStream.assistantMsgId
-          ? (() => {
-              const interruptedMessage = settleInterruptedMessageProcess(msg);
-              return {
-                ...updateMessageArtifactsStatus(interruptedMessage, "complete"),
-                ...buildInterruptedMessageContentPatch(interruptedMessage),
-                isThinking: false,
-                runtimeTurnId:
-                  interruptedRuntimeTurnId ?? interruptedMessage.runtimeTurnId,
-                runtimeStatus: undefined,
-              };
-            })()
-          : msg,
-      ),
+      upsertInterruptedAssistantMessage({
+        messages: prev,
+        messageId: interruptedAssistantMessageId,
+        runtimeTurnId: interruptedRuntimeTurnId,
+        visibleText: visibleTextCandidate,
+      }),
     );
-    clearAgentStreamTextOverlay(activeStream.assistantMsgId);
+    clearAgentStreamTextOverlay(interruptedAssistantMessageId);
   }
 
   setActiveStream(null);

@@ -81,8 +81,6 @@ pub(super) fn start_windows_restricted_execution_process(
         ));
     }
 
-    request.env =
-        resolve_windows_child_environment(request.env_clear, std::env::vars(), &request.env);
     apply_offline_environment(&mut request.env, sandbox.granted_permissions.as_ref());
     let acl_plan = build_acl_plan(&cwd, policy, sandbox.granted_permissions.as_ref())?;
     let capability_sid = capability_sid();

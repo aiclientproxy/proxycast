@@ -12,10 +12,13 @@ use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::task::JoinHandle;
 
+mod environment;
 pub mod live;
 mod pty;
 #[cfg(target_os = "windows")]
 mod windows;
+
+use environment::resolve_child_environment;
 
 const DEFAULT_OUTPUT_RETAIN_BYTES: usize = 128 * 1024;
 const PROCESS_OUTPUT_CHUNK_BYTES: usize = 8 * 1024;
@@ -611,8 +614,16 @@ impl LocalExecutionControlSender {
 }
 
 pub fn start_local_execution_process(
-    mut request: LocalExecutionRequest,
+    request: LocalExecutionRequest,
 ) -> io::Result<LocalExecutionProcessHandle> {
+    start_local_execution_process_with_inherited_environment(request, std::env::vars())
+}
+
+fn start_local_execution_process_with_inherited_environment(
+    mut request: LocalExecutionRequest,
+    inherited_environment: impl IntoIterator<Item = (String, String)>,
+) -> io::Result<LocalExecutionProcessHandle> {
+    request.env = resolve_child_environment(request.env_clear, inherited_environment, &request.env);
     if let Some(sandbox) = request.sandbox.take() {
         if sandbox.backend == SandboxBackend::RestrictedToken {
             #[cfg(target_os = "windows")]
@@ -665,12 +676,8 @@ pub fn start_local_execution_process(
     if let Some(cwd) = &request.cwd {
         command.current_dir(cwd);
     }
-    if request.env_clear {
-        command.env_clear();
-    }
-    if !request.env.is_empty() {
-        command.envs(&request.env);
-    }
+    command.env_clear();
+    command.envs(&request.env);
 
     let mut child = command.spawn()?;
     let stdout = child.stdout.take();
@@ -707,28 +714,6 @@ pub fn start_local_execution_process(
         final_rx: Some(final_rx),
         final_snapshot: None,
     })
-}
-
-#[cfg(any(test, target_os = "windows"))]
-fn resolve_windows_child_environment(
-    env_clear: bool,
-    inherited: impl IntoIterator<Item = (String, String)>,
-    overrides: &HashMap<String, String>,
-) -> HashMap<String, String> {
-    let mut resolved = HashMap::new();
-    if !env_clear {
-        resolved.extend(
-            inherited
-                .into_iter()
-                .map(|(key, value)| (key.to_uppercase(), value)),
-        );
-    }
-    resolved.extend(
-        overrides
-            .iter()
-            .map(|(key, value)| (key.to_uppercase(), value.clone())),
-    );
-    resolved
 }
 
 #[cfg(any(test, target_os = "windows"))]

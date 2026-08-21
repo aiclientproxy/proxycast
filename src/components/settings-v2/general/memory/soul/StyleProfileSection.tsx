@@ -24,7 +24,7 @@ import {
 interface StyleProfileSectionProps {
   value?: string | null;
   onChange: (profileId: SoulStyleProfileId) => void;
-  setMessage: (message: string | null) => void;
+  showMessage: (message: string) => void;
   t: TFunction<"settings">;
 }
 
@@ -43,7 +43,7 @@ function sectionT(
 export function StyleProfileSection({
   value,
   onChange,
-  setMessage,
+  showMessage,
   t,
 }: StyleProfileSectionProps) {
   const translate = useCallback(
@@ -93,10 +93,10 @@ export function StyleProfileSection({
     }
     const fallback = registry.getFallbackProfile();
     onChange(fallback.id);
-    setMessage(
+    showMessage(
       translate("settings.memory.soul.styleProfile.missing.fallbackApplied"),
     );
-  }, [loading, onChange, registry, setMessage, translate, value]);
+  }, [loading, onChange, registry, showMessage, translate, value]);
 
   const handleInstallPack = async (draft: StylePackInstallDraft) => {
     setBusyPackId(STYLE_PACK_INSTALL_BUSY_ID);
@@ -108,7 +108,7 @@ export function StyleProfileSection({
         enableAfterInstall: draft.enableAfterInstall,
       });
       await refreshPacks();
-      setMessage(
+      showMessage(
         translate("settings.memory.soul.stylePacks.message.installed"),
       );
     } catch (installError) {
@@ -130,7 +130,7 @@ export function StyleProfileSection({
     try {
       await setSoulStylePackStatus({ packId, status });
       await refreshPacks();
-      setMessage(
+      showMessage(
         translate(
           status === "enabled"
             ? "settings.memory.soul.stylePacks.message.enabled"
@@ -153,7 +153,7 @@ export function StyleProfileSection({
     try {
       await uninstallSoulStylePack({ packId });
       await refreshPacks();
-      setMessage(
+      showMessage(
         translate("settings.memory.soul.stylePacks.message.uninstalled"),
       );
     } catch (uninstallError) {

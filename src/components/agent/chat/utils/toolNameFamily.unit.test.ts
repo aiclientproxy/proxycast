@@ -16,8 +16,8 @@ describe("toolNameFamily", () => {
       innerToolName: "web_search",
       normalizedInnerToolName: "web_search",
     });
-    expect(parseMcpToolName("mcp__lime-browser__browserSnapshot")).toEqual({
-      serverName: "lime-browser",
+    expect(parseMcpToolName("mcp__site__browserSnapshot")).toEqual({
+      serverName: "site",
       innerToolName: "browserSnapshot",
       normalizedInnerToolName: "browser_snapshot",
     });

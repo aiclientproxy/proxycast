@@ -111,7 +111,8 @@ describe("generalAgentPrompt", () => {
     expect(prompt).toContain("对话内 A2UI");
     expect(prompt).toContain("站点技能启动上下文");
     expect(prompt).toContain("lime_site_run");
-    expect(prompt).toContain("mcp__lime-browser__browser_navigate");
+    expect(prompt).toContain("旧外部浏览器工具");
+    expect(prompt).not.toContain("mcp__lime-browser__");
     expect(prompt).toContain("严格 JSON 对象");
     expect(prompt).toContain("attached_session_required");
   });

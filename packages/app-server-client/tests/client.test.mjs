@@ -2963,6 +2963,36 @@ test("connection server request handler keeps the read pump active without an ev
   ]);
 });
 
+test("connection stops the read pump after a terminal transport error", async () => {
+  let reads = 0;
+  let connection;
+  const disconnectError = new Error(
+    "app-server exited before next message: signal=SIGTERM",
+  );
+
+  connection = new AppServerConnection({
+    send() {},
+    async nextMessage() {
+      reads += 1;
+      if (reads > 1) {
+        connection.setServerRequestHandler(null);
+      }
+      throw disconnectError;
+    },
+  });
+
+  connection.setServerRequestHandler(() => false);
+  await waitFor(() => reads >= 1);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(reads, 1);
+  await assert.rejects(
+    connection.nextServerMessage(100),
+    /app-server exited before next message/,
+  );
+  assert.equal(reads, 1);
+});
+
 test("connection buffers server requests declined by the host handler", async () => {
   let handled = false;
   const connection = new AppServerConnection({

@@ -63,6 +63,7 @@ const APP_SERVER_SERVER_REQUEST_TOKEN_LIMIT = 500;
 const APP_SERVER_SERVER_REQUEST_TOKEN_PREFIX = "electron-action:";
 const APP_SERVER_DRAIN_FIRST_MESSAGE_WAIT_MS = 25;
 const APP_SERVER_DRAIN_BUFFERED_MESSAGE_WAIT_MS = 0;
+const APP_SERVER_RESTART_MAX_ATTEMPTS = 3;
 const APP_SERVER_PROXY_PROBE_URL = "https://llm.limeai.run/v1/models";
 const APP_SERVER_PROXY_ENV_KEYS = [
   "HTTP_PROXY",
@@ -90,6 +91,19 @@ type DrainEventsRequest = {
   limit?: number;
 };
 
+export type AppServerSidecarTermination = {
+  pid: number | null;
+  requested: boolean;
+  signal: "SIGTERM";
+};
+
+type AppServerRestartWaiter = {
+  lifecycle: AppServerSidecarLifecycle;
+  promise: Promise<ConnectedAppServerSidecar>;
+  reject: (error: Error) => void;
+  resolve: (connected: ConnectedAppServerSidecar) => void;
+};
+
 export class ElectronAppServerHost {
   #lifecycle: AppServerSidecarLifecycle | null = null;
   #connected: ConnectedAppServerSidecar | null = null;
@@ -98,6 +112,7 @@ export class ElectronAppServerHost {
   #activeProxyRequestIds = new Map<RequestId, RequestId>();
   #consumedServerRequestTokens = new Set<string>();
   #recentNotifications: JsonRpcMessage[] = [];
+  #restartWaiter: AppServerRestartWaiter | null = null;
   #serverRequestRawIdsByToken = new Map<string, RequestId>();
   #serverRequestTokensByRawId = new Map<string, string>();
   #stopping = false;
@@ -266,6 +281,7 @@ export class ElectronAppServerHost {
   async stop(): Promise<void> {
     this.#stopping = true;
     this.#dynamicToolHost.connectionLost("app-server-stopped");
+    this.#rejectRestartWaiter(this.#lifecycle, appServerHostStoppingError());
     await this.#lifecycle?.stop();
     this.#lifecycle = null;
     this.#connected = null;
@@ -274,6 +290,23 @@ export class ElectronAppServerHost {
     this.#serverRequestRawIdsByToken.clear();
     this.#serverRequestTokensByRawId.clear();
     this.#dynamicToolHost.reset();
+  }
+
+  terminateSidecarForE2e(): AppServerSidecarTermination {
+    if (process.env.LIME_ELECTRON_E2E !== "1") {
+      throw new Error(
+        "App Server sidecar termination is only available in E2E mode",
+      );
+    }
+    const child = this.#lifecycle?.connected?.sidecar.child;
+    const pid = child?.pid ?? null;
+    const running =
+      child && child.exitCode === null && child.signalCode === null;
+    return {
+      pid,
+      requested: running ? child.kill("SIGTERM") : false,
+      signal: "SIGTERM",
+    };
   }
 
   #projectServerMessageForRenderer(
@@ -372,14 +405,21 @@ export class ElectronAppServerHost {
       }
       this.#connected = null;
     }
+    if (this.#restartWaiter) {
+      this.#connected = await this.#restartWaiter.promise;
+      return this.#connected;
+    }
     if (!this.#connectPromise) {
       this.#connectPromise = this.#start();
     }
+    const connectPromise = this.#connectPromise;
     try {
-      this.#connected = await this.#connectPromise;
+      this.#connected = await connectPromise;
       return this.#connected;
     } finally {
-      this.#connectPromise = null;
+      if (this.#connectPromise === connectPromise) {
+        this.#connectPromise = null;
+      }
     }
   }
 
@@ -431,7 +471,7 @@ export class ElectronAppServerHost {
         verifySha256: launchConfig.verifySha256,
         ...(sidecarEnv ? { env: sidecarEnv } : {}),
         restartPolicy: {
-          maxAttempts: 3,
+          maxAttempts: APP_SERVER_RESTART_MAX_ATTEMPTS,
           initialDelayMs: 500,
           maxDelayMs: 5_000,
         },
@@ -439,22 +479,30 @@ export class ElectronAppServerHost {
           if (this.#lifecycle === lifecycle) {
             this.#dynamicToolHost.connectionLost("app-server-disconnected");
             this.#connected = null;
-            this.#connectPromise = null;
+            this.#waitForRestart(lifecycle);
           }
           console.warn("[electron-host] app-server exited", event);
         },
         onRestarted: (connected) => {
           if (this.#lifecycle === lifecycle) {
             this.#connected = connected;
-            this.#connectPromise = null;
             this.#installServerRequestHandler(connected);
+            this.#resolveRestartWaiter(lifecycle, connected);
           }
         },
         onRestartFailed: (event) => {
-          if (this.#lifecycle === lifecycle) {
+          if (
+            this.#lifecycle === lifecycle &&
+            this.#restartWaiter?.lifecycle === lifecycle &&
+            event.attempt >= APP_SERVER_RESTART_MAX_ATTEMPTS
+          ) {
             this.#dynamicToolHost.connectionLost("app-server-restart-failed");
             this.#connected = null;
-            this.#connectPromise = null;
+            this.#lifecycle = null;
+            this.#rejectRestartWaiter(
+              lifecycle,
+              new Error("App Server sidecar restart attempts exhausted"),
+            );
           }
           console.warn("[electron-host] app-server restart failed", event);
         },
@@ -465,6 +513,49 @@ export class ElectronAppServerHost {
     const connected = await lifecycle.start();
     this.#installServerRequestHandler(connected);
     return connected;
+  }
+
+  #waitForRestart(
+    lifecycle: AppServerSidecarLifecycle,
+  ): Promise<ConnectedAppServerSidecar> {
+    if (this.#restartWaiter?.lifecycle === lifecycle) {
+      return this.#restartWaiter.promise;
+    }
+    let resolve!: (connected: ConnectedAppServerSidecar) => void;
+    let reject!: (error: Error) => void;
+    const promise = new Promise<ConnectedAppServerSidecar>(
+      (resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      },
+    );
+    void promise.catch(() => undefined);
+    this.#restartWaiter = { lifecycle, promise, reject, resolve };
+    return promise;
+  }
+
+  #resolveRestartWaiter(
+    lifecycle: AppServerSidecarLifecycle,
+    connected: ConnectedAppServerSidecar,
+  ): void {
+    const waiter = this.#restartWaiter;
+    if (!waiter || waiter.lifecycle !== lifecycle) {
+      return;
+    }
+    this.#restartWaiter = null;
+    waiter.resolve(connected);
+  }
+
+  #rejectRestartWaiter(
+    lifecycle: AppServerSidecarLifecycle | null,
+    error: Error,
+  ): void {
+    const waiter = this.#restartWaiter;
+    if (!waiter || waiter.lifecycle !== lifecycle) {
+      return;
+    }
+    this.#restartWaiter = null;
+    waiter.reject(error);
   }
 
   #installServerRequestHandler(connected: ConnectedAppServerSidecar): void {
@@ -559,6 +650,10 @@ export class ElectronAppServerHost {
 
   async #discardStaleSidecar(): Promise<void> {
     const lifecycle = this.#lifecycle;
+    this.#rejectRestartWaiter(
+      lifecycle,
+      new Error("App Server stale sidecar lifecycle was discarded"),
+    );
     this.#lifecycle = null;
     this.#connected = null;
     this.#connectPromise = null;

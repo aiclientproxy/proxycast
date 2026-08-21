@@ -54,6 +54,8 @@ import { StreamingRenderer } from "./StreamingRenderer";
 interface ConversationTurnTimelineProps {
   entry: CanonicalTurnRenderEntry;
   sessionId?: string | null;
+  userMessageId?: string | null;
+  assistantMessageId?: string | null;
   threadRead: AgentRuntimeThreadReadModel | null;
   pendingActions: readonly ActionRequired[];
   submittedActionsInFlight: readonly ActionRequired[];
@@ -104,7 +106,8 @@ function resolveUserMessageContent(
   segment: CanonicalTurnMessageSegment,
 ): string {
   if (segment.item.type !== "user_message") return "";
-  if (segment.item.content.trim()) return segment.item.content;
+  const content = segment.item.content ?? "";
+  if (content.trim()) return content;
   return (segment.item.content_parts ?? [])
     .flatMap((part) => (part.type === "text" ? [part.text] : []))
     .join("\n");
@@ -158,8 +161,9 @@ function resolveAgentMessageContentParts(
       ),
   );
   if (parts.length === 0) return undefined;
-  if (segment.item.text.trim() && !parts.some((part) => part.type === "text")) {
-    return [{ type: "text", text: segment.item.text }, ...parts];
+  const agentText = segment.item.text ?? "";
+  if (agentText.trim() && !parts.some((part) => part.type === "text")) {
+    return [{ type: "text", text: agentText }, ...parts];
   }
   return parts;
 }
@@ -206,6 +210,8 @@ function buildCanonicalPreviewMessage(params: {
 export function ConversationTurnTimeline({
   entry,
   sessionId,
+  userMessageId,
+  assistantMessageId,
   threadRead,
   pendingActions,
   submittedActionsInFlight,
@@ -285,7 +291,18 @@ export function ConversationTurnTimeline({
           (segment): segment is CanonicalTurnMessageSegment =>
             segment.kind === "message" &&
             segment.item.type === "agent_message" &&
-            segment.item.text.trim().length > 0,
+            (segment.item.text ?? "").trim().length > 0,
+        )
+        .at(-1)?.id ?? null,
+    [entry.segments],
+  );
+  const lastAssistantSegmentId = useMemo(
+    () =>
+      entry.segments
+        .filter(
+          (segment): segment is CanonicalTurnMessageSegment =>
+            segment.kind === "message" &&
+            segment.item.type === "agent_message",
         )
         .at(-1)?.id ?? null,
     [entry.segments],
@@ -473,7 +490,7 @@ export function ConversationTurnTimeline({
         const content =
           segment.item.type === "user_message"
             ? resolveUserMessageContent(segment)
-            : segment.item.text;
+            : (segment.item.text ?? "");
         const canSave = !isUser && content.trim().length >= 24;
         const isStreaming =
           !isUser &&
@@ -527,7 +544,14 @@ export function ConversationTurnTimeline({
             <ContentColumn $isUser={isUser}>
               <MessageBubble
                 $isUser={isUser}
-                data-message-id={segment.item.id}
+                data-message-id={
+                  isUser
+                    ? userMessageId || segment.item.id
+                    : segment.id ===
+                        (assistantActionOwnerId ?? lastAssistantSegmentId)
+                      ? assistantMessageId || segment.item.id
+                      : segment.item.id
+                }
                 data-message-role={isUser ? "user" : "assistant"}
                 data-runtime-turn-id={entry.turn.id}
                 data-thread-item-id={segment.item.id}

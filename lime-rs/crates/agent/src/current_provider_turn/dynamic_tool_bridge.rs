@@ -1,9 +1,11 @@
-use super::mcp_step_snapshot::DynamicToolRoute;
+use super::{mcp_step_snapshot::DynamicToolRoute, tool_executor::orchestration};
 use crate::protocol::AgentEvent;
+use crate::runtime_state::AgentRuntimeState;
 use agent_protocol::ThreadId;
 use agent_runtime::session_loop::{RuntimeSessionInputHandle, RuntimeSessionResponseKind};
 use app_server_protocol::protocol::v2::{
-    DynamicToolCallOutputContentItem, DynamicToolCallResponse,
+    DynamicToolCallApproval, DynamicToolCallOutputContentItem, DynamicToolCallPhase,
+    DynamicToolCallResponse,
 };
 use std::collections::HashMap;
 use tokio::sync::mpsc::UnboundedSender;
@@ -21,6 +23,7 @@ pub(super) async fn call_dynamic_tool(
     route: DynamicToolRoute,
     pending_input: Option<RuntimeSessionInputHandle>,
     event_sender: &UnboundedSender<AgentEvent>,
+    state: &AgentRuntimeState,
 ) -> Result<RuntimeToolExecutionResult, RuntimeToolExecutionError> {
     let identity = request.context.tool_identity().ok_or_else(|| {
         dynamic_tool_error(
@@ -47,6 +50,64 @@ pub(super) async fn call_dynamic_tool(
         )
         .before_handler()
     })?;
+    let mut response = request_dynamic_tool_phase(
+        request,
+        &route,
+        &response_handle,
+        event_sender,
+        DynamicToolCallPhase::Preflight,
+        None,
+    )
+    .await?;
+    if let Some(approval) = response.approval.take() {
+        if route.namespace.as_deref() != Some("browser") {
+            return Err(dynamic_tool_error(
+                "dynamic tool approval is only supported for Browser actions",
+                "dynamic_tool_approval_namespace_invalid",
+            ));
+        }
+        validate_approval(&approval)?;
+        orchestration::wait_for_browser_action_approval(
+            state,
+            event_sender,
+            request,
+            thread_id,
+            Some(&response_handle),
+            &approval,
+        )
+        .await?;
+        response = request_dynamic_tool_phase(
+            request,
+            &route,
+            &response_handle,
+            event_sender,
+            DynamicToolCallPhase::ApprovedExecute,
+            Some(approval.approval_token),
+        )
+        .await?;
+        if response.approval.is_some() {
+            return Err(dynamic_tool_error(
+                "approved dynamic tool execution cannot request another approval",
+                "dynamic_tool_approval_repeated",
+            ));
+        }
+    }
+    validate_content_items(&response.content_items)?;
+    project_dynamic_tool_response(route, response)
+}
+
+async fn request_dynamic_tool_phase(
+    request: RuntimeToolExecutionRequest<'_>,
+    route: &DynamicToolRoute,
+    response_handle: &RuntimeSessionInputHandle,
+    event_sender: &UnboundedSender<AgentEvent>,
+    phase: DynamicToolCallPhase,
+    approval_token: Option<String>,
+) -> Result<DynamicToolCallResponse, RuntimeToolExecutionError> {
+    let identity = request
+        .context
+        .tool_identity()
+        .expect("dynamic tool identity is validated before dispatch");
     let pending = response_handle
         .register_response(RuntimeSessionResponseKind::DynamicTool, identity.call_id())
         .await
@@ -59,6 +120,8 @@ pub(super) async fn call_dynamic_tool(
             namespace: route.namespace.clone(),
             tool: route.tool.clone(),
             arguments: request.params.clone(),
+            phase,
+            approval_token,
         })
         .map_err(|_| {
             dynamic_tool_error(
@@ -71,15 +134,18 @@ pub(super) async fn call_dynamic_tool(
         .wait()
         .await
         .map_err(|error| dynamic_tool_error(error.message, "dynamic_tool_response_wait_failed"))?;
-    let response =
-        serde_json::from_value::<DynamicToolCallResponse>(response).map_err(|error| {
-            dynamic_tool_error(
-                format!("dynamic tool response is invalid: {error}"),
-                "dynamic_tool_response_invalid",
-            )
-        })?;
-    validate_content_items(&response.content_items)?;
+    serde_json::from_value::<DynamicToolCallResponse>(response).map_err(|error| {
+        dynamic_tool_error(
+            format!("dynamic tool response is invalid: {error}"),
+            "dynamic_tool_response_invalid",
+        )
+    })
+}
 
+fn project_dynamic_tool_response(
+    route: DynamicToolRoute,
+    response: DynamicToolCallResponse,
+) -> Result<RuntimeToolExecutionResult, RuntimeToolExecutionError> {
     let output = serde_json::to_string(&response.content_items).map_err(|error| {
         dynamic_tool_error(
             format!("failed to serialize dynamic tool response: {error}"),
@@ -111,6 +177,26 @@ pub(super) async fn call_dynamic_tool(
         RuntimeToolExecutionResult::new(response.success, output, error, metadata)
             .with_structured_content(structured_content),
     )
+}
+
+fn validate_approval(approval: &DynamicToolCallApproval) -> Result<(), RuntimeToolExecutionError> {
+    let required = [
+        approval.approval_token.as_str(),
+        approval.reason.as_str(),
+        approval.risk_class.as_str(),
+        approval.action_kind.as_str(),
+        approval.browser_session_id.as_str(),
+        approval.tab_id.as_str(),
+        approval.view_id.as_str(),
+        approval.snapshot_id.as_str(),
+    ];
+    if required.iter().any(|value| value.trim().is_empty()) || approval.web_contents_id == 0 {
+        return Err(dynamic_tool_error(
+            "dynamic tool approval descriptor is incomplete",
+            "dynamic_tool_approval_invalid",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_content_items(

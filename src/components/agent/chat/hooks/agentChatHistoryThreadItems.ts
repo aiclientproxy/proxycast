@@ -19,6 +19,7 @@ import {
   readThreadItemText,
 } from "./agentChatHistoryTimelineBasics";
 import { dedupeImportedUserMessageItems } from "../utils/importedUserMessageDedupe";
+import { mergeRuntimeSyncThreadItems } from "./agentSessionTimelineMergePolicy";
 
 function readUserMessageImages(item: AgentThreadItem): MessageImage[] {
   if (item.type !== "user_message" || !Array.isArray(item.content_parts)) {
@@ -162,17 +163,9 @@ export function hydrateSessionDetailMessagesFromThreadItems(
 export function collectDetailThreadItems(
   detail: AgentSessionDetail,
 ): AgentThreadItem[] {
-  const seen = new Set<string>();
-  const items: AgentThreadItem[] = [];
-  for (const item of [
-    ...(detail.items || []),
-    ...(detail.thread_read?.thread_items || []),
-  ]) {
-    if (seen.has(item.id)) {
-      continue;
-    }
-    seen.add(item.id);
-    items.push(item);
-  }
-  return dedupeImportedUserMessageItems(items);
+  const detailItems = dedupeImportedUserMessageItems(detail.items || []);
+  const readModelItems = dedupeImportedUserMessageItems(
+    detail.thread_read?.thread_items || [],
+  );
+  return mergeRuntimeSyncThreadItems(detailItems, readModelItems);
 }

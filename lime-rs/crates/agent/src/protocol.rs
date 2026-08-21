@@ -458,6 +458,9 @@ pub enum AgentEvent {
         namespace: Option<String>,
         tool: String,
         arguments: Value,
+        phase: app_server_protocol::protocol::v2::DynamicToolCallPhase,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        approval_token: Option<String>,
     },
 
     #[serde(rename = "turn_context")]

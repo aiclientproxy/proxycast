@@ -1,5 +1,58 @@
 {
   "$defs": {
+    "DynamicToolCallApproval": {
+      "properties": {
+        "actionKind": {
+          "type": "string"
+        },
+        "approvalToken": {
+          "type": "string"
+        },
+        "backendNodeId": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "browserSessionId": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "riskClass": {
+          "type": "string"
+        },
+        "snapshotId": {
+          "type": "string"
+        },
+        "tabId": {
+          "type": "string"
+        },
+        "viewId": {
+          "type": "string"
+        },
+        "webContentsId": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "actionKind",
+        "approvalToken",
+        "browserSessionId",
+        "reason",
+        "riskClass",
+        "snapshotId",
+        "tabId",
+        "viewId",
+        "webContentsId"
+      ],
+      "type": "object"
+    },
     "DynamicToolCallOutputContentItem": {
       "oneOf": [
         {
@@ -55,6 +108,16 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
+    "approval": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DynamicToolCallApproval"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "contentItems": {
       "items": {
         "$ref": "#/$defs/DynamicToolCallOutputContentItem"

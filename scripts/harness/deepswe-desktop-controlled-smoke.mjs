@@ -52,6 +52,10 @@ const DEFAULT_OUTPUT_DIR = ".lime/benchmark/v2/desktop/controlled";
 const NAVIGATION_RESTORE_STORAGE_KEY = "lime.appNavigation.restore.v1";
 const INVOKE_TRACE_STORAGE_KEY = "lime_invoke_trace_buffer_v1";
 const INVOKE_ERROR_STORAGE_KEY = "lime_invoke_error_buffer_v1";
+const FAILURE_PROBE_TIMEOUT_MS = 2_000;
+const APP_SERVER_EXIT_CONSOLE_MARKER = "[electron-host] app-server exited";
+const APP_SERVER_RESTART_FAILED_CONSOLE_MARKER =
+  "[electron-host] app-server restart failed";
 const TERMINAL_STATUSES = new Set([
   "completed",
   "failed",
@@ -150,6 +154,211 @@ function assert(condition, message) {
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+export function classifyElectronHostLifecycleConsole(text) {
+  const normalized = String(text || "");
+  if (normalized.includes(APP_SERVER_EXIT_CONSOLE_MARKER)) {
+    return {
+      event: "app-server-exited",
+      source: "electron-main-console",
+    };
+  }
+  if (normalized.includes(APP_SERVER_RESTART_FAILED_CONSOLE_MARKER)) {
+    return {
+      event: "app-server-restart-failed",
+      source: "electron-main-console",
+    };
+  }
+  return null;
+}
+
+function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function electronProcessPid(app) {
+  if (typeof app?.process !== "function") return null;
+  try {
+    return app.process()?.pid ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function observeWithTimeout(operation, timeoutMs) {
+  let timer = null;
+  const operationPromise = Promise.resolve()
+    .then(operation)
+    .then((value) => ({ status: "ok", value }))
+    .catch((error) => ({
+      status: "error",
+      error: sanitizeText(error),
+    }));
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(
+      () => resolve({ status: "timeout", timeoutMs }),
+      timeoutMs,
+    );
+  });
+  return Promise.race([operationPromise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+export function attachElectronHostLifecycleDiagnostics(app, eventSink) {
+  if (!app || typeof app.on !== "function" || !Array.isArray(eventSink)) {
+    return;
+  }
+  app.on("console", (message) => {
+    const event = classifyElectronHostLifecycleConsole(
+      typeof message?.text === "function" ? message.text() : "",
+    );
+    if (!event) return;
+    eventSink.push({ ...event, observedAt: new Date().toISOString() });
+  });
+}
+
+function summarizeFailureBridgeProbe(result, threadId) {
+  if (result.status !== "ok") {
+    return {
+      method: "thread/read",
+      status: result.status,
+      ...(result.error ? { error: result.error } : {}),
+      ...(result.timeoutMs ? { timeoutMs: result.timeoutMs } : {}),
+    };
+  }
+  const thread = result.value?.result?.thread;
+  const turns = Array.isArray(thread?.turns) ? thread.turns : [];
+  const turn = turns.at(-1) || null;
+  return {
+    method: "thread/read",
+    status: "ok",
+    threadFound: Boolean(thread),
+    threadIdMatches: String(thread?.id || "") === String(threadId || ""),
+    latestTurn: turn
+      ? {
+          idPresent: Boolean(turn.id),
+          status: turnStatus(turn),
+        }
+      : null,
+  };
+}
+
+export async function collectControlledFailureDiagnostics({
+  electronHandle,
+  identity,
+  probeTimeoutMs = FAILURE_PROBE_TIMEOUT_MS,
+}) {
+  const app = electronHandle?.app;
+  const page = electronHandle?.page;
+  const electronPid = electronProcessPid(app);
+  const diagnostics = {
+    schemaVersion: "deepswe-desktop-controlled-runtime-diagnostics-v1",
+    probeTimeoutMs,
+    electron: {
+      pid: electronPid,
+      processAlive: electronPid === null ? null : isProcessAlive(electronPid),
+    },
+    renderer: {
+      status: "skipped",
+    },
+    bridge: {
+      status: "skipped",
+      method: "thread/read",
+    },
+  };
+
+  if (!page || typeof page.evaluate !== "function") {
+    return diagnostics;
+  }
+
+  const rendererProbe = await observeWithTimeout(
+    () =>
+      page.evaluate(() => ({
+        url: window.location.href,
+        electron: window.__LIME_ELECTRON__ === true,
+        hasInvokeBridge: typeof window.electronAPI?.invoke === "function",
+        supportsAppServer:
+          typeof window.electronAPI?.supportsCommand === "function" &&
+          window.electronAPI.supportsCommand("app_server_handle_json_lines"),
+      })),
+    probeTimeoutMs,
+  );
+  if (rendererProbe.status === "ok") {
+    diagnostics.renderer = {
+      status: "ok",
+      ...rendererProbe.value,
+    };
+  } else {
+    diagnostics.renderer = {
+      status: rendererProbe.status,
+      ...(rendererProbe.error ? { error: rendererProbe.error } : {}),
+      ...(rendererProbe.timeoutMs
+        ? { timeoutMs: rendererProbe.timeoutMs }
+        : {}),
+    };
+  }
+
+  const threadId = String(identity?.threadId || "").trim();
+  if (!threadId) {
+    return diagnostics;
+  }
+  const bridgeProbe = await observeWithTimeout(
+    () =>
+      invokeAppServerFromPage(page, "thread/read", {
+        threadId,
+        includeTurns: true,
+      }),
+    probeTimeoutMs,
+  );
+  diagnostics.bridge = summarizeFailureBridgeProbe(bridgeProbe, threadId);
+  return diagnostics;
+}
+
+export function buildControlledFailureEvidence({
+  error,
+  fixtureServer,
+  runId,
+  stage,
+  taskId,
+  runtimeDiagnostics = null,
+  sidecarLifecycleEvents = [],
+}) {
+  const providerRequests = (fixtureServer?.requests || [])
+    .filter((request) => request.path === "/v1/chat/completions")
+    .map((request, index) => ({
+      index: index + 1,
+      path: request.path,
+      responseKind: request.responseKind || null,
+      responseToolName: request.responseToolName || null,
+      stream: request.body?.stream === true,
+      messageCount: Array.isArray(request.body?.messages)
+        ? request.body.messages.length
+        : 0,
+      toolCount: Array.isArray(request.body?.tools)
+        ? request.body.tools.length
+        : 0,
+    }));
+  return {
+    schemaVersion: "deepswe-desktop-controlled-failure-v1",
+    generatedAt: new Date().toISOString(),
+    runId,
+    taskId,
+    stage,
+    error: error instanceof Error ? error.message : String(error),
+    providerRequestCount: providerRequests.length,
+    providerRequests,
+    connectionDiagnostics: fixtureServer?.connectionDiagnostics || [],
+    runtimeDiagnostics,
+    sidecarLifecycleEvents,
+  };
 }
 
 function writeFixtureFiles(workspaceRoot, fixture) {
@@ -415,6 +624,7 @@ async function waitForSpecificTerminalThread(
   expectedTurnId,
   fixtureServer,
   requestLog,
+  acceptableStatuses = TERMINAL_STATUSES,
 ) {
   const startedAt = Date.now();
   let last = null;
@@ -435,7 +645,7 @@ async function waitForSpecificTerminalThread(
     };
     if (
       String(turn?.id || "") === expectedTurnId &&
-      TERMINAL_STATUSES.has(turnStatus(turn))
+      acceptableStatuses.has(turnStatus(turn))
     ) {
       return last;
     }
@@ -448,6 +658,7 @@ async function waitForSpecificTerminalThread(
         providerRequestCount: last?.providerRequestCount ?? 0,
         latestTurnId: last?.turn?.id ?? null,
         status: turnStatus(last?.turn),
+        acceptableStatuses: [...acceptableStatuses],
       }),
     )}`,
   );
@@ -802,6 +1013,7 @@ async function runRecoveryScenarios({
     approvalTurnId,
     fixtureServer,
     requestLog,
+    new Set(["completed"]),
   );
   const approvalNormalized = normalizeToolExecutionThreadReadResponse(
     approvalTerminal.raw,
@@ -953,6 +1165,7 @@ export async function runControlledTask({
   const requestLog = [];
   const consoleErrors = [];
   const pageErrors = [];
+  const sidecarLifecycleEvents = [];
   const fixtureDefinition = controlledFixtureForTask(task.id);
   const instruction = taskInstruction(repoRoot, task);
   const appServerBinary = resolveDevAppServerBinary({
@@ -964,12 +1177,16 @@ export async function runControlledTask({
   });
   let electronHandle = null;
   let fixtureServer = null;
+  let identity = null;
+  let stage = "fixture";
   try {
     console.log(`${LOG_PREFIX} task=${task.id} stage=fixture`);
     fixtureServer = await startOpenAiCompatibleFixtureServer({
+      captureConnectionDiagnostics: true,
       deferScriptedToolCallsUntilAvailable: true,
       scriptedResponses: controlledFixtureResponses(task.id),
     });
+    stage = "electron";
     console.log(`${LOG_PREFIX} task=${task.id} stage=electron`);
     electronHandle = await launchElectronFixture({
       options,
@@ -979,6 +1196,10 @@ export async function runControlledTask({
       pageErrors,
       backendMode: "runtime",
     });
+    attachElectronHostLifecycleDiagnostics(
+      electronHandle.app,
+      sidecarLifecycleEvents,
+    );
     const { page, rendererSnapshot } = electronHandle;
     await initializeAppServer(page, requestLog);
     const workspace = await ensureDefaultWorkspace(page, requestLog);
@@ -993,7 +1214,7 @@ export async function runControlledTask({
       invoke,
       options,
     });
-    const identity = await createToolExecutionThreadCurrent({
+    identity = await createToolExecutionThreadCurrent({
       invoke,
       options,
       provider,
@@ -1007,9 +1228,11 @@ export async function runControlledTask({
       workspaceId: workspace.workspaceId,
     };
 
+    stage = "gui-submit";
     console.log(`${LOG_PREFIX} task=${task.id} stage=gui-submit`);
     const input = await restoreThreadInGui(page, options, preferences);
     await submitInstruction(page, input, instruction.toString("utf8"), options);
+    stage = "terminal-wait";
     const terminal = await waitForTerminalThread(
       page,
       options,
@@ -1032,6 +1255,7 @@ export async function runControlledTask({
       identity.sessionId,
       fixtureDefinition,
     );
+    stage = "reopen";
     console.log(`${LOG_PREFIX} task=${task.id} stage=reopen`);
     await restoreThreadInGui(page, options, preferences);
     const reopenedVisible = await readVisibleState(
@@ -1040,6 +1264,7 @@ export async function runControlledTask({
       identity.sessionId,
       fixtureDefinition,
     );
+    stage = "artifact-preview";
     console.log(`${LOG_PREFIX} task=${task.id} stage=artifact-preview`);
     const artifactPreview = await openPrimaryArtifactPreview(
       page,
@@ -1060,6 +1285,7 @@ export async function runControlledTask({
     });
     const patch = captureControlledPatch(workspaceRoot, fixtureDefinition);
     assert(patch.patchBytes > 0, "controlled task produced an empty patch");
+    stage = "recovery-approval";
     console.log(`${LOG_PREFIX} task=${task.id} stage=recovery-approval`);
     const recovery = await runRecoveryScenarios({
       fixture: fixtureDefinition,
@@ -1240,6 +1466,32 @@ export async function runControlledTask({
       `${LOG_PREFIX} task=${task.id} gateB=${verdict.gateBPass ? "pass" : "fail"} evidence=${evidencePath}`,
     );
     return evidence;
+  } catch (error) {
+    const runtimeDiagnostics = await collectControlledFailureDiagnostics({
+      electronHandle,
+      identity,
+    });
+    const failurePath = path.join(
+      options.outputDir,
+      runId,
+      `${task.id}.failure.json`,
+    );
+    writeJson(
+      failurePath,
+      buildControlledFailureEvidence({
+        error,
+        fixtureServer,
+        runId,
+        runtimeDiagnostics,
+        sidecarLifecycleEvents,
+        stage,
+        taskId: task.id,
+      }),
+    );
+    console.error(
+      `${LOG_PREFIX} task=${task.id} stage=${stage} failure=${failurePath}`,
+    );
+    throw error;
   } finally {
     await closeControlledElectronFixture(electronHandle);
     await fixtureServer?.close().catch(() => undefined);

@@ -22645,8 +22645,23 @@
       "title": "DynamicToolCallOutputContentItem"
     },
     "DynamicToolCallParams": {
+      "$defs": {
+        "DynamicToolCallPhase": {
+          "enum": [
+            "approvedExecute",
+            "preflight"
+          ],
+          "type": "string"
+        }
+      },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "approvalToken": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "arguments": true,
         "callId": {
           "type": "string"
@@ -22656,6 +22671,9 @@
             "null",
             "string"
           ]
+        },
+        "phase": {
+          "$ref": "#/$defs/DynamicToolCallPhase"
         },
         "threadId": {
           "type": "string"
@@ -22670,6 +22688,7 @@
       "required": [
         "arguments",
         "callId",
+        "phase",
         "threadId",
         "tool",
         "turnId"
@@ -22679,6 +22698,59 @@
     },
     "DynamicToolCallResponse": {
       "$defs": {
+        "DynamicToolCallApproval": {
+          "properties": {
+            "actionKind": {
+              "type": "string"
+            },
+            "approvalToken": {
+              "type": "string"
+            },
+            "backendNodeId": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "browserSessionId": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "riskClass": {
+              "type": "string"
+            },
+            "snapshotId": {
+              "type": "string"
+            },
+            "tabId": {
+              "type": "string"
+            },
+            "viewId": {
+              "type": "string"
+            },
+            "webContentsId": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "actionKind",
+            "approvalToken",
+            "browserSessionId",
+            "reason",
+            "riskClass",
+            "snapshotId",
+            "tabId",
+            "viewId",
+            "webContentsId"
+          ],
+          "type": "object"
+        },
         "DynamicToolCallOutputContentItem": {
           "oneOf": [
             {
@@ -22734,6 +22806,16 @@
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "approval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DynamicToolCallApproval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "contentItems": {
           "items": {
             "$ref": "#/$defs/DynamicToolCallOutputContentItem"
@@ -60265,6 +60347,12 @@
         },
         "DynamicToolCallParams": {
           "properties": {
+            "approvalToken": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "arguments": true,
             "callId": {
               "type": "string"
@@ -60274,6 +60362,9 @@
                 "null",
                 "string"
               ]
+            },
+            "phase": {
+              "$ref": "#/$defs/DynamicToolCallPhase"
             },
             "threadId": {
               "type": "string"
@@ -60288,11 +60379,19 @@
           "required": [
             "arguments",
             "callId",
+            "phase",
             "threadId",
             "tool",
             "turnId"
           ],
           "type": "object"
+        },
+        "DynamicToolCallPhase": {
+          "enum": [
+            "approvedExecute",
+            "preflight"
+          ],
+          "type": "string"
         },
         "FileChangeRequestApprovalParams": {
           "properties": {

@@ -42,6 +42,7 @@ import {
   stopBrowserTab,
   stopFindInBrowserTab,
   type BrowserTabDownloadEvent,
+  type BrowserTabLoadFailedEvent,
   type BrowserTabPermissionRequestEvent,
   type BrowserTabState,
 } from "@/lib/api/browserTab";
@@ -127,6 +128,32 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
 
   const selected = tabs.find((tab) => tab.selected) ?? null;
   selectedRef.current = selected;
+
+  const acceptsSelectedHostEvent = useCallback(
+    (
+      event:
+        | BrowserTabDownloadEvent
+        | BrowserTabLoadFailedEvent
+        | BrowserTabPermissionRequestEvent,
+    ) => {
+      const tab = selectedRef.current;
+      return Boolean(
+        identity &&
+        owner &&
+        tab &&
+        event.browserSessionId === identity.browserSessionId &&
+        event.browserSessionId === tab.browserSessionId &&
+        event.threadId === owner.threadId &&
+        event.threadId === tab.threadId &&
+        event.tabId === tab.tabId &&
+        event.viewId === tab.viewId &&
+        event.webContentsId === tab.webContentsId &&
+        event.ownerWebContentsId === tab.ownerWebContentsId &&
+        event.windowId === tab.windowId,
+      );
+    },
+    [identity, owner],
+  );
 
   const acceptState = useCallback(
     (state: BrowserTabState) => {
@@ -263,11 +290,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
     );
     void register(
       listenBrowserTabLoadFailed((event) => {
-        if (
-          identity &&
-          event.browserSessionId === identity.browserSessionId &&
-          event.threadId === owner?.threadId
-        ) {
+        if (acceptsSelectedHostEvent(event)) {
           setError(
             resolveLoadError(
               event.failureCategory,
@@ -280,22 +303,14 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
     );
     void register(
       listenBrowserTabDownload((event) => {
-        if (
-          identity &&
-          event.browserSessionId === identity.browserSessionId &&
-          event.threadId === owner?.threadId
-        ) {
+        if (acceptsSelectedHostEvent(event)) {
           setDownload(event);
         }
       }),
     );
     void register(
       listenBrowserTabPermissionRequest((event) => {
-        if (
-          identity &&
-          event.browserSessionId === identity.browserSessionId &&
-          event.threadId === owner?.threadId
-        ) {
+        if (acceptsSelectedHostEvent(event)) {
           setPermission(event);
         }
       }),
@@ -304,7 +319,23 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
       disposed = true;
       cleanup.forEach((stop) => stop());
     };
-  }, [acceptState, identity, owner?.threadId, translate]);
+  }, [
+    acceptState,
+    acceptsSelectedHostEvent,
+    identity,
+    owner?.threadId,
+    translate,
+  ]);
+
+  useEffect(() => {
+    setPermission((current) =>
+      current?.tabId === selected?.tabId ? current : null,
+    );
+    setDownload((current) =>
+      current?.tabId === selected?.tabId ? current : null,
+    );
+    setError((current) => (current?.source === "load" ? null : current));
+  }, [selected?.tabId]);
 
   useEffect(() => {
     if (!hostAvailable || !identity || !owner) {
@@ -460,6 +491,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
       data-testid="browser-workspace"
       data-browser-active-turn-id={selected?.activeTurnId ?? ""}
       data-browser-control-owner={selected?.controlOwner ?? ""}
+      data-browser-loading={selected?.isLoading ? "true" : "false"}
       data-browser-page-revision={selected?.pageRevision ?? ""}
       data-browser-session-id={identity?.browserSessionId ?? ""}
       data-browser-tab-id={selected?.tabId ?? ""}
@@ -480,11 +512,14 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
                 ? "border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] text-[color:var(--lime-text-strong)]"
                 : "border-transparent text-[color:var(--lime-text-muted)] hover:bg-[color:var(--lime-chrome-tab-hover)]",
             )}
+            data-browser-tab-id={tab.tabId}
+            data-browser-tab-session-id={tab.browserSessionId}
             key={tab.tabId}
           >
             <button
               aria-selected={tab.selected}
               className="flex h-full min-w-0 flex-1 items-center gap-1.5 px-2 text-left text-xs"
+              data-testid="browser-workspace-tab-select"
               onClick={() => void selectTab(tab.tabId)}
               role="tab"
               type="button"
@@ -497,6 +532,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
             <button
               aria-label={translate("agentChat.browserWorkspace.closeTab")}
               className={cn(iconButton, "h-6 w-6")}
+              data-testid="browser-workspace-tab-close"
               disabled={tabs.length <= 1}
               onClick={() => void closeBrowserTab(tab.tabId)}
               title={translate("agentChat.browserWorkspace.closeTab")}
@@ -509,6 +545,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
         <button
           aria-label={translate("agentChat.browserWorkspace.newTab")}
           className={iconButton}
+          data-testid="browser-workspace-new-tab"
           onClick={() => void openTab()}
           title={translate("agentChat.browserWorkspace.newTab")}
           type="button"
@@ -521,6 +558,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
         <button
           aria-label={translate("agentChat.browserWorkspace.back")}
           className={iconButton}
+          data-testid="browser-workspace-back"
           disabled={!selected?.canGoBack}
           onClick={() =>
             selected && void run(() => goBackBrowserTab(selected.tabId))
@@ -533,6 +571,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
         <button
           aria-label={translate("agentChat.browserWorkspace.forward")}
           className={iconButton}
+          data-testid="browser-workspace-forward"
           disabled={!selected?.canGoForward}
           onClick={() =>
             selected && void run(() => goForwardBrowserTab(selected.tabId))
@@ -549,6 +588,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
               : "agentChat.browserWorkspace.refresh",
           )}
           className={iconButton}
+          data-testid="browser-workspace-refresh"
           disabled={!selected}
           onClick={() =>
             selected &&
@@ -583,6 +623,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
           <input
             aria-label={translate("agentChat.browserWorkspace.address")}
             className="min-w-0 flex-1 bg-transparent text-xs text-[color:var(--lime-text-strong)] outline-none"
+            data-testid="browser-workspace-address"
             onChange={(event) => setAddress(event.target.value)}
             placeholder={translate(
               "agentChat.browserWorkspace.addressPlaceholder",
@@ -593,6 +634,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
         <button
           aria-label={translate("agentChat.browserWorkspace.find")}
           className={iconButton}
+          data-testid="browser-workspace-find"
           disabled={!selected}
           onClick={() => setFindVisible((visible) => !visible)}
           title={translate("agentChat.browserWorkspace.find")}
@@ -603,6 +645,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
         <button
           aria-label={translate("agentChat.browserWorkspace.zoomOut")}
           className={iconButton}
+          data-testid="browser-workspace-zoom-out"
           disabled={!selected}
           onClick={() =>
             selected &&
@@ -620,6 +663,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
         </button>
         <button
           className="h-7 min-w-10 px-1 text-[11px] text-[color:var(--lime-text-muted)] hover:text-[color:var(--lime-text-strong)]"
+          data-testid="browser-workspace-zoom-reset"
           disabled={!selected}
           onClick={() =>
             selected && void run(() => setBrowserTabZoom(selected.tabId, 1))
@@ -632,6 +676,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
         <button
           aria-label={translate("agentChat.browserWorkspace.zoomIn")}
           className={iconButton}
+          data-testid="browser-workspace-zoom-in"
           disabled={!selected}
           onClick={() =>
             selected &&
@@ -662,6 +707,7 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
             aria-label={translate("agentChat.browserWorkspace.findInput")}
             autoFocus
             className="h-7 min-w-0 flex-1 bg-transparent text-xs outline-none"
+            data-testid="browser-workspace-find-input"
             onChange={(event) => {
               setFindValue(event.target.value);
               if (!event.target.value) {
@@ -706,8 +752,20 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
         </form>
       ) : null}
 
+      {error ? <BrowserWorkspaceErrorBanner error={error} /> : null}
+      {permission ? (
+        <BrowserWorkspacePermissionBanner
+          permission={permission}
+          t={translate}
+        />
+      ) : null}
+      {download ? (
+        <BrowserWorkspaceDownloadShelf download={download} t={translate} />
+      ) : null}
+
       <div
         className="relative min-h-0 flex-1 bg-white"
+        data-browser-viewport-state={selected ? "mounted" : "empty"}
         data-testid="browser-workspace-viewport"
         ref={viewportRef}
       >
@@ -715,16 +773,6 @@ export const BrowserWorkspace = memo(function BrowserWorkspace({
           <BrowserWorkspaceHostUnavailable t={translate} />
         ) : !selected && !error ? (
           <BrowserWorkspaceLoading t={translate} />
-        ) : null}
-        {error ? <BrowserWorkspaceErrorBanner error={error} /> : null}
-        {permission ? (
-          <BrowserWorkspacePermissionBanner
-            permission={permission}
-            t={translate}
-          />
-        ) : null}
-        {download ? (
-          <BrowserWorkspaceDownloadShelf download={download} t={translate} />
         ) : null}
       </div>
     </section>

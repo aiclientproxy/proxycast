@@ -184,6 +184,40 @@ describe("agentChatHistoryThreadItems", () => {
     expect(collectDetailThreadItems(detail)).toHaveLength(1);
   });
 
+  it("同一 agent message 的 read model partial 应覆盖 detail marker-only", () => {
+    const baseItem = {
+      id: "agent-interrupted",
+      type: "agent_message" as const,
+      thread_id: "thread-1",
+      turn_id: "turn-1",
+      sequence: 2,
+      status: "completed" as const,
+      phase: "final_answer" as const,
+      started_at: "2026-07-29T10:00:01.000Z",
+      updated_at: "2026-07-29T10:00:02.000Z",
+    };
+    const detail = {
+      id: "dedupe-agent-items",
+      created_at: 1,
+      updated_at: 2,
+      messages: [],
+      items: [{ ...baseItem, text: "(已停止)" }],
+      thread_read: {
+        thread_id: "thread-1",
+        thread_items: [
+          { ...baseItem, text: "以下是今日国际新闻简要整理：" },
+        ],
+      },
+    } as unknown as AgentSessionDetail;
+
+    expect(collectDetailThreadItems(detail)).toMatchObject([
+      {
+        id: "agent-interrupted",
+        text: "以下是今日国际新闻简要整理：",
+      },
+    ]);
+  });
+
   it("canonical user content_parts 中的图片应进入历史 Message，图片-only 也不能丢失", () => {
     const detail = {
       id: "history-user-images",

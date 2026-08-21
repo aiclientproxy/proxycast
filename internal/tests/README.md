@@ -10,11 +10,9 @@
 - `lime-agent-autonomous-testing-plan.md`：Lime 作为实际 Agent 产品的自主化测试体系示例计划，说明风险地图、Agent 分工、测试组合和分阶段建设路径。
 - `lime-agent-autonomous-test-execution-matrix.md`：Lime 自主测试执行矩阵，把 owner gate、P0 场景、证据层和失败回写落成 Agent 可执行步骤。
 - `lime-agent-qc-current-blockers.md`：Lime 当前 P0 qcloop 阻断清单，记录真实 fail evidence、root cause 和关闭条件。
-- `lime-agent-qc-stale-worker-analysis-2026-05-10.md`：当前 stale qcloop worker 的根因分析样本，汇总 qcloop status、DB lease、进程树、binary provenance、失败分类和恢复路径。
 - `lime-agent-qc-qcloop-operations.md`：qcloop 批次只读监控、worker preflight、sidecar evidence、stale item 和重跑策略运维手册。
 - `lime-agent-qc-stale-owner-intervention.md`：stale GUI qcloop owner 的只读取证、owner 确认和最小处置协议。
 - `lime-agent-qc-evidence-contract.md`：qcloop worker / verifier 的结构化 evidence 输出契约，定义 `QCLOOP_WORKER_RESULT` 与 `QCLOOP_EVIDENCE_SUMMARY_JSON`。
-- `lime-agent-qc-completion-audit-2026-05-10.md`：当前整体目标完成度审计，逐项映射需求、证据、缺口和关闭条件。
 - `ai-agent-testing-guide.md`：AI Agent 测试基础理论与评分器说明。
 
 ## 与 `internal/test` 的分工

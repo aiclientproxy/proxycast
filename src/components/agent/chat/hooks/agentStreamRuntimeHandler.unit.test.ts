@@ -3875,7 +3875,11 @@ describe("agentStreamRuntimeHandler", () => {
       {
         id: "assistant-canceled",
         role: "assistant",
-        content: "已经输出的内容",
+        content: "(已停止)",
+        contentParts: [
+          { type: "text", text: "已经输出的内容" },
+          { type: "text", text: "(已停止)" },
+        ],
         timestamp: new Date("2026-06-07T10:00:00.000Z"),
         isThinking: true,
       },
@@ -3925,7 +3929,7 @@ describe("agentStreamRuntimeHandler", () => {
         },
       } as AgentEvent,
       requestState: {
-        accumulatedContent: "已经输出的内容",
+        accumulatedContent: "",
         currentTurnId: "turn-canceled",
         requestLogId: null,
         requestStartedAt: 0,
@@ -3956,6 +3960,7 @@ describe("agentStreamRuntimeHandler", () => {
       toolNameByToolId: new Map<string, string>(),
       setMessages: setMessages as never,
       setPendingActions: vi.fn() as never,
+      getThreadItems: () => threadItems,
       setThreadItems: setThreadItems as never,
       setThreadTurns: vi.fn() as never,
       setCurrentTurnId: vi.fn() as never,
@@ -3971,6 +3976,10 @@ describe("agentStreamRuntimeHandler", () => {
       type: "agent_message",
       text: "已经输出的内容\n\n(已停止)",
       contentParts: [
+        {
+          type: "text",
+          text: "已经输出的内容",
+        },
         {
           type: "text",
           text: "(已停止)",

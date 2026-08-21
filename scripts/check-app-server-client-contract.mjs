@@ -7022,7 +7022,7 @@ const checks = [
       "const currentStreamingEventNameRef = useRef<string | null>(null)",
       "currentTurnEventName: stream.activeStreamEventName",
       "refreshSessionDetail: session.refreshSessionDetail",
-      "getThreadItems: () => session.threadItems",
+      "getThreadItems: session.getThreadItems",
     ],
   },
   {

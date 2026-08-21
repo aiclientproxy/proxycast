@@ -379,6 +379,16 @@ pub struct DynamicToolCallParams {
     pub namespace: Option<String>,
     pub tool: String,
     pub arguments: Value,
+    pub phase: DynamicToolCallPhase,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_token: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum DynamicToolCallPhase {
+    Preflight,
+    ApprovedExecute,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -386,6 +396,24 @@ pub struct DynamicToolCallParams {
 pub struct DynamicToolCallResponse {
     pub content_items: Vec<DynamicToolCallOutputContentItem>,
     pub success: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval: Option<DynamicToolCallApproval>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicToolCallApproval {
+    pub approval_token: String,
+    pub reason: String,
+    pub risk_class: String,
+    pub action_kind: String,
+    pub browser_session_id: String,
+    pub tab_id: String,
+    pub view_id: String,
+    pub web_contents_id: u64,
+    pub snapshot_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_node_id: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

@@ -2637,6 +2637,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stream_request_recovers_when_reused_connection_closes_before_response() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind reused-connection fixture");
+        let address = listener.local_addr().expect("fixture address");
+        let server = tokio::spawn(async move {
+            let (mut reused, _) = listener.accept().await.expect("accept first request");
+            read_http_request(&mut reused).await;
+            reused
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Type: text/event-stream\r\nConnection: keep-alive\r\n\r\n",
+                )
+                .await
+                .expect("write first response");
+
+            read_http_request(&mut reused).await;
+            drop(reused);
+
+            let (mut retry, _) = tokio::time::timeout(Duration::from_secs(3), listener.accept())
+                .await
+                .expect("client must reconnect after reused connection closes")
+                .expect("accept retry request");
+            read_http_request(&mut retry).await;
+            retry
+                .write_all(
+                    fixture_response("200 OK", "Content-Type: text/event-stream\r\n", "")
+                        .as_bytes(),
+                )
+                .await
+                .expect("write retry response");
+            retry.shutdown().await.expect("close retry response");
+        });
+
+        let mut runtime_config = config(Some(RuntimeProviderProtocol::ChatCompletions));
+        runtime_config.base_url = Some(format!("http://{address}"));
+        let client = CurrentProviderClient::with_client(
+            runtime_config,
+            Client::builder().no_proxy().build().expect("HTTP client"),
+        );
+        let protocol = ModelProviderProtocol::ChatCompletions;
+        let wire_shape = RuntimeReplyProviderRequestWireShape::default();
+
+        client
+            .send_stream_request(&protocol, json!({ "stream": true }), &wire_shape)
+            .await
+            .expect("first request")
+            .bytes()
+            .await
+            .expect("consume first response");
+
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            client.send_stream_request(&protocol, json!({ "stream": true }), &wire_shape),
+        )
+        .await
+        .expect("reused connection recovery must not hang")
+        .expect("retry request must succeed");
+
+        server.await.expect("reused-connection fixture server");
+    }
+
+    #[tokio::test]
     async fn no_auth_http_request_omits_authorization_header() {
         let (base_url, headers, server) = spawn_http_headers_fixture(fixture_response(
             "200 OK",
@@ -3576,6 +3638,39 @@ mod tests {
 
     async fn read_http_headers(stream: &mut tokio::net::TcpStream) {
         let _ = read_http_headers_text(stream).await;
+    }
+
+    async fn read_http_request(stream: &mut tokio::net::TcpStream) {
+        let mut received = Vec::new();
+        let mut buffer = [0_u8; 1024];
+        let header_end = loop {
+            if let Some(position) = received.windows(4).position(|window| window == b"\r\n\r\n") {
+                break position + 4;
+            }
+            let read = stream
+                .read(&mut buffer)
+                .await
+                .expect("read fixture request headers");
+            assert!(read > 0, "fixture request ended before headers completed");
+            received.extend_from_slice(&buffer[..read]);
+        };
+        let headers = String::from_utf8_lossy(&received[..header_end]);
+        let content_length = headers
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().expect("content length"))
+            })
+            .unwrap_or_default();
+        while received.len() < header_end + content_length {
+            let read = stream
+                .read(&mut buffer)
+                .await
+                .expect("read fixture request body");
+            assert!(read > 0, "fixture request ended before body completed");
+            received.extend_from_slice(&buffer[..read]);
+        }
     }
 
     async fn read_http_headers_text(stream: &mut tokio::net::TcpStream) -> String {

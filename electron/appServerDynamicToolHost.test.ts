@@ -32,6 +32,7 @@ function call(overrides: Record<string, unknown> = {}): JsonRpcMessage {
       namespace: "desktop",
       tool: "appInfo",
       arguments: {},
+      phase: "preflight",
       ...overrides,
     },
   };
@@ -110,7 +111,7 @@ describe("AppServerDynamicToolHost", () => {
     expect(await host.tryHandle(transport, call())).toBe(true);
     expect(transport.rejectServerRequest).toHaveBeenCalledWith("request-1", {
       code: -32602,
-      message: "item/tool/call identity was already consumed",
+      message: "item/tool/call phase is stale or already consumed",
     });
   });
 
@@ -171,6 +172,7 @@ describe("AppServerDynamicToolHost", () => {
       arguments: {},
       callId: "call-1",
       ownerWebContentsId: 41,
+      phase: "preflight",
       threadId: "thread-1",
       tool: "openTabs",
       turnId: "turn-1",
@@ -188,6 +190,97 @@ describe("AppServerDynamicToolHost", () => {
       },
     });
     expect(browserHost.turnEnded).toHaveBeenCalledWith("thread-1", "turn-1");
+  });
+
+  it("allows one Browser preflight and one approved execution for the same call", async () => {
+    const browserHost = {
+      executeTool: vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: "approval_required" as const,
+          approval: {
+            actionKind: "click",
+            approvalToken: "approval-1",
+            backendNodeId: 11,
+            browserSessionId: "browser-session-1",
+            reason: "Sensitive click target: Delete account",
+            riskClass: "high_impact_click",
+            snapshotId: "snapshot-1",
+            tabId: "tab-1",
+            viewId: "view-1",
+            webContentsId: 100,
+          },
+        })
+        .mockResolvedValueOnce({ status: "completed" as const }),
+      turnEnded: vi.fn(),
+    };
+    const host = new AppServerDynamicToolHost(undefined, browserHost as never);
+    const transport = connection();
+    host.observeClientResult(
+      "thread/start",
+      { thread: { id: "thread-1" } },
+      { ownerWebContentsId: 41 },
+    );
+    const argumentsValue = {
+      backendNodeId: 11,
+      snapshotId: "snapshot-1",
+      tabId: "tab-1",
+    };
+
+    await host.tryHandle(
+      transport,
+      call({
+        namespace: "browser",
+        tool: "click",
+        arguments: argumentsValue,
+      }),
+    );
+    expect(transport.respondServerRequest).toHaveBeenLastCalledWith(
+      "request-1",
+      expect.objectContaining({
+        approval: expect.objectContaining({ approvalToken: "approval-1" }),
+        success: false,
+      }),
+    );
+
+    await host.tryHandle(
+      transport,
+      call({
+        namespace: "browser",
+        tool: "click",
+        arguments: argumentsValue,
+        phase: "approvedExecute",
+        approvalToken: "approval-1",
+      }),
+    );
+    expect(browserHost.executeTool).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        approvalToken: "approval-1",
+        callId: "call-1",
+        phase: "approvedExecute",
+      }),
+    );
+    expect(transport.respondServerRequest).toHaveBeenLastCalledWith(
+      "request-1",
+      expect.objectContaining({ success: true }),
+    );
+
+    await host.tryHandle(
+      transport,
+      call({
+        namespace: "browser",
+        tool: "click",
+        arguments: argumentsValue,
+        phase: "approvedExecute",
+        approvalToken: "approval-1",
+      }),
+    );
+    expect(transport.rejectServerRequest).toHaveBeenLastCalledWith(
+      "request-1",
+      expect.objectContaining({
+        message: "item/tool/call phase is stale or already consumed",
+      }),
+    );
   });
 
   it.each(["failed", "interrupted", "canceled"])(

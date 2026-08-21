@@ -672,10 +672,10 @@ describe("toolBatchGrouping", () => {
 
   it("应继续把浏览器 MCP 步骤聚合为页面检查摘要", () => {
     const summary = summarizeStreamingToolBatch([
-      createToolCall("mcp__lime-browser__navigate", {
+      createToolCall("mcp__site__navigate", {
         url: "https://example.com",
       }),
-      createToolCall("mcp__lime-browser__click", {
+      createToolCall("mcp__site__click", {
         selector: "#cta",
       }),
     ]);

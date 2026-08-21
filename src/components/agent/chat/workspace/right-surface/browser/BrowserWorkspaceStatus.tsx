@@ -16,7 +16,9 @@ export function BrowserWorkspaceHostUnavailable({ t }: { t: Translate }) {
   return (
     <div
       className="absolute inset-0 flex items-center justify-center p-6"
+      role="alert"
       data-testid="browser-workspace-host-unavailable"
+      data-browser-workspace-status="host-unavailable"
     >
       <div className="max-w-[380px] text-center">
         <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-700">
@@ -37,7 +39,10 @@ export function BrowserWorkspaceLoading({ t }: { t: Translate }) {
   return (
     <div
       className="pointer-events-none absolute inset-0 flex items-center justify-center p-6"
+      aria-live="polite"
+      role="status"
       data-testid="browser-workspace-loading"
+      data-browser-workspace-status="loading"
     >
       <div className="text-center text-xs text-[color:var(--lime-text-muted)]">
         <Globe2 className="mx-auto mb-2 h-5 w-5" />
@@ -54,8 +59,11 @@ export function BrowserWorkspaceErrorBanner({
 }) {
   return (
     <div
-      className="absolute inset-x-3 top-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-900 shadow-sm"
+      className="shrink-0 border-b border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-900"
+      role="alert"
       data-testid="browser-workspace-error"
+      data-browser-workspace-status={`${error.source}-error`}
+      data-browser-error-source={error.source}
     >
       <div className="font-medium">{error.title}</div>
       <div className="text-rose-800/90">{error.body}</div>
@@ -74,8 +82,10 @@ export function BrowserWorkspacePermissionBanner({
     permission.requestingUrl || permission.embeddingOrigin || permission.url;
   return (
     <div
-      className="absolute inset-x-3 top-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 shadow-sm"
+      className="shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950"
+      role="alert"
       data-testid="browser-workspace-permission"
+      data-browser-workspace-status="permission-blocked"
     >
       <div className="flex items-start gap-2">
         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
@@ -120,8 +130,11 @@ export function BrowserWorkspaceDownloadShelf({
           : "downloadProgress";
   return (
     <div
-      className="pointer-events-none absolute inset-x-3 bottom-3 max-w-[420px] rounded-md border border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] px-3 py-2 text-xs text-[color:var(--lime-text)] shadow-lg"
+      className="pointer-events-none shrink-0 border-b border-[color:var(--lime-surface-border)] bg-[color:var(--lime-surface)] px-3 py-2 text-xs text-[color:var(--lime-text)]"
+      aria-live="polite"
+      role="status"
       data-testid="browser-workspace-download"
+      data-browser-workspace-status={`download-${download.state}`}
     >
       <div className="flex min-w-0 items-center gap-2">
         <Download className="h-4 w-4 shrink-0 text-[color:var(--lime-text-muted)]" />

@@ -72,6 +72,7 @@ fn canonical_read_keeps_runtime_warning_message_and_localization_code() {
         ReadDetailOptions::default(),
         &[],
         Some(&[]),
+        Some(stored.turns[0].turn_id.as_str()),
     );
     let warning = detail["items"]
         .as_array()
@@ -108,6 +109,7 @@ fn canonical_read_keeps_runtime_error_without_terminalizing_the_turn() {
         ReadDetailOptions::default(),
         &[],
         Some(&[]),
+        Some(stored.turns[0].turn_id.as_str()),
     );
     let error = detail["items"]
         .as_array()
@@ -177,6 +179,7 @@ fn canonical_read_rejects_malformed_runtime_warning_shapes_and_identity() {
         ReadDetailOptions::default(),
         &[],
         Some(&[]),
+        Some(stored.turns[0].turn_id.as_str()),
     );
 
     assert!(detail["items"]
@@ -305,24 +308,34 @@ fn workflow_respond_action_requires_matching_canonical_pending_action() {
 }
 
 #[test]
-fn thread_read_downgrades_stale_orphan_running_turn() {
+fn thread_read_interrupts_orphan_running_turn_without_execution_owner() {
     let stored = stored_running_session("2026-03-29T00:00:00.000Z", "2026-03-29T00:00:01.000Z");
 
-    let thread_read =
-        runtime_thread_read_from_stored_session_with_usage_events(&stored, None, Vec::new(), &[]);
+    let thread_read = runtime_thread_read_from_stored_session_with_usage_events(
+        &stored,
+        None,
+        Vec::new(),
+        &[],
+        None,
+    );
 
     assert_eq!(thread_read["status"], "idle");
     assert_eq!(thread_read["active_turn_id"], serde_json::Value::Null);
-    assert_eq!(thread_read["diagnostics"]["latest_turn_status"], "running");
+    assert_eq!(thread_read["diagnostics"]["latest_turn_status"], "canceled");
 }
 
 #[test]
-fn thread_read_keeps_recent_running_turn_active() {
+fn thread_read_keeps_execution_owned_turn_active() {
     let now = chrono::Utc::now().to_rfc3339();
     let stored = stored_running_session(now.as_str(), now.as_str());
 
-    let thread_read =
-        runtime_thread_read_from_stored_session_with_usage_events(&stored, None, Vec::new(), &[]);
+    let thread_read = runtime_thread_read_from_stored_session_with_usage_events(
+        &stored,
+        None,
+        Vec::new(),
+        &[],
+        Some("turn_read_model_orphan_running"),
+    );
 
     assert_eq!(thread_read["status"], "running");
     assert_eq!(
@@ -613,7 +626,7 @@ fn read_detail_projects_thread_items_into_thread_read() {
     };
 
     let detail =
-        runtime_session_read_detail_with_options(&stored, ReadDetailOptions::default(), &[]);
+        runtime_session_read_detail_with_options(&stored, ReadDetailOptions::default(), &[], None);
 
     assert_eq!(detail["items"], detail["thread_read"]["thread_items"]);
     assert_eq!(
@@ -728,6 +741,7 @@ fn canonical_overlay_preserves_richer_current_coding_projection() {
         ReadDetailOptions::default(),
         &[],
         Some(&canonical_items),
+        Some(stored.turns[0].turn_id.as_str()),
     );
     let serialized = serde_json::to_string(&detail).expect("serialize read detail");
 
@@ -941,6 +955,7 @@ fn read_detail_prefers_canonical_thread_store_items_after_restart() {
         ReadDetailOptions::default(),
         &[],
         &projection_store,
+        None,
     ))
     .expect("canonical detail");
 

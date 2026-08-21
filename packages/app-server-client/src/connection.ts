@@ -119,6 +119,8 @@ export class AppServerConnection {
   #readPump: Promise<void> | null = null;
   #resolvedServerRequestIds = new Set<protocol.RequestId>();
   #serverRequestHandler: AppServerServerRequestHandler | null = null;
+  #terminalReadError: unknown;
+  #terminalReadFailed = false;
 
   constructor(
     transport: AppServerMessageTransport,
@@ -213,9 +215,7 @@ export class AppServerConnection {
    * Installs an optional host-side interceptor for reverse requests.
    * Returning true consumes the request; false keeps it available to drainEvents.
    */
-  setServerRequestHandler(
-    handler: AppServerServerRequestHandler | null,
-  ): void {
+  setServerRequestHandler(handler: AppServerServerRequestHandler | null): void {
     this.#serverRequestHandler = handler;
     if (handler) {
       this.#ensureReadPump();
@@ -241,6 +241,9 @@ export class AppServerConnection {
     if (this.#pendingRequests.has(id)) {
       throw new Error(`duplicate pending app-server request id: ${String(id)}`);
     }
+    if (this.#terminalReadFailed) {
+      return Promise.reject(this.#terminalReadError);
+    }
 
     return new Promise<PendingRequestResult>((resolve, reject) => {
       const pending: PendingRequestRead = {
@@ -252,15 +255,18 @@ export class AppServerConnection {
         signal: options.signal,
       };
       if (options.timeoutMs !== undefined) {
-        pending.timeout = setTimeout(() => {
-          this.#detachedRequestIds.add(id);
-          this.#rejectPendingRequest(
-            id,
-            new Error(
-              `timed out waiting for app-server message after ${options.timeoutMs}ms`,
-            ),
-          );
-        }, Math.max(0, options.timeoutMs));
+        pending.timeout = setTimeout(
+          () => {
+            this.#detachedRequestIds.add(id);
+            this.#rejectPendingRequest(
+              id,
+              new Error(
+                `timed out waiting for app-server message after ${options.timeoutMs}ms`,
+              ),
+            );
+          },
+          Math.max(0, options.timeoutMs),
+        );
       }
       if (options.signal) {
         pending.abort = () => {
@@ -286,7 +292,10 @@ export class AppServerConnection {
         return;
       }
       const bufferedIndex = this.#bufferedMessages.findIndex((message) => {
-        if (mode === "first-message" && protocol.isJsonRpcNotification(message)) {
+        if (
+          mode === "first-message" &&
+          protocol.isJsonRpcNotification(message)
+        ) {
           return true;
         }
         return (
@@ -310,6 +319,9 @@ export class AppServerConnection {
     const buffered = this.#shiftBufferedMessage(accept);
     if (buffered) {
       return Promise.resolve(buffered);
+    }
+    if (this.#terminalReadFailed) {
+      return Promise.reject(this.#terminalReadError);
     }
     if (timeoutMs !== undefined && timeoutMs <= 0) {
       return Promise.reject(
@@ -360,7 +372,7 @@ export class AppServerConnection {
   }
 
   #ensureReadPump(): void {
-    if (this.#readPump || !this.#hasReadDemand()) {
+    if (this.#readPump || this.#terminalReadFailed || !this.#hasReadDemand()) {
       return;
     }
     const pump = this.#runReadPump();
@@ -386,6 +398,8 @@ export class AppServerConnection {
         if (isAppServerTransportReadTimeoutError(error)) {
           continue;
         }
+        this.#terminalReadFailed = true;
+        this.#terminalReadError = error;
         this.#failPendingReads(error);
         return;
       }

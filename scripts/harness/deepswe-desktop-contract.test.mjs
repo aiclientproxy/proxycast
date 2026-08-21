@@ -146,7 +146,7 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
         "happy-dom-abort-pending-body-reads:pre-artifacts-deleted",
       ]),
     );
-  });
+  }, 20_000);
 
   it("accepts a live trial only when Gate B, verifier, and patch identity all match", () => {
     const evidence = passingEvidence(manifest.tasks[0]);

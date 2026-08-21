@@ -62,7 +62,7 @@ function renderPanel(): HTMLDivElement {
       <MemoryStoreStatusPanel
         vectorSearchEnabled={false}
         memoryStatusDescriptionKey="settings.memory.embedding.status.fullTextOnly"
-        setMessage={vi.fn()}
+        showMessage={vi.fn()}
       />,
     );
   });

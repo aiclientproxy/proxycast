@@ -9,7 +9,9 @@ import {
   filterGeneralWorkbenchExecLogEntries,
 } from "./generalWorkbenchExecLogData";
 
-function skillDetail(overrides: Partial<SkillDetailInfo> = {}): SkillDetailInfo {
+function skillDetail(
+  overrides: Partial<SkillDetailInfo> = {},
+): SkillDetailInfo {
   return {
     name: "content_post_with_cover",
     display_name: "社媒主稿与封面",
@@ -147,7 +149,7 @@ describe("generalWorkbenchExecLogData", () => {
           toolCalls: [
             toolCall({
               id: "tool-browser-1",
-              name: "mcp__lime-browser__browser_navigate",
+              name: "mcp__site__navigate",
               arguments: JSON.stringify({ url: "https://example.com/docs" }),
               status: "completed",
               result: { success: true, output: "ok" },

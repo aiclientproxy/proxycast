@@ -1140,6 +1140,31 @@ export async function waitForGuiChatCanceled(
         const approvalRecordText = approvalRecords
           .map((record) => record.text)
           .join("\n");
+        const assistantBubbles = Array.from(
+          document.querySelectorAll('[data-message-role="assistant"]'),
+        ).map((bubble) => ({
+          messageId: bubble.getAttribute("data-message-id") || "",
+          runtimeTurnId: bubble.getAttribute("data-runtime-turn-id") || "",
+          threadItemId: bubble.getAttribute("data-thread-item-id") || "",
+          contentPartTypes:
+            bubble.getAttribute("data-message-content-part-types") || "",
+          rendererContentPartTypes:
+            bubble.getAttribute("data-renderer-content-part-types") || "",
+          text: bubble.textContent || "",
+        }));
+        const turnGroups = Array.from(
+          document.querySelectorAll('[data-testid="message-turn-group"]'),
+        ).map((group) => ({
+          kind: group.getAttribute("data-render-entry-kind") || "",
+          runtimeTurnId: group.getAttribute("data-runtime-turn-id") || "",
+          runtimeTurnStatus:
+            group.getAttribute("data-runtime-turn-status") || "",
+          lastAssistantMessageId:
+            group.getAttribute("data-last-assistant-message-id") || "",
+          timelineMessageId:
+            group.getAttribute("data-timeline-message-id") || "",
+          text: group.textContent || "",
+        }));
         const approvalLegacyFragments = [
           prompt,
           "历史记录只读",
@@ -1194,6 +1219,8 @@ export async function waitForGuiChatCanceled(
             ),
             texts: approvalRecords.map((record) => record.text),
           },
+          assistantBubbles,
+          turnGroups,
           compactTimelinePreviewCount: document.querySelectorAll(
             '[data-testid="message-list-historical-timeline-preview:leading"]',
           ).length,

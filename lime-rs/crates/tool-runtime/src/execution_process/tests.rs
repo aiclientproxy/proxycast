@@ -1,4 +1,5 @@
 use super::*;
+use environment::{resolve_child_environment_with_semantics, EnvironmentKeySemantics};
 
 fn start_process() -> ExecutionProcess {
     ExecutionProcess::start(ExecutionProcessStart {
@@ -108,6 +109,33 @@ async fn local_process_emits_stdout_stderr_and_exit_snapshot() {
     assert!(observed
         .iter()
         .any(|delta| delta.kind == ExecutionOutputKind::Stderr && delta.delta == "stderr"));
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tokio::test]
+async fn local_process_does_not_inherit_sensitive_parent_environment() {
+    const SECRET_NAME: &str = "LIME_EXECUTION_PROCESS_TEST_SECRET";
+    let inherited_environment = [
+        ("PATH".to_string(), "/usr/bin:/bin".to_string()),
+        (SECRET_NAME.to_string(), "inherited-secret".to_string()),
+    ];
+    let mut handle = start_local_execution_process_with_inherited_environment(
+        LocalExecutionRequest::new(
+            "process-local-environment",
+            "tool-local-environment",
+            "exec_command",
+            shell_command(
+                "if [ -n \"${LIME_EXECUTION_PROCESS_TEST_SECRET+x}\" ]; then printf leaked; else printf filtered; fi",
+            ),
+        ),
+        inherited_environment,
+    )
+    .expect("local process should start");
+
+    let final_snapshot = handle.wait().await.expect("process should finish");
+    assert_eq!(final_snapshot.status, ExecutionProcessStatus::Exited);
+    assert_eq!(final_snapshot.exit_code, Some(0));
+    assert_eq!(final_snapshot.retained_output, "filtered");
 }
 
 #[tokio::test]
@@ -220,13 +248,21 @@ fn windows_environment_inherits_and_applies_case_insensitive_overrides() {
     let inherited = [
         ("Path".to_string(), "C:\\Windows".to_string()),
         ("SystemRoot".to_string(), "C:\\Windows".to_string()),
+        ("OPENAI_API_KEY".to_string(), "inherited-key".to_string()),
+        ("service_secret".to_string(), "inherited-secret".to_string()),
+        ("Access_Token".to_string(), "inherited-token".to_string()),
     ];
     let overrides = HashMap::from([
         ("PATH".to_string(), "C:\\Tools".to_string()),
         ("custom_value".to_string(), "enabled".to_string()),
     ]);
 
-    let environment = resolve_windows_child_environment(false, inherited, &overrides);
+    let environment = resolve_child_environment_with_semantics(
+        false,
+        inherited,
+        &overrides,
+        EnvironmentKeySemantics::CaseInsensitive,
+    );
 
     assert_eq!(
         environment.get("PATH").map(String::as_str),
@@ -240,6 +276,9 @@ fn windows_environment_inherits_and_applies_case_insensitive_overrides() {
         environment.get("CUSTOM_VALUE").map(String::as_str),
         Some("enabled")
     );
+    assert!(!environment.contains_key("OPENAI_API_KEY"));
+    assert!(!environment.contains_key("SERVICE_SECRET"));
+    assert!(!environment.contains_key("ACCESS_TOKEN"));
     assert_eq!(environment.len(), 3);
 }
 
@@ -248,13 +287,92 @@ fn windows_environment_clear_drops_inherited_values() {
     let inherited = [("SystemRoot".to_string(), "C:\\Windows".to_string())];
     let overrides = HashMap::from([("Path".to_string(), "C:\\Tools".to_string())]);
 
-    let environment = resolve_windows_child_environment(true, inherited, &overrides);
+    let environment = resolve_child_environment_with_semantics(
+        true,
+        inherited,
+        &overrides,
+        EnvironmentKeySemantics::CaseInsensitive,
+    );
 
     assert_eq!(
         environment.get("PATH").map(String::as_str),
         Some("C:\\Tools")
     );
     assert!(!environment.contains_key("SYSTEMROOT"));
+}
+
+#[test]
+fn native_environment_preserves_key_case_and_filters_sensitive_inheritance() {
+    let inherited = [
+        ("PATH".to_string(), "/usr/bin".to_string()),
+        ("Path".to_string(), "/custom/bin".to_string()),
+        ("HOME".to_string(), "/home/test".to_string()),
+        ("LANG".to_string(), "en_US.UTF-8".to_string()),
+        ("api_key_hint".to_string(), "sensitive".to_string()),
+        ("SERVICE_SECRET".to_string(), "sensitive".to_string()),
+        ("AccessToken".to_string(), "sensitive".to_string()),
+    ];
+
+    let environment = resolve_child_environment_with_semantics(
+        false,
+        inherited,
+        &HashMap::new(),
+        EnvironmentKeySemantics::Native,
+    );
+
+    assert_eq!(
+        environment.get("PATH").map(String::as_str),
+        Some("/usr/bin")
+    );
+    assert_eq!(
+        environment.get("Path").map(String::as_str),
+        Some("/custom/bin")
+    );
+    assert_eq!(
+        environment.get("HOME").map(String::as_str),
+        Some("/home/test")
+    );
+    assert_eq!(
+        environment.get("LANG").map(String::as_str),
+        Some("en_US.UTF-8")
+    );
+    assert!(!environment.contains_key("api_key_hint"));
+    assert!(!environment.contains_key("SERVICE_SECRET"));
+    assert!(!environment.contains_key("AccessToken"));
+}
+
+#[test]
+fn explicit_environment_overrides_can_restore_filtered_values() {
+    let inherited = [
+        ("OPENAI_API_KEY".to_string(), "inherited-key".to_string()),
+        ("SERVICE_SECRET".to_string(), "inherited-secret".to_string()),
+        ("ACCESS_TOKEN".to_string(), "inherited-token".to_string()),
+    ];
+    let overrides = HashMap::from([
+        ("OPENAI_API_KEY".to_string(), "explicit-key".to_string()),
+        ("SERVICE_SECRET".to_string(), "explicit-secret".to_string()),
+        ("ACCESS_TOKEN".to_string(), "explicit-token".to_string()),
+    ]);
+
+    let environment = resolve_child_environment_with_semantics(
+        false,
+        inherited,
+        &overrides,
+        EnvironmentKeySemantics::Native,
+    );
+
+    assert_eq!(
+        environment.get("OPENAI_API_KEY").map(String::as_str),
+        Some("explicit-key")
+    );
+    assert_eq!(
+        environment.get("SERVICE_SECRET").map(String::as_str),
+        Some("explicit-secret")
+    );
+    assert_eq!(
+        environment.get("ACCESS_TOKEN").map(String::as_str),
+        Some("explicit-token")
+    );
 }
 
 #[test]

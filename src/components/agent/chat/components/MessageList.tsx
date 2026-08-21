@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,7 @@ import {
 import { useMessageListTelemetry } from "./useMessageListTelemetry";
 import { useMessageListTimelineState } from "./useMessageListTimelineState";
 import { CONVERSATION_CONTENT_MAX_WIDTH } from "../styles/conversationLayoutTokens";
+import { mergeRuntimeSyncThreadItems } from "../hooks/agentSessionTimelineMergePolicy";
 
 const MessageListInner: React.FC<MessageListProps> = ({
   sessionId = null,
@@ -89,6 +90,16 @@ const MessageListInner: React.FC<MessageListProps> = ({
     expandedHistoricalAssistantMessageIds,
     setExpandedHistoricalAssistantMessageIds,
   ] = useState<Set<string>>(() => new Set());
+  // read model 可能比终态事件携带更长的 canonical assistant partial。
+  // 统一在进入窗口和时间线投影前合并，避免 marker-only item 直接成为气泡正文。
+  const effectiveThreadItems = useMemo(
+    () =>
+      mergeRuntimeSyncThreadItems(
+        threadItems,
+        threadRead?.thread_items ?? [],
+      ),
+    [threadItems, threadRead?.thread_items],
+  );
   const scrollController = useMessageListScrollController();
   const renderWindow = useMessageListRenderWindow({
     currentTurnId,
@@ -97,7 +108,7 @@ const MessageListInner: React.FC<MessageListProps> = ({
     isUserScrolling: scrollController.isUserScrolling,
     messages,
     sessionHistoryWindow,
-    threadItems,
+    threadItems: effectiveThreadItems,
     turns,
   });
   const timelineState = useMessageListTimelineState({
@@ -400,6 +411,17 @@ const MessageListInner: React.FC<MessageListProps> = ({
                     segment.item.type === "agent_message",
                 )
                 .at(-1)?.id;
+              const lastAssistantMessageId =
+                messages.findLast(
+                  (message) =>
+                    message.role === "assistant" &&
+                    message.runtimeTurnId?.trim() === entry.turn.id,
+                )?.id ?? lastAssistantItemId;
+              const lastUserMessageId = messages.findLast(
+                (message) =>
+                  message.role === "user" &&
+                  message.runtimeTurnId?.trim() === entry.turn.id,
+              )?.id;
               return (
                 <MessageTurnGroup
                   key={entry.id}
@@ -412,7 +434,9 @@ const MessageListInner: React.FC<MessageListProps> = ({
                   data-group-index={groupIndex + 1}
                   data-runtime-turn-id={entry.turn.id}
                   data-runtime-turn-status={entry.turn.status}
-                  data-last-assistant-message-id={lastAssistantItemId || ""}
+                  data-last-assistant-message-id={
+                    lastAssistantMessageId || ""
+                  }
                   data-timeline-message-id={lastAssistantItemId || ""}
                   data-render-priority={
                     groupIndex < timelineState.renderEntries.length - 2
@@ -424,6 +448,8 @@ const MessageListInner: React.FC<MessageListProps> = ({
                   <ConversationTurnTimeline
                     entry={entry}
                     sessionId={sessionId}
+                    userMessageId={lastUserMessageId}
+                    assistantMessageId={lastAssistantMessageId}
                     threadRead={threadRead}
                     pendingActions={pendingActions}
                     submittedActionsInFlight={submittedActionsInFlight}

@@ -22,7 +22,7 @@ use tool_runtime::tool_executor::{
 const GRANTED_PERMISSIONS_METADATA_KEY: &str = "grantedPermissions";
 const STRICT_AUTO_REVIEW_METADATA_KEY: &str = "strictAutoReview";
 
-mod orchestration;
+pub(super) mod orchestration;
 
 #[derive(Clone)]
 pub(super) struct CurrentTurnToolExecutor {
@@ -242,6 +242,7 @@ impl RuntimeToolExecutor for CurrentTurnToolExecutor {
                     route,
                     self.pending_input.clone(),
                     &self.event_sender,
+                    &self.state,
                 )
                 .await;
             }

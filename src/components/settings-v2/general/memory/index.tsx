@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import {
   AlertCircle,
@@ -338,10 +338,31 @@ export function MemorySettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const messageTimeoutRef = useRef<number | null>(null);
   const [soulImportText, setSoulImportText] = useState("");
   const [soulImportPreview, setSoulImportPreview] =
     useState<SoulImportResult | null>(null);
   const [activeTab, setActiveTab] = useState<MemorySettingsTab>("memory");
+
+  const showMessage = useCallback((nextMessage: string) => {
+    if (messageTimeoutRef.current !== null) {
+      window.clearTimeout(messageTimeoutRef.current);
+    }
+    setMessage(nextMessage);
+    messageTimeoutRef.current = window.setTimeout(() => {
+      messageTimeoutRef.current = null;
+      setMessage(null);
+    }, 2500);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (messageTimeoutRef.current !== null) {
+        window.clearTimeout(messageTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -453,8 +474,7 @@ export function MemorySettings() {
         buildSoulTemplatePatch(t, template),
       ),
     }));
-    setMessage(memoryT(t, "settings.memory.soul.message.templateApplied"));
-    window.setTimeout(() => setMessage(null), 2500);
+    showMessage(memoryT(t, "settings.memory.soul.message.templateApplied"));
   };
 
   const handleSoulStyleProfileChange = (styleProfileId: SoulStyleProfileId) => {
@@ -465,8 +485,9 @@ export function MemorySettings() {
         style_profile_id: styleProfileId,
       }),
     }));
-    setMessage(memoryT(t, "settings.memory.soul.message.styleProfileUpdated"));
-    window.setTimeout(() => setMessage(null), 2500);
+    showMessage(
+      memoryT(t, "settings.memory.soul.message.styleProfileUpdated"),
+    );
   };
 
   const handleSoulReset = () => {
@@ -492,14 +513,13 @@ export function MemorySettings() {
     });
     setSoulImportPreview(null);
     setSoulImportText("");
-    setMessage(memoryT(t, "settings.memory.soul.message.reset"));
-    window.setTimeout(() => setMessage(null), 2500);
+    showMessage(memoryT(t, "settings.memory.soul.message.reset"));
   };
 
   const handleSoulImportPreview = () => {
     const result = parseSoulMarkdown(soulImportText);
     setSoulImportPreview(result);
-    setMessage(
+    showMessage(
       memoryT(
         t,
         result.canImport
@@ -507,7 +527,6 @@ export function MemorySettings() {
           : "settings.memory.soul.message.importEmpty",
       ),
     );
-    window.setTimeout(() => setMessage(null), 2500);
   };
 
   const handleSoulImportApply = () => {
@@ -525,31 +544,29 @@ export function MemorySettings() {
         }),
       };
     });
-    setMessage(memoryT(t, "settings.memory.soul.message.importApplied"));
-    window.setTimeout(() => setMessage(null), 2500);
+    showMessage(memoryT(t, "settings.memory.soul.message.importApplied"));
   };
 
   const handleSoulExportCopy = async () => {
     if (!soulExportMarkdown) {
-      setMessage(memoryT(t, "settings.memory.soul.message.exportEmpty"));
-      window.setTimeout(() => setMessage(null), 2500);
+      showMessage(memoryT(t, "settings.memory.soul.message.exportEmpty"));
       return;
     }
 
     try {
       await navigator.clipboard.writeText(soulExportMarkdown);
-      setMessage(memoryT(t, "settings.memory.soul.message.exportCopied"));
+      showMessage(memoryT(t, "settings.memory.soul.message.exportCopied"));
     } catch (error) {
       console.error("复制 SOUL.md 失败:", error);
-      setMessage(memoryT(t, "settings.memory.soul.message.exportCopyFailed"));
+      showMessage(
+        memoryT(t, "settings.memory.soul.message.exportCopyFailed"),
+      );
     }
-    window.setTimeout(() => setMessage(null), 2500);
   };
 
   const handleCancel = () => {
     setDraft(snapshot);
-    setMessage(memoryT(t, "settings.memory.message.restored"));
-    window.setTimeout(() => setMessage(null), 2500);
+    showMessage(memoryT(t, "settings.memory.message.restored"));
   };
 
   const handleSave = async () => {
@@ -566,12 +583,10 @@ export function MemorySettings() {
       setConfig(updatedConfig);
       setSnapshot(updatedConfig.memory ?? normalizeMemoryConfig());
       setDraft(updatedConfig.memory ?? normalizeMemoryConfig());
-      setMessage(memoryT(t, "settings.memory.message.saved"));
-      window.setTimeout(() => setMessage(null), 2500);
+      showMessage(memoryT(t, "settings.memory.message.saved"));
     } catch (error) {
       console.error("保存记忆设置失败:", error);
-      setMessage(memoryT(t, "settings.memory.message.saveFailed"));
-      window.setTimeout(() => setMessage(null), 2500);
+      showMessage(memoryT(t, "settings.memory.message.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -752,7 +767,7 @@ export function MemorySettings() {
           <StyleProfileSection
             value={soul.style_profile_id}
             onChange={handleSoulStyleProfileChange}
-            setMessage={setMessage}
+            showMessage={showMessage}
             t={t}
           />
 
@@ -957,7 +972,7 @@ export function MemorySettings() {
         <MemoryStoreStatusPanel
           vectorSearchEnabled={vectorSearchEnabled}
           memoryStatusDescriptionKey={memoryStatusDescriptionKey}
-          setMessage={setMessage}
+          showMessage={showMessage}
         />
       ) : null}
 

@@ -211,9 +211,9 @@ export function decodeJsonRpcLines(lines) {
 }
 
 export function runtimeEventFromDirectNotification(message) {
-  const type = APP_SERVER_DIRECT_EVENT_TYPES.get(message?.method);
+  const directType = APP_SERVER_DIRECT_EVENT_TYPES.get(message?.method);
   const params = readRecord(message?.params);
-  if (!type || !params) {
+  if (!directType || !params) {
     return null;
   }
   const turn = readRecord(params.turn);
@@ -224,6 +224,14 @@ export function runtimeEventFromDirectNotification(message) {
   if (!threadId || !turnId) {
     return null;
   }
+  const turnStatus = readString(turn, "status")?.trim().toLowerCase();
+  const type =
+    message.method === "turn/completed" &&
+    (turnStatus === "interrupted" || turnStatus === "canceled")
+      ? "turn.canceled"
+      : message.method === "turn/completed" && turnStatus === "failed"
+        ? "turn.failed"
+        : directType;
   const itemId =
     readString(params, "itemId", "item_id") ?? readString(item, "id");
   const delta = readString(params, "delta");

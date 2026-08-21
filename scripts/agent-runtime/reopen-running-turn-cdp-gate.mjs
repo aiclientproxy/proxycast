@@ -24,13 +24,10 @@ import {
   APP_SERVER_METHOD_SESSION_THREAD_RESUME,
   APP_SERVER_METHOD_SESSION_TURN_CANCEL,
   APP_SERVER_METHOD_SESSION_TURN_START,
-  APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE,
   FIXTURE_MODEL,
   FIXTURE_PROVIDER,
   NEWS_PROMPT,
-  SESSION_ID,
   SESSION_TITLE,
-  THREAD_ID,
 } from "./claw-chat-current-fixture-constants.mjs";
 import { sendPromptFromGui } from "./claw-chat-current-fixture-gui-actions.mjs";
 import {
@@ -53,6 +50,7 @@ import {
   ensureDefaultWorkspace,
   initializeAppServer,
   invokeAppServerFromPage,
+  mergeRuntimeEvents,
   readTraceMessages,
   reloadRendererDocument,
   summarizeRuntimeEvents,
@@ -91,10 +89,9 @@ const DEFAULTS = {
 };
 const REOPEN_MODES = new Set(["reload", "restart"]);
 const PRESENTATION_MODES = new Set(["foreground", "background"]);
-const MULTI_RUNNING_SECONDARY_SESSION_ID = "sess_cdp_multi_running_secondary";
-const MULTI_RUNNING_SECONDARY_THREAD_ID = "thread_cdp_multi_running_secondary";
 const MULTI_RUNNING_SECONDARY_TITLE = "CDP 多运行会话后台任务";
 const MULTI_RUNNING_SECONDARY_PROMPT = "整理今天的国际新闻（后台第二会话）";
+let primaryIdentity = { sessionId: "", threadId: "" };
 
 function printHelp() {
   console.log(`
@@ -106,7 +103,8 @@ Reopen Running Turn CDP Gate
   然后 reload renderer 或重启 Electron，验证同一 sessionId/turnId 的
   主区、侧栏、输入框运行态保持一致。reload 模式还要求产品恢复逻辑
   自动调用 thread/resume；restart 模式只声明 cold-start
-  后 read model / GUI 恢复，不声明 external backend 子进程跨重启存活。
+  后孤儿 turn 投影为 interrupted，GUI 回到非运行态；不声明 external
+  backend 子进程跨重启存活。
 
 边界:
   这是 Gate B controlled fixture：覆盖 Electron/preload/IPC、
@@ -524,13 +522,17 @@ function summarizeTraceMessages(traceMessages) {
         message.params?.sessionId ?? message.params?.session_id ?? null,
       threadId: message.params?.threadId ?? message.params?.thread_id ?? null,
       turnId: message.params?.turnId ?? message.params?.turn_id ?? null,
-      eventName:
-        message.params?.runtimeOptions?.eventName ??
-        message.params?.runtime_options?.event_name ??
-        null,
       promptLength:
-        typeof message.params?.input?.text === "string"
-          ? message.params.input.text.length
+        Array.isArray(message.params?.input) &&
+        message.params.input.some(
+          (part) => part?.type === "text" && typeof part?.text === "string",
+        )
+          ? message.params.input
+              .filter(
+                (part) =>
+                  part?.type === "text" && typeof part?.text === "string",
+              )
+              .reduce((length, part) => length + part.text.length, 0)
           : null,
     })),
   );
@@ -637,16 +639,21 @@ function collectTurnStartTraceEvidence(inputSend) {
   return candidates;
 }
 
-function summarizeTurnStartEvidence(summary, { sessionId, turnId, prompt }) {
+function summarizeTurnStartEvidence(
+  summary,
+  { sessionId, threadId, turnId, prompt },
+) {
   const guiTraceMatched =
     collectTurnStartTraceEvidence(summary.inputSend).find((entry) => {
       const entrySessionId = entry?.sessionId ?? entry?.session_id ?? null;
+      const entryThreadId = entry?.threadId ?? entry?.thread_id ?? null;
       const entryTurnId = turnStartTraceTurnId(entry);
       const entryText = turnStartTraceText(entry);
       const status = normalizeText(entry?.status).toLowerCase();
       const transport = normalizeText(entry?.transport).toLowerCase();
       return (
-        entrySessionId === sessionId &&
+        entryThreadId === threadId &&
+        (!entrySessionId || entrySessionId === sessionId) &&
         (!entryTurnId || entryTurnId === turnId) &&
         normalizeText(entryText).includes(prompt) &&
         status === "success" &&
@@ -665,6 +672,7 @@ function summarizeTurnStartEvidence(summary, { sessionId, turnId, prompt }) {
     guiTraceMatched: guiTraceMatched
       ? {
           sessionId: guiTraceMatched.sessionId ?? null,
+          threadId: guiTraceMatched.threadId ?? null,
           turnId: turnStartTraceTurnId(guiTraceMatched),
           status: guiTraceMatched.status ?? null,
           transport: guiTraceMatched.transport ?? null,
@@ -684,11 +692,17 @@ function summarizeTurnStartEvidence(summary, { sessionId, turnId, prompt }) {
   });
 }
 
-function hasSuccessfulTraceEvidence(evidence, method, { sessionId, turnId }) {
+function hasSuccessfulTraceEvidence(
+  evidence,
+  method,
+  { sessionId, threadId, turnId },
+) {
   const matched = evidence?.matched ?? {};
   return (
     matched.method === method &&
-    matched.sessionId === sessionId &&
+    (threadId
+      ? matched.threadId === threadId
+      : !sessionId || matched.sessionId === sessionId) &&
     (!turnId || !matched.turnId || matched.turnId === turnId) &&
     matched.transport === "electron-ipc" &&
     matched.status === "success"
@@ -700,7 +714,12 @@ async function waitForTraceMethodAfter(
   options,
   cursor,
   method,
-  { sessionId = SESSION_ID, turnId = null, browser = null } = {},
+  {
+    sessionId = primaryIdentity.sessionId,
+    threadId = primaryIdentity.threadId,
+    turnId = null,
+    browser = null,
+  } = {},
 ) {
   const startedAt = Date.now();
   let lastSummary = null;
@@ -712,6 +731,9 @@ async function waitForTraceMethodAfter(
     );
     const entries = traceMethodEntriesAfter(traceMessages, cursor, method);
     const matched = entries.find((entry) => {
+      if (threadId && entry.threadId !== threadId) {
+        return false;
+      }
       if (sessionId && entry.sessionId && entry.sessionId !== sessionId) {
         return false;
       }
@@ -755,12 +777,14 @@ function summarizeReadModelRunningState(readModel, turnId, prompt) {
     queueState.latestTurnStatus,
     readModelLatestTurnStatus(readModel),
     matchedTurn?.status,
-  ].map((status) => String(status ?? "").toLowerCase());
+  ].map(normalizeRuntimeStatus);
   const hasRunningStatus = statusValues.some((status) =>
-    ["running", "active", "streaming", "in_progress"].includes(status),
+    ["running", "active", "streaming", "inprogress"].includes(status),
   );
   const hasTerminalStatus = statusValues.some((status) =>
-    ["completed", "failed", "canceled", "cancelled"].includes(status),
+    ["completed", "failed", "canceled", "cancelled", "interrupted"].includes(
+      status,
+    ),
   );
   return sanitizeJson({
     ...queueState,
@@ -783,7 +807,12 @@ async function waitForReadModelRunning(
   options,
   requestLog,
   turnId,
-  { requireContent = true, sessionId = SESSION_ID, prompt = NEWS_PROMPT } = {},
+  {
+    requireContent = true,
+    sessionId = primaryIdentity.sessionId,
+    threadId = primaryIdentity.threadId,
+    prompt = NEWS_PROMPT,
+  } = {},
 ) {
   const startedAt = Date.now();
   let lastSummary = null;
@@ -792,8 +821,8 @@ async function waitForReadModelRunning(
       page,
       APP_SERVER_METHOD_SESSION_READ,
       {
-        sessionId,
-        historyLimit: 100,
+        threadId,
+        includeTurns: true,
       },
       requestLog,
     );
@@ -817,17 +846,88 @@ async function waitForReadModelRunning(
   );
 }
 
-function summarizeSessionList(result, turnId, sessionId = SESSION_ID) {
-  const sessions = Array.isArray(result?.sessions)
-    ? result.sessions
-    : Array.isArray(result?.items)
-      ? result.items
-      : [];
+function normalizeRuntimeStatus(value) {
+  const status =
+    value && typeof value === "object" ? value.type : String(value ?? "");
+  return String(status ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+}
+
+function summarizeReadModelInterruptedState(readModel, turnId, prompt) {
+  const turns = collectReadModelTurns(readModel);
+  const matchedTurn = turns.find((turn) => readModelTurnId(turn) === turnId);
+  const serialized = JSON.stringify(readModel || {});
+  const threadStatus = normalizeRuntimeStatus(readModel?.thread?.status);
+  const turnStatus = normalizeRuntimeStatus(readModelTurnStatus(matchedTurn));
+  return sanitizeJson({
+    threadStatus,
+    turnStatus,
+    matchedTurn: matchedTurn
+      ? {
+          turnId: readModelTurnId(matchedTurn),
+          status: readModelTurnStatus(matchedTurn),
+        }
+      : null,
+    includesPrompt: serialized.includes(prompt),
+    inactiveThread: ["idle", "notloaded"].includes(threadStatus),
+    interrupted: turnStatus === "interrupted",
+  });
+}
+
+async function waitForReadModelInterrupted(
+  page,
+  options,
+  requestLog,
+  turnId,
+  {
+    sessionId = primaryIdentity.sessionId,
+    threadId = primaryIdentity.threadId,
+    prompt = NEWS_PROMPT,
+    requireContent = true,
+  } = {},
+) {
+  const startedAt = Date.now();
+  let lastSummary = null;
+  while (Date.now() - startedAt < options.timeoutMs) {
+    const read = await invokeAppServerFromPage(
+      page,
+      APP_SERVER_METHOD_SESSION_READ,
+      { threadId, includeTurns: true },
+      requestLog,
+    );
+    lastSummary = summarizeReadModelInterruptedState(
+      read.result,
+      turnId,
+      prompt,
+    );
+    if (
+      lastSummary.inactiveThread &&
+      lastSummary.interrupted &&
+      (!requireContent || lastSummary.includesPrompt)
+    ) {
+      return { readModel: read.result, summary: lastSummary };
+    }
+    await sleep(options.intervalMs);
+  }
+  throw new Error(
+    `cold restart 后孤儿 turn 未归一化 session=${sessionId}: ${JSON.stringify(
+      sanitizeJson(lastSummary),
+    )}`,
+  );
+}
+
+function summarizeSessionList(result, turnId, identity = primaryIdentity) {
+  const { sessionId, threadId } = identity;
+  const sessions = Array.isArray(result?.data) ? result.data : [];
   const matched = sessions.find(
     (session) =>
       session?.sessionId === sessionId ||
       session?.session_id === sessionId ||
-      session?.id === sessionId,
+      session?.id === threadId ||
+      session?.threadId === threadId ||
+      session?.thread_id === threadId,
   );
   const serialized = JSON.stringify(matched || {});
   const statusValues = [
@@ -839,12 +939,14 @@ function summarizeSessionList(result, turnId, sessionId = SESSION_ID) {
     matched?.latest_turn_status,
     matched?.runtimeSummary?.latestTurnStatus,
     matched?.runtime_summary?.latestTurnStatus,
-  ].map((status) => String(status ?? "").toLowerCase());
+  ].map(normalizeRuntimeStatus);
   const running = statusValues.some((status) =>
-    ["running", "active", "streaming", "in_progress"].includes(status),
+    ["running", "active", "streaming", "inprogress"].includes(status),
   );
   const terminal = statusValues.some((status) =>
-    ["completed", "failed", "canceled", "cancelled"].includes(status),
+    ["completed", "failed", "canceled", "cancelled", "interrupted"].includes(
+      status,
+    ),
   );
   return sanitizeJson({
     count: sessions.length,
@@ -852,10 +954,12 @@ function summarizeSessionList(result, turnId, sessionId = SESSION_ID) {
       ? {
           sessionId:
             matched.sessionId ?? matched.session_id ?? matched.id ?? null,
+          threadId: matched.id ?? matched.threadId ?? matched.thread_id ?? null,
           title: matched.title ?? null,
           runtimeStatus:
             matched.runtimeStatus ?? matched.runtime_status ?? null,
           status: matched.status ?? matched.state ?? null,
+          statusType: normalizeRuntimeStatus(matched.status ?? matched.state),
           latestTurnStatus:
             matched.latestTurnStatus ?? matched.latest_turn_status ?? null,
           activeTurnId:
@@ -867,9 +971,13 @@ function summarizeSessionList(result, turnId, sessionId = SESSION_ID) {
           includesTurnId: turnId ? serialized.includes(turnId) : null,
         }
       : null,
-    running:
-      Boolean(matched) && (running || serialized.includes(turnId)) && !terminal,
+    running: Boolean(matched) && running && !terminal,
     terminal,
+    inactive:
+      Boolean(matched) &&
+      ["idle", "notloaded"].includes(
+        normalizeRuntimeStatus(matched.status ?? matched.state),
+      ),
   });
 }
 
@@ -878,18 +986,19 @@ async function waitForSessionListRunning(
   options,
   requestLog,
   turnId,
-  sessionId = SESSION_ID,
+  identity = primaryIdentity,
 ) {
+  const { sessionId } = identity;
   const startedAt = Date.now();
   let lastSummary = null;
   while (Date.now() - startedAt < options.timeoutMs) {
     const list = await invokeAppServerFromPage(
       page,
       APP_SERVER_METHOD_SESSION_LIST,
-      { includeArchived: true, limit: 20 },
+      { archived: false, limit: 20 },
       requestLog,
     );
-    lastSummary = summarizeSessionList(list.result, turnId, sessionId);
+    lastSummary = summarizeSessionList(list.result, turnId, identity);
     if (lastSummary.running) {
       return lastSummary;
     }
@@ -907,18 +1016,19 @@ async function waitForSessionListNotRunning(
   options,
   requestLog,
   turnId,
-  sessionId = SESSION_ID,
+  identity = primaryIdentity,
 ) {
+  const { sessionId } = identity;
   const startedAt = Date.now();
   let lastSummary = null;
   while (Date.now() - startedAt < options.timeoutMs) {
     const list = await invokeAppServerFromPage(
       page,
       APP_SERVER_METHOD_SESSION_LIST,
-      { includeArchived: true, limit: 20 },
+      { archived: false, limit: 20 },
       requestLog,
     );
-    lastSummary = summarizeSessionList(list.result, turnId, sessionId);
+    lastSummary = summarizeSessionList(list.result, turnId, identity);
     if (lastSummary.matched && !lastSummary.running) {
       return lastSummary;
     }
@@ -933,14 +1043,14 @@ async function waitForSessionListNotRunning(
 
 function buildRunningSessionSpec(overrides = {}) {
   return {
-    sessionId: overrides.sessionId ?? SESSION_ID,
-    threadId: overrides.threadId ?? THREAD_ID,
+    sessionId: overrides.sessionId ?? primaryIdentity.sessionId,
+    threadId: overrides.threadId ?? primaryIdentity.threadId,
     title: overrides.title ?? SESSION_TITLE,
     prompt: overrides.prompt ?? NEWS_PROMPT,
   };
 }
 
-function buildMultiRunningSessionSpecs(primaryTurnId, secondaryTurnId) {
+function buildMultiRunningSessionSpecs(primaryTurnId, secondary) {
   return [
     {
       ...buildRunningSessionSpec(),
@@ -948,12 +1058,12 @@ function buildMultiRunningSessionSpecs(primaryTurnId, secondaryTurnId) {
     },
     {
       ...buildRunningSessionSpec({
-        sessionId: MULTI_RUNNING_SECONDARY_SESSION_ID,
-        threadId: MULTI_RUNNING_SECONDARY_THREAD_ID,
+        sessionId: secondary.spec.sessionId,
+        threadId: secondary.spec.threadId,
         title: MULTI_RUNNING_SECONDARY_TITLE,
         prompt: MULTI_RUNNING_SECONDARY_PROMPT,
       }),
-      turnId: secondaryTurnId,
+      turnId: secondary.turnId,
     },
   ];
 }
@@ -965,44 +1075,25 @@ async function createFixtureSessionForSpec(page, workspace, requestLog, spec) {
     page,
     APP_SERVER_METHOD_SESSION_START,
     {
-      sessionId: spec.sessionId,
-      threadId: spec.threadId,
-      appId: "desktop",
-      workspaceId,
-      workingDir: rootPath,
-      businessObjectRef: {
-        kind: "agent.session",
-        id: `agent-session:${workspaceId}:${spec.sessionId}`,
-        title: spec.title,
-        metadata: {
-          title: spec.title,
-          workingDir: rootPath,
-          working_dir: rootPath,
-          executionStrategy: "react",
-          runStartHooks: false,
-          harness: {
-            hiddenFromUserRecents: false,
-            source: "smoke:reopen-running-turn-cdp-gate:multi-running",
-          },
-        },
-      },
+      cwd: rootPath,
+      historyMode: "paginated",
+      model: FIXTURE_MODEL,
+      modelProvider: FIXTURE_PROVIDER,
+      runtimeWorkspaceRoots: [rootPath],
+      serviceName: spec.title,
+      threadSource: "appServer",
     },
     requestLog,
   );
-  const update = await invokeAppServerFromPage(
-    page,
-    APP_SERVER_METHOD_THREAD_SETTINGS_UPDATE,
-    {
-      threadId: spec.threadId,
-      modelProvider: FIXTURE_PROVIDER,
-      model: FIXTURE_MODEL,
-      approvalPolicy: "never",
-      sandboxPolicy: "danger-full-access",
-      toolPreferences: {
-        searchMode: "auto",
-      },
-    },
-    requestLog,
+  const identity = {
+    sessionId: String(session.result?.thread?.sessionId || "").trim(),
+    threadId: String(session.result?.thread?.id || "").trim(),
+  };
+  assert(
+    identity.sessionId && identity.threadId,
+    `secondary thread/start 未返回 canonical identity: ${JSON.stringify(
+      sanitizeJson(session.result),
+    )}`,
   );
   await page.evaluate(
     ({ sessionId, workspaceId }) => {
@@ -1016,43 +1107,40 @@ async function createFixtureSessionForSpec(page, workspace, requestLog, spec) {
         }),
       );
     },
-    { sessionId: spec.sessionId, workspaceId },
+    { sessionId: identity.sessionId, workspaceId },
   );
   return {
+    identity,
     session: session.result,
-    update: update.result,
+    update: null,
   };
 }
 
 async function startRunningTurnForSpec(page, requestLog, spec) {
-  const turnId = `turn_${spec.sessionId}_${Date.now()}`;
-  const eventName = `agentSession/event/${spec.sessionId}`;
   const turnStart = await invokeAppServerFromPage(
     page,
     APP_SERVER_METHOD_SESSION_TURN_START,
     {
-      sessionId: spec.sessionId,
-      turnId,
-      input: {
-        text: spec.prompt,
+      threadId: spec.threadId,
+      clientUserMessageId: `reopen-running-secondary-${Date.now()}`,
+      input: [{ type: "text", text: spec.prompt }],
+      cwd: spec.rootPath,
+      runtimeWorkspaceRoots: [spec.rootPath],
+      approvalPolicy: "never",
+      sandboxPolicy: "danger-full-access",
+      model: FIXTURE_MODEL,
+      responsesapiClientMetadata: {
+        source: "smoke:reopen-running-turn-cdp-gate:multi-running",
       },
-      runtimeOptions: {
-        stream: true,
-        eventName,
-        runtimeRequest: {
-          providerPreference: FIXTURE_PROVIDER,
-          modelPreference: FIXTURE_MODEL,
-          metadata: {
-            harness: {
-              source: "smoke:reopen-running-turn-cdp-gate:multi-running",
-            },
-          },
-        },
-      },
-      queueIfBusy: false,
-      skipPreSubmitResume: true,
     },
     requestLog,
+  );
+  const turnId = String(turnStart.result?.turn?.id || "").trim();
+  assert(
+    turnId,
+    `secondary turn/start 未返回 canonical turn.id: ${JSON.stringify(
+      sanitizeJson(turnStart.result),
+    )}`,
   );
   return {
     turnId,
@@ -1067,32 +1155,38 @@ async function createSecondaryRunningSession(
   requestLog,
   runtimeEnv,
 ) {
-  const spec = buildRunningSessionSpec({
-    sessionId: MULTI_RUNNING_SECONDARY_SESSION_ID,
-    threadId: MULTI_RUNNING_SECONDARY_THREAD_ID,
+  const requestedSpec = {
     title: MULTI_RUNNING_SECONDARY_TITLE,
     prompt: MULTI_RUNNING_SECONDARY_PROMPT,
-  });
+  };
   const session = await createFixtureSessionForSpec(
     page,
     workspace,
     requestLog,
-    spec,
+    requestedSpec,
   );
+  const spec = {
+    ...requestedSpec,
+    ...session.identity,
+    rootPath: workspace.rootPath,
+  };
   const started = await startRunningTurnForSpec(page, requestLog, spec);
   const backendTurn = await waitForBackendLedgerTurnStart(
     runtimeEnv.backendLedgerPath,
     spec.prompt,
     options,
   );
-  const turnId = String(backendTurn.entry?.turnId || started.turnId).trim();
-  assert(turnId, "secondary external backend ledger 未记录 turnId");
+  const backendTurnId = String(backendTurn.entry?.turnId || "").trim();
+  assert(
+    backendTurnId === started.turnId,
+    `secondary turn identity 漂移: response=${started.turnId} backend=${backendTurnId}`,
+  );
   return sanitizeJson({
     spec,
     session,
     turnStart: started.turnStart,
     backendTurnStart: backendTurn.entry,
-    turnId,
+    turnId: started.turnId,
   });
 }
 
@@ -1179,6 +1273,48 @@ async function waitForGuiSidebarSessionsRunning(page, options, specs, label) {
   );
 }
 
+async function waitForGuiSidebarSessionsNotRunning(
+  page,
+  options,
+  specs,
+  label,
+) {
+  const startedAt = Date.now();
+  let lastSnapshot = null;
+  while (Date.now() - startedAt < options.timeoutMs) {
+    try {
+      lastSnapshot = sanitizeJson(
+        await sampleGuiSidebarRunningSessions(page, specs),
+      );
+    } catch (error) {
+      if (!isTransientGuiSamplingError(error)) {
+        throw error;
+      }
+      lastSnapshot = {
+        transientError: sanitizeText(error),
+        url: typeof page.url === "function" ? page.url() : "",
+      };
+      await sleep(options.intervalMs);
+      continue;
+    }
+    if (
+      Array.isArray(lastSnapshot) &&
+      lastSnapshot.length === specs.length &&
+      lastSnapshot.every(
+        (entry) => entry.titleFound && entry.status !== "running",
+      )
+    ) {
+      return { allInactive: true, sessions: lastSnapshot };
+    }
+    await sleep(options.intervalMs);
+  }
+  throw new Error(
+    `GUI 侧栏 cold restart 后仍显示 running (${label}): ${JSON.stringify(
+      sanitizeJson(lastSnapshot),
+    )}`,
+  );
+}
+
 async function cancelSecondaryRunningSession(
   page,
   options,
@@ -1196,7 +1332,7 @@ async function cancelSecondaryRunningSession(
     page,
     APP_SERVER_METHOD_SESSION_TURN_CANCEL,
     {
-      sessionId: MULTI_RUNNING_SECONDARY_SESSION_ID,
+      threadId: secondary.spec.threadId,
       turnId: secondary.turnId,
     },
     requestLog,
@@ -1205,7 +1341,7 @@ async function cancelSecondaryRunningSession(
     runtimeEnv.backendLedgerPath,
     (entry) =>
       entry.kind === "turnCancel" &&
-      entry.sessionId === MULTI_RUNNING_SECONDARY_SESSION_ID &&
+      entry.sessionId === secondary.spec.sessionId &&
       entry.turnId === secondary.turnId,
     options,
   );
@@ -1214,7 +1350,7 @@ async function cancelSecondaryRunningSession(
     options,
     requestLog,
     {
-      sessionId: MULTI_RUNNING_SECONDARY_SESSION_ID,
+      threadId: secondary.spec.threadId,
       prompt: MULTI_RUNNING_SECONDARY_PROMPT,
       partialText: "以下是今日国际新闻简要整理",
     },
@@ -1224,7 +1360,7 @@ async function cancelSecondaryRunningSession(
     options,
     requestLog,
     secondary.turnId,
-    MULTI_RUNNING_SECONDARY_SESSION_ID,
+    secondary.spec,
   );
   return sanitizeJson({
     turnCancel: turnCancel.result,
@@ -1238,9 +1374,17 @@ async function cancelSecondaryRunningSession(
   });
 }
 
-async function sampleGuiHomeBackgroundRecoveryState(page, turnId) {
+async function sampleGuiHomeBackgroundRecoveryState(
+  page,
+  turnId,
+  runningSpecs = [],
+) {
+  const recoveryCardSpecs =
+    runningSpecs.length > 0
+      ? runningSpecs
+      : [{ ...buildRunningSessionSpec(), turnId }];
   return await page.evaluate(
-    ({ prompt, title, sessionId, turnId }) => {
+    ({ prompt, title, sessionId, turnId, recoveryCardSpecs }) => {
       const isVisible = (node) => {
         if (!(node instanceof HTMLElement)) {
           return false;
@@ -1262,6 +1406,10 @@ async function sampleGuiHomeBackgroundRecoveryState(page, turnId) {
       const homeRecoveryCard = document.querySelector(
         '[data-testid="home-unfinished-session-card"]',
       );
+      const homeRecoveryCardText = homeRecoveryCard?.textContent || "";
+      const homeRecoveryCardMatch = recoveryCardSpecs.find((spec) =>
+        homeRecoveryCardText.includes(spec.title),
+      );
       const messageLists = Array.from(
         document.querySelectorAll(
           '[data-testid="message-list"], [data-testid="message-list-frame"]',
@@ -1275,6 +1423,9 @@ async function sampleGuiHomeBackgroundRecoveryState(page, turnId) {
       ).filter((node) => node instanceof HTMLTextAreaElement);
       const textareaSessionIds = textareas.map(
         (textarea) => textarea.dataset.sessionId || null,
+      );
+      const runningSessionIds = new Set(
+        recoveryCardSpecs.map((spec) => spec.sessionId),
       );
       const sidebarRows = Array.from(
         document.querySelectorAll(
@@ -1318,15 +1469,19 @@ async function sampleGuiHomeBackgroundRecoveryState(page, turnId) {
         mainText.includes("以下是今日国际新闻简要整理");
       const activeSessionTextareaVisible = textareas.some(
         (textarea) =>
-          textarea.dataset.sessionId === sessionId && isVisible(textarea),
+          runningSessionIds.has(textarea.dataset.sessionId) && isVisible(textarea),
+      );
+      const runningPromptVisible = recoveryCardSpecs.some((spec) =>
+        mainText.includes(spec.prompt),
+      );
+      const runningTurnVisible = messageTurnGroups.some((group) =>
+        recoveryCardSpecs.some((spec) =>
+          (group.textContent || "").includes(spec.turnId),
+        ),
       );
       const activeSessionMessageVisible =
         messageLists.some((list) => isVisible(list)) &&
-        (mainPromptVisible ||
-          mainAssistantOutputVisible ||
-          messageTurnGroups.some((group) =>
-            (group.textContent || "").includes(turnId),
-          ));
+        (runningPromptVisible || mainAssistantOutputVisible || runningTurnVisible);
       return {
         url: window.location.href,
         homeStartVisible: isVisible(homeStartSurface),
@@ -1334,12 +1489,12 @@ async function sampleGuiHomeBackgroundRecoveryState(page, turnId) {
         homeRecoveryCardVisible: isVisible(homeRecoveryCard),
         homeRecoveryCardStatus:
           homeRecoveryCard?.getAttribute("data-status") || "",
-        homeRecoveryCardText: homeRecoveryCard?.textContent || "",
+        homeRecoveryCardText,
         homeRecoveryCardTitle: homeRecoveryCard?.getAttribute("title") || "",
-        homeRecoveryCardTitleFound: Boolean(
-          homeRecoveryCard &&
-          (homeRecoveryCard.textContent || "").includes(title),
-        ),
+        homeRecoveryCardMatchesRunningSession: Boolean(homeRecoveryCardMatch),
+        homeRecoveryCardMatchedSessionId:
+          homeRecoveryCardMatch?.sessionId || null,
+        homeRecoveryCardMatchedTitle: homeRecoveryCardMatch?.title || null,
         mainPromptVisible,
         mainAssistantOutputVisible,
         messageListCount: messageLists.length,
@@ -1359,19 +1514,33 @@ async function sampleGuiHomeBackgroundRecoveryState(page, turnId) {
     {
       prompt: NEWS_PROMPT,
       title: SESSION_TITLE,
-      sessionId: SESSION_ID,
+      sessionId: primaryIdentity.sessionId,
       turnId,
+      recoveryCardSpecs: recoveryCardSpecs.map(
+        ({ sessionId, title, prompt, turnId: runningTurnId }) => ({
+          sessionId,
+          title,
+          prompt,
+          turnId: runningTurnId,
+        }),
+      ),
     },
   );
 }
 
-async function waitForGuiHomeBackgroundRecovery(page, options, turnId, label) {
+async function waitForGuiHomeBackgroundRecovery(
+  page,
+  options,
+  turnId,
+  label,
+  runningSpecs = [],
+) {
   const startedAt = Date.now();
   let lastSnapshot = null;
   while (Date.now() - startedAt < options.timeoutMs) {
     try {
       lastSnapshot = sanitizeJson(
-        await sampleGuiHomeBackgroundRecoveryState(page, turnId),
+        await sampleGuiHomeBackgroundRecoveryState(page, turnId, runningSpecs),
       );
     } catch (error) {
       if (!isTransientGuiSamplingError(error)) {
@@ -1388,7 +1557,7 @@ async function waitForGuiHomeBackgroundRecovery(page, options, turnId, label) {
       lastSnapshot.homeStartVisible &&
       lastSnapshot.homeRecoveryCardVisible &&
       lastSnapshot.homeRecoveryCardStatus === "running" &&
-      lastSnapshot.homeRecoveryCardTitleFound &&
+      lastSnapshot.homeRecoveryCardMatchesRunningSession &&
       !lastSnapshot.activeDetailBoundToSession &&
       lastSnapshot.sidebarTitleFound &&
       lastSnapshot.sidebarStatus === "running"
@@ -1399,6 +1568,53 @@ async function waitForGuiHomeBackgroundRecovery(page, options, turnId, label) {
   }
   throw new Error(
     `GUI 首页后台恢复状态不一致 (${label}): ${JSON.stringify(
+      sanitizeJson(lastSnapshot),
+    )}`,
+  );
+}
+
+async function waitForGuiHomeColdRestart(
+  page,
+  options,
+  turnId,
+  label,
+  runningSpecs = [],
+) {
+  const startedAt = Date.now();
+  let lastSnapshot = null;
+  while (Date.now() - startedAt < options.timeoutMs) {
+    try {
+      lastSnapshot = sanitizeJson(
+        await sampleGuiHomeBackgroundRecoveryState(page, turnId, runningSpecs),
+      );
+    } catch (error) {
+      if (!isTransientGuiSamplingError(error)) {
+        throw error;
+      }
+      lastSnapshot = {
+        transientError: sanitizeText(error),
+        url: typeof page.url === "function" ? page.url() : "",
+      };
+      await sleep(options.intervalMs);
+      continue;
+    }
+    const fixtureRecoveryCardRunning =
+      lastSnapshot.homeRecoveryCardVisible &&
+      lastSnapshot.homeRecoveryCardMatchesRunningSession &&
+      lastSnapshot.homeRecoveryCardStatus === "running";
+    if (
+      lastSnapshot.homeStartVisible &&
+      !fixtureRecoveryCardRunning &&
+      !lastSnapshot.activeDetailBoundToSession &&
+      lastSnapshot.sidebarTitleFound &&
+      lastSnapshot.sidebarStatus !== "running"
+    ) {
+      return lastSnapshot;
+    }
+    await sleep(options.intervalMs);
+  }
+  throw new Error(
+    `GUI 首页 cold restart 状态不一致 (${label}): ${JSON.stringify(
       sanitizeJson(lastSnapshot),
     )}`,
   );
@@ -1739,7 +1955,10 @@ async function waitForCanceledEventAfterReload(page, options, turnId) {
   let lastSummary = null;
   while (Date.now() - startedAt < options.timeoutMs) {
     const drained = await drainAppServerEventsFromPage(page, 100);
-    events = [...events, ...collectRuntimeEvents(drained.messages)];
+    events = mergeRuntimeEvents(
+      events,
+      collectRuntimeEvents(drained.messages),
+    );
     lastSummary = summarizeRuntimeEvents(events, turnId);
     if (lastSummary.terminalTypes?.includes("turn.canceled")) {
       return {
@@ -1750,7 +1969,7 @@ async function waitForCanceledEventAfterReload(page, options, turnId) {
     await sleep(options.intervalMs);
   }
   throw new Error(
-    `reload 后未通过 agentSession/event 观察到同一 turn 取消终态: ${JSON.stringify(
+    `reload 后未通过 current runtime notification 观察到同一 turn 取消终态: ${JSON.stringify(
       sanitizeJson(lastSummary),
     )}`,
   );
@@ -1818,7 +2037,7 @@ async function run() {
     proofLevel: "Gate B controlled fixture",
     claimBoundary:
       options.reopenMode === "restart"
-        ? `真实 Electron CDP + preload IPC + app_server_handle_json_lines + App Server JSON-RPC + external controlled fixture；证明 Electron/App Server 重启后同一 running turnId 的 read model 与 GUI 状态可恢复一致；presentation=${options.presentationMode}；不要求 thread/resume，不证明后台 backend 子进程跨重启继续存活或 live Provider。`
+        ? `真实 Electron CDP + preload IPC + app_server_handle_json_lines + App Server JSON-RPC + external controlled fixture；证明 Electron/App Server 重启后无 live execution owner 的同一 turnId 被投影为 interrupted，thread 为 idle/notLoaded，GUI 不再显示运行中；presentation=${options.presentationMode}；不伪造 turn/interrupt，不证明后台 backend 子进程跨重启继续存活或 live Provider。`
         : `真实 Electron CDP + preload IPC + app_server_handle_json_lines + App Server JSON-RPC + external controlled fixture；证明 reload 后同一 running turnId 由产品恢复逻辑续接；presentation=${options.presentationMode}；不证明 live Provider。`,
     completedGateB: false,
     backendMode: "external",
@@ -1828,8 +2047,8 @@ async function run() {
     appUrl: options.appUrl || null,
     cdpUrl: options.cdpUrl,
     cdpPort: options.cdpPort,
-    sessionId: SESSION_ID,
-    threadId: THREAD_ID,
+    sessionId: null,
+    threadId: null,
     prompt: NEWS_PROMPT,
     checkedAt: new Date().toISOString(),
     tempRoot: options.keepTemp ? runtimeEnv.tempRoot : null,
@@ -1899,12 +2118,21 @@ async function run() {
     );
 
     logStage("create-fixture-session");
-    summary.sessionCreation = sanitizeJson(
-      await createFixtureSession(page, workspace, requestLog, {
+    const sessionCreation = await createFixtureSession(
+      page,
+      workspace,
+      requestLog,
+      {
         provider: FIXTURE_PROVIDER,
         model: FIXTURE_MODEL,
-      }),
+      },
     );
+    primaryIdentity = sessionCreation.identity;
+    options.sessionId = primaryIdentity.sessionId;
+    options.threadId = primaryIdentity.threadId;
+    summary.sessionId = primaryIdentity.sessionId;
+    summary.threadId = primaryIdentity.threadId;
+    summary.sessionCreation = sanitizeJson(sessionCreation);
     if (options.multiRunningSessions) {
       logStage("create-secondary-running-session");
       summary.multiRunningSecondary = sanitizeJson(
@@ -1923,7 +2151,8 @@ async function run() {
           requestLog,
           summary.multiRunningSecondary.turnId,
           {
-            sessionId: MULTI_RUNNING_SECONDARY_SESSION_ID,
+            sessionId: summary.multiRunningSecondary.spec.sessionId,
+            threadId: summary.multiRunningSecondary.spec.threadId,
             prompt: MULTI_RUNNING_SECONDARY_PROMPT,
           },
         ),
@@ -1934,7 +2163,7 @@ async function run() {
           options,
           requestLog,
           summary.multiRunningSecondary.turnId,
-          MULTI_RUNNING_SECONDARY_SESSION_ID,
+          summary.multiRunningSecondary.spec,
         ),
       );
     } else {
@@ -1964,7 +2193,8 @@ async function run() {
     logStage("send-running-turn");
     summary.inputSend = sanitizeJson(
       await sendPromptFromGui(page, options, NEWS_PROMPT, {
-        expectedSessionId: SESSION_ID,
+        expectedSessionId: primaryIdentity.sessionId,
+        expectedThreadId: primaryIdentity.threadId,
         requireTurnStart: true,
       }),
     );
@@ -1978,10 +2208,7 @@ async function run() {
     summary.turnId = turnId;
     summary.backendTurnStart = sanitizeJson(backendTurn.entry);
     const multiRunningSpecs = options.multiRunningSessions
-      ? buildMultiRunningSessionSpecs(
-          turnId,
-          summary.multiRunningSecondary?.turnId,
-        )
+      ? buildMultiRunningSessionSpecs(turnId, summary.multiRunningSecondary)
       : [];
 
     logStage("assert-running-before-reload");
@@ -2015,7 +2242,8 @@ async function run() {
           requestLog,
           summary.multiRunningSecondary.turnId,
           {
-            sessionId: MULTI_RUNNING_SECONDARY_SESSION_ID,
+            sessionId: summary.multiRunningSecondary.spec.sessionId,
+            threadId: summary.multiRunningSecondary.spec.threadId,
             prompt: MULTI_RUNNING_SECONDARY_PROMPT,
           },
         ),
@@ -2026,7 +2254,7 @@ async function run() {
           options,
           requestLog,
           summary.multiRunningSecondary.turnId,
-          MULTI_RUNNING_SECONDARY_SESSION_ID,
+          summary.multiRunningSecondary.spec,
         ),
       );
     } else {
@@ -2053,6 +2281,7 @@ async function run() {
           options,
           turnId,
           "before-reopen",
+          multiRunningSpecs,
         ),
       );
       if (options.multiRunningSessions) {
@@ -2134,21 +2363,37 @@ async function run() {
     if (options.presentationMode === "background") {
       logStage(`assert-home-background-after-${options.reopenMode}`);
       summary.homeBackgroundAfterReopen = sanitizeJson(
-        await waitForGuiHomeBackgroundRecovery(
-          page,
-          options,
-          turnId,
-          `after-${options.reopenMode}`,
-        ),
+        options.reopenMode === "restart"
+          ? await waitForGuiHomeColdRestart(
+              page,
+              options,
+              turnId,
+              "after-restart",
+              multiRunningSpecs,
+            )
+          : await waitForGuiHomeBackgroundRecovery(
+              page,
+              options,
+              turnId,
+              "after-reload",
+              multiRunningSpecs,
+            ),
       );
       if (options.multiRunningSessions) {
         summary.multiRunningHomeSidebarAfterReopen = sanitizeJson(
-          await waitForGuiSidebarSessionsRunning(
-            page,
-            options,
-            multiRunningSpecs,
-            `home-after-${options.reopenMode}`,
-          ),
+          options.reopenMode === "restart"
+            ? await waitForGuiSidebarSessionsNotRunning(
+                page,
+                options,
+                multiRunningSpecs,
+                "home-after-restart",
+              )
+            : await waitForGuiSidebarSessionsRunning(
+                page,
+                options,
+                multiRunningSpecs,
+                "home-after-reload",
+              ),
         );
       }
       summary.homeBackgroundAfterReload = summary.homeBackgroundAfterReopen;
@@ -2166,8 +2411,15 @@ async function run() {
       });
       summary.homeBackgroundAfterReload = summary.homeBackgroundAfterReopen;
     }
+    const openPrimaryFromHomeRecoveryCard =
+      options.presentationMode === "background" &&
+      options.reopenMode !== "restart" &&
+      !options.multiRunningSessions;
+    summary.guiSessionOpenSourceAfterReopen = openPrimaryFromHomeRecoveryCard
+      ? "home-recovery-card"
+      : "sidebar-primary";
     summary.guiSessionOpenedAfterReopen = sanitizeJson(
-      options.presentationMode === "background"
+      openPrimaryFromHomeRecoveryCard
         ? await openFixtureSessionFromHomeRecoveryCard(page, options, turnId)
         : await openFixtureSessionFromSidebar(page, options, requestLog),
     );
@@ -2178,7 +2430,7 @@ async function run() {
       summary.threadResumeTraceAfterReopen = sanitizeJson({
         skipped: true,
         reason:
-          "restart 模式只声明 cold-start 后 read model / GUI running 状态恢复；external backend 子进程不作为跨重启存活声明，thread/resume 不是 restart Gate B 必需断言。",
+          "restart 模式验证无 live execution owner 的孤儿 turn 被读模型归一化为 interrupted；不把 thread/resume 或 external backend 子进程伪装为跨重启续跑。",
       });
     } else {
       summary.threadResumeTraceAfterReopen = sanitizeJson(
@@ -2187,63 +2439,110 @@ async function run() {
           options,
           traceCursorBeforeReload,
           APP_SERVER_METHOD_SESSION_THREAD_RESUME,
-          { sessionId: SESSION_ID, turnId, browser },
+          {
+            sessionId: primaryIdentity.sessionId,
+            threadId: primaryIdentity.threadId,
+            turnId,
+            browser,
+          },
         ),
       );
     }
     summary.threadResumeTraceAfterReload = summary.threadResumeTraceAfterReopen;
     page = pageRef.current;
-    summary.readModelRunningAfterReopen = sanitizeJson(
-      await waitForReadModelRunning(page, options, requestLog, turnId, {
-        requireContent: options.reopenMode !== "restart",
-      }),
-    );
-    summary.readModelRunningAfterReload = summary.readModelRunningAfterReopen;
-    summary.sessionListRunningAfterReopen = sanitizeJson(
-      await waitForSessionListRunning(page, options, requestLog, turnId),
-    );
-    summary.sessionListRunningAfterReload =
-      summary.sessionListRunningAfterReopen;
-    summary.guiRunningAfterReopen = sanitizeJson(
-      await waitForGuiRunningConsistency(
-        page,
-        options,
-        turnId,
-        `after-${options.reopenMode}`,
-      ),
-    );
-    summary.guiRunningAfterReload = summary.guiRunningAfterReopen;
-    if (options.multiRunningSessions) {
-      summary.multiRunningSidebarAfterReopen = sanitizeJson(
-        await waitForGuiSidebarSessionsRunning(
+    if (options.reopenMode === "restart") {
+      summary.readModelInterruptedAfterReopen = sanitizeJson(
+        await waitForReadModelInterrupted(page, options, requestLog, turnId),
+      );
+      summary.sessionListNotRunningAfterReopen = sanitizeJson(
+        await waitForSessionListNotRunning(page, options, requestLog, turnId),
+      );
+      summary.guiIdleAfterReopen = sanitizeJson(
+        await waitForGuiIdleConsistency(page, options, turnId),
+      );
+      if (options.multiRunningSessions) {
+        summary.multiRunningSidebarAfterReopen = sanitizeJson(
+          await waitForGuiSidebarSessionsNotRunning(
+            page,
+            options,
+            multiRunningSpecs,
+            "after-restart",
+          ),
+        );
+        summary.multiRunningSecondaryReadModelAfterReopen = sanitizeJson(
+          await waitForReadModelInterrupted(
+            page,
+            options,
+            requestLog,
+            summary.multiRunningSecondary.turnId,
+            {
+              sessionId: summary.multiRunningSecondary.spec.sessionId,
+              threadId: summary.multiRunningSecondary.spec.threadId,
+              prompt: MULTI_RUNNING_SECONDARY_PROMPT,
+            },
+          ),
+        );
+        summary.multiRunningSecondarySessionListAfterReopen = sanitizeJson(
+          await waitForSessionListNotRunning(
+            page,
+            options,
+            requestLog,
+            summary.multiRunningSecondary.turnId,
+            summary.multiRunningSecondary.spec,
+          ),
+        );
+      }
+    } else {
+      summary.readModelRunningAfterReopen = sanitizeJson(
+        await waitForReadModelRunning(page, options, requestLog, turnId),
+      );
+      summary.readModelRunningAfterReload = summary.readModelRunningAfterReopen;
+      summary.sessionListRunningAfterReopen = sanitizeJson(
+        await waitForSessionListRunning(page, options, requestLog, turnId),
+      );
+      summary.sessionListRunningAfterReload =
+        summary.sessionListRunningAfterReopen;
+      summary.guiRunningAfterReopen = sanitizeJson(
+        await waitForGuiRunningConsistency(
           page,
           options,
-          multiRunningSpecs,
-          `after-${options.reopenMode}`,
+          turnId,
+          "after-reload",
         ),
       );
-      summary.multiRunningSecondaryReadModelAfterReopen = sanitizeJson(
-        await waitForReadModelRunning(
-          page,
-          options,
-          requestLog,
-          summary.multiRunningSecondary.turnId,
-          {
-            sessionId: MULTI_RUNNING_SECONDARY_SESSION_ID,
-            prompt: MULTI_RUNNING_SECONDARY_PROMPT,
-            requireContent: options.reopenMode !== "restart",
-          },
-        ),
-      );
-      summary.multiRunningSecondarySessionListAfterReopen = sanitizeJson(
-        await waitForSessionListRunning(
-          page,
-          options,
-          requestLog,
-          summary.multiRunningSecondary.turnId,
-          MULTI_RUNNING_SECONDARY_SESSION_ID,
-        ),
-      );
+      summary.guiRunningAfterReload = summary.guiRunningAfterReopen;
+      if (options.multiRunningSessions) {
+        summary.multiRunningSidebarAfterReopen = sanitizeJson(
+          await waitForGuiSidebarSessionsRunning(
+            page,
+            options,
+            multiRunningSpecs,
+            "after-reload",
+          ),
+        );
+        summary.multiRunningSecondaryReadModelAfterReopen = sanitizeJson(
+          await waitForReadModelRunning(
+            page,
+            options,
+            requestLog,
+            summary.multiRunningSecondary.turnId,
+            {
+              sessionId: summary.multiRunningSecondary.spec.sessionId,
+              threadId: summary.multiRunningSecondary.spec.threadId,
+              prompt: MULTI_RUNNING_SECONDARY_PROMPT,
+            },
+          ),
+        );
+        summary.multiRunningSecondarySessionListAfterReopen = sanitizeJson(
+          await waitForSessionListRunning(
+            page,
+            options,
+            requestLog,
+            summary.multiRunningSecondary.turnId,
+            summary.multiRunningSecondary.spec,
+          ),
+        );
+      }
     }
     await page.screenshot({
       path: screenshotAfterReloadPath,
@@ -2253,118 +2552,155 @@ async function run() {
     summary.screenshotAfterReopen = screenshotAfterReloadPath;
     summary.screenshotAfterReload = screenshotAfterReloadPath;
 
-    const traceCursorBeforeCancel = createTraceCursor(
-      await readRendererTraceFromPageRef(pageRef, browser, options),
-    );
-    page = pageRef.current;
-    summary.traceCursorBeforeCancel = traceCursorBeforeCancel;
-
-    logStage("stop-after-reload");
-    summary.stopClick = sanitizeJson(
-      await waitForStopButtonVisibleAndClick(page, options, {
-        prompt: NEWS_PROMPT,
-        visibleOutputText: "以下是今日国际新闻简要整理",
-        requireVisibleOutput: true,
-      }),
-    );
-    summary.turnCancelTraceAfterReload = sanitizeJson(
-      await waitForTraceMethodAfter(
-        pageRef,
-        options,
-        traceCursorBeforeCancel,
-        APP_SERVER_METHOD_SESSION_TURN_CANCEL,
-        { sessionId: SESSION_ID, turnId, browser },
-      ),
-    );
-    summary.turnCancelTraceAfterReopen = summary.turnCancelTraceAfterReload;
-    page = pageRef.current;
     if (options.reopenMode === "restart") {
+      summary.traceCursorBeforeCancel = sanitizeJson({
+        skipped: true,
+        reason: "cold restart 后没有 live turn，禁止发送伪取消命令",
+      });
+      summary.stopClick = sanitizeJson({
+        skipped: true,
+        reason: "orphan turn 已在 read model 中归一化为 interrupted",
+      });
+      summary.turnCancelTraceAfterReopen = sanitizeJson({
+        skipped: true,
+        reason: "cold restart orphan normalization 不生成 turn/interrupt",
+      });
+      summary.turnCancelTraceAfterReload = summary.turnCancelTraceAfterReopen;
       summary.backendTurnCancel = sanitizeJson({
         skipped: true,
         reason:
-          "restart 模式只声明产品恢复绑定与 GUI/read model 收口；不声明 external backend 子进程跨 Electron/App Server 重启存活。",
+          "cold restart 后不存在 live backend owner，不向已退出 backend 发送 cancel",
+      });
+      const drainedAfterRestart = await drainAppServerEventsFromPage(page, 100);
+      const eventsAfterRestart = collectRuntimeEvents(
+        drainedAfterRestart.messages,
+      );
+      summary.eventProjectionAfterRestart = sanitizeJson({
+        events: eventsAfterRestart.filter((event) => event.turnId === turnId),
+        summary: summarizeRuntimeEvents(eventsAfterRestart, turnId),
+      });
+      summary.eventCanceledAfterReopen = sanitizeJson({
+        skipped: true,
+        reason: "读模型归一化不伪造 durable turn.canceled event",
+      });
+      summary.eventCanceledAfterReload = summary.eventCanceledAfterReopen;
+      summary.readModelCanceled = summary.readModelInterruptedAfterReopen;
+      summary.guiCanceled = summary.guiIdleAfterReopen;
+      summary.sessionListAfterCancel = summary.sessionListNotRunningAfterReopen;
+      summary.guiIdleAfterCancel = summary.guiIdleAfterReopen;
+      summary.multiRunningSecondaryCleanup = sanitizeJson({
+        skipped: true,
+        reason:
+          "cold restart 已将所有无 live owner 的 running turn 投影为 interrupted",
       });
     } else {
+      const traceCursorBeforeCancel = createTraceCursor(
+        await readRendererTraceFromPageRef(pageRef, browser, options),
+      );
+      page = pageRef.current;
+      summary.traceCursorBeforeCancel = traceCursorBeforeCancel;
+
+      logStage("stop-after-reload");
+      summary.stopClick = sanitizeJson(
+        await waitForStopButtonVisibleAndClick(page, options, {
+          prompt: NEWS_PROMPT,
+          visibleOutputText: "以下是今日国际新闻简要整理",
+          requireVisibleOutput: true,
+        }),
+      );
+      summary.turnCancelTraceAfterReload = sanitizeJson(
+        await waitForTraceMethodAfter(
+          pageRef,
+          options,
+          traceCursorBeforeCancel,
+          APP_SERVER_METHOD_SESSION_TURN_CANCEL,
+          {
+            sessionId: primaryIdentity.sessionId,
+            threadId: primaryIdentity.threadId,
+            turnId,
+            browser,
+          },
+        ),
+      );
+      summary.turnCancelTraceAfterReopen = summary.turnCancelTraceAfterReload;
+      page = pageRef.current;
       summary.backendTurnCancel = sanitizeJson(
         await waitForBackendLedgerEntry(
           runtimeEnv.backendLedgerPath,
           (entry) =>
             entry.kind === "turnCancel" &&
-            entry.sessionId === SESSION_ID &&
+            entry.sessionId === primaryIdentity.sessionId &&
             entry.turnId === turnId,
           options,
         ),
       );
-    }
-    summary.eventCanceledAfterReload = sanitizeJson(
-      await waitForCanceledEventAfterReload(page, options, turnId),
-    );
-    summary.eventCanceledAfterReopen = summary.eventCanceledAfterReload;
-    summary.readModelCanceled = sanitizeJson(
-      await waitForSessionReadCanceled(page, options, requestLog, {
-        sessionId: SESSION_ID,
-        prompt: NEWS_PROMPT,
-        partialText: "以下是今日国际新闻简要整理",
-        requireContent: options.reopenMode !== "restart",
-      }),
-    );
-    summary.guiCanceled = sanitizeJson(
-      await waitForGuiChatCanceled(page, options, {
-        prompt: NEWS_PROMPT,
-        partialText: "以下是今日国际新闻简要整理",
-      }),
-    );
-    summary.sessionListAfterCancel = sanitizeJson(
-      await waitForSessionListNotRunning(page, options, requestLog, turnId),
-    );
-    summary.guiIdleAfterCancel = sanitizeJson(
-      await waitForGuiIdleConsistency(page, options, turnId, {
-        requirePrompt: options.reopenMode !== "restart",
-      }),
-    );
-    if (options.multiRunningSessions) {
-      summary.multiRunningSecondaryStillRunningAfterPrimaryCancel =
-        sanitizeJson(
-          await waitForSessionListRunning(
+      summary.eventCanceledAfterReload = sanitizeJson(
+        await waitForCanceledEventAfterReload(page, options, turnId),
+      );
+      summary.eventCanceledAfterReopen = summary.eventCanceledAfterReload;
+      summary.readModelCanceled = sanitizeJson(
+        await waitForSessionReadCanceled(page, options, requestLog, {
+          threadId: primaryIdentity.threadId,
+          prompt: NEWS_PROMPT,
+          partialText: "以下是今日国际新闻简要整理",
+        }),
+      );
+      summary.guiCanceled = sanitizeJson(
+        await waitForGuiChatCanceled(page, options, {
+          prompt: NEWS_PROMPT,
+          partialText: "以下是今日国际新闻简要整理",
+        }),
+      );
+      summary.sessionListAfterCancel = sanitizeJson(
+        await waitForSessionListNotRunning(page, options, requestLog, turnId),
+      );
+      summary.guiIdleAfterCancel = sanitizeJson(
+        await waitForGuiIdleConsistency(page, options, turnId),
+      );
+      if (options.multiRunningSessions) {
+        summary.multiRunningSecondaryStillRunningAfterPrimaryCancel =
+          sanitizeJson(
+            await waitForSessionListRunning(
+              page,
+              options,
+              requestLog,
+              summary.multiRunningSecondary.turnId,
+              summary.multiRunningSecondary.spec,
+            ),
+          );
+        summary.multiRunningSecondarySidebarAfterPrimaryCancel = sanitizeJson(
+          await waitForGuiSidebarSessionsRunning(
+            page,
+            options,
+            [
+              {
+                ...buildRunningSessionSpec({
+                  sessionId: summary.multiRunningSecondary.spec.sessionId,
+                  threadId: summary.multiRunningSecondary.spec.threadId,
+                  title: MULTI_RUNNING_SECONDARY_TITLE,
+                  prompt: MULTI_RUNNING_SECONDARY_PROMPT,
+                }),
+                turnId: summary.multiRunningSecondary.turnId,
+              },
+            ],
+            "secondary-after-primary-cancel",
+          ),
+        );
+        summary.multiRunningSecondaryCleanup = sanitizeJson(
+          await cancelSecondaryRunningSession(
             page,
             options,
             requestLog,
-            summary.multiRunningSecondary.turnId,
-            MULTI_RUNNING_SECONDARY_SESSION_ID,
+            runtimeEnv,
+            summary.multiRunningSecondary,
           ),
         );
-      summary.multiRunningSecondarySidebarAfterPrimaryCancel = sanitizeJson(
-        await waitForGuiSidebarSessionsRunning(
-          page,
-          options,
-          [
-            {
-              ...buildRunningSessionSpec({
-                sessionId: MULTI_RUNNING_SECONDARY_SESSION_ID,
-                threadId: MULTI_RUNNING_SECONDARY_THREAD_ID,
-                title: MULTI_RUNNING_SECONDARY_TITLE,
-                prompt: MULTI_RUNNING_SECONDARY_PROMPT,
-              }),
-              turnId: summary.multiRunningSecondary.turnId,
-            },
-          ],
-          "secondary-after-primary-cancel",
-        ),
-      );
-      summary.multiRunningSecondaryCleanup = sanitizeJson(
-        await cancelSecondaryRunningSession(
-          page,
-          options,
-          requestLog,
-          runtimeEnv,
-          summary.multiRunningSecondary,
-        ),
-      );
-    } else {
-      summary.multiRunningSecondaryCleanup = sanitizeJson({
-        skipped: true,
-        reason: "--multi-running-sessions not enabled",
-      });
+      } else {
+        summary.multiRunningSecondaryCleanup = sanitizeJson({
+          skipped: true,
+          reason: "--multi-running-sessions not enabled",
+        });
+      }
     }
     await page.screenshot({
       path: screenshotAfterCancelPath,
@@ -2392,7 +2728,8 @@ async function run() {
       .map((entry) => entry.method)
       .filter(Boolean);
     summary.turnStartEvidence = summarizeTurnStartEvidence(summary, {
-      sessionId: SESSION_ID,
+      sessionId: primaryIdentity.sessionId,
+      threadId: primaryIdentity.threadId,
       turnId,
       prompt: NEWS_PROMPT,
     });
@@ -2402,7 +2739,11 @@ async function run() {
     const threadResumeSeenAfterReopen = hasSuccessfulTraceEvidence(
       summary.threadResumeTraceAfterReopen,
       APP_SERVER_METHOD_SESSION_THREAD_RESUME,
-      { sessionId: SESSION_ID, turnId },
+      {
+        sessionId: primaryIdentity.sessionId,
+        threadId: primaryIdentity.threadId,
+        turnId,
+      },
     );
     const threadResumeAssertion =
       summary.reopenMode === "restart"
@@ -2414,68 +2755,199 @@ async function run() {
             threadResumeSeen: threadResumeSeenAfterReopen,
           };
     const homeBackgroundAssertions =
-      summary.presentationMode === "background"
+      summary.presentationMode !== "background"
         ? {
-            homeBackgroundBeforeReopen:
-              summary.homeBackgroundBeforeReopen?.homeStartVisible === true &&
-              summary.homeBackgroundBeforeReopen?.homeRecoveryCardVisible ===
-                true &&
-              summary.homeBackgroundBeforeReopen?.homeRecoveryCardStatus ===
-                "running" &&
-              summary.homeBackgroundBeforeReopen?.homeRecoveryCardTitleFound ===
-                true &&
-              summary.homeBackgroundBeforeReopen?.activeDetailBoundToSession ===
-                false &&
-              summary.homeBackgroundBeforeReopen?.sidebarStatus === "running",
-            homeBackgroundAfterReopen:
-              summary.homeBackgroundAfterReopen?.homeStartVisible === true &&
-              summary.homeBackgroundAfterReopen?.homeRecoveryCardVisible ===
-                true &&
-              summary.homeBackgroundAfterReopen?.homeRecoveryCardStatus ===
-                "running" &&
-              summary.homeBackgroundAfterReopen?.homeRecoveryCardTitleFound ===
-                true &&
-              summary.homeBackgroundAfterReopen?.activeDetailBoundToSession ===
-                false &&
-              summary.homeBackgroundAfterReopen?.sidebarStatus === "running",
-            homeRecoveryCardOpenedAfterReopen:
-              summary.guiSessionOpenedAfterReopen?.click?.clicked === true &&
-              summary.guiSessionOpenedAfterReopen?.running?.sidebarStatus ===
-                "running" &&
-              summary.guiSessionOpenedAfterReopen?.running
-                ?.inputbarHasStopButton === true,
-          }
-        : {
             homeBackgroundSkippedInForeground:
               summary.homeBackgroundAfterReopen?.skipped === true,
-          };
-    const multiRunningAssertions = options.multiRunningSessions
+          }
+        : summary.reopenMode === "restart"
+          ? {
+              homeBackgroundBeforeReopen:
+                summary.homeBackgroundBeforeReopen?.homeStartVisible === true &&
+                summary.homeBackgroundBeforeReopen?.homeRecoveryCardVisible ===
+                  true &&
+                summary.homeBackgroundBeforeReopen?.homeRecoveryCardStatus ===
+                  "running" &&
+                summary.homeBackgroundBeforeReopen
+                  ?.homeRecoveryCardMatchesRunningSession === true &&
+                summary.homeBackgroundBeforeReopen
+                  ?.activeDetailBoundToSession === false &&
+                summary.homeBackgroundBeforeReopen?.sidebarStatus === "running",
+              homeColdRestartHasNoRunningRecoveryCard:
+                summary.homeBackgroundAfterReopen?.homeStartVisible === true &&
+                !(
+                  summary.homeBackgroundAfterReopen?.homeRecoveryCardVisible ===
+                    true &&
+                  summary.homeBackgroundAfterReopen
+                    ?.homeRecoveryCardMatchesRunningSession === true &&
+                  summary.homeBackgroundAfterReopen?.homeRecoveryCardStatus ===
+                    "running"
+                ) &&
+                summary.homeBackgroundAfterReopen
+                  ?.activeDetailBoundToSession === false &&
+                summary.homeBackgroundAfterReopen?.sidebarStatus !== "running",
+            }
+          : {
+              homeBackgroundBeforeReopen:
+                summary.homeBackgroundBeforeReopen?.homeStartVisible === true &&
+                summary.homeBackgroundBeforeReopen?.homeRecoveryCardVisible ===
+                  true &&
+                summary.homeBackgroundBeforeReopen?.homeRecoveryCardStatus ===
+                  "running" &&
+                summary.homeBackgroundBeforeReopen
+                  ?.homeRecoveryCardMatchesRunningSession === true &&
+                summary.homeBackgroundBeforeReopen
+                  ?.activeDetailBoundToSession === false &&
+                summary.homeBackgroundBeforeReopen?.sidebarStatus === "running",
+              homeBackgroundAfterReopen:
+                summary.homeBackgroundAfterReopen?.homeStartVisible === true &&
+                summary.homeBackgroundAfterReopen?.homeRecoveryCardVisible ===
+                  true &&
+                summary.homeBackgroundAfterReopen?.homeRecoveryCardStatus ===
+                  "running" &&
+                summary.homeBackgroundAfterReopen
+                  ?.homeRecoveryCardMatchesRunningSession === true &&
+                summary.homeBackgroundAfterReopen
+                  ?.activeDetailBoundToSession === false &&
+                summary.homeBackgroundAfterReopen?.sidebarStatus === "running",
+              runningSessionDetailOpenedAfterReopen:
+                summary.guiSessionOpenSourceAfterReopen ===
+                "home-recovery-card"
+                  ? summary.guiSessionOpenedAfterReopen?.click?.clicked === true &&
+                    summary.guiSessionOpenedAfterReopen?.running
+                      ?.sidebarStatus === "running" &&
+                    summary.guiSessionOpenedAfterReopen?.running
+                      ?.inputbarHasStopButton === true
+                  : summary.guiSessionOpenedAfterReopen?.clicked?.clicked ===
+                        true &&
+                      summary.guiSessionOpenedAfterReopen?.readModel
+                        ?.sessionId === primaryIdentity.sessionId &&
+                      summary.guiSessionOpenedAfterReopen?.readModel?.threadId ===
+                        primaryIdentity.threadId &&
+                      summary.guiRunningAfterReopen?.sidebarStatus ===
+                        "running" &&
+                      summary.guiRunningAfterReopen?.inputbarHasStopButton ===
+                        true,
+            };
+    const multiRunningAssertions = !options.multiRunningSessions
       ? {
-          multiRunningSecondaryStarted:
-            summary.multiRunningSecondary?.session?.session != null &&
-            typeof summary.multiRunningSecondary?.turnId === "string" &&
-            summary.multiRunningSecondary.turnId.length > 0,
-          multiRunningPrimaryAndSecondarySidebarBeforeReopen:
-            summary.multiRunningSidebarBeforeReopen?.allRunning === true,
-          multiRunningPrimaryAndSecondarySidebarAfterReopen:
-            summary.multiRunningSidebarAfterReopen?.allRunning === true,
-          multiRunningHomeKeepsPrimaryRecoveryCard:
-            summary.presentationMode !== "background" ||
-            (summary.homeBackgroundAfterReopen?.homeRecoveryCardTitleFound ===
-              true &&
-              !String(
-                summary.homeBackgroundAfterReopen?.homeRecoveryCardText || "",
-              ).includes(MULTI_RUNNING_SECONDARY_TITLE)),
-          multiRunningSecondaryStillRunningAfterPrimaryCancel:
-            summary.multiRunningSecondaryStillRunningAfterPrimaryCancel
-              ?.running === true,
-          multiRunningSecondaryCleanupCanceled:
-            summary.multiRunningSecondaryCleanup?.sessionListNotRunning
-              ?.running === false,
-        }
-      : {
           multiRunningSessionsSkipped: true,
-        };
+        }
+      : summary.reopenMode === "restart"
+        ? {
+            multiRunningSecondaryStarted:
+              summary.multiRunningSecondary?.session?.session != null &&
+              typeof summary.multiRunningSecondary?.turnId === "string" &&
+              summary.multiRunningSecondary.turnId.length > 0,
+            multiRunningPrimaryAndSecondarySidebarBeforeReopen:
+              summary.multiRunningSidebarBeforeReopen?.allRunning === true,
+            multiRunningTurnsInterruptedAfterRestart:
+              summary.multiRunningSidebarAfterReopen?.allInactive === true &&
+              summary.multiRunningSecondaryReadModelAfterReopen?.summary
+                ?.interrupted === true &&
+              summary.multiRunningSecondarySessionListAfterReopen?.inactive ===
+                true,
+            multiRunningRestartNeedsNoCleanupCancel:
+              summary.multiRunningSecondaryCleanup?.skipped === true,
+          }
+        : {
+            multiRunningSecondaryStarted:
+              summary.multiRunningSecondary?.session?.session != null &&
+              typeof summary.multiRunningSecondary?.turnId === "string" &&
+              summary.multiRunningSecondary.turnId.length > 0,
+            multiRunningPrimaryAndSecondarySidebarBeforeReopen:
+              summary.multiRunningSidebarBeforeReopen?.allRunning === true,
+            multiRunningPrimaryAndSecondarySidebarAfterReopen:
+              summary.multiRunningSidebarAfterReopen?.allRunning === true,
+            multiRunningHomeRecoveryCardMatchesRunningSession:
+              summary.presentationMode !== "background" ||
+              (summary.homeBackgroundAfterReopen
+                ?.homeRecoveryCardMatchesRunningSession === true &&
+                multiRunningSpecs.some(
+                  (spec) =>
+                    spec.sessionId ===
+                      summary.homeBackgroundAfterReopen
+                        ?.homeRecoveryCardMatchedSessionId &&
+                    spec.title ===
+                      summary.homeBackgroundAfterReopen
+                        ?.homeRecoveryCardMatchedTitle,
+                ) &&
+                summary.homeBackgroundAfterReopen
+                  ?.activeDetailBoundToSession === false),
+            multiRunningPrimaryOpenedFromSidebarAfterReopen:
+              summary.presentationMode !== "background" ||
+              (summary.guiSessionOpenSourceAfterReopen === "sidebar-primary" &&
+                summary.guiSessionOpenedAfterReopen?.readModel?.sessionId ===
+                  primaryIdentity.sessionId &&
+                summary.guiSessionOpenedAfterReopen?.readModel?.threadId ===
+                  primaryIdentity.threadId),
+            multiRunningSecondaryStillRunningAfterPrimaryCancel:
+              summary.multiRunningSecondaryStillRunningAfterPrimaryCancel
+                ?.running === true,
+            multiRunningSecondaryCleanupCanceled:
+              summary.multiRunningSecondaryCleanup?.sessionListNotRunning
+                ?.running === false,
+          };
+    const lifecycleAssertions =
+      summary.reopenMode === "restart"
+        ? {
+            turnCancelSkippedAfterRestart:
+              summary.turnCancelTraceAfterReopen?.skipped === true,
+            sameTurnInterruptedAfterRestart:
+              summary.readModelInterruptedAfterReopen?.summary?.matchedTurn
+                ?.turnId === turnId &&
+              summary.readModelInterruptedAfterReopen?.summary?.interrupted ===
+                true,
+            threadInactiveAfterRestart:
+              summary.readModelInterruptedAfterReopen?.summary
+                ?.inactiveThread === true &&
+              summary.sessionListNotRunningAfterReopen?.inactive === true,
+            guiIdleAfterRestart:
+              summary.guiIdleAfterReopen?.sidebarStatus !== "running" &&
+              summary.guiIdleAfterReopen?.inputbarHasStopButton === false,
+            noSyntheticCanceledEventAfterRestart:
+              summary.eventProjectionAfterRestart?.summary?.terminalTypes?.includes(
+                "turn.canceled",
+              ) !== true,
+          }
+        : {
+            turnCancelSeen: hasSuccessfulTraceEvidence(
+              summary.turnCancelTraceAfterReload,
+              APP_SERVER_METHOD_SESSION_TURN_CANCEL,
+              {
+                sessionId: primaryIdentity.sessionId,
+                threadId: primaryIdentity.threadId,
+                turnId,
+              },
+            ),
+            sameTurnAfterReopen:
+              summary.readModelRunningAfterReopen?.summary?.sameActiveTurn ===
+                true ||
+              summary.readModelRunningAfterReopen?.summary?.matchedTurn
+                ?.turnId === turnId,
+            sameTurnAfterReload:
+              summary.readModelRunningAfterReopen?.summary?.sameActiveTurn ===
+                true ||
+              summary.readModelRunningAfterReopen?.summary?.matchedTurn
+                ?.turnId === turnId,
+            guiRunningAfterReopen:
+              summary.guiRunningAfterReopen?.sidebarStatus === "running" &&
+              summary.guiRunningAfterReopen?.inputbarHasStopButton === true,
+            guiRunningAfterReload:
+              summary.guiRunningAfterReopen?.sidebarStatus === "running" &&
+              summary.guiRunningAfterReopen?.inputbarHasStopButton === true,
+            canceledEventAfterReopen:
+              summary.eventCanceledAfterReopen?.summary?.terminalTypes?.includes(
+                "turn.canceled",
+              ) === true,
+            canceledEventAfterReload:
+              summary.eventCanceledAfterReopen?.summary?.terminalTypes?.includes(
+                "turn.canceled",
+              ) === true,
+            guiIdleAfterCancel:
+              summary.guiIdleAfterCancel?.sidebarStatus !== "running" &&
+              summary.guiIdleAfterCancel?.inputbarHasStopButton === false,
+          };
     summary.assertions = {
       electronPreloadBridge: summary.rendererSnapshot?.electron === true,
       hasInvokeBridge: summary.rendererSnapshot?.hasInvokeBridge === true,
@@ -2485,11 +2957,6 @@ async function run() {
         typeof summary.cdpEndpoint?.version?.userAgent === "string",
       turnStartSeen: summary.turnStartEvidence?.matched === true,
       ...threadResumeAssertion,
-      turnCancelSeen: hasSuccessfulTraceEvidence(
-        summary.turnCancelTraceAfterReload,
-        APP_SERVER_METHOD_SESSION_TURN_CANCEL,
-        { sessionId: SESSION_ID, turnId },
-      ),
       sessionReadSeen:
         requestMethods.has(APP_SERVER_METHOD_SESSION_READ) ||
         methods.has(APP_SERVER_METHOD_SESSION_READ),
@@ -2504,34 +2971,10 @@ async function run() {
           true ||
         summary.readModelRunningBeforeReload?.summary?.matchedTurn?.turnId ===
           turnId,
-      sameTurnAfterReopen:
-        summary.readModelRunningAfterReopen?.summary?.sameActiveTurn === true ||
-        summary.readModelRunningAfterReopen?.summary?.matchedTurn?.turnId ===
-          turnId,
-      sameTurnAfterReload:
-        summary.readModelRunningAfterReopen?.summary?.sameActiveTurn === true ||
-        summary.readModelRunningAfterReopen?.summary?.matchedTurn?.turnId ===
-          turnId,
       guiRunningBeforeReload:
         summary.guiRunningBeforeReload?.sidebarStatus === "running" &&
         summary.guiRunningBeforeReload?.inputbarHasStopButton === true,
-      guiRunningAfterReopen:
-        summary.guiRunningAfterReopen?.sidebarStatus === "running" &&
-        summary.guiRunningAfterReopen?.inputbarHasStopButton === true,
-      guiRunningAfterReload:
-        summary.guiRunningAfterReopen?.sidebarStatus === "running" &&
-        summary.guiRunningAfterReopen?.inputbarHasStopButton === true,
-      canceledEventAfterReopen:
-        summary.eventCanceledAfterReopen?.summary?.terminalTypes?.includes(
-          "turn.canceled",
-        ) === true,
-      canceledEventAfterReload:
-        summary.eventCanceledAfterReopen?.summary?.terminalTypes?.includes(
-          "turn.canceled",
-        ) === true,
-      guiIdleAfterCancel:
-        summary.guiIdleAfterCancel?.sidebarStatus !== "running" &&
-        summary.guiIdleAfterCancel?.inputbarHasStopButton === false,
+      ...lifecycleAssertions,
       noMockBackend: summary.backendMode === "external",
       ...multiRunningAssertions,
     };

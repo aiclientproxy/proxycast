@@ -2,6 +2,8 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 pub const TOOL_EXECUTION_ACTION_KIND: &str = "tool_execution_policy";
+pub const BROWSER_ACTION_CONTRACT_KEY: &str = "browser_action";
+pub const BROWSER_ACTION_TOOL_FAMILY: &str = "browser_action";
 pub const SHELL_COMMAND_CONTRACT_KEY: &str = "shell_command";
 pub const SHELL_TOOL_FAMILY: &str = "shell_command";
 const DEFAULT_TOOL_APPROVAL_DECISIONS: [&str; 3] = ["allow_once", "decline", "cancel"];
@@ -376,5 +378,37 @@ mod tests {
                 vec!["allow_once", "decline", "cancel"]
             );
         }
+    }
+
+    #[test]
+    fn browser_action_approval_is_once_only() {
+        let metadata = HashMap::from([
+            ("toolFamily".to_string(), json!(BROWSER_ACTION_TOOL_FAMILY)),
+            (
+                "contractKey".to_string(),
+                json!(BROWSER_ACTION_CONTRACT_KEY),
+            ),
+            (
+                "availableDecisions".to_string(),
+                json!(["allow_once", "allow_for_session", "decline", "cancel"]),
+            ),
+            (
+                "runtime_contract".to_string(),
+                json!({
+                    "contract_key": BROWSER_ACTION_CONTRACT_KEY,
+                    "tool_family": BROWSER_ACTION_TOOL_FAMILY,
+                    "session_cache_supported": false,
+                }),
+            ),
+        ]);
+
+        let projection = execution_approval_projection("browser__click", &metadata);
+
+        assert_eq!(projection.tool_family, BROWSER_ACTION_TOOL_FAMILY);
+        assert_eq!(projection.contract_key, BROWSER_ACTION_CONTRACT_KEY);
+        assert_eq!(
+            projection.available_decisions,
+            vec!["allow_once", "decline", "cancel"]
+        );
     }
 }

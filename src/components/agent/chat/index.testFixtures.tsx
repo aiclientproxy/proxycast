@@ -1303,7 +1303,7 @@ export function mockBrowserAssistCompletedSession() {
         toolCalls: [
           {
             id: "tool-browser-open",
-            name: "mcp__lime-browser__browser_navigate",
+            name: "mcp__site__navigate",
             arguments: JSON.stringify({
               url: "https://www.rokid.com",
               profile_key: "general_browser_assist",

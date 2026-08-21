@@ -14,11 +14,15 @@ use agent_protocol::action_required::{tool_confirmation_action, ActionRequiredPr
 use agent_protocol::ThreadId;
 use agent_runtime::action_required::ActionRequiredRequest;
 use agent_runtime::session_loop::{RuntimeSessionInputHandle, RuntimeSessionResponseKind};
-use app_server_protocol::protocol::v2::{FileSystemAccessMode, GrantedPermissionProfile};
+use app_server_protocol::protocol::v2::{
+    DynamicToolCallApproval, FileSystemAccessMode, GrantedPermissionProfile,
+};
 use rmcp::model::CallToolRequestParam;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
+use tool_runtime::execution_approval::{BROWSER_ACTION_CONTRACT_KEY, BROWSER_ACTION_TOOL_FAMILY};
 use tool_runtime::execution_orchestrator::{
     orchestrate_runtime_tool_execution, RuntimeToolApprovalFuture, RuntimeToolApprovalHandler,
     RuntimeToolApprovalKind, RuntimeToolApprovalPhase, RuntimeToolApprovalPolicy,
@@ -164,7 +168,8 @@ impl RuntimeToolApprovalHandler for CurrentToolApprovalHandler<'_> {
                         self.request,
                         &self.executor.thread_id,
                         self.executor.pending_input.as_ref(),
-                        &decision,
+                        &decision.reason,
+                        &decision.metadata,
                     )
                     .await
                     .map_err(RuntimeToolExecutionError::before_handler)
@@ -510,7 +515,8 @@ async fn wait_for_tool_approval(
     request: RuntimeToolExecutionRequest<'_>,
     thread_id: &ThreadId,
     pending_input: Option<&RuntimeSessionInputHandle>,
-    decision: &ToolExecutionDecision,
+    prompt: &str,
+    metadata: &HashMap<String, Value>,
 ) -> Result<(), RuntimeToolExecutionError> {
     let response_handle = pending_input.cloned().ok_or_else(|| {
         RuntimeToolExecutionError::new(
@@ -523,10 +529,9 @@ async fn wait_for_tool_approval(
     let (scope, tool_call_id) = action_scope(request, thread_id)?;
     let tool_name = request.tool_name.to_string();
     let arguments = request.params.clone();
-    let prompt = decision.reason.clone();
     let approval = tool_runtime::execution_approval::execution_approval_projection(
         request.tool_name,
-        &decision.metadata,
+        metadata,
     );
     let response = state
         .action_required_state()
@@ -537,7 +542,7 @@ async fn wait_for_tool_approval(
             Some(tool_call_id),
             approval.available_decisions.clone(),
             scope,
-            prompt.clone(),
+            prompt.to_string(),
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -550,7 +555,7 @@ async fn wait_for_tool_approval(
                 let event_sender = event_sender.clone();
                 move |queued| {
                     let projection = materialize_tool_approval_action(
-                        queued, &tool_name, &arguments, &prompt, &approval,
+                        queued, &tool_name, &arguments, prompt, &approval,
                     );
                     let _ = event_sender.send(AgentEvent::ActionRequired {
                         request_id: projection.id,
@@ -580,6 +585,64 @@ async fn wait_for_tool_approval(
             "tool_approval_declined".to_string(),
         )),
     ))
+}
+
+pub(in crate::current_provider_turn) async fn wait_for_browser_action_approval(
+    state: &AgentRuntimeState,
+    event_sender: &UnboundedSender<AgentEvent>,
+    request: RuntimeToolExecutionRequest<'_>,
+    thread_id: &ThreadId,
+    pending_input: Option<&RuntimeSessionInputHandle>,
+    descriptor: &DynamicToolCallApproval,
+) -> Result<(), RuntimeToolExecutionError> {
+    let approval_scope = json!({
+        "contractKey": BROWSER_ACTION_CONTRACT_KEY,
+        "contract_key": BROWSER_ACTION_CONTRACT_KEY,
+        "toolFamily": BROWSER_ACTION_TOOL_FAMILY,
+        "tool_family": BROWSER_ACTION_TOOL_FAMILY,
+        "riskClass": descriptor.risk_class,
+        "risk_class": descriptor.risk_class,
+        "browserActionKind": descriptor.action_kind,
+        "browserSessionId": descriptor.browser_session_id,
+        "tabId": descriptor.tab_id,
+        "viewId": descriptor.view_id,
+        "webContentsId": descriptor.web_contents_id,
+        "snapshotId": descriptor.snapshot_id,
+        "backendNodeId": descriptor.backend_node_id,
+    });
+    let metadata = HashMap::from([
+        ("actionKind".to_string(), json!("browser_action")),
+        ("toolFamily".to_string(), json!(BROWSER_ACTION_TOOL_FAMILY)),
+        (
+            "contractKey".to_string(),
+            json!(BROWSER_ACTION_CONTRACT_KEY),
+        ),
+        ("riskClass".to_string(), json!(descriptor.risk_class)),
+        ("approvalScope".to_string(), approval_scope),
+        (
+            "availableDecisions".to_string(),
+            json!(["allow_once", "decline", "cancel"]),
+        ),
+        (
+            "runtime_contract".to_string(),
+            json!({
+                "contract_key": BROWSER_ACTION_CONTRACT_KEY,
+                "tool_family": BROWSER_ACTION_TOOL_FAMILY,
+                "session_cache_supported": false,
+            }),
+        ),
+    ]);
+    wait_for_tool_approval(
+        state,
+        event_sender,
+        request,
+        thread_id,
+        pending_input,
+        &descriptor.reason,
+        &metadata,
+    )
+    .await
+    .map_err(RuntimeToolExecutionError::before_handler)
 }
 
 pub(super) fn materialize_tool_approval_action(

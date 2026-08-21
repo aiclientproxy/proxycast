@@ -85,8 +85,15 @@ pub(super) fn runtime_session_read_detail_with_options(
     stored: &StoredSession,
     options: ReadDetailOptions,
     workflow_audit_events: &[AgentEvent],
+    active_turn_id: Option<&str>,
 ) -> serde_json::Value {
-    runtime_session_read_detail_with_item_source(stored, options, workflow_audit_events, None)
+    runtime_session_read_detail_with_item_source(
+        stored,
+        options,
+        workflow_audit_events,
+        None,
+        active_turn_id,
+    )
 }
 
 /// Builds the session detail from the canonical ThreadStore item projection when it exists.
@@ -99,6 +106,7 @@ pub(super) async fn runtime_session_read_detail_from_thread_store(
     options: ReadDetailOptions,
     workflow_audit_events: &[AgentEvent],
     projection_store: &ProjectionStore,
+    active_turn_id: Option<&str>,
 ) -> ThreadStoreResult<serde_json::Value> {
     let canonical_items = canonical_items_from_thread_store(projection_store, stored).await?;
     Ok(runtime_session_read_detail_with_item_source(
@@ -106,6 +114,7 @@ pub(super) async fn runtime_session_read_detail_from_thread_store(
         options,
         workflow_audit_events,
         Some(canonical_items.as_slice()),
+        active_turn_id,
     ))
 }
 
@@ -114,6 +123,7 @@ fn runtime_session_read_detail_with_item_source(
     options: ReadDetailOptions,
     workflow_audit_events: &[AgentEvent],
     canonical_items: Option<&[serde_json::Value]>,
+    active_turn_id: Option<&str>,
 ) -> serde_json::Value {
     let usage_projection_events = runtime_events_with_workflow_audit(stored, workflow_audit_events);
     let article_workspace = article_workspace_projection::article_workspace_from_events(
@@ -134,6 +144,7 @@ fn runtime_session_read_detail_with_item_source(
         article_workspace.clone(),
         article_workspace_actions.clone(),
         &usage_projection_events,
+        active_turn_id,
     );
     let queued_turns = queued_turn_snapshots(stored);
     let all_messages = messages::runtime_session_messages(stored);
@@ -488,6 +499,7 @@ fn runtime_thread_read_from_stored_session_with_usage_events(
     article_workspace: Option<serde_json::Value>,
     article_workspace_actions: Vec<serde_json::Value>,
     usage_projection_events: &[AgentEvent],
+    active_turn_id: Option<&str>,
 ) -> serde_json::Value {
     let coding_activity = coding_activity_projection::coding_activity_from_events(stored);
     let model_routing = latest_model_routing_from_events(&stored.events);
@@ -509,8 +521,7 @@ fn runtime_thread_read_from_stored_session_with_usage_events(
         stored.session.status,
         pending_request_count,
         &stored.turns,
-        &stored.events,
-        chrono::Utc::now(),
+        active_turn_id,
     );
     let latest_turn_status = runtime_state.latest_turn_status.as_deref();
     let active_turn_id = runtime_state.active_turn_id.clone();

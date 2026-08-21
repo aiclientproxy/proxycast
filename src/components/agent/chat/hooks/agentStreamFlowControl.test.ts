@@ -232,6 +232,131 @@ describe("agentStreamFlowControl", () => {
     );
   });
 
+  it("stopActiveAgentStream 应在 reload binding 已释放时按 current turn 补回正文", async () => {
+    let messages: Message[] = [];
+    let threadItems: AgentThreadItem[] = [];
+    const canonicalThreadItems: AgentThreadItem[] = [
+      {
+        id: "agent-message-final-turn-reload",
+        type: "agent_message",
+        thread_id: "thread-reload",
+        turn_id: "turn-reload",
+        sequence: 1,
+        status: "in_progress",
+        started_at: "2026-07-10T00:00:01.000Z",
+        updated_at: "2026-07-10T00:00:01.000Z",
+        text: "以下是今日国际新闻简要整理：",
+        phase: "final_answer",
+      },
+    ];
+
+    await stopActiveAgentStream({
+      activeStream: null,
+      sessionIdRef: { current: "session-reload" },
+      threadId: "thread-reload",
+      currentTurnId: "turn-reload",
+      runtime: {
+        getSessionReadModel: vi.fn(async () => ({
+          thread_items: canonicalThreadItems,
+        })),
+        interruptTurn: vi.fn(async () => true),
+      } as never,
+      removeStreamListener: vi.fn(),
+      refreshSessionReadModel: vi.fn(async () => true),
+      setThreadItems: createStateSetter(
+        () => threadItems,
+        (value) => {
+          threadItems = value;
+        },
+      ),
+      setThreadTurns: createStateSetter(
+        () => [] as AgentThreadTurn[],
+        () => undefined,
+      ),
+      setCurrentTurnId: createStateSetter(
+        () => "turn-reload" as string | null,
+        () => undefined,
+      ),
+      setMessages: createStateSetter(
+        () => messages,
+        (value) => {
+          messages = value;
+        },
+      ),
+      getMessages: () => messages,
+      getThreadItems: () => threadItems,
+      setActiveStream: vi.fn(),
+      notify: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+    });
+
+    await flushMicrotasks();
+    expect(messages[0]).toMatchObject({
+      role: "assistant",
+      runtimeTurnId: "turn-reload",
+      content: "以下是今日国际新闻简要整理：\n\n(已停止)",
+    });
+  });
+
+  it("stopActiveAgentStream 应从恢复消息的 text parts 保留 partial 正文", async () => {
+    let messages: Message[] = [
+      {
+        id: "recovered-assistant:turn-parts",
+        role: "assistant",
+        content: "(已停止)",
+        contentParts: [
+          { type: "text", text: "以下是今日国际新闻简要整理：" },
+          { type: "text", text: "(已停止)" },
+        ],
+        timestamp: new Date("2026-07-10T00:00:00.000Z"),
+        runtimeTurnId: "turn-parts",
+      },
+    ];
+    let activeStream: ActiveStreamState | null = {
+      assistantMsgId: "recovered-assistant:turn-parts",
+      eventName: "agentSession/event/session-parts",
+      sessionId: "session-parts",
+      turnId: "turn-parts",
+    };
+
+    await stopActiveAgentStream({
+      activeStream,
+      sessionIdRef: { current: "session-parts" },
+      threadId: "thread-parts",
+      runtime: {
+        getSessionReadModel: vi.fn(async () => ({})),
+        interruptTurn: vi.fn(async () => true),
+      } as never,
+      removeStreamListener: vi.fn(),
+      refreshSessionReadModel: vi.fn(async () => true),
+      setThreadItems: vi.fn(),
+      setThreadTurns: vi.fn(),
+      setCurrentTurnId: vi.fn(),
+      setMessages: createStateSetter(
+        () => messages,
+        (value) => {
+          messages = value;
+        },
+      ),
+      getMessages: () => messages,
+      getThreadItems: () => [],
+      setActiveStream: (next) => {
+        activeStream = next;
+      },
+      notify: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+    });
+
+    expect(messages[0]?.content).toBe(
+      "以下是今日国际新闻简要整理：\n\n(已停止)",
+    );
+    expect(activeStream).toBeNull();
+  });
+
   it("stopActiveAgentStream 不应等待 cancel 后端返回才解除 UI 停止态", async () => {
     let resolveInterrupt!: (value: boolean) => void;
     const interruptPromise = new Promise<boolean>((resolve) => {
@@ -348,6 +473,7 @@ describe("agentStreamFlowControl", () => {
         isThinking: true,
       },
     ];
+    let threadItems: AgentThreadItem[] = [];
 
     await stopActiveAgentStream({
       activeStream,
@@ -360,8 +486,10 @@ describe("agentStreamFlowControl", () => {
       removeStreamListener: vi.fn(),
       refreshSessionReadModel: vi.fn(async () => true),
       setThreadItems: createStateSetter(
-        () => [] as AgentThreadItem[],
-        () => undefined,
+        () => threadItems,
+        (value) => {
+          threadItems = value;
+        },
       ),
       setThreadTurns: createStateSetter(
         () => [] as AgentThreadTurn[],
@@ -378,6 +506,7 @@ describe("agentStreamFlowControl", () => {
         },
       ),
       getMessages: () => messages,
+      getThreadItems: () => threadItems,
       setActiveStream: (next) => {
         activeStream = next;
       },
@@ -404,7 +533,7 @@ describe("agentStreamFlowControl", () => {
     expect(activeStream).toBeNull();
   });
 
-  it("stopActiveAgentStream 应清理同一 assistant 的流式正文 overlay", async () => {
+  it("stopActiveAgentStream 应提交并清理同一 assistant 的流式正文 overlay", async () => {
     let activeStream: ActiveStreamState | null = {
       assistantMsgId: "assistant-overlay-partial",
       eventName: "stream-overlay-cancel",
@@ -423,6 +552,7 @@ describe("agentStreamFlowControl", () => {
         isThinking: true,
       },
     ];
+    let threadItems: AgentThreadItem[] = [];
 
     upsertAgentStreamTextOverlay({
       messageId: "assistant-overlay-partial",
@@ -442,8 +572,10 @@ describe("agentStreamFlowControl", () => {
       removeStreamListener: vi.fn(),
       refreshSessionReadModel: vi.fn(async () => true),
       setThreadItems: createStateSetter(
-        () => [] as AgentThreadItem[],
-        () => undefined,
+        () => threadItems,
+        (value) => {
+          threadItems = value;
+        },
       ),
       setThreadTurns: createStateSetter(
         () => [] as AgentThreadTurn[],
@@ -460,6 +592,7 @@ describe("agentStreamFlowControl", () => {
         },
       ),
       getMessages: () => messages,
+      getThreadItems: () => threadItems,
       setActiveStream: (next) => {
         activeStream = next;
       },
@@ -469,14 +602,419 @@ describe("agentStreamFlowControl", () => {
       },
     });
 
-    expect(messages[0]?.content).toBe("(已停止)");
+    expect(messages[0]?.content).toBe(
+      "以下是今日国际新闻简要整理：\n\n(已停止)",
+    );
     expect(messages[0]?.contentParts).toEqual([
+      {
+        type: "text",
+        text: "以下是今日国际新闻简要整理：",
+      },
       {
         type: "text",
         text: "(已停止)",
       },
     ]);
+    expect(threadItems[0]).toMatchObject({
+      type: "agent_message",
+      turn_id: "turn-runtime-1",
+      text: "以下是今日国际新闻简要整理：\n\n(已停止)",
+    });
     expect(getAgentStreamTextOverlay("assistant-overlay-partial")).toBeNull();
+  });
+
+  it("stopActiveAgentStream 应从同一 runtime turn 的 canonical item 保留正文", async () => {
+    let activeStream: ActiveStreamState | null = {
+      assistantMsgId: "recovered-assistant:turn-runtime-1",
+      eventName: "agentSession/event/session-1",
+      sessionId: "session-1",
+      turnId: "turn-runtime-1",
+      pendingTurnKey: "turn-runtime-1",
+      pendingItemKey: "recovered-turn-summary:turn-runtime-1",
+    };
+    let messages: Message[] = [
+      {
+        id: "recovered-assistant:turn-runtime-1",
+        role: "assistant",
+        content: "",
+        contentParts: [],
+        timestamp: new Date("2026-07-10T00:00:00.000Z"),
+        isThinking: true,
+        runtimeTurnId: "turn-runtime-1",
+      },
+    ];
+    const threadItems: AgentThreadItem[] = [
+      {
+        id: "agent-message-final-turn-runtime-1",
+        type: "agent_message",
+        thread_id: "thread-1",
+        turn_id: "turn-runtime-1",
+        sequence: 1,
+        status: "in_progress",
+        started_at: "2026-07-10T00:00:01.000Z",
+        updated_at: "2026-07-10T00:00:01.000Z",
+        text: "以下是今日国际新闻简要整理：",
+        phase: "final_answer",
+      },
+    ];
+
+    await stopActiveAgentStream({
+      activeStream,
+      sessionIdRef: { current: "session-1" },
+      threadId: "thread-1",
+      runtime: {
+        getSessionReadModel: vi.fn(async () => ({})),
+        interruptTurn: vi.fn(async () => true),
+      } as never,
+      removeStreamListener: vi.fn(),
+      refreshSessionReadModel: vi.fn(async () => true),
+      setThreadItems: createStateSetter(
+        () => threadItems,
+        (value) => {
+          threadItems.splice(0, threadItems.length, ...value);
+        },
+      ),
+      setThreadTurns: createStateSetter(
+        () => [] as AgentThreadTurn[],
+        () => undefined,
+      ),
+      setCurrentTurnId: createStateSetter(
+        () => "turn-runtime-1" as string | null,
+        () => undefined,
+      ),
+      setMessages: createStateSetter(
+        () => messages,
+        (value) => {
+          messages = value;
+        },
+      ),
+      getMessages: () => messages,
+      getThreadItems: () => threadItems,
+      setActiveStream: (next) => {
+        activeStream = next;
+      },
+      notify: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+    });
+
+    expect(messages[0]).toMatchObject({
+      id: "recovered-assistant:turn-runtime-1",
+      content: "以下是今日国际新闻简要整理：\n\n(已停止)",
+      contentParts: [
+        { type: "text", text: "以下是今日国际新闻简要整理：" },
+        { type: "text", text: "(已停止)" },
+      ],
+      isThinking: false,
+      runtimeTurnId: "turn-runtime-1",
+    });
+  });
+
+  it("stopActiveAgentStream 应保留缺少 thread_id 的同 turn 恢复正文", async () => {
+    let messages: Message[] = [
+      {
+        id: "recovered-assistant:turn-runtime-missing-thread",
+        role: "assistant",
+        content: "",
+        contentParts: [],
+        timestamp: new Date("2026-07-10T00:00:00.000Z"),
+        isThinking: true,
+        runtimeTurnId: "turn-runtime-missing-thread",
+      },
+    ];
+    const threadItems: AgentThreadItem[] = [
+      {
+        id: "agent-message-final-turn-runtime-missing-thread",
+        type: "agent_message",
+        thread_id: "",
+        turn_id: "turn-runtime-missing-thread",
+        sequence: 1,
+        status: "in_progress",
+        started_at: "2026-07-10T00:00:01.000Z",
+        updated_at: "2026-07-10T00:00:01.000Z",
+        text: "以下是今日国际新闻简要整理：",
+        phase: "final_answer",
+      },
+    ];
+
+    await stopActiveAgentStream({
+      activeStream: {
+        assistantMsgId: "recovered-assistant:turn-runtime-missing-thread",
+        eventName: "agentSession/event/session-missing-thread",
+        sessionId: "session-missing-thread",
+        turnId: "turn-runtime-missing-thread",
+      },
+      sessionIdRef: { current: "session-missing-thread" },
+      threadId: "thread-missing-thread",
+      currentTurnId: "turn-runtime-missing-thread",
+      runtime: {
+        getSessionReadModel: vi.fn(async () => ({})),
+        interruptTurn: vi.fn(async () => true),
+      } as never,
+      removeStreamListener: vi.fn(),
+      refreshSessionReadModel: vi.fn(async () => true),
+      setThreadItems: createStateSetter(
+        () => threadItems,
+        (value) => {
+          threadItems.splice(0, threadItems.length, ...value);
+        },
+      ),
+      setThreadTurns: createStateSetter(
+        () => [] as AgentThreadTurn[],
+        () => undefined,
+      ),
+      setCurrentTurnId: createStateSetter(
+        () => "turn-runtime-missing-thread" as string | null,
+        () => undefined,
+      ),
+      setMessages: createStateSetter(
+        () => messages,
+        (value) => {
+          messages = value;
+        },
+      ),
+      getMessages: () => messages,
+      getThreadItems: () => threadItems,
+      setActiveStream: vi.fn(),
+      notify: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+    });
+
+    expect(messages[0]?.content).toBe(
+      "以下是今日国际新闻简要整理：\n\n(已停止)",
+    );
+  });
+
+  it("stopActiveAgentStream 应在 read model 刷新后补回 canonical partial 正文", async () => {
+    let activeStream: ActiveStreamState | null = {
+      assistantMsgId: "recovered-assistant:turn-runtime-refresh",
+      eventName: "agentSession/event/session-refresh",
+      sessionId: "session-refresh",
+      turnId: "turn-runtime-refresh",
+    };
+    let messages: Message[] = [
+      {
+        id: "recovered-assistant:turn-runtime-refresh",
+        role: "assistant",
+        content: "(已停止)",
+        contentParts: [{ type: "text", text: "(已停止)" }],
+        timestamp: new Date("2026-07-10T00:00:00.000Z"),
+        runtimeTurnId: "turn-runtime-refresh",
+      },
+    ];
+    let threadItems: AgentThreadItem[] = [];
+    const canonicalThreadItems: AgentThreadItem[] = [
+      {
+        id: "agent-message-final-turn-runtime-refresh",
+        type: "agent_message",
+        thread_id: "thread-refresh",
+        turn_id: "turn-runtime-refresh",
+        sequence: 1,
+        status: "in_progress",
+        started_at: "2026-07-10T00:00:01.000Z",
+        updated_at: "2026-07-10T00:00:01.000Z",
+        text: "以下是今日国际新闻简要整理：",
+        phase: "final_answer",
+      },
+    ];
+    const refreshSessionReadModel = vi.fn(async () => true);
+    const getSessionReadModel = vi.fn(async () => ({
+      thread_items: canonicalThreadItems,
+    }));
+
+    await stopActiveAgentStream({
+      activeStream,
+      sessionIdRef: { current: "session-refresh" },
+      threadId: "thread-refresh",
+      runtime: {
+        getSessionReadModel,
+        interruptTurn: vi.fn(async () => true),
+      } as never,
+      removeStreamListener: vi.fn(),
+      refreshSessionReadModel,
+      setThreadItems: createStateSetter(
+        () => threadItems,
+        (value) => {
+          threadItems = value;
+        },
+      ),
+      setThreadTurns: createStateSetter(
+        () => [] as AgentThreadTurn[],
+        () => undefined,
+      ),
+      setCurrentTurnId: createStateSetter(
+        () => null as string | null,
+        () => undefined,
+      ),
+      setMessages: createStateSetter(
+        () => messages,
+        (value) => {
+          messages = value;
+        },
+      ),
+      getMessages: () => messages,
+      getThreadItems: () => threadItems,
+      setActiveStream: (next) => {
+        activeStream = next;
+      },
+      notify: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+    });
+
+    await flushMicrotasks();
+    expect(refreshSessionReadModel).toHaveBeenCalledWith("session-refresh");
+    expect(getSessionReadModel).toHaveBeenCalledWith("session-refresh");
+    expect(messages[0]?.content).toBe(
+      "以下是今日国际新闻简要整理：\n\n(已停止)",
+    );
+    expect(threadItems[0]).toMatchObject({
+      type: "agent_message",
+      turn_id: "turn-runtime-refresh",
+      text: "以下是今日国际新闻简要整理：\n\n(已停止)",
+    });
+  });
+
+  it("stopActiveAgentStream 应在恢复消息壳被替换后按 turnId 补回正文", async () => {
+    let activeStream: ActiveStreamState | null = {
+      assistantMsgId: "recovered-assistant:turn-runtime-replaced",
+      eventName: "agentSession/event/session-replaced",
+      sessionId: "session-replaced",
+      turnId: "turn-runtime-replaced",
+    };
+    let messages: Message[] = [];
+    let threadItems: AgentThreadItem[] = [];
+    const canonicalThreadItems: AgentThreadItem[] = [
+      {
+        id: "agent-message-final-turn-runtime-replaced",
+        type: "agent_message",
+        thread_id: "thread-replaced",
+        turn_id: "turn-runtime-replaced",
+        sequence: 1,
+        status: "in_progress",
+        started_at: "2026-07-10T00:00:01.000Z",
+        updated_at: "2026-07-10T00:00:01.000Z",
+        text: "以下是今日国际新闻简要整理：",
+        phase: "final_answer",
+      },
+    ];
+
+    await stopActiveAgentStream({
+      activeStream,
+      sessionIdRef: { current: "session-replaced" },
+      threadId: "thread-replaced",
+      runtime: {
+        getSessionReadModel: vi.fn(async () => ({
+          thread_items: canonicalThreadItems,
+        })),
+        interruptTurn: vi.fn(async () => true),
+      } as never,
+      removeStreamListener: vi.fn(),
+      refreshSessionReadModel: vi.fn(async () => true),
+      setThreadItems: createStateSetter(
+        () => threadItems,
+        (value) => {
+          threadItems = value;
+        },
+      ),
+      setThreadTurns: createStateSetter(
+        () => [] as AgentThreadTurn[],
+        () => undefined,
+      ),
+      setCurrentTurnId: createStateSetter(
+        () => null as string | null,
+        () => undefined,
+      ),
+      setMessages: createStateSetter(
+        () => messages,
+        (value) => {
+          messages = value;
+        },
+      ),
+      getMessages: () => messages,
+      getThreadItems: () => threadItems,
+      setActiveStream: (next) => {
+        activeStream = next;
+      },
+      notify: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+    });
+
+    await flushMicrotasks();
+    expect(messages[0]).toMatchObject({
+      role: "assistant",
+      runtimeTurnId: "turn-runtime-replaced",
+      content: "以下是今日国际新闻简要整理：\n\n(已停止)",
+    });
+  });
+
+  it("停止时应优先更新同 turn 的可见 canonical message，而不是恢复壳", async () => {
+    const runtimeTurnId = "turn-visible-canonical";
+    let messages: Message[] = [
+      {
+        id: "recovered-assistant:visible-canonical",
+        role: "assistant",
+        content: "(已停止)",
+        contentParts: [{ type: "text", text: "(已停止)" }],
+        timestamp: new Date("2026-07-10T00:00:00.000Z"),
+        runtimeTurnId,
+      },
+      {
+        id: "agent-message-final-visible-canonical",
+        role: "assistant",
+        content: "以下是今日国际新闻简要整理：",
+        contentParts: [
+          { type: "text", text: "以下是今日国际新闻简要整理：" },
+        ],
+        timestamp: new Date("2026-07-10T00:00:01.000Z"),
+        runtimeTurnId,
+      },
+    ];
+
+    await stopActiveAgentStream({
+      activeStream: {
+        assistantMsgId: "recovered-assistant:visible-canonical",
+        eventName: "agentSession/event/visible-canonical",
+        sessionId: "session-visible-canonical",
+        turnId: runtimeTurnId,
+      },
+      sessionIdRef: { current: "session-visible-canonical" },
+      threadId: "thread-visible-canonical",
+      currentTurnId: runtimeTurnId,
+      runtime: {
+        getSessionReadModel: vi.fn(async () => ({ thread_items: [] })),
+        interruptTurn: vi.fn(async () => true),
+      } as never,
+      removeStreamListener: vi.fn(),
+      refreshSessionReadModel: vi.fn(async () => true),
+      setThreadItems: vi.fn(),
+      setThreadTurns: vi.fn(),
+      setCurrentTurnId: vi.fn(),
+      setMessages: createStateSetter(
+        () => messages,
+        (value) => {
+          messages = value;
+        },
+      ),
+      getMessages: () => messages,
+      getThreadItems: () => [],
+      setActiveStream: vi.fn(),
+      notify: {
+        info: vi.fn(),
+        error: vi.fn(),
+      },
+    });
+
+    expect(messages[0]?.content).toBe("(已停止)");
+    expect(messages[1]?.content).toBe(
+      "以下是今日国际新闻简要整理：\n\n(已停止)",
+    );
   });
 
   it("stopActiveAgentStream 应把 pending 本地停止标记绑定到真实 runtime turn", async () => {
@@ -603,6 +1141,10 @@ describe("agentStreamFlowControl", () => {
       type: "agent_message",
       text: "以下是今日国际新闻简要整理：\n\n(已停止)",
       contentParts: [
+        {
+          type: "text",
+          text: "以下是今日国际新闻简要整理：",
+        },
         {
           type: "text",
           text: "(已停止)",

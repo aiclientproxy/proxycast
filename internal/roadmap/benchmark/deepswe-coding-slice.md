@@ -1,6 +1,6 @@
 # DeepSWE Coding 测试切片 v2
 
-> status: DSW-07 schema 1.3 + Pier 0.3.1 contract passed / 0 verified score / Desktop Smoke 5 controlled Gate B passed
+> status: DSW-07 schema 1.3 + Pier 0.3.1 contract passed / 0 verified score / Desktop Smoke 5 controlled Gate B and recovery passed / combined verdict pending live verifier
 > owner: evaluation + agent-runtime
 > source_commit: `435ee89ec2f2e2289f33b0da4f992f0b7b7266b9`
 > source_schema: `1.3`
@@ -249,7 +249,7 @@ adapter 首次完成后运行 Smoke 10 三个独立批次。此阶段只做信�
 6. `DSW-05`：把真实失败中可确定复现的 runtime/tool 缺陷回写为 L2-L6 内部回归场景。
 7. `DSW-07`：固定审计后的 DeepSWE schema `1.3` commit 与 Pier `0.3.1`，迁移 `network_mode`、`verifier.collect`、license/provenance 和 preflight。
 8. `DSW-08`：实现 Smoke 10/Release 20 批量编排与三 trial 聚合，输出 pass@1/pass@3/pass^3、成本、时延和 infra validity。
-9. `DSW-09` 至 `DSW-11`：完成 Desktop Smoke 5 的真实 Electron Gate B、取消/恢复与 Gate B + Pier 双门禁。
+9. `DSW-09`、`DSW-10`：controlled Desktop Smoke 5 的真实 Electron Gate B、取消/恢复已完成；`DSW-11` 的 Gate B + Pier combined verdict 仍等待 live candidate、同一 patch SHA 与 separate verifier artifacts。
 
 ## 11. 2026-07-17 wall-timeout terminal cleanup
 
@@ -278,3 +278,12 @@ adapter 首次完成后运行 Smoke 10 三个独立批次。此阶段只做信�
 - fresh suite：`.lime/benchmark/v2/desktop/controlled-artifact-final/20260819T022022Z/summary.json`。TS、Go、Python、Rust、JavaScript 五题均 `gateBPass=true`、`artifactContentAvailable=true`；`controlledGateBComplete=true`、`recoveryCoverageComplete=true`，每题 session reopen、approval resume、cancel no-ghost-write 通过，native test 通过，mock/invoke/console/page error 均为零。
 - 前一次 Yjs attempt 6 无首事件的现场保留为一次性 transport/进程时序诊断：连接诊断单题证明第 6 次 SSE response 正常 `finish/close`，随后无重试的完整五题 suite 也通过。未找到可重复的 fixture index、tool defer 或 stream close 缺陷，因此不增加掩盖失败的自动重试，也不放宽 terminal fail-closed。
 - 证据边界不变：完整 suite 仍为 `status=product_path_only`、`liveTrialCount=0`、`desktopCodingPass=false`。受控 provider、artifact 正文与 recovery 只能证明真实产品链，不能替代 live DeepSWE sampling、Pier verifier、同一 patch SHA 或三轮能力统计。
+
+## 17. 2026-08-21 Desktop approval convergence 与合同复验
+
+- App Server `thread/read` 在 loaded runtime 的 active owner 已退出、canonical Turn 尚未完成 terminal projection 的窗口，过去可能短暂返回 `interrupted`。current `thread_read` 保留仍为 `inProgress` 的 persisted Turn，直到 terminal projection 收敛；冷启动 orphan 和被新 active Turn 取代的旧 Turn 仍保持 interrupted 语义。回归 `loaded_runtime_preserves_turn_until_terminal_projection_converges` 为 `1/1`。
+- `waitForSpecificTerminalThread` 增加 `acceptableStatuses` 参数：approval resume 只接受 `completed`，cancel 保持既有取消终态集合。单题 approval 证据明确为 `terminalStatus=completed`、tool `completed`、marker 存在和 `doneInReadModel=true`。
+- 本轮合同验证：Desktop Smoke 5 preflight `53/53`；Release 20 preflight `205/205`；Smoke 10 batch plan `105/105`；DeepSWE adapter 与 Desktop contract `36/36`；受控 smoke、desktop benchmark、coding slice、batch benchmark 和 provider fixture 回归共 `41/41`。
+- 最新 controlled suite `.lime/benchmark/v2/desktop/controlled/20260821T011259Z/summary.json` 为 5/5 Gate B、恢复覆盖完整、零 mock/invoke/console/page error；聚合器按设计拒绝提升为 `DesktopCodingPass`，失败项仅为 `liveTrialPerTask` 与 `allLiveDesktopCodingPass`。
+- 当前边界：未调用 live provider，未安装依赖，未运行 Docker/Podman/nerdctl/Colima，未生成 `reward.json`、`ctrf.json` 或 `test-stdout.txt`。因此 DSW-11、DeepSWE score、pass@k 与 DesktopCodingPass 继续保持 blocked/incomplete，不使用 controlled fixture 冒充能力评分。
+- Release 20 空批次聚合复验：`npm run harness:deepswe:batch:aggregate` 以预期退出码 `2` 返回 `status=blocked`，`observedRunCount=0`、`infraValid=false`、20 题均 `missing_trials`，`passAt1/passAt3/passPower3/wallTimeMs/budgetTokens` 全为 `null`；没有把缺失样本折算成 0 分。

@@ -2,7 +2,7 @@
 
 > status: active / DeepSWE scoring, desktop coding Gate B, and platform receipts pending
 > owner: quality-workflow + runtime domain owners
-> last_verified: 2026-08-19
+> last_verified: 2026-08-21
 > refactor_source: `internal/research/refactor/v2/**`
 > codex_commit: `5c19155cbd93bfa099016e7487259f61669823ff`
 
@@ -92,7 +92,7 @@ L0-L6 主要验证确定性正确性；L7 验证模型能力和稳定性；L8 �
 - `current / incomplete`：本地不再保留 DeepSWE 旧 run、patch 或 verifier 产物；历史诊断证据已按确认删除。当前结果只能证明 adapter/preflight 合同，不能证明 DeepSWE 能力基线或桌面 coding。
 - `planned / required`：DeepSWE Desktop Smoke 5 从 TS、Go、Python、Rust、JavaScript 各取一题，通过真实 Electron GUI 输入原始 instruction，观察 preload/IPC/App Server/runtime/read model、审批/取消/恢复、文件 diff 与 terminal，再把同一 patch 交给 Pier separate verifier。受控五题 Gate B 已完成，但 `DesktopCodingPass` 仍只在 live Gate B 与 verifier 同时通过时为真。
 - `current / controlled-product-path`：Desktop Smoke 5 manifest、统一 trial evidence/verdict 合同和受控 runner 已落库：`internal/test/deepswe-desktop-smoke-v1.json`、`scripts/harness/deepswe-desktop-contract.mjs`、`scripts/harness/deepswe-desktop-controlled-smoke.mjs`。2026-08-19 fresh suite `.lime/benchmark/v2/desktop/controlled-artifact-final/20260819T022022Z/summary.json` 已让五题全部通过真实 Electron bring-up、原始 instruction、外部隔离 workspace、Read/Glob/Grep/apply_patch/exec_command、native test、Thread/Turn/Item、GUI terminal/diff、artifact 正文预览、session reopen、approval resume、cancel no-ghost-write 与零 mock/invoke/console/page error；五题均命中 `artifact/read`，且不再出现 `App Server artifact 内容不可用`。该 lane 明确不生成 DeepSWE score，`verifier=not_run` 时 `desktopCodingPass=false`。
-- `current / fail-closed`：`deepswe-desktop-benchmark.mjs` 只接受 `deepswe-desktop-trial-v1`，并要求 task/base commit/instruction/workspace、同一 trial identity、非空 patch、工具阶段、terminal/read model、GUI identity、mock/error、Pier `reward.json`/`ctrf.json`/`test-stdout.txt` 与 patch SHA 全部一致；controlled provider 或缺失 Pier/container 只能得到 `product_path_only`/`incomplete`，不能拼接成桌面 coding pass。
+- `current / fail-closed`：`deepswe-desktop-benchmark.mjs` 只接受 `deepswe-desktop-trial-v1`，并要求 task/base commit/instruction/workspace、同一 trial identity、非空 patch、工具阶段、terminal/read model、GUI identity、mock/error、Pier `reward.json`/`ctrf.json`/`test-stdout.txt` 与 patch SHA 全部一致；controlled provider 或缺失 Pier/container 只能得到 `product_path_only`/`incomplete`，不能拼接成桌面 coding pass。2026-08-21 聚合仍明确为 `product_path_only`，5/5 controlled Gate B 通过但 `liveTrialCount=0`。
 - `planned / external coverage`：SWE-bench-Live MultiLang/Windows 补滚动污染与 Windows/PowerShell，SWE-bench Multimodal 补视觉 issue，Terminal-Bench 2.1 补 shell/环境诊断。外部 source、任务集、镜像和 grader 必须固定版本，基础设施失败使批次无效而不是计模型失败。
 - `deprecated`：现有 Agent QC/Harness manifest 只作为第二期场景迁移输入，未逐项映射到 [scenario-matrix.md](./scenario-matrix.md) 前不算新门禁。
 - `dead`：旧 Benchmark runner、旧 release manifest、旧外部数据集 wrapper、旧 progress 文档和专用 flag differential research 页，已删除；DeepSWE 数据集不属于 dead。

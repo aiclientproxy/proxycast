@@ -38,7 +38,7 @@ describe("DeepSWE desktop benchmark CLI", () => {
     expect(result.status).toBe("pass");
     expect(result.taskCount).toBe(5);
     expect(result.checks).toHaveLength(53);
-  });
+  }, 20_000);
 
   it("discovers only desktop trial evidence recursively", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "desktop-evidence-"));

@@ -1,6 +1,21 @@
 {
+  "$defs": {
+    "DynamicToolCallPhase": {
+      "enum": [
+        "approvedExecute",
+        "preflight"
+      ],
+      "type": "string"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
+    "approvalToken": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
     "arguments": true,
     "callId": {
       "type": "string"
@@ -10,6 +25,9 @@
         "null",
         "string"
       ]
+    },
+    "phase": {
+      "$ref": "#/$defs/DynamicToolCallPhase"
     },
     "threadId": {
       "type": "string"
@@ -24,6 +42,7 @@
   "required": [
     "arguments",
     "callId",
+    "phase",
     "threadId",
     "tool",
     "turnId"

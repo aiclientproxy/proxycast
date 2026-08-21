@@ -2316,7 +2316,8 @@ fn typed_v2_server_envelopes_fail_closed_for_unknown_methods() {
             "callId": "call-1",
             "namespace": "workspace",
             "tool": "render",
-            "arguments": { "format": "png" }
+            "arguments": { "format": "png" },
+            "phase": "preflight"
         }
     });
     let dynamic_tool_call: ServerRequest = serde_json::from_value(dynamic_tool_call_value.clone())
@@ -2346,6 +2347,7 @@ fn typed_v2_server_envelopes_fail_closed_for_unknown_methods() {
                 },
             ],
             success: true,
+            approval: None,
         })
         .expect("encode dynamic tool call response"),
         json!({

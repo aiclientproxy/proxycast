@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
+import { isDeepStrictEqual } from "node:util";
 import type { WebContents } from "electron";
 import type { BrowserWindow, Rectangle } from "./electronRuntime";
 import {
@@ -8,12 +9,20 @@ import {
   observeBrowserPage,
 } from "./browserTabObservation";
 import {
+  observeBrowserTabUserControl,
+  type BrowserTabUserControlObserver,
+} from "./browserTabUserControl";
+import {
   ElectronEmbeddedBrowserHost,
   type EmbeddedBrowserViewState,
 } from "./embeddedBrowserHost";
 
 type HostArgs = Record<string, unknown> | null | undefined;
 type HostEventEmitter = (event: string, payload?: unknown) => void;
+type BrowserTurnInterruptHandler = (
+  threadId: string,
+  turnId: string,
+) => Promise<void>;
 
 export const BROWSER_TAB_COMMANDS = [
   "browser_tab_mount",
@@ -56,19 +65,54 @@ export interface BrowserTabState extends EmbeddedBrowserViewState {
 }
 
 export interface BrowserToolCall {
+  approvalToken?: string;
   arguments: Record<string, unknown>;
   callId: string;
   ownerWebContentsId: number;
+  phase: "preflight" | "approvedExecute";
   threadId: string;
   tool: string;
   turnId: string;
 }
 
+export interface BrowserToolApproval {
+  actionKind: string;
+  approvalToken: string;
+  backendNodeId?: number;
+  browserSessionId: string;
+  reason: string;
+  riskClass: string;
+  snapshotId: string;
+  tabId: string;
+  viewId: string;
+  webContentsId: number;
+}
+
 export interface BrowserToolResult {
+  approval?: BrowserToolApproval;
   data?: unknown;
   imageBase64?: string;
   state?: BrowserTabState;
-  status: "completed" | "human_takeover";
+  status: "approval_required" | "completed" | "human_takeover";
+}
+
+interface PendingBrowserApproval {
+  actionKind: string;
+  approvalToken: string;
+  arguments: Record<string, unknown>;
+  backendNodeId: number | null;
+  browserSessionId: string;
+  callId: string;
+  ownerWebContentsId: number;
+  snapshotId: string;
+  tabId: string;
+  targetDescription: string | null;
+  threadId: string;
+  tool: string;
+  turnId: string;
+  viewId: string;
+  webContentsId: number;
+  windowId: number;
 }
 
 interface BrowserRoute {
@@ -90,6 +134,11 @@ interface BrowserRoute {
   windowId: number;
 }
 
+interface NativeUserControlObserver {
+  observer: BrowserTabUserControlObserver;
+  webContentsId: number;
+}
+
 const NAVIGATION_TIMEOUT_MS = 30_000;
 const DANGEROUS_ACTION_PATTERN =
   /\b(delete|remove|submit|publish|purchase|pay|checkout|authorize|login|sign in|send)\b|删除|移除|提交|发布|购买|支付|授权|登录|发送/i;
@@ -105,6 +154,12 @@ export class ElectronBrowserTabHost {
   readonly #emit: HostEventEmitter;
   readonly #routesByTabId = new Map<string, BrowserRoute>();
   readonly #tabIdsByViewId = new Map<string, string>();
+  readonly #pendingApprovals = new Map<string, PendingBrowserApproval>();
+  readonly #userControlObserversByViewId = new Map<
+    string,
+    NativeUserControlObserver
+  >();
+  #interruptTurn: BrowserTurnInterruptHandler | null = null;
 
   constructor(
     embeddedHost: ElectronEmbeddedBrowserHost,
@@ -112,6 +167,10 @@ export class ElectronBrowserTabHost {
   ) {
     this.#embeddedHost = embeddedHost;
     this.#emit = emit;
+  }
+
+  setTurnInterruptHandler(handler: BrowserTurnInterruptHandler | null): void {
+    this.#interruptTurn = handler;
   }
 
   async invoke(
@@ -193,6 +252,12 @@ export class ElectronBrowserTabHost {
   }
 
   async executeTool(call: BrowserToolCall): Promise<BrowserToolResult> {
+    if (call.phase === "approvedExecute") {
+      return await this.#executeApprovedTool(call);
+    }
+    if (call.phase !== "preflight" || call.approvalToken !== undefined) {
+      throw new Error("Browser tool preflight phase is invalid");
+    }
     if (call.tool === "openTabs") {
       return {
         status: "completed",
@@ -289,16 +354,35 @@ export class ElectronBrowserTabHost {
       }
       case "click":
         this.#assertSnapshot(route, call.arguments, true);
-        return await this.#click(route, call.arguments);
+        return await this.#click(route, call);
       case "fill":
         this.#assertSnapshot(route, call.arguments, true);
-        return await this.#fill(route, call.arguments);
+        return await this.#fill(route, call);
       case "press":
         this.#assertSnapshot(route, call.arguments, false);
-        return await this.#press(route, call.arguments);
+        return await this.#press(route, call);
       default:
         throw new Error(`Unsupported Browser tool: ${call.tool}`);
     }
+  }
+
+  /** 仅供真实 Electron E2E 读取 pending approval，生产 IPC 不暴露 token。 */
+  pendingApprovalForE2e(
+    threadId: string,
+    turnId: string,
+  ): PendingBrowserApproval | null {
+    for (const approval of this.#pendingApprovals.values()) {
+      if (approval.threadId === threadId && approval.turnId === turnId) {
+        return structuredClone(approval);
+      }
+    }
+    return null;
+  }
+
+  pendingApprovalsForE2e(): PendingBrowserApproval[] {
+    return [...this.#pendingApprovals.values()].map((approval) =>
+      structuredClone(approval),
+    );
   }
 
   observeEmbeddedEvent(event: string, payload: unknown): void {
@@ -346,6 +430,10 @@ export class ElectronBrowserTabHost {
   }
 
   turnEnded(threadId: string, turnId: string): void {
+    this.#clearPendingApprovals(
+      (approval) =>
+        approval.threadId === threadId && approval.turnId === turnId,
+    );
     for (const route of [...this.#routesByTabId.values()]) {
       if (route.threadId !== threadId || route.activeTurnId !== turnId) {
         continue;
@@ -365,6 +453,7 @@ export class ElectronBrowserTabHost {
   }
 
   connectionLost(reason = "app-server-disconnected"): void {
+    this.#pendingApprovals.clear();
     for (const route of [...this.#routesByTabId.values()]) {
       if (
         route.activeTurnId === null &&
@@ -415,16 +504,22 @@ export class ElectronBrowserTabHost {
       this.#tabIdsByViewId.set(identity.viewId, identity.tabId);
     }
     const route = existing ?? identity;
+    // A remount only restores the existing native view; reapplying the initial
+    // URL here would silently undo user navigation after Right Surface restore.
+    const mountArgs = existing
+      ? { ...asRecord(args), url: undefined }
+      : asRecord(args);
     const state = await this.#embeddedHost.invoke(
       window,
       "embedded_browser_view_mount",
       {
-        ...asRecord(args),
+        ...mountArgs,
         viewId: route.viewId,
         visible: route.selected,
       },
     );
     assertEmbeddedState(state);
+    this.#observeNativeUserControl(route);
     if (!existing && route.selected) {
       return await this.#select(window, {
         ...asRecord(args),
@@ -562,6 +657,7 @@ export class ElectronBrowserTabHost {
       },
     );
     assertEmbeddedState(state);
+    this.#observeNativeUserControl(route);
     return this.#emitState(route, state);
   }
 
@@ -649,9 +745,63 @@ export class ElectronBrowserTabHost {
   }
 
   #invalidateSnapshot(route: BrowserRoute): void {
+    this.#clearPendingApprovals((approval) => approval.tabId === route.tabId);
     route.pageRevision += 1;
     route.latestSnapshotId = null;
     route.latestSnapshotNodeIds.clear();
+  }
+
+  #observeNativeUserControl(route: BrowserRoute): void {
+    const webContents = this.#nativeRoute(route).view.webContents;
+    const existing = this.#userControlObserversByViewId.get(route.viewId);
+    if (existing?.webContentsId === webContents.id) {
+      return;
+    }
+    existing?.observer.dispose();
+    const observer = observeBrowserTabUserControl(webContents, () => {
+      this.#takeUserControl(route);
+    });
+    this.#userControlObserversByViewId.set(route.viewId, {
+      observer,
+      webContentsId: webContents.id,
+    });
+  }
+
+  #takeUserControl(route: BrowserRoute): void {
+    if (
+      this.#routesByTabId.get(route.tabId) !== route ||
+      (route.controlOwner !== "agent" &&
+        route.controlOwner !== "human_takeover")
+    ) {
+      return;
+    }
+    const activeTurnId = route.activeTurnId;
+    this.#detachDebugger(route);
+    this.#invalidateSnapshot(route);
+    route.activeTurnId = null;
+    route.controlOwner = "user";
+    route.humanReason = null;
+    this.#emitState(route);
+    if (activeTurnId && this.#interruptTurn) {
+      void this.#interruptTurn(route.threadId, activeTurnId).catch((error) => {
+        console.warn(
+          "[browser-tab-host] failed to interrupt Agent turn after native user control",
+          error,
+        );
+      });
+    }
+  }
+
+  async #runAgentInput<T>(
+    route: BrowserRoute,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    this.#observeNativeUserControl(route);
+    const observer = this.#userControlObserversByViewId.get(route.viewId);
+    if (!observer) {
+      throw new Error("Browser native input observer is unavailable");
+    }
+    return await observer.observer.runAgentInput(action);
   }
 
   async #attachDebugger(route: BrowserRoute): Promise<void> {
@@ -676,52 +826,67 @@ export class ElectronBrowserTabHost {
 
   async #click(
     route: BrowserRoute,
-    args: Record<string, unknown>,
+    call: BrowserToolCall,
+    expectedDescription: string | null = null,
   ): Promise<BrowserToolResult> {
+    const args = call.arguments;
     const backendNodeId = readPositiveInteger(args.backendNodeId);
     const native = this.#nativeRoute(route);
     const description = await describeBrowserNode(
       native.view.webContents,
       backendNodeId,
     );
-    if (DANGEROUS_ACTION_PATTERN.test(description)) {
-      return this.#requireHuman(
+    if (expectedDescription !== null && description !== expectedDescription) {
+      throw new Error("Browser approved click target changed after preflight");
+    }
+    if (
+      expectedDescription === null &&
+      DANGEROUS_ACTION_PATTERN.test(description)
+    ) {
+      return this.#requireApproval(
         route,
+        call,
         `Sensitive click target: ${description}`,
+        "high_impact_click",
+        description,
       );
     }
     const point = await browserNodeCenter(
       native.view.webContents,
       backendNodeId,
     );
-    await native.view.webContents.debugger.sendCommand(
-      "Input.dispatchMouseEvent",
-      {
-        type: "mousePressed",
-        x: point.x,
-        y: point.y,
-        button: "left",
-        clickCount: 1,
-      },
-    );
-    await native.view.webContents.debugger.sendCommand(
-      "Input.dispatchMouseEvent",
-      {
-        type: "mouseReleased",
-        x: point.x,
-        y: point.y,
-        button: "left",
-        clickCount: 1,
-      },
-    );
+    await this.#runAgentInput(route, async () => {
+      await native.view.webContents.debugger.sendCommand(
+        "Input.dispatchMouseEvent",
+        {
+          type: "mousePressed",
+          x: point.x,
+          y: point.y,
+          button: "left",
+          clickCount: 1,
+        },
+      );
+      await native.view.webContents.debugger.sendCommand(
+        "Input.dispatchMouseEvent",
+        {
+          type: "mouseReleased",
+          x: point.x,
+          y: point.y,
+          button: "left",
+          clickCount: 1,
+        },
+      );
+    });
     this.#invalidateSnapshot(route);
     return { status: "completed", state: this.#emitState(route) };
   }
 
   async #fill(
     route: BrowserRoute,
-    args: Record<string, unknown>,
+    call: BrowserToolCall,
+    expectedDescription: string | null = null,
   ): Promise<BrowserToolResult> {
+    const args = call.arguments;
     const backendNodeId = readPositiveInteger(args.backendNodeId);
     const text = readRequiredString(args, "text");
     const native = this.#nativeRoute(route);
@@ -729,58 +894,195 @@ export class ElectronBrowserTabHost {
       native.view.webContents,
       backendNodeId,
     );
-    if (/password|token|secret|密码|令牌|密钥/i.test(description)) {
-      return this.#requireHuman(route, "Sensitive input requires user control");
+    if (expectedDescription !== null && description !== expectedDescription) {
+      throw new Error("Browser approved fill target changed after preflight");
+    }
+    if (
+      expectedDescription === null &&
+      /password|token|secret|密码|令牌|密钥/i.test(description)
+    ) {
+      return this.#requireApproval(
+        route,
+        call,
+        "Sensitive input requires approval",
+        "sensitive_input",
+        description,
+      );
     }
     const debuggerApi = native.view.webContents.debugger;
-    await debuggerApi.sendCommand("DOM.focus", { backendNodeId });
-    await debuggerApi.sendCommand("Input.dispatchKeyEvent", {
-      type: "keyDown",
-      key: "a",
-      code: "KeyA",
-      modifiers: process.platform === "darwin" ? 4 : 2,
+    await this.#runAgentInput(route, async () => {
+      await debuggerApi.sendCommand("DOM.focus", { backendNodeId });
+      await debuggerApi.sendCommand("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "a",
+        code: "KeyA",
+        modifiers: process.platform === "darwin" ? 4 : 2,
+      });
+      await debuggerApi.sendCommand("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "a",
+        code: "KeyA",
+        modifiers: process.platform === "darwin" ? 4 : 2,
+      });
+      await debuggerApi.sendCommand("Input.insertText", { text });
     });
-    await debuggerApi.sendCommand("Input.dispatchKeyEvent", {
-      type: "keyUp",
-      key: "a",
-      code: "KeyA",
-      modifiers: process.platform === "darwin" ? 4 : 2,
-    });
-    await debuggerApi.sendCommand("Input.insertText", { text });
     this.#invalidateSnapshot(route);
     return { status: "completed", state: this.#emitState(route) };
   }
 
   async #press(
     route: BrowserRoute,
-    args: Record<string, unknown>,
+    call: BrowserToolCall,
+    approved = false,
   ): Promise<BrowserToolResult> {
+    const args = call.arguments;
     const key = readRequiredString(args, "key");
-    if (/^(Enter|NumpadEnter)$/i.test(key)) {
-      return this.#requireHuman(route, "Enter may submit the current form");
+    if (!approved && /^(Enter|NumpadEnter)$/i.test(key)) {
+      return this.#requireApproval(
+        route,
+        call,
+        "Enter may submit the current form",
+        "form_submission",
+      );
     }
     const debuggerApi = this.#nativeRoute(route).view.webContents.debugger;
-    await debuggerApi.sendCommand("Input.dispatchKeyEvent", {
-      type: "keyDown",
-      key,
-    });
-    await debuggerApi.sendCommand("Input.dispatchKeyEvent", {
-      type: "keyUp",
-      key,
+    await this.#runAgentInput(route, async () => {
+      await debuggerApi.sendCommand("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key,
+      });
+      await debuggerApi.sendCommand("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key,
+      });
     });
     this.#invalidateSnapshot(route);
     return { status: "completed", state: this.#emitState(route) };
   }
 
-  #requireHuman(route: BrowserRoute, reason: string): BrowserToolResult {
-    this.#detachDebugger(route);
-    route.controlOwner = "human_takeover";
-    route.humanReason = reason;
-    return {
-      status: "human_takeover",
-      state: this.#emitState(route),
-      data: { reason },
+  #requireApproval(
+    route: BrowserRoute,
+    call: BrowserToolCall,
+    reason: string,
+    riskClass: string,
+    targetDescription: string | null = null,
+  ): BrowserToolResult {
+    const callKey = browserToolCallKey(call);
+    if (this.#pendingApprovals.has(callKey)) {
+      throw new Error("Browser action approval is already pending");
+    }
+    const native = this.#nativeRoute(route);
+    const approvalToken = randomUUID();
+    const snapshotId = readRequiredString(call.arguments, "snapshotId");
+    const backendNodeId =
+      call.tool === "click" || call.tool === "fill"
+        ? readPositiveInteger(call.arguments.backendNodeId)
+        : null;
+    const approval: PendingBrowserApproval = {
+      actionKind: call.tool,
+      approvalToken,
+      arguments: structuredClone(call.arguments),
+      backendNodeId,
+      browserSessionId: route.browserSessionId,
+      callId: call.callId,
+      ownerWebContentsId: call.ownerWebContentsId,
+      snapshotId,
+      tabId: route.tabId,
+      targetDescription,
+      threadId: call.threadId,
+      tool: call.tool,
+      turnId: call.turnId,
+      viewId: route.viewId,
+      webContentsId: native.view.webContents.id,
+      windowId: route.windowId,
     };
+    this.#pendingApprovals.set(callKey, approval);
+    return {
+      status: "approval_required",
+      state: this.#emitState(route),
+      approval: {
+        actionKind: approval.actionKind,
+        approvalToken,
+        ...(backendNodeId === null ? {} : { backendNodeId }),
+        browserSessionId: approval.browserSessionId,
+        reason,
+        riskClass,
+        snapshotId,
+        tabId: approval.tabId,
+        viewId: approval.viewId,
+        webContentsId: approval.webContentsId,
+      },
+    };
+  }
+
+  async #executeApprovedTool(
+    call: BrowserToolCall,
+  ): Promise<BrowserToolResult> {
+    const callKey = browserToolCallKey(call);
+    const pending = this.#pendingApprovals.get(callKey);
+    this.#pendingApprovals.delete(callKey);
+    if (!pending || call.approvalToken !== pending.approvalToken) {
+      throw new Error("Browser action approval token is stale or invalid");
+    }
+    if (
+      call.tool !== pending.tool ||
+      call.threadId !== pending.threadId ||
+      call.turnId !== pending.turnId ||
+      call.callId !== pending.callId ||
+      call.ownerWebContentsId !== pending.ownerWebContentsId ||
+      !isDeepStrictEqual(call.arguments, pending.arguments)
+    ) {
+      throw new Error("Browser approved action identity mismatch");
+    }
+    const route = this.#resolveToolRoute(call);
+    this.#assertAgentControl(route, call.turnId);
+    const native = this.#nativeRoute(route);
+    if (
+      route.browserSessionId !== pending.browserSessionId ||
+      route.tabId !== pending.tabId ||
+      route.viewId !== pending.viewId ||
+      route.windowId !== pending.windowId ||
+      native.view.webContents.id !== pending.webContentsId
+    ) {
+      throw new Error("Browser approved action native route mismatch");
+    }
+    this.#assertSnapshot(
+      route,
+      call.arguments,
+      call.tool === "click" || call.tool === "fill",
+    );
+    if (
+      readRequiredString(call.arguments, "snapshotId") !== pending.snapshotId
+    ) {
+      throw new Error("Browser approved action snapshot mismatch");
+    }
+    if (
+      pending.backendNodeId !== null &&
+      readPositiveInteger(call.arguments.backendNodeId) !==
+        pending.backendNodeId
+    ) {
+      throw new Error("Browser approved action target mismatch");
+    }
+    switch (call.tool) {
+      case "click":
+        return await this.#click(route, call, pending.targetDescription);
+      case "fill":
+        return await this.#fill(route, call, pending.targetDescription);
+      case "press":
+        return await this.#press(route, call, true);
+      default:
+        throw new Error("Browser tool does not support approved execution");
+    }
+  }
+
+  #clearPendingApprovals(
+    predicate: (approval: PendingBrowserApproval) => boolean,
+  ): void {
+    for (const [key, approval] of this.#pendingApprovals) {
+      if (predicate(approval)) {
+        this.#pendingApprovals.delete(key);
+      }
+    }
   }
 
   #nativeRoute(route: BrowserRoute) {
@@ -846,6 +1148,9 @@ export class ElectronBrowserTabHost {
   }
 
   #removeRoute(route: BrowserRoute): void {
+    this.#clearPendingApprovals((approval) => approval.tabId === route.tabId);
+    this.#userControlObserversByViewId.get(route.viewId)?.observer.dispose();
+    this.#userControlObserversByViewId.delete(route.viewId);
     this.#routesByTabId.delete(route.tabId);
     this.#tabIdsByViewId.delete(route.viewId);
   }
@@ -859,6 +1164,10 @@ export class ElectronBrowserTabHost {
       viewId: route.viewId,
     });
   }
+}
+
+function browserToolCallKey(call: BrowserToolCall): string {
+  return [call.threadId, call.turnId, call.callId].join("\u0000");
 }
 
 const BROWSER_EMBEDDED_EVENT_MAP: Record<string, string> = {

@@ -1,5 +1,10 @@
 import type { AgentThreadItem, AgentThreadTurn } from "../types";
 import { resolveThreadItemTimelinePosition } from "./agentChatHistoryPrimitives";
+import {
+  appendInterruptedPlaceholderText,
+  INTERRUPTED_PLACEHOLDER_TEXT,
+  stripInterruptedPlaceholderText,
+} from "./agentInterruptedMessageContent";
 
 export function areJsonLikeValuesEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) {
@@ -121,6 +126,23 @@ function mergeThreadItemUpdate(
   for (const [key, value] of Object.entries(nextItem)) {
     if (isEmptyMergeValue(value) && !isEmptyMergeValue(existingRecord[key])) {
       merged[key] = existingRecord[key];
+    }
+  }
+
+  if (existing.type === "agent_message" && nextItem.type === "agent_message") {
+    const existingText = stripInterruptedPlaceholderText(existing.text);
+    const nextText = stripInterruptedPlaceholderText(nextItem.text);
+    const nextHasInterruptedPlaceholder = nextItem.text
+      .trimEnd()
+      .endsWith(INTERRUPTED_PLACEHOLDER_TEXT);
+
+    if (
+      existingText &&
+      (!nextText || nextText.length < existingText.length)
+    ) {
+      merged.text = nextHasInterruptedPlaceholder
+        ? appendInterruptedPlaceholderText(existing.text)
+        : existing.text;
     }
   }
 

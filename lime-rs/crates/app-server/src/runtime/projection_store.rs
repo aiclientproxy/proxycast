@@ -585,10 +585,8 @@ fn projected_session_overview(conn: &Connection, row: ProjectedSessionRow) -> Ag
         turns.iter().map(|turn| RuntimeTurnSnapshot {
             turn_id: turn.turn_id.as_str(),
             status: turn.status.as_str(),
-            started_at: turn.started_at.as_deref(),
-            latest_activity_at: Some(row.updated_at.as_str()),
         }),
-        chrono::Utc::now(),
+        None,
     );
     let messages_count = conn
         .query_row(

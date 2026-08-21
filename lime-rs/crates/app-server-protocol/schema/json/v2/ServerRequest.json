@@ -140,6 +140,12 @@
     },
     "DynamicToolCallParams": {
       "properties": {
+        "approvalToken": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "arguments": true,
         "callId": {
           "type": "string"
@@ -149,6 +155,9 @@
             "null",
             "string"
           ]
+        },
+        "phase": {
+          "$ref": "#/$defs/DynamicToolCallPhase"
         },
         "threadId": {
           "type": "string"
@@ -163,11 +172,19 @@
       "required": [
         "arguments",
         "callId",
+        "phase",
         "threadId",
         "tool",
         "turnId"
       ],
       "type": "object"
+    },
+    "DynamicToolCallPhase": {
+      "enum": [
+        "approvedExecute",
+        "preflight"
+      ],
+      "type": "string"
     },
     "FileChangeRequestApprovalParams": {
       "properties": {

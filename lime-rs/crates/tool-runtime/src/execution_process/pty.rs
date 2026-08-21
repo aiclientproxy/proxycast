@@ -20,9 +20,7 @@ pub(super) fn start_local_pty_execution_process(
     if let Some(cwd) = &request.cwd {
         command.cwd(cwd);
     }
-    if request.env_clear {
-        command.env_clear();
-    }
+    command.env_clear();
     for (key, value) in &request.env {
         command.env(key, value);
     }

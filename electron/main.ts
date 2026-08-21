@@ -95,6 +95,35 @@ const browserTabHost = new ElectronBrowserTabHost(
 );
 browserTabHostRef.current = browserTabHost;
 const appServerHost = new ElectronAppServerHost(browserTabHost);
+browserTabHost.setTurnInterruptHandler(async (threadId, turnId) => {
+  await appServerHost.request("turn/interrupt", { threadId, turnId });
+});
+if (process.env.LIME_ELECTRON_E2E === "1") {
+  const e2eGlobal = globalThis as typeof globalThis & {
+    __appServerE2E?: {
+      terminateSidecar: () => ReturnType<
+        ElectronAppServerHost["terminateSidecarForE2e"]
+      >;
+      pendingBrowserApproval: (
+        threadId: string,
+        turnId: string,
+      ) => ReturnType<ElectronBrowserTabHost["pendingApprovalForE2e"]>;
+      pendingBrowserApprovals: () => ReturnType<
+        ElectronBrowserTabHost["pendingApprovalsForE2e"]
+      >;
+      executeBrowserTool: (
+        call: Parameters<ElectronBrowserTabHost["executeTool"]>[0],
+      ) => ReturnType<ElectronBrowserTabHost["executeTool"]>;
+    };
+  };
+  e2eGlobal.__appServerE2E = {
+    terminateSidecar: () => appServerHost.terminateSidecarForE2e(),
+    pendingBrowserApproval: (threadId, turnId) =>
+      browserTabHost.pendingApprovalForE2e(threadId, turnId),
+    pendingBrowserApprovals: () => browserTabHost.pendingApprovalsForE2e(),
+    executeBrowserTool: (call) => browserTabHost.executeTool(call),
+  };
+}
 const hostCommands = new ElectronHostCommands(
   appServerHost,
   app.getPath("userData"),

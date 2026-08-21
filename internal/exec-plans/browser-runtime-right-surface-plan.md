@@ -1,6 +1,6 @@
 # Browser Workspace 同 Tab 重构执行计划
 
-更新时间：2026-08-19
+更新时间：2026-08-21
 
 状态：In Progress / P1-P3
 
@@ -36,6 +36,13 @@ App Server 仍是业务与 turn owner；Electron 只执行原生 WebContents、d
 - `src/lib/api/embeddedBrowser.ts` 迁移后的 Browser typed gateway 与测试
 - `src/components/agent/chat/workspace/right-surface/browser/**`
 - Browser 专项 protocol/catalog/fixture/negative guard 文件
+- `lime-rs/crates/app-server-protocol/src/protocol/v2/item.rs`、生成 schema/client 与协议测试；原因是
+  `item/tool/call` 需要表达 `preflight / approvedExecute` 和 typed approval descriptor。
+- `lime-rs/crates/agent/src/current_provider_turn/dynamic_tool_bridge.rs`、
+  `tool_executor/orchestration.rs`；原因是 Browser dynamic tool 必须复用 canonical `action_required`
+  waiter，批准后恢复同一 dynamic call，不新增 runtime 状态机。
+- `lime-rs/crates/app-server/src/dynamic_tool_server_request.rs` 与精确测试；原因是 App Server 负责把
+  dynamic-tool phase/token 从 Runtime 事件投影到 connection-owned reverse request。
 - `lime-rs/crates/agent/src/agent_tools/catalog.rs`、`inventory.rs` 中仅限
   `BrowserAssist`、`mcp__lime-browser__*`、`lime_site_*` 静态工具面；原因是这些旧 catalog
   仍与 `browser__*` dynamic capability 竞争唯一 Browser owner。验证使用 agent/app-server
@@ -46,7 +53,7 @@ App Server 仍是业务与 turn owner；Electron 只执行原生 WebContents、d
 ### 只读避让写集
 
 - `lime-rs/crates/agent-runtime/**`
-- `lime-rs/crates/agent/**` 现有并行 CodeCell/AgentControl 改动
+- `lime-rs/crates/agent/**` 除上述两个 Browser dynamic-tool 文件外的现有并行 CodeCell/AgentControl 改动
 - `lime-rs/crates/app-server/src/runtime/event_sink.rs`
 - `lime-rs/crates/app-server/src/runtime/trace_store*`
 - `lime-rs/crates/tool-runtime/src/tool_lifecycle.rs`
@@ -80,13 +87,13 @@ App Server 仍是业务与 turn owner；Electron 只执行原生 WebContents、d
 - [x] 定义 Electron Host `BrowserRoute`、`BrowserTab`、`BrowserTabMark` 边界。
 - [x] 明确 `threadId + turnId + windowId + ownerWebContentsId + sessionId + tabId + viewId + webContentsId` 的校验与 stale 行为。
 - [x] 将 identity 收敛到 canonical App Server read model，删除旧 `BrowserSessionRef` 输入。
-- [ ] 为旧 BrowserSession/Canvas/MCP 前缀补负向回流守卫。
+- [x] 为旧 BrowserSession/Canvas/MCP 前缀补 current-owner 负向回流守卫，覆盖 Browser Host、typed gateway、Right Surface 与通用 Agent prompt。
 
 退出条件：协议、dynamic tool binding、Host route、Renderer projection 使用同一 identity；任何只凭 `BrowserSessionRef` 或外部 CDP target 的完成项均失效。
 
 ### P1：同一 WebContents 纵切
 
-状态：基础纵切、active-turn identity Gate B 与 renderer termination cleanup Gate B 已通过，disconnect/window-close 等扩展生命周期仍待补。
+状态：基础纵切、active-turn identity、native 用户接管、cancel、disconnect、window-close、permission、download 与 renderer termination cleanup Gate B 已通过。
 
 - [x] BrowserTabHost 按稳定 `sessionId/tabId/viewId` 创建或复用 `WebContentsView`。
 - [x] App Server `item/tool/call` reverse request 能由 Electron Host 精确路由到该 tab。
@@ -95,26 +102,34 @@ App Server 仍是业务与 turn owner；Electron 只执行原生 WebContents、d
 - [x] `turnEnded` 清理 debugger，并按 origin/mark close 或 release。
 - [x] 真实 Electron fixture 证明 Renderer mount 与 Agent `openTabs -> claimTab -> observe` 使用相同 `browserSessionId/tabId/threadId/webContentsId`，并绑定同一 active turn。
 - [x] Electron Host 断连会 detach debugger，并对 user tab release、Agent tab close；原生 `WebContents` destroyed 会回收 Browser route。
-- [ ] 补齐 clipboard、download/permission grant、窗口关闭和上述断连路径的真实 Electron turn-scoped evidence。
+- [x] 真实终止 App Server sidecar 后，pending provider request 取消、user tab release、debugger detach，且 Electron main 不再进入 read-pump 自旋。
+- [x] 真实页面调用 geolocation 后，Electron permission handler fail closed，并把 canonical tab identity 与 blocked 状态投影到 viewport 外的 GUI 状态带。
+- [x] 真实页面触发下载后，同一 Electron session 产生 `started -> cancelled`，并把 canonical tab identity 与取消终态投影到 viewport 外的 GUI 状态带；fixture 不写入用户下载目录。
+- [ ] 补齐 clipboard、permission approve/grant、下载完成后的 artifact ref/open/reveal 与跨平台 packaged evidence。
 - [x] 真实 Electron fixture 证明用户人工操作后的 Agent observe 和同一 `webContentsId`。
+- [x] 用户直接点击/输入 native `WebContentsView` 会立即 detach debugger、撤销 Agent control/snapshot/pending approval token，并使旧 `allow_once` fail closed；Agent 自身 CDP input 不触发人工接管。
+- [x] 真实 Electron GUI 停止操作经 `turn/interrupt` 将 read model 投影为 `interrupted`，release 用户 tab 并 detach debugger，同时取消 pending provider response。
+- [x] 真实 Electron owner `BrowserWindow` 关闭后，Renderer page、native Browser WebContents 与 Browser route 同步销毁，close event 保留 canonical thread/tab/view identity 和 `window-closed` 原因。
 
 退出条件：真实 Electron 中 Agent navigate/observe 改变用户可见页面，且 `browserSessionId/tabId/webContentsId` 全部相等；不是普通 Chrome、browser mirror 或 mock 证据。
 
 ### P2：Right Surface Browser Workspace
 
-状态：组件骨架完成，Gate A 待复核。
+状态：组件骨架与原生状态带布局完成，独立 Browser Gate A 核心投影已通过；多语言和状态矩阵仍待补齐。
 
 - [x] 用稳定 tab identity mount Right Surface，不再使用 React `useId()` 生成产品 view identity。
 - [x] 独立 Browser Workspace 承担 tab strip、chrome、viewport、权限/下载/接管状态。
 - [x] 用户切换、收起、恢复、resize 只改变同一 view 的 bounds/visibility，不重建页面。
 - [x] 五语言文案已补齐，Browser component test 已覆盖基础 DOM identity。
-- [ ] `verify:gui-smoke` 与 Gate A evidence 复核无第二右栏、无系统浏览器、无重复 WebContents。
+- [x] permission/download/load-failed 只接受当前选中 native tab 的完整 identity；状态带位于 native viewport 外，`ResizeObserver` 同步下移 WebContents bounds。
+- [x] 独立 Browser Gate A projection 场景已覆盖首屏 mount、同 tab 导航、查找、缩放、新建/选择/关闭 tab、收起/恢复、桌面视口 resize、canonical session/thread 投影和横向溢出；证据标记为 Gate A，不替代 Gate B。
+- [ ] `verify:gui-smoke` 与 Gate A 多语言/状态 evidence 复核无第二右栏、无系统浏览器或布局重叠；同一 WebContents identity 继续只由 Gate B 证明。
 
 退出条件：Gate A 打开、切换、收起、恢复和 resize 通过，无系统浏览器弹出、第二右栏、Canvas 镜像或重复 WebContents。
 
 ### P3：旧链清退、Agent Browser API 与安全
 
-状态：进行中；Browser identity、stale-control、active-turn 与 native renderer termination cleanup 已完成，旧链清退和剩余扩展生命周期证据仍阻塞。
+状态：进行中；Browser identity、stale-control、active-turn、native 用户接管、permission/download Host 投影、native lifecycle cleanup 与 Browser action approval 安全行为已完成，旧链清退、artifact/grant、风险覆盖扩展和历史恢复仍阻塞。
 
 - [x] Dynamic Browser capability 以稳定对象语义暴露 tabs/open/claim/release/navigate/observe/screenshot/mark。
 - [x] 空白 Claw 任务打开 Browser 前先建立 canonical runtime session/thread；owner 申请失败显示明确错误，不再永久显示 loading。
@@ -123,8 +138,35 @@ App Server 仍是业务与 turn owner；Electron 只执行原生 WebContents、d
 - [ ] 重建 protocol schema/generated client，删除 `browserSession/*`、外部 CDP Settings 和旧 fixture。
 - [ ] 删除 `BrowserSessionRef`、Canvas Browser owner 与 `mcp__lime-browser__*` 正向依赖。
 - [ ] DOM snapshot 使用稳定 node identity；click/fill/press/select 只对 actionability 通过的目标执行。
-- [ ] 普通读取/导航自动执行；提交、发布、删除、支付、身份信息、上传下载和脚本等高风险动作进入 human takeover 或审批闭环。
+- [x] 普通读取/导航自动执行；危险 click、敏感 fill 与 Enter 提交进入 canonical action approval，批准后恢复原 action，拒绝不执行 mutation。
+- [x] Browser dynamic tool 已进入 `agent/current_provider_turn` + `tool-runtime` 的通用 execution approval lifecycle；Electron 关键词/敏感字段 heuristic 只生成 fail-closed preflight 风险事实，不保存用户决策或建立第二套审批状态机。
+- [ ] 把 action-time 风险覆盖扩展到上传、下载完成、任意脚本、permission grant 与 artifact open/reveal，并补对应 turn-scoped grant/evidence。
 - [x] 用户人工操作后 Agent observe 能继续读取同一 tab，不创建新 session。
+- [x] native 用户输入优先于 pending approval：旧 snapshot/token 同时失效，Host 不允许延迟到达的 `approvedExecute` 重放页面 mutation。
+
+#### P3 action approval 两阶段合同
+
+```text
+dynamic tool call
+  -> item/tool/call(phase=preflight)
+  -> completed | approval descriptor
+  -> canonical action_required(toolFamily=browser_action, allow_once/decline/cancel)
+  -> item/tool/call(phase=approvedExecute, one-time approvalToken)
+  -> completed | failed closed
+```
+
+- `DynamicToolCallParams.phase` 只允许 `preflight / approvedExecute`；第二阶段必须携带 Host 在第一阶段生成的
+  一次性 opaque token。
+- approval descriptor 只携带 action kind、reason、risk class、tab/snapshot/node lineage 和 token；普通 tool
+  content 不承担控制协议解析。
+- Rust `agent/current_provider_turn` 是审批等待与 resume owner；`tool-runtime::execution_approval` 生成
+  `browser_action` projection，固定 `session_cache_supported=false`，因此只允许
+  `allow_once / decline / cancel`。
+- Electron 只做风险 preflight 和 token/identity/snapshot 校验。批准执行必须匹配原
+  `thread/turn/call/tool/tab/view/WebContents/snapshot/backendNode`，token 消费一次；stale、重放、跨 tab 或跨
+  snapshot 一律 fail closed。
+- decline 不发第二阶段 mutation；cancel 继续使用 canonical turn/action cancellation。Browser Host 不保存用户
+  决策，不把风险动作改成 `human_takeover` 后再假装完成。
 
 退出条件：至少一个真实网页工作流完成 observe、导航、用户操作、Agent observe 和 evidence join；旧 MCP Browser 工具不再是 current owner。
 
@@ -161,7 +203,7 @@ Agent action.turnId           == active turnId
 
 2026-08-19 核心 identity Gate B 已通过：`npm run smoke:browser-runtime-electron-gate-b -- --timeout-ms 60000` 启动真实 Electron 与 runtime provider fixture，经 `app_server_handle_json_lines` 建立 current Thread/Turn，完成 `browser__openTabs -> browser__claimTab -> browser__observe -> final assistant` provider round trip。Agent observation 与 GUI 的 `browserSessionId/tabId/threadId/webContentsId` 全等，`viewId/windowId/ownerWebContentsId` 为有效 native identity，turn 以 `completed` 收口，Renderer 地址栏随后通过真实 `browser_tab_navigate` 操作相同 tab；console/page error 为零，生产 mock fallback 命中为零。脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-summary.json`。
 
-同一 fixture 已扩展为 active-turn 生命周期场景：用户导航后旧 snapshot mutation fail-closed，Agent 重新 claim/observe 使用同一 tab/WebContents，terminal release detach debugger；随后通过真实 Electron renderer-process-gone 事件回收 Browser route。该证据标记 identity、stale-control、turn cleanup 与 renderer termination cleanup 为 pass；直接 `destroyed` 事件仍由 Electron Host 单测覆盖，不把两者混为同一触发器。尚未覆盖 approval、cancel、sidecar disconnect、window close、权限/下载和历史恢复的真实 Electron 终态。
+同一 fixture 已扩展为 active-turn lifecycle、approval、user-control、cancel、disconnect、window-close、permission 与 download 八个场景。lifecycle 场景覆盖用户导航后旧 snapshot mutation fail-closed、Agent 重新 claim/observe、terminal release/debugger detach 和真实 renderer-process-gone route cleanup；approval 场景覆盖危险 click 的 `preflight -> action_required -> allow_once -> approvedExecute`，同一 tab/snapshot/action 只执行一次，再以 fresh snapshot 触发第二次审批并拒绝，页面 mutation count 保持为 1；user-control 场景在审批等待中直接点击 native 页面，证明同一 `webContentsId` 上 `pageRevision 4 -> 5`、`controlOwner=user`、`activeTurnId=null`、debugger detached，旧 token 被拒绝且 mutation count 保持为 1，canonical turn 以 `interrupted` 收口；cancel 场景由用户可见 GUI 停止按钮触发 `turn/interrupt`，验证 current Electron IPC、`interrupted` read model、pending provider response 取消、同一用户 tab release 和 debugger detach；disconnect 场景真实向当前 App Server sidecar 发送 `SIGTERM`，验证 pending provider response 未完成即关闭、user tab release、debugger detach 和生产 mock 命中为零；window-close 场景验证真实 owner `BrowserWindow.closed` 触发 native Browser WebContents 与 Browser route 清理，并产生 identity 对齐的 `browser-tab-closed(reason=window-closed)`。permission 场景验证真实 geolocation 调用被 Host 拒绝、canonical identity 到达当前 tab 状态带且状态带不被 native view 遮挡；download 场景验证同一 download identity 的 `started -> cancelled`、当前 tab 状态带、路径脱敏和明确 turn 终态。直接 `destroyed` 事件仍由 Electron Host 单测覆盖，不与 renderer-process-gone 混为同一触发器；artifact ref、permission grant、download completion 和历史恢复的真实 Electron 终态仍未覆盖。
 
 ## 验证矩阵
 
@@ -198,12 +240,69 @@ Agent action.turnId           == active turnId
 - 2026-08-19：补齐 Electron sidecar disconnect 与 native `WebContents` destroyed 的统一清理：`AppServerHost` 在 stop、sidecar exit、restart failure 和 stale connection 触发 `BrowserTabHost.connectionLost`；user-origin tab release 并 detach debugger，Agent-origin 无 mark tab close；原生 `destroyed` 事件发出 `browser-tab-closed`。`embeddedBrowserHost`、`browserTabHost`、`appServerDynamicToolHost` 定向回归共 32 tests 通过，`npm run typecheck:electron` 与 `git diff --check` 通过。尚未把该单测结果冒充真实 Electron disconnect/window-close Gate B evidence。
 - 2026-08-19：真实 Electron Gate B 以 `npm run smoke:browser-runtime-electron-gate-b -- --timeout-ms 60000 --interval-ms 500` 通过（退出码 `0`）。25 项断言全部通过：同一 session/tab/thread/WebContents、用户接管后的 stale snapshot 拒绝与重新 observe、turn release/debugger detach，以及 renderer-process-gone 后 Browser route 关闭；console/page error 为零。证据文件为 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-summary.json`。该运行验证的是 renderer termination 触发器；`destroyed` 事件路径仍以 Host 单测为准。
 - 2026-08-19：补齐取消/失败终态的 fail-closed 边界：`AppServerDynamicToolHost` 仅在 `turn/completed` 携带 `completed/failed/interrupted/canceled/cancelled` 状态时调用 `BrowserTabHost.turnEnded`，缺少状态或仍为 `inProgress` 时不释放 Browser 控制；Electron DynamicTool/Browser/AppServerHost 定向回归 62 tests、`npm run typecheck:electron` 通过。真实 Electron cancel、sidecar disconnect 和 window-close evidence 仍待补。
+- 2026-08-19：`smoke:browser-runtime-electron-gate-b -- --scenario cancel` 以真实 Electron 退出码 `0` 通过。GUI 停止按钮经 `safeInvoke -> app_server_handle_json_lines -> turn/interrupt` 取消 active Browser turn；Electron IPC trace 的 thread/turn identity 与 Agent 控制态一致，read model 为 `interrupted`，pending provider response 在完成前关闭且没有续发请求，同一 user tab 保留原 `webContentsId` 并进入 `released`，debugger `attached -> detached`。15 项断言全部通过，console/page/invoke error 与生产 mock fallback 均为零；脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-cancel-summary.json`。Browser/Electron 定向回归 68 tests、`npm run test:contracts` 均通过；默认 `--scenario lifecycle` 随后重跑，25 项断言和真实 Electron 退出码仍为 pass。
+- 2026-08-19：`smoke:browser-runtime-electron-gate-b -- --scenario window-close` 真实 Electron 场景通过。Agent 已 claim/observe 同一用户 tab 且 debugger attached 后，fixture 在主进程关闭对应 owner `BrowserWindow`；Renderer page 随之关闭，原生窗口与 Browser WebContents 均不可解析，`BrowserTabHost` 广播 `browser-tab-closed(reason=window-closed)`，其中 thread/tab/view identity 与关闭前 route 一致，provider 无续发请求。12 项断言全部通过，console/page error 为零；脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-window-close-summary.json`。Browser/Electron 定向回归 69 tests 与 `npm run typecheck:electron` 通过。
+- 2026-08-19：`smoke:browser-runtime-electron-gate-b -- --scenario disconnect` 真实 Electron 场景通过。根因是 `AppServerConnection` 安装持续 server-request handler 后，sidecar 退出令 transport 立即 reject，而 read pump 在 `finally` 中因 handler 仍存在而无间隔自启，微任务自旋使 Electron main 占满 CPU，并饿死 sidecar restart timer 与 Renderer IPC。connection 现把首个非 timeout transport error 固化为 terminal read 状态，失败现有与后续读取且不再重启 pump；回归测试先在旧实现稳定观察到第二次 read，再于修复后通过。真实 `SIGTERM` 场景 12 项断言全部通过：pending provider response `responseFinished=false`、同一 user tab `released`、debugger `attached -> detached`、无 provider 续发、console/page error 与生产 mock fallback 为零，命令退出码为 `0`。脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-disconnect-summary.json`。App Server client 123 tests、Browser/Electron fixture 36 tests、`npm run typecheck:electron`、`npm run test:contracts`、`npm run governance:scripts` 与 `npm run docs:boundary` 通过；随后 lifecycle 25 项和 window-close 12 项真实 Gate B 回归均以退出码 `0` 通过。`npm run verify:gui-smoke` 的 SHELL-01 真实 Electron summary 与命令退出码均为 pass；`npm run smoke:agent-runtime-current-fixture` 也完整通过，此前挂起的 unknown Item 场景已收口，聚合 fixture 同时覆盖 history/cache、terminal、cancel-then-continue、approval、Skills/MCP/media 与 Coding Workbench，且 `liveProviderUsed=false`。
+- 2026-08-19：修复 Browser Host 事件投影的 tab 漂移和 native view 遮挡。Renderer 现在按 session/thread/tab/view/WebContents/owner/window 完整 identity 接受 permission/download/load-failed 事件，切 tab 清除上一 tab 状态；error/permission/download 状态带移到 native viewport 外，bounds observer 让真实 `WebContentsView` 从状态带下方开始。Browser Host 与 Workspace 回归覆盖 canonical identity、selected-tab 过滤、状态带顺序和非 absolute 布局。
+- 2026-08-19：`smoke:browser-runtime-electron-gate-b -- --scenario permission` 真实 Electron 场景通过。native page 的 geolocation 调用经 Electron permission handler 返回 `User denied Geolocation`，Host 决策为 `blocked`；事件与 GUI 当前 tab 的 session/thread/tab/view/WebContents/owner/window identity 全等，permission band 底边与 native viewport 顶边对齐，turn 以 `interrupted` 收口。11 项断言全部通过，console/page error 与生产 mock fallback 为零；脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-permission-summary.json`。`navigator.permissions.query` 在 Electron 中仍可能报告 `granted`，不能代替真实 API 调用结果。
+- 2026-08-19：`smoke:browser-runtime-electron-gate-b -- --scenario download` 真实 Electron 场景通过。native page 触发 data URL 下载，Electron `will-download` 产生同一 `downloadId` 的 `started -> cancelled`，GUI 当前 tab 显示取消状态且不遮挡 native viewport，evidence 不含 `savePath` 或用户目录，turn 以 `interrupted` 收口。11 项断言全部通过，console/page error 与生产 mock fallback 为零；脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-download-summary.json`。fixture 主动取消下载，故不证明文件落盘、artifact ref、完成后的 open/reveal 或 packaged 跨平台行为。
+- 2026-08-19：收尾回归使用最新 Electron 构建全部通过：Browser Host/Workspace/Gate assertion 21 tests，根与 Electron typecheck，`npm run test:contracts`，`npm run smoke:agent-runtime-current-fixture`，`npm run verify:gui-smoke`，lifecycle Gate B 25/25、permission Gate B 11/11、download Gate B 11/11，`npm run governance:scripts`、`npm run docs:boundary` 与全工作树 `git diff --check`。三份 Gate B evidence 的 `proofLevel=Gate B`、`status=pass`、`failedAssertions=[]`；本轮未运行 live provider、Windows/macOS packaged 下载完成、Browser 专项 Gate A 或历史恢复。
+- 2026-08-20：确认 dynamic Browser route 在通用 orchestration 前直接返回是审批旁路根因；确认
+  `RuntimeSessionInputHandle` 可在前一 waiter resolve 后以同一 call id 顺序注册第二阶段。冻结上述 typed
+  `preflight -> action_required -> approvedExecute` 合同，开始实现协议、canonical approval 与 Host 一次性恢复。
+- 2026-08-20：Browser action approval 主链与真实 Electron Gate B 安全行为收口。协议/schema/generated client 已表达
+  `preflight / approvedExecute / approvalToken / typed approval descriptor`；Rust current provider turn 复用 canonical
+  `action_required`，Browser 固定 `allow_once / decline / cancel` 且关闭 session cache；Electron Host 对危险 click、敏感
+  fill 与 Enter 做 preflight，并以一次性 token 校验原 thread/turn/call/tool/tab/view/WebContents/snapshot/node 后执行。
+  最新 `--scenario approval` 中首次 `allow_once` 后 mutation count 为 1，fresh snapshot 的第二次危险 click 经 GUI
+  `decline` 后仍为 1，user tab `released`、debugger detached，console/page/invoke error 与 production mock fallback 均为
+  零；此前 canonical turn 曾因并行 read-model 终态投影漂移为 `interrupted`，形成 14/15、退出码 `1` 的中间结果；
+  该结果已由后续 15/15 重跑证据取代，未放宽断言，也未覆盖并行 `runtime/read_model.rs` / `runtime/load_context.rs`。
+- 2026-08-20：新增 native 用户接管 Gate B。`--scenario user-control` 在 canonical approval 等待期间直接点击同一
+  `WebContentsView`，Host 立即 detach debugger、将 `pageRevision 4 -> 5`、`activeTurnId=null`、`controlOwner=user`，
+  并清除 snapshot 与 pending token；随后 GUI 的旧 `allow_once` 被拒绝，mutation count 在用户点击后和 stale approval 后
+  均为 1。canonical turn 以 `interrupted` 收口，12/12 断言、console/page/invoke error 与 production mock fallback 门禁
+  全部通过，退出码 `0`。脱敏 evidence 位于
+  `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-user-control-summary.json`。
+- 2026-08-20：本轮 Host + Gate assertion 22/22、`npm run typecheck:electron`、`npm run test:contracts`、
+  `npm run governance:scripts`、`npm run verify:gui-smoke` 和 lifecycle Gate B 均通过。最新
+  `npm run smoke:agent-runtime-current-fixture` 已通过 history/cache、streaming、Electron guard、unknown Item 与 Claw
+  首页热路径，但最终在 Coding Workbench recovery 退出 `1`：App Server recovery turn 已为 `completed` 且成功预览可见，
+  GUI 未出现 recovery assistant 文本。该并行投影阻塞不在 Browser 写集，不能把聚合门禁标记为全绿。
+- 2026-08-20：收口 Browser P0 current-owner negative guard。生产 prompt 不再写入旧
+  `mcp__lime-browser__*` 正向工具名，测试 fixture 改用中性的 `mcp__site__*` 命名；新增
+  `src/lib/governance/browserCurrentBoundary.test.ts` 扫描 Browser Host、App Server dynamic-tool host、typed gateway、
+  Right Surface 与通用 prompt，阻止旧 MCP/Canvas/BrowserSessionRef owner 回流。Browser 相关治理与 prompt 定向测试
+  41 项通过，`git diff --check` 通过；protocol/schema/generated client 与历史 fixture 清退仍未完成。
+- 2026-08-20：重跑 Browser action approval Gate B。最新并行 read-model 终态投影已稳定为 `completed`，真实 Electron
+  `--scenario approval` 15/15 断言、退出码 `0`；首个危险 click 经 `allow_once` 仅执行一次，第二次 fresh snapshot
+  经 `decline` 不产生 mutation，tab release、debugger detach、console/page/invoke error 与 production mock fallback
+  均通过。证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-approval-summary.json`。
+- 2026-08-20：修复 Browser Right Surface 收起/恢复时已有 route 被重新导航的问题：`BrowserTabHost` 对已有 tab remount
+  只恢复 native view bounds/visibility，不再次传入初始 URL；补充 Electron Host 回归，确认同一 WebContents 与当前 URL
+  保留。Gate A fixture 同时等待导航终态 `isLoading=false`，避免加载完成覆盖 zoom。重跑
+  `npm run smoke:browser-runtime-gate-a -- --timeout-ms 120000 --interval-ms 500`，真实 Electron fixture 在不启动 Agent
+  turn 的前提下完成首屏 canonical tab、同 tab 导航、查找、缩放恢复、新建/选择/关闭 tab、收起/恢复、session/thread
+  identity 稳定、桌面视口 resize、可用 viewport 和横向溢出检查，16 项断言全部通过；console/page error 为零。证据位于
+  `.lime/qc/gui-evidence/browser-runtime-gate-a/browser-runtime-gate-a-summary.json`，proofLevel 明确为 `Gate A`，不宣称
+  Agent 与用户共享 WebContents。
+- 2026-08-21：Browser 状态带补齐稳定 `data-browser-workspace-status` 语义与 live-region/alert 角色，覆盖
+  `loading`、`host-unavailable`、`load-error`、`host-error`、`permission-blocked` 与下载终态；新增
+  `BrowserWorkspaceStatus.test.tsx`，逐项检查 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`ko-KR` 资源、插值文案、状态
+  identity 和非 viewport 布局护栏。该结果属于 Gate A 组件级证据，尚未替代真实 Electron 的多语言/状态截图矩阵。
+- 2026-08-21：补充 `BrowserWorkspace.test.tsx` 的真实 `load-failed` 事件回归，确认当前 native tab 的 DNS 失败会进入
+  `load-error` 状态带并保留错误详情，其他 tab 的同类事件被忽略；Browser Workspace/Status 定向回归 7 tests、根
+  typecheck、Prettier、`git diff --check` 与真实 Electron Gate A projection 16/16 通过。
+- 2026-08-21：按 source 拆分 `load-error` 与 `host-error`，避免 Host/IPC 操作失败被误记为页面加载失败；重跑
+  `npm run verify:gui-smoke`，SHELL-01 真实 Electron summary 为 pass、退出码 `0`。最终 Browser 定向回归 7/7、Gate A
+  16/16、根 typecheck、docs boundary、Prettier 与 scoped `git diff --check` 全部通过；仍未生成五语言逐项截图或状态
+  matrix，不扩大本轮 proof claim。
 
 ## 当前结论
 
-- 当前综合完成度约 74%；owner/identity/Host 基础纵切、reverse-request 回环、同 tab Gate B、用户接管后的 stale-control/reclaim、turn terminal cleanup、sidecar disconnect/native renderer termination 清理已落地，旧链清退、Browser 专项 Gate A、权限/下载/窗口关闭的真实 evidence、完整安全审批与历史恢复仍未完成。
+- 当前综合完成度约 90%；owner/identity/Host 基础纵切、reverse-request 回环、同 tab Gate B、native 用户接管与 stale-control/reclaim、turn complete/cancel cleanup、真实 sidecar disconnect、window-close、permission block、download cancel、native renderer termination、Browser action approval 安全行为与 current-owner negative guard 已落地，独立 Browser Gate A 核心投影已通过；旧协议链清退、Gate A 多语言/状态矩阵、artifact/grant、审批风险覆盖扩展与历史恢复仍未完成。
 - 用户闭环：空白 Claw 任务会先补齐 canonical owner，再进入 Browser mount；Agent Browser 工具不再永久停在 `inProgress`，真实 Electron 已完成 `openTabs -> claimTab -> observe -> final assistant`。
-- Gate A：Browser 组件与普通 GUI shell 已验证，但专项 visual matrix 被旧 files geometry 断言阻塞，尚未形成 Browser 专项证据。
-- Gate B：核心 identity/dynamic-tool round trip、同一 `WebContentsView`、用户地址栏导航同 tab、用户导航后的 stale snapshot 拒绝、重新 claim/observe、debugger detach/close-release 和 renderer-process-gone route cleanup 均为 pass；直接 `destroyed` 事件已有 Host 单测，approval、cancel、disconnect、window-close、权限/下载和历史恢复真实证据仍未完成。
-- 通用门禁：contracts 已通过；最新 GUI smoke 的产品断言通过但进程生命周期收尾失败；Agent current fixture 在既有 `unknown-item` 场景挂起。二者均需按 harness 缺口单独修复和重跑，当前不能宣称完整本地门禁全绿。
-- 下一刀：补齐 cancel、窗口关闭、权限/下载的真实 Electron turn-scoped 终态证据；随后清理旧 visual matrix 的 Canvas/CDP 正向 fixture并补专项 Gate A。
+- Gate A：独立 Browser projection 场景已形成 `Gate A` 证据并通过 16 项 chrome/identity/layout 断言，包含收起/恢复后同一 session/tab/thread/address；五语言逐项截图和 error/permission/download/approval 状态矩阵仍待补齐，旧 files geometry visual matrix 继续保持 dead fixture，不作为 Browser Gate A/B。
+- Gate B：核心 identity/dynamic-tool round trip、同一 `WebContentsView`、用户地址栏导航同 tab、用户导航和 native 点击后的 stale snapshot/token 拒绝、重新 claim/observe、Browser action `allow_once/decline` 的 mutation 安全性、cancel/disconnect debugger detach/release、window-close、permission block、download cancel 和 renderer-process-gone route cleanup 已有真实证据；`user-control` 为 12/12 pass，最新 approval 为 15/15 pass。
+- 通用门禁：Host/Gate 定向回归、Electron typecheck、contracts、scripts governance、GUI smoke 与 lifecycle Gate B 已取得退出码 `0`。Agent current fixture 最终在并行 Coding Workbench recovery GUI 投影缺少 assistant 文本处退出 `1`；跨平台打包与 live provider 不在本轮 claim boundary。
+- 下一刀：补 artifact/grant、上传与下载完成/open/reveal 的受控引用，并扩展敏感动作风险覆盖；随后清理旧 visual matrix 的 Canvas/CDP 正向 fixture（不纳入 Browser Gate A/B），把当前组件级多语言/状态断言扩展成真实 Electron Gate A evidence，再补历史 snapshot/replay 恢复与负向回流守卫。

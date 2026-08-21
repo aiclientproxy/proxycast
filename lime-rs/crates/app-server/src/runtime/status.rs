@@ -1,13 +1,6 @@
-use chrono::DateTime;
-use chrono::Duration;
-use chrono::Utc;
-
-use app_server_protocol::AgentEvent;
 use app_server_protocol::AgentSessionStatus;
 use app_server_protocol::AgentTurn;
 use app_server_protocol::AgentTurnStatus;
-
-const STALE_RUNNING_TURN_AFTER_SECS: i64 = 30 * 60;
 
 pub(super) fn agent_turn_is_active(status: AgentTurnStatus) -> bool {
     matches!(
@@ -71,8 +64,6 @@ pub(super) fn session_status_from_turn_status(turn_status: AgentTurnStatus) -> A
 pub(super) struct RuntimeTurnSnapshot<'a> {
     pub turn_id: &'a str,
     pub status: &'a str,
-    pub started_at: Option<&'a str>,
-    pub latest_activity_at: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -87,13 +78,13 @@ pub(super) fn resolve_session_runtime_state<'a>(
     session_status: &str,
     pending_request_count: usize,
     turns: impl IntoIterator<Item = RuntimeTurnSnapshot<'a>>,
-    now: DateTime<Utc>,
+    active_turn_id: Option<&str>,
 ) -> SessionRuntimeState {
     let turns = turns.into_iter().collect::<Vec<_>>();
     let session_status = normalize_session_runtime_status(session_status);
     let latest_turn_status = turns
         .last()
-        .map(|turn| normalize_turn_runtime_status(turn.status));
+        .map(|turn| effective_turn_runtime_status(turn, active_turn_id));
 
     if session_runtime_status_is_terminal(session_status.as_str()) {
         return SessionRuntimeState {
@@ -110,14 +101,15 @@ pub(super) fn resolve_session_runtime_state<'a>(
         .count();
     let has_waiting_turn = turns
         .iter()
-        .any(|turn| normalize_turn_runtime_status(turn.status) == "waitingAction");
-    let active_turn_id = turns
-        .iter()
-        .rev()
-        .find(|turn| runtime_turn_has_active_activity(turn, now))
-        .map(|turn| turn.turn_id.to_string());
+        .any(|turn| {
+            active_turn_id == Some(turn.turn_id)
+                && normalize_turn_runtime_status(turn.status) == "waitingAction"
+        });
+    let active_turn_id = active_turn_id.map(ToString::to_string);
 
-    let thread_status = if pending_request_count > 0 || has_waiting_turn {
+    let thread_status = if active_turn_id.is_some()
+        && (pending_request_count > 0 || has_waiting_turn)
+    {
         "waitingAction"
     } else if active_turn_id.is_some() || queued_turn_count > 0 {
         "running"
@@ -142,38 +134,68 @@ pub(super) fn resolve_agent_session_runtime_state(
     session_status: AgentSessionStatus,
     pending_request_count: usize,
     turns: &[AgentTurn],
-    events: &[AgentEvent],
-    now: DateTime<Utc>,
+    active_turn_id: Option<&str>,
 ) -> SessionRuntimeState {
     resolve_session_runtime_state(
         agent_session_status_label(session_status),
         pending_request_count,
         turns
             .iter()
-            .map(|turn| runtime_turn_state_from_agent_turn(turn, events)),
-        now,
+            .map(runtime_turn_state_from_agent_turn),
+        active_turn_id,
     )
 }
 
-pub(super) fn runtime_turn_state_from_agent_turn<'a>(
-    turn: &'a AgentTurn,
-    events: &'a [AgentEvent],
-) -> RuntimeTurnSnapshot<'a> {
+pub(super) fn normalize_agent_session_runtime_snapshot(
+    session: &mut app_server_protocol::AgentSession,
+    turns: &mut [AgentTurn],
+    active_turn_id: Option<&str>,
+) {
+    let runtime_state = resolve_agent_session_runtime_state(
+        session.status,
+        0,
+        turns,
+        active_turn_id,
+    );
+    for turn in turns {
+        if matches!(
+            turn.status,
+            AgentTurnStatus::Accepted
+                | AgentTurnStatus::Running
+                | AgentTurnStatus::WaitingAction
+        ) && active_turn_id != Some(turn.turn_id.as_str())
+        {
+            turn.status = AgentTurnStatus::Canceled;
+        }
+    }
+    session.status = match runtime_state.thread_status.as_str() {
+        "running" => AgentSessionStatus::Running,
+        "waitingAction" => AgentSessionStatus::WaitingAction,
+        "completed" => AgentSessionStatus::Completed,
+        "failed" => AgentSessionStatus::Failed,
+        "canceled" => AgentSessionStatus::Canceled,
+        _ => AgentSessionStatus::Idle,
+    };
+}
+
+pub(super) fn runtime_turn_state_from_agent_turn(turn: &AgentTurn) -> RuntimeTurnSnapshot<'_> {
     RuntimeTurnSnapshot {
         turn_id: turn.turn_id.as_str(),
         status: agent_turn_status_label(turn.status),
-        started_at: turn.started_at.as_deref(),
-        latest_activity_at: latest_event_timestamp_for_turn(events, turn.turn_id.as_str()),
     }
 }
 
-fn runtime_turn_has_active_activity(turn: &RuntimeTurnSnapshot<'_>, now: DateTime<Utc>) -> bool {
-    match normalize_turn_runtime_status(turn.status).as_str() {
-        "waitingAction" => true,
-        "accepted" | "running" => {
-            running_turn_has_recent_activity([turn.started_at, turn.latest_activity_at], now)
-        }
-        _ => false,
+fn effective_turn_runtime_status(
+    turn: &RuntimeTurnSnapshot<'_>,
+    active_turn_id: Option<&str>,
+) -> String {
+    let status = normalize_turn_runtime_status(turn.status);
+    if matches!(status.as_str(), "accepted" | "running" | "waitingAction")
+        && active_turn_id != Some(turn.turn_id)
+    {
+        "canceled".to_string()
+    } else {
+        status
     }
 }
 
@@ -214,35 +236,6 @@ fn canonical_terminal_status(status: &str) -> &'static str {
     }
 }
 
-pub(super) fn running_turn_has_recent_activity<'a>(
-    timestamps: impl IntoIterator<Item = Option<&'a str>>,
-    now: DateTime<Utc>,
-) -> bool {
-    let latest = timestamps
-        .into_iter()
-        .flatten()
-        .filter_map(parse_rfc3339_utc)
-        .max();
-    let Some(latest) = latest else {
-        return true;
-    };
-    now.signed_duration_since(latest) <= Duration::seconds(STALE_RUNNING_TURN_AFTER_SECS)
-}
-
-fn parse_rfc3339_utc(raw: &str) -> Option<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(raw.trim())
-        .ok()
-        .map(|value| value.with_timezone(&Utc))
-}
-
-fn latest_event_timestamp_for_turn<'a>(events: &'a [AgentEvent], turn_id: &str) -> Option<&'a str> {
-    events
-        .iter()
-        .rev()
-        .find(|event| event.turn_id.as_deref() == Some(turn_id))
-        .map(|event| event.timestamp.as_str())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,24 +249,42 @@ mod tests {
                 RuntimeTurnSnapshot {
                     turn_id: "turn-completed",
                     status: "completed",
-                    started_at: Some("2026-07-16T00:00:00Z"),
-                    latest_activity_at: Some("2026-07-16T00:00:01Z"),
                 },
                 RuntimeTurnSnapshot {
                     turn_id: "turn-queued",
                     status: "queued",
-                    started_at: Some("2026-07-16T00:00:02Z"),
-                    latest_activity_at: Some("2026-07-16T00:00:02Z"),
                 },
             ],
-            DateTime::parse_from_rfc3339("2026-07-16T00:00:03Z")
-                .expect("valid test timestamp")
-                .with_timezone(&Utc),
+            None,
         );
 
         assert_eq!(state.thread_status, "running");
         assert_eq!(state.latest_turn_status.as_deref(), Some("queued"));
         assert_eq!(state.active_turn_id, None);
         assert_eq!(state.queued_turn_count, 1);
+    }
+
+    #[test]
+    fn only_execution_owner_keeps_turn_running() {
+        let turns = [
+            RuntimeTurnSnapshot {
+                turn_id: "turn-orphan",
+                status: "running",
+            },
+            RuntimeTurnSnapshot {
+                turn_id: "turn-live",
+                status: "running",
+            },
+        ];
+
+        let live = resolve_session_runtime_state("running", 0, turns, Some("turn-live"));
+        assert_eq!(live.thread_status, "running");
+        assert_eq!(live.latest_turn_status.as_deref(), Some("running"));
+        assert_eq!(live.active_turn_id.as_deref(), Some("turn-live"));
+
+        let cold = resolve_session_runtime_state("running", 0, turns, None);
+        assert_eq!(cold.thread_status, "idle");
+        assert_eq!(cold.latest_turn_status.as_deref(), Some("canceled"));
+        assert_eq!(cold.active_turn_id, None);
     }
 }

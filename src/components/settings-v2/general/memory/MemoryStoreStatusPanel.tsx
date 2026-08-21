@@ -27,7 +27,7 @@ import {
 interface MemoryStoreStatusPanelProps {
   vectorSearchEnabled: boolean;
   memoryStatusDescriptionKey: string;
-  setMessage: (message: string | null) => void;
+  showMessage: (message: string) => void;
 }
 
 function memoryPanelT(
@@ -67,7 +67,7 @@ function healthRootScope(
 export function MemoryStoreStatusPanel({
   vectorSearchEnabled,
   memoryStatusDescriptionKey,
-  setMessage,
+  showMessage,
 }: MemoryStoreStatusPanelProps) {
   const { t } = useTranslation("settings");
   const [health, setHealth] = useState<MemoryStoreHealthResponse | null>(null);
@@ -94,14 +94,6 @@ export function MemoryStoreStatusPanel({
     string | null
   >(null);
   const [rolloutConsolidating, setRolloutConsolidating] = useState(false);
-
-  const showMessage = useCallback(
-    (message: string) => {
-      setMessage(message);
-      window.setTimeout(() => setMessage(null), 2500);
-    },
-    [setMessage],
-  );
 
   const refreshHealth = useCallback(
     async (showSuccess = false) => {

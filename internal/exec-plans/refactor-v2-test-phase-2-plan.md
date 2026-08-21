@@ -551,3 +551,44 @@ Electron Desktop Host
 - current 保留：DeepSWE source cache、schema `1.3` manifest、adapter v6、Pier `0.3.1` 工具目录、batch planner/aggregator、Desktop Smoke contract/controlled runner、路线图与执行计划。
 - 清理后回归：benchmark 单测改为临时 stale identity fixture，不再依赖仓库历史 run；空 run 根目录聚合保持 `blocked`，禁止把清理后的零样本当作 baseline。
 - 分类：已删除的旧对标文档、历史 run、patch、partial evidence 和 batch summary 为 `dead / deleted`；current adapter/manifest/contract 为 `current`；无新增 `compat` 或历史 fallback。
+
+## 52. 2026-08-19 Agent QC 历史快照清理
+
+- 用户已确认继续清理旧材料；删除 `internal/tests/lime-agent-qc-completion-audit-2026-05-10.md` 与 `internal/tests/lime-agent-qc-stale-worker-analysis-2026-05-10.md`。
+- 两份文件均为 2026-05-10 的一次性 qcloop 取证快照，不属于 current 构建图；current 运营规则、状态、证据契约和重跑流程由 `lime-agent-qc-qcloop-operations.md`、`lime-agent-qc-current-blockers.md`、`lime-agent-qc-evidence-contract.md` 与 `lime-agent-qc-stale-owner-intervention.md` 承接。
+- 同步移除 `internal/tests/README.md` 中的两条历史导航；未新增 compat 或 fallback，分类为 `dead / deleted`。
+- 验证要求：`npm run governance:legacy-report`、`npm run governance:scripts`、`npm run test:contracts`、目标文件 `git diff --check`，并确认仓库不再引用两个已删除路径。
+
+## 53. 2026-08-19 DeepSWE blocker 复核
+
+- 本轮没有新增生产代码；继续沿 DeepSWE 主线复核当前可关闭项与基础设施边界。
+- current 验证：Desktop Smoke 5 preflight `53/53`；Core Release 20 preflight 通过；Desktop benchmark/contract 定向测试 `16/16`；controlled smoke fixture `12/12`；受控五题聚合保持 `status=product_path_only`、`controlledGateBComplete=true`、`recoveryCoverageComplete=true`、`liveTrialCount=0`、`desktopCodingPass=false`。
+- 测试稳定性：两个固定 source preflight 测试在高负载下曾超过 Vitest 默认 5 秒；按仓库已有约定将测试 timeout 提升到 `20_000ms`，重跑 benchmark 定向套件 `20/20`、controlled smoke `12/12` 通过。该调整只作用于测试 harness，不放宽业务终态或 verifier 门禁。
+- current 聚合口径保持 fail-closed：Release 20 空 run 根目录 `observedRunCount=0`，`scoreEligible=false`，所有 score/时延/预算指标为 `null`；受控 Desktop 证据不进入 DeepSWE score。
+- blocker：本机发现 macOS `container` CLI `0.12.3`，但 `container system status` 为 `apiserver is not running and not registered with launchd`；Pier runner 仍要求 Docker-compatible `container info`/separate verifier。未启动系统服务、未安装容器 runtime、未执行 live provider 或 Pier verifier。
+- 经用户确认后尝试 `container system start`：LaunchAgent 注册成功，但 API server 持续以 exit code `1` 崩溃重启，`status`/`info` 均无法返回；官方 `system stop` 也因 API 不可用超时。本轮已用精确 plist 执行 `launchctl bootout` 回滚，服务与 `container-apiserver` 进程均已停止，未删除任何镜像或用户数据。
+- 实际 adapter prerequisite 使用 `.lime/benchmark/tools/bin/pier` 与 `/Users/coso/.local/bin/container` 复核：Pier `0.3.1` 通过；container 明确失败为 `Plugins are unavailable`，并把 `info` 解析为不存在的插件。Harbor `docker` environment 后续依赖 `docker compose exec/cp/up/down`，因此 Apple container 不是可替代的 verifier runtime，不能通过 wrapper 冒充 Docker-compatible backend。
+- 分类：benchmark adapter、manifest、preflight、contract 与 controlled product path 为 `current / closed`；无 verifier runtime、无 live provider 和无 candidate score 为 `blocked / evidence pending`；没有新增 compat/deprecated/dead surface。
+- 下一刀：按用户最新决定跳过所有 Docker/Pier separate verifier 步骤，不安装或启动 Docker-compatible runtime；继续收口不依赖容器的 Desktop controlled 产品路径、失败证据与稳定性。不得把 controlled evidence 当作 score。
+
+## 54. 2026-08-19 DeepSWE Desktop 无 Docker 稳定性复验
+
+- 范围与环境决定：用户明确要求所有依赖 Docker 或 Pier separate verifier 的步骤跳过，并要求不安装 Docker。已停止此前刚启动的 Homebrew `colima docker docker-compose` 安装及其下载子进程，`colima`、`docker`、`docker-compose`、`lima` 均未安装；Apple `container` API server 也保持停止。本轮不再探测、安装或启动容器 runtime，不执行 live DeepSWE/Pier verifier。
+- Yjs 失败现场：第二轮完整 suite 的 TypeScript、Go、Python、Rust 四题通过，`yjs-map-conflict-detection` 停在 `terminal-wait`；App Server projection sequence `50` 只有 attempt 6 的 `provider.request.started`，没有 `provider.first_event.received`，turn 保持 `active`。该轮按 fail-closed 退出，没有 summary，也没有自动重试或伪造 terminal。
+- 诊断闭环：显式连接诊断下的 Yjs 单题 `20260819T140423Z` 通过，第 6 个 chat response 产生 `response-finish` 与 `response-close`，Gate B、artifact、session reopen、approval resume 和 cancel no-ghost-write 均通过。因此当前证据不支持固定的第 6 响应格式缺陷，但仍保留一次可复核的 runtime 首事件未到达现场。
+- current 测试改造：fixture server 新增静默 `captureConnectionDiagnostics`，正常运行不刷 stderr；Desktop runner 跟踪 fixture/electron/gui-submit/terminal-wait/reopen/artifact-preview/recovery-approval stage，失败时写 `<run>/<task>.failure.json`。failure evidence 只保存 response kind、tool name、stream/message/tool 数量和连接生命周期，不保存 Authorization、完整 messages 或 prompt；终态 timeout 仍为 `240000ms`，未增加自动重试。
+- 三轮稳定性结论：以 `controlled-artifact-final/20260819T022022Z`、失败的 `controlled-no-docker-trial-2/20260819T135342Z` 和 `controlled-no-docker-trial-3/20260819T141421Z` 为三次完整 suite 尝试，suite 通过率为 `2/3`，task-trial Gate B 通过率为 `14/15`；Yjs 为 `2/3`，其余四题均为 `3/3`。另有一次 Yjs 诊断单题通过。第三轮五题全部 `gateBPass=true`、`recoveryCoverageComplete=true`，且未生成 `*.failure.json`。
+- 验证：Prettier 四个目标文件与本计划通过；fixture server 与 Desktop controlled smoke 定向测试 `2 files / 29 tests` 通过；`npm run governance:scripts`、`npm run governance:legacy-report`、`git diff --check` 通过，legacy report 的零引用候选、分类漂移和边界违规均为 `0`；第三轮真实 Electron suite 五题均通过 Electron/preload/IPC、`app_server_handle_json_lines`、App Server、RuntimeCore、read model、GUI、native test、artifact 正文、session reopen、approval resume 与 cancel no-ghost-write，production mock/invoke/console/page error 为零。
+- 判分与分类：连接诊断和脱敏 failure evidence 为 `current / closed`；自动重试、放宽 terminal、controlled evidence 冒充 live score 为 `dead / forbidden-to-add`；Docker/Pier verifier 为本轮 `skipped / user decision`。第三轮仍严格输出 `trialKind=controlled_product_smoke`、`status=product_path_only`、`liveTrialCount=0`、`desktopCodingPass=false`，第二期完成度保持 `80%`。
+
+## 55. 2026-08-20 DeepSWE Desktop restart read-model 收口
+
+- 主目标：继续完善不依赖 Docker 的 Desktop coding/DeepSWE 产品链，修复 Electron/App Server sidecar restart 后孤儿 `running / inProgress` Turn 仍被 GUI 当作运行中的缺陷；reload 与 restart 必须按真实 live execution owner 分流。
+- 写集：`lime-rs/crates/app-server/src/runtime/{thread_read,status,read_model,load_context,session_lifecycle,projection_store}.rs` 及对应 runtime 测试；`scripts/agent-runtime/reopen-running-turn-cdp-gate.{mjs,test.mjs}`、共享 GUI trace observer；未完成会话路线图、本架构事实源与本计划。避让 Browser Host、dynamic tool、protocol schema 和其它并行工作树热区。
+- Codex 对齐：`session_loops.active_turn_id` 是唯一 live execution owner。Renderer reload 保留 owner，可 `thread/resume` 同一 Turn；Electron/App Server restart 后 owner 消失，`thread/read/list/turns-list` 只在 response 中投影 `InProgress -> Interrupted` 与 `Idle/NotLoaded`，不改 durable ProjectionStore，不合成 terminal event，也不发送伪 `turn/interrupt`。
+- keep-alive 结论：external fixture/backend 子进程存活不能证明 App Server session loop 存活；进程重启后禁止用 backend keep-alive、持久 `active_turn_id` 或时间戳冒充 running。旧 30 分钟 stale-running 启发式、固定 session/thread identity、legacy `runtimeOptions/eventName/queueIfBusy/skipPreSubmitResume` 已删除。
+- Gate 合同：secondary session 改为读取 `thread/start` 返回的 canonical UUID；direct `turn/start` 使用 typed `input[]` 并读取响应 `turn.id`；direct cancel 只用 `turn/interrupt { threadId, turnId }`。restart 分支必须断言 `waitForReadModelInterrupted`、`threadInactiveAfterRestart`、`guiIdleAfterRestart`、`turnCancelSkippedAfterRestart` 与 `noSyntheticCanceledEventAfterRestart`；reload 分支继续验证 same-turn resume/cancel。
+- 当前验证：App Server related `1664/1664` 通过；Gate 与共享 GUI trace observer Vitest `2 files / 91 tests` 通过；`node --check` 和目标脚本 `git diff --check` 通过。Yjs 既有三次完整 suite 结果保持 `2/3`、另有两轮独立成功证据；本轮没有用自动重试或放宽 terminal 掩盖失败。
+- 待验证：`smoke:agent-runtime-current-fixture`、`test:contracts`、`verify:gui-smoke`、reload multi-session Gate B 与 restart multi-session Gate B。fresh summary 落盘且 assertions 全真前，本节保持 `in_progress`。
+- 环境决定：Docker、Colima、Lima 与 Pier separate verifier 继续按用户决定 `skipped / user decision`；不安装、不启动、不探测，不产生或宣称 DeepSWE score。controlled Gate B 仍固定是 `product_path_only`，`desktopCodingPass=false`，第二期完成度保持 `80%`。
+- 分类：owner-based read projection、canonical Gate contract 与脱敏 failure evidence 为 `current`；external backend 为 `test-only`；时间戳启发式、legacy request shape、cold restart 自动续跑与 synthetic cancel 为 `dead / deleted / forbidden-to-restore`；没有 compat/deprecated wrapper。

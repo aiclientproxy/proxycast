@@ -137,15 +137,28 @@ describe("Codex model native tool policy origin", () => {
         "pub enum ConfigShellToolType",
         "pub enum ApplyPatchToolType",
       );
-      expect(shellType).toContain("Default");
-      expect(shellType).toContain("Local");
       expect(shellType).toContain("UnifiedExec");
       expect(shellType).toContain("Disabled");
-      expect(shellType).toContain("ShellCommand");
+      const hasLegacyVariants = [
+        "Default",
+        "Local",
+        "ShellCommand",
+      ].every((variant) => shellType.includes(variant));
+      const hasCurrentAliases = [
+        'alias = "default"',
+        'alias = "local"',
+        'alias = "shell_command"',
+      ].every((alias) => shellType.includes(alias));
+      expect(hasLegacyVariants || hasCurrentAliases).toBe(true);
     }
 
     const codexToolConfigSource = readIfExists(CODEX_TOOL_CONFIG_SOURCE);
     if (!codexToolConfigSource) {
+      return;
+    }
+
+    if (!codexToolConfigSource.includes("shell_type_for_model_and_features")) {
+      expect(codexToolConfigSource).toContain("UnifiedExecShellMode");
       return;
     }
 

@@ -38,6 +38,16 @@ afterEach(async () => {
 });
 
 describe("openai-compatible-fixture-server", () => {
+  it("可静默捕获连接诊断供失败 evidence 使用", async () => {
+    const fixture = await startFixture({ captureConnectionDiagnostics: true });
+    const response = await fetch(`${fixture.baseUrl}/v1/models`);
+    expect(response.ok).toBe(true);
+    await response.json();
+    expect(fixture.connectionDiagnostics.map((entry) => entry.event)).toEqual(
+      expect.arrayContaining(["request-start", "response-finish"]),
+    );
+  });
+
   it("不得通过强杀 active connection 掩盖 provider 生命周期缺陷", () => {
     const source = fs.readFileSync(
       path.resolve("scripts/lib/openai-compatible-fixture-server.mjs"),

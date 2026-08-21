@@ -4,7 +4,10 @@ import {
   filterConversationThreadItems,
   mergeThreadItems,
 } from "../utils/threadTimelineView";
-import { messageHasInterruptedPlaceholder } from "./agentInterruptedMessageContent";
+import {
+  messageHasInterruptedPlaceholder,
+  stripInterruptedPlaceholderText,
+} from "./agentInterruptedMessageContent";
 
 export type AgentSessionDetailMergeMode =
   | "history_hydrate"
@@ -125,20 +128,20 @@ export function shouldPreserveDetachedLocalSnapshot(params: {
 }
 
 export function mergeRuntimeSyncThreadItems(
-  localItems: AgentThreadItem[],
-  incomingItems: AgentThreadItem[],
+  localItems: readonly AgentThreadItem[],
+  incomingItems: readonly AgentThreadItem[],
 ): AgentThreadItem[] {
   const localItemById = new Map(localItems.map((item) => [item.id, item]));
   return filterConversationThreadItems(
-    mergeThreadItems(localItems, incomingItems),
+    mergeThreadItems([...localItems], [...incomingItems]),
   ).map((item) => {
     const localItem = localItemById.get(item.id);
     if (item.type !== "agent_message" || localItem?.type !== "agent_message") {
       return item;
     }
 
-    const localText = localItem.text.trim();
-    const incomingText = item.text.trim();
+    const localText = stripInterruptedPlaceholderText(localItem.text);
+    const incomingText = stripInterruptedPlaceholderText(item.text);
     if (
       !localText ||
       (incomingText && !localText.includes(incomingText)) ||

@@ -1,38 +1,85 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BrowserTabState } from "@/lib/api/browserTab";
+import type {
+  BrowserTabDownloadEvent,
+  BrowserTabLoadFailedEvent,
+  BrowserTabPermissionRequestEvent,
+  BrowserTabState,
+} from "@/lib/api/browserTab";
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(async () => undefined),
   createIdentity: vi.fn(),
+  downloadHandler: null as ((event: BrowserTabDownloadEvent) => void) | null,
+  find: vi.fn(),
+  goBack: vi.fn(),
+  goForward: vi.fn(),
+  loadFailedHandler: null as
+    | ((event: BrowserTabLoadFailedEvent) => void)
+    | null,
   mount: vi.fn(),
   navigate: vi.fn(),
   openIdentity: vi.fn(),
+  permissionHandler: null as
+    | ((event: BrowserTabPermissionRequestEvent) => void)
+    | null,
   select: vi.fn(),
   setBounds: vi.fn(),
+  setZoom: vi.fn(),
   stateHandler: null as ((state: BrowserTabState) => void) | null,
+  stopFind: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => {
-  const t = (key: string) => key;
+  const t = (key: string, options?: Record<string, unknown>) => {
+    const rendered = key.replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
+      String(options?.[name] ?? `{{${name}}}`),
+    );
+    return options
+      ? `${rendered} ${Object.values(options).join(" ")}`
+      : rendered;
+  };
   return { useTranslation: () => ({ t }) };
 });
 
 vi.mock("@/lib/api/browserTab", () => ({
   closeBrowserTab: mocks.close,
-  findInBrowserTab: vi.fn(),
-  goBackBrowserTab: vi.fn(),
-  goForwardBrowserTab: vi.fn(),
+  findInBrowserTab: mocks.find,
+  goBackBrowserTab: mocks.goBack,
+  goForwardBrowserTab: mocks.goForward,
   isBrowserTabHostAvailable: () => true,
   listenBrowserTabClosed: vi.fn(async () => () => undefined),
-  listenBrowserTabDownload: vi.fn(async () => () => undefined),
-  listenBrowserTabLoadFailed: vi.fn(async () => () => undefined),
-  listenBrowserTabPermissionRequest: vi.fn(async () => () => undefined),
+  listenBrowserTabDownload: vi.fn(async (handler) => {
+    mocks.downloadHandler = handler;
+    return () => {
+      if (mocks.downloadHandler === handler) {
+        mocks.downloadHandler = null;
+      }
+    };
+  }),
+  listenBrowserTabLoadFailed: vi.fn(async (handler) => {
+    mocks.loadFailedHandler = handler;
+    return () => {
+      if (mocks.loadFailedHandler === handler) {
+        mocks.loadFailedHandler = null;
+      }
+    };
+  }),
+  listenBrowserTabPermissionRequest: vi.fn(async (handler) => {
+    mocks.permissionHandler = handler;
+    return () => {
+      if (mocks.permissionHandler === handler) {
+        mocks.permissionHandler = null;
+      }
+    };
+  }),
   listenBrowserTabState: vi.fn(async (handler) => {
     mocks.stateHandler = handler;
     return () => {
-      mocks.stateHandler = null;
+      if (mocks.stateHandler === handler) {
+        mocks.stateHandler = null;
+      }
     };
   }),
   mountBrowserTab: mocks.mount,
@@ -40,9 +87,9 @@ vi.mock("@/lib/api/browserTab", () => ({
   reloadBrowserTab: vi.fn(),
   selectBrowserTab: mocks.select,
   setBrowserTabBounds: mocks.setBounds,
-  setBrowserTabZoom: vi.fn(),
+  setBrowserTabZoom: mocks.setZoom,
   stopBrowserTab: vi.fn(),
-  stopFindInBrowserTab: vi.fn(),
+  stopFindInBrowserTab: mocks.stopFind,
 }));
 
 vi.mock("@/lib/api/browserWorkspace", () => ({
@@ -114,6 +161,9 @@ describe("BrowserWorkspace", () => {
     mocks.openIdentity.mockReset();
     mocks.createIdentity.mockReset();
     mocks.setBounds.mockReset();
+    mocks.downloadHandler = null;
+    mocks.loadFailedHandler = null;
+    mocks.permissionHandler = null;
     mocks.openIdentity.mockResolvedValue({
       browserSessionId: "browser-session-1",
       tabId: "browser-session-1:user:primary",
@@ -221,7 +271,9 @@ describe("BrowserWorkspace", () => {
       '[data-testid="browser-workspace"]',
     );
     expect(workspace?.getAttribute("data-browser-tab-id")).toBe("tab-agent-1");
-    expect(workspace?.getAttribute("data-browser-active-turn-id")).toBe("turn-1");
+    expect(workspace?.getAttribute("data-browser-active-turn-id")).toBe(
+      "turn-1",
+    );
     expect(workspace?.getAttribute("data-browser-control-owner")).toBe("agent");
     expect(workspace?.getAttribute("data-browser-page-revision")).toBe("0");
     expect(workspace?.getAttribute("data-browser-view-id")).toBe(
@@ -283,4 +335,155 @@ describe("BrowserWorkspace", () => {
       container.querySelector('[data-testid="browser-workspace-loading"]'),
     ).toBeNull();
   });
+
+  it("只投影当前 native tab 的权限和下载事件，并把状态带放在 viewport 外", async () => {
+    await act(async () => {
+      root.render(
+        <BrowserWorkspace runtimeSessionId="session-1" threadId="thread-1" />,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const permission = permissionEvent();
+    await act(async () => {
+      mocks.permissionHandler?.({ ...permission, tabId: "other-tab" });
+    });
+    expect(
+      container.querySelector('[data-testid="browser-workspace-permission"]'),
+    ).toBeNull();
+
+    await act(async () => {
+      mocks.permissionHandler?.(permission);
+    });
+    const banner = container.querySelector(
+      '[data-testid="browser-workspace-permission"]',
+    );
+    const viewport = container.querySelector(
+      '[data-testid="browser-workspace-viewport"]',
+    );
+    expect(banner).not.toBeNull();
+    expect(banner?.className).not.toContain("absolute");
+    expect(
+      Boolean(
+        banner &&
+        viewport &&
+        banner.compareDocumentPosition(viewport) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBe(true);
+
+    await act(async () => {
+      mocks.downloadHandler?.(downloadEvent());
+    });
+    const shelf = container.querySelector(
+      '[data-testid="browser-workspace-download"]',
+    );
+    expect(shelf).not.toBeNull();
+    expect(shelf?.className).not.toContain("absolute");
+
+    await act(async () => {
+      mocks.stateHandler?.(
+        browserState({
+          tabId: "tab-2",
+          viewId: "view-2",
+          webContentsId: 202,
+        }),
+      );
+    });
+    expect(
+      container
+        .querySelector('[data-testid="browser-workspace"]')
+        ?.getAttribute("data-browser-tab-id"),
+    ).toBe("tab-2");
+    expect(
+      container.querySelector('[data-testid="browser-workspace-permission"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="browser-workspace-download"]'),
+    ).toBeNull();
+  });
+
+  it("把当前 native tab 的 load-failed 事件投影成可区分的错误状态", async () => {
+    await act(async () => {
+      root.render(
+        <BrowserWorkspace runtimeSessionId="session-1" threadId="thread-1" />,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      mocks.loadFailedHandler?.({
+        ...browserState({ isLoading: false }),
+        errorCode: -105,
+        errorDescription: "NAME_NOT_RESOLVED",
+        failureCategory: "dns",
+      });
+    });
+
+    const error = container.querySelector(
+      '[data-testid="browser-workspace-error"]',
+    );
+    expect(error?.getAttribute("data-browser-workspace-status")).toBe(
+      "load-error",
+    );
+    expect(error?.getAttribute("data-browser-error-source")).toBe("load");
+    expect(error?.textContent).toContain(
+      "agentChat.browserWorkspace.loadFailedDnsTitle",
+    );
+    expect(error?.textContent).toContain("NAME_NOT_RESOLVED");
+
+    await act(async () => {
+      mocks.loadFailedHandler?.({
+        ...browserState({ tabId: "other-tab" }),
+        errorCode: -105,
+        errorDescription: "OTHER_TAB",
+        failureCategory: "dns",
+      });
+    });
+    expect(error?.textContent).not.toContain("OTHER_TAB");
+  });
 });
+
+function permissionEvent(
+  overrides: Partial<BrowserTabPermissionRequestEvent> = {},
+): BrowserTabPermissionRequestEvent {
+  return {
+    browserSessionId: "browser-session-1",
+    decision: "blocked",
+    embeddingOrigin: "https://example.com",
+    ownerWebContentsId: 41,
+    permission: "geolocation",
+    requestingUrl: "https://example.com/",
+    requestId: "permission-1",
+    tabId: "browser-session-1:user:primary",
+    threadId: "thread-1",
+    url: "https://example.com/",
+    viewId: "browser:browser-session-1:user:primary",
+    webContentsId: 101,
+    windowId: 7,
+    ...overrides,
+  };
+}
+
+function downloadEvent(
+  overrides: Partial<BrowserTabDownloadEvent> = {},
+): BrowserTabDownloadEvent {
+  return {
+    browserSessionId: "browser-session-1",
+    canResume: false,
+    downloadId: "download-1",
+    filename: "report.pdf",
+    mimeType: "application/pdf",
+    ownerWebContentsId: 41,
+    receivedBytes: 100,
+    state: "completed",
+    tabId: "browser-session-1:user:primary",
+    threadId: "thread-1",
+    totalBytes: 100,
+    url: "https://example.com/report.pdf",
+    viewId: "browser:browser-session-1:user:primary",
+    webContentsId: 101,
+    windowId: 7,
+    ...overrides,
+  };
+}

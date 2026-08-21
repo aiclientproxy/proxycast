@@ -8,6 +8,7 @@ import type { ActionRequired, Message } from "../types";
 import type { ActiveStreamState } from "./agentStreamSubmissionLifecycle";
 import {
   bindRecoveredAgentStreamThread,
+  mergeRecoveredAssistantProjectionText,
   rememberLocallyInterruptedAgentStreamBinding,
   rememberLocallyStartedAgentStreamBinding,
   resolveAgentStreamResumeBindingTarget,
@@ -23,6 +24,24 @@ function createStateSetter<T>(state: { current: T }) {
 }
 
 describe("agentStreamResumeBinding", () => {
+  it("恢复回放的 marker-only 文本不能覆盖已有 partial 正文", () => {
+    expect(
+      mergeRecoveredAssistantProjectionText(
+        {
+          id: "assistant-1",
+          role: "assistant",
+          content: "以下是今日国际新闻简要整理：",
+          contentParts: [
+            { type: "text", text: "以下是今日国际新闻简要整理：" },
+          ],
+          timestamp: new Date(),
+          runtimeTurnId: "turn-1",
+        },
+        "(已停止)",
+      ),
+    ).toBe("以下是今日国际新闻简要整理：\n\n(已停止)");
+  });
+
   it("running read model 应解析成固定 session event 绑定目标", () => {
     expect(
       resolveAgentStreamResumeBindingTarget({
@@ -538,6 +557,19 @@ describe("agentStreamResumeBinding", () => {
         text: "恢复中的输出",
       }),
     ]);
+    expect(messages.current[0]).toMatchObject({
+      content: "恢复中的输出",
+      contentParts: [
+        expect.objectContaining({
+          type: "text",
+          text: "恢复中的输出",
+          metadata: expect.objectContaining({
+            threadItemId: "message-1",
+            turnId: "turn-1",
+          }),
+        }),
+      ],
+    });
 
     eventHandler?.({
       payload: {

@@ -370,10 +370,10 @@ export function createToolInventory(): AgentRuntimeToolInventory {
         visible_in_context: true,
       },
       {
-        name: "mcp__lime-browser__navigate",
+        name: "mcp__site__navigate",
         description: "打开网页",
         source_kind: "runtime_extension",
-        source_label: "mcp__lime-browser",
+        source_label: "mcp__site",
         status: "loaded",
         deferred_loading: false,
         always_visible: false,
@@ -405,25 +405,22 @@ export function createToolInventory(): AgentRuntimeToolInventory {
     ],
     extension_surfaces: [
       {
-        extension_name: "mcp__lime-browser",
+        extension_name: "mcp__site",
         description: "浏览器桥接工具面",
         source_kind: "mcp_bridge",
         deferred_loading: true,
         allowed_caller: "assistant",
         available_tools: ["navigate", "click"],
         always_expose_tools: ["navigate"],
-        loaded_tools: ["mcp__lime-browser__navigate"],
-        searchable_tools: [
-          "mcp__lime-browser__navigate",
-          "mcp__lime-browser__click",
-        ],
+        loaded_tools: ["mcp__site__navigate"],
+        searchable_tools: ["mcp__site__navigate", "mcp__site__click"],
       },
     ],
     extension_tools: [
       {
-        name: "mcp__lime-browser__navigate",
+        name: "mcp__site__navigate",
         description: "打开网页",
-        extension_name: "mcp__lime-browser",
+        extension_name: "mcp__site",
         source_kind: "mcp_bridge",
         deferred_loading: false,
         allowed_caller: "assistant",
@@ -434,8 +431,8 @@ export function createToolInventory(): AgentRuntimeToolInventory {
     ],
     mcp_tools: [
       {
-        server_name: "lime-browser",
-        name: "mcp__lime-browser__navigate",
+        server_name: "site",
+        name: "mcp__site__navigate",
         description: "导航到指定页面",
         deferred_loading: false,
         always_visible: true,

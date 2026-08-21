@@ -30,7 +30,9 @@ import {
   shouldPreserveDetachedLocalSnapshot,
   type AgentSessionDetailMergeMode,
 } from "./agentSessionTimelineMergePolicy";
-import { collectDetailThreadItems } from "./agentChatHistoryThreadItems";
+import {
+  collectDetailThreadItems,
+} from "./agentChatHistoryThreadItems";
 import { createExecutionRuntimeFromSessionDetail } from "../utils/sessionExecutionRuntime";
 import { normalizeExecutionStrategy } from "./agentChatCoreUtils";
 import type { AgentRuntimeAdapter } from "./agentRuntimeAdapter";
@@ -41,9 +43,12 @@ import {
 } from "../projection/threadReadActivity";
 import { resolveFinalAgentMessageItemIds } from "../utils/agentMessagePhase";
 import {
+  appendInterruptedPlaceholderText,
   buildInterruptedMessageContentPatch,
+  contentHasInterruptedPlaceholder,
   markInterruptedAgentMessageThreadItems,
   messageHasInterruptedPlaceholder,
+  stripInterruptedPlaceholderText,
 } from "./agentInterruptedMessageContent";
 import { consumeLocallyInterruptedAgentStreamBinding } from "./agentStreamResumeBinding";
 
@@ -57,6 +62,91 @@ export interface AgentSessionSnapshot {
   threadRead: AgentRuntimeThreadReadModel | null;
   executionRuntime: AgentSessionExecutionRuntime | null;
   todoItems: AgentTodoItem[];
+}
+
+export function mergeCanonicalAgentMessagesIntoMessages(
+  messages: Message[],
+  threadItems: AgentThreadItem[],
+): Message[] {
+  const canonicalTextByTurnId = new Map<
+    string,
+    { text: string; hasInterruptedPlaceholder: boolean }
+  >();
+  const canonicalTextByItemId = new Map<
+    string,
+    { text: string; hasInterruptedPlaceholder: boolean }
+  >();
+  for (const item of threadItems) {
+    if (item.type !== "agent_message" || !item.turn_id) {
+      continue;
+    }
+    const text = stripInterruptedPlaceholderText(item.text);
+    if (!text.trim()) {
+      continue;
+    }
+    const current = canonicalTextByTurnId.get(item.turn_id);
+    const nextCanonical = {
+      text,
+      hasInterruptedPlaceholder: contentHasInterruptedPlaceholder(item.text),
+    };
+    if (current && current.text.trim().length >= text.trim().length) {
+      if (
+        !current.hasInterruptedPlaceholder &&
+        contentHasInterruptedPlaceholder(item.text)
+      ) {
+        canonicalTextByTurnId.set(item.turn_id, {
+          ...current,
+          hasInterruptedPlaceholder: true,
+        });
+      }
+      canonicalTextByItemId.set(item.id, current);
+      continue;
+    }
+    canonicalTextByTurnId.set(item.turn_id, nextCanonical);
+    canonicalTextByItemId.set(item.id, nextCanonical);
+  }
+
+  if (canonicalTextByTurnId.size === 0) {
+    return messages;
+  }
+
+  return messages.map((message) => {
+    if (message.role !== "assistant" || !message.runtimeTurnId) {
+      return message;
+    }
+    const canonical =
+      canonicalTextByTurnId.get(message.runtimeTurnId) ||
+      canonicalTextByItemId.get(message.id);
+    if (!canonical) {
+      return message;
+    }
+    const localText = stripInterruptedPlaceholderText(message.content);
+    if (localText.trim().length >= canonical.text.trim().length) {
+      return message;
+    }
+    const shouldAppendInterruptedPlaceholder =
+      canonical.hasInterruptedPlaceholder ||
+      messageHasInterruptedPlaceholder(message);
+    const nextContent = shouldAppendInterruptedPlaceholder
+      ? appendInterruptedPlaceholderText(canonical.text)
+      : canonical.text;
+    const textPartSeen = { value: false };
+    const nextContentParts = message.contentParts?.map((part) => {
+      if (part.type !== "text" || textPartSeen.value) {
+        return part;
+      }
+      textPartSeen.value = true;
+      return { ...part, text: nextContent };
+    });
+    return {
+      ...message,
+      content: nextContent,
+      contentParts:
+        nextContentParts && textPartSeen.value
+          ? nextContentParts
+          : message.contentParts,
+    };
+  });
 }
 
 export type { AgentSessionDetailMergeMode } from "./agentSessionTimelineMergePolicy";
@@ -763,6 +853,14 @@ export function buildHydratedAgentSessionSnapshot(
   const shouldReconcileTerminalRuntimeDetail =
     hasIncomingTerminalTimeline &&
     normalizedDetailMergeMode !== "history_hydrate";
+  // 终态详情可能只带停止标记，而运行期间的 read model 已保留更长的正文。
+  // 先把本地 canonical item 带入 hydrate，避免 marker-only detail 覆盖 partial。
+  const incomingItemsForHydration = shouldReconcileTerminalRuntimeDetail
+    ? mergeRuntimeSyncThreadItems(effectiveCurrentThreadItems, incomingItems)
+    : incomingItems;
+  const detailForHydration = shouldReconcileTerminalRuntimeDetail
+    ? { ...detail, items: incomingItemsForHydration }
+    : detail;
   const mayPreserveExistingTimelineBySession =
     effectiveCurrentSessionId === topicId ||
     (effectiveCurrentSessionId === null &&
@@ -771,7 +869,7 @@ export function buildHydratedAgentSessionSnapshot(
         effectiveCurrentThreadTurns.length > 0 ||
         effectiveCurrentThreadItems.length > 0));
   const hydratedMessagesForCurrentMode = hydrateSessionDetailMessages(
-    detail,
+    detailForHydration,
     topicId,
     {
       compactCompletedHistory: shouldCompactCompletedSessionHistory(detail),
@@ -787,7 +885,7 @@ export function buildHydratedAgentSessionSnapshot(
   );
   const hydratedMessagesForCompatibility =
     mayPreserveExistingTimelineBySession && effectiveCurrentMessages.length > 0
-      ? hydrateSessionDetailMessages(detail, topicId, {
+      ? hydrateSessionDetailMessages(detailForHydration, topicId, {
           compactCompletedHistory: shouldCompactCompletedSessionHistory(detail),
           includeTimelineFallback: true,
           includeTimelineFallbackUsers: shouldReconcileTerminalRuntimeDetail,
@@ -832,11 +930,14 @@ export function buildHydratedAgentSessionSnapshot(
     ? timelineMergeDecision.shouldPreserveByRuntimeSync
       ? mergeRuntimeSyncThreadItems(effectiveCurrentThreadItems, incomingItems)
       : filterConversationThreadItems(
-          mergeThreadItems(effectiveCurrentThreadItems, incomingItems),
+          mergeThreadItems(
+            effectiveCurrentThreadItems,
+            incomingItemsForHydration,
+          ),
         )
     : filterConversationThreadItems(incomingItems);
   const visibleIncomingTurns = mergeThreadTurns(incomingTurns);
-  const visibleIncomingItems = mergeThreadItems(incomingItems);
+  const visibleIncomingItems = mergeThreadItems(incomingItemsForHydration);
   const nextMessages =
     shouldPreserveExistingTimeline && hydratedMessages.length === 0
       ? effectiveCurrentMessages
@@ -858,14 +959,18 @@ export function buildHydratedAgentSessionSnapshot(
     preferredItems: visibleIncomingItems,
   });
   const interruptedTurnIds = collectInterruptedTurnIds({
-    items: incomingItems,
+    items: shouldPreserveExistingTimeline
+      ? incomingItemsForHydration
+      : incomingItems,
     threadRead: detail.thread_read,
     turns: incomingTurns,
   });
   for (const turnId of collectLocallyInterruptedTurnIds({
     candidateTurnIds: collectLocalInterruptedCandidateTurnIds({
       currentTurnId: nextCurrentTurnId,
-      items: incomingItems,
+      items: shouldPreserveExistingTimeline
+        ? incomingItemsForHydration
+        : incomingItems,
       threadRead: detail.thread_read,
       turns: incomingTurns,
     }),
@@ -890,13 +995,19 @@ export function buildHydratedAgentSessionSnapshot(
     interruptedTurnIds,
     { fallbackTurnId: nextCurrentTurnId },
   );
+  const nextMessagesWithCanonicalTerminalItems = shouldReconcileTerminalRuntimeDetail
+    ? mergeCanonicalAgentMessagesIntoMessages(
+        nextMessagesWithTerminalMarkers,
+        nextThreadItemsWithTerminalMarkers,
+      )
+    : nextMessagesWithTerminalMarkers;
 
   return {
     executionStrategy: normalizeExecutionStrategy(nextExecutionStrategy),
     snapshot: {
       sessionId: syncSessionId ? topicId : currentSessionId,
       workingDir: detail.working_dir?.trim() || null,
-      messages: nextMessagesWithTerminalMarkers,
+      messages: nextMessagesWithCanonicalTerminalItems,
       threadTurns: nextThreadTurns,
       threadItems: nextThreadItemsWithTerminalMarkers,
       currentTurnId: nextCurrentTurnId,

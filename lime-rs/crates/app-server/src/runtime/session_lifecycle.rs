@@ -10,14 +10,16 @@ use std::collections::{HashMap, HashSet};
 
 const DEFAULT_SESSION_LIST_LIMIT: u32 = 100;
 
-fn stored_session_to_overview(stored: &StoredSession) -> AgentSessionOverview {
+fn stored_session_to_overview(
+    stored: &StoredSession,
+    active_turn_id: Option<&str>,
+) -> AgentSessionOverview {
     let session = &stored.session;
     let runtime_state = resolve_agent_session_runtime_state(
         session.status,
         0,
         &stored.turns,
-        &stored.events,
-        chrono::Utc::now(),
+        active_turn_id,
     );
     let explicit_title = session
         .business_object_ref
@@ -129,9 +131,25 @@ fn metadata_nested_bool(metadata: &serde_json::Value, parent: &str, key: &str) -
 }
 
 impl RuntimeCore {
+    pub(in crate::runtime) async fn active_turn_id_for_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<String>, RuntimeCoreError> {
+        self.session_loops
+            .snapshot(session_id)
+            .await
+            .map(|snapshot| snapshot.and_then(|snapshot| snapshot.active_turn_id))
+            .map_err(|error| {
+                RuntimeCoreError::Backend(format!(
+                    "read runtime session snapshot for session state: {error}"
+                ))
+            })
+    }
+
     fn list_runtime_core_session_overviews(
         &self,
         params: &AgentSessionListParams,
+        active_turn_ids: &HashMap<String, String>,
     ) -> Result<Vec<AgentSessionOverview>, RuntimeCoreError> {
         if params.archived_only.unwrap_or(false) {
             return Ok(Vec::new());
@@ -162,7 +180,12 @@ impl RuntimeCore {
                 ))
             })
             .filter(|stored| !stored_session_hidden_from_user_recents(stored))
-            .map(stored_session_to_overview)
+            .map(|stored| {
+                stored_session_to_overview(
+                    stored,
+                    active_turn_ids.get(&stored.session.session_id).map(String::as_str),
+                )
+            })
             .filter(|overview| {
                 scope.matches_session(
                     overview.workspace_id.as_deref(),
@@ -177,6 +200,20 @@ impl RuntimeCore {
         params: AgentSessionListParams,
     ) -> Result<AgentSessionListResponse, RuntimeCoreError> {
         let params = self.normalize_agent_session_list_params(params).await?;
+        let loaded_session_ids = self
+            .state
+            .lock()
+            .expect("runtime core state mutex poisoned")
+            .sessions
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut active_turn_ids = HashMap::new();
+        for session_id in loaded_session_ids {
+            if let Some(active_turn_id) = self.active_turn_id_for_session(&session_id).await? {
+                active_turn_ids.insert(session_id, active_turn_id);
+            }
+        }
         let mut sessions = Vec::new();
         let mut persisted_session_ids = HashSet::new();
         if let Some(projection_store) = self.projection_store.as_ref() {
@@ -189,11 +226,21 @@ impl RuntimeCore {
                 }
             }
         }
-        sessions.extend(
-            self.list_runtime_core_session_overviews(&params)?
-                .into_iter()
-                .filter(|session| persisted_session_ids.insert(session.session_id.clone())),
-        );
+        for runtime_session in
+            self.list_runtime_core_session_overviews(&params, &active_turn_ids)?
+        {
+            if let Some(projected) = sessions
+                .iter_mut()
+                .find(|projected| projected.session_id == runtime_session.session_id)
+            {
+                projected.thread_status = runtime_session.thread_status;
+                projected.latest_turn_status = runtime_session.latest_turn_status;
+                projected.active_turn_id = runtime_session.active_turn_id;
+                projected.queued_turn_count = runtime_session.queued_turn_count;
+            } else if persisted_session_ids.insert(runtime_session.session_id.clone()) {
+                sessions.push(runtime_session);
+            }
+        }
         sessions.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
         if let Some(limit) = params.limit.map(|value| value as usize) {
             sessions.truncate(limit);
@@ -302,10 +349,17 @@ impl RuntimeCore {
         }
         let workflow_audit_events =
             self.read_workflow_audit_events_for_session(&params.session_id)?;
+        let active_turn_id = stored
+            .turns
+            .iter()
+            .rev()
+            .find(|turn| super::status::agent_turn_blocks_queue_resume(turn.status))
+            .map(|turn| turn.turn_id.as_str());
         let detail = read_model::runtime_session_read_detail_with_options(
             &stored,
             read_model::ReadDetailOptions::from_params(&params),
             &workflow_audit_events,
+            active_turn_id,
         );
 
         Ok(AgentSessionReadResponse {

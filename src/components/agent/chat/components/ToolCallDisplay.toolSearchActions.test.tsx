@@ -139,7 +139,7 @@ describe("ToolCallDisplay tool search and actions", () => {
       toolCalls: [
         {
           id: "tool-browser-1",
-          name: "mcp__lime-browser__browser_navigate",
+          name: "mcp__site__navigate",
           arguments: JSON.stringify({ url: "https://example.com/docs" }),
           status: "completed",
           result: { success: true, output: "ok" },

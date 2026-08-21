@@ -67,6 +67,7 @@ import {
 import {
   buildHydratedAgentSessionSnapshot,
   createEmptyAgentSessionSnapshot,
+  mergeCanonicalAgentMessagesIntoMessages,
   resolveMissingSessionFromTopicsAction,
   resolveRestorableTopicSessionId,
   shouldPreserveActiveLocalSessionDuringBackgroundRestoreInitialization,
@@ -771,8 +772,16 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       if (!snapshot.threadRead) {
         return;
       }
-      setThreadItemsState((currentItems) =>
-        mergeAgentSessionReadModelThreadItems(currentItems, snapshot),
+      const nextThreadItems = mergeAgentSessionReadModelThreadItems(
+        threadItemsRef.current,
+        snapshot,
+      );
+      setThreadItemsState(nextThreadItems);
+      setMessagesState((currentMessages) =>
+        mergeCanonicalAgentMessagesIntoMessages(
+          currentMessages,
+          nextThreadItems,
+        ),
       );
       threadReadRef.current = snapshot.threadRead;
       const currentSessionId = sessionIdRef.current?.trim();
@@ -785,7 +794,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       }
       setThreadRead(snapshot.threadRead);
     },
-    [setThreadItemsState, sessionIdRef],
+    [setMessagesState, setThreadItemsState, sessionIdRef],
   );
   const getThreadIdForSubmit = useCallback(
     (targetSessionId?: string) => {

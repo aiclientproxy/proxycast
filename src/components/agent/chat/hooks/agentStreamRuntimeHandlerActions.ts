@@ -19,6 +19,7 @@ import {
 import {
   buildInterruptedMessageContentPatch,
   markInterruptedAgentMessageThreadItems,
+  stripInterruptedPlaceholderText,
 } from "./agentInterruptedMessageContent";
 import { settleInterruptedMessageProcess } from "./agentStreamFlowControl";
 import {
@@ -671,13 +672,31 @@ export function createAgentStreamRuntimeHandlerActions({
       description: "请求已中止",
     });
     observer?.onComplete?.(requestState.accumulatedContent.trim());
+    const canonicalPartialText = (getThreadItems?.() ?? []).reduce(
+      (longest, item) => {
+        if (item.type !== "agent_message" || item.turn_id !== turn.id) {
+          return longest;
+        }
+        const candidate = stripInterruptedPlaceholderText(item.text);
+        return candidate.trim().length > longest.trim().length
+          ? candidate
+          : longest;
+      },
+      "",
+    );
     setMessages((prev) => {
       const nextMessages = prev.map((msg) => {
         if (msg.id !== assistantMsgId) {
           return msg;
         }
 
-        const interruptedMessage = settleInterruptedMessageProcess(msg);
+        const interruptedMessage = settleInterruptedMessageProcess({
+          ...msg,
+          ...(canonicalPartialText.trim() &&
+          canonicalPartialText.trim().length > msg.content.trim().length
+            ? { content: canonicalPartialText }
+            : {}),
+        });
         return {
           ...updateMessageArtifactsStatus(interruptedMessage, "complete"),
           ...buildInterruptedMessageContentPatch(interruptedMessage),

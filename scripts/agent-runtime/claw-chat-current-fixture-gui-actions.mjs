@@ -476,10 +476,11 @@ async function sampleInputbarSubmitState(
   page,
   prompt,
   expectedSessionId = null,
+  expectedThreadId = null,
 ) {
   return await evaluatePageSnapshot(
     page,
-    ({ expectedPrompt, sessionId }) => {
+    ({ expectedPrompt, sessionId, threadId }) => {
       const parseJsonArray = (raw) => {
         try {
           const parsed = JSON.parse(raw || "[]");
@@ -523,17 +524,21 @@ async function sampleInputbarSubmitState(
               .map((message) => ({
                 id: message?.id || null,
                 sessionId: message?.params?.sessionId || null,
-                queueIfBusy: message?.params?.queueIfBusy ?? null,
-                providerPreference: message?.params?.providerPreference ?? null,
-                modelPreference: message?.params?.modelPreference ?? null,
-                runtimeOptions: message?.params?.runtimeOptions ?? null,
-                metadata: message?.params?.metadata ?? null,
-                text:
-                  message?.params?.input?.text ??
-                  message?.params?.input?.content ??
-                  message?.params?.input?.displayContent ??
-                  message?.params?.inputText ??
-                  null,
+                threadId: message?.params?.threadId || null,
+                clientUserMessageId:
+                  message?.params?.clientUserMessageId || null,
+                model: message?.params?.model || null,
+                permissions: message?.params?.permissions || null,
+                text: Array.isArray(message?.params?.input)
+                  ? message.params.input
+                      .filter(
+                        (part) =>
+                          part?.type === "text" &&
+                          typeof part?.text === "string",
+                      )
+                      .map((part) => part.text)
+                      .join("\n")
+                  : null,
               })),
           };
         });
@@ -551,7 +556,8 @@ async function sampleInputbarSubmitState(
         .slice(-20);
       const matchingTurnStartTrace = appServerTurnStartTrace.find(
         (entry) =>
-          (!sessionId || entry.sessionId === sessionId) &&
+          (!threadId || entry.threadId === threadId) &&
+          (!sessionId || !entry.sessionId || entry.sessionId === sessionId) &&
           (!expectedPrompt ||
             String(entry.text || "").includes(expectedPrompt)),
       );
@@ -610,7 +616,11 @@ async function sampleInputbarSubmitState(
         matchingTurnStartTrace: matchingTurnStartTrace || null,
       };
     },
-    { expectedPrompt: prompt, sessionId: expectedSessionId },
+    {
+      expectedPrompt: prompt,
+      sessionId: expectedSessionId,
+      threadId: expectedThreadId,
+    },
   );
 }
 
@@ -632,6 +642,7 @@ async function waitForInputbarSubmitEffect(
       page,
       prompt,
       expectedSessionId,
+      constraints.expectedThreadId ?? null,
     );
     if (!snapshot) {
       await sleep(options.intervalMs);

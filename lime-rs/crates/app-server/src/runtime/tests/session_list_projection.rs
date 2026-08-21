@@ -253,13 +253,13 @@ async fn list_agent_sessions_downgrades_stale_orphan_running_turn() {
         .find(|session| session.session_id == session_id)
         .expect("projected stale running session");
     assert_eq!(projected.thread_status, "idle");
-    assert_eq!(projected.latest_turn_status.as_deref(), Some("running"));
+    assert_eq!(projected.latest_turn_status.as_deref(), Some("canceled"));
     assert_eq!(projected.active_turn_id, None);
     assert_eq!(projected.queued_turn_count, 0);
 }
 
 #[tokio::test]
-async fn list_agent_sessions_projects_running_state_from_projection() {
+async fn list_agent_sessions_interrupts_recent_running_projection_after_restart() {
     let harness = projection_running_test_core();
     seed_projected_running_session(
         &harness.core,
@@ -286,12 +286,9 @@ async fn list_agent_sessions_projects_running_state_from_projection() {
         .iter()
         .find(|session| session.session_id == "sess_projection_running")
         .expect("projected running session");
-    assert_eq!(projected.thread_status, "running");
-    assert_eq!(projected.latest_turn_status.as_deref(), Some("running"));
-    assert_eq!(
-        projected.active_turn_id.as_deref(),
-        Some("thread_projection_running_turn")
-    );
+    assert_eq!(projected.thread_status, "idle");
+    assert_eq!(projected.latest_turn_status.as_deref(), Some("canceled"));
+    assert_eq!(projected.active_turn_id, None);
     assert_eq!(projected.queued_turn_count, 0);
 }
 

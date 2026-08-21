@@ -427,7 +427,7 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
     setWorkspacePathMissing: context.setWorkspacePathMissing,
     getMessages: () => session.messages,
     setMessages: session.setMessages,
-    getThreadItems: () => session.threadItems,
+    getThreadItems: session.getThreadItems,
     setThreadItems: session.setThreadItems,
     setTodoItems: session.setTodoItems,
     setThreadTurns: session.setThreadTurns,

@@ -25,6 +25,13 @@ import {
   upsertThreadTurnState,
 } from "./agentThreadState";
 import { reconcileAgentStreamProjectionItems } from "./agentStreamConversationProjection";
+import { buildAgentStreamProcessBoundaryTextCommitPatch } from "./agentStreamProcessBoundaryCommit";
+import {
+  appendInterruptedPlaceholderText,
+  contentHasInterruptedPlaceholder,
+  contentPartsHaveInterruptedPlaceholder,
+  stripInterruptedPlaceholderText,
+} from "./agentInterruptedMessageContent";
 
 type MessageParts = NonNullable<Message["contentParts"]>;
 
@@ -477,6 +484,95 @@ function upsertRecoveredRunningTurn(options: {
   });
 }
 
+function commitRecoveredAssistantProjection(options: {
+  assistantMsgId: string;
+  items: readonly AgentThreadItem[];
+  setMessages: Dispatch<SetStateAction<Message[]>>;
+  target: AgentStreamResumeBindingTarget;
+}): void {
+  const { assistantMsgId, items, setMessages, target } = options;
+  const projectedMessage = items.reduce<
+    Extract<AgentThreadItem, { type: "agent_message" }> | undefined
+  >((selected, item) => {
+    if (
+      item.type !== "agent_message" ||
+      item.turn_id !== target.turnId ||
+      !item.text.trim()
+    ) {
+      return selected;
+    }
+    return !selected || item.text.trim().length > selected.text.trim().length
+      ? item
+      : selected;
+  }, undefined);
+  if (!projectedMessage) {
+    return;
+  }
+
+  setMessages((previous) =>
+    previous.map((message) => {
+      if (message.id !== assistantMsgId) {
+        return message;
+      }
+      const committedText = mergeRecoveredAssistantProjectionText(
+        message,
+        projectedMessage.text,
+      );
+      const patch = buildAgentStreamProcessBoundaryTextCommitPatch({
+        accumulatedContent: committedText,
+        parts: message.contentParts,
+        renderedContent: committedText,
+        shouldRetainThinkingPart: () => true,
+        surfaceThinkingDeltas: true,
+        textPartMetadata: {
+          phase: projectedMessage.phase,
+          threadItemId: projectedMessage.id,
+          turnId: target.turnId,
+        },
+      });
+      return patch.content || patch.contentParts
+        ? { ...message, ...patch }
+        : message;
+    }),
+  );
+}
+
+export function mergeRecoveredAssistantProjectionText(
+  message: Message,
+  projectedText: string,
+): string {
+  const contentPartsText = (message.contentParts ?? [])
+    .filter(
+      (
+        part,
+      ): part is Extract<
+        NonNullable<Message["contentParts"]>[number],
+        { type: "text" }
+      > => part.type === "text",
+    )
+    .map((part) => part.text)
+    .join("");
+  const visibleCandidates = [message.content, contentPartsText, projectedText]
+    .map(stripInterruptedPlaceholderText)
+    .filter((text) => text.trim().length > 0);
+  const visibleText = visibleCandidates.reduce(
+    (longest, candidate) =>
+      candidate.trim().length > longest.trim().length ? candidate : longest,
+    "",
+  );
+  if (!visibleText.trim()) {
+    return projectedText;
+  }
+
+  const hasInterruptedPlaceholder =
+    contentHasInterruptedPlaceholder(message.content) ||
+    contentPartsHaveInterruptedPlaceholder(message.contentParts) ||
+    contentHasInterruptedPlaceholder(projectedText);
+  return hasInterruptedPlaceholder
+    ? appendInterruptedPlaceholderText(visibleText)
+    : visibleText;
+}
+
 export async function bindRecoveredAgentStreamThread(
   options: BindRecoveredAgentStreamThreadOptions,
 ): Promise<(() => void) | null> {
@@ -658,6 +754,12 @@ export async function bindRecoveredAgentStreamThread(
             projected: projection.items,
           }),
         );
+        commitRecoveredAssistantProjection({
+          assistantMsgId,
+          items: projection.items,
+          setMessages,
+          target,
+        });
       }
       if (projection.turns.length > 0) {
         setThreadTurns((current) =>

@@ -117,13 +117,13 @@ package 只在至少两个独立 consumer 需要稳定边界时创建。单一 R
 
 ### 6.1 App Server 与协议组
 
-| Crate                    | 职责                                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------------- |
-| `app-server-protocol`    | JSON-RPC method、params、result、notification、schema export。                                    |
-| `app-server-transport`   | JSONL/transport framing、连接与传输错误。                                                         |
-| `app-server-client`      | Rust client。                                                                                     |
-| `app-server-test-client` | 测试专用 protocol client。                                                                        |
-| `app-server-daemon`      | sidecar/daemon 生命周期。                                                                         |
+| Crate                    | 职责                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `app-server-protocol`    | JSON-RPC method、params、result、notification、schema export。                                         |
+| `app-server-transport`   | JSONL/transport framing、连接与传输错误。                                                              |
+| `app-server-client`      | Rust client。                                                                                          |
+| `app-server-test-client` | 测试专用 protocol client。                                                                             |
+| `app-server-daemon`      | sidecar/daemon 生命周期。                                                                              |
 | `app-server`             | request dispatch、RuntimeCore、host context、ProjectionStore、canonical read model、领域 data source。 |
 
 App Server 是 Renderer、Electron、CLI、Plugin 与 runtime 的唯一跨应用业务协议入口。它可以做 transport、鉴权/初始化、请求编排、host context、projection 和 repository 接线；不能持有 provider-specific wire payload 或把工具实现复制进 handler。
@@ -188,6 +188,20 @@ effective multi-agent producer 已落地，但其余 typed producer 与 Codex du
 第二套 environment context。
 
 状态模型与 Codex 对齐：Thread 是会话上下文，Turn 是一次执行，Item 是可恢复的输入、输出、工具或审批活动。`ThreadStore` 的 raw canonical append 与独立 metadata patch 是持久化 contract；App Server `ProjectionStore` 只能是该 contract 的实现，queue payload、stream buffer 与 renderer cache 不得反向成为事实源。
+
+运行中状态必须由 durable history 与当前进程 live execution owner 联合投影。唯一 live owner 是 App Server
+`session_loops.active_turn_id`；`thread/read`、`thread/list` 与 `thread/turns/list` 必须用同一 owner 判断
+`InProgress` 是否仍可执行。Renderer reload 不销毁 owner，可以通过 `thread/resume` 续接同一 Thread 的通知；
+Electron/App Server restart 后 owner 已不存在，cold read 只能把 durable `InProgress` response 投影为
+`Interrupted`，Thread 投影为 `NotLoaded`，已加载且空闲时投影为 `Idle`。该归一化只作用于 response snapshot：
+ProjectionStore 与 `SessionLoadContext.stored` 保留原始 durable/operational 状态，不写 synthetic
+`turn.completed`/`turn.canceled`，不发送伪 `turn/interrupt`，也不按时间戳猜测 stale running。首页、侧栏、详情、
+输入框、evidence 与 export 只能消费该 owner-based projection，不得恢复 30 分钟启发式或 Renderer running truth。
+Architecture impact: major; App Server restart/read projection owner and durable/read boundary changed while preserving the
+existing ThreadStore and session-loop ownership. Architecture diagram updated: this Agent Runtime state-flow block.
+Responsible developer confirmation: root, 2026-08-20. Confirmation content: 已对照 Codex thread lifecycle/history
+projection，确认 cold read 只做 `InProgress -> Interrupted` 展示归一化，live resume 仍以当前 session loop owner 为准，
+且 durable history、mailbox、workflow 与 AgentControl 不被 response normalization 改写。
 
 #### 6.2.1 Storage alignment target（P1 `in_progress`）
 
@@ -1111,10 +1125,10 @@ Electron 只负责 JSONL 转发和系统通知宿主能力，不承接 scheduler
 terminal event 的 typed notification owner：任务 create/update/delete/enabled-set 发布 `scheduledTask/changed`，
 `turn.completed/failed/canceled` 经过 Agent Run 幂等终态写回后发布 `scheduledTask/run/updated`。Renderer 只按任务的
 `all_runs / failures / none` policy 决定是否调用 Desktop Host；`unsupported/failed` 必须进入可见错误通道，不能伪造发送成功。
-	Renderer timer、生产 mock backend/fallback、browser session automation 与 SceneApp automation context 均禁止成为 current owner。旧
-	`automationJob/*`、`automationSchedule/*`、`automationScheduler/*`、Renderer automation gateway 及旧 Settings 工作台已物理删除，
-	分类为 `dead / deleted / forbidden-to-restore`；旧 method 字符串只允许作为 contract、fixture 或治理扫描的负向回流守卫。Rust
-	`AutomationJob` DAO、`automation_jobs` 表与内部 execution helper 是 Scheduled Tasks 的 current 存储映射，不是公开双轨。scheduler 原子 claim、
+Renderer timer、生产 mock backend/fallback、browser session automation 与 SceneApp automation context 均禁止成为 current owner。旧
+`automationJob/*`、`automationSchedule/*`、`automationScheduler/*`、Renderer automation gateway 及旧 Settings 工作台已物理删除，
+分类为 `dead / deleted / forbidden-to-restore`；旧 method 字符串只允许作为 contract、fixture 或治理扫描的负向回流守卫。Rust
+`AutomationJob` DAO、`automation_jobs` 表与内部 execution helper 是 Scheduled Tasks 的 current 存储映射，不是公开双轨。scheduler 原子 claim、
 missed/catch-up、DST、通知、软删除及并发运行合同已由 current owner 收口；任务删除写入 tombstone、禁用并清除未来调度，
 但不取消已运行 Turn，canonical terminal write 仍保留 Agent Run 历史且不得复活 tombstone。真实 OS sleep/wake、Windows
 Notification Center 与 Windows Gate B 仍是平台证据缺口，按 `internal/roadmap/task/scheduled-tasks/` 和对应执行计划收口。
@@ -1124,7 +1138,7 @@ preserving Electron as transport/system-notification host and RuntimeCore/Thread
 updated: this section and `internal/aiprompts/commands.md#scheduled-tasks-主链`. Responsible developer confirmation: root,
 2026-08-17. Confirmation content: 已核对 scheduledTask JSON-RPC、typed invalidation/terminal notifications、Agent Run
 幂等终态、soft-delete tombstone、Renderer notification policy、Electron system notification boundary，以及未完成的
-	Windows/sleep-resume 平台证据，以及旧 Automation 协议、GUI、client、smoke 与 Agent UI projection 的物理删除和回流守卫。
+Windows/sleep-resume 平台证据，以及旧 Automation 协议、GUI、client、smoke 与 Agent UI projection 的物理删除和回流守卫。
 
 ## 8. 命令、配置与数据边界
 
@@ -2805,6 +2819,22 @@ mismatch、destroyed view、stale turn、重复 call identity 和未知 tab 全�
 `threadId/turnId/sessionId/tabId/viewId/webContentsId/actionId/status`，使 Thread/Turn/Item、evidence 和 GUI 能以同一
 identity join。
 
+高风险 Browser action 使用同一个 `item/tool/call` reverse-request owner 的两阶段合同。第一阶段
+`phase=preflight` 由 Electron BrowserTabHost 读取真实 AX/DOM 目标并返回 typed approval descriptor；安全动作可以直接
+完成。需要审批时，`agent/current_provider_turn` 必须通过现有 `agent-runtime::action_required` 和
+`tool-runtime::execution_approval` 发出 `toolFamily=browser_action`、`contractKey=browser_action` 的 canonical
+tool confirmation，默认只允许 `allow_once / decline / cancel`，不得开启 session cache。批准后 Runtime 以同一
+session/thread/turn/call/tool 发起 `phase=approvedExecute`，携带 Host 生成的一次性 opaque token；Host 只有在
+tab/view/WebContents/snapshot/backendNode lineage 全部仍匹配时执行一次并消费 token。decline 不发第二阶段 mutation，
+cancel 走既有 turn/action cancellation。Electron 不保存用户决策，Renderer 不解析或伪造 approval descriptor，
+filesystem/network permission grant 也不得代替 Browser action approval。
+
+用户在同一个 native `WebContentsView` 中产生 `mouseDown`、`contextMenu`、`mouseWheel` 或 `keyDown` 时，
+`BrowserTabHost` 必须立即让用户优先：detach debugger、递增 page revision、清除 snapshot 与该 tab 的 pending
+approval token、清空 active turn，并把 `controlOwner` 投影为 `user`。随后到达的旧 `approvedExecute` 必须 fail closed，
+不得重放 mutation。Agent 经 CDP 发出的 click/fill/press 必须在 Host 的 agent-input 抑制作用域内执行，不能被 Electron
+input event 误判成人工接管；Renderer 也不能通过合成 DOM 事件伪造 native user control。
+
 Tab lifecycle 由 BrowserTabHost 与 canonical turn 共同驱动：Agent tab 在 `turnEnded` 默认 close，User/Claimed tab 默认
 release，Handoff/Deliverable mark 只在当前 turn 有效。`turnEnded` 必须清理 debugger、clipboard、download grant、
 permission intent、takeover overlay 和 pending waiter；历史恢复只打开 snapshot/replay，不自动恢复控制权或 pending
@@ -2812,16 +2842,16 @@ mutation。
 
 Browser 的当前事实源分类如下：
 
-| 分类 | Owner / surface |
-| --- | --- |
-| current | Electron BrowserTabHost + `WebContentsView` / `webContents.debugger` |
-| current | App Server JSON-RPC + connection-owned `item/tool/call` server request |
-| current | RuntimeCore / tool-runtime Browser dynamic capability and approval policy |
-| current | Right Surface Browser Workspace and Browser read projection |
-| deprecated | `CanvasWorkbenchBrowserPanel`，只允许迁出后删除 |
-| deprecated | 外部 Chrome/CDP `browserSession/*`，只允许迁出后删除主链 |
-| deprecated | `BrowserSessionRef` 与 `mcp__lime-browser__*`，被强类型 BrowserRoute/BrowserTab 替换后删除 |
-| dead | production browser mock/fallback、旧 v0 Browser Session、旧 connector/Chrome relay、第二 Browser daemon |
+| 分类       | Owner / surface                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
+| current    | Electron BrowserTabHost + `WebContentsView` / `webContents.debugger`                                    |
+| current    | App Server JSON-RPC + connection-owned `item/tool/call` server request                                  |
+| current    | RuntimeCore / tool-runtime Browser dynamic capability and approval policy                               |
+| current    | Right Surface Browser Workspace and Browser read projection                                             |
+| deprecated | `CanvasWorkbenchBrowserPanel`，只允许迁出后删除                                                         |
+| deprecated | 外部 Chrome/CDP `browserSession/*`，只允许迁出后删除主链                                                |
+| deprecated | `BrowserSessionRef` 与 `mcp__lime-browser__*`，被强类型 BrowserRoute/BrowserTab 替换后删除              |
+| dead       | production browser mock/fallback、旧 v0 Browser Session、旧 connector/Chrome relay、第二 Browser daemon |
 
 禁止新增 Browser compat wrapper、旧 `embedded_browser_view_*` Browser 产品命令、外部 CDP fallback 或 renderer mock。Plugin
 若另有 WebContents 宿主需求，必须在其自身 current owner 中重新定义，不得继续把 Canvas Browser 作为共享业务事实源。
@@ -2832,3 +2862,13 @@ route identity、turn cleanup 和删除边界。Architecture diagram updated: th
 本机 Codex Desktop Browser plugin 的 tab claiming/cleanup/safety 合同、Lime `ServerRequestRouter`、Electron
 `AppServerDynamicToolHost`、`WebContentsView` Host 与 current App Server JSONL 边界；确认 Gate A 只证明投影，真实同 tab
 闭环必须通过 Electron Gate B identity evidence。
+
+Responsible developer confirmation: root, 2026-08-20. Confirmation content: 已复核 dynamic tool session waiter、
+App Server connection-owned reverse request、current provider turn 通用 approval handler 与 Electron Browser Host 的
+风险检测位置；确认 Browser action 采用 typed 两阶段合同，canonical approval 仍由 RuntimeCore/agent-runtime owner，
+Electron 仅负责 preflight 与一次性 token/identity/snapshot 校验，不新增第二套审批状态机。
+
+Responsible developer confirmation: root, 2026-08-20. Confirmation content: 已复核 Electron 42
+`before-mouse-event` / `before-input-event` 与 CDP input 的触发边界；确认 native 用户输入由 BrowserTabHost 直接撤销
+Agent lease、snapshot 和 approval token，Agent CDP input 只通过 scoped suppression 排除自触发，不改变 canonical
+Thread/Turn/Item 与 approval owner。
