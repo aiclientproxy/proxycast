@@ -4,16 +4,18 @@ use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, R
 use app_server_protocol::protocol::v2::ServerNotification as V2ServerNotification;
 use app_server_protocol::{
     JsonRpcError, ModelListParams, ModelListUpdatedNotification, ModelProviderAliasReadParams,
-    ModelProviderConfigExportParams, ModelProviderConfigImportParams, ModelProviderCreateParams,
-    ModelProviderDeleteParams, ModelProviderFetchModelsParams, ModelProviderFetchModelsResponse,
-    ModelProviderKeyCreateParams, ModelProviderKeyDeleteParams, ModelProviderKeyUpdateParams,
-    ModelProviderReadParams, ModelProviderSortOrdersUpdateParams, ModelProviderTestChatParams,
+    ModelProviderCapabilitiesReadResponse, ModelProviderConfigExportParams,
+    ModelProviderConfigImportParams, ModelProviderCreateParams, ModelProviderDeleteParams,
+    ModelProviderFetchModelsParams, ModelProviderFetchModelsResponse, ModelProviderKeyCreateParams,
+    ModelProviderKeyDeleteParams, ModelProviderKeyUpdateParams, ModelProviderReadParams,
+    ModelProviderSortOrdersUpdateParams, ModelProviderTestChatParams,
     ModelProviderTestConnectionParams, ModelProviderUiStateReadParams,
     ModelProviderUiStateWriteParams, ModelProviderUpdateParams, METHOD_MODEL_LIST,
     METHOD_MODEL_PREFERENCES_LIST, METHOD_MODEL_PROVIDER_ALIAS_LIST,
-    METHOD_MODEL_PROVIDER_ALIAS_READ, METHOD_MODEL_PROVIDER_CATALOG_LIST,
-    METHOD_MODEL_PROVIDER_CONFIG_EXPORT, METHOD_MODEL_PROVIDER_CONFIG_IMPORT,
-    METHOD_MODEL_PROVIDER_CREATE, METHOD_MODEL_PROVIDER_DELETE, METHOD_MODEL_PROVIDER_FETCH_MODELS,
+    METHOD_MODEL_PROVIDER_ALIAS_READ, METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
+    METHOD_MODEL_PROVIDER_CATALOG_LIST, METHOD_MODEL_PROVIDER_CONFIG_EXPORT,
+    METHOD_MODEL_PROVIDER_CONFIG_IMPORT, METHOD_MODEL_PROVIDER_CREATE,
+    METHOD_MODEL_PROVIDER_DELETE, METHOD_MODEL_PROVIDER_FETCH_MODELS,
     METHOD_MODEL_PROVIDER_KEY_CREATE, METHOD_MODEL_PROVIDER_KEY_DELETE,
     METHOD_MODEL_PROVIDER_KEY_UPDATE, METHOD_MODEL_PROVIDER_LIST, METHOD_MODEL_PROVIDER_READ,
     METHOD_MODEL_PROVIDER_SORT_ORDERS_UPDATE, METHOD_MODEL_PROVIDER_TEST_CHAT,
@@ -23,6 +25,7 @@ use app_server_protocol::{
 };
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use model_provider::provider_capabilities::ProviderCapabilities;
 use std::time::Duration;
 
 const MODEL_CATALOG_RETRY_MAX_ATTEMPTS: u32 = 5;
@@ -37,6 +40,9 @@ impl RequestProcessor {
     ) -> Option<BoxFuture<'a, Result<RpcDispatch, JsonRpcError>>> {
         let request = match method {
             METHOD_MODEL_LIST => self.handle_model_list_impl(params.take()).boxed(),
+            METHOD_MODEL_PROVIDER_CAPABILITIES_READ => self
+                .handle_model_provider_capabilities_read_impl(params.take())
+                .boxed(),
             METHOD_MODEL_PREFERENCES_LIST => self.handle_model_preferences_list_impl().boxed(),
             METHOD_MODEL_SYNC_STATE_READ => self.handle_model_sync_state_read_impl().boxed(),
             METHOD_MODEL_PROVIDER_LIST => self.handle_model_provider_list_impl().boxed(),
@@ -111,6 +117,26 @@ impl RequestProcessor {
             .await
             .map_err(to_jsonrpc_error)?;
         dispatch_result(response)
+    }
+
+    pub(super) async fn handle_model_provider_capabilities_read_impl(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let _: app_server_protocol::ModelProviderCapabilitiesReadParams = parse_params(params)?;
+        let (provider, base_url) = self
+            .runtime
+            .current_model_provider_route()
+            .map_err(to_jsonrpc_error)?;
+        let capabilities =
+            ProviderCapabilities::from_provider_route(&provider, base_url.as_deref())
+                .unwrap_or(ProviderCapabilities::NONE);
+        dispatch_result(ModelProviderCapabilitiesReadResponse {
+            namespace_tools: capabilities.namespace_tools,
+            image_generation: capabilities.image_generation,
+            web_search: capabilities.web_search,
+        })
     }
 
     pub(super) async fn handle_model_preferences_list_impl(
@@ -661,5 +687,60 @@ mod retry_tests {
         assert_eq!(model_catalog_retry_delay(3), Duration::from_secs(20));
         assert_eq!(model_catalog_retry_delay(5), Duration::from_secs(60));
         assert_eq!(model_catalog_retry_delay(99), Duration::from_secs(60));
+    }
+}
+
+#[cfg(test)]
+mod capability_route_tests {
+    use super::*;
+    use crate::runtime::configured_provider_base_url;
+
+    #[test]
+    fn default_openai_route_uses_openai_base_url_and_hosted_capabilities() {
+        let mut config = lime_core::config::Config::default();
+        config.default_provider = "openai-response".into();
+        config.providers.openai.base_url = Some("https://api.openai.com/v1".into());
+
+        let provider = config.default_provider.trim();
+        let base_url = configured_provider_base_url(&config, provider);
+        assert_eq!(base_url, Some("https://api.openai.com/v1"));
+        assert_eq!(
+            ProviderCapabilities::from_provider_route(provider, base_url),
+            Some(ProviderCapabilities {
+                namespace_tools: false,
+                custom_tools: true,
+                image_generation: true,
+                web_search: true,
+            })
+        );
+    }
+
+    #[test]
+    fn openai_compatible_route_fails_closed() {
+        let mut config = lime_core::config::Config::default();
+        config.providers.openai.base_url = Some("https://gateway.example/v1".into());
+
+        let capabilities = ProviderCapabilities::from_provider_route(
+            config.default_provider.trim(),
+            configured_provider_base_url(&config, config.default_provider.trim()),
+        );
+        assert_eq!(capabilities, Some(ProviderCapabilities::NONE));
+    }
+
+    #[test]
+    fn unsupported_provider_route_fails_closed() {
+        let config = lime_core::config::Config {
+            default_provider: "amazon-bedrock".into(),
+            ..lime_core::config::Config::default()
+        };
+
+        assert_eq!(
+            configured_provider_base_url(&config, "amazon-bedrock"),
+            None
+        );
+        assert_eq!(
+            ProviderCapabilities::from_provider_route("amazon-bedrock", None),
+            None
+        );
     }
 }

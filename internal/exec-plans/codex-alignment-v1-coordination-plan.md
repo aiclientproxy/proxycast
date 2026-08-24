@@ -5298,7 +5298,7 @@ projection 收敛；冷启动 orphan 与被新 active Turn 取代的旧 Turn 仍
 - 单题 `happy-dom-abort-pending-body-reads`：Gate B pass；approval `completed`、tool `completed`、marker 存在，
   `doneInReadModel=true`；cancel `interrupted` 且无幽灵写入。
 - 完整 `npm run harness:deepswe:desktop:controlled`：5/5 controlled tasks `gateBPass=true`、`claimConsistent=true`，
-  `session_reopen`、`approval_resume`、`cancel_no_ghost_write` 覆盖完整；证据目录
+  `approval_resume`、`cancel_no_ghost_write` 覆盖完整；证据目录
   `.lime/benchmark/v2/desktop/controlled/20260821T011259Z/`，suite 状态 `product_path_only`。
 - 复跑 `npm run smoke:agent-runtime-current-fixture`：通过；真实 Electron/preload/IPC/App Server/runtime/read model/GUI
   聚合覆盖 history、Coding Workbench、approval resume/decline/cancel、Plan、Skills、MCP、media、typed error 与
@@ -5311,3 +5311,15 @@ projection 收敛；冷启动 orphan 与被新 active Turn 取代的旧 Turn 仍
 `desktopCodingPass=false` 是显式 claim boundary，不生成 DeepSWE score，不运行 Docker/容器，不安装依赖。
 分类：approval terminal convergence、受控 Gate B 与 harness oracle 为 `current`；旧的宽泛 approval terminal
 判定为 `dead / deleted`；无 `compat / deprecated`。本切片完成度 `100%`。
+
+### 2026-08-22 DeepSWE Desktop Smoke 5 cold-restart Gate B 收口
+
+状态：`completed / current`（受控 Desktop Gate B；live verifier 仍未运行）。
+
+本轮把 Desktop Smoke 5 的 recovery 证据从旧同进程页面 reload 收敛为真实冷重启：每题关闭原 Electron 及其 App Server 子进程树，等待所有旧 PID 退出，再复用同一运行时环境、userData 和 App Server dataDir 启动新 Electron/App Server。新版 contract 将 `cold_restart` 设为每题必需 assertion，并要求 Electron PID、App Server PID、canonical Thread/Turn/Item projection、GUI tool/diff/artifact、approval/cancel marker、patch SHA 和 Provider request count 均稳定；`ThreadStatus::Idle/NotLoaded` 的合法加载态变化不计入对象漂移。
+
+最终五题证据：`.lime/benchmark/v2/desktop/controlled/20260822T075644Z/summary.json`。五题 `gateBPass=true`，`controlledGateBComplete=true`，`recoveryCoverageComplete=true`，`cancel_no_ghost_write`、`approval_resume`、`cold_restart` 三类 current recovery 均为 `true`，mock/invoke/console/page error 均为零；聚合器按预期退出码 `2` 返回 `status=product_path_only`、`liveTrialCount=0`，没有把受控 fixture 提升为 `DesktopCodingPass`。五题中的 Go 证据为 `.lime/benchmark/v2/desktop/controlled/20260822T075644Z/go-genai-streamed-function-args.trial.json`。
+
+本轮还修复了受控 OpenAI-compatible fixture 的生命周期竞态：`server.keepAliveTimeout=1_000` 会在 Go 题工具间隔中截断已 `response-finish` 但客户端尚未消费的 SSE 复用 socket，使 turn 永久保持 `inProgress`。fixture 现在将 idle 连接回收统一留给显式 `close()`，不强杀 active response；定向 fixture/DeepSWE 回归 `46/46`，最终 Go 与五题复跑均通过。该修复属于 `current / controlled-fixture-lifecycle`；旧同进程页面 reload 证据属于 `dead / historical-only`，无 `compat / deprecated` 新增。
+
+验证：单题 Go Gate B、完整五题 controlled smoke、desktop aggregate、DeepSWE Desktop contract/provider fixture 定向回归均通过；本轮未安装依赖、未调用 live provider、未运行 Docker/Podman/nerdctl/Colima/Pier verifier，因此 DeepSWE score、Pier artifacts、`DesktopCodingPass` 和 DSW-11 仍保持 blocked/incomplete。

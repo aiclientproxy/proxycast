@@ -1,6 +1,6 @@
 {
   "schemaVersion": "lime-deepswe-desktop-smoke-v1",
-  "status": "contract_implemented_runner_pending",
+  "status": "controlled_gate_b_verified_live_verifier_pending",
   "sourceManifest": "internal/test/deepswe-coding-slice-v2.json",
   "sourceCommit": "435ee89ec2f2e2289f33b0da4f992f0b7b7266b9",
   "sourceSchemaVersion": "1.3",
@@ -19,7 +19,8 @@
       "visibleTerminal",
       "visibleToolLifecycle",
       "visibleDiffArtifact",
-      "sessionReopen",
+      "artifactContentAvailable",
+      "coldRestart",
       "productionMockFallbackZero",
       "invokeErrorsZero",
       "consoleErrorsZero",
@@ -33,7 +34,7 @@
     "recoveryCoverage": [
       "cancel_no_ghost_write",
       "approval_resume",
-      "session_reopen"
+      "cold_restart"
     ],
     "trialsPerTask": {
       "bringup": 1,

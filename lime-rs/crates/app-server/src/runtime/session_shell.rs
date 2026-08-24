@@ -361,6 +361,7 @@ impl RuntimeCore {
                     process_id: process_id.to_string(),
                     tool_id: item_id.to_string(),
                     tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME.to_string(),
+                    environment_id: "local".to_string(),
                     command: tool_runtime::shell_runtime::platform_shell_argv(command),
                     working_directory: cwd.to_path_buf(),
                     tty: false,

@@ -1,7 +1,13 @@
 use super::*;
+use futures::{SinkExt, StreamExt};
+use serde_json::json;
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use tokio_tungstenite::accept_async;
+use tokio_tungstenite::tungstenite::Message;
 use tool_runtime::execution_orchestrator::{
     orchestrate_runtime_tool_execution, RuntimeToolApprovalFuture, RuntimeToolApprovalHandler,
     RuntimeToolApprovalKind, RuntimeToolApprovalPolicy, RuntimeToolApprovalRequest,
@@ -53,6 +59,7 @@ impl RuntimeToolAttemptRunner for ProcessAttemptRunner {
                     process_id,
                     tool_id: attempt.identity().call_id().to_string(),
                     tool_name: "exec_command".to_string(),
+                    environment_id: "local".to_string(),
                     command: shell_output_command("orchestrated"),
                     working_directory: current_directory(),
                     tty: false,
@@ -169,6 +176,7 @@ async fn execution_process_server_streams_output_and_status() {
                 process_id: "process-test".to_string(),
                 tool_id: "tool-test".to_string(),
                 tool_name: "exec_command".to_string(),
+                environment_id: "local".to_string(),
                 command: vec![
                     "sh".to_string(),
                     "-c".to_string(),
@@ -197,6 +205,172 @@ async fn execution_process_server_streams_output_and_status() {
 }
 
 #[tokio::test]
+async fn execution_process_server_never_lowers_remote_environment_to_local_process() {
+    let error = ExecutionProcessServer::default()
+        .start_thread_process(
+            "test-thread",
+            "printf remote",
+            LiveExecutionRequest {
+                process_id: "process-remote".to_string(),
+                tool_id: "tool-remote".to_string(),
+                tool_name: "exec_command".to_string(),
+                environment_id: "remote-tools".to_string(),
+                command: shell_output_command("remote"),
+                working_directory: PathBuf::from("/remote/workspace"),
+                tty: false,
+                approval_policy: Some("never".to_string()),
+                sandbox_policy: Some("danger-full-access".to_string()),
+                runtime_metadata: None,
+                env: HashMap::new(),
+                attempt: None,
+            },
+        )
+        .await
+        .expect_err("remote Environment must not fall back to local execution");
+
+    assert!(matches!(
+        error,
+        ExecutionProcessError::UnsupportedEnvironment(environment_id)
+            if environment_id == "remote-tools"
+    ));
+}
+
+#[tokio::test]
+async fn execution_process_server_uses_environment_process_transport() {
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .expect("remote exec fixture bind");
+    let address = listener.local_addr().expect("remote exec fixture address");
+    let read_count = Arc::new(AtomicUsize::new(0));
+    let fixture_read_count = Arc::clone(&read_count);
+    let fixture = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("remote exec fixture accept");
+        let mut socket = accept_async(stream)
+            .await
+            .expect("remote exec fixture websocket");
+        while let Some(message) = socket.next().await {
+            let Message::Text(text) = message.expect("remote exec fixture message") else {
+                continue;
+            };
+            let request: Value = serde_json::from_str(&text).expect("remote exec fixture JSON");
+            let Some(id) = request.get("id") else {
+                continue;
+            };
+            let method = request["method"]
+                .as_str()
+                .expect("remote exec fixture method");
+            let result = match method {
+                "initialize" => json!({"sessionId": "remote-process-fixture"}),
+                "environment/info" => json!({
+                    "shell": {"name": "fixture-sh", "path": "/bin/fixture-sh"},
+                    "cwd": "file:///remote/workspace"
+                }),
+                "environment/status" => json!({"status": "ready"}),
+                "process/start" => json!({
+                    "processId": request["params"]["processId"].clone()
+                }),
+                "process/read" => {
+                    let read = fixture_read_count.fetch_add(1, Ordering::SeqCst);
+                    if read == 0 {
+                        json!({
+                            "chunks": [{
+                                "seq": 0,
+                                "stream": "stdout",
+                                "chunk": base64::engine::general_purpose::STANDARD.encode("remote-output")
+                            }],
+                            "nextSeq": 1,
+                            "exited": true,
+                            "exitCode": 0,
+                            "closed": false,
+                            "failure": null,
+                            "sandboxDenied": false
+                        })
+                    } else {
+                        json!({"chunks": [], "nextSeq": 1, "exited": true, "exitCode": 0})
+                    }
+                }
+                "process/write" | "process/signal" | "process/terminate" => json!({}),
+                method => panic!("unexpected remote exec method: {method}"),
+            };
+            socket
+                .send(Message::Text(
+                    json!({"jsonrpc": "2.0", "id": id, "result": result}).to_string(),
+                ))
+                .await
+                .expect("remote exec fixture response");
+        }
+    });
+
+    let registry = Arc::new(EnvironmentRegistry::new());
+    registry
+        .upsert(
+            "remote-fixture".to_string(),
+            format!("ws://{address}"),
+            None,
+        )
+        .await
+        .expect("remote fixture registry entry");
+    registry.start();
+
+    let server = ExecutionProcessServer::default();
+    server.attach_environment_registry(Arc::clone(&registry));
+    let mut client_ready = false;
+    for _ in 0..80 {
+        if registry.execution_client("remote-fixture").await.is_ok() {
+            client_ready = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    assert!(
+        client_ready,
+        "remote fixture should complete Environment handshake"
+    );
+
+    let response = server
+        .start_thread_process(
+            "test-thread",
+            "printf remote-output",
+            LiveExecutionRequest {
+                process_id: "process-remote-fixture".to_string(),
+                tool_id: "tool-remote-fixture".to_string(),
+                tool_name: "exec_command".to_string(),
+                environment_id: "remote-fixture".to_string(),
+                command: shell_output_command("remote-output"),
+                working_directory: PathBuf::from(r"C:\remote\workspace"),
+                tty: false,
+                approval_policy: Some("never".to_string()),
+                sandbox_policy: Some("workspace-write".to_string()),
+                runtime_metadata: None,
+                env: HashMap::new(),
+                attempt: None,
+            },
+        )
+        .await
+        .expect("remote process should start through Environment transport");
+    assert_eq!(response.status, ExecutionProcessStatus::Running);
+    server
+        .write_stdin("process-remote-fixture", b"input")
+        .expect("remote stdin should use process/write");
+    server
+        .signal("process-remote-fixture")
+        .expect("remote signal should use process/signal");
+
+    let output = wait_for_output(&server, "process-remote-fixture", "remote-output").await;
+    assert!(output
+        .deltas
+        .iter()
+        .any(|delta| delta.delta.contains("remote-output")));
+    let snapshot = wait_for_terminal_snapshot(&server, "process-remote-fixture").await;
+    assert_eq!(snapshot.status, ExecutionProcessStatus::Exited);
+    assert_eq!(snapshot.exit_code, Some(0));
+    assert!(read_count.load(Ordering::SeqCst) >= 1);
+
+    fixture.abort();
+    let _ = fixture.await;
+}
+
+#[tokio::test]
 async fn execution_process_output_replays_until_cursor_advances() {
     let server = ExecutionProcessServer::default();
     server
@@ -207,6 +381,7 @@ async fn execution_process_output_replays_until_cursor_advances() {
                 process_id: "process-replay".to_string(),
                 tool_id: "tool-replay".to_string(),
                 tool_name: "exec_command".to_string(),
+                environment_id: "local".to_string(),
                 command: vec![
                     "sh".to_string(),
                     "-c".to_string(),
@@ -319,6 +494,7 @@ async fn execution_process_server_rejects_dangerous_shell_command() {
                 process_id: "process-danger".to_string(),
                 tool_id: "tool-danger".to_string(),
                 tool_name: "exec_command".to_string(),
+                environment_id: "local".to_string(),
                 command: vec!["sh".to_string(), "-c".to_string(), "rm -rf /".to_string()],
                 working_directory: current_directory(),
                 tty: false,
@@ -345,6 +521,7 @@ async fn execution_process_server_uses_current_unsandboxed_fallback_when_backend
                 process_id: "process-sandbox".to_string(),
                 tool_id: "tool-sandbox".to_string(),
                 tool_name: "exec_command".to_string(),
+                environment_id: "local".to_string(),
                 command: vec![
                     "sh".to_string(),
                     "-c".to_string(),
@@ -381,6 +558,7 @@ async fn execution_process_server_enforces_seatbelt_workspace_boundaries() {
                 process_id: "process-seatbelt".to_string(),
                 tool_id: "tool-seatbelt".to_string(),
                 tool_name: "exec_command".to_string(),
+                environment_id: "local".to_string(),
                 command: vec![
                     "sh".to_string(),
                     "-c".to_string(),
@@ -490,4 +668,68 @@ fn shell_output_command(output: &str) -> Vec<String> {
             format!("printf {output}"),
         ]
     }
+}
+
+#[test]
+fn remote_sandbox_context_lowers_codex_environment_wire() {
+    let cwd = app_server_protocol::protocol::v2::PathUri::from_host_path(current_directory())
+        .expect("test cwd should be representable as file URI");
+    let request = LiveExecutionRequest {
+        process_id: "remote-process".to_string(),
+        tool_id: "tool".to_string(),
+        tool_name: "exec_command".to_string(),
+        environment_id: "remote".to_string(),
+        command: shell_output_command("hello"),
+        working_directory: current_directory(),
+        tty: false,
+        approval_policy: None,
+        sandbox_policy: Some("workspace-write".to_string()),
+        runtime_metadata: None,
+        env: HashMap::new(),
+        attempt: None,
+    };
+    let context = remote_sandbox_context(&request, &cwd).expect("workspace sandbox lowering");
+    assert_eq!(context["permissions"]["type"], "managed");
+    assert_eq!(context["permissions"]["fileSystem"]["type"], "restricted");
+    assert_eq!(
+        context["permissions"]["fileSystem"]["entries"][0]["access"],
+        "write"
+    );
+    assert_eq!(context["cwd"], cwd.as_str());
+}
+
+#[test]
+fn remote_sandbox_context_rejects_unknown_policy() {
+    let cwd = app_server_protocol::protocol::v2::PathUri::from_host_path(current_directory())
+        .expect("test cwd should be representable as file URI");
+    let request = LiveExecutionRequest {
+        process_id: "remote-process".to_string(),
+        tool_id: "tool".to_string(),
+        tool_name: "exec_command".to_string(),
+        environment_id: "remote".to_string(),
+        command: shell_output_command("hello"),
+        working_directory: current_directory(),
+        tty: false,
+        approval_policy: None,
+        sandbox_policy: Some("future-policy".to_string()),
+        runtime_metadata: None,
+        env: HashMap::new(),
+        attempt: None,
+    };
+    assert!(matches!(
+        remote_sandbox_context(&request, &cwd),
+        Err(ExecutionProcessError::SandboxDenied { .. })
+    ));
+}
+
+#[test]
+fn remote_path_uri_preserves_foreign_windows_drive_paths() {
+    let uri = remote_path_uri(Path::new(r"C:\workspace\project"))
+        .expect("Windows drive path should lower to a file URI");
+    assert_eq!(uri.as_str(), "file:///C:/workspace/project");
+}
+
+#[test]
+fn remote_path_uri_rejects_relative_paths() {
+    assert!(remote_path_uri(Path::new("relative/project")).is_err());
 }

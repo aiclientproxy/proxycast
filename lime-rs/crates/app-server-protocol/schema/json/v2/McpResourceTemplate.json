@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "annotations": true,
+    "description": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "mimeType": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "title": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "uriTemplate": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "uriTemplate"
+  ],
+  "title": "McpResourceTemplate",
+  "type": "object"
+}

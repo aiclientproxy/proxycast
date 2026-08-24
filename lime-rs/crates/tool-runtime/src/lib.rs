@@ -12,6 +12,7 @@ pub mod execution_process;
 pub mod execution_rules;
 pub mod file_read_execution;
 pub mod file_search_execution;
+pub mod filesystem_gateway;
 pub mod gateway_dispatch_execution;
 pub mod hook_discovery;
 pub mod hook_gated_executor;

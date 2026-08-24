@@ -50,6 +50,7 @@ pub(super) async fn orchestrate_current_tool_execution(
 ) -> Result<RuntimeToolExecutionResult, RuntimeToolExecutionError> {
     let mut decision = current_tool_execution_decision(request);
     normalize_deferred_sandbox_decision(&mut decision, request);
+    annotate_shell_approval_contract(&mut decision, request);
 
     match decision.kind {
         ToolExecutionDecisionKind::Allow | ToolExecutionDecisionKind::RequiresApproval => {}
@@ -103,8 +104,20 @@ pub(super) async fn orchestrate_current_tool_execution(
     } else {
         requested_sandbox
     };
+    let approval_key = shell_approval_key(request, requested_sandbox);
+    let cached_approval = match approval_key.as_deref() {
+        Some(key) => {
+            executor
+                .state
+                .has_shell_approval(request.context.session_id(), key)
+                .await
+        }
+        None => false,
+    };
     let initial_approval = if strict_guardian {
         RuntimeToolInitialApproval::Required(RuntimeToolApprovalKind::Guardian)
+    } else if decision.kind == ToolExecutionDecisionKind::RequiresApproval && cached_approval {
+        RuntimeToolInitialApproval::Cached
     } else if decision.kind == ToolExecutionDecisionKind::RequiresApproval {
         RuntimeToolInitialApproval::Required(RuntimeToolApprovalKind::User)
     } else {
@@ -134,6 +147,7 @@ pub(super) async fn orchestrate_current_tool_execution(
         executor,
         request,
         decision,
+        approval_key,
     };
     let runner = CurrentToolAttemptRunner { executor, request };
     orchestrate_runtime_tool_execution(input, &approvals, &runner).await
@@ -143,6 +157,7 @@ struct CurrentToolApprovalHandler<'a> {
     executor: &'a CurrentTurnToolExecutor,
     request: RuntimeToolExecutionRequest<'a>,
     decision: ToolExecutionDecision,
+    approval_key: Option<String>,
 }
 
 impl RuntimeToolApprovalHandler for CurrentToolApprovalHandler<'_> {
@@ -170,6 +185,7 @@ impl RuntimeToolApprovalHandler for CurrentToolApprovalHandler<'_> {
                         self.executor.pending_input.as_ref(),
                         &decision.reason,
                         &decision.metadata,
+                        self.approval_key.as_deref(),
                     )
                     .await
                     .map_err(RuntimeToolExecutionError::before_handler)
@@ -250,6 +266,7 @@ async fn execute_current_tool_attempt(
                 tool_name: request.tool_name,
                 params: request.params,
                 thread_id: executor.thread_id.as_str(),
+                environment_id: request.context.environment_id().unwrap_or("local"),
                 working_directory: request.context.working_directory().clone(),
                 environment: request.context.environment().clone(),
                 tool_call_id: attempt.identity().call_id().to_string(),
@@ -309,6 +326,7 @@ async fn execute_current_tool_attempt(
             cancel_token: request.context.cancel_token().cloned(),
             turn_context: request.turn_context,
             attempt: Some(attempt),
+            filesystem_gateway: request.context.filesystem_gateway().cloned(),
         })
         .await
     {
@@ -360,6 +378,62 @@ fn current_tool_execution_decision(
             request_metadata: request_metadata.as_ref(),
         },
     })
+}
+
+fn annotate_shell_approval_contract(
+    decision: &mut ToolExecutionDecision,
+    request: RuntimeToolExecutionRequest<'_>,
+) {
+    if decision.kind != ToolExecutionDecisionKind::RequiresApproval
+        || request.tool_name != tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME
+    {
+        return;
+    }
+    decision.metadata.insert(
+        "availableDecisions".to_string(),
+        json!(["allow_once", "allow_for_session", "decline", "cancel"]),
+    );
+    decision.metadata.insert(
+        "runtime_contract".to_string(),
+        json!({
+            "contract_key": tool_runtime::execution_approval::SHELL_COMMAND_CONTRACT_KEY,
+            "tool_family": tool_runtime::execution_approval::SHELL_TOOL_FAMILY,
+            "session_cache_supported": true,
+        }),
+    );
+}
+
+fn shell_approval_key(
+    request: RuntimeToolExecutionRequest<'_>,
+    requested_sandbox: RuntimeToolSandboxPolicy,
+) -> Option<String> {
+    if request.tool_name != tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME {
+        return None;
+    }
+    let command = request
+        .params
+        .get("cmd")
+        .or_else(|| request.params.get("command"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|command| !command.is_empty())?;
+    let requested_permissions = [
+        request.params.get("sandbox_permissions"),
+        request.params.get("additional_permissions"),
+        request.params.get("prefix_rule"),
+    ]
+    .into_iter()
+    .flatten()
+    .map(Value::to_string)
+    .collect::<Vec<_>>()
+    .join(",");
+    Some(format!(
+        "shell-v1\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
+        command,
+        request.context.working_directory().to_string_lossy(),
+        requested_sandbox.label().unwrap_or("none"),
+        requested_permissions
+    ))
 }
 
 fn normalize_deferred_sandbox_decision(
@@ -517,6 +591,7 @@ async fn wait_for_tool_approval(
     pending_input: Option<&RuntimeSessionInputHandle>,
     prompt: &str,
     metadata: &HashMap<String, Value>,
+    approval_key: Option<&str>,
 ) -> Result<(), RuntimeToolExecutionError> {
     let response_handle = pending_input.cloned().ok_or_else(|| {
         RuntimeToolExecutionError::new(
@@ -577,6 +652,19 @@ async fn wait_for_tool_approval(
         })?;
 
     if response.get("confirmed").and_then(Value::as_bool) == Some(true) {
+        if approval_key.is_some()
+            && response
+                .get("decision")
+                .and_then(Value::as_str)
+                .is_some_and(|decision| decision == "allow_for_session")
+        {
+            state
+                .record_shell_approval(
+                    request.context.session_id(),
+                    approval_key.expect("checked above").to_string(),
+                )
+                .await;
+        }
         return Ok(());
     }
     Err(RuntimeToolExecutionError::new(
@@ -640,6 +728,7 @@ pub(in crate::current_provider_turn) async fn wait_for_browser_action_approval(
         pending_input,
         &descriptor.reason,
         &metadata,
+        None,
     )
     .await
     .map_err(RuntimeToolExecutionError::before_handler)
@@ -708,6 +797,25 @@ pub(super) fn materialize_tool_approval_action(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    fn execution_request(
+        params: Value,
+        working_directory: &str,
+    ) -> (
+        Value,
+        tool_runtime::tool_executor::RuntimeToolExecutionContext,
+    ) {
+        let context = tool_runtime::tool_executor::RuntimeToolExecutionContext::new(
+            tool_runtime::tool_executor::RuntimeToolExecutionContextInput {
+                working_directory: PathBuf::from(working_directory),
+                session_id: "approval-key-test-session".to_string(),
+                cancel_token: None,
+                workspace_sandbox: None,
+            },
+        );
+        (params, context)
+    }
 
     #[test]
     fn shell_and_apply_patch_retry_policies_match_codex_contract() {
@@ -727,5 +835,165 @@ mod tests {
             tool_runtime::apply_patch::APPLY_PATCH_TOOL_NAME,
             RuntimeToolApprovalPolicy::Never,
         ));
+    }
+
+    #[test]
+    fn shell_approval_key_is_scoped_to_command_cwd_sandbox_and_permissions() {
+        let (params, context) = execution_request(
+            json!({
+                "cmd": "cargo test",
+                "sandbox_permissions": "require_escalated",
+                "additional_permissions": {"network": true}
+            }),
+            "/workspace/project",
+        );
+        let request = RuntimeToolExecutionRequest {
+            tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME,
+            params: &params,
+            context: &context,
+            turn_context: None,
+        };
+        let base = shell_approval_key(request, RuntimeToolSandboxPolicy::WorkspaceWrite)
+            .expect("shell approval key");
+
+        let (different_command, _) =
+            execution_request(json!({"cmd": "cargo check"}), "/workspace/project");
+        let different_command_request = RuntimeToolExecutionRequest {
+            tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME,
+            params: &different_command,
+            context: &context,
+            turn_context: None,
+        };
+        assert_ne!(
+            base,
+            shell_approval_key(
+                different_command_request,
+                RuntimeToolSandboxPolicy::WorkspaceWrite
+            )
+            .expect("different command key")
+        );
+
+        let (same_command_different_cwd, different_cwd_context) = execution_request(
+            json!({
+                "cmd": "cargo test",
+                "sandbox_permissions": "require_escalated",
+                "additional_permissions": {"network": true}
+            }),
+            "/workspace/other-project",
+        );
+        let different_cwd_request = RuntimeToolExecutionRequest {
+            tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME,
+            params: &same_command_different_cwd,
+            context: &different_cwd_context,
+            turn_context: None,
+        };
+        assert_ne!(
+            base,
+            shell_approval_key(
+                different_cwd_request,
+                RuntimeToolSandboxPolicy::WorkspaceWrite
+            )
+            .expect("different cwd key")
+        );
+        assert_ne!(
+            base,
+            shell_approval_key(request, RuntimeToolSandboxPolicy::DangerFullAccess)
+                .expect("different sandbox key")
+        );
+
+        let (different_permissions, different_permissions_context) = execution_request(
+            json!({
+                "cmd": "cargo test",
+                "sandbox_permissions": "require_escalated",
+                "additional_permissions": {"network": false}
+            }),
+            "/workspace/project",
+        );
+        let different_permissions_request = RuntimeToolExecutionRequest {
+            tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME,
+            params: &different_permissions,
+            context: &different_permissions_context,
+            turn_context: None,
+        };
+        assert_ne!(
+            base,
+            shell_approval_key(
+                different_permissions_request,
+                RuntimeToolSandboxPolicy::WorkspaceWrite
+            )
+            .expect("different permissions key")
+        );
+
+        let (browser_params, browser_context) =
+            execution_request(json!({"cmd": "cargo test"}), "/workspace/project");
+        let browser_request = RuntimeToolExecutionRequest {
+            tool_name: "browser_click",
+            params: &browser_params,
+            context: &browser_context,
+            turn_context: None,
+        };
+        assert!(
+            shell_approval_key(browser_request, RuntimeToolSandboxPolicy::WorkspaceWrite).is_none()
+        );
+    }
+
+    #[test]
+    fn shell_approval_contract_exposes_session_scope_only_for_shell() {
+        let params = json!({"cmd": "cargo test"});
+        let context = tool_runtime::tool_executor::RuntimeToolExecutionContext::new(
+            tool_runtime::tool_executor::RuntimeToolExecutionContextInput {
+                working_directory: PathBuf::from("/workspace/project"),
+                session_id: "approval-contract-test-session".to_string(),
+                cancel_token: None,
+                workspace_sandbox: None,
+            },
+        );
+        let request = RuntimeToolExecutionRequest {
+            tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME,
+            params: &params,
+            context: &context,
+            turn_context: None,
+        };
+        let mut decision = current_tool_execution_decision(request);
+        decision.kind = ToolExecutionDecisionKind::RequiresApproval;
+        annotate_shell_approval_contract(&mut decision, request);
+        let projection = tool_runtime::execution_approval::execution_approval_projection(
+            request.tool_name,
+            &decision.metadata,
+        );
+        assert_eq!(
+            projection.available_decisions,
+            vec![
+                "allow_once".to_string(),
+                "allow_for_session".to_string(),
+                "decline".to_string(),
+                "cancel".to_string()
+            ]
+        );
+        assert_eq!(
+            projection.runtime_contract["session_cache_supported"],
+            Value::Bool(true)
+        );
+
+        let mut browser_metadata = HashMap::from([(
+            "runtime_contract".to_string(),
+            json!({
+                "contract_key": BROWSER_ACTION_CONTRACT_KEY,
+                "tool_family": BROWSER_ACTION_TOOL_FAMILY,
+                "session_cache_supported": false,
+            }),
+        )]);
+        browser_metadata.insert(
+            "availableDecisions".to_string(),
+            json!(["allow_once", "allow_for_session", "decline", "cancel"]),
+        );
+        let browser_projection = tool_runtime::execution_approval::execution_approval_projection(
+            "browser_click",
+            &browser_metadata,
+        );
+        assert_eq!(
+            browser_projection.available_decisions,
+            vec!["allow_once", "decline", "cancel"]
+        );
     }
 }

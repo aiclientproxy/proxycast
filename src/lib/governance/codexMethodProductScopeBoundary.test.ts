@@ -226,13 +226,10 @@ describe("Codex method product scope boundary", () => {
     }
   });
 
-  it("excluded remote environment, migration, marketplace and share surfaces cannot enter Desktop", () => {
+  it("excluded migration, marketplace and share surfaces cannot enter Desktop", () => {
     const matrix = readJson<Matrix>(MATRIX_PATH);
     const manifest = readJson<Manifest>(MANIFEST_PATH);
     const excludedMethods = new Set([
-      "environment/add",
-      "environment/info",
-      "environment/status",
       "externalAgentConfig/detect",
       "externalAgentConfig/import",
       "externalAgentConfig/import/readHistories",
@@ -245,8 +242,6 @@ describe("Codex method product scope boundary", () => {
       "plugin/share/list",
       "plugin/share/save",
       "plugin/share/updateTargets",
-      "thread/environment/connected",
-      "thread/environment/disconnected",
       "externalAgentConfig/import/completed",
       "externalAgentConfig/import/progress",
     ]);
@@ -263,6 +258,34 @@ describe("Codex method product scope boundary", () => {
             kind === manifestKind(entry.direction) && method === entry.method,
         ),
       ).toBe(false);
+    }
+  });
+
+  it("current environment and provider capability surfaces have same-name manifest contracts", () => {
+    const matrix = readJson<Matrix>(MATRIX_PATH);
+    const manifest = readJson<Manifest>(MANIFEST_PATH);
+    const currentMethods = [
+      "environment/add",
+      "environment/info",
+      "environment/status",
+      "modelProvider/capabilities/read",
+      "thread/environment/connected",
+      "thread/environment/disconnected",
+    ];
+    const contracts = new Set(
+      manifest.methods.map(({ kind, method }) => `${kind}:${method}`),
+    );
+    for (const method of currentMethods) {
+      const entry = flatten(matrix).find(
+        ({ method: candidate }) => candidate === method,
+      );
+      expect(entry?.status, `${method} must be current in the matrix`).toBe(
+        "implemented",
+      );
+      expect(
+        contracts.has(`${manifestKind(entry!.direction)}:${method}`),
+        `${method} must be in the generated manifest`,
+      ).toBe(true);
     }
   });
 });

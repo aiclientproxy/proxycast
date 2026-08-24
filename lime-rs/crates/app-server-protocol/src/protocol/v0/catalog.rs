@@ -2029,6 +2029,10 @@ pub const APP_SERVER_REQUEST_SERIALIZATION_SCOPES: &[AppServerRequestSerializati
         scope: AppServerRequestSerializationScope::Thread,
     },
     AppServerRequestSerializationScopeSpec {
+        method: crate::protocol::v2::METHOD_THREAD_REVERT,
+        scope: AppServerRequestSerializationScope::Thread,
+    },
+    AppServerRequestSerializationScopeSpec {
         method: METHOD_MCP_SERVER_OAUTH_LOGIN,
         scope: AppServerRequestSerializationScope::McpOauth,
     },

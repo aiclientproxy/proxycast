@@ -2,6 +2,7 @@ pub mod agent_graph;
 pub mod agent_identity;
 pub mod agent_mailbox;
 pub mod history;
+pub mod projects;
 pub mod runtime_snapshot;
 pub mod session_record;
 pub mod session_repository;
@@ -31,6 +32,11 @@ pub use agent_mailbox::{
 };
 pub use history::{
     CanonicalHistory, ThreadHistoryBuilder, ThreadHistoryBuilderError, ThreadHistoryPage,
+};
+pub use projects::{
+    CreateProjectParams, CreatedProject, DeletedProject, ListProjectsParams, MoveProjectParams,
+    ProjectMoveOutcome, StoredProject, StoredProjectRoot, StoredProjectsPage, UpdateProjectParams,
+    UpdatedProject,
 };
 pub use store::{ThreadStore, ThreadStoreFuture};
 pub use types::{

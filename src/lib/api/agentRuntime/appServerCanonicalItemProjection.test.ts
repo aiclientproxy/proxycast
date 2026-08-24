@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AppServerJsonRpcNotification } from "@/lib/api/appServer";
 import { projectAppServerAgentEventPayload } from "./appServerEventStream";
+import { readAppServerV2NotificationRoute } from "./appServerV2Notification";
 
 const COMPLETED_MESSAGE_TEXT =
   "The transport kept this.\nAnd dropped this.\n\n- Finding — /tmp/file.rs:1\n  Keep ::git-stage{cwd=/tmp} literal.";
@@ -146,6 +147,52 @@ describe("direct v2 App Server Item projection", () => {
         output: "fetched https://example.com/tool",
         structured_content: { source: "fixture" },
         duration_ms: 37,
+        success: true,
+      },
+    });
+  });
+
+  it("projects RuntimeCore canonical tool envelopes from direct item notifications", () => {
+    const notification = {
+      method: "item/completed",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        completedAtMs: 1_752_347_281_113,
+        item: {
+          itemId: "mcp-call-1",
+          kind: "tool",
+          status: "completed",
+          payload: {
+            type: "tool",
+            call_id: "mcp-call-1",
+            name: "mcp__docs__diagnostic_probe",
+            arguments: [{ name: "server", value: "docs" }],
+            output: {
+              text: "control-plane envelope only",
+              structuredContent: { answer: "visible" },
+              durationMs: 12,
+            },
+          },
+          metadata: { tool_family: "mcp" },
+        },
+      },
+    } satisfies AppServerJsonRpcNotification;
+
+    expect(readAppServerV2NotificationRoute(notification)).toMatchObject({
+      itemId: "mcp-call-1",
+      threadId: "thread-1",
+      turnId: "turn-1",
+    });
+    const projected = projectAppServerAgentEventPayload(notification);
+
+    expect(projected).toMatchObject({
+      type: "item_completed",
+      item: {
+        id: "mcp-call-1",
+        type: "tool_call",
+        tool_name: "mcp__docs__diagnostic_probe",
+        structured_content: { answer: "visible" },
         success: true,
       },
     });

@@ -16,7 +16,7 @@ fn initialize_request_matches_protocol_fixture_shape() {
                 },
                 capabilities: ClientCapabilities {
                     event_methods: vec![METHOD_AGENT_SESSION_EVENT.to_string()],
-                    experimental: false,
+                    experimental_api: false,
                     opt_out_notification_methods: None,
                 },
             })
@@ -38,7 +38,7 @@ fn initialize_request_matches_protocol_fixture_shape() {
                 },
                 "capabilities": {
                     "eventMethods": ["agentSession/event"],
-                    "experimental": false
+                    "experimentalApi": false
                 }
             }
         })

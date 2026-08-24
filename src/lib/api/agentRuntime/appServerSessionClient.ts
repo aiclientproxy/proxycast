@@ -35,6 +35,7 @@ export type AppServerSessionRpcClient = Pick<
   | "updateThreadSettings"
   | "archiveThread"
   | "unarchiveThread"
+  | "forkThread"
   | "deleteThread"
   | "request"
 >;
@@ -224,6 +225,26 @@ export function createAppServerSessionClient({
     await appServerClient.archiveThread({ threadId });
   }
 
+  async function forkAgentRuntimeSession(sessionId: string): Promise<string> {
+    const threadId = await resolveCanonicalThreadId(
+      appServerClient,
+      sessionId,
+      "thread/fork",
+    );
+    const response = await appServerClient.forkThread({ threadId });
+    const thread = readCanonicalThreadFromResult(response.result);
+    if (!thread) {
+      throw new Error("thread/fork did not return canonical Thread");
+    }
+    const forkedThreadId = readStringField(thread, "id");
+    const forkedSessionId = readStringField(thread, "sessionId");
+    if (!forkedThreadId || !forkedSessionId) {
+      throw new Error("thread/fork returned an incomplete canonical Thread");
+    }
+    rememberSessionThreadId(forkedSessionId, forkedThreadId);
+    return forkedSessionId;
+  }
+
   async function unarchiveAgentRuntimeSession(
     sessionId: string,
   ): Promise<void> {
@@ -255,6 +276,7 @@ export function createAppServerSessionClient({
     archiveAgentRuntimeSession,
     createAgentRuntimeSession,
     deleteAgentRuntimeSession,
+    forkAgentRuntimeSession,
     getAgentRuntimeSession,
     listAgentRuntimeSessions,
     unarchiveAgentRuntimeSession,
@@ -474,6 +496,7 @@ async function resolveCanonicalThreadId(
     | "thread/archive"
     | "thread/delete"
     | "thread/settings/update"
+    | "thread/fork"
     | "thread/unarchive",
 ): Promise<string> {
   const normalizedSessionId = sessionId.trim();

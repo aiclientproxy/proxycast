@@ -64,6 +64,7 @@ internal/exec-plans/*
 !internal/exec-plans/claw-trace-system-implementation-plan.md
 !internal/exec-plans/devlime-codex-claude-alignment-gap-list.md
 !internal/exec-plans/codex-alignment-v1-coordination-plan.md
+!internal/exec-plans/codex-desktop-complete-alignment-plan.md
 !internal/exec-plans/codex-runtime-gap-alignment-plan.md
 !internal/exec-plans/orchestrator-complete-alignment-plan.md
 !internal/exec-plans/app-server-implementation-plan.md

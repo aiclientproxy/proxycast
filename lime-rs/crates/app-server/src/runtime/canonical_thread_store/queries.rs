@@ -96,6 +96,7 @@ fn query_all_items(
 pub(super) fn query_thread_page(
     conn: &Connection,
     include_archived: bool,
+    project: Option<&Option<String>>,
     direction: SortDirection,
     cursor: Option<&CursorValue>,
     limit: u32,
@@ -122,8 +123,11 @@ pub(super) fn query_thread_page(
                 WHERE edge.child_thread_id = canonical_threads.thread_id
                   AND edge.status = 'pending'
            )
+           AND (?4 = 0
+                OR (?4 = 1 AND json_extract(thread_json, '$.metadata.projectId') IS NULL)
+                OR (?4 = 2 AND json_extract(thread_json, '$.metadata.projectId') = ?5))
            {cursor_clause}
-         ORDER BY COALESCE(recency_at_ms, updated_at_ms) {order}, thread_id {order} LIMIT ?4"
+         ORDER BY COALESCE(recency_at_ms, updated_at_ms) {order}, thread_id {order} LIMIT ?6"
     );
     let mut stmt = conn.prepare(&sql).map_err(store_error)?;
     let fallback = cursor_fallback(CursorKind::Threads, direction);
@@ -134,6 +138,8 @@ pub(super) fn query_thread_page(
                 i64::from(include_archived),
                 cursor.position,
                 cursor.id,
+                project_filter_mode(project),
+                project.and_then(Option::as_deref),
                 i64::from(limit)
             ],
             |row| {
@@ -151,6 +157,14 @@ pub(super) fn query_thread_page(
         })
         .collect();
     rows
+}
+
+pub(super) fn project_filter_mode(project: Option<&Option<String>>) -> i64 {
+    match project {
+        None => 0,
+        Some(None) => 1,
+        Some(Some(_)) => 2,
+    }
 }
 
 pub(super) fn query_turn_page(

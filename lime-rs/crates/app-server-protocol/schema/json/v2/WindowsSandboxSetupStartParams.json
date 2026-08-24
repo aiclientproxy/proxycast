@@ -1,0 +1,28 @@
+{
+  "$defs": {
+    "WindowsSandboxSetupMode": {
+      "enum": [
+        "elevated",
+        "unelevated"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "cwd": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "mode": {
+      "$ref": "#/$defs/WindowsSandboxSetupMode"
+    }
+  },
+  "required": [
+    "mode"
+  ],
+  "title": "WindowsSandboxSetupStartParams",
+  "type": "object"
+}

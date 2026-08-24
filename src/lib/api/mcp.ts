@@ -31,6 +31,7 @@ import {
   type McpServerListResponse as AppServerMcpServerListResponse,
   type McpServerOauthLoginResponse as AppServerMcpServerOauthLoginResponse,
   type McpServerStatusListResponse as AppServerMcpServerStatusListResponse,
+  type ListMcpServerStatusResponse as AppServerMcpServerStatusListV2Response,
   type McpServerToolCallResponse as AppServerMcpServerToolCallResponse,
   type McpToolListResponse as AppServerMcpToolListResponse,
 } from "../../../packages/app-server-client/src/protocol";
@@ -97,6 +98,59 @@ function requireMcpPromptTarget(server: string, name: string) {
     throw new Error("MCP prompt name cannot be empty");
   }
   return { server: normalizedServer, name: normalizedName };
+}
+
+function lowerMcpServerStatus(
+  status: AppServerMcpServerStatusListV2Response["data"][number],
+  config: McpServer,
+): McpServerInfo {
+  const isRunning = status.runtimeStatus === "connected";
+  const serverInfo = status.serverInfo
+    ? {
+        name: status.serverInfo.name,
+        version: status.serverInfo.version,
+        supports_tools: Object.keys(status.tools).length > 0,
+        supports_prompts: false,
+        supports_resources: status.resources.length > 0,
+      }
+    : undefined;
+  return {
+    ...config,
+    config: config.server_config,
+    is_running: isRunning,
+    server_info: serverInfo,
+    runtime_status: {
+      name: status.name,
+      transport:
+        config.server_config.transport ??
+        config.server_config.type ??
+        "unknown",
+      enabled: status.runtimeStatus !== "disabled",
+      is_running: isRunning,
+      required: config.server_config.required ?? false,
+      supports_parallel_tool_calls:
+        config.server_config.supports_parallel_tool_calls ??
+        config.server_config.supportsParallelToolCalls ??
+        false,
+      startup_timeout:
+        config.server_config.startup_timeout ??
+        config.server_config.startupTimeout ??
+        30,
+      tool_timeout:
+        config.server_config.tool_timeout ??
+        config.server_config.toolTimeout ??
+        30,
+      disabled_tools:
+        config.server_config.disabled_tools ??
+        config.server_config.disabledTools ??
+        [],
+      server_info: serverInfo,
+      auth_status: {
+        mode: status.authStatus === "oauth" ? "oauth" : "none",
+        available: status.authStatus !== "notloggedin",
+      },
+    },
+  };
 }
 
 // ============================================================================
@@ -189,15 +243,27 @@ export const mcpApi = {
 
   /** 获取所有服务器及其运行状态 */
   listServersWithStatus: (): Promise<McpServerInfo[]> =>
-    requestMcpAppServer<AppServerMcpServerStatusListResponse>(
-      METHOD_MCP_SERVER_STATUS_LIST,
-    ).then((response) =>
-      assertArrayField<McpServerInfo>(
+    requestMcpAppServer<
+      | AppServerMcpServerStatusListV2Response
+      | AppServerMcpServerStatusListResponse
+    >(METHOD_MCP_SERVER_STATUS_LIST).then(async (response) => {
+      if (response && typeof response === "object" && "data" in response) {
+        const statuses = assertArrayField<
+          AppServerMcpServerStatusListV2Response["data"][number]
+        >(METHOD_MCP_SERVER_STATUS_LIST, response, "data");
+        const configs = await mcpApi.getServers();
+        const byName = new Map(configs.map((config) => [config.name, config]));
+        return statuses.flatMap((status) => {
+          const config = byName.get(status.name);
+          return config ? [lowerMcpServerStatus(status, config)] : [];
+        });
+      }
+      return assertArrayField<McpServerInfo>(
         METHOD_MCP_SERVER_STATUS_LIST,
         response,
         "servers",
-      ),
-    ),
+      );
+    }),
 
   /** 启动 MCP 服务器 */
   startServer: (name: string): Promise<void> =>

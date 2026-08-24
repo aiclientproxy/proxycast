@@ -367,6 +367,9 @@ jobs:
       - name: Test Windows shell runtime fallback
         run: cargo test --manifest-path lime-rs/Cargo.toml -p lime-agent --test windows_shell_runtime -- --test-threads=1
 
+      - name: Test Windows restricted execution security matrix
+        run: cargo test --manifest-path lime-rs/Cargo.toml -p tool-runtime --test windows_restricted_execution -- --test-threads=1
+
       - name: Test Windows file browser directory creation
         run: cargo test --manifest-path lime-rs/Cargo.toml -p lime-services create_directory_creates_nested_directory_from_platform_path -- --test-threads=1
 

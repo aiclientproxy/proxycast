@@ -67,7 +67,7 @@ export function useAgentChatWorkspaceSceneRuntime({
     setAccessMode, messages, setChatMessages, currentTurnId, turns, todoItems,
     threadRead, threadGoal, threadGoalError, isThreadGoalLoading, executionRuntime, sessionWorkingDir, isSending, stopSending, replayPendingAction,
     clearMessages, deleteMessage, editMessage, handlePermissionResponse, submittedActionsInFlight, sessionHistoryWindow,
-    isAutoRestoringSession, isSessionHydrating, sessionId, ensureSession, getThreadIdForSubmit, originalSwitchTopic, loadFullSessionHistory, refreshSessionReadModel, workspacePathMissing, workspaceHealthError,
+    isAutoRestoringSession, isSessionHydrating, sessionId, ensureSession, getThreadIdForSubmit, originalSwitchTopic, loadFullSessionHistory, refreshSessionReadModel, renameTopic, archiveTopic, forkTopic, workspacePathMissing, workspaceHealthError,
     combinedSkillsLoading, expertPanelRequestMetadata, expertPanelRuntimeKey, expertSkillRefsOverride, expertWorkspaceSkillRuntimeEnableBindings, expertWorkspaceSkillRuntimeEnableRefs, handleEnableExpertWorkspaceSkillRuntime, handleExpertSkillRefsChange,
     handlePluginSuggestionsNeeded, handleThreadExpertProfileSwitch, workspacePluginInputSuggestions, workspacePluginSuggestionsError, workspacePluginSuggestionsLoading, workspaceSkillBindings, topicById, effectiveChatToolPreferences, canonicalChildren,
     currentSessionTitle, handleStopSending, handleOpenSubagentSession, currentImageWorkbenchState, imageWorkbenchSessionKey, updateCurrentImageWorkbenchState, artifacts, artifactDisplayState,
@@ -580,6 +580,27 @@ export function useAgentChatWorkspaceSceneRuntime({
           topic: sceneSessionId ? topicById.get(sceneSessionId) : null,
           sessionWorkingDirectory: sessionWorkingDir,
           projectRootPath: project?.rootPath,
+          canonicalThreadStatus: threadRead?.status,
+          canAcceptDirectInput: threadRead?.can_accept_direct_input,
+          onRename: sceneSessionId
+            ? (nextTitle) => renameTopic(sceneSessionId, nextTitle)
+            : undefined,
+          onArchive: sceneSessionId
+            ? async () => {
+                const archived = await archiveTopic(sceneSessionId);
+                if (archived) {
+                  handleBackHome();
+                }
+              }
+            : undefined,
+          onFork: sceneSessionId
+            ? async () => {
+                const forkedSessionId = await forkTopic(sceneSessionId);
+                if (forkedSessionId) {
+                  await originalSwitchTopic(forkedSessionId);
+                }
+              }
+            : undefined,
           isSending: sceneIsSending,
           pendingActionCount: scenePendingActions.length,
           untitledTaskLabel,

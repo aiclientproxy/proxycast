@@ -83,7 +83,7 @@ const BROWSER_TOOL_DEFINITIONS = Object.freeze([
         "Page revision returned by openTabs.",
       ),
       tabId: stringProperty("Tab id returned by openTabs."),
-      title: stringProperty("Title returned by openTabs."),
+      title: stringProperty("Title returned by openTabs.", { allowEmpty: true }),
       url: stringProperty("URL returned by openTabs."),
     },
     ["tabId", "title", "url", "pageRevision"],
@@ -151,6 +151,55 @@ const BROWSER_TOOL_DEFINITIONS = Object.freeze([
     "markDeliverable",
     "Keep the claimed tab as a user-visible deliverable when this turn ends.",
     { tabId: stringProperty("Claimed tab id; defaults to the selected tab.") },
+  ),
+  tool(
+    "openArtifact",
+    "Open a completed Browser download by its controlled artifact ref.",
+    { artifactRef: stringProperty("Artifact ref returned by a completed download.") },
+    ["artifactRef"],
+  ),
+  tool(
+    "revealArtifact",
+    "Reveal a completed Browser download in the system file manager.",
+    { artifactRef: stringProperty("Artifact ref returned by a completed download.") },
+    ["artifactRef"],
+  ),
+  tool(
+    "copyArtifactRef",
+    "Copy a controlled artifact ref to the system clipboard.",
+    { artifactRef: stringProperty("Artifact ref returned by a completed download.") },
+    ["artifactRef"],
+  ),
+  tool(
+    "readClipboard",
+    "Read the system clipboard after turn-scoped approval.",
+    {},
+  ),
+  tool(
+    "writeClipboard",
+    "Write text to the system clipboard after turn-scoped approval.",
+    { text: stringProperty("Text to write to the clipboard.") },
+    ["text"],
+  ),
+  tool(
+    "grantPermission",
+    "Grant a pending Browser permission for this turn after explicit approval.",
+    {
+      permission: stringProperty("Permission name from browser-tab-permission-request."),
+      requestId: stringProperty("Permission request id."),
+    },
+    ["permission", "requestId"],
+  ),
+  tool(
+    "uploadArtifact",
+    "Upload a completed Browser artifact into the current file input after approval.",
+    {
+      artifactRef: stringProperty("Artifact ref returned by a completed download."),
+      backendNodeId: integerProperty("File input backendNodeId from observe."),
+      snapshotId: stringProperty("snapshotId from observe."),
+      tabId: stringProperty("Claimed tab id; defaults to the selected tab."),
+    },
+    ["artifactRef", "backendNodeId", "snapshotId"],
   ),
 ]);
 
@@ -490,7 +539,11 @@ function validateArguments(
   }
   for (const [key, value] of Object.entries(args)) {
     const schema = asRecord(properties[key]);
-    if (schema?.type === "string" && nonEmptyString(value) === null) {
+    if (
+      schema?.type === "string" &&
+      schema.allowEmpty !== true &&
+      nonEmptyString(value) === null
+    ) {
       return `${binding.runtimeName}.${key} must be a non-empty string`;
     }
     if (
@@ -574,8 +627,15 @@ function tool(
   });
 }
 
-function stringProperty(description: string) {
-  return Object.freeze({ type: "string", description });
+function stringProperty(
+  description: string,
+  options: { allowEmpty?: boolean } = {},
+) {
+  return Object.freeze({
+    type: "string",
+    description,
+    ...(options.allowEmpty === true ? { allowEmpty: true } : {}),
+  });
 }
 
 function integerProperty(description: string) {

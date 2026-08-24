@@ -1,5 +1,12 @@
 {
   "$defs": {
+    "AgentMessageDelivery": {
+      "description": "Codex v2 assistant message delivery mode.\n\nThe current upstream contract only exposes `async`; keeping this as a\nclosed enum prevents arbitrary presentation strings from crossing the\nprotocol boundary.",
+      "enum": [
+        "async"
+      ],
+      "type": "string"
+    },
     "ByteRange": {
       "properties": {
         "end": {
@@ -498,6 +505,10 @@
         }
       ]
     },
+    "ReasoningEffort": {
+      "description": "Typed reasoning effort carried by collaboration tool calls.\n\nCodex accepts model-defined values in addition to its well-known levels.\nA transparent validated wrapper preserves those values without falling\nback to an untyped `String` field in the public Item contract.",
+      "type": "string"
+    },
     "SleepItem": {
       "properties": {
         "durationMs": {
@@ -628,6 +639,16 @@
         },
         {
           "properties": {
+            "delivery": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AgentMessageDelivery"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "id": {
               "type": "string"
             },
@@ -794,7 +815,19 @@
                 }
               ]
             },
+            "pluginId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "processId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "scriptPath": {
               "type": [
                 "null",
                 "string"
@@ -921,6 +954,12 @@
               "type": [
                 "null",
                 "string"
+              ]
+            },
+            "readOnlyHint": {
+              "type": [
+                "boolean",
+                "null"
               ]
             },
             "result": {
@@ -1067,9 +1106,13 @@
               ]
             },
             "reasoningEffort": {
-              "type": [
-                "null",
-                "string"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ReasoningEffort"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "receiverThreadIds": {

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "queuedSubmissionIds": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "queuedSubmissionIds",
+    "threadId"
+  ],
+  "title": "ThreadQueueReorderParams",
+  "type": "object"
+}

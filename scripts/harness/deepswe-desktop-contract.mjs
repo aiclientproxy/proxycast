@@ -36,6 +36,27 @@ const REQUIRED_VERIFIER_ARTIFACTS = [
   "ctrf.json",
   "test-stdout.txt",
 ];
+const REQUIRED_RECOVERY_COVERAGE = [
+  "cancel_no_ghost_write",
+  "approval_resume",
+  "cold_restart",
+];
+const REQUIRED_MANIFEST_GATE_B = [
+  "realElectronHost",
+  "preloadInvokeBridge",
+  "appServerHandleJsonLines",
+  "canonicalIdentity",
+  "terminalReadModel",
+  "visibleTerminal",
+  "visibleToolLifecycle",
+  "visibleDiffArtifact",
+  "artifactContentAvailable",
+  "coldRestart",
+  "productionMockFallbackZero",
+  "invokeErrorsZero",
+  "consoleErrorsZero",
+  "pageErrorsZero",
+];
 
 function isRecord(value) {
   return value != null && typeof value === "object" && !Array.isArray(value);
@@ -109,6 +130,28 @@ export function validateDesktopManifest(manifest) {
   if (JSON.stringify(languages.sort()) !== JSON.stringify(expectedLanguages)) {
     throw new Error(
       `Desktop Smoke 5 language coverage mismatch: ${languages.join(", ")}`,
+    );
+  }
+  const recoveryCoverage = uniqueStrings(
+    manifest?.suiteRequirements?.recoveryCoverage,
+  ).sort();
+  if (
+    JSON.stringify(recoveryCoverage) !==
+    JSON.stringify([...REQUIRED_RECOVERY_COVERAGE].sort())
+  ) {
+    throw new Error(
+      `Desktop Smoke 5 recovery coverage mismatch: ${recoveryCoverage.join(", ")}`,
+    );
+  }
+  const requiredGateB = uniqueStrings(
+    manifest?.evidenceContract?.requiredGateB,
+  ).sort();
+  if (
+    JSON.stringify(requiredGateB) !==
+    JSON.stringify([...REQUIRED_MANIFEST_GATE_B].sort())
+  ) {
+    throw new Error(
+      `Desktop Smoke 5 Gate B contract mismatch: ${requiredGateB.join(", ")}`,
     );
   }
   for (const task of tasks) {
@@ -256,6 +299,59 @@ function verifierArtifactNames(verifier) {
   );
 }
 
+export function coldRestartEvidencePasses({
+  coldRestart,
+  identity,
+  patchSha256,
+}) {
+  const restartIdentity = coldRestart?.identity ?? {};
+  const artifactPreview = coldRestart?.artifactPreview ?? {};
+  const patch = coldRestart?.patch ?? {};
+  const bridge = coldRestart?.bridge ?? {};
+  return (
+    coldRestart?.status === "pass" &&
+    coldRestart?.electronProcessReplaced === true &&
+    Number.isInteger(coldRestart?.previousElectronPid) &&
+    Number.isInteger(coldRestart?.restartedElectronPid) &&
+    coldRestart.previousElectronPid !== coldRestart.restartedElectronPid &&
+    coldRestart?.appServerProcessReplaced === true &&
+    Array.isArray(coldRestart?.previousProcessTree?.appServerPids) &&
+    coldRestart.previousProcessTree.appServerPids.length > 0 &&
+    Array.isArray(coldRestart?.restartedProcessTree?.appServerPids) &&
+    coldRestart.restartedProcessTree.appServerPids.length > 0 &&
+    coldRestart?.previousProcessTreeExit?.exited === true &&
+    coldRestart?.renderer?.electron === true &&
+    coldRestart?.renderer?.preloadInvokeBridge === true &&
+    normalizeString(restartIdentity.sessionId) ===
+      normalizeString(identity?.sessionId) &&
+    normalizeString(restartIdentity.threadId) ===
+      normalizeString(identity?.threadId) &&
+    normalizeString(restartIdentity.turnId) ===
+      normalizeString(identity?.turnId) &&
+    coldRestart?.projection?.stable === true &&
+    isSha256(coldRestart?.projection?.beforeSha256) &&
+    coldRestart?.projection?.beforeSha256 ===
+      coldRestart?.projection?.afterSha256 &&
+    coldRestart?.toolLifecycleVisible === true &&
+    coldRestart?.diffArtifactVisible === true &&
+    artifactPreview?.status === "pass" &&
+    artifactPreview?.contentVisible === true &&
+    artifactPreview?.unavailableErrorVisible === false &&
+    artifactPreview?.artifactReadSeen === true &&
+    coldRestart?.approvalCompleted === true &&
+    coldRestart?.cancelNoGhostWrite === true &&
+    patch?.stable === true &&
+    normalizeString(patch?.beforeSha256) === normalizeString(patchSha256) &&
+    patch?.beforeSha256 === patch?.afterSha256 &&
+    coldRestart?.providerRequestCountStable === true &&
+    bridge?.appServerHandleJsonLinesSeen === true &&
+    bridge?.mockFallbackHitCount === 0 &&
+    bridge?.invokeErrorCount === 0 &&
+    coldRestart?.consoleErrorCount === 0 &&
+    coldRestart?.pageErrorCount === 0
+  );
+}
+
 function buildTrialAssertions({ evidence, manifest, repoRoot }) {
   const task = taskById(manifest, normalizeString(evidence?.taskId));
   const toolPhases = completedToolPhases(evidence?.toolLifecycle);
@@ -329,10 +425,11 @@ function buildTrialAssertions({ evidence, manifest, repoRoot }) {
       evidence?.gui?.artifactPreview?.contentVisible === true &&
       evidence?.gui?.artifactPreview?.unavailableErrorVisible === false &&
       evidence?.gui?.artifactPreview?.artifactReadSeen === true,
-    sessionReopen:
-      evidence?.recovery?.sessionReopen?.status === "pass" &&
-      normalizeString(evidence?.recovery?.sessionReopen?.sessionId) ===
-        normalizeString(identity.sessionId),
+    coldRestart: coldRestartEvidencePasses({
+      coldRestart: evidence?.recovery?.coldRestart,
+      identity,
+      patchSha256,
+    }),
     productionMockFallbackZero: evidence?.bridge?.mockFallbackHitCount === 0,
     invokeErrorsZero: evidence?.bridge?.invokeErrorCount === 0,
     consoleErrorsZero: evidence?.gui?.consoleErrorCount === 0,
@@ -369,7 +466,7 @@ export function evaluateDesktopTrial({ evidence, manifest, repoRoot }) {
     "visibleToolLifecycle",
     "visibleDiffArtifact",
     "artifactContentAvailable",
-    "sessionReopen",
+    "coldRestart",
     "productionMockFallbackZero",
     "invokeErrorsZero",
     "consoleErrorsZero",
@@ -419,7 +516,13 @@ function recoveryCoverage(evidenceList) {
   return {
     cancel_no_ghost_write: hasPass("cancelNoGhostWrite"),
     approval_resume: hasPass("approvalResume"),
-    session_reopen: hasPass("sessionReopen"),
+    cold_restart: evidenceList.some((evidence) =>
+      coldRestartEvidencePasses({
+        coldRestart: evidence?.recovery?.coldRestart,
+        identity: evidence?.identity,
+        patchSha256: evidence?.patchSha256,
+      }),
+    ),
   };
 }
 

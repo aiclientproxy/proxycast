@@ -5,6 +5,7 @@ import {
   getAllAliasConfigs,
   getModelRegistry,
   getModelRegistryProviderIds,
+  readModelProviderCapabilities,
   getModelPreferences,
   getProviderAliasConfig,
   getModelSyncState,
@@ -171,6 +172,35 @@ describe("modelRegistry API", () => {
     vi.clearAllMocks();
     appServerRequestMock.mockReset();
     invalidateModelRegistryCache();
+  });
+
+  it("readModelProviderCapabilities 应通过 exact App Server method 读取布尔能力", async () => {
+    resolveAppServerRequest({
+      namespaceTools: true,
+      imageGeneration: false,
+      webSearch: true,
+    });
+
+    await expect(readModelProviderCapabilities()).resolves.toEqual({
+      namespaceTools: true,
+      imageGeneration: false,
+      webSearch: true,
+    });
+    expectAppServerRequest(1, "modelProvider/capabilities/read", {});
+  });
+
+  it("readModelProviderCapabilities 遇到未知响应时 fail closed", async () => {
+    resolveAppServerRequest({
+      namespaceTools: true,
+      imageGeneration: "unknown",
+      webSearch: true,
+    });
+
+    await expect(readModelProviderCapabilities()).resolves.toEqual({
+      namespaceTools: false,
+      imageGeneration: false,
+      webSearch: false,
+    });
   });
 
   it("getModelRegistry 应缓存并复用同一轮读取结果", async () => {

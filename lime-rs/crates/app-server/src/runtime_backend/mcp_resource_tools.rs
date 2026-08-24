@@ -90,6 +90,7 @@ impl McpResourceGateway for AppServerMcpResourceGateway {
         };
         Ok(McpServerResourceReadResponse {
             contents: content.into_iter().collect(),
+            origin_call_id: None,
         })
     }
 }

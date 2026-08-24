@@ -7,6 +7,7 @@ import {
   isErrorNotification,
   isGuardianReviewCompletedNotification,
   isGuardianReviewStartedNotification,
+  isStrictReviewRequiredNotification,
   isFileChangePatchUpdatedNotification,
   isItemCompletedNotification,
   isItemStartedNotification,
@@ -167,6 +168,32 @@ test("recognizes strict Guardian auto approval review lifecycle", () => {
   ]) {
     assert.equal(isGuardianReviewStartedNotification(malformed), false);
     assert.equal(isGuardianReviewCompletedNotification(malformed), false);
+    assert.equal(serverNotification(malformed), undefined);
+  }
+});
+
+test("recognizes strict review required as an independent notification", () => {
+  const notification = {
+    method: "autoApprovalReview/strictReviewRequired",
+    params: {
+      startedAtMs: 1_783_814_400_100,
+      threadId,
+      turnId,
+    },
+  };
+
+  assert.equal(isStrictReviewRequiredNotification(notification), true);
+  assert.deepEqual(serverNotification(notification), notification);
+
+  for (const malformed of [
+    { ...notification, params: { ...notification.params, turnId: "" } },
+    {
+      ...notification,
+      params: { ...notification.params, startedAtMs: "1783814400100" },
+    },
+    { ...notification, params: { ...notification.params, extra: true } },
+  ]) {
+    assert.equal(isStrictReviewRequiredNotification(malformed), false);
     assert.equal(serverNotification(malformed), undefined);
   }
 });
@@ -672,6 +699,50 @@ test("fails closed for malformed or unknown notifications", () => {
   assert.equal(isServerNotification(malformed), false);
   assert.equal(serverNotification(retired), undefined);
   assert.equal(isServerNotification(retired), false);
+});
+
+test("recognizes environment connection lifecycle notifications", () => {
+  for (const method of [
+    "thread/environment/connected",
+    "thread/environment/disconnected",
+  ]) {
+    const notification = {
+      method,
+      params: { threadId: "thread-1", environmentId: "remote-a" },
+    };
+    assert.deepEqual(serverNotification(notification), notification);
+    assert.equal(isServerNotification(notification), true);
+  }
+
+  for (const params of [
+    { threadId: "", environmentId: "remote-a" },
+    { threadId: "thread-1", environmentId: "" },
+    { threadId: "thread-1", environmentId: 42 },
+  ]) {
+    assert.equal(
+      serverNotification({
+        method: "thread/environment/connected",
+        params,
+      }),
+      undefined,
+    );
+  }
+});
+
+test("recognizes thread queue changed notifications and fails closed", () => {
+  const notification = {
+    method: "thread/queue/changed",
+    params: { threadId: "thread-1" },
+  };
+  assert.deepEqual(serverNotification(notification), notification);
+  assert.equal(isServerNotification(notification), true);
+
+  for (const params of [{}, { threadId: "" }, { threadId: 42 }]) {
+    assert.equal(
+      serverNotification({ method: "thread/queue/changed", params }),
+      undefined,
+    );
+  }
 });
 
 test("fails closed for malformed reasoning notifications", () => {

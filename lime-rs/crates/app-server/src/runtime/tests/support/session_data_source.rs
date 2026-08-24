@@ -1,5 +1,6 @@
 use super::super::*;
 use crate::MemoryBackend;
+use async_trait::async_trait;
 
 pub(in crate::runtime::tests) struct TestSessionDataSource {
     workspace: Option<serde_json::Value>,

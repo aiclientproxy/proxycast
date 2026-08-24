@@ -255,6 +255,74 @@ describe("mcp", () => {
     expect(safeInvoke).not.toHaveBeenCalled();
   });
 
+  it("current v2 状态分页应投影回配置页所需的 server identity", async () => {
+    const config = {
+      id: "server-v2",
+      name: "remote-docs",
+      server_config: {
+        type: "streamable_http",
+        url: "https://example.com/mcp",
+        enabled: true,
+      },
+      enabled_lime: true,
+      enabled_claude: false,
+      enabled_codex: true,
+      enabled_gemini: false,
+    };
+    mockAppServerResult({
+      data: [
+        {
+          name: "remote-docs",
+          runtimeStatus: "connected",
+          pluginId: null,
+          serverInfo: {
+            name: "remote-docs",
+            title: null,
+            version: "1.0.0",
+            description: null,
+            icons: null,
+            websiteUrl: null,
+          },
+          tools: {
+            search: {
+              name: "search",
+              description: "Search docs",
+              inputSchema: {},
+            },
+          },
+          resources: [],
+          resourceTemplates: [],
+          authStatus: "unsupported",
+        },
+      ],
+      nextCursor: null,
+    });
+    mockAppServerResult({ servers: [config] });
+
+    await expect(mcpApi.listServersWithStatus()).resolves.toMatchObject([
+      {
+        id: "server-v2",
+        name: "remote-docs",
+        is_running: true,
+        config: config.server_config,
+        runtime_status: {
+          is_running: true,
+          auth_status: { mode: "none", available: true },
+        },
+      },
+    ]);
+    expect(appServerRequestMock).toHaveBeenNthCalledWith(
+      1,
+      "mcpServerStatus/list",
+      {},
+    );
+    expect(appServerRequestMock).toHaveBeenNthCalledWith(
+      2,
+      "mcpServer/list",
+      {},
+    );
+  });
+
   it("MCP runtime 使用命令应通过 App Server current method 传递参数", async () => {
     const tool = {
       name: "mcp__docs__search_docs",

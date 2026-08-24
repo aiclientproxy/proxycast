@@ -101,6 +101,22 @@ function appServerClientMock(): AgentRuntimeAppServerClient {
       messages: [],
       notifications: [],
     }),
+    forkThread: vi.fn().mockResolvedValue({
+      id: 2,
+      result: {
+        thread: {
+          id: "thread-forked",
+          sessionId: "session-forked",
+          createdAt: 1780704000,
+          updatedAt: 1780704000,
+          status: { type: "idle" },
+          turns: [],
+        },
+      },
+      response: { id: 2, result: {} },
+      messages: [],
+      notifications: [],
+    }),
     unarchiveThread: vi.fn().mockResolvedValue({
       id: 1,
       result: {

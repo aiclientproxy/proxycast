@@ -246,6 +246,7 @@ fn request<'a>(
         tool_name,
         params,
         thread_id: "thread-1",
+        environment_id: "local",
         working_directory: std::env::current_dir().unwrap(),
         environment: HashMap::new(),
         tool_call_id: call_id.to_string(),
@@ -352,6 +353,22 @@ async fn exec_command_forwards_tty_to_execution_process_gateway() {
     let starts = gateway.starts.lock().unwrap();
     assert_eq!(starts.len(), 1);
     assert!(starts[0].tty);
+}
+
+#[tokio::test]
+async fn exec_command_forwards_environment_identity_to_execution_gateway() {
+    let gateway = Arc::new(FixtureGateway::default());
+    let params = json!({ "cmd": "short", "login": false, "yield_time_ms": 250 });
+    let mut remote_request = request(EXEC_COMMAND_TOOL_NAME, &params, "call-remote");
+    remote_request.environment_id = "remote-tools";
+
+    execute_runtime_unified_exec_tool(gateway.clone(), remote_request)
+        .await
+        .expect("remote Environment identity should reach the gateway");
+
+    let starts = gateway.starts.lock().unwrap();
+    assert_eq!(starts.len(), 1);
+    assert_eq!(starts[0].environment_id, "remote-tools");
 }
 
 #[tokio::test]

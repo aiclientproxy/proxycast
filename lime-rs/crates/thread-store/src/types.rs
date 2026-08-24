@@ -103,6 +103,7 @@ pub struct ListThreadsParams {
     pub include_archived: bool,
     pub page: PageRequest,
     pub section: Option<Option<String>>,
+    pub project: Option<Option<String>>,
     pub sort_by_section_position: bool,
 }
 

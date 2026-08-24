@@ -124,6 +124,8 @@ export function createThreadClient(deps: AgentRuntimeThreadClientDeps = {}) {
   const appServerEventRouter = shouldEnableAppServerEventDrain(
     appServerClient,
     enableAppServerEventDrain,
+    // The App Server-backed lifecycle client is created just below. Only an
+    // explicitly injected lifecycle client bypasses the App Server drain.
     deps.standardRuntimeClient,
   )
     ? new AppServerAgentSessionEventDrainRouter(appServerClient)
@@ -567,10 +569,10 @@ function shouldEnableAppServerEventDrain(
   if (override !== undefined) {
     return override;
   }
-  if (standardRuntimeClient) {
-    return false;
-  }
-  return appServerClient instanceof AppServerClient;
+  return (
+    standardRuntimeClient === undefined &&
+    typeof appServerClient.drainEvents === "function"
+  );
 }
 
 function createAppServerAgentRuntimeLifecycleClient(

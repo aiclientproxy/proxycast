@@ -1,6 +1,6 @@
 {
   "$defs": {
-    "McpServerResourceContent": {
+    "McpResourceContent": {
       "anyOf": [
         {
           "properties": {
@@ -54,9 +54,15 @@
   "properties": {
     "contents": {
       "items": {
-        "$ref": "#/$defs/McpServerResourceContent"
+        "$ref": "#/$defs/McpResourceContent"
       },
       "type": "array"
+    },
+    "originCallId": {
+      "type": [
+        "null",
+        "string"
+      ]
     }
   },
   "required": [

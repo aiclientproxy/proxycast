@@ -138,7 +138,11 @@ export class AgentRuntimeEventSequenceGate {
       !this.#verifier ||
       isItemStreamingNotification(notification) ||
       isGuardianReviewNotification(notification) ||
-      notification.method === "thread/settings/updated"
+      notification.method === "thread/reverted" ||
+      notification.method === "thread/settings/updated" ||
+      notification.method === "thread/queue/changed" ||
+      notification.method === "thread/environment/connected" ||
+      notification.method === "thread/environment/disconnected"
     ) {
       return { accepted: true, violations: [] };
     }

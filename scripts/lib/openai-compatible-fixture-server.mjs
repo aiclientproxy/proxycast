@@ -822,7 +822,9 @@ export async function startOpenAiCompatibleFixtureServer(options = {}) {
       socketRequestCounts.delete(socket);
     });
   });
-  server.keepAliveTimeout = 1_000;
+  // The fixture owns socket cleanup through close(). A short server TTL races
+  // with tool execution gaps and can destroy a reused SSE socket at turn end.
+  server.keepAliveTimeout = 0;
 
   await new Promise((resolve, reject) => {
     server.once("error", reject);

@@ -322,7 +322,8 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     accessMode,
     providerTypeRef,
     modelRef,
-    pendingSessionMetadataSyncCancelRef: sharedPendingSessionMetadataSyncCancelRef,
+    pendingSessionMetadataSyncCancelRef:
+      sharedPendingSessionMetadataSyncCancelRef,
     sessionIdRef,
     currentAssistantMsgIdRef,
     currentStreamingSessionIdRef,
@@ -3497,6 +3498,73 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     [loadTopics, runtime, tNavigation],
   );
 
+  const archiveTopic = useCallback(
+    async (topicId: string): Promise<boolean> => {
+      try {
+        if (!runtime.archiveSession) {
+          throw new Error("archive session capability is unavailable");
+        }
+        await runtime.archiveSession(topicId);
+        await loadTopics();
+
+        if (topicId === sessionIdRef.current) {
+          applySessionSnapshot(createEmptyAgentSessionSnapshot());
+          resetPendingActions();
+          resetStreamingRefs();
+          hydratedSessionRef.current = null;
+          restoredWorkspaceRef.current = null;
+          persistSessionRestoreCandidate(null);
+          saveTransient(scopedKeys.turnsKey, []);
+          saveTransient(scopedKeys.itemsKey, []);
+          saveTransient(scopedKeys.currentTurnKey, null);
+        }
+
+        toast.success(
+          tNavigation("navigation.sidebar.conversations.archive.success"),
+        );
+        return true;
+      } catch (error) {
+        console.error("[AgentChat] 归档任务失败:", error);
+        toast.error(
+          tNavigation("navigation.sidebar.conversations.archive.error"),
+        );
+        return false;
+      }
+    },
+    [
+      applySessionSnapshot,
+      loadTopics,
+      persistSessionRestoreCandidate,
+      resetPendingActions,
+      resetStreamingRefs,
+      runtime,
+      scopedKeys,
+      sessionIdRef,
+      tNavigation,
+    ],
+  );
+
+  const forkTopic = useCallback(
+    async (topicId: string): Promise<string | null> => {
+      try {
+        if (!runtime.forkSession) {
+          throw new Error("fork session capability is unavailable");
+        }
+        const forkedSessionId = await runtime.forkSession(topicId);
+        await loadTopics();
+        toast.success(
+          tNavigation("navigation.sidebar.conversations.fork.success"),
+        );
+        return forkedSessionId;
+      } catch (error) {
+        console.error("[AgentChat] 分叉任务失败:", error);
+        toast.error(tNavigation("navigation.sidebar.conversations.fork.error"));
+        return null;
+      }
+    },
+    [loadTopics, runtime, tNavigation],
+  );
+
   const updateTopicExecutionStrategy = useCallback(
     (
       targetSessionId: string,
@@ -3576,6 +3644,8 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     loadFullSessionHistory,
     deleteTopic,
     renameTopic,
+    archiveTopic,
+    forkTopic,
     refreshSessionDetail,
     refreshSessionReadModel,
     attemptSilentTurnRecovery,

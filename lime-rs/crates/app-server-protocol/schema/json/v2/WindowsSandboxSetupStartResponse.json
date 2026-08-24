@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "started": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "started"
+  ],
+  "title": "WindowsSandboxSetupStartResponse",
+  "type": "object"
+}

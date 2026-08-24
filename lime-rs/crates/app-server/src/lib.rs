@@ -168,7 +168,6 @@ pub use runtime::FilesystemFileCheckpointSnapshotStore;
 pub use runtime::FilesystemOutputSnapshotStore;
 pub use runtime::GatewayAppDataSource;
 pub use runtime::InlineArtifactContentProvider;
-pub use runtime::WorkspaceArtifactContentProvider;
 pub use runtime::KnowledgeAppDataSource;
 pub use runtime::McpAppDataSource;
 pub use runtime::MediaAppDataSource;
@@ -211,6 +210,7 @@ pub use runtime::UnavailableBackend;
 pub use runtime::UsageStatsAppDataSource;
 pub use runtime::VoiceAppDataSource;
 pub use runtime::WorkspaceAppDataSource;
+pub use runtime::WorkspaceArtifactContentProvider;
 pub use runtime::WorkspaceSkillBindingAppDataSource;
 pub(crate) use runtime::TRACE_EVENT_MAX_FILES_PER_SESSION;
 pub use runtime_backend::RuntimeBackend;
@@ -243,6 +243,7 @@ type TransportWriter = mpsc::Sender<QueuedOutgoingMessage>;
 type TransportWriters = Arc<Mutex<HashMap<ConnectionId, TransportWriter>>>;
 type TransportDisconnects = Arc<Mutex<HashMap<ConnectionId, CancellationToken>>>;
 type TransportInitialized = Arc<Mutex<HashSet<ConnectionId>>>;
+type TransportExperimentalApi = Arc<Mutex<HashSet<ConnectionId>>>;
 type TransportNotificationOptOut = Arc<Mutex<HashMap<ConnectionId, HashSet<String>>>>;
 type StreamedTransportMessage = Result<(ConnectionId, JsonRpcMessage), AppServerError>;
 
@@ -284,6 +285,7 @@ pub struct AppServer {
     transport_writers: TransportWriters,
     transport_disconnects: TransportDisconnects,
     transport_initialized: TransportInitialized,
+    transport_experimental_api: TransportExperimentalApi,
     transport_notification_opt_out: TransportNotificationOptOut,
     thread_unloading_delay: Duration,
     server_requests: server_request::ServerRequestRouter,
@@ -301,6 +303,7 @@ pub struct AppServerEventBridge {
     transport_writers: TransportWriters,
     transport_disconnects: TransportDisconnects,
     transport_initialized: TransportInitialized,
+    transport_experimental_api: TransportExperimentalApi,
     transport_notification_opt_out: TransportNotificationOptOut,
 }
 
@@ -313,10 +316,12 @@ impl AppServer {
     pub fn with_runtime(runtime: RuntimeCore) -> Self {
         let (outbound_messages, _) = broadcast::channel(OUTBOUND_MESSAGE_CAPACITY);
         let runtime_event_receiver = Arc::new(Mutex::new(runtime.take_event_receiver()));
+        let environment_registry_path = runtime.environment_registry_path();
         let thread_states = thread_state::ThreadStateManager::new();
         let transport_writers = Arc::new(Mutex::new(HashMap::new()));
         let transport_disconnects = Arc::new(Mutex::new(HashMap::new()));
         let transport_initialized = Arc::new(Mutex::new(HashSet::new()));
+        let transport_experimental_api = Arc::new(Mutex::new(HashSet::new()));
         let transport_notification_opt_out = Arc::new(Mutex::new(HashMap::new()));
         let server_requests = server_request::ServerRequestRouter::default();
         let current_time_requests = current_time::CurrentTimeRequestRouter::new(
@@ -338,12 +343,14 @@ impl AppServer {
             transport_writers: transport_writers.clone(),
             transport_disconnects: transport_disconnects.clone(),
             transport_initialized: transport_initialized.clone(),
+            transport_experimental_api: transport_experimental_api.clone(),
             transport_notification_opt_out: transport_notification_opt_out.clone(),
         };
         let interrupt_router = server_requests.clone();
         let process_notification_bridge = interrupt_bridge.clone();
         let command_exec_notification_bridge = interrupt_bridge.clone();
         let fs_notification_bridge = interrupt_bridge.clone();
+        let connection_notification_bridge = interrupt_bridge.clone();
         let notification_bridge = interrupt_bridge.clone();
         let skills_watcher_bridge = notification_bridge.clone();
         let turn_interrupt_hook: processor::TurnInterruptHook =
@@ -401,18 +408,37 @@ impl AppServer {
                         .await;
                 })
             });
+        let connection_server_notification_hook: processor::ConnectionServerNotificationHook =
+            Arc::new(move |connection_id, notification| {
+                let bridge = connection_notification_bridge.clone();
+                Box::pin(async move {
+                    let _ = bridge
+                        .send_messages_to_connection(
+                            connection_id,
+                            &[JsonRpcMessage::Notification(notification.into())],
+                        )
+                        .await;
+                })
+            });
         let skills_watcher = if cfg!(test) {
             None
         } else {
             skills_watcher::SkillsWatcher::start_default(skills_watcher_bridge)
         };
+        let processor = RequestProcessor::new_with_thread_states_and_environment_storage(
+            runtime,
+            thread_states.clone(),
+            Some(environment_registry_path),
+        )
+        .with_turn_interrupt_hook(turn_interrupt_hook)
+        .with_server_notification_hook(server_notification_hook)
+        .with_process_notification_hook(process_notification_hook)
+        .with_command_exec_notification_hook(command_exec_notification_hook)
+        .with_fs_notification_hook(fs_notification_hook)
+        .with_connection_server_notification_hook(connection_server_notification_hook);
+        processor.start_environment_runtime();
         Self {
-            processor: RequestProcessor::new_with_thread_states(runtime, thread_states.clone())
-                .with_turn_interrupt_hook(turn_interrupt_hook)
-                .with_server_notification_hook(server_notification_hook)
-                .with_process_notification_hook(process_notification_hook)
-                .with_command_exec_notification_hook(command_exec_notification_hook)
-                .with_fs_notification_hook(fs_notification_hook),
+            processor,
             thread_states,
             runtime_event_receiver,
             runtime_event_pump_started: Arc::new(AtomicBool::new(false)),
@@ -420,6 +446,7 @@ impl AppServer {
             transport_writers,
             transport_disconnects,
             transport_initialized,
+            transport_experimental_api,
             transport_notification_opt_out,
             thread_unloading_delay: DEFAULT_THREAD_UNLOADING_DELAY,
             server_requests,
@@ -540,6 +567,7 @@ impl AppServer {
             transport_writers: self.transport_writers.clone(),
             transport_disconnects: self.transport_disconnects.clone(),
             transport_initialized: self.transport_initialized.clone(),
+            transport_experimental_api: self.transport_experimental_api.clone(),
             transport_notification_opt_out: self.transport_notification_opt_out.clone(),
         }
     }
@@ -607,6 +635,10 @@ impl AppServer {
                         .server_requests
                         .abort_for_threads(&bridge, &[thread_id.to_string()], "thread closed")
                         .await;
+                    server
+                        .processor
+                        .close_mcp_event_streams_for_thread(thread_id.as_str())
+                        .await;
                     server.thread_states.remove_thread(&thread_id).await;
                     let status: JsonRpcNotification =
                         app_server_protocol::protocol::v2::ServerNotification::ThreadStatusChanged(
@@ -631,6 +663,10 @@ impl AppServer {
                         .await;
                 }
                 Ok(runtime::ThreadUnloadResult::NotLoaded) => {
+                    server
+                        .processor
+                        .close_mcp_event_streams_for_thread(thread_id.as_str())
+                        .await;
                     server.thread_states.remove_thread(&thread_id).await;
                 }
                 Ok(runtime::ThreadUnloadResult::Active) => {
@@ -697,9 +733,52 @@ impl AppServer {
         self.ensure_runtime_event_pump();
         match message {
             JsonRpcMessage::Request(request) => {
-                self.processor
+                if !transport_experimental_api_enabled(
+                    &self.transport_experimental_api,
+                    connection_id,
+                ) {
+                    if let Some(reason) = experimental_api_field_reason(&request) {
+                        return Ok(vec![JsonRpcMessage::Error(
+                            app_server_protocol::JsonRpcErrorResponse {
+                                id: request.id.clone(),
+                                error: JsonRpcError::new(
+                                    error_codes::INVALID_REQUEST,
+                                    format!("{reason} requires experimentalApi capability"),
+                                ),
+                            },
+                        )]);
+                    }
+                    if is_experimental_api_method(&request.method) {
+                        return Ok(vec![JsonRpcMessage::Error(
+                            app_server_protocol::JsonRpcErrorResponse {
+                                id: request.id.clone(),
+                                error: JsonRpcError::new(
+                                    error_codes::INVALID_REQUEST,
+                                    experimental_api_required_message(&request.method),
+                                ),
+                            },
+                        )]);
+                    }
+                }
+                let initialize_capability =
+                    initialize_experimental_api(&JsonRpcMessage::Request(request.clone()));
+                let initialize_request = request.method == METHOD_INITIALIZE;
+                let responses = self
+                    .processor
                     .handle_transport_request(connection_id, request)
-                    .await
+                    .await?;
+                if initialize_request
+                    && initialize_capability
+                    && responses
+                        .iter()
+                        .any(|response| matches!(response, JsonRpcMessage::Response(_)))
+                {
+                    self.transport_experimental_api
+                        .lock()
+                        .expect("app-server transport experimental capability mutex poisoned")
+                        .insert(connection_id);
+                }
+                Ok(responses)
             }
             JsonRpcMessage::Notification(notification) => {
                 self.processor.handle_notification(notification);
@@ -798,6 +877,10 @@ impl AppServer {
             .lock()
             .expect("app-server transport initialization mutex poisoned")
             .remove(&connection_id);
+        self.transport_experimental_api
+            .lock()
+            .expect("app-server transport experimental capability mutex poisoned")
+            .remove(&connection_id);
         self.transport_notification_opt_out
             .lock()
             .expect("app-server transport notification opt-out mutex poisoned")
@@ -824,6 +907,10 @@ impl AppServer {
             .lock()
             .expect("app-server transport initialization mutex poisoned")
             .clear();
+        self.transport_experimental_api
+            .lock()
+            .expect("app-server transport experimental capability mutex poisoned")
+            .clear();
         self.transport_notification_opt_out
             .lock()
             .expect("app-server transport notification opt-out mutex poisoned")
@@ -834,6 +921,7 @@ impl AppServer {
                 .close_command_exec_connection(connection_id)
                 .await;
             self.processor.close_fs_connection(connection_id).await;
+            self.processor.close_mcp_event_streams(connection_id).await;
             self.thread_states
                 .disconnect_connection(connection_id)
                 .await;
@@ -1104,6 +1192,14 @@ impl AppServerEventBridge {
             .cloned();
 
         for message in messages {
+            if notification_requires_experimental_api(message)
+                && !transport_experimental_api_enabled(
+                    &self.transport_experimental_api,
+                    connection_id,
+                )
+            {
+                continue;
+            }
             if notification_is_opted_out(
                 &self.transport_notification_opt_out,
                 connection_id,
@@ -1276,6 +1372,10 @@ async fn run_transport_events(
                                 .close_command_exec_connection(connection_id)
                                 .await;
                             server.processor.close_fs_connection(connection_id).await;
+                            server
+                                .processor
+                                .close_mcp_event_streams(connection_id)
+                                .await;
                             let idle_thread_ids = server
                                 .thread_states
                                 .disconnect_connection(connection_id)
@@ -1349,6 +1449,51 @@ async fn run_transport_events(
                             } else {
                                 None
                             };
+                            if let JsonRpcMessage::Request(request) = &message {
+                                if !transport_experimental_api_enabled(
+                                    &server.transport_experimental_api,
+                                    connection_id,
+                                ) {
+                                    if let Some(reason) = experimental_api_field_reason(request) {
+                                        server
+                                            .send_to_transport_connection(
+                                                connection_id,
+                                                JsonRpcMessage::Error(
+                                                    app_server_protocol::JsonRpcErrorResponse {
+                                                        id: request.id.clone(),
+                                                        error: JsonRpcError::new(
+                                                            error_codes::INVALID_REQUEST,
+                                                            format!(
+                                                                "{reason} requires experimentalApi capability"
+                                                            ),
+                                                        ),
+                                                    },
+                                                ),
+                                            )
+                                            .await?;
+                                        continue;
+                                    }
+                                    if is_experimental_api_method(&request.method) {
+                                        server
+                                            .send_to_transport_connection(
+                                                connection_id,
+                                                JsonRpcMessage::Error(
+                                                    app_server_protocol::JsonRpcErrorResponse {
+                                                        id: request.id.clone(),
+                                                        error: JsonRpcError::new(
+                                                            error_codes::INVALID_REQUEST,
+                                                            experimental_api_required_message(
+                                                                &request.method,
+                                                            ),
+                                                        ),
+                                                    },
+                                                ),
+                                            )
+                                            .await?;
+                                        continue;
+                                    }
+                                }
+                            }
                             if should_spawn_transport_request(&message) {
                                 let prepared_resume = if transport_is_initialized(
                                     &server.transport_initialized,
@@ -1385,6 +1530,8 @@ async fn run_transport_events(
                                 );
                                 continue;
                             }
+                            let initialize_experimental =
+                                is_initialize && initialize_experimental_api(&message);
                             let responses = server
                                 .handle_transport_message(connection_id, message)
                                 .await?;
@@ -1398,6 +1545,13 @@ async fn run_transport_events(
                                     .await?;
                             }
                             if initialize_succeeded {
+                                if initialize_experimental {
+                                    server
+                                        .transport_experimental_api
+                                        .lock()
+                                        .expect("app-server transport experimental capability mutex poisoned")
+                                        .insert(connection_id);
+                                }
                                 server.set_transport_notification_opt_out(
                                     connection_id,
                                     notification_opt_out,
@@ -1516,6 +1670,133 @@ fn transport_is_initialized(
         .lock()
         .expect("app-server transport initialization mutex poisoned")
         .contains(&connection_id)
+}
+
+fn initialize_experimental_api(message: &JsonRpcMessage) -> bool {
+    let JsonRpcMessage::Request(request) = message else {
+        return false;
+    };
+    if request.method != METHOD_INITIALIZE {
+        return false;
+    }
+    request
+        .params
+        .as_ref()
+        .and_then(|params| serde_json::from_value::<InitializeParams>(params.clone()).ok())
+        .is_some_and(|params| params.capabilities.experimental_api)
+}
+
+fn transport_experimental_api_enabled(
+    enabled: &TransportExperimentalApi,
+    connection_id: ConnectionId,
+) -> bool {
+    enabled
+        .lock()
+        .expect("app-server transport experimental capability mutex poisoned")
+        .contains(&connection_id)
+}
+
+fn is_experimental_api_method(method: &str) -> bool {
+    matches!(
+        method,
+        app_server_protocol::protocol::v2::METHOD_THREAD_INCREMENT_ELICITATION
+            | app_server_protocol::protocol::v2::METHOD_THREAD_DECREMENT_ELICITATION
+            | app_server_protocol::protocol::v2::METHOD_THREAD_TURNS_LIST
+            | app_server_protocol::protocol::v2::METHOD_THREAD_ITEMS_LIST
+            | app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH
+            | app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH_OCCURRENCES
+            | app_server_protocol::protocol::v2::METHOD_THREAD_REVERT
+            | app_server_protocol::protocol::v2::METHOD_THREAD_SETTINGS_UPDATE
+            | app_server_protocol::protocol::v2::METHOD_THREAD_MEMORY_MODE_SET
+            | app_server_protocol::protocol::v2::METHOD_MEMORY_RESET
+            | app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN
+            | app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_LIST
+            | app_server_protocol::protocol::v2::METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE
+            | app_server_protocol::protocol::v2::METHOD_PLUGIN_SEARCH
+            | app_server_protocol::protocol::v2::METHOD_COLLABORATION_MODE_LIST
+            | app_server_protocol::protocol::v2::METHOD_MCP_SERVER_EVENT_STREAM_START
+            | app_server_protocol::protocol::v2::METHOD_MCP_SERVER_EVENT_STREAM_STOP
+            | app_server_protocol::protocol::v2::METHOD_ENVIRONMENT_ADD
+            | app_server_protocol::protocol::v2::METHOD_ENVIRONMENT_INFO
+            | app_server_protocol::protocol::v2::METHOD_ENVIRONMENT_STATUS
+            | app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_ADD
+            | app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_LIST
+            | app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_UPDATE
+            | app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_DELETE
+            | app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_REORDER
+            | app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_START
+            | app_server_protocol::protocol::v2::METHOD_PROJECT_LIST
+            | app_server_protocol::protocol::v2::METHOD_PROJECT_READ
+            | app_server_protocol::protocol::v2::METHOD_PROJECT_CREATE
+            | app_server_protocol::protocol::v2::METHOD_PROJECT_IMPORT
+            | app_server_protocol::protocol::v2::METHOD_PROJECT_UPDATE
+            | app_server_protocol::protocol::v2::METHOD_PROJECT_MOVE
+            | app_server_protocol::protocol::v2::METHOD_PROJECT_DELETE
+            | app_server_protocol::protocol::v2::METHOD_PROCESS_SPAWN
+            | app_server_protocol::protocol::v2::METHOD_PROCESS_WRITE_STDIN
+            | app_server_protocol::protocol::v2::METHOD_PROCESS_RESIZE_PTY
+            | app_server_protocol::protocol::v2::METHOD_PROCESS_KILL
+    )
+}
+
+fn experimental_api_field_reason(request: &JsonRpcRequest) -> Option<&'static str> {
+    let params = request.params.as_ref()?.as_object()?;
+    match request.method.as_str() {
+        app_server_protocol::protocol::v2::METHOD_THREAD_START
+            if params
+                .get("projectId")
+                .is_some_and(|value| !value.is_null()) =>
+        {
+            Some("thread/start.projectId")
+        }
+        app_server_protocol::protocol::v2::METHOD_THREAD_METADATA_UPDATE
+            if params
+                .get("projectId")
+                .is_some_and(|value| !value.is_null()) =>
+        {
+            Some("thread/metadata/update.projectId")
+        }
+        app_server_protocol::protocol::v2::METHOD_THREAD_LIST
+            if params.contains_key("projectId") =>
+        {
+            Some("thread/list.projectId")
+        }
+        _ => None,
+    }
+}
+
+fn experimental_api_required_message(method: &str) -> &'static str {
+    if method.starts_with("environment/") {
+        "environment methods require initialize capabilities.experimentalApi"
+    } else if method.starts_with("thread/queue/") {
+        "thread queue methods require initialize capabilities.experimentalApi"
+    } else if method.starts_with("mcpServer/event/stream/") {
+        "MCP event stream methods require initialize capabilities.experimentalApi"
+    } else if method.starts_with("process/") {
+        "process methods require initialize capabilities.experimentalApi"
+    } else {
+        "experimental method requires initialize capabilities.experimentalApi"
+    }
+}
+
+fn notification_requires_experimental_api(message: &JsonRpcMessage) -> bool {
+    let JsonRpcMessage::Notification(notification) = message else {
+        return false;
+    };
+    matches!(
+        notification.method.as_str(),
+        app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_CHANGED
+            | app_server_protocol::protocol::v2::METHOD_PROJECT_CHANGED
+            | app_server_protocol::protocol::v2::METHOD_THREAD_PROJECT_UPDATED
+            | app_server_protocol::protocol::v2::METHOD_THREAD_ENVIRONMENT_CONNECTED
+            | app_server_protocol::protocol::v2::METHOD_THREAD_ENVIRONMENT_DISCONNECTED
+            | app_server_protocol::protocol::v2::METHOD_THREAD_SETTINGS_UPDATED
+            | app_server_protocol::protocol::v2::METHOD_STRICT_REVIEW_REQUIRED
+            | app_server_protocol::protocol::v2::METHOD_PROCESS_OUTPUT_DELTA
+            | app_server_protocol::protocol::v2::METHOD_PROCESS_EXITED
+            | app_server_protocol::protocol::v2::METHOD_MCP_SERVER_EVENT_STREAM_NOTIFICATION
+            | app_server_protocol::protocol::v2::METHOD_TURN_MODERATION_METADATA
+    )
 }
 
 fn thread_resume_request_context(message: &JsonRpcMessage) -> Option<(String, RequestId)> {
@@ -1664,6 +1945,10 @@ async fn publish_thread_delete_transport_result(
         server
             .thread_states
             .remove_thread(&canonical_thread_id)
+            .await;
+        server
+            .processor
+            .close_mcp_event_streams_for_thread(canonical_thread_id.as_str())
             .await;
     }
     true
@@ -2166,6 +2451,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mcp_event_stream_is_gated_by_connection_experimental_capability() {
+        let initialize = |id: i64, experimental_api: bool| {
+            JsonRpcMessage::Request(JsonRpcRequest::new(
+                RequestId::Integer(id),
+                METHOD_INITIALIZE,
+                Some(
+                    serde_json::to_value(InitializeParams {
+                        client_info: ClientInfo {
+                            name: "mcp-event-test".to_string(),
+                            title: None,
+                            version: Some("test".to_string()),
+                        },
+                        capabilities: ClientCapabilities {
+                            event_methods: Vec::new(),
+                            experimental_api,
+                            opt_out_notification_methods: None,
+                        },
+                    })
+                    .expect("initialize params"),
+                ),
+            ))
+        };
+        let event_request = || {
+            JsonRpcMessage::Request(JsonRpcRequest::new(
+                RequestId::Integer(2),
+                app_server_protocol::protocol::v2::METHOD_MCP_SERVER_EVENT_STREAM_START,
+                Some(json!({
+                    "threadId": "thread_1",
+                    "server": "codex_apps",
+                    "subscriptionId": "subscription_1",
+                    "name": "updates",
+                    "arguments": {}
+                })),
+            ))
+        };
+
+        let denied_server = AppServer::new();
+        let denied = denied_server
+            .handle_transport_message(ConnectionId(101), initialize(1, false))
+            .await
+            .expect("initialize without experimental API");
+        assert!(matches!(denied.first(), Some(JsonRpcMessage::Response(_))));
+        denied_server
+            .handle_transport_message(
+                ConnectionId(101),
+                JsonRpcMessage::Notification(JsonRpcNotification::new(
+                    METHOD_INITIALIZED,
+                    Some(json!({})),
+                )),
+            )
+            .await
+            .expect("initialized notification without experimental API");
+        let denied = denied_server
+            .handle_transport_message(ConnectionId(101), event_request())
+            .await
+            .expect("event stream gate response");
+        let JsonRpcMessage::Error(error) = &denied[0] else {
+            panic!("expected experimental API gate error, got {denied:?}");
+        };
+        assert_eq!(error.error.code, error_codes::INVALID_REQUEST);
+
+        let allowed_server = AppServer::new();
+        let allowed = allowed_server
+            .handle_transport_message(ConnectionId(102), initialize(1, true))
+            .await
+            .expect("initialize with experimental API");
+        assert!(matches!(allowed.first(), Some(JsonRpcMessage::Response(_))));
+        allowed_server
+            .handle_transport_message(
+                ConnectionId(102),
+                JsonRpcMessage::Notification(JsonRpcNotification::new(
+                    METHOD_INITIALIZED,
+                    Some(json!({})),
+                )),
+            )
+            .await
+            .expect("initialized notification with experimental API");
+        let allowed = allowed_server
+            .handle_transport_message(ConnectionId(102), event_request())
+            .await
+            .expect("experimental event stream request");
+        let JsonRpcMessage::Error(error) = &allowed[0] else {
+            panic!("expected thread subscription validation error, got {allowed:?}");
+        };
+        assert_eq!(error.error.code, error_codes::INVALID_REQUEST);
+        assert!(error.error.message.contains("not subscribed to thread"));
+    }
+
+    #[tokio::test]
     async fn session_and_turn_flow_runs_on_mock_runtime() {
         let (_temp, server) = server_with_projection_store();
         initialize(&server).await;
@@ -2210,6 +2584,7 @@ mod tests {
                 .map(|event| event.event_type.as_str())
                 .collect::<Vec<_>>(),
             vec![
+                "world_state",
                 "item.started",
                 "message.created",
                 "item.completed",
@@ -3419,6 +3794,182 @@ mod tests {
             )),
         );
         assert!(queued.recv().await.is_some());
+    }
+
+    #[tokio::test]
+    async fn experimental_notifications_only_reach_capable_connections() {
+        use app_server_protocol::protocol::v2;
+
+        let server = AppServer::new();
+        let enabled_connection = ConnectionId(102);
+        let disabled_connection = ConnectionId(103);
+        let (enabled_writer, mut enabled_messages) = mpsc::channel(4);
+        let (disabled_writer, mut disabled_messages) = mpsc::channel(4);
+        server.register_transport_writer(enabled_connection, enabled_writer, None);
+        server.register_transport_writer(disabled_connection, disabled_writer, None);
+        server.mark_transport_initialized(enabled_connection);
+        server.mark_transport_initialized(disabled_connection);
+        server
+            .transport_experimental_api
+            .lock()
+            .expect("app-server transport experimental capability mutex poisoned")
+            .insert(enabled_connection);
+
+        let notifications = [
+            v2::ServerNotification::ThreadQueueChanged(v2::ThreadQueueChangedNotification {
+                thread_id: "thread-experimental".to_string(),
+            }),
+            v2::ServerNotification::ProjectChanged(v2::ProjectChangedNotification {
+                project_id: "project-experimental".to_string(),
+                change_type: v2::ProjectChangeType::Created,
+            }),
+            v2::ServerNotification::ThreadProjectUpdated(v2::ThreadProjectUpdatedNotification {
+                thread_id: "thread-experimental".to_string(),
+                project_id: Some("project-experimental".to_string()),
+            }),
+            v2::ServerNotification::StrictReviewRequired(v2::StrictReviewRequiredNotification {
+                thread_id: "thread-experimental".to_string(),
+                turn_id: "turn-strict".to_string(),
+                started_at_ms: 1_783_814_400_100,
+            }),
+        ];
+
+        for notification in notifications {
+            let expected_method = notification.method();
+            server
+                .processor
+                .publish_server_notification(notification)
+                .await;
+            let message = enabled_messages
+                .recv()
+                .await
+                .expect("experimental-capable connection notification")
+                .message
+                .into_json_rpc_message();
+            let JsonRpcMessage::Notification(message) = message else {
+                panic!("expected notification for {expected_method}");
+            };
+            assert_eq!(message.method, expected_method);
+            assert!(matches!(
+                disabled_messages.try_recv(),
+                Err(mpsc::error::TryRecvError::Empty)
+            ));
+        }
+    }
+
+    #[test]
+    fn experimental_method_gate_matches_current_codex_surface() {
+        use app_server_protocol::protocol::v2;
+
+        for method in [
+            v2::METHOD_THREAD_INCREMENT_ELICITATION,
+            v2::METHOD_THREAD_DECREMENT_ELICITATION,
+            v2::METHOD_THREAD_TURNS_LIST,
+            v2::METHOD_THREAD_ITEMS_LIST,
+            v2::METHOD_THREAD_SEARCH,
+            v2::METHOD_THREAD_SEARCH_OCCURRENCES,
+            v2::METHOD_THREAD_REVERT,
+            v2::METHOD_THREAD_SETTINGS_UPDATE,
+            v2::METHOD_THREAD_MEMORY_MODE_SET,
+            v2::METHOD_MEMORY_RESET,
+            v2::METHOD_THREAD_BACKGROUND_TERMINALS_CLEAN,
+            v2::METHOD_THREAD_BACKGROUND_TERMINALS_LIST,
+            v2::METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE,
+            v2::METHOD_PLUGIN_SEARCH,
+            v2::METHOD_COLLABORATION_MODE_LIST,
+            v2::METHOD_MCP_SERVER_EVENT_STREAM_START,
+            v2::METHOD_MCP_SERVER_EVENT_STREAM_STOP,
+            v2::METHOD_ENVIRONMENT_ADD,
+            v2::METHOD_ENVIRONMENT_INFO,
+            v2::METHOD_ENVIRONMENT_STATUS,
+            v2::METHOD_THREAD_QUEUE_ADD,
+            v2::METHOD_THREAD_QUEUE_LIST,
+            v2::METHOD_THREAD_QUEUE_UPDATE,
+            v2::METHOD_THREAD_QUEUE_DELETE,
+            v2::METHOD_THREAD_QUEUE_REORDER,
+            v2::METHOD_THREAD_QUEUE_START,
+            v2::METHOD_PROJECT_LIST,
+            v2::METHOD_PROJECT_READ,
+            v2::METHOD_PROJECT_CREATE,
+            v2::METHOD_PROJECT_IMPORT,
+            v2::METHOD_PROJECT_UPDATE,
+            v2::METHOD_PROJECT_MOVE,
+            v2::METHOD_PROJECT_DELETE,
+            v2::METHOD_PROCESS_SPAWN,
+            v2::METHOD_PROCESS_WRITE_STDIN,
+            v2::METHOD_PROCESS_RESIZE_PTY,
+            v2::METHOD_PROCESS_KILL,
+        ] {
+            assert!(
+                is_experimental_api_method(method),
+                "expected {method} to require experimentalApi"
+            );
+        }
+
+        for method in [METHOD_INITIALIZE, METHOD_THREAD_START, METHOD_TURN_START] {
+            assert!(
+                !is_experimental_api_method(method),
+                "expected stable method {method} to remain available"
+            );
+        }
+
+        for method in [
+            v2::METHOD_THREAD_QUEUE_CHANGED,
+            v2::METHOD_PROJECT_CHANGED,
+            v2::METHOD_THREAD_PROJECT_UPDATED,
+            v2::METHOD_THREAD_ENVIRONMENT_CONNECTED,
+            v2::METHOD_THREAD_ENVIRONMENT_DISCONNECTED,
+            v2::METHOD_THREAD_SETTINGS_UPDATED,
+            v2::METHOD_STRICT_REVIEW_REQUIRED,
+            v2::METHOD_PROCESS_OUTPUT_DELTA,
+            v2::METHOD_PROCESS_EXITED,
+            v2::METHOD_MCP_SERVER_EVENT_STREAM_NOTIFICATION,
+            v2::METHOD_TURN_MODERATION_METADATA,
+        ] {
+            assert!(
+                notification_requires_experimental_api(&JsonRpcMessage::Notification(
+                    JsonRpcNotification::new(method, None),
+                )),
+                "expected {method} notification to require experimentalApi"
+            );
+        }
+        assert!(!notification_requires_experimental_api(
+            &JsonRpcMessage::Notification(JsonRpcNotification::new(v2::METHOD_WARNING, None,))
+        ));
+    }
+
+    #[test]
+    fn project_thread_fields_report_exact_experimental_reasons() {
+        for (method, params, expected) in [
+            (
+                app_server_protocol::protocol::v2::METHOD_THREAD_START,
+                json!({"projectId": "project-1"}),
+                Some("thread/start.projectId"),
+            ),
+            (
+                app_server_protocol::protocol::v2::METHOD_THREAD_METADATA_UPDATE,
+                json!({"threadId": "thread-1", "projectId": ""}),
+                Some("thread/metadata/update.projectId"),
+            ),
+            (
+                app_server_protocol::protocol::v2::METHOD_THREAD_LIST,
+                json!({"projectId": null}),
+                Some("thread/list.projectId"),
+            ),
+            (
+                app_server_protocol::protocol::v2::METHOD_THREAD_START,
+                json!({"projectId": null}),
+                None,
+            ),
+            (
+                app_server_protocol::protocol::v2::METHOD_THREAD_LIST,
+                json!({}),
+                None,
+            ),
+        ] {
+            let request = JsonRpcRequest::new(RequestId::Integer(1), method, Some(params));
+            assert_eq!(experimental_api_field_reason(&request), expected);
+        }
     }
 
     #[tokio::test]

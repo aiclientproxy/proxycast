@@ -135,6 +135,74 @@ fn turn_context_projects_typed_world_state_without_unowned_sections() {
 }
 
 #[test]
+fn turn_context_projects_selected_environments_into_typed_world_state() {
+    let workspace = TempDir::new().expect("create workspace");
+    let request = request_for_test(
+        "inspect the remote workspace",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-4.1".to_string()),
+            working_dir: Some(workspace.path().to_string_lossy().into_owned()),
+            ..RuntimeRequest::default()
+        }),
+        Some(json!({
+            "environments": [
+                {
+                    "environmentId": "remote",
+                    "cwd": "/remote/workspace",
+                    "runtimeWorkspaceRoots": ["/remote/workspace", "/remote/shared"]
+                },
+                {
+                    "environmentId": "local",
+                    "cwd": "/local/workspace",
+                    "runtimeWorkspaceRoots": ["/local/workspace"]
+                }
+            ],
+            "environmentWorldState": [
+                {
+                    "environmentId": "remote",
+                    "cwd": "/remote/workspace",
+                    "runtimeWorkspaceRoots": ["/remote/workspace", "/remote/shared"],
+                    "primary": true,
+                    "status": "ready",
+                    "shell": "bash"
+                },
+                {
+                    "environmentId": "local",
+                    "cwd": "/local/workspace",
+                    "runtimeWorkspaceRoots": ["/local/workspace"],
+                    "status": "ready",
+                    "shell": "zsh"
+                }
+            ]
+        })),
+    );
+    let host_request = runtime_request_from_request(&request).expect("host request");
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("model selection");
+
+    let turn_context =
+        turn_context_from_request(&request, Some(&host_request), &scope, &selection, None)
+            .expect("turn context");
+    let world_state = turn_context
+        .metadata
+        .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)
+        .expect("world state metadata");
+
+    assert_eq!(world_state["environment"]["cwd"], "/remote/workspace");
+    assert_eq!(world_state["environments"][0]["environmentId"], "local");
+    assert_eq!(world_state["environments"][0]["status"], "ready");
+    assert_eq!(world_state["environments"][1]["environmentId"], "remote");
+    assert_eq!(world_state["environments"][1]["primary"], true);
+    assert_eq!(world_state["environments"][1]["status"], "ready");
+    assert_eq!(world_state["environments"][1]["shell"], "bash");
+    assert_eq!(
+        world_state["environments"][1]["runtimeWorkspaceRoots"],
+        json!(["/remote/workspace", "/remote/shared"])
+    );
+}
+
+#[test]
 fn turn_context_derives_proactive_multi_agent_mode_from_ultra_effort() {
     let workspace = TempDir::new().expect("create workspace");
     let request = request_for_test(

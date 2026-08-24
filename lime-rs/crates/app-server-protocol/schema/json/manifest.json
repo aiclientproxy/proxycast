@@ -83,6 +83,10 @@
       "method": "artifact/write"
     },
     {
+      "kind": "notification",
+      "method": "autoApprovalReview/strictReviewRequired"
+    },
+    {
       "kind": "request",
       "method": "capability/list"
     },
@@ -193,6 +197,18 @@
     {
       "kind": "request",
       "method": "discordChannel/probe"
+    },
+    {
+      "kind": "request",
+      "method": "environment/add"
+    },
+    {
+      "kind": "request",
+      "method": "environment/info"
+    },
+    {
+      "kind": "request",
+      "method": "environment/status"
     },
     {
       "kind": "notification",
@@ -515,6 +531,18 @@
       "method": "mcpServer/enabled/set"
     },
     {
+      "kind": "notification",
+      "method": "mcpServer/event/stream/notification"
+    },
+    {
+      "kind": "request",
+      "method": "mcpServer/event/stream/start"
+    },
+    {
+      "kind": "request",
+      "method": "mcpServer/event/stream/stop"
+    },
+    {
       "kind": "request",
       "method": "mcpServer/importFromApp"
     },
@@ -680,6 +708,10 @@
     },
     {
       "kind": "request",
+      "method": "modelProvider/capabilities/read"
+    },
+    {
+      "kind": "request",
       "method": "modelProvider/catalog/list"
     },
     {
@@ -813,6 +845,38 @@
     {
       "kind": "request",
       "method": "process/writeStdin"
+    },
+    {
+      "kind": "notification",
+      "method": "project/changed"
+    },
+    {
+      "kind": "request",
+      "method": "project/create"
+    },
+    {
+      "kind": "request",
+      "method": "project/delete"
+    },
+    {
+      "kind": "request",
+      "method": "project/import"
+    },
+    {
+      "kind": "request",
+      "method": "project/list"
+    },
+    {
+      "kind": "request",
+      "method": "project/move"
+    },
+    {
+      "kind": "request",
+      "method": "project/read"
+    },
+    {
+      "kind": "request",
+      "method": "project/update"
     },
     {
       "kind": "request",
@@ -1119,6 +1183,14 @@
       "method": "thread/deleted"
     },
     {
+      "kind": "notification",
+      "method": "thread/environment/connected"
+    },
+    {
+      "kind": "notification",
+      "method": "thread/environment/disconnected"
+    },
+    {
       "kind": "request",
       "method": "thread/fork"
     },
@@ -1179,12 +1251,52 @@
       "method": "thread/name/updated"
     },
     {
+      "kind": "notification",
+      "method": "thread/project/updated"
+    },
+    {
+      "kind": "request",
+      "method": "thread/queue/add"
+    },
+    {
+      "kind": "notification",
+      "method": "thread/queue/changed"
+    },
+    {
+      "kind": "request",
+      "method": "thread/queue/delete"
+    },
+    {
+      "kind": "request",
+      "method": "thread/queue/list"
+    },
+    {
+      "kind": "request",
+      "method": "thread/queue/reorder"
+    },
+    {
+      "kind": "request",
+      "method": "thread/queue/start"
+    },
+    {
+      "kind": "request",
+      "method": "thread/queue/update"
+    },
+    {
       "kind": "request",
       "method": "thread/read"
     },
     {
       "kind": "request",
       "method": "thread/resume"
+    },
+    {
+      "kind": "request",
+      "method": "thread/revert"
+    },
+    {
+      "kind": "notification",
+      "method": "thread/reverted"
     },
     {
       "kind": "request",
@@ -1383,8 +1495,20 @@
       "method": "wechatChannel/runtimeModel/set"
     },
     {
+      "kind": "notification",
+      "method": "windows/worldWritableWarning"
+    },
+    {
       "kind": "request",
       "method": "windowsSandbox/readiness"
+    },
+    {
+      "kind": "notification",
+      "method": "windowsSandbox/setupCompleted"
+    },
+    {
+      "kind": "request",
+      "method": "windowsSandbox/setupStart"
     },
     {
       "kind": "request",
@@ -1559,6 +1683,10 @@
     },
     {
       "method": "thread/resume",
+      "scope": "thread"
+    },
+    {
+      "method": "thread/revert",
       "scope": "thread"
     },
     {
@@ -2201,6 +2329,14 @@
       "DynamicToolNamespaceSpec",
       "DynamicToolNamespaceTool",
       "DynamicToolSpec",
+      "EnvironmentAddParams",
+      "EnvironmentAddResponse",
+      "EnvironmentInfoParams",
+      "EnvironmentInfoResponse",
+      "EnvironmentShellInfo",
+      "EnvironmentStatusKind",
+      "EnvironmentStatusParams",
+      "EnvironmentStatusResponse",
       "ErrorNotification",
       "ExperimentalFeature",
       "ExperimentalFeatureEnablementSetParams",
@@ -2267,18 +2403,34 @@
       "ItemGuardianApprovalReviewCompletedNotification",
       "ItemGuardianApprovalReviewStartedNotification",
       "ItemStartedNotification",
+      "ListMcpServerStatusParams",
+      "ListMcpServerStatusResponse",
+      "McpAuthStatus",
+      "McpResource",
+      "McpResourceTemplate",
+      "McpServerConnectionStatus",
       "McpServerElicitationAction",
       "McpServerElicitationRequestParams",
       "McpServerElicitationRequestResponse",
+      "McpServerEventNotification",
+      "McpServerEventStreamNotification",
+      "McpServerEventStreamStartParams",
+      "McpServerEventStreamStartResponse",
+      "McpServerEventStreamStopParams",
+      "McpServerEventStreamStopResponse",
+      "McpServerInfo",
       "McpServerOauthLoginCompletedNotification",
       "McpServerResourceContent",
       "McpServerResourceReadParams",
       "McpServerResourceReadResponse",
       "McpServerStartupFailureReason",
       "McpServerStartupState",
+      "McpServerStatus",
+      "McpServerStatusDetail",
       "McpServerStatusUpdatedNotification",
       "McpServerToolCallParams",
       "McpServerToolCallResponse",
+      "McpTool",
       "McpToolCallAppContext",
       "McpToolCallError",
       "McpToolCallProgressNotification",
@@ -2296,6 +2448,8 @@
       "ModelListParams",
       "ModelListResponse",
       "ModelListUpdatedNotification",
+      "ModelProviderCapabilitiesReadParams",
+      "ModelProviderCapabilitiesReadResponse",
       "ModelRerouteReason",
       "ModelReroutedNotification",
       "ModelSafetyBufferingUpdatedNotification",
@@ -2362,6 +2516,25 @@
       "ProcessTerminalSize",
       "ProcessWriteStdinParams",
       "ProcessWriteStdinResponse",
+      "Project",
+      "ProjectChangeType",
+      "ProjectChangedNotification",
+      "ProjectCreateParams",
+      "ProjectCreateResponse",
+      "ProjectDeleteParams",
+      "ProjectDeleteResponse",
+      "ProjectImportParams",
+      "ProjectImportResponse",
+      "ProjectListParams",
+      "ProjectListResponse",
+      "ProjectMoveParams",
+      "ProjectMoveResponse",
+      "ProjectReadParams",
+      "ProjectReadResponse",
+      "ProjectRoot",
+      "ProjectUpdateParams",
+      "ProjectUpdateResponse",
+      "QueuedSubmission",
       "ReasoningEffortOption",
       "ReasoningSummaryPartAddedNotification",
       "ReasoningSummaryTextDeltaNotification",
@@ -2393,6 +2566,7 @@
       "SkillsListResponse",
       "SleepItem",
       "SortDirection",
+      "StrictReviewRequiredNotification",
       "SubAgentActivityKind",
       "TextPosition",
       "TextRange",
@@ -2451,11 +2625,28 @@
       "ThreadMetadataUpdateParams",
       "ThreadMetadataUpdateResponse",
       "ThreadNameUpdatedNotification",
+      "ThreadProjectUpdatedNotification",
+      "ThreadQueueAddParams",
+      "ThreadQueueAddResponse",
+      "ThreadQueueChangedNotification",
+      "ThreadQueueDeleteParams",
+      "ThreadQueueDeleteResponse",
+      "ThreadQueueListParams",
+      "ThreadQueueListResponse",
+      "ThreadQueueReorderParams",
+      "ThreadQueueReorderResponse",
+      "ThreadQueueStartParams",
+      "ThreadQueueStartResponse",
+      "ThreadQueueUpdateParams",
+      "ThreadQueueUpdateResponse",
       "ThreadReadParams",
       "ThreadReadResponse",
       "ThreadResumeInitialTurnsPageParams",
       "ThreadResumeParams",
       "ThreadResumeResponse",
+      "ThreadRevertParams",
+      "ThreadRevertResponse",
+      "ThreadRevertedNotification",
       "ThreadSearchOccurrence",
       "ThreadSearchOccurrencesParams",
       "ThreadSearchOccurrencesResponse",
@@ -2531,6 +2722,11 @@
       "WindowsSandboxReadiness",
       "WindowsSandboxReadinessParams",
       "WindowsSandboxReadinessResponse",
+      "WindowsSandboxSetupCompletedNotification",
+      "WindowsSandboxSetupMode",
+      "WindowsSandboxSetupStartParams",
+      "WindowsSandboxSetupStartResponse",
+      "WindowsWorldWritableWarningNotification",
       "WriteStatus"
     ]
   }

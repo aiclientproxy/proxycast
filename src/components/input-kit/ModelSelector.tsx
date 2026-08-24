@@ -39,9 +39,14 @@ import {
 } from "@/lib/model/providerPromptCacheSupport";
 import { buildProviderModelsFromBackendModelIds } from "@/lib/model/providerModelsCatalog";
 import { ModelCapabilityBadges } from "@/components/model/ModelCapabilityBadges";
+import { ModelProviderCapabilityBadges } from "@/components/model/ModelProviderCapabilityBadges";
 import { resolveOemCloudRuntimeContext } from "@/lib/api/oemCloudRuntime";
 import { resolveOemLimeHubProviderName } from "@/lib/oemLimeHubProvider";
 import { resolveProviderModelLoadOptions } from "@/lib/model/providerModelLoadOptions";
+import {
+  modelRegistryApi,
+  type ModelProviderCapabilities,
+} from "@/lib/api/modelRegistry";
 import {
   resolveModelReasoningEffortForModelSwitch,
   type ModelReasoningEffortPreset,
@@ -242,6 +247,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   );
   const [backgroundProviderLoadReady, setBackgroundProviderLoadReady] =
     useState(false);
+  const [providerCapabilities, setProviderCapabilities] =
+    useState<ModelProviderCapabilities | null>(null);
+  const [providerCapabilitiesLoading, setProviderCapabilitiesLoading] =
+    useState(false);
   const hasInitialized = useRef(false);
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -350,6 +359,42 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     : false;
   const selectedProviderBlocksModelLoad =
     selectedProviderLoginRequired && !selectedProviderHasDeclaredModel;
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let disposed = false;
+    setProviderCapabilities(null);
+    setProviderCapabilitiesLoading(true);
+
+    void modelRegistryApi
+      .readModelProviderCapabilities()
+      .then((capabilities) => {
+        if (!disposed) {
+          setProviderCapabilities(capabilities);
+        }
+      })
+      .catch(() => {
+        if (!disposed) {
+          setProviderCapabilities({
+            namespaceTools: false,
+            imageGeneration: false,
+            webSearch: false,
+          });
+        }
+      })
+      .finally(() => {
+        if (!disposed) {
+          setProviderCapabilitiesLoading(false);
+        }
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [open]);
   const autoSelectableProviders = useMemo(
     () =>
       visibleProviders.filter(
@@ -912,6 +957,26 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               <div className="mb-1 px-2 py-1 text-[11px] font-semibold tracking-[0.08em] text-slate-500">
                 {t("common.modelSelector.provider.title")}
               </div>
+              {providerCapabilities || providerCapabilitiesLoading ? (
+                <div
+                  className="mb-1 rounded-xl border border-slate-200/80 bg-white px-2.5 py-2"
+                  data-testid="model-selector-provider-capability-panel"
+                >
+                  <div className="mb-1.5 text-[10px] font-semibold text-slate-500">
+                    {t("common.modelProviderCapabilities.title")}
+                  </div>
+                  {providerCapabilitiesLoading ? (
+                    <div className="text-[10px] leading-4 text-slate-400">
+                      {t("common.modelProviderCapabilities.loading")}
+                    </div>
+                  ) : providerCapabilities ? (
+                    <ModelProviderCapabilityBadges
+                      capabilities={providerCapabilities}
+                      compact
+                    />
+                  ) : null}
+                </div>
+              ) : null}
 
               {visibleProviders.length === 0 ? (
                 <div className="px-2 py-3 text-xs leading-5 text-slate-500">

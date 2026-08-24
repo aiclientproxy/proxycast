@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "description": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "icons": {
+      "items": true,
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "title": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "version": {
+      "type": "string"
+    },
+    "websiteUrl": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "name",
+    "version"
+  ],
+  "title": "McpServerInfo",
+  "type": "object"
+}

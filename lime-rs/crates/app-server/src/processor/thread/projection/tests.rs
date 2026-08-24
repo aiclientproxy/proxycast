@@ -31,7 +31,22 @@ fn canonical_thread_projects_to_v2_shape_and_seconds() {
     assert_eq!(projected.session_id, "session-1");
     assert_eq!(projected.created_at, 1_700_000_000);
     assert_eq!(projected.updated_at, 1_700_000_002);
-    assert_eq!(projected.cwd, "/workspace");
+    assert_eq!(projected.cwd, std::path::PathBuf::from("/workspace"));
+    assert_eq!(projected.project_id.as_deref(), Some("project-1"));
+    assert_eq!(projected.source, v2::SessionSource::AppServer);
+    assert_eq!(projected.thread_source, Some(v2::ThreadSource::User));
+    assert_eq!(
+        projected.path,
+        Some(std::path::PathBuf::from("/workspace/.lime/thread.jsonl"))
+    );
+    assert_eq!(
+        projected.git_info,
+        Some(v2::GitInfo {
+            sha: Some("abc123".to_string()),
+            branch: Some("main".to_string()),
+            origin_url: Some("https://example.com/repo.git".to_string()),
+        })
+    );
     assert_eq!(projected.can_accept_direct_input, Some(true));
     assert_eq!(projected.history_mode, v2::ThreadHistoryMode::Paginated);
     assert_eq!(projected.turns.len(), 1);
@@ -791,8 +806,16 @@ fn canonical_thread(archived: bool) -> canonical::Thread {
         name: Some("Thread".to_string()),
         metadata: json!({
             "workingDir": "/workspace",
+            "projectId": "project-1",
+            "path": "/workspace/.lime/thread.jsonl",
             "historyMode": "paginated",
             "source": "appServer",
+            "threadSource": "user",
+            "gitInfo": {
+                "sha": "abc123",
+                "branch": "main",
+                "originUrl": "https://example.com/repo.git"
+            },
             "cliVersion": "test"
         }),
         turns: vec![canonical::Turn {

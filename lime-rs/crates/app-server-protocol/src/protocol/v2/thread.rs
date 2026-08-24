@@ -1,7 +1,7 @@
 use super::{
     DynamicToolSpec, SortDirection, Thread, ThreadHistoryMode, ThreadItem, ThreadListCwdFilter,
-    ThreadSortKey, ThreadSourceKind, ThreadStartSource, ThreadStatus, Turn, TurnEnvironmentParams,
-    TurnItemsView,
+    ThreadSortKey, ThreadSource, ThreadSourceKind, ThreadStartSource, ThreadStatus, Turn,
+    TurnEnvironmentParams, TurnItemsView, UserInput,
 };
 use agent_protocol::MultiAgentMode;
 use schemars::JsonSchema;
@@ -51,7 +51,9 @@ pub struct ThreadStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_start_source: Option<ThreadStartSource>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub thread_source: Option<String>,
+    pub thread_source: Option<ThreadSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub environments: Option<Vec<TurnEnvironmentParams>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -123,7 +125,7 @@ pub struct ThreadForkParams {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub ephemeral: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub thread_source: Option<String>,
+    pub thread_source: Option<ThreadSource>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exclude_turns: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -224,6 +226,26 @@ pub struct ThreadResumeResponse {
     pub items_backwards_cursor: Option<String>,
 }
 
+/// Replace a paginated thread's durable history with the prefix before one turn.
+///
+/// This only changes persisted conversation history. It does not revert local file changes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadRevertParams {
+    pub thread_id: String,
+    /// Turn excluded from the replacement history, together with every later turn.
+    pub before_turn_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadRevertResponse {
+    /// Updated loaded thread metadata. `turns` is always empty; retained history is paginated.
+    pub thread: Thread,
+    pub turns_backwards_cursor: Option<String>,
+    pub items_backwards_cursor: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadResumeInitialTurnsPageParams {
@@ -292,6 +314,12 @@ pub struct ThreadListParams {
         skip_serializing_if = "Option::is_none"
     )]
     pub section_id: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_double_option_string",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub project_id: Option<Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<ThreadListCwdFilter>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -494,6 +522,8 @@ pub struct ThreadSetNameResponse {}
 #[serde(rename_all = "camelCase")]
 pub struct ThreadMetadataUpdateParams {
     pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub git_info: Option<ThreadMetadataGitInfoUpdateParams>,
 }
@@ -780,6 +810,98 @@ pub struct ThreadGoalClearResponse {
     pub cleared: bool,
 }
 
+/// A user submission retained for later execution by an idle Thread.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedSubmission {
+    pub id: String,
+    pub input: Vec<UserInput>,
+    pub client_user_message_id: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueAddParams {
+    pub thread_id: String,
+    pub input: Vec<UserInput>,
+    pub client_user_message_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueAddResponse {
+    pub queued_submission: QueuedSubmission,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueListParams {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueListResponse {
+    pub data: Vec<QueuedSubmission>,
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueUpdateParams {
+    pub thread_id: String,
+    pub queued_submission_id: String,
+    pub input: Vec<UserInput>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueUpdateResponse {
+    pub queued_submission: QueuedSubmission,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueDeleteParams {
+    pub thread_id: String,
+    pub queued_submission_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueDeleteResponse {
+    pub deleted: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueReorderParams {
+    pub thread_id: String,
+    pub queued_submission_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueReorderResponse {}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueStartParams {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queued_submission_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueStartResponse {
+    pub turn: Turn,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadStartedNotification {
@@ -812,6 +934,12 @@ pub struct ThreadClosedNotification {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ThreadRevertedNotification {
+    pub thread_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ThreadNameUpdatedNotification {
     pub thread_id: String,
     pub thread_name: Option<String>,
@@ -835,6 +963,12 @@ pub struct ThreadGoalUpdatedNotification {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadGoalClearedNotification {
+    pub thread_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadQueueChangedNotification {
     pub thread_id: String,
 }
 

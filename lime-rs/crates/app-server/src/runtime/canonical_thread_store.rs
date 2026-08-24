@@ -15,13 +15,16 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thread_store::{
     AppendThreadItemsParams, ApplyThreadHistoryParams, ApplyThreadHistoryResult,
-    ArchiveThreadParams, CreateThreadParams, CreateThreadSectionParams, DeleteThreadParams,
-    DeleteThreadSectionParams, ItemPage, ListItemsParams, ListThreadSectionsParams,
-    ListThreadsParams, ListTurnsParams, MoveThreadToSectionParams, ReadThreadParams,
-    RenameThreadSectionParams, SearchThreadsParams, StoreCursor, StoredThreadSection,
-    ThreadMetadataPatch, ThreadPage, ThreadSearchPage, ThreadSectionPage, ThreadSpawnEdgeStatus,
-    ThreadStore, ThreadStoreError, ThreadStoreFuture, ThreadStoreResult, TurnPage,
-    UpdateThreadMetadataParams, PINNED_THREAD_SECTION_ID, PINNED_THREAD_SECTION_NAME,
+    ArchiveThreadParams, CreateProjectParams, CreateThreadParams, CreateThreadSectionParams,
+    CreatedProject, DeleteThreadParams, DeleteThreadSectionParams, DeletedProject, ItemPage,
+    ListItemsParams, ListProjectsParams, ListThreadSectionsParams, ListThreadsParams,
+    ListTurnsParams, MoveProjectParams, MoveThreadToSectionParams, ProjectMoveOutcome,
+    ReadThreadParams, RenameThreadSectionParams, SearchThreadsParams, StoreCursor, StoredProject,
+    StoredProjectRoot, StoredProjectsPage, StoredThreadSection, ThreadMetadataPatch, ThreadPage,
+    ThreadSearchPage, ThreadSectionPage, ThreadSpawnEdgeStatus, ThreadStore, ThreadStoreError,
+    ThreadStoreFuture, ThreadStoreResult, TurnPage, UpdateProjectParams,
+    UpdateThreadMetadataParams, UpdatedProject, PINNED_THREAD_SECTION_ID,
+    PINNED_THREAD_SECTION_NAME,
 };
 
 use super::projection_rebuild::{projected_tables_are_empty, rebuild_projected_thread_snapshot};
@@ -38,7 +41,9 @@ mod goal_projection_tests;
 mod goal_rebind;
 mod history_builder;
 mod persistence;
+mod projects;
 mod queries;
+mod revert;
 mod search;
 mod sections;
 
@@ -466,6 +471,7 @@ impl ProjectionStore {
                 &conn,
                 params.include_archived,
                 section_id,
+                params.project.as_ref(),
                 params.sort_by_section_position,
                 direction,
                 cursor.as_ref(),
@@ -474,6 +480,7 @@ impl ProjectionStore {
             Some(None) => sections::query_unsectioned_thread_page(
                 &conn,
                 params.include_archived,
+                params.project.as_ref(),
                 direction,
                 cursor.as_ref(),
                 limit + 1,
@@ -481,6 +488,7 @@ impl ProjectionStore {
             None => query_thread_page(
                 &conn,
                 params.include_archived,
+                params.project.as_ref(),
                 direction,
                 cursor.as_ref(),
                 limit + 1,
@@ -1177,6 +1185,45 @@ impl ThreadStore for ProjectionStore {
     fn history_sequence(&self, thread_id: ThreadId) -> ThreadStoreFuture<'_, Option<u64>> {
         let store = self.clone();
         Box::pin(async move { store.history_sequence_sync(thread_id) })
+    }
+
+    fn list_projects(
+        &self,
+        params: ListProjectsParams,
+    ) -> ThreadStoreFuture<'_, StoredProjectsPage> {
+        let store = self.clone();
+        Box::pin(async move { projects::list_projects(&store, params) })
+    }
+
+    fn read_project(&self, project_id: String) -> ThreadStoreFuture<'_, Option<StoredProject>> {
+        let store = self.clone();
+        Box::pin(async move { projects::read_project(&store, project_id) })
+    }
+
+    fn create_project(&self, params: CreateProjectParams) -> ThreadStoreFuture<'_, CreatedProject> {
+        let store = self.clone();
+        Box::pin(async move { projects::create_project(&store, params) })
+    }
+
+    fn update_project(
+        &self,
+        params: UpdateProjectParams,
+    ) -> ThreadStoreFuture<'_, Option<UpdatedProject>> {
+        let store = self.clone();
+        Box::pin(async move { projects::update_project(&store, params) })
+    }
+
+    fn move_project(
+        &self,
+        params: MoveProjectParams,
+    ) -> ThreadStoreFuture<'_, Option<ProjectMoveOutcome>> {
+        let store = self.clone();
+        Box::pin(async move { projects::move_project(&store, params) })
+    }
+
+    fn delete_project(&self, project_id: String) -> ThreadStoreFuture<'_, Option<DeletedProject>> {
+        let store = self.clone();
+        Box::pin(async move { projects::delete_project(&store, project_id) })
     }
 }
 

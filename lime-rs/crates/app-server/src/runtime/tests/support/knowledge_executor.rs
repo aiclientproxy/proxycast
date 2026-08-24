@@ -1,4 +1,5 @@
 use super::super::*;
+use async_trait::async_trait;
 
 pub(in crate::runtime::tests) struct TestKnowledgeBuilderRuntimeExecutor {
     pub(in crate::runtime::tests) calls: Mutex<Vec<lime_knowledge::KnowledgeBuilderRuntimePlan>>,

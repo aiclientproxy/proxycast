@@ -1,7 +1,7 @@
 use crate::runtime::ToolInventoryReadRequest;
 use crate::AppDataSource;
 use crate::RuntimeCoreError;
-use app_server_protocol::McpServerStatusListResponse;
+use app_server_protocol::protocol::v2::{ListMcpServerStatusParams, ListMcpServerStatusResponse};
 use app_server_protocol::McpToolListResponse;
 use lime_agent::agent_tools::catalog::WorkspaceToolSurface;
 use lime_agent::agent_tools::execution::persisted_tool_execution_policy_from_metadata;
@@ -66,7 +66,17 @@ async fn read_mcp_inventory_snapshot(
     };
 
     let mut snapshot = McpInventorySnapshot::default();
-    match app_data_source.list_mcp_servers_with_status().await {
+    match app_data_source
+        .list_mcp_servers_with_status_v2(ListMcpServerStatusParams {
+            cursor: None,
+            limit: None,
+            detail: Some(
+                app_server_protocol::protocol::v2::McpServerStatusDetail::ToolsAndAuthOnly,
+            ),
+            thread_id: None,
+        })
+        .await
+    {
         Ok(response) => apply_mcp_server_status_snapshot(&mut snapshot, response),
         Err(error) => snapshot
             .warnings
@@ -86,25 +96,13 @@ async fn read_mcp_inventory_snapshot(
 
 fn apply_mcp_server_status_snapshot(
     snapshot: &mut McpInventorySnapshot,
-    response: McpServerStatusListResponse,
+    response: ListMcpServerStatusResponse,
 ) {
-    for server in response.servers {
-        let is_running = bool_field(&server, &["isRunning", "is_running"]).unwrap_or(false);
-        if let Some(name) = string_field(&server, &["name"]) {
-            snapshot.server_names.push(name);
-        }
-
-        let supports_resources = bool_field(
-            &server,
-            &[
-                "runtimeStatus.supportsResources",
-                "runtime_status.supports_resources",
-                "serverInfo.supportsResources",
-                "server_info.supports_resources",
-            ],
-        )
-        .unwrap_or(false);
-        snapshot.resource_helpers_supported |= is_running && supports_resources;
+    for server in response.data {
+        snapshot.server_names.push(server.name);
+        snapshot.resource_helpers_supported |= server.runtime_status
+            == Some(app_server_protocol::protocol::v2::McpServerConnectionStatus::Connected)
+            && (!server.resources.is_empty() || !server.resource_templates.is_empty());
     }
 }
 
@@ -148,26 +146,6 @@ fn hydrate_mcp_tool_metadata(tool: &mut McpToolDefinition) {
     if tool.input_examples.is_none() && !metadata.input_examples.is_empty() {
         tool.input_examples = Some(metadata.input_examples);
     }
-}
-
-fn string_field(value: &Value, keys: &[&str]) -> Option<String> {
-    keys.iter()
-        .filter_map(|key| nested_value(value, key))
-        .find_map(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-}
-
-fn bool_field(value: &Value, keys: &[&str]) -> Option<bool> {
-    keys.iter()
-        .filter_map(|key| nested_value(value, key))
-        .find_map(Value::as_bool)
-}
-
-fn nested_value<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
-    path.split('.')
-        .try_fold(value, |current, key| current.get(key))
 }
 
 fn merged_inventory_metadata(

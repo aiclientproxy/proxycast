@@ -11,6 +11,7 @@ pub struct LiveExecutionRequest {
     pub process_id: String,
     pub tool_id: String,
     pub tool_name: String,
+    pub environment_id: String,
     pub command: Vec<String>,
     pub working_directory: PathBuf,
     pub tty: bool,

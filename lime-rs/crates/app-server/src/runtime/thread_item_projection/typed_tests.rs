@@ -441,6 +441,20 @@ fn queue_events_materialize_canonical_turn_state_and_removal() {
     assert!(removed.changed_turns.is_empty());
     assert_eq!(removed.removed_turn_ids.len(), 1);
     assert_eq!(removed.removed_turn_ids[0].as_str(), "turn-queued");
+
+    let reordered = materialize_events(
+        &[
+            queue_event("queue-reorder-remove", 5, "queue.removed"),
+            queue_event("queue-reorder-add", 6, "queue.added"),
+        ],
+        "session-1",
+        "thread-1",
+    )
+    .expect("materialize queue reorder");
+    assert_eq!(reordered.removed_turn_ids.len(), 1);
+    assert_eq!(reordered.removed_turn_ids[0].as_str(), "turn-queued");
+    assert_eq!(reordered.changed_turns.len(), 1);
+    assert_eq!(reordered.changed_turns[0].turn_id.as_str(), "turn-queued");
 }
 
 #[test]

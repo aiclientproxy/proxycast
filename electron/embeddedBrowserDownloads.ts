@@ -30,6 +30,8 @@ interface EmbeddedBrowserDownloadController {
   findEntryByWebContents(
     webContents: WebContents,
   ): EmbeddedBrowserDownloadEntry | null;
+  onCompletedDownload?: (downloadId: string, savePath: string) => void;
+  resolveSavePath?: (filename: string) => string;
 }
 
 const downloadIds = new WeakMap<DownloadItem, string>();
@@ -43,6 +45,10 @@ export function installEmbeddedBrowserDownloadHandling(
     const entry = controller.findEntryByWebContents(webContents);
     if (!entry) {
       return;
+    }
+    const savePath = controller.resolveSavePath?.(item.getFilename());
+    if (savePath && typeof item.setSavePath === "function") {
+      item.setSavePath(savePath);
     }
     const emitDownload = (state: EmbeddedBrowserDownloadState) => {
       emit(
@@ -61,6 +67,13 @@ export function installEmbeddedBrowserDownloadHandling(
           : state === "cancelled"
             ? "cancelled"
             : "interrupted";
+      if (finalState === "completed") {
+        const savePath =
+          typeof item.getSavePath === "function" ? item.getSavePath() : "";
+        if (savePath.trim()) {
+          controller.onCompletedDownload?.(resolveDownloadId(item), savePath);
+        }
+      }
       emitDownload(finalState);
     });
   });

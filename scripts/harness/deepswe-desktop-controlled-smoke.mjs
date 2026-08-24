@@ -8,7 +8,6 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 import {
-  closeElectronFixture,
   createTempRuntimeEnv,
   launchElectronFixture,
   sanitizeText,
@@ -33,12 +32,17 @@ import {
 } from "../agent-runtime/tool-execution-current-contract.mjs";
 import {
   DEEPSWE_DESKTOP_TRIAL_SCHEMA,
+  coldRestartEvidencePasses,
   evaluateDesktopSuite,
   evaluateDesktopTrial,
   loadDesktopManifest,
   preflightDesktopManifest,
   sha256,
 } from "./deepswe-desktop-contract.mjs";
+import {
+  closeControlledElectronFixture,
+  coldRestartControlledElectronFixture,
+} from "./deepswe-desktop-cold-restart.mjs";
 import {
   controlledFixtureForTask,
   controlledFixtureResponses,
@@ -882,27 +886,6 @@ function providerToolNames(request) {
     .filter(Boolean);
 }
 
-async function closeControlledElectronFixture(handle) {
-  const app = handle?.app;
-  if (!app) return;
-  const pid = typeof app.process === "function" ? app.process()?.pid : null;
-  await Promise.race([closeElectronFixture(handle), sleep(5_000)]);
-  if (!pid) return;
-  try {
-    process.kill(pid, 0);
-    process.kill(pid, "SIGTERM");
-    await sleep(500);
-    try {
-      process.kill(pid, 0);
-      process.kill(pid, "SIGKILL");
-    } catch {
-      // The fixture exited after SIGTERM.
-    }
-  } catch {
-    // The fixture exited during closeElectronFixture().
-  }
-}
-
 function summarizeProvider(fixtureServer) {
   const requests = fixtureServer.requests.filter(
     (request) => request.path === "/v1/chat/completions",
@@ -931,6 +914,82 @@ function normalizedProjectedLifecycle(threadRead) {
     success: item.success,
     output: String(item.output || "").slice(0, 2_000),
   }));
+}
+
+function canonicalThreadProjection(thread) {
+  const turns = (Array.isArray(thread?.turns) ? thread.turns : []).map(
+    (turn) => ({
+      id: String(turn?.id || ""),
+      status: turnStatus(turn),
+      items: (Array.isArray(turn?.items) ? turn.items : []).map((item) => ({
+        id: String(item?.id || item?.callId || item?.call_id || ""),
+        type: String(item?.type || ""),
+        status: String(item?.status || "").toLowerCase(),
+        contentSha256: sha256(JSON.stringify(item ?? null)),
+      })),
+    }),
+  );
+  const projection = {
+    threadId: String(thread?.id || ""),
+    sessionId: String(thread?.sessionId || ""),
+    turns,
+  };
+  return {
+    ...projection,
+    threadStatus: String(
+      thread?.status?.type || thread?.status || "",
+    ).toLowerCase(),
+    sha256: sha256(JSON.stringify(projection)),
+  };
+}
+
+async function waitForStableThreadProjection({
+  options,
+  page,
+  requestLog,
+  threadId,
+}) {
+  const startedAt = Date.now();
+  let previousSha256 = null;
+  let last = null;
+  while (Date.now() - startedAt < options.timeoutMs) {
+    const response = await invokeAppServerFromPage(
+      page,
+      "thread/read",
+      { threadId, includeTurns: true },
+      requestLog,
+    );
+    const projection = canonicalThreadProjection(response.result?.thread);
+    const allTurnsTerminal =
+      projection.turns.length > 0 &&
+      projection.turns.every((turn) => TERMINAL_STATUSES.has(turn.status));
+    last = { projection, response };
+    if (allTurnsTerminal && projection.sha256 === previousSha256) {
+      return last;
+    }
+    previousSha256 = projection.sha256;
+    await sleep(options.intervalMs);
+  }
+  throw new Error(
+    `canonical thread projection did not stabilize: ${sanitizeText(
+      JSON.stringify({
+        threadId,
+        sha256: last?.projection?.sha256 || null,
+        turnStatuses: last?.projection?.turns.map((turn) => ({
+          id: turn.id,
+          status: turn.status,
+        })),
+      }),
+    )}`,
+  );
+}
+
+function visibleCompletedToolNames(visibleState) {
+  return new Set(
+    visibleState.toolRows
+      .filter((row) => row.visible && row.status === "completed")
+      .map((row) => row.name),
+  );
 }
 
 function providerToolOutput(request, callId) {
@@ -1200,7 +1259,7 @@ export async function runControlledTask({
       electronHandle.app,
       sidecarLifecycleEvents,
     );
-    const { page, rendererSnapshot } = electronHandle;
+    let { page, rendererSnapshot } = electronHandle;
     await initializeAppServer(page, requestLog);
     const workspace = await ensureDefaultWorkspace(page, requestLog);
     const workspaceRoot = path.resolve(String(workspace.rootPath || ""));
@@ -1255,15 +1314,6 @@ export async function runControlledTask({
       identity.sessionId,
       fixtureDefinition,
     );
-    stage = "reopen";
-    console.log(`${LOG_PREFIX} task=${task.id} stage=reopen`);
-    await restoreThreadInGui(page, options, preferences);
-    const reopenedVisible = await readVisibleState(
-      page,
-      options,
-      identity.sessionId,
-      fixtureDefinition,
-    );
     stage = "artifact-preview";
     console.log(`${LOG_PREFIX} task=${task.id} stage=artifact-preview`);
     const artifactPreview = await openPrimaryArtifactPreview(
@@ -1298,26 +1348,170 @@ export async function runControlledTask({
       taskId: task.id,
       workspaceRoot,
     });
+    const expectedVisibleTools = ["Glob", "Grep", "exec_command"];
+    const stableBeforeRestart = await waitForStableThreadProjection({
+      options,
+      page,
+      requestLog,
+      threadId: identity.threadId,
+    });
+    const projectionBeforeRestart = stableBeforeRestart.projection;
+    const providerRequestCountBeforeRestart =
+      providerRequestCount(fixtureServer);
+
+    stage = "cold-restart";
+    console.log(`${LOG_PREFIX} task=${task.id} stage=cold-restart`);
+    const restarted = await coldRestartControlledElectronFixture({
+      appServerEnv,
+      consoleErrors,
+      electronHandle,
+      options,
+      pageErrors,
+      runtimeEnv,
+    });
+    electronHandle = restarted.electronHandle;
+    attachElectronHostLifecycleDiagnostics(
+      electronHandle.app,
+      sidecarLifecycleEvents,
+    );
+    page = electronHandle.page;
+    rendererSnapshot = electronHandle.rendererSnapshot;
+    await initializeAppServer(page, requestLog);
+    await restoreThreadInGui(page, options, preferences);
+    const coldRestartVisible = await readVisibleState(
+      page,
+      options,
+      identity.sessionId,
+      fixtureDefinition,
+    );
+    const stableAfterRestart = await waitForStableThreadProjection({
+      options,
+      page,
+      requestLog,
+      threadId: identity.threadId,
+    });
+    const coldThreadResponse = stableAfterRestart.response;
+    const coldNormalized = normalizeToolExecutionThreadReadResponse(
+      coldThreadResponse.result,
+    );
+    const projectionAfterRestart = stableAfterRestart.projection;
+    const coldTurnStatuses = Object.fromEntries(
+      projectionAfterRestart.turns.map((turn) => [turn.id, turn.status]),
+    );
+    const coldVisibleToolNames = visibleCompletedToolNames(coldRestartVisible);
+    const coldScreenshotPath = path.join(
+      options.outputDir,
+      runId,
+      `${task.id}.cold-restart.png`,
+    );
+    await page.screenshot({ path: coldScreenshotPath, fullPage: true });
+    const coldArtifactPreview = await openPrimaryArtifactPreview(
+      page,
+      options,
+      fixtureDefinition,
+    );
+    const coldArtifactScreenshotPath = path.join(
+      options.outputDir,
+      runId,
+      `${task.id}.cold-restart-artifact-preview.png`,
+    );
+    await page.screenshot({
+      path: coldArtifactScreenshotPath,
+      fullPage: true,
+    });
+    const patchAfterRestart = captureControlledPatch(
+      workspaceRoot,
+      fixtureDefinition,
+    );
     const diagnostics = await readInvokeDiagnostics(page);
+    const providerRequestCountAfterRestart = providerRequestCount(fixtureServer);
+    const approvalMarkerPath = path.join(
+      workspaceRoot,
+      fixtureDefinition.recovery.approvalResumeFile,
+    );
+    const cancelMarkerPath = path.join(
+      workspaceRoot,
+      fixtureDefinition.recovery.cancelNoGhostWriteFile,
+    );
+    const coldRestart = {
+      status: "pass",
+      ...restarted.lifecycle,
+      renderer: {
+        electron: rendererSnapshot.electron === true,
+        preloadInvokeBridge: rendererSnapshot.hasInvokeBridge === true,
+      },
+      identity: {
+        sessionId: coldNormalized.session_id,
+        threadId: coldNormalized.thread_id,
+        turnId,
+      },
+      projection: {
+        stable:
+          projectionBeforeRestart.sha256 === projectionAfterRestart.sha256,
+        beforeSha256: projectionBeforeRestart.sha256,
+        afterSha256: projectionAfterRestart.sha256,
+        threadStatusBefore: projectionBeforeRestart.threadStatus,
+        threadStatusAfter: projectionAfterRestart.threadStatus,
+        turnStatusesBefore: Object.fromEntries(
+          projectionBeforeRestart.turns.map((turn) => [turn.id, turn.status]),
+        ),
+        turnStatusesAfter: coldTurnStatuses,
+      },
+      toolLifecycleVisible: expectedVisibleTools.every((tool) =>
+        coldVisibleToolNames.has(tool),
+      ),
+      diffArtifactVisible: coldRestartVisible.diffGroups.some(
+        (group) => group.visible && group.fileCount > 0,
+      ),
+      artifactPreview: {
+        ...coldArtifactPreview,
+        screenshotPath: path.relative(repoRoot, coldArtifactScreenshotPath),
+      },
+      approvalCompleted:
+        coldTurnStatuses[recovery.approvalResume.turnId] === "completed" &&
+        fs.existsSync(approvalMarkerPath),
+      cancelNoGhostWrite:
+        ["cancelled", "canceled", "interrupted", "aborted"].includes(
+          coldTurnStatuses[recovery.cancelNoGhostWrite.turnId],
+        ) && !fs.existsSync(cancelMarkerPath),
+      patch: {
+        stable: patch.patchSha256 === patchAfterRestart.patchSha256,
+        beforeSha256: patch.patchSha256,
+        afterSha256: patchAfterRestart.patchSha256,
+      },
+      providerRequestCountBefore: providerRequestCountBeforeRestart,
+      providerRequestCountAfter: providerRequestCountAfterRestart,
+      providerRequestCountStable:
+        providerRequestCountBeforeRestart === providerRequestCountAfterRestart,
+      bridge: {
+        appServerHandleJsonLinesSeen: diagnostics.calls.some(
+          (call) =>
+            call.method === "thread/read" || call.method === "artifact/read",
+        ),
+        mockFallbackHitCount: diagnostics.mockFallbackHitCount,
+        invokeErrorCount: diagnostics.invokeErrorCount,
+      },
+      consoleErrorCount: consoleErrors.length,
+      pageErrorCount: pageErrors.length,
+      screenshotPath: path.relative(repoRoot, coldScreenshotPath),
+    };
+    assert(
+      coldRestartEvidencePasses({
+        coldRestart,
+        identity: { ...identity, turnId },
+        patchSha256: patch.patchSha256,
+      }),
+      `cold restart evidence did not converge: ${sanitizeText(
+        JSON.stringify(coldRestart),
+      )}`,
+    );
     const execCall = toolLifecycle.find((item) => item.name === "exec_command");
     const testOutputVisible =
       firstVisible.testOutputVisible ||
-      reopenedVisible.testOutputVisible ||
+      coldRestartVisible.testOutputVisible ||
       String(execCall?.output || "").includes(fixtureDefinition.testMarker);
-    const expectedVisibleTools = ["Glob", "Grep", "exec_command"];
-    const visibleToolNames = new Set(
-      reopenedVisible.toolRows
-        .filter((row) => row.visible && row.status === "completed")
-        .map((row) => row.name),
-    );
+    const visibleToolNames = visibleCompletedToolNames(coldRestartVisible);
     const providerEvidence = summarizeProvider(fixtureServer);
-    const screenshotPath = path.join(
-      options.outputDir,
-      runId,
-      `${task.id}.png`,
-    );
-    fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
-    await page.screenshot({ path: screenshotPath, fullPage: true });
 
     let evidence = {
       schemaVersion: DEEPSWE_DESKTOP_TRIAL_SCHEMA,
@@ -1368,18 +1562,19 @@ export async function runControlledTask({
         electron: rendererSnapshot.electron === true,
         preloadInvokeBridge: rendererSnapshot.hasInvokeBridge === true,
         identity: {
-          sessionId: reopenedVisible.activeSessionId,
+          sessionId: coldRestartVisible.activeSessionId,
           threadId: identity.threadId,
           turnId,
         },
         terminalVisible:
-          firstVisible.terminalVisible && reopenedVisible.terminalVisible,
+          firstVisible.terminalVisible &&
+          coldRestartVisible.terminalVisible,
         toolLifecycleVisible:
           expectedVisibleTools.every((tool) => visibleToolNames.has(tool)) &&
-          reopenedVisible.diffGroups.some(
+          coldRestartVisible.diffGroups.some(
             (group) => group.visible && group.fileCount > 0,
           ),
-        diffArtifactVisible: reopenedVisible.diffGroups.some(
+        diffArtifactVisible: coldRestartVisible.diffGroups.some(
           (group) => group.visible && group.fileCount > 0,
         ),
         artifactPreview: {
@@ -1389,19 +1584,19 @@ export async function runControlledTask({
             artifactPreviewScreenshotPath,
           ),
         },
-        toolRows: reopenedVisible.toolRows,
-        diffGroups: reopenedVisible.diffGroups,
+        toolRows: coldRestartVisible.toolRows,
+        diffGroups: coldRestartVisible.diffGroups,
         consoleErrorCount: consoleErrors.length,
         pageErrorCount: pageErrors.length,
         consoleErrors: consoleErrors.slice(0, 10),
         pageErrors: pageErrors.slice(0, 10),
-        screenshotPath: path.relative(repoRoot, screenshotPath),
+        screenshotPath: path.relative(repoRoot, coldScreenshotPath),
       },
       readModel: {
-        sessionId: normalized.session_id,
-        threadId: normalized.thread_id,
+        sessionId: coldNormalized.session_id,
+        threadId: coldNormalized.thread_id,
         turnId,
-        terminalStatus: turnStatus(terminal.turn),
+        terminalStatus: coldTurnStatuses[turnId] || turnStatus(terminal.turn),
         toolCount: toolLifecycle.length,
       },
       bridge: {
@@ -1415,16 +1610,9 @@ export async function runControlledTask({
         invokeErrorCount: diagnostics.invokeErrorCount,
       },
       recovery: {
-        sessionReopen: {
-          status:
-            reopenedVisible.activeSessionId === identity.sessionId &&
-            reopenedVisible.terminalVisible
-              ? "pass"
-              : "fail",
-          sessionId: reopenedVisible.activeSessionId,
-        },
         cancelNoGhostWrite: recovery.cancelNoGhostWrite,
         approvalResume: recovery.approvalResume,
+        coldRestart,
       },
       verifier: {
         status: "not_run",

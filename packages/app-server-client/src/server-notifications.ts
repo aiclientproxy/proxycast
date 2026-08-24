@@ -11,10 +11,12 @@ export type RuntimeServerNotification = Extract<
     method:
       | "error"
       | "guardianWarning"
+      | "autoApprovalReview/strictReviewRequired"
       | "turn/diff/updated"
       | "turn/moderationMetadata"
       | "turn/plan/updated"
       | "thread/started"
+      | "thread/reverted"
       | "turn/started"
       | "turn/completed"
       | "item/started"
@@ -30,7 +32,17 @@ export type RuntimeServerNotification = Extract<
       | "item/reasoning/summaryTextDelta"
       | "item/reasoning/summaryPartAdded"
       | "item/reasoning/textDelta"
-      | "thread/settings/updated";
+      | "thread/settings/updated"
+      | "thread/queue/changed"
+      | "thread/environment/connected"
+      | "thread/environment/disconnected";
+  }
+>;
+
+export type EnvironmentConnectionServerNotification = Extract<
+  ServerNotification,
+  {
+    method: "thread/environment/connected" | "thread/environment/disconnected";
   }
 >;
 
@@ -89,6 +101,11 @@ export type GuardianWarningServerNotification = Extract<
   { method: "guardianWarning" }
 >;
 
+export type StrictReviewRequiredServerNotification = Extract<
+  ServerNotification,
+  { method: "autoApprovalReview/strictReviewRequired" }
+>;
+
 export function commandExecOutputDeltaServerNotification(
   message: JsonRpcMessage,
 ): CommandExecOutputDeltaServerNotification | undefined {
@@ -138,6 +155,10 @@ export function serverNotification(
       return hasGuardianWarningNotification(message.params)
         ? (message as ServerNotificationFor<"guardianWarning">)
         : undefined;
+    case "autoApprovalReview/strictReviewRequired":
+      return hasStrictReviewRequiredNotification(message.params)
+        ? (message as ServerNotificationFor<"autoApprovalReview/strictReviewRequired">)
+        : undefined;
     case "turn/diff/updated":
       return hasTurnDiffUpdatedNotification(message.params)
         ? (message as ServerNotificationFor<"turn/diff/updated">)
@@ -154,6 +175,12 @@ export function serverNotification(
       return hasEntityId(record(message.params)?.thread)
         ? (message as ServerNotificationFor<"thread/started">)
         : undefined;
+    case "thread/reverted": {
+      const params = record(message.params);
+      return params && typeof params.threadId === "string" && params.threadId.trim()
+        ? (message as ServerNotificationFor<"thread/reverted">)
+        : undefined;
+    }
     case "turn/started":
       return hasTurnNotification(message.params, ["inProgress"])
         ? (message as ServerNotificationFor<"turn/started">)
@@ -222,6 +249,25 @@ export function serverNotification(
       return hasThreadSettings(message.params)
         ? (message as ServerNotificationFor<"thread/settings/updated">)
         : undefined;
+    case "thread/queue/changed": {
+      const params = record(message.params);
+      return params &&
+        typeof params.threadId === "string" &&
+        params.threadId.trim()
+        ? (message as ServerNotificationFor<"thread/queue/changed">)
+        : undefined;
+    }
+    case "thread/environment/connected":
+    case "thread/environment/disconnected": {
+      const params = record(message.params);
+      return params &&
+        typeof params.threadId === "string" &&
+        params.threadId.trim() &&
+        typeof params.environmentId === "string" &&
+        params.environmentId.trim()
+        ? (message as EnvironmentConnectionServerNotification)
+        : undefined;
+    }
     default:
       return undefined;
   }
@@ -524,6 +570,15 @@ export function isGuardianWarningNotification(
   return serverNotification(message)?.method === "guardianWarning";
 }
 
+export function isStrictReviewRequiredNotification(
+  message: JsonRpcMessage,
+): message is StrictReviewRequiredServerNotification {
+  return (
+    serverNotification(message)?.method ===
+    "autoApprovalReview/strictReviewRequired"
+  );
+}
+
 export function isAgentMessageDeltaNotification(
   message: JsonRpcMessage,
 ): message is ServerNotificationFor<"item/agentMessage/delta"> {
@@ -628,6 +683,16 @@ function hasGuardianWarningNotification(value: unknown): boolean {
     hasOnlyKeys(params, ["message", "threadId"]) &&
     hasString(params, "threadId") &&
     hasString(params, "message")
+  );
+}
+
+function hasStrictReviewRequiredNotification(value: unknown): boolean {
+  const params = record(value);
+  return (
+    hasOnlyKeys(params, ["startedAtMs", "threadId", "turnId"]) &&
+    hasString(params, "threadId") &&
+    hasString(params, "turnId") &&
+    hasFiniteNumber(params, "startedAtMs")
   );
 }
 

@@ -19,6 +19,10 @@ pub(super) fn agent_turn_is_terminal(status: AgentTurnStatus) -> bool {
     )
 }
 
+pub(super) fn agent_turn_advances_queue(status: AgentTurnStatus) -> bool {
+    matches!(status, AgentTurnStatus::Completed | AgentTurnStatus::Failed)
+}
+
 pub(super) fn agent_turn_blocks_queue_resume(status: AgentTurnStatus) -> bool {
     matches!(
         status,
@@ -99,28 +103,25 @@ pub(super) fn resolve_session_runtime_state<'a>(
         .iter()
         .filter(|turn| normalize_turn_runtime_status(turn.status) == "queued")
         .count();
-    let has_waiting_turn = turns
-        .iter()
-        .any(|turn| {
-            active_turn_id == Some(turn.turn_id)
-                && normalize_turn_runtime_status(turn.status) == "waitingAction"
-        });
+    let has_waiting_turn = turns.iter().any(|turn| {
+        active_turn_id == Some(turn.turn_id)
+            && normalize_turn_runtime_status(turn.status) == "waitingAction"
+    });
     let active_turn_id = active_turn_id.map(ToString::to_string);
 
-    let thread_status = if active_turn_id.is_some()
-        && (pending_request_count > 0 || has_waiting_turn)
-    {
-        "waitingAction"
-    } else if active_turn_id.is_some() || queued_turn_count > 0 {
-        "running"
-    } else if matches!(
-        session_status.as_str(),
-        "running" | "active" | "waitingAction"
-    ) {
-        "idle"
-    } else {
-        session_status.as_str()
-    };
+    let thread_status =
+        if active_turn_id.is_some() && (pending_request_count > 0 || has_waiting_turn) {
+            "waitingAction"
+        } else if active_turn_id.is_some() || queued_turn_count > 0 {
+            "running"
+        } else if matches!(
+            session_status.as_str(),
+            "running" | "active" | "waitingAction"
+        ) {
+            "idle"
+        } else {
+            session_status.as_str()
+        };
 
     SessionRuntimeState {
         thread_status: thread_status.to_string(),
@@ -139,9 +140,7 @@ pub(super) fn resolve_agent_session_runtime_state(
     resolve_session_runtime_state(
         agent_session_status_label(session_status),
         pending_request_count,
-        turns
-            .iter()
-            .map(runtime_turn_state_from_agent_turn),
+        turns.iter().map(runtime_turn_state_from_agent_turn),
         active_turn_id,
     )
 }
@@ -151,18 +150,12 @@ pub(super) fn normalize_agent_session_runtime_snapshot(
     turns: &mut [AgentTurn],
     active_turn_id: Option<&str>,
 ) {
-    let runtime_state = resolve_agent_session_runtime_state(
-        session.status,
-        0,
-        turns,
-        active_turn_id,
-    );
+    let runtime_state =
+        resolve_agent_session_runtime_state(session.status, 0, turns, active_turn_id);
     for turn in turns {
         if matches!(
             turn.status,
-            AgentTurnStatus::Accepted
-                | AgentTurnStatus::Running
-                | AgentTurnStatus::WaitingAction
+            AgentTurnStatus::Accepted | AgentTurnStatus::Running | AgentTurnStatus::WaitingAction
         ) && active_turn_id != Some(turn.turn_id.as_str())
         {
             turn.status = AgentTurnStatus::Canceled;

@@ -7,6 +7,7 @@ use agent_protocol::{CollaborationMode, CollaborationModeSettings, ModeKind};
 use app_server_protocol::protocol::v2::{
     ThreadCompactStartParams, ThreadCompactStartResponse, ThreadSettingsUpdateParams,
 };
+use async_trait::async_trait;
 use lime_core::models::model_registry::{
     EnhancedModelMetadata, ModelCapabilityProvenance, ModelModality, ModelRuntimeFeature,
     ModelServiceTier, ModelTaskFamily, ModelVisibility,
@@ -447,7 +448,11 @@ async fn action_response_resumes_the_waiter_owned_by_the_active_session_task() {
             .response
             .lock()
             .expect("live response mutex poisoned"),
-        Some(json!({ "confirmed": true }))
+        Some(json!({
+            "confirmed": true,
+            "decision": "allow_once",
+            "decisionScope": "once"
+        }))
     );
 }
 

@@ -128,6 +128,7 @@ pub(super) async fn execute_calls(
                 session_id: session_id.to_string(),
                 turn_context: turn_context.cloned(),
                 working_directory: working_directory.to_path_buf(),
+                filesystem_gateway: tool_step_snapshot.filesystem_gateway().cloned(),
                 lifecycle_emitter: lifecycle_emitter.clone(),
                 notification_sink: notification_sink.clone(),
                 closed: Arc::new(AtomicBool::new(false)),
@@ -483,6 +484,7 @@ struct RuntimeCodeModeNestedToolDelegate {
     session_id: String,
     turn_context: Option<agent_protocol::turn_context::TurnContextOverride>,
     working_directory: std::path::PathBuf,
+    filesystem_gateway: Option<Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>>,
     lifecycle_emitter: Arc<dyn ToolLifecycleEmitter>,
     notification_sink: CodeModeNotificationSink,
     closed: Arc<AtomicBool>,
@@ -535,7 +537,8 @@ impl RuntimeCodeModeSessionDelegate for RuntimeCodeModeNestedToolDelegate {
                 session_id: self.session_id.clone(),
                 cancel_token: Some(cancellation_token),
                 workspace_sandbox: None,
-            });
+            })
+            .with_optional_filesystem_gateway(self.filesystem_gateway.clone());
             let call = ToolCall::new(
                 self.turn_id.clone(),
                 tool_call_id.clone(),

@@ -1,0 +1,267 @@
+{
+  "$defs": {
+    "McpAuthStatus": {
+      "description": "Authentication state reported by the current MCP inventory contract.",
+      "enum": [
+        "bearertoken",
+        "notloggedin",
+        "oauth",
+        "unknown",
+        "unsupported"
+      ],
+      "type": "string"
+    },
+    "McpResource": {
+      "properties": {
+        "_meta": true,
+        "annotations": true,
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "icons": {
+          "items": true,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "mimeType": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "uri"
+      ],
+      "type": "object"
+    },
+    "McpResourceTemplate": {
+      "properties": {
+        "annotations": true,
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "mimeType": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "uriTemplate": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "uriTemplate"
+      ],
+      "type": "object"
+    },
+    "McpServerConnectionStatus": {
+      "enum": [
+        "authenticationRequired",
+        "cancelled",
+        "connected",
+        "disabled",
+        "failed",
+        "notStarted",
+        "starting"
+      ],
+      "type": "string"
+    },
+    "McpServerInfo": {
+      "properties": {
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "icons": {
+          "items": true,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "version": {
+          "type": "string"
+        },
+        "websiteUrl": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "McpServerStatus": {
+      "properties": {
+        "authStatus": {
+          "$ref": "#/$defs/McpAuthStatus"
+        },
+        "name": {
+          "type": "string"
+        },
+        "pluginId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "resourceTemplates": {
+          "items": {
+            "$ref": "#/$defs/McpResourceTemplate"
+          },
+          "type": "array"
+        },
+        "resources": {
+          "items": {
+            "$ref": "#/$defs/McpResource"
+          },
+          "type": "array"
+        },
+        "runtimeStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServerConnectionStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serverInfo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServerInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "additionalProperties": {
+            "$ref": "#/$defs/McpTool"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "authStatus",
+        "name",
+        "resourceTemplates",
+        "resources",
+        "tools"
+      ],
+      "type": "object"
+    },
+    "McpTool": {
+      "properties": {
+        "_meta": true,
+        "annotations": true,
+        "description": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "icons": {
+          "items": true,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "inputSchema": true,
+        "name": {
+          "type": "string"
+        },
+        "outputSchema": true,
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "inputSchema",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "data": {
+      "items": {
+        "$ref": "#/$defs/McpServerStatus"
+      },
+      "type": "array"
+    },
+    "nextCursor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "required": [
+    "data"
+  ],
+  "title": "ListMcpServerStatusResponse",
+  "type": "object"
+}

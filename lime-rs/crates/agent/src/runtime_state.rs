@@ -19,9 +19,9 @@ use model_provider::current_client::{
     CurrentProviderError, CurrentProviderHealthRegistry, CurrentProviderHealthSnapshot,
 };
 use model_provider::runtime_provider::RuntimeProviderConfig;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tool_runtime::gateway_dispatch_execution::RuntimeGatewayToolExecutionRegistry;
@@ -39,9 +39,12 @@ pub struct AgentRuntimeState {
     mcp_runtime_lifecycle: Arc<Mutex<()>>,
     action_required: Arc<agent_runtime::action_required::ActionRequiredState>,
     permission_grants: Arc<RwLock<PermissionGrantState>>,
+    shell_approval_cache: Arc<RwLock<HashMap<String, HashSet<String>>>>,
     guardian_denials: Arc<Mutex<HashMap<(String, String), GuardianDenialState>>>,
     live_execution_gateway:
         Arc<RwLock<Option<Arc<dyn crate::live_execution_process::LiveExecutionProcessGateway>>>>,
+    filesystem_gateway:
+        Arc<StdRwLock<Option<Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>>>>,
 }
 
 impl Clone for AgentRuntimeState {
@@ -58,8 +61,10 @@ impl Clone for AgentRuntimeState {
             mcp_runtime_lifecycle: Arc::clone(&self.mcp_runtime_lifecycle),
             action_required: Arc::clone(&self.action_required),
             permission_grants: Arc::clone(&self.permission_grants),
+            shell_approval_cache: Arc::clone(&self.shell_approval_cache),
             guardian_denials: Arc::clone(&self.guardian_denials),
             live_execution_gateway: Arc::clone(&self.live_execution_gateway),
+            filesystem_gateway: Arc::clone(&self.filesystem_gateway),
         }
     }
 }
@@ -86,8 +91,10 @@ impl AgentRuntimeState {
                 agent_runtime::action_required::ActionRequiredState::default(),
             ),
             permission_grants: Arc::new(RwLock::new(PermissionGrantState::default())),
+            shell_approval_cache: Arc::new(RwLock::new(HashMap::new())),
             guardian_denials: Arc::new(Mutex::new(HashMap::new())),
             live_execution_gateway: Arc::new(RwLock::new(None)),
+            filesystem_gateway: Arc::new(StdRwLock::new(None)),
         }
     }
 
@@ -136,6 +143,7 @@ impl AgentRuntimeState {
     pub async fn close_provider_session(&self, session_id: &str) {
         self.providers.write().await.remove(session_id);
         self.clear_permission_grants(session_id).await;
+        self.clear_shell_approval_cache(session_id).await;
         self.guardian_denials
             .lock()
             .await
@@ -324,6 +332,26 @@ impl AgentRuntimeState {
         Ok(())
     }
 
+    pub fn install_filesystem_gateway(
+        &self,
+        gateway: Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>,
+    ) -> Result<(), String> {
+        *self
+            .filesystem_gateway
+            .write()
+            .map_err(|_| "filesystem gateway lock poisoned".to_string())? = Some(gateway);
+        Ok(())
+    }
+
+    pub(crate) fn filesystem_gateway(
+        &self,
+    ) -> Option<Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>> {
+        self.filesystem_gateway
+            .read()
+            .ok()
+            .and_then(|gateway| gateway.clone())
+    }
+
     pub(crate) async fn live_execution_process_gateway(
         &self,
     ) -> Option<Arc<dyn crate::live_execution_process::LiveExecutionProcessGateway>> {
@@ -468,6 +496,34 @@ impl AgentRuntimeState {
             .retain(|(candidate_session_id, _), _| candidate_session_id != session_id);
     }
 
+    pub(crate) async fn has_shell_approval(&self, session_id: &str, approval_key: &str) -> bool {
+        if session_id.trim().is_empty() || approval_key.trim().is_empty() {
+            return false;
+        }
+        self.shell_approval_cache
+            .read()
+            .await
+            .get(session_id)
+            .is_some_and(|keys| keys.contains(approval_key))
+    }
+
+    pub(crate) async fn record_shell_approval(&self, session_id: &str, approval_key: String) {
+        if session_id.trim().is_empty() || approval_key.trim().is_empty() {
+            return;
+        }
+        const MAX_SESSION_APPROVALS: usize = 256;
+        let mut cache = self.shell_approval_cache.write().await;
+        let keys = cache.entry(session_id.to_string()).or_default();
+        if keys.len() >= MAX_SESSION_APPROVALS && !keys.contains(&approval_key) {
+            return;
+        }
+        keys.insert(approval_key);
+    }
+
+    async fn clear_shell_approval_cache(&self, session_id: &str) {
+        self.shell_approval_cache.write().await.remove(session_id);
+    }
+
     pub async fn ensure_mcp_runtime(
         &self,
         session_id: String,
@@ -508,16 +564,32 @@ impl AgentRuntimeState {
             elicitation_router,
             server_specs.clone(),
         ));
-        runtime.start().await?;
-        let mut runtimes = self.mcp_runtimes.write().await;
-        if let Some(existing) = runtimes.get(&session_id).cloned() {
-            if existing.thread_id() != runtime.thread_id() {
-                return Err(format!(
-                    "MCP runtime thread mismatch for session '{session_id}'"
-                ));
-            }
+        if let Err(error) = runtime.start().await {
+            runtime.shutdown().await;
+            return Err(error);
         }
-        runtimes.insert(session_id, Arc::clone(&runtime));
+        let thread_mismatch = self
+            .mcp_runtimes
+            .read()
+            .await
+            .get(&session_id)
+            .is_some_and(|existing| existing.thread_id() != runtime.thread_id());
+        if thread_mismatch {
+            runtime.shutdown().await;
+            return Err(format!(
+                "MCP runtime thread mismatch for session '{session_id}'"
+            ));
+        }
+        let previous = {
+            let mut runtimes = self.mcp_runtimes.write().await;
+            runtimes.insert(session_id, Arc::clone(&runtime))
+        };
+        // A replacement is published only after its MCP servers have started.
+        // Shut down the previous generation after releasing the map lock so
+        // old stdio transports and event routes cannot outlive their owner.
+        if let Some(previous) = previous {
+            previous.shutdown().await;
+        }
         Ok(runtime)
     }
 
@@ -579,6 +651,32 @@ impl AgentRuntimeState {
             .await?
             .has_server(server_name)
             .await)
+    }
+
+    pub async fn subscribe_mcp_server_notifications(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+    ) -> Result<tokio::sync::broadcast::Receiver<lime_mcp::McpServerNotification>, String> {
+        Ok(self
+            .mcp_runtime(session_id, thread_id)
+            .await?
+            .subscribe_server_notifications())
+    }
+
+    pub async fn open_mcp_event_stream(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server_name: &str,
+        name: &str,
+        arguments: serde_json::Value,
+        meta: Option<serde_json::Value>,
+    ) -> Result<lime_mcp::McpEventStream, String> {
+        self.mcp_runtime(session_id, thread_id)
+            .await?
+            .open_event_stream(server_name, name, arguments, meta)
+            .await
     }
 
     pub async fn list_mcp_resources(
@@ -831,6 +929,20 @@ mod permission_grant_tests {
                 .await,
             EffectivePermissionGrant::default()
         );
+    }
+
+    #[tokio::test]
+    async fn shell_approval_cache_is_session_scoped_and_clears_on_close() {
+        let state = AgentRuntimeState::new();
+        state
+            .record_shell_approval("session-1", "shell-key".to_string())
+            .await;
+
+        assert!(state.has_shell_approval("session-1", "shell-key").await);
+        assert!(!state.has_shell_approval("session-2", "shell-key").await);
+
+        state.close_provider_session("session-1").await;
+        assert!(!state.has_shell_approval("session-1", "shell-key").await);
     }
 }
 

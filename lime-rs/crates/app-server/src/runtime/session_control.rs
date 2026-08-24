@@ -26,7 +26,8 @@ pub(in crate::runtime) enum QueuedTurnResume {
     },
 }
 
-struct QueuedTurnResumeLease {
+#[derive(Clone)]
+pub(in crate::runtime) struct QueuedTurnResumeLease {
     index: usize,
     turn: AgentTurn,
     input: Vec<UserInput>,
@@ -389,6 +390,41 @@ impl RuntimeCore {
         session_id: &str,
         host: RuntimeHostContext,
     ) -> Result<QueuedTurnResume, RuntimeCoreError> {
+        self.resume_queued_turn_if_idle_selected(session_id, None, host)
+            .await
+    }
+
+    pub(in crate::runtime) async fn resume_queued_turn_if_idle_selected(
+        &self,
+        session_id: &str,
+        queued_submission_id: Option<&str>,
+        host: RuntimeHostContext,
+    ) -> Result<QueuedTurnResume, RuntimeCoreError> {
+        self.resume_queued_turn_if_idle_selected_with_mode(
+            session_id,
+            queued_submission_id,
+            host,
+            true,
+        )
+        .await
+    }
+
+    pub(in crate::runtime) async fn resume_next_queued_turn_for_recovery(
+        &self,
+        session_id: &str,
+        host: RuntimeHostContext,
+    ) -> Result<QueuedTurnResume, RuntimeCoreError> {
+        self.resume_queued_turn_if_idle_selected_with_mode(session_id, None, host, false)
+            .await
+    }
+
+    async fn resume_queued_turn_if_idle_selected_with_mode(
+        &self,
+        session_id: &str,
+        queued_submission_id: Option<&str>,
+        host: RuntimeHostContext,
+        return_after_admission: bool,
+    ) -> Result<QueuedTurnResume, RuntimeCoreError> {
         self.ensure_current_session_hydrated(session_id).await?;
         let queued = {
             let mut state = self
@@ -406,11 +442,22 @@ impl RuntimeCore {
             {
                 return Ok(QueuedTurnResume::Blocked);
             }
-            let Some(index) = stored
-                .turns
-                .iter()
-                .position(|turn| matches!(turn.status, AgentTurnStatus::Queued))
-            else {
+            let index = match queued_submission_id {
+                Some(queued_submission_id) => stored.turns.iter().position(|turn| {
+                    turn.turn_id == queued_submission_id
+                        && matches!(turn.status, AgentTurnStatus::Queued)
+                }),
+                None => stored
+                    .turns
+                    .iter()
+                    .position(|turn| matches!(turn.status, AgentTurnStatus::Queued)),
+            };
+            let Some(index) = index else {
+                if let Some(queued_submission_id) = queued_submission_id {
+                    return Err(RuntimeCoreError::InvalidRequest(format!(
+                        "queued submission not found: {queued_submission_id}"
+                    )));
+                }
                 return Ok(QueuedTurnResume::Empty);
             };
             let turn = stored.turns.remove(index);
@@ -426,24 +473,43 @@ impl RuntimeCore {
         let queued_turn_id = queued.turn.turn_id.clone();
         let mut resumed_runtime_options = queued.runtime_options.clone().unwrap_or_default();
         resumed_runtime_options.queued_turn_id = Some(queued_turn_id.clone());
-        let output = match self
-            .start_turn_inner(
-                TurnStartRequest {
-                    session_id: session_id.to_string(),
-                    turn_id: Some(queued_turn_id.clone()),
-                    input: queued.input.clone(),
-                    runtime_options: Some(resumed_runtime_options),
-                    queue_if_busy: false,
-                    skip_pre_submit_resume: true,
-                },
+        let request = TurnStartRequest {
+            session_id: session_id.to_string(),
+            turn_id: Some(queued_turn_id.clone()),
+            input: queued.input.clone(),
+            runtime_options: Some(resumed_runtime_options),
+            queue_if_busy: false,
+            skip_pre_submit_resume: true,
+        };
+        let start_result = if return_after_admission {
+            self.start_queued_turn_inner(
+                request,
                 host,
                 None,
                 false,
-                false,
+                true,
                 super::turn_start::TurnStartInputKind::QueuedUser,
+                queued.clone(),
             )
             .await
-        {
+        } else {
+            let event_hub = self.event_hub.clone();
+            let mut publish_event = move |event| {
+                event_hub.publish(event);
+                Ok(())
+            };
+            self.start_queued_turn_inner(
+                request,
+                host,
+                Some(&mut publish_event),
+                false,
+                false,
+                super::turn_start::TurnStartInputKind::QueuedUser,
+                queued.clone(),
+            )
+            .await
+        };
+        let output = match start_result {
             Ok(output) => output,
             Err(error) => {
                 self.restore_queued_turn_if_missing(
@@ -460,6 +526,20 @@ impl RuntimeCore {
             queued_turn_id,
             events: output.events,
         })
+    }
+
+    pub(in crate::runtime) fn restore_queued_turn_lease(
+        &self,
+        session_id: &str,
+        queued: QueuedTurnResumeLease,
+    ) {
+        self.restore_queued_turn_if_missing(
+            session_id,
+            queued.index,
+            queued.turn,
+            queued.input,
+            queued.runtime_options,
+        );
     }
 
     pub async fn list_agent_session_file_checkpoints(

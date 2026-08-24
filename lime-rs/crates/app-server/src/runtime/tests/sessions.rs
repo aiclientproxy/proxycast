@@ -2,6 +2,7 @@ use super::support::*;
 use super::*;
 use agent_protocol::{SortDirection, ThreadId, ThreadStatus, ThreadTurnsView, TurnItemsView};
 use app_server_protocol::protocol::v2::{ThreadCompactStartParams, ThreadCompactStartResponse};
+use async_trait::async_trait;
 use futures::executor::block_on;
 use thread_store::{
     ListItemsParams, ListThreadsParams, ListTurnsParams, PageRequest, ReadThreadParams, ThreadStore,
@@ -115,6 +116,7 @@ fn start_session_creates_empty_canonical_thread_before_returning() {
     let threads = block_on(store.list_threads(ListThreadsParams {
         include_archived: false,
         section: None,
+        project: None,
         sort_by_section_position: false,
         page: canonical_page(),
     }))

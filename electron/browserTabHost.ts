@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
+import { statSync } from "node:fs";
 import type { WebContents } from "electron";
 import type { BrowserWindow, Rectangle } from "./electronRuntime";
+import { clipboard, shell } from "./electronRuntime";
 import {
   browserNodeCenter,
   describeBrowserNode,
@@ -23,6 +25,9 @@ type BrowserTurnInterruptHandler = (
   threadId: string,
   turnId: string,
 ) => Promise<void>;
+type BrowserArtifactWriter = (
+  params: Record<string, unknown>,
+) => Promise<unknown>;
 
 export const BROWSER_TAB_COMMANDS = [
   "browser_tab_mount",
@@ -82,6 +87,7 @@ export interface BrowserToolApproval {
   browserSessionId: string;
   reason: string;
   riskClass: string;
+  /** Dynamic-tool protocol requires a non-empty value even for non-DOM actions. */
   snapshotId: string;
   tabId: string;
   viewId: string;
@@ -104,11 +110,41 @@ interface PendingBrowserApproval {
   browserSessionId: string;
   callId: string;
   ownerWebContentsId: number;
-  snapshotId: string;
+  snapshotId: string | null;
   tabId: string;
   targetDescription: string | null;
   threadId: string;
   tool: string;
+  turnId: string;
+  viewId: string;
+  webContentsId: number;
+  windowId: number;
+}
+
+interface BrowserArtifactRecord {
+  artifactRef: string;
+  filename: string;
+  mimeType: string | null;
+  path: string;
+  threadId: string;
+  turnId: string | null;
+  browserSessionId: string;
+  ownerWebContentsId: number;
+  tabId: string;
+  viewId: string;
+  createdAt: string;
+  persistedAt: string | null;
+  sidecarRelativePath: string | null;
+  contentStatus: string | null;
+}
+
+interface PendingBrowserPermission {
+  browserSessionId: string;
+  ownerWebContentsId: number;
+  permission: string;
+  requestId: string;
+  tabId: string;
+  threadId: string;
   turnId: string;
   viewId: string;
   webContentsId: number;
@@ -155,11 +191,14 @@ export class ElectronBrowserTabHost {
   readonly #routesByTabId = new Map<string, BrowserRoute>();
   readonly #tabIdsByViewId = new Map<string, string>();
   readonly #pendingApprovals = new Map<string, PendingBrowserApproval>();
+  readonly #pendingPermissions = new Map<string, PendingBrowserPermission>();
+  readonly #artifactsByRef = new Map<string, BrowserArtifactRecord>();
   readonly #userControlObserversByViewId = new Map<
     string,
     NativeUserControlObserver
   >();
   #interruptTurn: BrowserTurnInterruptHandler | null = null;
+  #artifactWriter: BrowserArtifactWriter | null = null;
 
   constructor(
     embeddedHost: ElectronEmbeddedBrowserHost,
@@ -171,6 +210,10 @@ export class ElectronBrowserTabHost {
 
   setTurnInterruptHandler(handler: BrowserTurnInterruptHandler | null): void {
     this.#interruptTurn = handler;
+  }
+
+  setArtifactWriter(writer: BrowserArtifactWriter | null): void {
+    this.#artifactWriter = writer;
   }
 
   async invoke(
@@ -292,6 +335,63 @@ export class ElectronBrowserTabHost {
     }
 
     this.#assertAgentControl(route, call.turnId);
+    if (call.tool === "openArtifact" || call.tool === "revealArtifact") {
+      return this.#requireApproval(
+        route,
+        call,
+        call.tool === "openArtifact"
+          ? "Opening a downloaded artifact launches a local file"
+          : "Revealing a downloaded artifact opens the system file manager",
+        call.tool === "openArtifact" ? "artifact_open" : "artifact_reveal",
+      );
+    }
+    if (call.tool === "copyArtifactRef") {
+      return this.#requireApproval(
+        route,
+        call,
+        "Writing an artifact ref changes the system clipboard",
+        "clipboard_write",
+      );
+    }
+    if (call.tool === "grantPermission") {
+      this.#assertPendingPermission(route, call);
+      return this.#requireApproval(
+        route,
+        call,
+        "Browser permission changes affect the current site",
+        "permission_grant",
+      );
+    }
+    if (call.tool === "readClipboard" || call.tool === "writeClipboard") {
+      return this.#requireApproval(
+        route,
+        call,
+        call.tool === "readClipboard"
+          ? "Reading the system clipboard may expose sensitive data"
+          : "Writing the system clipboard changes user-visible data",
+        call.tool === "readClipboard" ? "clipboard_read" : "clipboard_write",
+      );
+    }
+    if (call.tool === "uploadArtifact") {
+      this.#assertSnapshot(route, call.arguments, true);
+      const description = await describeBrowserNode(
+        this.#nativeRoute(route).view.webContents,
+        readPositiveInteger(call.arguments.backendNodeId),
+      );
+      if (
+        !/\binput\b/i.test(description) ||
+        !/\btype[=\s]+["']?file\b/i.test(description)
+      ) {
+        throw new Error("Browser upload target is not a file input");
+      }
+      return this.#requireApproval(
+        route,
+        call,
+        "Uploading a local artifact mutates the current page",
+        "file_upload",
+        description,
+      );
+    }
     if (call.tool === "markHandoff" || call.tool === "markDeliverable") {
       route.mark = call.tool === "markHandoff" ? "handoff" : "deliverable";
       return { status: "completed", state: this.#emitState(route) };
@@ -417,19 +517,68 @@ export class ElectronBrowserTabHost {
     if (mappedEvent) {
       const native = this.#embeddedHost.resolveNativeView(route.viewId);
       const webContentsId = native?.view.webContents.id ?? null;
-      this.#emit(mappedEvent, {
-        ...record,
-        browserSessionId: route.browserSessionId,
-        ownerWebContentsId: route.ownerWebContentsId,
-        tabId: route.tabId,
-        threadId: route.threadId,
+      let nextRecord = record;
+      if (event === "embedded-browser-view-permission-request") {
+        const requestId = readString(record, "requestId");
+        const permission = readString(record, "permission");
+        if (
+          requestId &&
+          permission &&
+          readString(record, "decision") === "pending"
+        ) {
+          const turnId = route.activeTurnId;
+          if (turnId && webContentsId !== null) {
+            this.#pendingPermissions.set(requestId, {
+              browserSessionId: route.browserSessionId,
+              ownerWebContentsId: route.ownerWebContentsId,
+              permission,
+              requestId,
+              tabId: route.tabId,
+              threadId: route.threadId,
+              turnId,
+              viewId: route.viewId,
+              webContentsId,
+              windowId: route.windowId,
+            });
+          } else {
+            // A deferred permission without an active turn has no valid grant owner.
+            this.#embeddedHost.resolvePermission(
+              requestId,
+              false,
+              route.viewId,
+            );
+            nextRecord = { ...record, decision: "blocked" };
+          }
+        } else if (requestId) {
+          this.#pendingPermissions.delete(requestId);
+        }
+      }
+      if (
+        event === "embedded-browser-view-download" &&
+        readString(record, "state") === "completed"
+      ) {
+        void this.#publishCompletedDownload(
+          route,
+          mappedEvent,
+          nextRecord,
+          webContentsId,
+        );
+        return;
+      }
+      this.#emitBrowserEmbeddedEvent(
+        mappedEvent,
+        route,
+        nextRecord,
         webContentsId,
-        windowId: route.windowId,
-      });
+      );
     }
   }
 
   turnEnded(threadId: string, turnId: string): void {
+    this.#clearPendingPermissions(
+      (permission) =>
+        permission.threadId === threadId && permission.turnId === turnId,
+    );
     this.#clearPendingApprovals(
       (approval) =>
         approval.threadId === threadId && approval.turnId === turnId,
@@ -438,6 +587,12 @@ export class ElectronBrowserTabHost {
       if (route.threadId !== threadId || route.activeTurnId !== turnId) {
         continue;
       }
+      this.#clearArtifacts(
+        (artifact) =>
+          artifact.threadId === threadId &&
+          artifact.turnId === turnId &&
+          artifact.tabId === route.tabId,
+      );
       this.#detachDebugger(route);
       route.activeTurnId = null;
       route.controlOwner = "released";
@@ -452,7 +607,141 @@ export class ElectronBrowserTabHost {
     }
   }
 
+  async #publishCompletedDownload(
+    route: BrowserRoute,
+    mappedEvent: string,
+    record: Record<string, unknown>,
+    webContentsId: number | null,
+  ): Promise<void> {
+    try {
+      const artifact = await this.#registerDownloadArtifact(route, record);
+      this.#emitBrowserEmbeddedEvent(
+        mappedEvent,
+        route,
+        {
+          ...record,
+          artifactRef: artifact.artifactRef,
+          artifactFilename: artifact.filename,
+          artifactMimeType: artifact.mimeType,
+          artifactCreatedAt: artifact.createdAt,
+          artifactPersistedAt: artifact.persistedAt,
+          artifactSidecarPath: artifact.sidecarRelativePath,
+          artifactContentStatus: artifact.contentStatus,
+        },
+        webContentsId,
+      );
+    } catch {
+      this.#emitBrowserEmbeddedEvent(
+        mappedEvent,
+        route,
+        {
+          ...record,
+          artifactStatus: "failed",
+          artifactError: "Artifact could not be persisted",
+        },
+        webContentsId,
+      );
+    }
+  }
+
+  #emitBrowserEmbeddedEvent(
+    mappedEvent: string,
+    route: BrowserRoute,
+    record: Record<string, unknown>,
+    webContentsId: number | null,
+  ): void {
+    this.#emit(mappedEvent, {
+      ...record,
+      browserSessionId: route.browserSessionId,
+      ownerWebContentsId: route.ownerWebContentsId,
+      tabId: route.tabId,
+      threadId: route.threadId,
+      turnId: route.activeTurnId,
+      webContentsId,
+      windowId: route.windowId,
+    });
+  }
+
+  async #registerDownloadArtifact(
+    route: BrowserRoute,
+    record: Record<string, unknown>,
+  ): Promise<BrowserArtifactRecord> {
+    const downloadId = readString(record, "downloadId");
+    const path = downloadId
+      ? (this.#embeddedHost.resolveDownloadPath?.(downloadId) ?? null)
+      : null;
+    if (!downloadId || !path) {
+      throw new Error("Completed Browser download has no controlled file");
+    }
+    try {
+      const file = statSync(path);
+      if (!file.isFile() || file.size < 0) {
+        throw new Error("Completed Browser download file is unavailable");
+      }
+    } catch {
+      throw new Error("Completed Browser download file is unavailable");
+    }
+    const existing = [...this.#artifactsByRef.values()].find(
+      (artifact) =>
+        artifact.threadId === route.threadId &&
+        artifact.tabId === route.tabId &&
+        artifact.path === path,
+    );
+    if (existing) {
+      return existing;
+    }
+    const artifact: BrowserArtifactRecord = {
+      artifactRef: `browser-artifact-${randomUUID()}`,
+      filename: readString(record, "filename") ?? "download",
+      mimeType: readString(record, "mimeType"),
+      path,
+      threadId: route.threadId,
+      turnId: route.activeTurnId,
+      browserSessionId: route.browserSessionId,
+      ownerWebContentsId: route.ownerWebContentsId,
+      tabId: route.tabId,
+      viewId: route.viewId,
+      createdAt: new Date().toISOString(),
+      persistedAt: null,
+      sidecarRelativePath: null,
+      contentStatus: null,
+    };
+    if (!this.#artifactWriter) {
+      throw new Error("Browser artifact persistence is unavailable");
+    }
+    const response = await this.#artifactWriter({
+      threadId: route.threadId,
+      turnId: route.activeTurnId,
+      artifact: {
+        artifactRef: artifact.artifactRef,
+        title: artifact.filename,
+        kind: "browser_download",
+        status: "completed",
+        content: JSON.stringify({
+          source: "browser",
+          filename: artifact.filename,
+          mimeType: artifact.mimeType,
+          createdAt: artifact.createdAt,
+        }),
+        metadata: {
+          browserSessionId: artifact.browserSessionId,
+          tabId: artifact.tabId,
+          viewId: artifact.viewId,
+          downloadId,
+        },
+      },
+    });
+    const persisted = readArtifactWriteResponse(response, artifact.artifactRef);
+    artifact.persistedAt = persisted.persistedAt;
+    artifact.sidecarRelativePath = persisted.relativePath;
+    artifact.contentStatus = persisted.contentStatus;
+    this.#artifactsByRef.set(artifact.artifactRef, artifact);
+    return artifact;
+  }
+
   connectionLost(reason = "app-server-disconnected"): void {
+    this.#clearPendingPermissions(() => true);
+    this.#embeddedHost.clearPendingPermissions?.();
     this.#pendingApprovals.clear();
     for (const route of [...this.#routesByTabId.values()]) {
       if (
@@ -710,7 +999,7 @@ export class ElectronBrowserTabHost {
     route: BrowserRoute,
     args: Record<string, unknown>,
   ): void {
-    const title = readRequiredString(args, "title");
+    const title = readOptionalString(args, "title") ?? "";
     const url = readRequiredString(args, "url");
     const pageRevision = readNonNegativeInteger(args, "pageRevision");
     const state = this.#readState(route);
@@ -746,6 +1035,13 @@ export class ElectronBrowserTabHost {
 
   #invalidateSnapshot(route: BrowserRoute): void {
     this.#clearPendingApprovals((approval) => approval.tabId === route.tabId);
+    this.#clearPendingPermissions(
+      (permission) =>
+        permission.threadId === route.threadId &&
+        permission.browserSessionId === route.browserSessionId &&
+        permission.tabId === route.tabId &&
+        permission.viewId === route.viewId,
+    );
     route.pageRevision += 1;
     route.latestSnapshotId = null;
     route.latestSnapshotNodeIds.clear();
@@ -973,7 +1269,10 @@ export class ElectronBrowserTabHost {
     }
     const native = this.#nativeRoute(route);
     const approvalToken = randomUUID();
-    const snapshotId = readRequiredString(call.arguments, "snapshotId");
+    const snapshotId =
+      call.tool === "click" || call.tool === "fill" || call.tool === "press"
+        ? readRequiredString(call.arguments, "snapshotId")
+        : readString(call.arguments, "snapshotId");
     const backendNodeId =
       call.tool === "click" || call.tool === "fill"
         ? readPositiveInteger(call.arguments.backendNodeId)
@@ -1007,7 +1306,7 @@ export class ElectronBrowserTabHost {
         browserSessionId: approval.browserSessionId,
         reason,
         riskClass,
-        snapshotId,
+        snapshotId: snapshotId ?? "none",
         tabId: approval.tabId,
         viewId: approval.viewId,
         webContentsId: approval.webContentsId,
@@ -1046,15 +1345,17 @@ export class ElectronBrowserTabHost {
     ) {
       throw new Error("Browser approved action native route mismatch");
     }
-    this.#assertSnapshot(
-      route,
-      call.arguments,
-      call.tool === "click" || call.tool === "fill",
-    );
-    if (
-      readRequiredString(call.arguments, "snapshotId") !== pending.snapshotId
-    ) {
-      throw new Error("Browser approved action snapshot mismatch");
+    if (pending.snapshotId !== null) {
+      this.#assertSnapshot(
+        route,
+        call.arguments,
+        call.tool === "click" || call.tool === "fill",
+      );
+      if (
+        readRequiredString(call.arguments, "snapshotId") !== pending.snapshotId
+      ) {
+        throw new Error("Browser approved action snapshot mismatch");
+      }
     }
     if (
       pending.backendNodeId !== null &&
@@ -1063,6 +1364,17 @@ export class ElectronBrowserTabHost {
     ) {
       throw new Error("Browser approved action target mismatch");
     }
+    if (pending.targetDescription !== null && call.tool === "uploadArtifact") {
+      const description = await describeBrowserNode(
+        native.view.webContents,
+        readPositiveInteger(call.arguments.backendNodeId),
+      );
+      if (description !== pending.targetDescription) {
+        throw new Error(
+          "Browser approved upload target changed after preflight",
+        );
+      }
+    }
     switch (call.tool) {
       case "click":
         return await this.#click(route, call, pending.targetDescription);
@@ -1070,9 +1382,178 @@ export class ElectronBrowserTabHost {
         return await this.#fill(route, call, pending.targetDescription);
       case "press":
         return await this.#press(route, call, true);
+      case "readClipboard":
+        return {
+          status: "completed",
+          state: this.#emitState(route),
+          data: {
+            text: clipboard.readText(),
+            ...this.#turnGrant(route, call, "clipboard_read"),
+          },
+        };
+      case "writeClipboard": {
+        const text = readRequiredString(call.arguments, "text");
+        clipboard.writeText(text);
+        return {
+          status: "completed",
+          state: this.#emitState(route),
+          data: {
+            written: true,
+            ...this.#turnGrant(route, call, "clipboard_write"),
+          },
+        };
+      }
+      case "copyArtifactRef": {
+        const artifact = this.#resolveArtifact(route, call.arguments);
+        clipboard.writeText(artifact.artifactRef);
+        return {
+          status: "completed",
+          state: this.#emitState(route),
+          data: {
+            artifactRef: artifact.artifactRef,
+            copied: true,
+            ...this.#turnGrant(route, call, "artifact_ref_copy"),
+          },
+        };
+      }
+      case "uploadArtifact":
+        return await this.#uploadArtifact(route, call);
+      case "openArtifact":
+      case "revealArtifact":
+        return await this.#artifactAction(route, call);
+      case "grantPermission":
+        this.#grantPermission(route, call);
+        return {
+          status: "completed",
+          state: this.#emitState(route),
+          data: {
+            decision: "granted",
+            permission: readRequiredString(call.arguments, "permission"),
+            requestId: readRequiredString(call.arguments, "requestId"),
+            ...this.#turnGrant(route, call, "permission_grant"),
+          },
+        };
       default:
         throw new Error("Browser tool does not support approved execution");
     }
+  }
+
+  async #artifactAction(
+    route: BrowserRoute,
+    call: BrowserToolCall,
+  ): Promise<BrowserToolResult> {
+    const artifact = this.#resolveArtifact(route, call.arguments);
+    const error =
+      call.tool === "openArtifact"
+        ? await shell.openPath(artifact.path)
+        : (shell.showItemInFolder(artifact.path), "");
+    if (error) {
+      throw new Error(error);
+    }
+    return {
+      status: "completed",
+      state: this.#emitState(route),
+      data: {
+        artifactRef: artifact.artifactRef,
+        action: call.tool === "openArtifact" ? "open" : "reveal",
+        filename: artifact.filename,
+        ...this.#turnGrant(
+          route,
+          call,
+          call.tool === "openArtifact" ? "artifact_open" : "artifact_reveal",
+        ),
+      },
+    };
+  }
+
+  async #uploadArtifact(
+    route: BrowserRoute,
+    call: BrowserToolCall,
+  ): Promise<BrowserToolResult> {
+    const artifact = this.#resolveArtifact(route, call.arguments);
+    const backendNodeId = readPositiveInteger(call.arguments.backendNodeId);
+    const native = this.#nativeRoute(route);
+    await this.#runAgentInput(route, async () => {
+      await native.view.webContents.debugger.sendCommand(
+        "DOM.setFileInputFiles",
+        { backendNodeId, files: [artifact.path] },
+      );
+    });
+    this.#invalidateSnapshot(route);
+    return {
+      status: "completed",
+      state: this.#emitState(route),
+      data: {
+        artifactRef: artifact.artifactRef,
+        filename: artifact.filename,
+        uploaded: true,
+        ...this.#turnGrant(route, call, "file_upload"),
+      },
+    };
+  }
+
+  #resolveArtifact(
+    route: BrowserRoute,
+    args: Record<string, unknown>,
+  ): BrowserArtifactRecord {
+    const artifactRef = readRequiredString(args, "artifactRef");
+    const artifact = this.#artifactsByRef.get(artifactRef);
+    if (
+      !artifact ||
+      artifact.threadId !== route.threadId ||
+      artifact.browserSessionId !== route.browserSessionId ||
+      artifact.ownerWebContentsId !== route.ownerWebContentsId ||
+      artifact.tabId !== route.tabId ||
+      artifact.viewId !== route.viewId
+    ) {
+      throw new Error("Browser artifact ref is stale or outside this session");
+    }
+    return artifact;
+  }
+
+  #actionEvidence(
+    route: BrowserRoute,
+    call: BrowserToolCall,
+    actionKind: string,
+  ): Record<string, string | number> {
+    return {
+      actionKind,
+      callId: call.callId,
+      threadId: call.threadId,
+      turnId: call.turnId,
+      browserSessionId: route.browserSessionId,
+      tabId: route.tabId,
+      viewId: route.viewId,
+      windowId: route.windowId,
+      ownerWebContentsId: route.ownerWebContentsId,
+      webContentsId: this.#nativeRoute(route).view.webContents.id,
+      pageRevision: route.pageRevision,
+    };
+  }
+
+  #turnGrant(
+    route: BrowserRoute,
+    call: BrowserToolCall,
+    actionKind: string,
+  ): {
+    grantId: string;
+    grantScope: "turn";
+    expiresAt: string;
+    evidence: Record<string, string | number>;
+  } {
+    const grantId = `turn-grant-${randomUUID()}`;
+    const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
+    return {
+      grantId,
+      grantScope: "turn",
+      expiresAt,
+      evidence: {
+        ...this.#actionEvidence(route, call, actionKind),
+        grantId,
+        grantScope: "turn",
+        expiresAt,
+      },
+    };
   }
 
   #clearPendingApprovals(
@@ -1083,6 +1564,64 @@ export class ElectronBrowserTabHost {
         this.#pendingApprovals.delete(key);
       }
     }
+  }
+
+  #clearArtifacts(
+    predicate: (artifact: BrowserArtifactRecord) => boolean,
+  ): void {
+    for (const [artifactRef, artifact] of this.#artifactsByRef) {
+      if (predicate(artifact)) {
+        this.#artifactsByRef.delete(artifactRef);
+      }
+    }
+  }
+
+  #clearPendingPermissions(
+    predicate: (permission: PendingBrowserPermission) => boolean,
+  ): void {
+    for (const [requestId, permission] of this.#pendingPermissions) {
+      if (!predicate(permission)) {
+        continue;
+      }
+      this.#pendingPermissions.delete(requestId);
+      this.#embeddedHost.clearPendingPermission?.(requestId, permission.viewId);
+    }
+  }
+
+  #grantPermission(route: BrowserRoute, call: BrowserToolCall): void {
+    const pending = this.#assertPendingPermission(route, call);
+    const requestId = readRequiredString(call.arguments, "requestId");
+    if (!this.#embeddedHost.resolvePermission(requestId, true, route.viewId)) {
+      throw new Error("Browser permission request is stale or unavailable");
+    }
+    this.#pendingPermissions.delete(pending.requestId);
+  }
+
+  #assertPendingPermission(
+    route: BrowserRoute,
+    call: BrowserToolCall,
+  ): PendingBrowserPermission {
+    const requestId = readRequiredString(call.arguments, "requestId");
+    const permission = readRequiredString(call.arguments, "permission");
+    const pending = this.#pendingPermissions.get(requestId);
+    const native = this.#nativeRoute(route);
+    if (
+      !pending ||
+      pending.permission !== permission ||
+      pending.threadId !== call.threadId ||
+      pending.turnId !== call.turnId ||
+      pending.browserSessionId !== route.browserSessionId ||
+      pending.ownerWebContentsId !== route.ownerWebContentsId ||
+      pending.tabId !== route.tabId ||
+      pending.viewId !== route.viewId ||
+      pending.webContentsId !== native.view.webContents.id ||
+      pending.windowId !== route.windowId
+    ) {
+      throw new Error(
+        "Browser permission request is stale or outside this turn",
+      );
+    }
+    return pending;
   }
 
   #nativeRoute(route: BrowserRoute) {
@@ -1149,6 +1688,23 @@ export class ElectronBrowserTabHost {
 
   #removeRoute(route: BrowserRoute): void {
     this.#clearPendingApprovals((approval) => approval.tabId === route.tabId);
+    this.#clearPendingPermissions(
+      (permission) =>
+        permission.threadId === route.threadId &&
+        permission.browserSessionId === route.browserSessionId &&
+        permission.tabId === route.tabId &&
+        permission.viewId === route.viewId,
+    );
+    for (const [artifactRef, artifact] of this.#artifactsByRef) {
+      if (
+        artifact.threadId === route.threadId &&
+        artifact.browserSessionId === route.browserSessionId &&
+        artifact.tabId === route.tabId &&
+        artifact.viewId === route.viewId
+      ) {
+        this.#artifactsByRef.delete(artifactRef);
+      }
+    }
     this.#userControlObserversByViewId.get(route.viewId)?.observer.dispose();
     this.#userControlObserversByViewId.delete(route.viewId);
     this.#routesByTabId.delete(route.tabId);
@@ -1311,6 +1867,11 @@ function readString(value: unknown, key: string): string | null {
   return readStringValue(asRecord(value)?.[key]);
 }
 
+function readOptionalString(value: unknown, key: string): string | null {
+  const candidate = asRecord(value)?.[key];
+  return typeof candidate === "string" ? candidate.trim() : null;
+}
+
 function readStringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -1333,6 +1894,49 @@ function readNonNegativeInteger(value: unknown, key: string): number {
 function readOptionalBoolean(value: unknown, key: string): boolean | null {
   const candidate = asRecord(value)?.[key];
   return typeof candidate === "boolean" ? candidate : null;
+}
+
+interface ArtifactWriteReceipt {
+  persistedAt: string;
+  relativePath: string;
+  bytes: number;
+  sha256: string;
+  contentStatus: string;
+}
+
+function readArtifactWriteResponse(
+  value: unknown,
+  expectedArtifactRef: string,
+): ArtifactWriteReceipt {
+  const record = asRecord(value);
+  const sidecar = asRecord(record?.sidecar);
+  const artifactRef = readStringValue(record?.artifactRef);
+  const persistedAt = readStringValue(record?.persistedAt);
+  const relativePath = readStringValue(sidecar?.relativePath);
+  const sha256 = readStringValue(sidecar?.sha256);
+  const contentStatus = readStringValue(sidecar?.contentStatus);
+  const bytes = sidecar?.bytes;
+  if (
+    artifactRef !== expectedArtifactRef ||
+    !persistedAt ||
+    !relativePath ||
+    relativePath.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/.test(relativePath) ||
+    relativePath.split(/[\\/]+/).includes("..") ||
+    !Number.isInteger(bytes) ||
+    Number(bytes) < 0 ||
+    !sha256 ||
+    !contentStatus
+  ) {
+    throw new Error("Browser artifact persistence receipt is invalid");
+  }
+  return {
+    persistedAt,
+    relativePath,
+    bytes: Number(bytes),
+    sha256,
+    contentStatus,
+  };
 }
 
 function readBounds(value: unknown): Rectangle | null {

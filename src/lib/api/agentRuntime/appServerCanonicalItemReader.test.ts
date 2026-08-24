@@ -507,6 +507,76 @@ describe("readCanonicalThreadItem", () => {
     });
   });
 
+  it("preserves snake_case structured content from restored MCP items", () => {
+    expect(
+      readCanonicalThreadItem(
+        item({
+          type: "mcpToolCall",
+          server: "docs",
+          tool: "diagnostic_probe",
+          arguments: { query: "structured content" },
+          status: "completed",
+          result: {
+            content: [
+              {
+                type: "text",
+                text: "control-plane envelope only",
+              },
+            ],
+            structured_content: {
+              answer: "MCP 结构化答案",
+              ids: ["doc-structured-1"],
+            },
+          },
+        }),
+        event,
+      ),
+    ).toMatchObject({
+      type: "tool_call",
+      tool_name: "diagnostic_probe",
+      output: "control-plane envelope only",
+      structured_content: {
+        answer: "MCP 结构化答案",
+        ids: ["doc-structured-1"],
+      },
+    });
+  });
+
+  it("separates structured content from restored MCP dynamic content items", () => {
+    const protocolOutput = JSON.stringify({
+      request_metadata: { projection: "mcp_tool_result_projection" },
+      diagnostics: { raw_transport_payload: "doc-hidden-envelope" },
+      content: [{ type: "text", text: "control-plane envelope only" }],
+    });
+    const structuredOutput = JSON.stringify({
+      answer: "MCP 结构化答案",
+      ids: ["doc-structured-1"],
+    });
+    expect(
+      readCanonicalThreadItem(
+        item({
+          type: "dynamicToolCall",
+          tool: "mcp__docs__diagnostic_probe",
+          arguments: [],
+          status: "completed",
+          contentItems: [
+            { type: "inputText", text: protocolOutput },
+            { type: "inputText", text: structuredOutput },
+          ],
+        }),
+        event,
+      ),
+    ).toMatchObject({
+      type: "tool_call",
+      tool_name: "mcp__docs__diagnostic_probe",
+      output: protocolOutput,
+      structured_content: {
+        answer: "MCP 结构化答案",
+        ids: ["doc-structured-1"],
+      },
+    });
+  });
+
   it("projects a canonical v2 collab wait lifecycle as a Tool item", () => {
     expect(
       readCanonicalThreadItem(

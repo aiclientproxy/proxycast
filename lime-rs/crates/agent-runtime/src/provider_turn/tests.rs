@@ -1146,6 +1146,7 @@ async fn provider_request_projects_typed_world_state_once_before_current_user() 
             model: Some("claude <sonnet>".to_string()),
             reasoning_effort: Some("high".to_string()),
         }),
+        environments: Vec::new(),
         permissions: Some(RuntimeWorldPermissions {
             approval_policy: Some("on-request".to_string()),
             sandbox_policy: Some("workspace-write".to_string()),

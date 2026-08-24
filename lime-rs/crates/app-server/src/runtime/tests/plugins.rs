@@ -2,6 +2,7 @@ use super::*;
 use app_server_protocol::protocol::v2::{
     PluginCatalogUninstallParams, PluginCatalogUninstallResponse,
 };
+use async_trait::async_trait;
 use std::sync::Mutex as StdMutex;
 
 #[derive(Clone)]

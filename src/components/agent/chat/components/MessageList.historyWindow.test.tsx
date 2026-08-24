@@ -949,6 +949,9 @@ describe("MessageList history window", () => {
     ) as HTMLElement | null;
 
     expect(historicalSummary?.tagName).toBe("BUTTON");
+    expect(historicalSummary?.textContent).toBe("Processed for 1m 0s");
+    expect(historicalSummary?.textContent).not.toContain("steps");
+    expect(historicalSummary?.textContent).not.toContain("reasoning notes");
     expect(historicalSummary?.getAttribute("aria-expanded")).toBe("false");
     expect(mockAgentThreadTimeline).not.toHaveBeenCalled();
     expect(mockStreamingRenderer).toHaveBeenLastCalledWith(

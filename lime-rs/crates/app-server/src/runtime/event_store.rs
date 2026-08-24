@@ -516,7 +516,16 @@ fn append_runtime_events_to_stored_session(
         let event_timestamp = runtime_event_timestamp(event_class, &normalized.payload);
         let mut event = AgentEvent {
             event_id: new_id("evt"),
-            sequence: stored.events.len() as u64 + events.len() as u64 + 1,
+            sequence: stored
+                .events
+                .last()
+                .map(|event| event.sequence)
+                .unwrap_or(0)
+                .checked_add(u64::try_from(events.len()).map_err(|_| {
+                    RuntimeCoreError::Backend("runtime event batch length exceeds u64".to_string())
+                })?)
+                .and_then(|sequence| sequence.checked_add(1))
+                .ok_or_else(|| RuntimeCoreError::Backend("event sequence overflow".to_string()))?,
             session_id: session_id.to_string(),
             thread_id: Some(thread_id.to_string()),
             turn_id: turn_id.map(str::to_string),

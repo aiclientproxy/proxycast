@@ -62,6 +62,7 @@ import { decodeModelRouteSelector } from "../../../packages/app-server-client/sr
 import { modelListUpdatedServerNotification } from "../../../packages/app-server-client/src/server-notifications";
 import {
   METHOD_MODEL_LIST,
+  METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
   METHOD_MODEL_PREFERENCES_LIST,
   METHOD_MODEL_PROVIDER_LIST,
   METHOD_MODEL_PROVIDER_ALIAS_LIST,
@@ -98,6 +99,39 @@ type ModelProviderAliasListAppServerResponse = {
 type ModelProviderIdRecord = {
   id?: unknown;
 };
+
+export type ModelProviderCapabilities = {
+  namespaceTools: boolean;
+  imageGeneration: boolean;
+  webSearch: boolean;
+};
+
+function emptyModelProviderCapabilities(): ModelProviderCapabilities {
+  return {
+    namespaceTools: false,
+    imageGeneration: false,
+    webSearch: false,
+  };
+}
+
+function parseModelProviderCapabilities(
+  value: unknown,
+): ModelProviderCapabilities {
+  const source = recordValue(value);
+  if (
+    !source ||
+    typeof source.namespaceTools !== "boolean" ||
+    typeof source.imageGeneration !== "boolean" ||
+    typeof source.webSearch !== "boolean"
+  ) {
+    return emptyModelProviderCapabilities();
+  }
+  return {
+    namespaceTools: source.namespaceTools,
+    imageGeneration: source.imageGeneration,
+    webSearch: source.webSearch,
+  };
+}
 
 function recordValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -410,6 +444,17 @@ async function readModelsFromAppServer(
   } while (cursor);
 
   return models;
+}
+
+export async function readModelProviderCapabilities(
+  appServerClient: ModelRegistryAppServerClient = new AppServerClient(),
+): Promise<ModelProviderCapabilities> {
+  const response = await requestModelRegistryAppServer<unknown>(
+    METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
+    {},
+    appServerClient,
+  );
+  return parseModelProviderCapabilities(response);
 }
 
 interface ModelRegistryQueryOptions {
@@ -804,6 +849,7 @@ async function getAllAliasConfigsCached(
  */
 export const modelRegistryApi = {
   getModelRegistry,
+  readModelProviderCapabilities,
   getModelRegistryProviderIds,
   refreshModelRegistry,
   searchModels,

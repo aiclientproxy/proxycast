@@ -274,12 +274,13 @@ async fn seed_queued_session(
         .await
         .expect("queue turn");
     }
-    core.append_external_runtime_events(
-        session_id,
-        Some(&active_turn_id),
-        vec![RuntimeEvent::new("turn.completed", json!({}))],
-    )
-    .expect("complete active turn");
+    core.event_appender()
+        .append_external_runtime_events(
+            session_id,
+            Some(&active_turn_id),
+            vec![RuntimeEvent::new("turn.completed", json!({}))],
+        )
+        .expect("complete active turn");
 }
 
 fn assert_session_not_hydrated(core: &RuntimeCore, session_id: &str) {
@@ -482,6 +483,7 @@ async fn queued_user_fifo_runs_before_trigger_turn_mailbox_for_the_same_session(
             .expect("queue child user turn");
     }
     setup
+        .event_appender()
         .append_external_runtime_events(
             &child.session_id,
             Some(active_turn_id),

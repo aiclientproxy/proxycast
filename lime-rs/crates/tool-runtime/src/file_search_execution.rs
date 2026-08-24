@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::SystemTime;
 use tokio_util::sync::CancellationToken;
 
@@ -28,6 +29,9 @@ pub struct RuntimeFileSearchRequest<'a> {
     pub params: &'a Value,
     pub working_directory: PathBuf,
     pub cancel_token: Option<CancellationToken>,
+    pub environment_id: Option<String>,
+    pub filesystem_gateway: Option<Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>>,
+    pub sandbox_policy: Option<String>,
 }
 
 pub fn file_search_tool_definitions() -> Vec<RuntimeToolDefinition> {
@@ -306,11 +310,233 @@ pub async fn execute_runtime_file_search_tool(
         )));
     }
 
-    match file_search_canonical_tool_name(request.tool_name)? {
+    let canonical_tool_name = file_search_canonical_tool_name(request.tool_name)?;
+    let remote_environment_id = request
+        .environment_id
+        .as_deref()
+        .filter(|environment_id| *environment_id != "local");
+    if let Some(environment_id) = remote_environment_id {
+        let Some(gateway) = request.filesystem_gateway.as_ref() else {
+            return Some(Err(runtime_search_error(
+                ErrorCode::INTERNAL_ERROR,
+                format!("remote Environment '{environment_id}' filesystem gateway is unavailable"),
+            )));
+        };
+        return match canonical_tool_name {
+            GLOB_TOOL_NAME => Some(
+                execute_remote_glob(
+                    request.params,
+                    &request.working_directory,
+                    environment_id,
+                    Arc::clone(gateway),
+                    request.sandbox_policy.as_deref(),
+                )
+                .await,
+            ),
+            GREP_TOOL_NAME => Some(
+                execute_remote_grep(
+                    request.params,
+                    &request.working_directory,
+                    environment_id,
+                    Arc::clone(gateway),
+                    request.sandbox_policy.as_deref(),
+                )
+                .await,
+            ),
+            _ => None,
+        };
+    }
+    match canonical_tool_name {
         GLOB_TOOL_NAME => Some(execute_glob(request.params, &request.working_directory)),
         GREP_TOOL_NAME => Some(execute_grep(request.params, &request.working_directory)),
         _ => None,
     }
+}
+
+async fn execute_remote_glob(
+    params: &Value,
+    working_directory: &Path,
+    environment_id: &str,
+    gateway: Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>,
+    sandbox_policy: Option<&str>,
+) -> Result<CallToolResult, ErrorData> {
+    let input: GlobInput = serde_json::from_value(params.clone()).map_err(|error| {
+        runtime_search_error(
+            ErrorCode::INVALID_PARAMS,
+            format!("Invalid Glob parameters: {error}"),
+        )
+    })?;
+    let pattern = normalize_required_string(&input.pattern, "pattern")?;
+    let base_path = input
+        .path
+        .as_deref()
+        .map(|path| resolve_path(path, working_directory))
+        .unwrap_or_else(|| working_directory.to_path_buf());
+    let entries = gateway
+        .walk(
+            environment_id,
+            &base_path,
+            crate::filesystem_gateway::RuntimeFileWalkOptions {
+                max_depth: 64,
+                max_directories: 10_000,
+                max_entries: 50_000,
+                follow_directory_symlinks: false,
+                prune_hidden_directories: false,
+            },
+            sandbox_policy,
+        )
+        .await
+        .map_err(|error| runtime_search_error(ErrorCode::INTERNAL_ERROR, error))?;
+    let mut results = entries
+        .into_iter()
+        .filter(|entry| entry.is_file && glob_pattern_matches(&pattern, &base_path, &entry.path))
+        .filter(|entry| !excluded_path(&entry.path, &input.exclude))
+        .map(|entry| SearchResult::file_match(entry.path))
+        .collect::<Vec<_>>();
+    let max_results = input.max_results.unwrap_or(DEFAULT_MAX_RESULTS);
+    let (results, truncated) = truncate_results(std::mem::take(&mut results), max_results);
+    Ok(runtime_tool_result_to_call_tool_result(
+        RuntimeToolResultParts {
+            success: true,
+            output: Some(format_search_results(&results)),
+            error: None,
+            metadata: HashMap::from([
+                ("count".to_string(), json!(results.len())),
+                ("truncated".to_string(), json!(truncated)),
+                ("pattern".to_string(), json!(pattern)),
+                ("environment_id".to_string(), json!(environment_id)),
+            ]),
+        },
+    ))
+}
+
+async fn execute_remote_grep(
+    params: &Value,
+    working_directory: &Path,
+    environment_id: &str,
+    gateway: Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>,
+    sandbox_policy: Option<&str>,
+) -> Result<CallToolResult, ErrorData> {
+    let input: GrepInput = serde_json::from_value(params.clone()).map_err(|error| {
+        runtime_search_error(
+            ErrorCode::INVALID_PARAMS,
+            format!("Invalid Grep parameters: {error}"),
+        )
+    })?;
+    let pattern = normalize_required_string(&input.pattern, "pattern")?;
+    let regex = RegexBuilder::new(&pattern)
+        .case_insensitive(input.case_insensitive)
+        .build()
+        .map_err(|error| {
+            runtime_search_error(
+                ErrorCode::INVALID_PARAMS,
+                format!("Invalid regex pattern: {error}"),
+            )
+        })?;
+    let base_path = input
+        .path
+        .as_deref()
+        .map(|path| resolve_path(path, working_directory))
+        .unwrap_or_else(|| working_directory.to_path_buf());
+    let entries = gateway
+        .walk(
+            environment_id,
+            &base_path,
+            crate::filesystem_gateway::RuntimeFileWalkOptions {
+                max_depth: 64,
+                max_directories: 10_000,
+                max_entries: 50_000,
+                follow_directory_symlinks: false,
+                prune_hidden_directories: !input.include_hidden,
+            },
+            sandbox_policy,
+        )
+        .await
+        .map_err(|error| runtime_search_error(ErrorCode::INTERNAL_ERROR, error))?;
+    let before = input
+        .context_before
+        .unwrap_or(0)
+        .min(DEFAULT_MAX_CONTEXT_LINES);
+    let after = input
+        .context_after
+        .unwrap_or(0)
+        .min(DEFAULT_MAX_CONTEXT_LINES);
+    let hard_limit = input
+        .max_results
+        .unwrap_or(DEFAULT_MAX_RESULTS)
+        .saturating_mul(10)
+        .max(DEFAULT_MAX_RESULTS);
+    let mut results = Vec::new();
+    for entry in entries.into_iter().filter(|entry| entry.is_file) {
+        if results.len() >= hard_limit {
+            break;
+        }
+        let bytes = gateway
+            .read_file(environment_id, &entry.path, sandbox_policy)
+            .await
+            .map_err(|error| runtime_search_error(ErrorCode::INTERNAL_ERROR, error))?;
+        let Ok(text) = String::from_utf8(bytes) else {
+            continue;
+        };
+        let lines = text.lines().map(ToString::to_string).collect::<Vec<_>>();
+        let mut match_count = 0;
+        for (index, line) in lines.iter().enumerate() {
+            if !regex.is_match(line) {
+                continue;
+            }
+            match_count += 1;
+            if input.mode == GrepOutputMode::Content {
+                results.push(
+                    SearchResult::content_match(entry.path.clone(), index + 1, line.clone())
+                        .with_context(
+                            lines[index.saturating_sub(before)..index].to_vec(),
+                            lines[(index + 1)..(index + after + 1).min(lines.len())].to_vec(),
+                        ),
+                );
+            }
+        }
+        match input.mode {
+            GrepOutputMode::FilesWithMatches if match_count > 0 => {
+                results.push(SearchResult::file_match(entry.path.clone()))
+            }
+            GrepOutputMode::Count if match_count > 0 => {
+                results.push(SearchResult::count_match(entry.path.clone(), match_count))
+            }
+            _ => {}
+        }
+    }
+    let max_results = input.max_results.unwrap_or(DEFAULT_MAX_RESULTS);
+    let (results, result_truncated) = truncate_results(results, max_results);
+    let (output, output_truncated) = truncate_output(&format_search_results(&results));
+    Ok(runtime_tool_result_to_call_tool_result(
+        RuntimeToolResultParts {
+            success: true,
+            output: Some(output),
+            error: None,
+            metadata: HashMap::from([
+                ("count".to_string(), json!(results.len())),
+                (
+                    "truncated".to_string(),
+                    json!(result_truncated || output_truncated),
+                ),
+                ("mode".to_string(), json!(input.mode.metadata_value())),
+                ("pattern".to_string(), json!(pattern)),
+                ("environment_id".to_string(), json!(environment_id)),
+            ]),
+        },
+    ))
+}
+
+fn glob_pattern_matches(pattern: &str, base_path: &Path, path: &Path) -> bool {
+    let relative = path
+        .strip_prefix(base_path)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    let pattern = pattern.replace('\\', "/");
+    glob::Pattern::new(&pattern)
+        .map(|pattern| pattern.matches(&relative) || pattern.matches(&path.to_string_lossy()))
+        .unwrap_or(false)
 }
 
 fn execute_glob(params: &Value, working_directory: &Path) -> Result<CallToolResult, ErrorData> {
@@ -757,6 +983,9 @@ mod tests {
             params: &json!({ "pattern": "*.rs", "max_results": 1 }),
             working_directory: dir.path().to_path_buf(),
             cancel_token: None,
+            environment_id: None,
+            filesystem_gateway: None,
+            sandbox_policy: None,
         })
         .await
         .expect("glob tool")
@@ -788,6 +1017,9 @@ mod tests {
             }),
             working_directory: dir.path().to_path_buf(),
             cancel_token: None,
+            environment_id: None,
+            filesystem_gateway: None,
+            sandbox_policy: None,
         })
         .await
         .expect("grep tool")
@@ -809,6 +1041,9 @@ mod tests {
             params: &json!({ "pattern": "*.rs" }),
             working_directory: PathBuf::from("."),
             cancel_token: None,
+            environment_id: None,
+            filesystem_gateway: None,
+            sandbox_policy: None,
         })
         .await;
 

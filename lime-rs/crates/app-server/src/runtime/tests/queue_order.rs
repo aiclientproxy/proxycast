@@ -1,8 +1,7 @@
 use super::support::*;
 use super::*;
-use crate::runtime::session_control::QueuedTurnResume;
-
 use std::sync::Arc;
+use tokio::time::sleep;
 
 fn read_params(session_id: &str) -> AgentSessionReadParams {
     AgentSessionReadParams {
@@ -58,7 +57,7 @@ async fn read_queued_turns(core: &RuntimeCore, session_id: &str) -> Vec<serde_js
 
 #[tokio::test]
 async fn queued_turn_read_model_reindexes_after_pop_front_resume() {
-    let backend = Arc::new(RecordingBackend::default());
+    let backend = Arc::new(ExternallyTerminatedBackend::default());
     let core = RuntimeCore::with_backend(backend.clone());
     core.start_session(AgentSessionStartParams {
         session_id: Some("sess_queue_order".to_string()),
@@ -70,7 +69,7 @@ async fn queued_turn_read_model_reindexes_after_pop_front_resume() {
     })
     .expect("session");
 
-    core.start_turn(
+    core.start_turn_admitted(
         AgentSessionTurnStartParams {
             session_id: "sess_queue_order".to_string(),
             turn_id: Some("turn_running".to_string()),
@@ -140,24 +139,25 @@ async fn queued_turn_read_model_reindexes_after_pop_front_resume() {
         vec![RuntimeEvent::new("turn.completed", json!({}))],
     )
     .expect("complete running turn");
-    let resumed = core
-        .resume_next_queued_turn_if_idle("sess_queue_order", RuntimeHostContext::default())
-        .await
-        .expect("resume queued turn");
-    match resumed {
-        QueuedTurnResume::Started {
-            queued_turn_id,
-            events,
-        } => {
-            assert_eq!(queued_turn_id, "turn_queued_first");
-            assert!(events
+    backend.release_initial.notify_one();
+    timeout(Duration::from_secs(2), async {
+        loop {
+            let requests = backend
+                .requests
+                .lock()
+                .expect("test backend requests mutex poisoned");
+            if requests
                 .iter()
-                .any(|event| event.event_type == "turn.accepted"));
+                .any(|request| request.turn.turn_id == "turn_queued_first")
+            {
+                break;
+            }
+            drop(requests);
+            sleep(Duration::from_millis(10)).await;
         }
-        QueuedTurnResume::Empty | QueuedTurnResume::Blocked => {
-            panic!("queued turn helper did not pop the first queued turn")
-        }
-    }
+    })
+    .await
+    .expect("automatic queue resume");
 
     let queued_after_resume = read_queued_turns(&core, "sess_queue_order").await;
     assert_eq!(queued_ids(&queued_after_resume), vec!["turn_queued_second"]);

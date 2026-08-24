@@ -4,6 +4,7 @@ use agent_protocol as canonical;
 use app_server_protocol::protocol::v2;
 use app_server_protocol::{error_codes, AgentEvent, JsonRpcError};
 use serde_json::Value;
+use std::path::PathBuf;
 
 use super::ProjectedEvent;
 use safe_display::{
@@ -58,6 +59,7 @@ pub(super) fn lower_thread_list_params(
         include_archived: params.archived.unwrap_or(false),
         turns_view: canonical::ThreadTurnsView::NotLoaded,
         section: params.section_id.clone(),
+        project: params.project_id.clone(),
         sort_by_section_position: matches!(
             params.sort_key,
             Some(v2::ThreadSortKey::SectionPosition)
@@ -249,15 +251,18 @@ fn project_thread(thread: canonical::Thread) -> Result<v2::Thread, JsonRpcError>
     let can_accept_direct_input = thread.parent_thread_id.is_none();
     let metadata = thread.metadata.clone();
     let cwd = metadata_string(&metadata, &["workingDir", "working_dir", "cwd"]).unwrap_or_default();
-    let source = metadata_string(&metadata, &["source", "sourceKind", "source_kind"])
-        .unwrap_or_else(|| "appServer".to_string());
+    let source = project_session_source(
+        metadata_string(&metadata, &["source", "sourceKind", "source_kind"])
+            .as_deref()
+            .unwrap_or("appServer"),
+    );
     let git_info = project_git_info(&metadata);
     let history_mode = match metadata_string(&metadata, &["historyMode", "history_mode"]).as_deref()
     {
         Some("paginated") => v2::ThreadHistoryMode::Paginated,
         _ => v2::ThreadHistoryMode::Legacy,
     };
-    let extra = (!metadata.is_null()).then_some(metadata);
+    let extra = (!metadata.is_null()).then_some(metadata.clone());
 
     Ok(v2::Thread {
         id: thread.thread_id.as_str().to_string(),
@@ -274,19 +279,22 @@ fn project_thread(thread: canonical::Thread) -> Result<v2::Thread, JsonRpcError>
         section: project_thread_section(&thread.metadata),
         section_entered_at: metadata_i64(&thread.metadata, &["sectionEnteredAt"])
             .map(millis_to_seconds),
+        project_id: metadata_string(&metadata, &["projectId", "project_id"]),
         history_mode,
         model_provider: thread.model_provider,
         created_at: millis_to_seconds(thread.created_at_ms),
         updated_at: millis_to_seconds(thread.updated_at_ms),
         recency_at: thread.recency_at_ms.map(millis_to_seconds),
-        status: Some(project_thread_status(thread.status)),
-        path: metadata_string(&thread.metadata, &["path", "rolloutPath", "rollout_path"]),
-        cwd,
+        status: project_thread_status(thread.status),
+        path: metadata_string(&thread.metadata, &["path", "rolloutPath", "rollout_path"])
+            .map(PathBuf::from),
+        cwd: PathBuf::from(cwd),
         cli_version: metadata_string(&thread.metadata, &["cliVersion", "cli_version"])
             .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string()),
         source,
         can_accept_direct_input: Some(can_accept_direct_input),
-        thread_source: metadata_string(&thread.metadata, &["threadSource", "thread_source"]),
+        thread_source: metadata_string(&thread.metadata, &["threadSource", "thread_source"])
+            .map(Into::into),
         agent_nickname: thread.agent_nickname,
         agent_role: thread.agent_role,
         git_info,
@@ -348,6 +356,9 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 text,
                 phase,
                 memory_citation: None,
+                delivery: metadata_string(&metadata, &["delivery"])
+                    .filter(|value| value == "async")
+                    .map(|_| v2::AgentMessageDelivery::Async),
             })
         }
         canonical::ThreadItemPayload::Plan { text, .. } => {
@@ -455,6 +466,10 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                 app_context: None,
                 mcp_app_resource_uri,
                 plugin_id,
+                read_only_hint: metadata_bool(
+                    &metadata,
+                    &["readOnlyHint", "read_only_hint"],
+                ),
                 result,
                 error,
                 duration_ms: output
@@ -483,7 +498,8 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
             reasoning_effort: metadata_string(
                 &metadata,
                 &["reasoningEffort", "reasoning_effort"],
-            ),
+            )
+            .and_then(v2::ReasoningEffort::new),
             agents_states: agent_states
                 .into_iter()
                 .map(|(thread_id, state)| {
@@ -505,6 +521,8 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
         } => Ok(v2::ThreadItem::CommandExecution {
             id,
             metadata: projected_metadata,
+            plugin_id: metadata_string(&metadata, &["pluginId", "plugin_id"]),
+            script_path: metadata_string(&metadata, &["scriptPath", "script_path"]),
             command,
             cwd: cwd.unwrap_or_default(),
             process_id: metadata_string(&metadata, &["processId", "process_id"]),
@@ -720,6 +738,17 @@ fn project_thread_section(metadata: &Value) -> Option<v2::ThreadSection> {
         id: section.get("id")?.as_str()?.to_string(),
         name: section.get("name")?.as_str()?.to_string(),
     })
+}
+
+fn project_session_source(source: &str) -> v2::SessionSource {
+    match source.trim().to_ascii_lowercase().as_str() {
+        "cli" => v2::SessionSource::Cli,
+        "vscode" => v2::SessionSource::VsCode,
+        "exec" => v2::SessionSource::Exec,
+        "appserver" | "app-server" | "app_server" | "mcp" => v2::SessionSource::AppServer,
+        "unknown" => v2::SessionSource::Unknown,
+        _ => v2::SessionSource::Custom(source.to_string()),
+    }
 }
 
 fn cwd_matches(filter: &v2::ThreadListCwdFilter, cwd: &str) -> bool {

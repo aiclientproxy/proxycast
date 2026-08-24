@@ -268,16 +268,16 @@ async fn mcp_current_jsonrpc_starts_real_stdio_server_and_reads_resource() {
 
     let status = app_server_request(&server, 4, METHOD_MCP_SERVER_STATUS_LIST, json!({})).await;
     assert_eq!(
-        status.pointer("/result/servers/0/is_running"),
-        Some(&json!(true))
+        status.pointer("/result/data/0/runtimeStatus"),
+        Some(&json!("connected"))
     );
     assert_eq!(
-        status.pointer("/result/servers/0/server_info/supports_tools"),
-        Some(&json!(true))
+        status.pointer("/result/data/0/serverInfo/name"),
+        Some(&json!("fixture-mcp"))
     );
     assert_eq!(
-        status.pointer("/result/servers/0/server_info/supports_resources"),
-        Some(&json!(true))
+        status.pointer("/result/data/0/tools/echo/name"),
+        Some(&json!("echo"))
     );
 
     let tools = app_server_request(&server, 5, METHOD_MCP_TOOL_LIST, json!({})).await;

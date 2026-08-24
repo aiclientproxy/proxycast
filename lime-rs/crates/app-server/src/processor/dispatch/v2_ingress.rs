@@ -1,5 +1,7 @@
 use app_server_protocol::error_codes;
-use app_server_protocol::protocol::v2::{ClientRequest, Method, METHOD_MEMORY_RESET};
+use app_server_protocol::protocol::v2::{
+    ClientRequest, Method, METHOD_MEMORY_RESET, METHOD_WINDOWS_SANDBOX_SETUP_START,
+};
 use app_server_protocol::{JsonRpcError, JsonRpcRequest, RequestId};
 
 pub(super) fn decode(request: &JsonRpcRequest) -> Result<Option<ClientRequest>, JsonRpcError> {
@@ -28,6 +30,21 @@ pub(super) fn decode(request: &JsonRpcRequest) -> Result<Option<ClientRequest>, 
             "memory/reset accepts only omitted, null, or empty object params",
         ));
     }
+    if request.method == METHOD_WINDOWS_SANDBOX_SETUP_START {
+        let cwd_is_absolute = request
+            .params
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .and_then(|params| params.get("cwd"))
+            .map(|cwd| cwd.is_null() || cwd.as_str().is_some_and(windows_path_is_absolute))
+            .unwrap_or(true);
+        if !cwd_is_absolute {
+            return Err(JsonRpcError::new(
+                error_codes::INVALID_PARAMS,
+                "windowsSandbox/setupStart cwd must be absolute",
+            ));
+        }
+    }
 
     let value = serde_json::to_value(request).map_err(|error| {
         JsonRpcError::new(
@@ -43,6 +60,14 @@ pub(super) fn decode(request: &JsonRpcRequest) -> Result<Option<ClientRequest>, 
     })
 }
 
+fn windows_path_is_absolute(value: &str) -> bool {
+    value.starts_with('/')
+        || (value.len() >= 3
+            && value.as_bytes()[0].is_ascii_alphabetic()
+            && value.as_bytes()[1] == b':'
+            && matches!(value.as_bytes()[2], b'/' | b'\\'))
+}
+
 pub(super) fn into_parts(
     request: ClientRequest,
 ) -> Result<(RequestId, String, Option<serde_json::Value>), JsonRpcError> {
@@ -50,6 +75,7 @@ pub(super) fn into_parts(
         ClientRequest::ThreadStart { id, params } => parts(id, Method::ThreadStart, params),
         ClientRequest::ThreadFork { id, params } => parts(id, Method::ThreadFork, params),
         ClientRequest::ThreadResume { id, params } => parts(id, Method::ThreadResume, params),
+        ClientRequest::ThreadRevert { id, params } => parts(id, Method::ThreadRevert, params),
         ClientRequest::ThreadRead { id, params } => parts(id, Method::ThreadRead, params),
         ClientRequest::ThreadList { id, params } => parts(id, Method::ThreadList, params),
         ClientRequest::ThreadSectionMove { id, params } => {
@@ -101,13 +127,48 @@ pub(super) fn into_parts(
         ClientRequest::ThreadGoalSet { id, params } => parts(id, Method::ThreadGoalSet, params),
         ClientRequest::ThreadGoalGet { id, params } => parts(id, Method::ThreadGoalGet, params),
         ClientRequest::ThreadGoalClear { id, params } => parts(id, Method::ThreadGoalClear, params),
+        ClientRequest::ThreadQueueAdd { id, params } => parts(id, Method::ThreadQueueAdd, params),
+        ClientRequest::ThreadQueueList { id, params } => parts(id, Method::ThreadQueueList, params),
+        ClientRequest::ThreadQueueUpdate { id, params } => {
+            parts(id, Method::ThreadQueueUpdate, params)
+        }
+        ClientRequest::ThreadQueueDelete { id, params } => {
+            parts(id, Method::ThreadQueueDelete, params)
+        }
+        ClientRequest::ThreadQueueReorder { id, params } => {
+            parts(id, Method::ThreadQueueReorder, params)
+        }
+        ClientRequest::ThreadQueueStart { id, params } => {
+            parts(id, Method::ThreadQueueStart, params)
+        }
+        ClientRequest::ProjectList { id, params } => parts(id, Method::ProjectList, params),
+        ClientRequest::ProjectRead { id, params } => parts(id, Method::ProjectRead, params),
+        ClientRequest::ProjectCreate { id, params } => parts(id, Method::ProjectCreate, params),
+        ClientRequest::ProjectImport { id, params } => parts(id, Method::ProjectImport, params),
+        ClientRequest::ProjectUpdate { id, params } => parts(id, Method::ProjectUpdate, params),
+        ClientRequest::ProjectMove { id, params } => parts(id, Method::ProjectMove, params),
+        ClientRequest::ProjectDelete { id, params } => parts(id, Method::ProjectDelete, params),
         ClientRequest::ArtifactWrite { id, params } => parts(id, Method::ArtifactWrite, params),
         ClientRequest::MediaRead { id, params } => parts(id, Method::MediaRead, params),
         ClientRequest::McpServerResourceRead { id, params } => {
             parts(id, Method::McpServerResourceRead, params)
         }
+        ClientRequest::McpServerStatusList { id, params } => {
+            parts(id, Method::McpServerStatusList, params)
+        }
+        ClientRequest::McpServerEventStreamStart { id, params } => {
+            parts(id, Method::McpServerEventStreamStart, params)
+        }
+        ClientRequest::McpServerEventStreamStop { id, params } => {
+            parts(id, Method::McpServerEventStreamStop, params)
+        }
         ClientRequest::McpServerToolCall { id, params } => {
             parts(id, Method::McpServerToolCall, params)
+        }
+        ClientRequest::EnvironmentAdd { id, params } => parts(id, Method::EnvironmentAdd, params),
+        ClientRequest::EnvironmentInfo { id, params } => parts(id, Method::EnvironmentInfo, params),
+        ClientRequest::EnvironmentStatus { id, params } => {
+            parts(id, Method::EnvironmentStatus, params)
         }
         ClientRequest::ConfigRead { id, params } => parts(id, Method::ConfigRead, params),
         ClientRequest::ConfigValueWrite { id, params } => {
@@ -133,7 +194,13 @@ pub(super) fn into_parts(
             Method::WindowsSandboxReadiness.as_str().to_string(),
             None,
         )),
+        ClientRequest::WindowsSandboxSetupStart { id, params } => {
+            parts(id, Method::WindowsSandboxSetupStart, params)
+        }
         ClientRequest::ModelList { id, params } => parts(id, Method::ModelList, params),
+        ClientRequest::ModelProviderCapabilitiesRead { id, params } => {
+            parts(id, Method::ModelProviderCapabilitiesRead, params)
+        }
         ClientRequest::AppRead { id, params } => parts(id, Method::AppRead, params),
         ClientRequest::AppList { id, params } => parts(id, Method::AppList, params),
         ClientRequest::AppInstalled { id, params } => parts(id, Method::AppInstalled, params),
@@ -296,6 +363,30 @@ mod tests {
             json!({"mode": "elevated"}),
         ))
         .expect_err("readiness must reject setup params");
+        assert_eq!(error.code, error_codes::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn windows_sandbox_setup_start_requires_typed_mode_and_absolute_cwd() {
+        let setup_request = request(
+            METHOD_WINDOWS_SANDBOX_SETUP_START,
+            json!({ "mode": "unelevated", "cwd": "C:/workspace" }),
+        );
+        let decoded = decode(&setup_request)
+            .expect("valid setup params")
+            .expect("v2 request");
+        let (_, method, params) = into_parts(decoded).expect("lower setup request");
+        assert_eq!(method, METHOD_WINDOWS_SANDBOX_SETUP_START);
+        assert_eq!(
+            params,
+            Some(json!({ "mode": "unelevated", "cwd": "C:/workspace" }))
+        );
+
+        let error = decode(&request(
+            METHOD_WINDOWS_SANDBOX_SETUP_START,
+            json!({ "mode": "unelevated", "cwd": "relative" }),
+        ))
+        .expect_err("relative cwd must fail closed at protocol ingress");
         assert_eq!(error.code, error_codes::INVALID_PARAMS);
     }
 

@@ -173,11 +173,7 @@ async fn mcp_list_methods_require_initialized_and_return_current_empty_state() {
 
     let cases = [
         (RequestId::Integer(3), METHOD_MCP_SERVER_LIST, "servers"),
-        (
-            RequestId::Integer(4),
-            METHOD_MCP_SERVER_STATUS_LIST,
-            "servers",
-        ),
+        (RequestId::Integer(4), METHOD_MCP_SERVER_STATUS_LIST, "data"),
         (RequestId::Integer(5), METHOD_MCP_TOOL_LIST, "tools"),
         (RequestId::Integer(6), METHOD_MCP_PROMPT_LIST, "prompts"),
         (RequestId::Integer(7), METHOD_MCP_RESOURCE_LIST, "resources"),

@@ -1,4 +1,8 @@
 import type { WorkspaceRightSurfacePendingRequest } from "@/lib/api/workspaceRightSurface";
+import {
+  readBrowserTabHistoricalProjection,
+  type BrowserTabHistoricalProjection,
+} from "@/lib/api/browserTab";
 
 export interface WorkspaceRightSurfaceBrowserIntent {
   source: "rightSurfacePending";
@@ -8,6 +12,7 @@ export interface WorkspaceRightSurfaceBrowserIntent {
   priority: "foreground" | "background";
   launchUrl?: string | null;
   title?: string | null;
+  historicalProjection?: BrowserTabHistoricalProjection | null;
 }
 
 export function buildWorkspaceRightSurfacePendingBrowserIntent(
@@ -24,7 +29,10 @@ export function buildWorkspaceRightSurfacePendingBrowserIntent(
       firstString(browser?.launchUrl) ??
       navigableCandidate(request.candidateId);
 
-    return {
+    const historicalProjection = readBrowserTabHistoricalProjection(
+      browser?.historicalProjection ?? browser?.snapshot,
+    );
+    const intent: WorkspaceRightSurfaceBrowserIntent = {
       source: "rightSurfacePending",
       sourceRequestId: request.requestId,
       origin: request.origin,
@@ -33,6 +41,10 @@ export function buildWorkspaceRightSurfacePendingBrowserIntent(
       launchUrl,
       title: firstString(browser?.title),
     };
+    if (historicalProjection) {
+      intent.historicalProjection = historicalProjection;
+    }
+    return intent;
   }
 
   return null;

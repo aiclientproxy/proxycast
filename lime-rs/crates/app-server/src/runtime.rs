@@ -35,12 +35,14 @@ mod error;
 mod event_log;
 mod event_sink;
 mod event_store;
+mod execution_backend;
 mod execution_request;
 mod expert_role_switch;
 mod exports;
 mod file_checkpoint_projection;
 mod gateway;
 mod gateway_runner;
+mod history_replacement;
 mod hooks;
 mod image_media;
 mod input_media;
@@ -72,6 +74,7 @@ mod projection_store;
 mod projection_store_tests;
 pub(crate) mod provider_history;
 mod rollout_budget;
+pub use execution_backend::ExecutionBackend;
 #[doc(hidden)]
 pub use provider_history::ProviderTurnHistory;
 mod queued_turn_intent;
@@ -104,8 +107,11 @@ mod thread_goal_continuation;
 mod thread_guardian;
 mod thread_inject_items;
 mod thread_item_projection;
+mod thread_queue;
 mod thread_read;
+mod thread_revert;
 mod thread_search;
+pub(crate) use thread_queue::ThreadQueuedSubmission;
 pub(crate) use thread_read::ThreadUnloadResult;
 pub(crate) mod thread_usage;
 mod tool_item_projection;
@@ -162,6 +168,7 @@ pub use event_log::EventLogWriter;
 use event_sink::RuntimeEventCallback;
 pub use event_sink::{RuntimeEvent, RuntimeEventHub, RuntimeEventSink};
 pub use execution_request::ExecutionRequest;
+pub(crate) use model_providers::configured_provider_base_url;
 pub use output_refs::FilesystemOutputSnapshotStore;
 pub use output_refs::NoopOutputSnapshotStore;
 pub use output_refs::OutputSnapshotReadRequest;
@@ -188,7 +195,6 @@ use crate::CapabilitySource;
 use crate::KnowledgeBuilderRuntimeExecutor;
 use crate::NativeKnowledgeBuilderRuntimeExecutor;
 use agent_protocol::AgentInput;
-use agent_runtime::session_loop::RuntimeSessionInputHandle;
 use app_server_protocol::AgentEvent;
 use app_server_protocol::AgentSession;
 use app_server_protocol::AgentSessionActionScope;
@@ -198,7 +204,6 @@ use app_server_protocol::AgentTurn;
 use app_server_protocol::ArtifactSummary;
 use app_server_protocol::ClientInfo;
 use app_server_protocol::RuntimeOptions;
-use async_trait::async_trait;
 use lime_infra::telemetry::TelemetryStore;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -206,7 +211,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use value_fields::{
     json_string, metadata_string, new_id, optional_id_or_new, raw_string_field, string_array_field,
     string_field, timestamp, timestamp_seconds,
@@ -299,157 +303,6 @@ pub struct ToolInventoryReadRequest {
     pub caller: Option<String>,
     pub workbench: bool,
     pub metadata: Option<serde_json::Value>,
-}
-
-#[async_trait]
-pub trait ExecutionBackend: Send + Sync {
-    fn requires_provider_selection(&self) -> bool {
-        false
-    }
-
-    fn has_live_session_responses(&self) -> bool {
-        false
-    }
-
-    fn set_app_data_source(
-        &self,
-        _app_data_source: Arc<dyn AppDataSource>,
-    ) -> Result<(), RuntimeCoreError> {
-        Ok(())
-    }
-
-    fn set_current_time_gateway(
-        &self,
-        _gateway: Arc<dyn tool_runtime::current_time::CurrentTimeGateway>,
-    ) -> Result<(), RuntimeCoreError> {
-        Ok(())
-    }
-
-    fn effective_turn_runtime_options(
-        &self,
-        request: &ExecutionRequest,
-        _first_sampling_turn: bool,
-    ) -> Option<app_server_protocol::RuntimeOptions> {
-        request.runtime_options.clone()
-    }
-
-    async fn preflight_turn(
-        &self,
-        _request: &ExecutionRequest,
-        _first_sampling_turn: bool,
-    ) -> Result<(), RuntimeCoreError> {
-        Ok(())
-    }
-
-    async fn preflight_thread_settings(
-        &self,
-        _session: &AgentSession,
-        _settings: &app_server_protocol::protocol::v2::ThreadSettings,
-    ) -> Result<(), RuntimeCoreError> {
-        Ok(())
-    }
-
-    async fn prepare_turn_runtime_options(
-        &self,
-        request: &ExecutionRequest,
-        first_sampling_turn: bool,
-    ) -> Result<Option<RuntimeOptions>, RuntimeCoreError> {
-        self.preflight_turn(request, first_sampling_turn).await?;
-        Ok(request.runtime_options.clone())
-    }
-
-    async fn start_turn(
-        &self,
-        request: ExecutionRequest,
-        sink: &mut dyn RuntimeEventSink,
-    ) -> Result<(), RuntimeCoreError>;
-
-    async fn start_turn_with_provider_history(
-        &self,
-        request: ExecutionRequest,
-        _provider_history: ProviderTurnHistory,
-        sink: &mut dyn RuntimeEventSink,
-    ) -> Result<(), RuntimeCoreError> {
-        self.start_turn(request, sink).await
-    }
-
-    async fn start_turn_with_provider_history_and_session_input(
-        &self,
-        request: ExecutionRequest,
-        provider_history: ProviderTurnHistory,
-        _pending_input: Option<RuntimeSessionInputHandle>,
-        _cancellation_token: Option<CancellationToken>,
-        sink: &mut dyn RuntimeEventSink,
-    ) -> Result<(), RuntimeCoreError> {
-        self.start_turn_with_provider_history(request, provider_history, sink)
-            .await
-    }
-
-    async fn cancel_turn(
-        &self,
-        request: CancelExecutionRequest,
-        sink: &mut dyn RuntimeEventSink,
-    ) -> Result<(), RuntimeCoreError>;
-
-    async fn close_session(
-        &self,
-        _session_id: &str,
-        _thread_id: &str,
-    ) -> Result<(), RuntimeCoreError> {
-        Ok(())
-    }
-
-    async fn invalidate_mcp_runtimes(&self) {}
-
-    async fn respond_action(
-        &self,
-        request: ActionRespondRequest,
-        sink: &mut dyn RuntimeEventSink,
-    ) -> Result<(), RuntimeCoreError>;
-
-    async fn resolve_permission_action(
-        &self,
-        _request: &PermissionRespondRequest,
-    ) -> Result<(), RuntimeCoreError> {
-        Err(RuntimeCoreError::Backend(
-            "runtime backend does not support permission responses".to_string(),
-        ))
-    }
-
-    async fn read_tool_inventory(
-        &self,
-        _request: ToolInventoryReadRequest,
-    ) -> Result<serde_json::Value, RuntimeCoreError> {
-        Err(RuntimeCoreError::Backend(
-            "runtime backend does not expose tool inventory".to_string(),
-        ))
-    }
-
-    async fn read_mcp_runtime_resource(
-        &self,
-        _session_id: &str,
-        _thread_id: &str,
-        _server: &str,
-        _uri: &str,
-    ) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, RuntimeCoreError>
-    {
-        Err(RuntimeCoreError::Backend(
-            "runtime backend does not expose MCP resources".to_string(),
-        ))
-    }
-
-    async fn call_mcp_runtime_tool(
-        &self,
-        _session_id: &str,
-        _thread_id: &str,
-        _server: &str,
-        _tool: &str,
-        _arguments: serde_json::Value,
-    ) -> Result<lime_mcp::McpToolResult, RuntimeCoreError> {
-        Err(RuntimeCoreError::Backend(
-            "runtime backend does not execute MCP tools".to_string(),
-        ))
-    }
 }
 
 #[derive(Clone)]
@@ -595,6 +448,13 @@ impl RuntimeCore {
         self
     }
 
+    pub(crate) fn environment_registry_path(&self) -> PathBuf {
+        self.app_config_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("environments.json")
+    }
+
     pub(crate) fn take_event_receiver(&self) -> Option<mpsc::UnboundedReceiver<AgentEvent>> {
         self.event_hub.take_receiver()
     }
@@ -626,6 +486,13 @@ impl RuntimeCore {
         gateway: Arc<dyn tool_runtime::current_time::CurrentTimeGateway>,
     ) -> Result<(), RuntimeCoreError> {
         self.backend.set_current_time_gateway(gateway)
+    }
+
+    pub(crate) fn set_filesystem_gateway(
+        &self,
+        gateway: Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>,
+    ) -> Result<(), RuntimeCoreError> {
+        self.backend.set_filesystem_gateway(gateway)
     }
 
     pub fn with_output_snapshot_store(

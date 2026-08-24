@@ -42,6 +42,7 @@ pub(in crate::runtime) fn runtime_session_messages(
 fn turn_input_event_payload<'a>(events: &'a [AgentEvent], turn_id: &str) -> Option<&'a Value> {
     events
         .iter()
+        .rev()
         .find(|event| {
             event.turn_id.as_deref() == Some(turn_id)
                 && turn_input_events::is_turn_input_event(event)
@@ -55,6 +56,7 @@ pub(super) fn turn_input_from_events(
 ) -> Option<Vec<AgentInput>> {
     events
         .iter()
+        .rev()
         .find(|event| {
             event.turn_id.as_deref() == Some(turn_id)
                 && turn_input_events::is_turn_input_event(event)
@@ -64,6 +66,7 @@ pub(super) fn turn_input_from_events(
         .or_else(|| {
             events
                 .iter()
+                .rev()
                 .find(|event| {
                     event.turn_id.as_deref() == Some(turn_id)
                         && turn_input_events::is_turn_input_event(event)

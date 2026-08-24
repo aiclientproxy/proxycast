@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AppServerAgentEvent } from "@/lib/api/appServer";
 import {
   readCanonicalAgentThreadTurn,
+  readAgentThreadItemFromPayload,
   readPatchItemFromPayload,
 } from "./appServerEventTimelineReaders";
 
@@ -93,6 +94,49 @@ describe("readCanonicalAgentThreadTurn", () => {
       ),
     ).toMatchObject({
       moderation_metadata: ["inline", 2],
+    });
+  });
+});
+
+describe("readAgentThreadItemFromPayload", () => {
+  it("把 RuntimeCore canonical tool item 投影为实时 tool_call", () => {
+    expect(
+      readAgentThreadItemFromPayload(
+        {
+          item: {
+            itemId: "mcp-call-1",
+            threadId: "thread-1",
+            turnId: "turn-1",
+            kind: "tool",
+            status: "completed",
+            payload: {
+              type: "tool",
+              call_id: "mcp-call-1",
+              name: "mcp__docs__diagnostic_probe",
+              arguments: [{ name: "server", value: "docs" }],
+              output: {
+                text: "control-plane envelope only",
+                structuredContent: { answer: "visible", ids: ["doc-1"] },
+                durationMs: 12,
+              },
+            },
+            metadata: { tool_family: "mcp" },
+          },
+        },
+        event,
+        "completed",
+      ),
+    ).toMatchObject({
+      id: "mcp-call-1",
+      type: "tool_call",
+      status: "completed",
+      tool_name: "mcp__docs__diagnostic_probe",
+      arguments: [{ name: "server", value: "docs" }],
+      output: "control-plane envelope only",
+      structured_content: { answer: "visible", ids: ["doc-1"] },
+      duration_ms: 12,
+      success: true,
+      metadata: { tool_family: "mcp", callId: "mcp-call-1" },
     });
   });
 });

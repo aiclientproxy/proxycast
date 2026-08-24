@@ -111,6 +111,17 @@ pub struct GuardianWarningNotification {
     pub message: String,
 }
 
+/// Signals that a Guardian-backed tool review requires the strict-review
+/// surface before execution continues.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct StrictReviewRequiredNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    /// Unix timestamp (in milliseconds) when this review started.
+    pub started_at_ms: i64,
+}
+
 /// Emitted after a server-initiated request reaches a terminal state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

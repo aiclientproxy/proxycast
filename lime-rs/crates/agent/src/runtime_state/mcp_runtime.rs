@@ -2,6 +2,7 @@ use crate::mcp_bridge::McpBridgeRuntimeRegistry;
 use futures::future::join_all;
 use lime_mcp::{ElicitationRequestRouter, McpClientManager, McpRuntimeServerSpec};
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tool_runtime::mcp_connection::McpConnectionRegistry;
 
 pub(crate) struct McpThreadRuntime {
@@ -57,6 +58,25 @@ impl McpThreadRuntime {
 
     pub(crate) fn server_specs(&self) -> Vec<McpRuntimeServerSpec> {
         self.server_specs.clone()
+    }
+
+    pub(crate) fn subscribe_server_notifications(
+        &self,
+    ) -> broadcast::Receiver<lime_mcp::McpServerNotification> {
+        self.manager.subscribe_server_notifications()
+    }
+
+    pub(crate) async fn open_event_stream(
+        &self,
+        server_name: &str,
+        name: &str,
+        arguments: serde_json::Value,
+        meta: Option<serde_json::Value>,
+    ) -> Result<lime_mcp::McpEventStream, String> {
+        self.manager
+            .open_event_stream(server_name, name, arguments, meta)
+            .await
+            .map_err(|error| error.to_string())
     }
 
     pub(crate) async fn has_server(&self, server_name: &str) -> bool {

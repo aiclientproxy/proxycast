@@ -9,6 +9,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { AgentThreadTimelineAttachmentList } from "./AgentThreadTimelineAttachmentList";
 import { TimelineItemDetails } from "./AgentThreadTimelineItemRenderers";
 import { hasTimelineFileChangeEvidence } from "./AgentThreadTimelineFileChangesCard";
+import { isImportedHistoryMetadata } from "../utils/importedUserMessageDedupe";
 import {
   formatHistoricalContentLength,
   formatHistoricalTimelineDuration,
@@ -155,6 +156,9 @@ export const HistoricalTimelinePreview: React.FC<{
           meta: summaryMetaText,
         })
       : t("agentChat.messageList.historicalTimeline.deferredMeta");
+  const showImportedSummaryMeta = items.some((item) =>
+    isImportedHistoryMetadata(item.metadata),
+  );
   const durationLabel = formatHistoricalTimelineDuration(
     resolveHistoricalTimelineDurationMs(items, startedAt, completedAt),
   );
@@ -216,9 +220,13 @@ export const HistoricalTimelinePreview: React.FC<{
   const summaryRow = (
     <>
       <span className="shrink-0 whitespace-nowrap font-medium">{title}</span>
-      <span className="min-w-0 flex-1 truncate text-xs text-slate-400">
-        {metaText}
-      </span>
+      {showImportedSummaryMeta ? (
+        <span className="min-w-0 flex-1 truncate text-xs text-slate-400">
+          {metaText}
+        </span>
+      ) : onExpand ? (
+        <span className="min-w-0 flex-1" aria-hidden="true" />
+      ) : null}
       {onExpand ? (
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
       ) : null}

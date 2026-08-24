@@ -2,9 +2,16 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { changeLimeLocale } from "@/i18n/createI18n";
+import type { WindowsSandboxNotification } from "@/lib/api/windowsSandbox";
 
-const { mockReadWindowsSandboxReadiness } = vi.hoisted(() => ({
+const {
+  mockReadWindowsSandboxReadiness,
+  mockStartWindowsSandboxSetup,
+  mockSubscribeWindowsSandboxNotifications,
+} = vi.hoisted(() => ({
   mockReadWindowsSandboxReadiness: vi.fn(),
+  mockStartWindowsSandboxSetup: vi.fn(),
+  mockSubscribeWindowsSandboxNotifications: vi.fn(),
 }));
 
 vi.mock("@/lib/api/windowsSandbox", async () => {
@@ -14,6 +21,9 @@ vi.mock("@/lib/api/windowsSandbox", async () => {
   return {
     ...actual,
     readWindowsSandboxReadiness: mockReadWindowsSandboxReadiness,
+    startWindowsSandboxSetup: mockStartWindowsSandboxSetup,
+    subscribeWindowsSandboxNotifications:
+      mockSubscribeWindowsSandboxNotifications,
   };
 });
 
@@ -21,6 +31,7 @@ import { WindowsSandboxReadinessStatus } from "./WindowsSandboxReadinessStatus";
 
 let container: HTMLDivElement;
 let root: Root;
+let notifyWindowsSandbox: (notification: WindowsSandboxNotification) => void;
 
 function setNavigator(platform: string, userAgent: string) {
   Object.defineProperty(window.navigator, "platform", {
@@ -48,6 +59,12 @@ beforeEach(async () => {
     }
   ).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
+  notifyWindowsSandbox = () => undefined;
+  mockSubscribeWindowsSandboxNotifications.mockImplementation((handler) => {
+    notifyWindowsSandbox = handler;
+    return vi.fn();
+  });
+  mockStartWindowsSandboxSetup.mockResolvedValue({ started: true });
   await changeLimeLocale("zh-CN");
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -114,5 +131,54 @@ describe("WindowsSandboxReadinessStatus", () => {
         .querySelector('[data-testid="windows-sandbox-readiness"]')
         ?.getAttribute("data-status"),
     ).toBe("notConfigured");
+  });
+
+  it("setup completion 和 world-writable warning 走真实通知状态，并保持 fail-closed", async () => {
+    setNavigator("Win32", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+    mockReadWindowsSandboxReadiness.mockResolvedValue("updateRequired");
+
+    await renderStatus();
+    const setupButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>("button"),
+    ).find((button) => button.textContent?.includes("管理员安装"));
+    expect(setupButton).not.toBeUndefined();
+
+    await act(async () => {
+      setupButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(mockStartWindowsSandboxSetup).toHaveBeenCalledWith({
+      mode: "elevated",
+    });
+    expect(container.textContent).toContain(
+      "正在启动 管理员安装 Windows 隔离设置",
+    );
+
+    await act(async () => {
+      notifyWindowsSandbox({
+        method: "windowsSandbox/setupCompleted",
+        params: { mode: "elevated", success: false, error: "runner missing" },
+      });
+      notifyWindowsSandbox({
+        method: "windows/worldWritableWarning",
+        params: {
+          samplePaths: ["C:\\Users\\Public"],
+          extraCount: 1,
+          failedScan: false,
+        },
+      });
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain(
+      "Windows 隔离设置失败：runner missing",
+    );
+    expect(container.textContent).toContain(
+      "检测到 Windows 可被所有用户写入的路径",
+    );
+    expect(
+      container
+        .querySelector('[data-testid="windows-sandbox-readiness"]')
+        ?.getAttribute("data-status"),
+    ).toBe("updateRequired");
   });
 });

@@ -36,6 +36,7 @@ export declare function createSessionClient({
     options?: AgentRuntimeListSessionsOptions,
   ) => Promise<AgentSessionInfo[]>;
   archiveAgentRuntimeSession: (sessionId: string) => Promise<void>;
+  forkAgentRuntimeSession: (sessionId: string) => Promise<string>;
   unarchiveAgentRuntimeSession: (sessionId: string) => Promise<void>;
   updateAgentRuntimeThreadToolPreferences: (
     sessionId: string,
@@ -59,6 +60,7 @@ export declare const archiveAgentRuntimeSession: (
   listAgentRuntimeSessions: (
     options?: AgentRuntimeListSessionsOptions,
   ) => Promise<AgentSessionInfo[]>,
+  forkAgentRuntimeSession: (sessionId: string) => Promise<string>,
   unarchiveAgentRuntimeSession: (sessionId: string) => Promise<void>,
   updateAgentRuntimeThreadToolPreferences: (
     sessionId: string,

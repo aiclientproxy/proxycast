@@ -36,23 +36,28 @@ pub(super) fn validate_tool_confirmation_decision(
 }
 
 fn tool_confirmation_supports_session_approval(stored: &StoredSession, request_id: &str) -> bool {
-    stored.events.iter().rev().find_map(|event| {
-        if event_request_id(&event.payload).as_deref() != Some(request_id)
-            || event.event_type != "action.required"
-            || action_type(&event.payload) != Some("tool_confirmation")
-        {
-            return None;
-        }
-        Some(
-            event
-                .payload
-                .get("runtime_contract")
-                .or_else(|| event.payload.pointer("/data/runtime_contract"))
-                .and_then(|contract| contract.get("session_cache_supported"))
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
-        )
-    }).unwrap_or(false)
+    stored
+        .events
+        .iter()
+        .rev()
+        .find_map(|event| {
+            if event_request_id(&event.payload).as_deref() != Some(request_id)
+                || event.event_type != "action.required"
+                || action_type(&event.payload) != Some("tool_confirmation")
+            {
+                return None;
+            }
+            Some(
+                event
+                    .payload
+                    .get("runtime_contract")
+                    .or_else(|| event.payload.pointer("/data/runtime_contract"))
+                    .and_then(|contract| contract.get("session_cache_supported"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            )
+        })
+        .unwrap_or(false)
 }
 
 fn tool_confirmation_decision_availability(

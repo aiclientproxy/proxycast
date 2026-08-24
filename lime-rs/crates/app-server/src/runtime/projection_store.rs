@@ -1295,6 +1295,13 @@ fn apply_event_in_tx(conn: &Connection, event: &AgentEvent) -> Result<bool, Stri
         }
     }
 
+    if let Some(target) = super::history_replacement::rollback_target(event) {
+        apply_history_replacement_in_tx(conn, &event.session_id, target)?;
+        upsert_projected_session(conn, event, &thread_id)?;
+        upsert_watermark(conn, event)?;
+        return Ok(true);
+    }
+
     assert_projected_turn_owner(conn, event, &thread_id)?;
     upsert_projected_session(conn, event, &thread_id)?;
     apply_projected_queue_event(conn, event)?;
@@ -1302,6 +1309,26 @@ fn apply_event_in_tx(conn: &Connection, event: &AgentEvent) -> Result<bool, Stri
     insert_projected_item(conn, event, &thread_id)?;
     upsert_watermark(conn, event)?;
     Ok(true)
+}
+
+fn apply_history_replacement_in_tx(
+    conn: &Connection,
+    session_id: &str,
+    rollback_to_sequence: u64,
+) -> Result<(), String> {
+    let target = i64::try_from(rollback_to_sequence)
+        .map_err(|_| "history rollback sequence exceeds SQLite range".to_string())?;
+    conn.execute(
+        "DELETE FROM projected_items WHERE session_id = ?1 AND sequence > ?2",
+        params![session_id, target],
+    )
+    .map_err(|error| format!("failed to replace projected item history: {error}"))?;
+    conn.execute(
+        "DELETE FROM projected_turns WHERE session_id = ?1 AND last_event_sequence > ?2",
+        params![session_id, target],
+    )
+    .map_err(|error| format!("failed to replace projected turn history: {error}"))?;
+    Ok(())
 }
 
 fn resolve_projected_thread_id(conn: &Connection, event: &AgentEvent) -> Result<String, String> {
@@ -1514,6 +1541,19 @@ fn normalized_text(value: Option<&str>) -> Option<String> {
         .map(ToString::to_string)
 }
 
+fn projected_event_turn_id(event: &AgentEvent) -> Option<String> {
+    event.turn_id.clone().or_else(|| {
+        (event.event_type == "queue.added")
+            .then(|| {
+                value_string(
+                    Some(&event.payload),
+                    &["queuedTurnId", "queuedSubmissionId"],
+                )
+            })
+            .flatten()
+    })
+}
+
 fn value_string(value: Option<&Value>, keys: &[&str]) -> Option<String> {
     let value = value?;
     keys.iter()
@@ -1529,7 +1569,7 @@ fn upsert_projected_turn(
     event: &AgentEvent,
     thread_id: &str,
 ) -> Result<(), String> {
-    let Some(turn_id) = event.turn_id.as_deref() else {
+    let Some(turn_id) = projected_event_turn_id(event) else {
         return Ok(());
     };
     conn.execute(
@@ -1575,7 +1615,7 @@ fn insert_projected_item(
             event.event_id,
             event.session_id,
             thread_id,
-            event.turn_id,
+            projected_event_turn_id(event),
             event.sequence as i64,
             event.event_type,
             bounded_payload_summary(&event.payload),

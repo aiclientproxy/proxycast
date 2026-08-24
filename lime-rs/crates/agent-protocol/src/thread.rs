@@ -608,6 +608,8 @@ pub struct ThreadListParams {
     pub turns_view: ThreadTurnsView,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub section: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<Option<String>>,
     #[serde(default)]
     pub sort_by_section_position: bool,
 }
@@ -1096,6 +1098,7 @@ mod tests {
             include_archived: true,
             turns_view: ThreadTurnsView::Summary,
             section: None,
+            project: None,
             sort_by_section_position: false,
         };
         let read = ThreadReadParams {

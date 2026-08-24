@@ -16,10 +16,70 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadStartResponse>
     >;
+    readWindowsSandboxReadiness(
+      params?: appServer.AppServerWindowsSandboxReadinessParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerWindowsSandboxReadinessResponse>
+    >;
+    startWindowsSandboxSetup(
+      params: appServer.AppServerWindowsSandboxSetupStartParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerWindowsSandboxSetupStartResponse>
+    >;
+    readModelProviderCapabilities(
+      params?: appServer.AppServerModelProviderCapabilitiesReadParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerModelProviderCapabilitiesReadResponse>
+    >;
+    addEnvironment(
+      params: appServer.AppServerEnvironmentAddParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerEnvironmentAddResponse>
+    >;
+    readEnvironmentInfo(
+      params: appServer.AppServerEnvironmentInfoParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerEnvironmentInfoResponse>
+    >;
+    readEnvironmentStatus(
+      params: appServer.AppServerEnvironmentStatusParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerEnvironmentStatusResponse>
+    >;
     forkThread(
       params: appServer.AppServerThreadForkParams,
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadForkResponse>
+    >;
+    addThreadQueue(
+      params: appServer.AppServerThreadQueueAddParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadQueueAddResponse>
+    >;
+    listThreadQueue(
+      params: appServer.AppServerThreadQueueListParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadQueueListResponse>
+    >;
+    updateThreadQueue(
+      params: appServer.AppServerThreadQueueUpdateParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadQueueUpdateResponse>
+    >;
+    deleteThreadQueue(
+      params: appServer.AppServerThreadQueueDeleteParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadQueueDeleteResponse>
+    >;
+    reorderThreadQueue(
+      params: appServer.AppServerThreadQueueReorderParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadQueueReorderResponse>
+    >;
+    startThreadQueue(
+      params: appServer.AppServerThreadQueueStartParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadQueueStartResponse>
     >;
     listSessions(
       params?: appServer.AppServerAgentSessionListParams,

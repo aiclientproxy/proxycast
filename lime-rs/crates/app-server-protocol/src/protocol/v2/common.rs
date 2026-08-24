@@ -2,8 +2,59 @@ use agent_protocol::{ImageDetail, TextElement};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::PathBuf;
 
 use super::item::ThreadItem as CanonicalThreadItem;
+
+/// Origin of a thread session, aligned with Codex v2's typed source contract.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionSource {
+    Cli,
+    #[serde(rename = "vscode")]
+    VsCode,
+    Exec,
+    AppServer,
+    Custom(String),
+    #[serde(other)]
+    Unknown,
+}
+
+/// Analytics source classification for a thread.
+///
+/// Codex keeps feature values open-ended while preserving a typed wire shape;
+/// the same representation avoids a public untyped string field in Lime.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(try_from = "String", into = "String")]
+#[schemars(with = "String")]
+pub enum ThreadSource {
+    User,
+    Subagent,
+    Feature(String),
+    MemoryConsolidation,
+}
+
+impl From<String> for ThreadSource {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "user" => Self::User,
+            "subagent" => Self::Subagent,
+            "memory_consolidation" => Self::MemoryConsolidation,
+            _ => Self::Feature(value),
+        }
+    }
+}
+
+impl From<ThreadSource> for String {
+    fn from(value: ThreadSource) -> Self {
+        match value {
+            ThreadSource::User => "user".to_string(),
+            ThreadSource::Subagent => "subagent".to_string(),
+            ThreadSource::Feature(feature) => feature,
+            ThreadSource::MemoryConsolidation => "memory_consolidation".to_string(),
+        }
+    }
+}
 
 /// Client-declared capabilities negotiated during the v2 initialize
 /// handshake. Notification opt-out is connection-scoped, never global.
@@ -205,6 +256,9 @@ pub struct Thread {
     pub section: Option<ThreadSection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub section_entered_at: Option<i64>,
+    /// Canonical project assignment owned by App Server, if any.
+    #[schemars(required, schema_with = "super::serde_helpers::nullable_string_schema")]
+    pub project_id: Option<String>,
     #[serde(default)]
     pub history_mode: ThreadHistoryMode,
     pub model_provider: String,
@@ -212,20 +266,19 @@ pub struct Thread {
     pub updated_at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recency_at: Option<i64>,
+    pub status: ThreadStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub status: Option<ThreadStatus>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-    pub cwd: String,
+    pub path: Option<PathBuf>,
+    pub cwd: PathBuf,
     pub cli_version: String,
-    pub source: String,
+    pub source: SessionSource,
     /// Whether this thread may accept direct input from an App Server client.
     /// Spawned child threads are parent-owned and must be driven through the
     /// canonical agent-control route instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub can_accept_direct_input: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub thread_source: Option<String>,
+    pub thread_source: Option<ThreadSource>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_nickname: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

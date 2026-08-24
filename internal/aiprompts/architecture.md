@@ -174,7 +174,7 @@ typed RuntimeRequest + session scope + resolved model selection
 ```
 
 App Server 当前只投影有明确事实源的 environment（cwd/project root/workspace/thread/turn、
-provider/model/reasoning）、permissions（approval/sandbox/web search）、collaboration mode 与 effective
+provider/model/reasoning）、selected environments（id/cwd/workspace roots/primary/status/shell）、permissions（approval/sandbox/web search）、collaboration mode 与 effective
 multi-agent mode。`agent-protocol::MultiAgentMode` 复制 Codex exact typed union；effective mode 只从 resolved
 reasoning effort 推导：`ultra -> proactive`，其余为 `explicitRequestOnly`。deprecated
 `thread/start.multiAgentMode` / `turn/start.multiAgentMode` 只保留 typed wire 形状并被 runtime 忽略，不进入
@@ -182,10 +182,22 @@ durable metadata，也不能覆盖 effective mode。没有 typed 来源的 AGENT
 instructions 和 realtime 必须保持缺失，不得从 prompt 文案、进程环境或 provider 名称猜测。Agent Runtime
 必须优先反序列化该 snapshot，并在当前 user input 前只渲染一次；metadata 存在但损坏时 fail closed，只有
 非 App Server 调用者缺少 snapshot 时才通过同一 DTO 的 `from_cwd` 生成最小状态。旧的 runtime cwd XML
-拼接与 arbitrary-JSON multi-agent 控制面已删除。该链路仍为 `partial`：provider-visible consumption 与
-effective multi-agent producer 已落地，但其余 typed producer 与 Codex durable full/patch world-state history
-尚未完成。后续只能在同一 DTO owner 补齐，禁止在 App Server、Agent prompt 与 provider lowering 分别拼接
-第二套 environment context。
+拼接与 arbitrary-JSON multi-agent 控制面已删除。provider-visible consumption、effective multi-agent producer 与
+Environment typed producer 已落地：Environment selection 一方面由 App Server 在 RuntimeCore canonical event log
+中追加 `world_state` full/patch durable history，另一方面在每次 `turn/start` 从 registry 捕获请求级状态/shell
+快照并注入同一 typed DTO；两者分别服务恢复与当前 provider step，不是两套事实源。provider renderer 对单环境
+保持 legacy `<cwd>`，对多环境按稳定 ID 顺序输出 `<environments>` 并保留第一选择的 primary 语义。其余 typed
+producer 仍需沿同一 DTO owner 补齐，禁止在 App Server、Agent prompt 与 provider lowering 分别拼接第二套
+environment context。
+
+Environment registry 的 current owner 是 App Server `processor::environment::EnvironmentRegistry`。远端注册信息
+持久化到 App Server 配置根下的 `environments.json`，启动时只恢复经过 URL/ID 校验的条目并保持 Pending，连接
+必须完成 `initialize -> initialized -> environment/info -> environment/status` 才能进入 Ready。状态转换通过
+registry event bus 投影给当前选中该 Environment 的 Thread；archive/delete/unsubscribe 会撤销索引。该 owner 只负责
+transport、生命周期与选择 lowering。执行 Environment identity 必须沿 `ToolCall -> RuntimeToolExecutionContext ->
+RuntimeUnifiedExecToolRequest -> LiveExecutionRequest` 传到 App Server process owner；当前本机
+`ExecutionProcessServer` 对任何非 `local` identity 返回 `UnsupportedEnvironment`。exec-server `process/*` 与
+`fs/*` transport 注入完成前，远端 turn 仍不得静默降级到 local。
 
 状态模型与 Codex 对齐：Thread 是会话上下文，Turn 是一次执行，Item 是可恢复的输入、输出、工具或审批活动。`ThreadStore` 的 raw canonical append 与独立 metadata patch 是持久化 contract；App Server `ProjectionStore` 只能是该 contract 的实现，queue payload、stream buffer 与 renderer cache 不得反向成为事实源。
 
@@ -517,12 +529,12 @@ fallback 或 connection/chat probe。Store 未命中的 provider 名称不得生
 是带完整 route/config/capability 的 explicit direct request。direct request 与当前 selection 绑定，只允许
 一次 admission，不复用同一 endpoint/credential 参与 profile fallback。
 
-公开能力读取只有 `model/list.capabilitySnapshot`：它直接投影 ready provider-scoped executable catalog 的 typed
-snapshot，并保留 `providerId`、provenance、task family、modality、runtime feature 与 limits。具体 Turn 继续使用
-resolved route/model capability 决定实际工具暴露，不能把列表展示字段当成跨 provider 能力上界。Codex 的空参数
-`modelProvider/capabilities/read` 读取单一全局 Provider，与 Lime 的 Thread-bound route 不同且没有产品消费者，已从
-protocol、dispatcher、client、schema 和测试正向面物理删除；只允许出现在 excluded scope、历史 evidence 与 retired
-guard 中，禁止恢复为静态全局 capability owner。
+公开能力读取包括 `model/list.capabilitySnapshot` 和 current `modelProvider/capabilities/read`：前者直接投影
+ready provider-scoped executable catalog 的 typed snapshot，并保留 `providerId`、provenance、task family、modality、
+runtime feature 与 limits；后者复用 `model-provider::provider_capabilities`，只读取当前 RuntimeCore provider route，
+返回 exact namespace/image/web-search 三项 capability。具体 Turn 继续使用 resolved route/model capability 决定实际
+工具暴露，不能把列表展示字段当成跨 provider 能力上界；unknown provider、配置失败和未知响应均 fail closed。
+不得恢复一个脱离当前 route 的静态全局 capability owner。
 
 产品默认 provider 的配置事实源只有顶层 `Config.default_provider`；Electron AppConfig、App Server、
 `lime-config` observer 与 `lime-server` 必须读取同一字段。`RoutingConfig` 只承载 model aliases，旧
@@ -1082,12 +1094,25 @@ Architecture impact: major; portable package、runtime owner、Electron 边界�
 2026-08-08.
 
 MCP server 的执行环境身份只来自 `McpServerConfig.environment_id`，由 `lime-mcp::McpEnvironmentRegistry`
-在 transport 启动前解析。当前 registry 只注册 `local`；未知显式身份必须 fail closed，禁止把
-`remote` 或其它配置值降级成本机 stdio/HTTP 执行，也禁止从 `cwd` 猜测环境。Codex 的远端
-`environment/{add,info,status}` 与 `thread/environment/*` 依赖 exec-server registry、WebSocket
-连接恢复和远端 Thread 选择，Lime Desktop 没有对应产品 consumer，已归入
-`product-scope-excluded / forbidden-to-restore`。远程 executor/backend 仍未接入 Lime current，禁止新增
-compat fallback 或空壳 JSON-RPC。
+在 transport 启动前解析。当前 MCP registry 只注册 `local`；未知显式身份必须 fail closed，禁止把
+`remote` 或其它配置值降级成本机 stdio/HTTP 执行，也禁止从 `cwd` 猜测环境。Codex 的
+`environment/{add,info,status}` 现由 App Server `processor::EnvironmentRegistry` current owner
+承接：远端 URL 经过 `ws://`/`wss://` 校验，连接按 `initialize -> initialized -> environment/info ->
+environment/status` 建立并保持，状态只允许 `Pending/Ready/Disconnected/Unknown`，ready 环境的
+status 使用现有连接做 fail-fast probe；`environment/info.cwd` 在 App Server 边界收敛为 canonical
+`file:` `PathUri`。Thread/Turn environment selection 现在由同一 registry 做 ID、绝对 cwd、workspace roots
+去重和默认 root 规范化，并写入 Thread metadata；选择请求完成时按当前 registry 状态发射
+`thread/environment/connected|disconnected`，Pending 不伪造 connected。`thread/resume` 从持久化 Thread
+metadata 恢复 typed selection 并复用同一状态投影，损坏 metadata 或缺失 registry entry fail closed。
+远端 registry 已支持冷启动重建、有限健康探测/重连和主动断线到已选 Thread 的事件转发；selection 的 durable
+full/patch 与当前 typed provider snapshot 也已接入。RuntimeCore 仍缺 exec-server `process/*` 与 `fs/*` transport，
+不得将 transport-level recovery 当作完整可执行 backend。
+未完成前不得把远端环境宣称为可执行 backend，也不得新增 compat fallback 或空壳 JSON-RPC。
+
+Architecture impact: major; Environment registry/WebSocket transport、Thread/Turn selection、resume binding、
+typed provider context 与 execution identity lowering 均已有 current owner，远端 process/filesystem transport 和
+Desktop evidence 仍明确 pending. Architecture diagram updated: this section. Responsible developer confirmation:
+root, 2026-08-23.
 
 本地 stdio 启动还必须复用 Codex 的平台核心环境变量 allowlist，并仅叠加配置显式 `env`；
 不得把 Desktop Host 的完整环境（尤其凭证变量）隐式继承给 MCP 子进程。启动 deadline
@@ -1207,7 +1232,6 @@ current owner 负责；它们不是 user-turn queue GUI 的兼容替身。
 - `scripts/i18n/`：locale 边界检查。
 - `scripts/mcp/`：MCP smoke。
 - `scripts/plugin/`：plugin fixture。
-- `scripts/playwright/`：浏览器/Electron 交互辅助。
 - `scripts/smoke/`：跨域最小 smoke。
 - `scripts/lib/`：脚本共用实现。
 

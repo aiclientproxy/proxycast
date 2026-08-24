@@ -12,10 +12,12 @@ impl McpAppDataSource for LocalAppDataSource {
         mcp::list_mcp_servers(&self.db)
     }
 
-    async fn list_mcp_servers_with_status(
+    async fn list_mcp_servers_with_status_v2(
         &self,
-    ) -> Result<McpServerStatusListResponse, RuntimeCoreError> {
-        mcp::list_mcp_servers_with_status(&self.db, &self.mcp_manager).await
+        params: app_server_protocol::protocol::v2::ListMcpServerStatusParams,
+    ) -> Result<app_server_protocol::protocol::v2::ListMcpServerStatusResponse, RuntimeCoreError>
+    {
+        mcp::list_mcp_servers_with_status_v2(&self.db, &self.mcp_manager, params).await
     }
 
     async fn create_mcp_server(

@@ -268,5 +268,13 @@
   "common.modelCapabilities.reasoning.inactive": "No reasoning",
   "common.modelCapabilities.vision.active": "Supports multimodal",
   "common.modelCapabilities.vision.inactive": "No multimodal",
+  "common.modelProviderCapabilities.title": "Current runtime provider capabilities",
+  "common.modelProviderCapabilities.loading": "Reading capabilities...",
+  "common.modelProviderCapabilities.namespaceTools.active": "Tool namespaces",
+  "common.modelProviderCapabilities.namespaceTools.inactive": "No tool namespaces",
+  "common.modelProviderCapabilities.imageGeneration.active": "Image generation",
+  "common.modelProviderCapabilities.imageGeneration.inactive": "No image generation",
+  "common.modelProviderCapabilities.webSearch.active": "Web search",
+  "common.modelProviderCapabilities.webSearch.inactive": "No web search",
   "common.modelSelector.state.loginRequired": "Sign-in required"
 }

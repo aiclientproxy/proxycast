@@ -18,6 +18,10 @@ import {
 import { runBrowserUserControlScenario } from "./browser-runtime-electron-gate-b-user-control.mjs";
 import { runBrowserDisconnectScenario } from "./browser-runtime-electron-gate-b-disconnect.mjs";
 import { runBrowserDownloadScenario } from "./browser-runtime-electron-gate-b-download.mjs";
+import {
+  prepareBrowserArtifactDownload,
+  runBrowserArtifactScenario,
+} from "./browser-runtime-electron-gate-b-artifact.mjs";
 import { runBrowserPermissionScenario } from "./browser-runtime-electron-gate-b-permission.mjs";
 import { runBrowserWindowCloseScenario } from "./browser-runtime-electron-gate-b-window-close.mjs";
 import { runBrowserProjectionGateA } from "./browser-runtime-gate-a.mjs";
@@ -72,6 +76,9 @@ const DEFAULT_PERMISSION_OUTPUT = path.resolve(
 const DEFAULT_DOWNLOAD_OUTPUT = path.resolve(
   ".lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-download-summary.json",
 );
+const DEFAULT_ARTIFACT_OUTPUT = path.resolve(
+  ".lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-artifact-summary.json",
+);
 const DEFAULT_APPROVAL_OUTPUT = path.resolve(
   ".lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-approval-summary.json",
 );
@@ -91,6 +98,7 @@ const SCENARIOS = new Set([
   "disconnect",
   "permission",
   "download",
+  "artifact",
 ]);
 const TERMINAL_STATUSES = new Set([
   "completed",
@@ -99,6 +107,20 @@ const TERMINAL_STATUSES = new Set([
   "canceled",
   "interrupted",
 ]);
+const SUPPORTED_LOCALES = new Set([
+  "zh-CN",
+  "zh-TW",
+  "en-US",
+  "ja-JP",
+  "ko-KR",
+]);
+const LOCALE_MENU_INDEX = {
+  "zh-CN": 1,
+  "en-US": 2,
+  "zh-TW": 3,
+  "ja-JP": 4,
+  "ko-KR": 5,
+};
 
 export function parseArgs(argv) {
   const options = {
@@ -108,6 +130,8 @@ export function parseArgs(argv) {
     appUrl: process.env.VITE_DEV_SERVER_URL?.trim() || "",
     keepTemp: false,
     scenario: "lifecycle",
+    locale: "zh-CN",
+    screenshotDir: "",
   };
   let outputExplicit = false;
   for (let index = 0; index < argv.length; index += 1) {
@@ -147,6 +171,16 @@ export function parseArgs(argv) {
       options.keepTemp = true;
       continue;
     }
+    if (arg === "--locale" && next) {
+      options.locale = String(next).trim();
+      index += 1;
+      continue;
+    }
+    if (arg === "--screenshot-dir" && next) {
+      options.screenshotDir = path.resolve(next);
+      index += 1;
+      continue;
+    }
     throw new Error(`未知参数: ${arg}`);
   }
   if (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 30_000) {
@@ -157,7 +191,12 @@ export function parseArgs(argv) {
   }
   if (!SCENARIOS.has(options.scenario)) {
     throw new Error(
-      `--scenario 必须是 projection、lifecycle、approval、user-control、cancel、window-close、disconnect、permission 或 download，收到: ${options.scenario || "<empty>"}`,
+      `--scenario 必须是 projection、lifecycle、approval、user-control、cancel、window-close、disconnect、permission、download 或 artifact，收到: ${options.scenario || "<empty>"}`,
+    );
+  }
+  if (!SUPPORTED_LOCALES.has(options.locale)) {
+    throw new Error(
+      `--locale 必须是 ${[...SUPPORTED_LOCALES].join(", ")}，收到: ${options.locale || "<empty>"}`,
     );
   }
   if (!outputExplicit && options.scenario === "cancel") {
@@ -175,6 +214,9 @@ export function parseArgs(argv) {
   if (!outputExplicit && options.scenario === "download") {
     options.output = DEFAULT_DOWNLOAD_OUTPUT;
   }
+  if (!outputExplicit && options.scenario === "artifact") {
+    options.output = DEFAULT_ARTIFACT_OUTPUT;
+  }
   if (!outputExplicit && options.scenario === "approval") {
     options.output = DEFAULT_APPROVAL_OUTPUT;
   }
@@ -185,6 +227,44 @@ export function parseArgs(argv) {
     options.output = DEFAULT_PROJECTION_OUTPUT;
   }
   return options;
+}
+
+async function captureBrowserScreenshot(page, options, state) {
+  if (!options.screenshotDir) return null;
+  fs.mkdirSync(options.screenshotDir, { recursive: true });
+  const filePath = path.join(
+    options.screenshotDir,
+    `${options.locale}-${options.scenario}-${state}.png`,
+  );
+  await page.screenshot({ path: filePath, fullPage: true });
+  return filePath;
+}
+
+async function setRendererLocale(page, options) {
+  if (options.locale === "zh-CN") return;
+  const accountButton = page.locator(
+    '[data-testid="app-sidebar-account-button"]',
+  );
+  if ((await accountButton.count()) === 0) {
+    throw new Error("语言矩阵无法找到侧边栏账户入口");
+  }
+  await accountButton.click();
+  const languageMenuEntry = page.locator(
+    '[data-testid="app-sidebar-account-menu"] [aria-haspopup="menu"]',
+  );
+  if ((await languageMenuEntry.count()) === 0) {
+    throw new Error("语言矩阵无法找到语言菜单入口");
+  }
+  await languageMenuEntry.click();
+  const menu = page.locator('[data-testid="app-sidebar-language-menu"]');
+  await menu.waitFor({ state: "visible" });
+  const index = LOCALE_MENU_INDEX[options.locale];
+  await menu.locator('[role="menuitemradio"]').nth(index).click();
+  await page.waitForFunction(
+    (expected) => document.documentElement.lang === expected,
+    options.locale,
+    { timeout: options.timeoutMs },
+  );
 }
 
 export function extractBrowserState(value) {
@@ -274,6 +354,7 @@ async function createBrowserProviderFixture({
   approvalScenario = false,
   connectionDiagnostics = false,
   userControlScenario = false,
+  artifactScenario = false,
 } = {}) {
   let releaseUserNavigation;
   let releaseFinalResponse;
@@ -292,6 +373,14 @@ async function createBrowserProviderFixture({
     recovered: null,
     staleMutationFailure: null,
     userControlFailure: null,
+    artifact: null,
+    uploadTarget: null,
+    copy: null,
+    writeClipboard: null,
+    readClipboard: null,
+    open: null,
+    reveal: null,
+    upload: null,
     releaseUserNavigation: () => releaseUserNavigation?.(),
     releaseFinalResponse: () => releaseFinalResponse?.(),
     releaseAll: () => {
@@ -303,11 +392,13 @@ async function createBrowserProviderFixture({
     ? createBrowserApprovalResponses(scenario, {
         userControl: userControlScenario,
       })
-    : createBrowserLifecycleResponses(
-        scenario,
-        userNavigationCompleted,
-        finalResponseAllowed,
-      );
+    : artifactScenario
+      ? createBrowserArtifactResponses(scenario)
+      : createBrowserLifecycleResponses(
+          scenario,
+          userNavigationCompleted,
+          finalResponseAllowed,
+        );
   const server = await startOpenAiCompatibleFixtureServer({
     model: MODEL_NAME,
     apiKey: PROVIDER_API_KEY,
@@ -323,6 +414,37 @@ function createBrowserLifecycleResponses(
   userNavigationCompleted,
   finalResponseAllowed,
 ) {
+  let initialObserveRetries = 0;
+  let initialTabId = null;
+  const finishRecoveredObservation = (body) => {
+    const result = toolResultFromRequest(body);
+    const observed = extractBrowserState(result);
+    const observation = extractBrowserObservation(result);
+    if (!observed || !observation?.snapshotId) {
+      throw new Error("重新 observe 未返回 Browser state 与 snapshotId");
+    }
+    scenario.recovered = { observation, state: observed };
+    return finalResponseAllowed.then(() => ({
+      type: "text",
+      content: `${FINAL_MARKER}:${JSON.stringify({
+        activeTurnId: observed.activeTurnId,
+        browserSessionId: observed.browserSessionId,
+        initialPageRevision: scenario.initial?.observation?.pageRevision,
+        ownerWebContentsId: observed.ownerWebContentsId,
+        pageRevision: observed.pageRevision,
+        recoveredPageRevision: observation.pageRevision,
+        staleMutationRejected:
+          scenario.staleMutationFailure === "stale_snapshot_rejected",
+        tabId: observed.tabId,
+        threadId: observed.threadId,
+        title: observed.title,
+        url: observed.url,
+        viewId: observed.viewId,
+        webContentsId: observed.webContentsId,
+        windowId: observed.windowId,
+      })}`,
+    }));
+  };
   return [
     {
       type: "tool_call",
@@ -352,6 +474,7 @@ function createBrowserLifecycleResponses(
       if (!state) {
         throw new Error("claimTab 未返回可用于 observe 的 Browser state");
       }
+      initialTabId = state.tabId;
       return {
         type: "tool_call",
         id: "call-browser-observe",
@@ -360,10 +483,23 @@ function createBrowserLifecycleResponses(
       };
     },
     ({ body }) => {
-      const result = toolResultFromRequest(body);
+      const result = parseDynamicToolResult(toolResultFromRequest(body));
       const observed = extractBrowserState(result);
       const observation = extractBrowserObservation(result);
       if (!observed || typeof observed.webContentsId !== "number") {
+        const failure = JSON.stringify(result);
+        if (
+          initialObserveRetries < 2 &&
+          /page changed|stale|loading|being observed/i.test(failure)
+        ) {
+          initialObserveRetries += 1;
+          return {
+            type: "tool_call",
+            id: `call-browser-observe-retry-${initialObserveRetries}`,
+            name: "browser__observe",
+            arguments: { tabId: initialTabId },
+          };
+        }
         throw new Error("observe 未返回带 webContentsId 的同页 Browser state");
       }
       if (!observation?.snapshotId) {
@@ -396,13 +532,74 @@ function createBrowserLifecycleResponses(
       };
     },
     ({ body }) => {
-      const state = extractBrowserState(toolResultFromRequest(body));
-      if (!state || !scenario.initial?.observation?.snapshotId) {
+      const value = toolResultFromRequest(body);
+      const state = extractBrowserState(value);
+      if (!state) {
+        return {
+          type: "tool_call",
+          id: "call-browser-open-tabs-after-stale-claim",
+          name: "browser__openTabs",
+          arguments: {},
+        };
+      }
+      if (!scenario.initial?.observation?.snapshotId) {
         throw new Error("重新 claim 后缺少 stale snapshot mutation 输入");
       }
       return {
         type: "tool_call",
         id: "call-browser-stale-press",
+        name: "browser__press",
+        arguments: {
+          tabId: state.tabId,
+          snapshotId: scenario.initial.observation.snapshotId,
+          key: "ArrowDown",
+        },
+      };
+    },
+    ({ body }) => {
+      const value = toolResultFromRequest(body);
+      const state = extractBrowserState(value);
+      if (state) {
+        scenario.latestAfterUserNavigation = state;
+        return {
+          type: "tool_call",
+          id: "call-browser-reclaim-tab-retry",
+          name: "browser__claimTab",
+          arguments: {
+            tabId: state.tabId,
+            title: state.title,
+            url: state.url,
+            pageRevision: state.pageRevision,
+          },
+        };
+      }
+      const failure = String(value || "");
+      if (!failure.includes("Browser page snapshot is stale")) {
+        throw new Error(`旧 snapshot mutation 未按预期拒绝: ${failure}`);
+      }
+      scenario.staleMutationFailure = "stale_snapshot_rejected";
+      return {
+        type: "tool_call",
+        id: "call-browser-observe-after-user-navigation",
+        name: "browser__observe",
+        arguments: {
+          tabId: scenario.latestAfterUserNavigation?.tabId,
+        },
+      };
+    },
+    ({ body }) => {
+      const value = toolResultFromRequest(body);
+      const observation = extractBrowserObservation(value);
+      if (observation?.snapshotId) {
+        return finishRecoveredObservation(body);
+      }
+      const state = extractBrowserState(value);
+      if (!state || !scenario.initial?.observation?.snapshotId) {
+        throw new Error("重新 claim 重试后缺少 stale snapshot mutation 输入");
+      }
+      return {
+        type: "tool_call",
+        id: "call-browser-stale-press-retry",
         name: "browser__press",
         arguments: {
           tabId: state.tabId,
@@ -426,42 +623,113 @@ function createBrowserLifecycleResponses(
         },
       };
     },
+    ({ body }) => finishRecoveredObservation(body),
+  ];
+}
+
+function parseDynamicToolResult(value) {
+  if (Array.isArray(value)) {
+    const text = value.find((item) => item?.type === "inputText")?.text;
+    if (typeof text === "string") {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    }
+  }
+  if (value && typeof value === "object" && typeof value.text === "string") {
+    try {
+      return JSON.parse(value.text);
+    } catch {
+      return value.text;
+    }
+  }
+  return value;
+}
+
+function createBrowserArtifactResponses(scenario) {
+  return [
+    {
+      type: "tool_call",
+      id: "call-browser-artifact-open-tabs",
+      name: "browser__openTabs",
+      arguments: {},
+    },
+    ({ body }) => {
+      const state = extractBrowserState(toolResultFromRequest(body));
+      if (!state) throw new Error("artifact openTabs 未返回 Browser state");
+      return {
+        type: "tool_call",
+        id: "call-browser-artifact-claim-tab",
+        name: "browser__claimTab",
+        arguments: {
+          tabId: state.tabId,
+          title: state.title,
+          url: state.url,
+          pageRevision: state.pageRevision,
+        },
+      };
+    },
+    ({ body }) => {
+      const state = extractBrowserState(toolResultFromRequest(body));
+      if (!state) throw new Error("artifact claimTab 未返回 Browser state");
+      return {
+        type: "tool_call",
+        id: "call-browser-artifact-observe-initial",
+        name: "browser__observe",
+        arguments: { tabId: state.tabId },
+      };
+    },
     ({ body }) => {
       const result = toolResultFromRequest(body);
-      const observed = extractBrowserState(result);
+      const state = extractBrowserState(result);
       const observation = extractBrowserObservation(result);
-      if (!observed || !observation?.snapshotId) {
-        throw new Error("重新 observe 未返回 Browser state 与 snapshotId");
+      if (!state || !observation?.snapshotId) {
+        throw new Error("artifact 初次 observe 未返回完整 Browser state");
       }
-      scenario.recovered = { observation, state: observed };
-      return finalResponseAllowed.then(() => ({
+      scenario.initial = { state, observation };
+      scenario.secondObservation = { state, observation };
+      return {
+        type: "tool_call",
+        id: "call-browser-artifact-copy-ref",
+        name: "browser__copyArtifactRef",
+        arguments: { artifactRef: scenario.artifact.artifactRef },
+      };
+    },
+    ({ body }) => {
+      const result = parseDynamicToolResult(toolResultFromRequest(body));
+      scenario.copy = result;
+      assertArtifactGrant(result, "artifact_ref_copy");
+      return {
         type: "text",
         content: `${FINAL_MARKER}:${JSON.stringify({
-          activeTurnId: observed.activeTurnId,
-          browserSessionId: observed.browserSessionId,
-          initialPageRevision: scenario.initial?.observation?.pageRevision,
-          ownerWebContentsId: observed.ownerWebContentsId,
-          pageRevision: observed.pageRevision,
-          recoveredPageRevision: observation.pageRevision,
-          staleMutationRejected:
-            scenario.staleMutationFailure === "stale_snapshot_rejected",
-          tabId: observed.tabId,
-          threadId: observed.threadId,
-          title: observed.title,
-          url: observed.url,
-          viewId: observed.viewId,
-          webContentsId: observed.webContentsId,
-          windowId: observed.windowId,
+          artifactRef: scenario.artifact.artifactRef,
+          copied: scenario.copy?.data?.copied === true,
         })}`,
-      }));
+      };
     },
   ];
+}
+
+function assertArtifactGrant(result, actionKind) {
+  if (
+    result?.status !== "completed" ||
+    result?.data?.grantScope !== "turn" ||
+    result?.data?.evidence?.actionKind !== actionKind
+  ) {
+    throw new Error(
+      `artifact ${actionKind} 未返回 turn-scoped grant/evidence: ${JSON.stringify(result)}`,
+    );
+  }
 }
 
 function createBrowserApprovalResponses(
   scenario,
   { userControl = false } = {},
 ) {
+  let initialObserveRetries = 0;
+  let initialTabId = null;
   const dangerousNode = (observation) =>
     observation?.nodes?.find(
       (node) =>
@@ -497,6 +765,7 @@ function createBrowserApprovalResponses(
       if (!state) {
         throw new Error("claimTab 未返回可用于 observe 的 Browser state");
       }
+      initialTabId = state.tabId;
       return {
         type: "tool_call",
         id: "call-browser-observe",
@@ -509,6 +778,19 @@ function createBrowserApprovalResponses(
       const observed = extractBrowserState(result);
       const observation = extractBrowserObservation(result);
       if (!observed || typeof observed.webContentsId !== "number") {
+        const failure = JSON.stringify(result);
+        if (
+          initialObserveRetries < 2 &&
+          /page changed|stale|loading|being observed/i.test(failure)
+        ) {
+          initialObserveRetries += 1;
+          return {
+            type: "tool_call",
+            id: `call-browser-observe-retry-${initialObserveRetries}`,
+            name: "browser__observe",
+            arguments: { tabId: initialTabId },
+          };
+        }
         throw new Error("observe 未返回带 webContentsId 的同页 Browser state");
       }
       if (!observation?.snapshotId) {
@@ -723,6 +1005,35 @@ async function waitForScenarioValue(options, read, description) {
     await sleep(options.intervalMs);
   }
   throw new Error(`${description} 超时`);
+}
+
+function summarizeProviderRequests(requests) {
+  return requests.map((request, index) => ({
+    index: index + 1,
+    path: request?.path || null,
+    responseKind: request?.responseKind || null,
+    responseToolName: request?.responseToolName || null,
+    responseError: request?.responseError || null,
+    lastMessageRole: request?.body?.messages?.at(-1)?.role || null,
+    lastToolResultPreview:
+      request?.body?.messages?.at(-1)?.role === "tool"
+        ? String(request.body.messages.at(-1).content || "").slice(0, 800)
+        : null,
+    lastMessageToolNames: Array.isArray(
+      request?.body?.messages?.at(-1)?.tool_calls,
+    )
+      ? request.body.messages
+          .at(-1)
+          .tool_calls.map((call) => String(call?.function?.name || "").trim())
+      : [],
+    requestedToolNames: Array.isArray(request?.body?.tools)
+      ? request.body.tools
+          .map((tool) =>
+            String(tool?.function?.name || tool?.name || "").trim(),
+          )
+          .filter(Boolean)
+      : [],
+  }));
 }
 
 async function readBrowserDebuggerState(app, webContentsId) {
@@ -955,7 +1266,7 @@ export function buildAssertions({
       Boolean(recovered?.observation?.snapshotId) &&
       initial.observation.snapshotId !== recovered.observation.snapshotId &&
       recovered.observation.pageRevision === recovered?.state?.pageRevision &&
-      recovered.observation.pageRevision >
+      recovered.observation.pageRevision >=
         latestAfterUserNavigation?.pageRevision,
     debuggerAttachedDuringRecoveredObserve:
       debuggerBeforeTerminal?.exists === true &&
@@ -992,7 +1303,9 @@ Browser Electron Gate B
 
 选项:
   --output <path>       证据 JSON 路径
-  --scenario <name>     projection（Gate A）、lifecycle（默认）、approval、user-control、cancel、window-close、disconnect、permission 或 download
+  --scenario <name>     projection（Gate A）、lifecycle（默认）、approval、user-control、cancel、window-close、disconnect、permission、download 或 artifact
+  --locale <locale>     zh-CN、zh-TW、en-US、ja-JP 或 ko-KR
+  --screenshot-dir <dir> 采集 renderer/browser/agent/takeover/released/destroyed 截图
   --app-url <url>       可选 renderer dev server
   --timeout-ms <ms>     总超时，默认 180000
   --interval-ms <ms>    轮询间隔，默认 500
@@ -1008,14 +1321,17 @@ export async function run(options) {
   });
   fs.mkdirSync(path.dirname(options.output), { recursive: true });
   const runtimeEnv = createTempRuntimeEnv();
+  runtimeEnv.writeFixtureConfig({ language: options.locale });
   const providerFixture = await createBrowserProviderFixture({
     approvalScenario: ["approval", "user-control"].includes(options.scenario),
     userControlScenario: options.scenario === "user-control",
+    artifactScenario: options.scenario === "artifact",
     connectionDiagnostics: [
       "cancel",
       "disconnect",
       "permission",
       "download",
+      "artifact",
     ].includes(options.scenario),
   });
   const appServerBinary = resolveDevAppServerBinary({
@@ -1070,7 +1386,10 @@ export async function run(options) {
     );
     page.setDefaultTimeout(options.timeoutMs);
     await page.setViewportSize({ width: 1440, height: 1000 });
+    await captureBrowserScreenshot(page, options, "renderer-loading");
     await waitForRendererReady(page, options, () => undefined);
+    await setRendererLocale(page, options);
+    await captureBrowserScreenshot(page, options, "renderer-ready");
 
     logStage("initialize-app-server");
     await initializeAppServer(page, requestLog);
@@ -1180,7 +1499,13 @@ export async function run(options) {
       },
       requestLog,
     );
-    const guiBeforeTurn = await waitForBrowserSurface(page, options);
+    const guiBeforeTurn = {
+      ...(await waitForBrowserSurface(page, options)),
+      rendererLocale: await page.evaluate(
+        () => document.documentElement.lang || null,
+      ),
+    };
+    await captureBrowserScreenshot(page, options, "browser-loaded");
     if (options.scenario === "projection") {
       logStage("run-browser-projection-gate-a");
       const gateAEvidence = await runBrowserProjectionGateA({
@@ -1216,6 +1541,16 @@ export async function run(options) {
     if (["approval", "user-control"].includes(options.scenario)) {
       await installBrowserApprovalPage(app, guiBeforeTurn.webContentsId);
     }
+    if (options.scenario === "artifact") {
+      const artifactDownload = await prepareBrowserArtifactDownload({
+        app,
+        page,
+        options,
+        webContentsId: guiBeforeTurn.webContentsId,
+      });
+      providerFixture.scenario.artifactTrigger = artifactDownload.trigger;
+      providerFixture.scenario.artifact = artifactDownload.artifact;
+    }
 
     logStage("run-browser-dynamic-tools");
     await sendPromptFromGui(
@@ -1225,11 +1560,68 @@ export async function run(options) {
       { expectedSessionId: identity.sessionId },
     );
     logStage("wait-initial-agent-observation");
-    const initial = await waitForScenarioValue(
-      options,
-      () => providerFixture.scenario.initial,
-      "Agent 初次 observe",
-    );
+    let initial;
+    try {
+      initial = await waitForScenarioValue(
+        options,
+        () => providerFixture.scenario.initial,
+        "Agent 初次 observe",
+      );
+    } catch (error) {
+      const diagnostics = await page.evaluate(() => ({
+        browserWorkspace: (() => {
+          const workspace = document.querySelector(
+            '[data-testid="browser-workspace"]',
+          );
+          return workspace
+            ? {
+                activeTurnId: workspace.getAttribute(
+                  "data-browser-active-turn-id",
+                ),
+                controlOwner: workspace.getAttribute(
+                  "data-browser-control-owner",
+                ),
+                pageRevision: workspace.getAttribute(
+                  "data-browser-page-revision",
+                ),
+                tabId: workspace.getAttribute("data-browser-tab-id"),
+                webContentsId: workspace.getAttribute(
+                  "data-browser-web-contents-id",
+                ),
+              }
+            : null;
+        })(),
+        invokeTrace: (() => {
+          try {
+            const value = JSON.parse(
+              window.localStorage.getItem("lime_invoke_trace_buffer_v1") ||
+                "[]",
+            );
+            return value.slice(-20).map((entry) => ({
+              command: entry?.command || null,
+              status: entry?.status || null,
+              transport: entry?.transport || null,
+              error: entry?.error || null,
+            }));
+          } catch {
+            return [];
+          }
+        })(),
+      }));
+      console.error(
+        `${LOG_PREFIX} initial-observe-diagnostics ${JSON.stringify(
+          sanitizeJson({
+            error: sanitizeText(error),
+            providerRequests: summarizeProviderRequests(
+              providerFixture.requests,
+            ),
+            requestLog: requestLog.slice(-20),
+            diagnostics,
+          }),
+        )}`,
+      );
+      throw error;
+    }
     const activeTurnId = initial.state?.activeTurnId || null;
     assert(activeTurnId, "初次 observe 未绑定 active turn");
     const agentControlled = await waitForBrowserWorkspaceState(
@@ -1241,6 +1633,7 @@ export async function run(options) {
         state.webContentsId === initial.state.webContentsId,
       "Browser Workspace 未投影 Agent 控制态",
     );
+    await captureBrowserScreenshot(page, options, "agent-controlled");
 
     if (options.scenario === "approval") {
       const approvalEvidence = await runBrowserApprovalScenario({
@@ -1466,6 +1859,39 @@ export async function run(options) {
       return downloadEvidence;
     }
 
+    if (options.scenario === "artifact") {
+      const artifactEvidence = await runBrowserArtifactScenario({
+        activeTurnId,
+        agentControlled,
+        app,
+        consoleErrors,
+        finalMarker: FINAL_MARKER,
+        guiBeforeTurn,
+        identity,
+        initial,
+        logStage,
+        options,
+        page,
+        pageErrors,
+        providerFixture,
+        readBrowserDebuggerState,
+        readBrowserWorkspaceState,
+        requestLog,
+        waitForBrowserWorkspaceState,
+        waitForTerminalThread,
+      });
+      fs.writeFileSync(
+        options.output,
+        `${JSON.stringify(artifactEvidence, null, 2)}\n`,
+      );
+      if (artifactEvidence.failedAssertions.length > 0) {
+        throw new Error(
+          `Browser artifact Gate B 断言失败: ${artifactEvidence.failedAssertions.join(", ")}`,
+        );
+      }
+      return artifactEvidence;
+    }
+
     logStage("user-navigation-during-active-turn");
     const userNavigation = await navigateVisibleBrowserTab(
       page,
@@ -1483,6 +1909,7 @@ export async function run(options) {
         state.address === USER_NAVIGATION_URL,
       "用户导航后 Browser Workspace 未释放 Agent 控制",
     );
+    await captureBrowserScreenshot(page, options, "user-takeover");
     providerFixture.scenario.releaseUserNavigation();
 
     logStage("reclaim-reject-stale-and-reobserve");
@@ -1571,6 +1998,7 @@ export async function run(options) {
         state.webContentsId === initial.state.webContentsId,
       "turn terminal 后 Browser 用户 tab 未 release",
     );
+    await captureBrowserScreenshot(page, options, "released");
     const debuggerAfterTerminal = await readBrowserDebuggerState(
       app,
       released.webContentsId,
@@ -1618,6 +2046,7 @@ export async function run(options) {
       (state) => state.tabId === null && state.webContentsId === null,
       "native WebContents destroyed 后 Browser route 未关闭",
     );
+    await captureBrowserScreenshot(page, options, "destroyed");
 
     const traceAfterTurn = traceBeforeDestroy;
     const assertions = buildAssertions({

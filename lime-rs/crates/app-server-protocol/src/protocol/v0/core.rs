@@ -21,8 +21,9 @@ pub struct ClientInfo {
 pub struct ClientCapabilities {
     #[serde(default)]
     pub event_methods: Vec<String>,
-    #[serde(default)]
-    pub experimental: bool,
+    /// Opt into Codex v2 experimental methods for this connection.
+    #[serde(default, alias = "experimental")]
+    pub experimental_api: bool,
     /// Exact notification method names suppressed for this connection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opt_out_notification_methods: Option<Vec<String>>,

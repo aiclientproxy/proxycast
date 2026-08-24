@@ -153,6 +153,9 @@ impl RequestProcessor {
             METHOD_THREAD_RESUME => self
                 .handle_thread_resume_v2(params, thread_resume_request_id)
                 .boxed(),
+            app_server_protocol::protocol::v2::METHOD_THREAD_REVERT => {
+                self.handle_thread_revert_v2(params).boxed()
+            }
             METHOD_AGENT_SESSION_FILE_CHECKPOINT_LIST => {
                 self.handle_file_checkpoint_list_impl(params).boxed()
             }
@@ -256,6 +259,27 @@ impl RequestProcessor {
             app_server_protocol::protocol::v2::METHOD_THREAD_GOAL_CLEAR => {
                 self.handle_thread_goal_clear(params).boxed()
             }
+            v2::METHOD_THREAD_QUEUE_ADD => self
+                .handle_thread_queue_add_impl(params, event_callback)
+                .boxed(),
+            v2::METHOD_THREAD_QUEUE_LIST => self.handle_thread_queue_list_impl(params).boxed(),
+            v2::METHOD_THREAD_QUEUE_UPDATE => self
+                .handle_thread_queue_update_impl(params)
+                .boxed(),
+            v2::METHOD_THREAD_QUEUE_DELETE => self
+                .handle_thread_queue_delete_impl(params)
+                .boxed(),
+            v2::METHOD_THREAD_QUEUE_REORDER => self
+                .handle_thread_queue_reorder_impl(params)
+                .boxed(),
+            v2::METHOD_THREAD_QUEUE_START => self.handle_thread_queue_start_impl(params).boxed(),
+            v2::METHOD_PROJECT_LIST => self.handle_project_list_impl(params).boxed(),
+            v2::METHOD_PROJECT_READ => self.handle_project_read_impl(params).boxed(),
+            v2::METHOD_PROJECT_CREATE => self.handle_project_create_impl(params).boxed(),
+            v2::METHOD_PROJECT_IMPORT => self.handle_project_import_impl(params).boxed(),
+            v2::METHOD_PROJECT_UPDATE => self.handle_project_update_impl(params).boxed(),
+            v2::METHOD_PROJECT_MOVE => self.handle_project_move_impl(params).boxed(),
+            v2::METHOD_PROJECT_DELETE => self.handle_project_delete_impl(params).boxed(),
             app_server_protocol::protocol::v2::METHOD_MEDIA_READ => self
                 .handle_media_read_v2_impl(&id, params, event_callback)
                 .boxed(),
@@ -578,7 +602,6 @@ impl RequestProcessor {
                 .handle_scheduled_task_schedule_preview_impl(params)
                 .boxed(),
             METHOD_MCP_SERVER_LIST => self.handle_mcp_server_list_impl().boxed(),
-            METHOD_MCP_SERVER_STATUS_LIST => self.handle_mcp_server_status_list_impl().boxed(),
             METHOD_MCP_SERVER_CREATE => self.handle_mcp_server_create_impl(params).boxed(),
             METHOD_MCP_SERVER_UPDATE => self.handle_mcp_server_update_impl(params).boxed(),
             METHOD_MCP_SERVER_DELETE => self.handle_mcp_server_delete_impl(params).boxed(),
@@ -604,9 +627,27 @@ impl RequestProcessor {
             v2::METHOD_MCP_SERVER_RESOURCE_READ => {
                 self.handle_mcp_server_resource_read_impl(params).boxed()
             }
+            v2::METHOD_MCP_SERVER_STATUS_LIST => {
+                self.handle_mcp_server_status_list_v2_impl(params).boxed()
+            }
+            v2::METHOD_MCP_SERVER_EVENT_STREAM_START => self
+                .handle_mcp_server_event_stream_start_impl(
+                    params,
+                    connection_request_id.clone(),
+                )
+                .boxed(),
+            v2::METHOD_MCP_SERVER_EVENT_STREAM_STOP => self
+                .handle_mcp_server_event_stream_stop_impl(
+                    params,
+                    connection_request_id.clone(),
+                )
+                .boxed(),
             v2::METHOD_MCP_SERVER_TOOL_CALL => {
                 self.handle_mcp_server_tool_call_impl(params).boxed()
             }
+            v2::METHOD_ENVIRONMENT_ADD => self.handle_environment_add_impl(params).boxed(),
+            v2::METHOD_ENVIRONMENT_INFO => self.handle_environment_info_impl(params).boxed(),
+            v2::METHOD_ENVIRONMENT_STATUS => self.handle_environment_status_impl(params).boxed(),
             METHOD_MCP_PROMPT_LIST => self.handle_mcp_prompt_list_impl().boxed(),
             METHOD_MCP_PROMPT_GET => self.handle_mcp_prompt_get_impl(params).boxed(),
             METHOD_MCP_RESOURCE_LIST => self.handle_mcp_resource_list_impl().boxed(),
@@ -681,6 +722,12 @@ impl RequestProcessor {
             v2::METHOD_WINDOWS_SANDBOX_READINESS => {
                 self.handle_windows_sandbox_readiness_impl(params).boxed()
             }
+            v2::METHOD_WINDOWS_SANDBOX_SETUP_START => self
+                .handle_windows_sandbox_setup_start_impl(
+                    params,
+                    connection_request_id.clone(),
+                )
+                .boxed(),
             v2::METHOD_CONFIG_READ => self.handle_config_read_impl(params).boxed(),
             v2::METHOD_CONFIG_VALUE_WRITE => self.handle_config_value_write_impl(params).boxed(),
             v2::METHOD_CONFIG_BATCH_WRITE => self.handle_config_batch_write_impl(params).boxed(),

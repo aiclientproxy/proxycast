@@ -65,6 +65,14 @@ function appServerClientMock(): AppServerSessionRpcClient {
       .mockResolvedValue(rpcResult({ thread: canonicalThread() })),
     updateThreadSettings: vi.fn().mockResolvedValue(rpcResult({})),
     archiveThread: vi.fn().mockResolvedValue(rpcResult({})),
+    forkThread: vi.fn().mockResolvedValue(
+      rpcResult({
+        thread: canonicalThread({
+          id: "thread-forked",
+          sessionId: "session-forked",
+        }),
+      }),
+    ),
     unarchiveThread: vi
       .fn()
       .mockResolvedValue(rpcResult({ thread: canonicalThread() })),
@@ -1293,6 +1301,36 @@ describe("appServerSessionClient", () => {
     expect(appServerClient.archiveThread).toHaveBeenCalledWith({
       threadId: "thread-1",
     });
+  });
+
+  it("fork 应解析 canonical threadId 并返回新 session identity", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.request).mockResolvedValueOnce(
+      rpcResult({ data: [canonicalThread()] }) as never,
+    );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(client.forkAgentRuntimeSession(" session-1 ")).resolves.toBe(
+      "session-forked",
+    );
+    expect(appServerClient.forkThread).toHaveBeenCalledWith({
+      threadId: "thread-1",
+    });
+  });
+
+  it("fork 返回不完整 Thread 时应 fail closed", async () => {
+    const appServerClient = appServerClientMock();
+    vi.mocked(appServerClient.request).mockResolvedValueOnce(
+      rpcResult({ data: [canonicalThread()] }) as never,
+    );
+    vi.mocked(appServerClient.forkThread).mockResolvedValueOnce(
+      rpcResult({ thread: { id: "thread-forked" } }) as never,
+    );
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(client.forkAgentRuntimeSession("session-1")).rejects.toThrow(
+      "thread/fork returned an incomplete canonical Thread",
+    );
   });
 
   it("unarchive 应校验 App Server 返回的 restored thread", async () => {

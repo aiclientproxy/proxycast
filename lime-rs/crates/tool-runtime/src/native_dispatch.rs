@@ -461,6 +461,7 @@ mod tests {
             Ok(
                 app_server_protocol::protocol::v2::McpServerResourceReadResponse {
                     contents: Vec::new(),
+                    origin_call_id: None,
                 },
             )
         }

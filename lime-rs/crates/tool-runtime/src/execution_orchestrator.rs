@@ -128,6 +128,7 @@ impl RuntimeToolApprovalSource {
 pub enum RuntimeToolInitialApproval {
     NotRequired,
     Required(RuntimeToolApprovalKind),
+    Cached,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,6 +264,7 @@ pub async fn orchestrate_runtime_tool_execution(
 
     let initial_approval_source = match input.initial_approval {
         RuntimeToolInitialApproval::NotRequired => RuntimeToolApprovalSource::Config,
+        RuntimeToolInitialApproval::Cached => RuntimeToolApprovalSource::Reused,
         RuntimeToolInitialApproval::Required(kind) => {
             await_approval(
                 approvals,
@@ -714,6 +716,32 @@ mod tests {
         assert_eq!(
             runner.calls.lock().unwrap()[1].approval_source(),
             RuntimeToolApprovalSource::Reused
+        );
+    }
+
+    #[tokio::test]
+    async fn cached_initial_approval_skips_approval_handler() {
+        let approvals = RecordingApprovals::default();
+        let runner = SequenceRunner {
+            calls: Mutex::new(Vec::new()),
+            first_error: None,
+        };
+        let mut input = input();
+        input.initial_approval = RuntimeToolInitialApproval::Cached;
+
+        let result = orchestrate_runtime_tool_execution(input, &approvals, &runner)
+            .await
+            .expect("cached approval should execute");
+
+        assert_eq!(approvals.requests.lock().unwrap().len(), 0);
+        assert_eq!(runner.calls.lock().unwrap().len(), 1);
+        assert_eq!(
+            runner.calls.lock().unwrap()[0].approval_source(),
+            RuntimeToolApprovalSource::Reused
+        );
+        assert_eq!(
+            result.metadata[TOOL_APPROVAL_SOURCE_METADATA_KEY],
+            json!("reused")
         );
     }
 

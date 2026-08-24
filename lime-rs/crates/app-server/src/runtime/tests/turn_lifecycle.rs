@@ -1,5 +1,6 @@
 use super::support::*;
 use super::*;
+use async_trait::async_trait;
 
 fn runtime_options_with_metadata(metadata: serde_json::Value) -> RuntimeOptions {
     RuntimeOptions {

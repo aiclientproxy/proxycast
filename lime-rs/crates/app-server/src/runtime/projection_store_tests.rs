@@ -75,6 +75,29 @@ fn apply_events_updates_projection_in_one_batch() {
 }
 
 #[test]
+fn queue_added_payload_identity_populates_projected_turn_without_outer_turn_id() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let projection = ProjectionStore::initialize(temp.path().join("projection_queue.sqlite"))
+        .expect("projection store");
+    let mut queued = event(1, "queue.added", "sess_queue", "thread_queue", None);
+    queued.payload = json!({
+        "queuedTurnId": "turn_queued",
+        "queuedSubmissionId": "turn_queued",
+        "position": 0,
+    });
+
+    projection.apply_event(&queued).expect("apply queued event");
+
+    let session = projection
+        .read_session_projection("sess_queue", ProjectionReadWindow::default())
+        .expect("read projection")
+        .expect("session");
+    assert_eq!(session.turns.len(), 1);
+    assert_eq!(session.turns[0].turn_id, "turn_queued");
+    assert_eq!(session.turns[0].status, AgentTurnStatus::Queued);
+}
+
+#[test]
 fn apply_events_discards_stale_sequence_without_regressing_read_model() {
     let temp = tempfile::tempdir().expect("tempdir");
     let projection = ProjectionStore::initialize(temp.path().join("projection_1.sqlite"))

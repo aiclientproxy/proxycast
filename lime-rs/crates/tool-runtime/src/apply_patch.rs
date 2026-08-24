@@ -65,6 +65,44 @@ impl RuntimeApplyPatchExecutor {
         }
 
         let patch = patch_text_from_params(request.params)?;
+        if let Some(environment_id) = request
+            .context
+            .environment_id()
+            .filter(|environment_id| *environment_id != "local")
+        {
+            let gateway = request.context.filesystem_gateway().ok_or_else(|| {
+                runtime_apply_patch_error(format!(
+                    "remote Environment '{environment_id}' filesystem gateway is unavailable"
+                ))
+            })?;
+            let result = gateway
+                .apply_patch(
+                    environment_id,
+                    request.context.working_directory(),
+                    &patch,
+                    request
+                        .turn_context
+                        .and_then(|turn| turn.sandbox_policy.as_deref()),
+                )
+                .await
+                .map_err(runtime_apply_patch_error)?;
+            return Ok(RuntimeToolExecutionResult::new(
+                true,
+                format!("Applied patch to {} file(s)", result.modified_paths.len()),
+                None,
+                HashMap::from([
+                    ("environment_id".to_string(), json!(environment_id)),
+                    (
+                        "modified_paths".to_string(),
+                        json!(result
+                            .modified_paths
+                            .iter()
+                            .map(|path| path.display().to_string())
+                            .collect::<Vec<_>>()),
+                    ),
+                ]),
+            ));
+        }
         let workdir = request.context.working_directory().clone();
         let canonical_workdir = workdir.canonicalize().unwrap_or_else(|_| workdir.clone());
         let apply_root = request

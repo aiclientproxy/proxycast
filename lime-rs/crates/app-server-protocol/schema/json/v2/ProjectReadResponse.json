@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "Project": {
+      "properties": {
+        "createdAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        },
+        "position": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/ProjectRoot"
+          },
+          "type": "array"
+        },
+        "updatedAt": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "createdAt",
+        "id",
+        "metadata",
+        "name",
+        "position",
+        "roots",
+        "updatedAt"
+      ],
+      "type": "object"
+    },
+    "ProjectRoot": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "project": {
+      "$ref": "#/$defs/Project"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "ProjectReadResponse",
+  "type": "object"
+}

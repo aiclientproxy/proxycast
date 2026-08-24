@@ -896,7 +896,7 @@ fn apply_fork_overrides(metadata: &mut Map<String, Value>, params: &ThreadForkPa
             params
                 .thread_source
                 .as_ref()
-                .map(|value| Value::String(value.clone())),
+                .and_then(|value| serde_json::to_value(value).ok()),
         ),
     ] {
         if let Some(value) = value {

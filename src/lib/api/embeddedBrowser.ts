@@ -64,7 +64,7 @@ export interface EmbeddedBrowserDownloadEvent {
   canResume: boolean;
 }
 
-export type EmbeddedBrowserPermissionDecision = "blocked";
+export type EmbeddedBrowserPermissionDecision = "blocked" | "pending";
 
 export interface EmbeddedBrowserPermissionRequestEvent {
   viewId: string;
@@ -365,7 +365,10 @@ function assertEmbeddedBrowserPermissionRequestEvent(
       typeof record.embeddingOrigin === "string" ||
       record.embeddingOrigin === null
     ) ||
-    record.decision !== "blocked"
+    !(
+      record.decision === "blocked" ||
+      record.decision === "pending"
+    )
   ) {
     throw new Error("embedded browser 权限事件字段不完整。");
   }

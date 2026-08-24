@@ -31,6 +31,8 @@ export const METHOD_APP_LIST_UPDATED = "app/list/updated";
 export const METHOD_APP_READ = "app/read";
 export const METHOD_ARTIFACT_READ = "artifact/read";
 export const METHOD_ARTIFACT_WRITE = "artifact/write";
+export const METHOD_STRICT_REVIEW_REQUIRED =
+  "autoApprovalReview/strictReviewRequired";
 export const METHOD_CAPABILITY_LIST = "capability/list";
 export const METHOD_COLLABORATION_MODE_LIST = "collaborationMode/list";
 export const METHOD_COMMAND_EXEC = "command/exec";
@@ -67,6 +69,9 @@ export const METHOD_DIAGNOSTICS_TRACE_READ = "diagnostics/trace/read";
 export const METHOD_DIAGNOSTICS_WINDOWS_STARTUP_READ =
   "diagnostics/windowsStartup/read";
 export const METHOD_DISCORD_CHANNEL_PROBE = "discordChannel/probe";
+export const METHOD_ENVIRONMENT_ADD = "environment/add";
+export const METHOD_ENVIRONMENT_INFO = "environment/info";
+export const METHOD_ENVIRONMENT_STATUS = "environment/status";
 export const METHOD_ERROR = "error";
 export const METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET =
   "experimentalFeature/enablement/set";
@@ -171,6 +176,12 @@ export const METHOD_MCP_SERVER_DELETE = "mcpServer/delete";
 export const METHOD_MCP_SERVER_ELICITATION_REQUEST =
   "mcpServer/elicitation/request";
 export const METHOD_MCP_SERVER_ENABLED_SET = "mcpServer/enabled/set";
+export const METHOD_MCP_SERVER_EVENT_STREAM_NOTIFICATION =
+  "mcpServer/event/stream/notification";
+export const METHOD_MCP_SERVER_EVENT_STREAM_START =
+  "mcpServer/event/stream/start";
+export const METHOD_MCP_SERVER_EVENT_STREAM_STOP =
+  "mcpServer/event/stream/stop";
 export const METHOD_MCP_SERVER_IMPORT_FROM_APP = "mcpServer/importFromApp";
 export const METHOD_MCP_SERVER_LIST = "mcpServer/list";
 export const METHOD_MCP_SERVER_OAUTH_LOGIN = "mcpServer/oauth/login";
@@ -221,6 +232,8 @@ export const METHOD_MODEL_SAFETY_BUFFERING_UPDATED =
   "model/safetyBuffering/updated";
 export const METHOD_MODEL_VERIFICATION = "model/verification";
 export const METHOD_MODEL_PREFERENCES_LIST = "modelPreferences/list";
+export const METHOD_MODEL_PROVIDER_CAPABILITIES_READ =
+  "modelProvider/capabilities/read";
 export const METHOD_MODEL_PROVIDER_CATALOG_LIST = "modelProvider/catalog/list";
 export const METHOD_MODEL_PROVIDER_CREATE = "modelProvider/create";
 export const METHOD_MODEL_PROVIDER_DELETE = "modelProvider/delete";
@@ -258,6 +271,14 @@ export const METHOD_PROCESS_OUTPUT_DELTA = "process/outputDelta";
 export const METHOD_PROCESS_RESIZE_PTY = "process/resizePty";
 export const METHOD_PROCESS_SPAWN = "process/spawn";
 export const METHOD_PROCESS_WRITE_STDIN = "process/writeStdin";
+export const METHOD_PROJECT_CHANGED = "project/changed";
+export const METHOD_PROJECT_CREATE = "project/create";
+export const METHOD_PROJECT_DELETE = "project/delete";
+export const METHOD_PROJECT_IMPORT = "project/import";
+export const METHOD_PROJECT_LIST = "project/list";
+export const METHOD_PROJECT_MOVE = "project/move";
+export const METHOD_PROJECT_READ = "project/read";
+export const METHOD_PROJECT_UPDATE = "project/update";
 export const METHOD_PROJECT_GIT_BRANCH_CHECKOUT = "projectGit/branch/checkout";
 export const METHOD_PROJECT_GIT_BRANCH_CREATE = "projectGit/branch/create";
 export const METHOD_PROJECT_GIT_COMMITS_LIST = "projectGit/commits/list";
@@ -343,6 +364,10 @@ export const METHOD_THREAD_DECREMENT_ELICITATION =
   "thread/decrement_elicitation";
 export const METHOD_THREAD_DELETE = "thread/delete";
 export const METHOD_THREAD_DELETED = "thread/deleted";
+export const METHOD_THREAD_ENVIRONMENT_CONNECTED =
+  "thread/environment/connected";
+export const METHOD_THREAD_ENVIRONMENT_DISCONNECTED =
+  "thread/environment/disconnected";
 export const METHOD_THREAD_FORK = "thread/fork";
 export const METHOD_THREAD_GOAL_CLEAR = "thread/goal/clear";
 export const METHOD_THREAD_GOAL_CLEARED = "thread/goal/cleared";
@@ -359,8 +384,18 @@ export const METHOD_THREAD_MEMORY_MODE_SET = "thread/memoryMode/set";
 export const METHOD_THREAD_METADATA_UPDATE = "thread/metadata/update";
 export const METHOD_THREAD_NAME_SET = "thread/name/set";
 export const METHOD_THREAD_NAME_UPDATED = "thread/name/updated";
+export const METHOD_THREAD_PROJECT_UPDATED = "thread/project/updated";
+export const METHOD_THREAD_QUEUE_ADD = "thread/queue/add";
+export const METHOD_THREAD_QUEUE_CHANGED = "thread/queue/changed";
+export const METHOD_THREAD_QUEUE_DELETE = "thread/queue/delete";
+export const METHOD_THREAD_QUEUE_LIST = "thread/queue/list";
+export const METHOD_THREAD_QUEUE_REORDER = "thread/queue/reorder";
+export const METHOD_THREAD_QUEUE_START = "thread/queue/start";
+export const METHOD_THREAD_QUEUE_UPDATE = "thread/queue/update";
 export const METHOD_THREAD_READ = "thread/read";
 export const METHOD_THREAD_RESUME = "thread/resume";
+export const METHOD_THREAD_REVERT = "thread/revert";
+export const METHOD_THREAD_REVERTED = "thread/reverted";
 export const METHOD_THREAD_SEARCH = "thread/search";
 export const METHOD_THREAD_SEARCH_OCCURRENCES = "thread/searchOccurrences";
 export const METHOD_THREAD_SECTION_MOVE = "thread/section/move";
@@ -418,7 +453,12 @@ export const METHOD_WECHAT_CHANNEL_LOGIN_WAIT = "wechatChannel/login/wait";
 export const METHOD_WECHAT_CHANNEL_PROBE = "wechatChannel/probe";
 export const METHOD_WECHAT_CHANNEL_RUNTIME_MODEL_SET =
   "wechatChannel/runtimeModel/set";
+export const METHOD_WINDOWS_WORLD_WRITABLE_WARNING =
+  "windows/worldWritableWarning";
 export const METHOD_WINDOWS_SANDBOX_READINESS = "windowsSandbox/readiness";
+export const METHOD_WINDOWS_SANDBOX_SETUP_COMPLETED =
+  "windowsSandbox/setupCompleted";
+export const METHOD_WINDOWS_SANDBOX_SETUP_START = "windowsSandbox/setupStart";
 export const METHOD_WORKFLOW_CANCEL = "workflow/cancel";
 export const METHOD_WORKFLOW_READ = "workflow/read";
 export const METHOD_WORKFLOW_RESPOND = "workflow/respond";
@@ -523,6 +563,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "artifact/write",
+  },
+  {
+    kind: "notification",
+    method: "autoApprovalReview/strictReviewRequired",
   },
   {
     kind: "request",
@@ -635,6 +679,18 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "discordChannel/probe",
+  },
+  {
+    kind: "request",
+    method: "environment/add",
+  },
+  {
+    kind: "request",
+    method: "environment/info",
+  },
+  {
+    kind: "request",
+    method: "environment/status",
   },
   {
     kind: "notification",
@@ -957,6 +1013,18 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "mcpServer/enabled/set",
   },
   {
+    kind: "notification",
+    method: "mcpServer/event/stream/notification",
+  },
+  {
+    kind: "request",
+    method: "mcpServer/event/stream/start",
+  },
+  {
+    kind: "request",
+    method: "mcpServer/event/stream/stop",
+  },
+  {
     kind: "request",
     method: "mcpServer/importFromApp",
   },
@@ -1122,6 +1190,10 @@ export const GENERATED_APP_SERVER_METHODS = [
   },
   {
     kind: "request",
+    method: "modelProvider/capabilities/read",
+  },
+  {
+    kind: "request",
     method: "modelProvider/catalog/list",
   },
   {
@@ -1255,6 +1327,38 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "process/writeStdin",
+  },
+  {
+    kind: "notification",
+    method: "project/changed",
+  },
+  {
+    kind: "request",
+    method: "project/create",
+  },
+  {
+    kind: "request",
+    method: "project/delete",
+  },
+  {
+    kind: "request",
+    method: "project/import",
+  },
+  {
+    kind: "request",
+    method: "project/list",
+  },
+  {
+    kind: "request",
+    method: "project/move",
+  },
+  {
+    kind: "request",
+    method: "project/read",
+  },
+  {
+    kind: "request",
+    method: "project/update",
   },
   {
     kind: "request",
@@ -1561,6 +1665,14 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "thread/deleted",
   },
   {
+    kind: "notification",
+    method: "thread/environment/connected",
+  },
+  {
+    kind: "notification",
+    method: "thread/environment/disconnected",
+  },
+  {
     kind: "request",
     method: "thread/fork",
   },
@@ -1621,12 +1733,52 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "thread/name/updated",
   },
   {
+    kind: "notification",
+    method: "thread/project/updated",
+  },
+  {
+    kind: "request",
+    method: "thread/queue/add",
+  },
+  {
+    kind: "notification",
+    method: "thread/queue/changed",
+  },
+  {
+    kind: "request",
+    method: "thread/queue/delete",
+  },
+  {
+    kind: "request",
+    method: "thread/queue/list",
+  },
+  {
+    kind: "request",
+    method: "thread/queue/reorder",
+  },
+  {
+    kind: "request",
+    method: "thread/queue/start",
+  },
+  {
+    kind: "request",
+    method: "thread/queue/update",
+  },
+  {
     kind: "request",
     method: "thread/read",
   },
   {
     kind: "request",
     method: "thread/resume",
+  },
+  {
+    kind: "request",
+    method: "thread/revert",
+  },
+  {
+    kind: "notification",
+    method: "thread/reverted",
   },
   {
     kind: "request",
@@ -1825,8 +1977,20 @@ export const GENERATED_APP_SERVER_METHODS = [
     method: "wechatChannel/runtimeModel/set",
   },
   {
+    kind: "notification",
+    method: "windows/worldWritableWarning",
+  },
+  {
     kind: "request",
     method: "windowsSandbox/readiness",
+  },
+  {
+    kind: "notification",
+    method: "windowsSandbox/setupCompleted",
+  },
+  {
+    kind: "request",
+    method: "windowsSandbox/setupStart",
   },
   {
     kind: "request",
@@ -2006,6 +2170,10 @@ export const GENERATED_APP_SERVER_REQUEST_SERIALIZATION_SCOPES = [
   },
   {
     method: "thread/resume",
+    scope: "thread",
+  },
+  {
+    method: "thread/revert",
     scope: "thread",
   },
   {
@@ -4101,7 +4269,7 @@ export interface ChannelProbeResponse {
 
 export interface ClientCapabilities {
   eventMethods?: string[];
-  experimental?: boolean;
+  experimentalApi?: boolean;
   optOutNotificationMethods?: string[] | null;
 }
 
@@ -4130,6 +4298,11 @@ export type ClientRequest =
       id: number | string;
       method: "thread/resume";
       params: ThreadResumeParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/revert";
+      params: ThreadRevertParams;
     }
   | {
       id: number | string;
@@ -4297,6 +4470,71 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "thread/queue/add";
+      params: ThreadQueueAddParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/queue/list";
+      params: ThreadQueueListParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/queue/update";
+      params: ThreadQueueUpdateParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/queue/delete";
+      params: ThreadQueueDeleteParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/queue/reorder";
+      params: ThreadQueueReorderParams;
+    }
+  | {
+      id: number | string;
+      method: "thread/queue/start";
+      params: ThreadQueueStartParams;
+    }
+  | {
+      id: number | string;
+      method: "project/list";
+      params: ProjectListParams;
+    }
+  | {
+      id: number | string;
+      method: "project/read";
+      params: ProjectReadParams;
+    }
+  | {
+      id: number | string;
+      method: "project/create";
+      params: ProjectCreateParams;
+    }
+  | {
+      id: number | string;
+      method: "project/import";
+      params: ProjectImportParams;
+    }
+  | {
+      id: number | string;
+      method: "project/update";
+      params: ProjectUpdateParams;
+    }
+  | {
+      id: number | string;
+      method: "project/move";
+      params: ProjectMoveParams;
+    }
+  | {
+      id: number | string;
+      method: "project/delete";
+      params: ProjectDeleteParams;
+    }
+  | {
+      id: number | string;
       method: "artifact/write";
       params: ArtifactWriteParams;
     }
@@ -4312,8 +4550,38 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "mcpServerStatus/list";
+      params: ListMcpServerStatusParams;
+    }
+  | {
+      id: number | string;
+      method: "mcpServer/event/stream/start";
+      params: McpServerEventStreamStartParams;
+    }
+  | {
+      id: number | string;
+      method: "mcpServer/event/stream/stop";
+      params: McpServerEventStreamStopParams;
+    }
+  | {
+      id: number | string;
       method: "mcpServer/tool/call";
       params: McpServerToolCallParams;
+    }
+  | {
+      id: number | string;
+      method: "environment/add";
+      params: EnvironmentAddParams;
+    }
+  | {
+      id: number | string;
+      method: "environment/info";
+      params: EnvironmentInfoParams;
+    }
+  | {
+      id: number | string;
+      method: "environment/status";
+      params: EnvironmentStatusParams;
     }
   | {
       id: number | string;
@@ -4357,8 +4625,18 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "windowsSandbox/setupStart";
+      params: WindowsSandboxSetupStartParams;
+    }
+  | {
+      id: number | string;
       method: "model/list";
       params: ModelListParams;
+    }
+  | {
+      id: number | string;
+      method: "modelProvider/capabilities/read";
+      params: ModelProviderCapabilitiesReadParams;
     }
   | {
       id: number | string;
@@ -5320,6 +5598,43 @@ export type EndpointKind =
   | "openai_compatible"
   | "provider_base_url";
 
+export interface EnvironmentAddParams {
+  connectTimeoutMs?: number | null;
+  environmentId: string;
+  execServerUrl: string;
+}
+
+export type EnvironmentAddResponse = Record<string, unknown>;
+
+export interface EnvironmentInfoParams {
+  environmentId: string;
+}
+
+export interface EnvironmentInfoResponse {
+  cwd?: PathUri | null;
+  shell: EnvironmentShellInfo;
+}
+
+export interface EnvironmentShellInfo {
+  name: string;
+  path: string;
+}
+
+export type EnvironmentStatusKind =
+  | "disconnected"
+  | "pending"
+  | "ready"
+  | "unknown";
+
+export interface EnvironmentStatusParams {
+  environmentId: string;
+}
+
+export interface EnvironmentStatusResponse {
+  error?: null | string;
+  status: EnvironmentStatusKind;
+}
+
 export interface ErrorNotification {
   error: TurnError;
   threadId: string;
@@ -6104,6 +6419,18 @@ export interface KnowledgeValidateContextRunResponse {
   warnings?: string[];
 }
 
+export interface ListMcpServerStatusParams {
+  cursor?: null | string;
+  detail?: McpServerStatusDetail | null;
+  limit?: number | null;
+  threadId?: null | string;
+}
+
+export interface ListMcpServerStatusResponse {
+  data: McpServerStatus[];
+  nextCursor?: null | string;
+}
+
 export interface LogArtifactEntry {
   compressed: boolean;
   fileName: string;
@@ -6144,6 +6471,13 @@ export interface LogStorageDiagnosticsResponse {
   relatedLogFiles?: LogArtifactEntry[];
 }
 
+export type McpAuthStatus =
+  | "bearertoken"
+  | "notloggedin"
+  | "oauth"
+  | "unknown"
+  | "unsupported";
+
 export type McpContent =
   | {
       text: string;
@@ -6181,6 +6515,18 @@ export interface McpPromptMessage {
   role: string;
 }
 
+export interface McpResource {
+  _meta?: unknown;
+  annotations?: unknown;
+  description?: null | string;
+  icons?: unknown[] | null;
+  mimeType?: null | string;
+  name: string;
+  size?: number | null;
+  title?: null | string;
+  uri: string;
+}
+
 export interface McpResourceListResponse {
   nextCursor?: null | string;
   resourceTemplates?: unknown[];
@@ -6194,10 +6540,28 @@ export interface McpResourceSubscribeParams {
 
 export type McpResourceSubscriptionResponse = Record<string, unknown>;
 
+export interface McpResourceTemplate {
+  annotations?: unknown;
+  description?: null | string;
+  mimeType?: null | string;
+  name: string;
+  title?: null | string;
+  uriTemplate: string;
+}
+
 export interface McpResourceUnsubscribeParams {
   server: string;
   uri: string;
 }
+
+export type McpServerConnectionStatus =
+  | "authenticationRequired"
+  | "cancelled"
+  | "connected"
+  | "disabled"
+  | "failed"
+  | "notStarted"
+  | "starting";
 
 export interface McpServerCreateParams {
   server: unknown;
@@ -6232,6 +6596,33 @@ export interface McpServerEnabledSetParams {
   id: string;
 }
 
+export interface McpServerEventNotification {
+  method: string;
+  params: unknown;
+}
+
+export interface McpServerEventStreamNotification {
+  notification: McpServerEventNotification;
+  subscriptionId: string;
+}
+
+export interface McpServerEventStreamStartParams {
+  _meta?: unknown;
+  arguments: unknown;
+  name: string;
+  server: string;
+  subscriptionId: string;
+  threadId: string;
+}
+
+export type McpServerEventStreamStartResponse = Record<string, unknown>;
+
+export interface McpServerEventStreamStopParams {
+  subscriptionId: string;
+}
+
+export type McpServerEventStreamStopResponse = Record<string, unknown>;
+
 export interface McpServerImportFromAppParams {
   appType: string;
 }
@@ -6239,6 +6630,15 @@ export interface McpServerImportFromAppParams {
 export interface McpServerImportFromAppResponse {
   importedCount: number;
   servers?: unknown[];
+}
+
+export interface McpServerInfo {
+  description?: null | string;
+  icons?: unknown[] | null;
+  name: string;
+  title?: null | string;
+  version: string;
+  websiteUrl?: null | string;
 }
 
 export type McpServerLifecycleResponse = Record<string, unknown>;
@@ -6280,13 +6680,16 @@ export type McpServerResourceContent =
     };
 
 export interface McpServerResourceReadParams {
+  connectorId?: null | string;
+  originCallId?: null | string;
   server: string;
   threadId?: null | string;
   uri: string;
 }
 
 export interface McpServerResourceReadResponse {
-  contents: McpServerResourceContent[];
+  contents: McpResourceContent[];
+  originCallId?: null | string;
 }
 
 export interface McpServerStartParams {
@@ -6300,6 +6703,19 @@ export type McpServerStartupState =
   | "failed"
   | "ready"
   | "starting";
+
+export interface McpServerStatus {
+  authStatus: McpAuthStatus;
+  name: string;
+  pluginId?: null | string;
+  resourceTemplates: McpResourceTemplate[];
+  resources: McpResource[];
+  runtimeStatus?: McpServerConnectionStatus | null;
+  serverInfo?: McpServerInfo | null;
+  tools: Record<string, unknown>;
+}
+
+export type McpServerStatusDetail = "full" | "toolsAndAuthOnly";
 
 export interface McpServerStatusListResponse {
   servers?: unknown[];
@@ -6334,6 +6750,17 @@ export interface McpServerToolCallResponse {
 
 export interface McpServerUpdateParams {
   server: unknown;
+}
+
+export interface McpTool {
+  _meta?: unknown;
+  annotations?: unknown;
+  description?: null | string;
+  icons?: unknown[] | null;
+  inputSchema: unknown;
+  name: string;
+  outputSchema?: unknown;
+  title?: null | string;
 }
 
 export interface McpToolCallAppContext {
@@ -6832,6 +7259,9 @@ export type Method =
   | "config/batchWrite"
   | "config/read"
   | "config/value/write"
+  | "environment/add"
+  | "environment/info"
+  | "environment/status"
   | "experimentalFeature/enablement/set"
   | "experimentalFeature/list"
   | "fs/copy"
@@ -6845,11 +7275,15 @@ export type Method =
   | "fs/writeFile"
   | "fuzzyFileSearch"
   | "hooks/list"
+  | "mcpServer/event/stream/start"
+  | "mcpServer/event/stream/stop"
   | "mcpServer/resource/read"
   | "mcpServer/tool/call"
+  | "mcpServerStatus/list"
   | "media/read"
   | "memory/reset"
   | "model/list"
+  | "modelProvider/capabilities/read"
   | "permissionProfile/list"
   | "plugin/enabled/set"
   | "plugin/install"
@@ -6862,6 +7296,13 @@ export type Method =
   | "process/resizePty"
   | "process/spawn"
   | "process/writeStdin"
+  | "project/create"
+  | "project/delete"
+  | "project/import"
+  | "project/list"
+  | "project/move"
+  | "project/read"
+  | "project/update"
   | "review/start"
   | "skills/config/write"
   | "skills/extraRoots/set"
@@ -6886,8 +7327,15 @@ export type Method =
   | "thread/memoryMode/set"
   | "thread/metadata/update"
   | "thread/name/set"
+  | "thread/queue/add"
+  | "thread/queue/delete"
+  | "thread/queue/list"
+  | "thread/queue/reorder"
+  | "thread/queue/start"
+  | "thread/queue/update"
   | "thread/read"
   | "thread/resume"
+  | "thread/revert"
   | "thread/search"
   | "thread/searchOccurrences"
   | "thread/section/move"
@@ -6904,7 +7352,8 @@ export type Method =
   | "turn/interrupt"
   | "turn/start"
   | "turn/steer"
-  | "windowsSandbox/readiness";
+  | "windowsSandbox/readiness"
+  | "windowsSandbox/setupStart";
 
 export interface Model {
   additionalSpeedTiers: string[];
@@ -7026,6 +7475,14 @@ export interface ModelProviderAliasReadParams {
 
 export interface ModelProviderAliasReadResponse {
   config?: unknown;
+}
+
+export type ModelProviderCapabilitiesReadParams = Record<string, unknown>;
+
+export interface ModelProviderCapabilitiesReadResponse {
+  imageGeneration: boolean;
+  namespaceTools: boolean;
+  webSearch: boolean;
 }
 
 export interface ModelProviderCatalogListResponse {
@@ -7693,6 +8150,40 @@ export interface ProcessWriteStdinParams {
 
 export type ProcessWriteStdinResponse = Record<string, unknown>;
 
+export interface Project {
+  createdAt: number;
+  id: string;
+  metadata: Record<string, unknown>;
+  name: string;
+  position: number;
+  roots: ProjectRoot[];
+  updatedAt: number;
+}
+
+export type ProjectChangeType = "created" | "deleted" | "updated";
+
+export interface ProjectChangedNotification {
+  changeType: ProjectChangeType;
+  projectId: string;
+}
+
+export interface ProjectCreateParams {
+  idempotencyKey: string;
+  metadata?: null | Record<string, unknown>;
+  name: string;
+  roots: ProjectRoot[];
+}
+
+export interface ProjectCreateResponse {
+  project: Project;
+}
+
+export interface ProjectDeleteParams {
+  projectId: string;
+}
+
+export type ProjectDeleteResponse = Record<string, unknown>;
+
 export interface ProjectGitBranchCheckoutParams {
   branch: string;
   rootPath: string;
@@ -7783,6 +8274,28 @@ export interface ProjectGitWorktreeDeleteResponse {
   worktreePath: string;
 }
 
+export interface ProjectImportParams {
+  idempotencyKey: string;
+  metadata?: null | Record<string, unknown>;
+  name: string;
+  roots: ProjectRoot[];
+  threads?: string[] | null;
+}
+
+export interface ProjectImportResponse {
+  project: Project;
+}
+
+export interface ProjectListParams {
+  cursor?: null | string;
+  limit?: number | null;
+}
+
+export interface ProjectListResponse {
+  data: Project[];
+  nextCursor?: null | string;
+}
+
 export interface ProjectMaterial {
   content?: null | string;
   createdAt: number;
@@ -7868,6 +8381,36 @@ export interface ProjectMemoryReadResponse {
   memory: unknown;
 }
 
+export interface ProjectMoveParams {
+  beforeProjectId?: null | string;
+  projectId: string;
+}
+
+export type ProjectMoveResponse = Record<string, unknown>;
+
+export interface ProjectReadParams {
+  projectId: string;
+}
+
+export interface ProjectReadResponse {
+  project: Project;
+}
+
+export interface ProjectRoot {
+  path: string;
+}
+
+export interface ProjectUpdateParams {
+  metadata?: null | Record<string, unknown>;
+  name?: null | string;
+  projectId: string;
+  roots?: ProjectRoot[] | null;
+}
+
+export interface ProjectUpdateResponse {
+  project: Project;
+}
+
 export type ProtocolKind =
   | "anthropic_messages"
   | "bedrock_converse"
@@ -7916,6 +8459,12 @@ export interface ProviderKeyInfo {
   lastUsedAt?: null | string;
   providerId: string;
   usageCount: number;
+}
+
+export interface QueuedSubmission {
+  clientUserMessageId: string;
+  id: string;
+  input: UserInput[];
 }
 
 export interface ReasoningEffortOption {
@@ -8336,6 +8885,10 @@ export type ServerNotification =
       params: GuardianWarningNotification;
     }
   | {
+      method: "autoApprovalReview/strictReviewRequired";
+      params: StrictReviewRequiredNotification;
+    }
+  | {
       method: "error";
       params: ErrorNotification;
     }
@@ -8350,6 +8903,18 @@ export type ServerNotification =
   | {
       method: "mcpServer/startupStatus/updated";
       params: McpServerStatusUpdatedNotification;
+    }
+  | {
+      method: "mcpServer/event/stream/notification";
+      params: McpServerEventStreamNotification;
+    }
+  | {
+      method: "thread/environment/connected";
+      params: EnvironmentConnectionNotification;
+    }
+  | {
+      method: "thread/environment/disconnected";
+      params: EnvironmentConnectionNotification;
     }
   | {
       method: "app/list/updated";
@@ -8390,6 +8955,10 @@ export type ServerNotification =
   | {
       method: "thread/closed";
       params: ThreadClosedNotification;
+    }
+  | {
+      method: "thread/reverted";
+      params: ThreadRevertedNotification;
     }
   | {
       method: "thread/name/updated";
@@ -8520,8 +9089,28 @@ export type ServerNotification =
       params: ThreadGoalClearedNotification;
     }
   | {
+      method: "thread/queue/changed";
+      params: ThreadQueueChangedNotification;
+    }
+  | {
+      method: "project/changed";
+      params: ProjectChangedNotification;
+    }
+  | {
+      method: "thread/project/updated";
+      params: ThreadProjectUpdatedNotification;
+    }
+  | {
       method: "serverRequest/resolved";
       params: ServerRequestResolvedNotification;
+    }
+  | {
+      method: "windows/worldWritableWarning";
+      params: WindowsWorldWritableWarningNotification;
+    }
+  | {
+      method: "windowsSandbox/setupCompleted";
+      params: WindowsSandboxSetupCompletedNotification;
     };
 
 export type ServerRequest =
@@ -9036,6 +9625,12 @@ export interface SoulStylePackUninstallResponse {
   status: SoulStylePackInstallStatus;
 }
 
+export interface StrictReviewRequiredNotification {
+  startedAtMs: number;
+  threadId: string;
+  turnId: string;
+}
+
 export interface StructuredOutputContract {
   failureSubtype?: null | string;
   materializer?: unknown;
@@ -9094,13 +9689,14 @@ export interface Thread {
   parentThreadId?: null | string;
   path?: null | string;
   preview: string;
+  projectId: null | string;
   recencyAt?: number | null;
   section?: ThreadSection | null;
   sectionEnteredAt?: number | null;
   sessionId: string;
-  source: string;
-  status?: ThreadStatus | null;
-  threadSource?: null | string;
+  source: SessionSource;
+  status: ThreadStatus;
+  threadSource?: ThreadSource | null;
   turns?: Turn[];
   updatedAt: number;
 }
@@ -9209,7 +9805,7 @@ export interface ThreadForkParams {
   sandbox?: unknown;
   serviceTier?: null | string;
   threadId: string;
-  threadSource?: null | string;
+  threadSource?: ThreadSource | null;
 }
 
 export interface ThreadForkResponse {
@@ -9317,6 +9913,7 @@ export type ThreadItem =
       type: "hookPrompt";
     }
   | {
+      delivery?: AgentMessageDelivery | null;
       id: string;
       memoryCitation?: MemoryCitation | null;
       metadata?: ThreadItemMetadata | null;
@@ -9346,7 +9943,9 @@ export type ThreadItem =
       exitCode?: number | null;
       id: string;
       metadata?: ThreadItemMetadata | null;
+      pluginId?: null | string;
       processId?: null | string;
+      scriptPath?: null | string;
       source?: CommandExecutionSource;
       status: CommandExecutionStatus;
       terminalInteractions?: CommandExecutionTerminalInteraction[];
@@ -9370,6 +9969,7 @@ export type ThreadItem =
       mcpAppResourceUri?: null | string;
       metadata?: ThreadItemMetadata | null;
       pluginId?: null | string;
+      readOnlyHint?: boolean | null;
       result: null | {
         _meta: unknown;
         content: unknown[];
@@ -9398,7 +9998,7 @@ export type ThreadItem =
       metadata?: ThreadItemMetadata | null;
       model?: null | string;
       prompt?: null | string;
-      reasoningEffort?: null | string;
+      reasoningEffort?: ReasoningEffort | null;
       receiverThreadIds: string[];
       senderThreadId: string;
       status: CollabAgentToolCallStatus;
@@ -9476,6 +10076,7 @@ export interface ThreadListParams {
   limit?: number | null;
   modelProviders?: string[] | null;
   parentThreadId?: null | string;
+  projectId?: null | string;
   searchTerm?: null | string;
   sectionId?: null | string;
   sortDirection?: SortDirection | null;
@@ -9517,6 +10118,7 @@ export interface ThreadMetadataGitInfoUpdateParams {
 
 export interface ThreadMetadataUpdateParams {
   gitInfo?: ThreadMetadataGitInfoUpdateParams | null;
+  projectId?: null | string;
   threadId: string;
 }
 
@@ -9527,6 +10129,71 @@ export interface ThreadMetadataUpdateResponse {
 export interface ThreadNameUpdatedNotification {
   threadId: string;
   threadName?: null | string;
+}
+
+export interface ThreadProjectUpdatedNotification {
+  projectId: null | string;
+  threadId: string;
+}
+
+export interface ThreadQueueAddParams {
+  clientUserMessageId: string;
+  input: UserInput[];
+  threadId: string;
+}
+
+export interface ThreadQueueAddResponse {
+  queuedSubmission: QueuedSubmission;
+}
+
+export interface ThreadQueueChangedNotification {
+  threadId: string;
+}
+
+export interface ThreadQueueDeleteParams {
+  queuedSubmissionId: string;
+  threadId: string;
+}
+
+export interface ThreadQueueDeleteResponse {
+  deleted: boolean;
+}
+
+export interface ThreadQueueListParams {
+  cursor?: null | string;
+  limit?: number | null;
+  threadId: string;
+}
+
+export interface ThreadQueueListResponse {
+  data: QueuedSubmission[];
+  nextCursor?: null | string;
+}
+
+export interface ThreadQueueReorderParams {
+  queuedSubmissionIds: string[];
+  threadId: string;
+}
+
+export type ThreadQueueReorderResponse = Record<string, unknown>;
+
+export interface ThreadQueueStartParams {
+  queuedSubmissionId?: null | string;
+  threadId: string;
+}
+
+export interface ThreadQueueStartResponse {
+  turn: Turn;
+}
+
+export interface ThreadQueueUpdateParams {
+  input: UserInput[];
+  queuedSubmissionId: string;
+  threadId: string;
+}
+
+export interface ThreadQueueUpdateResponse {
+  queuedSubmission: QueuedSubmission;
 }
 
 export interface ThreadReadParams {
@@ -9582,6 +10249,21 @@ export interface ThreadResumeResponse {
   serviceTier?: null | string;
   thread: Thread;
   turnsBackwardsCursor?: null | string;
+}
+
+export interface ThreadRevertParams {
+  beforeTurnId: string;
+  threadId: string;
+}
+
+export interface ThreadRevertResponse {
+  itemsBackwardsCursor?: null | string;
+  thread: Thread;
+  turnsBackwardsCursor?: null | string;
+}
+
+export interface ThreadRevertedNotification {
+  threadId: string;
 }
 
 export interface ThreadSearchOccurrence {
@@ -9766,13 +10448,14 @@ export interface ThreadStartParams {
   multiAgentMode?: MultiAgentMode | null;
   permissions?: null | string;
   personality?: unknown;
+  projectId?: null | string;
   runtimeWorkspaceRoots?: string[] | null;
   sandbox?: unknown;
   selectedCapabilityRoots?: unknown[] | null;
   serviceName?: null | string;
   serviceTier?: null | string;
   sessionStartSource?: ThreadStartSource | null;
-  threadSource?: null | string;
+  threadSource?: ThreadSource | null;
 }
 
 export interface ThreadStartResponse {
@@ -10337,6 +11020,23 @@ export interface WindowsSandboxReadinessResponse {
   status: WindowsSandboxReadiness;
 }
 
+export interface WindowsSandboxSetupCompletedNotification {
+  error?: null | string;
+  mode: WindowsSandboxSetupMode;
+  success: boolean;
+}
+
+export type WindowsSandboxSetupMode = "elevated" | "unelevated";
+
+export interface WindowsSandboxSetupStartParams {
+  cwd?: null | string;
+  mode: WindowsSandboxSetupMode;
+}
+
+export interface WindowsSandboxSetupStartResponse {
+  started: boolean;
+}
+
 export interface WindowsStartupCheck {
   detail?: null | string;
   key: string;
@@ -10362,6 +11062,12 @@ export interface WindowsStartupDiagnosticsResponse {
   shellEnv?: null | string;
   summaryMessage?: null | string;
   webview2Version?: null | string;
+}
+
+export interface WindowsWorldWritableWarningNotification {
+  extraCount: number;
+  failedScan: boolean;
+  samplePaths: string[];
 }
 
 export interface WorkflowCancelParams {
@@ -10669,6 +11375,8 @@ export interface TextElement {
   placeholder?: null | string;
 }
 
+export type ThreadSource = string;
+
 export type DynamicToolCallPhase = "approvedExecute" | "preflight";
 
 export interface DynamicToolCallApproval {
@@ -10683,6 +11391,8 @@ export interface DynamicToolCallApproval {
   viewId: string;
   webContentsId: number;
 }
+
+export type PathUri = string;
 
 export type HookEventName =
   | "permissionRequest"
@@ -10751,7 +11461,25 @@ export interface ThreadItemSourceProvenance {
   sourceThreadId?: null | string;
 }
 
+export type AgentMessageDelivery = "async";
+
 export type MessagePhase = "commentary" | "final_answer";
+
+export type ReasoningEffort = string;
+
+export type McpResourceContent =
+  | {
+      _meta?: unknown;
+      mimeType?: null | string;
+      text: string;
+      uri: string;
+    }
+  | {
+      _meta?: unknown;
+      blob: string;
+      mimeType?: null | string;
+      uri: string;
+    };
 
 export interface ProviderModelCapability {
   capabilities?: ModelCapabilitiesInfo;
@@ -10767,6 +11495,11 @@ export interface ProviderModelConfig {
   id: string;
 }
 
+export interface EnvironmentConnectionNotification {
+  environmentId: string;
+  threadId: string;
+}
+
 export interface HookCompletedNotification {
   run: HookRunSummary;
   threadId: string;
@@ -10778,3 +11511,13 @@ export interface HookStartedNotification {
   threadId: string;
   turnId?: null | string;
 }
+
+export type SessionSource =
+  | "appServer"
+  | "cli"
+  | "exec"
+  | "unknown"
+  | "vscode"
+  | {
+      custom: string;
+    };

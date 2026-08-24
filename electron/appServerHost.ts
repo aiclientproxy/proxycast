@@ -459,7 +459,7 @@ export class ElectronAppServerHost {
           METHOD_THREAD_TOKEN_USAGE_UPDATED,
           METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_CHANGED,
         ],
-        experimental: true,
+        experimentalApi: true,
       },
     };
 

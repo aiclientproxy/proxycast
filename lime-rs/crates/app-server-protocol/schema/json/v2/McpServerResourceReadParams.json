@@ -1,6 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
+    "connectorId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "originCallId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
     "server": {
       "type": "string"
     },

@@ -53,7 +53,7 @@ impl RequestProcessor {
             model: metadata_string(&metadata, "modelName"),
             model_provider: thread.model_provider.clone(),
             service_tier: metadata_optional_string(&metadata, "serviceTier"),
-            cwd: thread.cwd.clone(),
+            cwd: thread.cwd.to_string_lossy().to_string(),
             runtime_workspace_roots: metadata_string_array(&metadata, "runtimeWorkspaceRoots"),
             instruction_sources: metadata_string_array(&metadata, "instructionSources"),
             approval_policy: metadata_value(&metadata, "approvalPolicy"),

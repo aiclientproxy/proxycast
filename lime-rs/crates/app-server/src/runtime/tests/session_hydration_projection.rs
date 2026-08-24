@@ -1,5 +1,6 @@
 use super::*;
 use crate::runtime::session_control::QueuedTurnResume;
+use async_trait::async_trait;
 
 struct ReasoningHistoryBackend;
 

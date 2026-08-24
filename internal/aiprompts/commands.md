@@ -323,6 +323,27 @@ Turn terminal。`item/commandExecution/terminalInteraction` 只发送脱敏、bo
 CommandExecution read model 合并。raw diagnostic side-channel、未脱敏 stdin/stdout 和 Renderer 自建 terminal history
 均为 `dead / forbidden-to-restore`。
 
+## Thread Revert 主链
+
+Codex `thread/revert` 是 experimental 的 paginated history replacement，Lime current owner 只允许以下主链：
+
+`AppServerClient.revertThread -> app_server_handle_json_lines -> App Server thread/revert -> RuntimeCore history replacement -> canonical Thread/Turn/Item projection`
+
+Rust `app-server-client`、`packages/app-server-client`、v2 method/envelope、schema registry 和 generated TypeScript
+必须同步 `ThreadRevertParams`、`ThreadRevertResponse`、`thread/reverted`。入口在 connection transport 边界检查
+`initialize.capabilities.experimentalApi`；未声明时返回 `INVALID_REQUEST`，不得由 renderer 或 mock 绕过。每个 Thread
+拥有独占串行 scope，活动 Turn 先复用现有 interrupt/cancel 流程，失败时保持原历史不变。
+
+RuntimeCore 使用 append-only `history.rollback` replacement marker 重算 effective event stream，不截断旧 JSONL，
+不回滚本地 workspace 文件；provider history、cold hydration、read model 和 turns/items cursor 都从同一 effective
+stream 读取。响应保留原 Thread identity，`thread.turns` 返回空数组并携带分页回溯 cursor，成功后发送一次
+`thread/reverted`。`thread/rollback` 属于 Codex deprecated surface，不恢复为新 GUI 主操作；在本地文件不回滚和真实
+transport/Electron evidence 完成前不新增 GUI 入口。
+
+该能力的定向证据必须覆盖 paginated replacement、metadata-only response、cursor、notification、missing-turn exact
+error、transport experimental gate、active-turn interrupt、cold resume、重复 revert、provider prefix 保留与 workspace
+文件不变。生产链禁止第二套历史存储、截断日志或 mock fallback。
+
 ## Config Control Plane 主链
 
 Desktop 配置只允许走单一全局用户层：

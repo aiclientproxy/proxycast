@@ -1,0 +1,46 @@
+{
+  "$defs": {
+    "McpServerStatusDetail": {
+      "enum": [
+        "full",
+        "toolsAndAuthOnly"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "cursor": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/McpServerStatusDetail"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "limit": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "threadId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "title": "ListMcpServerStatusParams",
+  "type": "object"
+}

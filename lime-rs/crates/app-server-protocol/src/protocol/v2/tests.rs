@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CapabilitySnapshot, JsonRpcNotification, ModelCapabilitiesInfo};
+use crate::{CapabilitySnapshot, JsonRpcNotification, ModelCapabilitiesInfo, RequestId};
 use schemars::schema_for;
 use serde_json::json;
 
@@ -110,6 +110,94 @@ fn experimental_feature_methods_keep_codex_wire_shapes() {
             }]
         })
     );
+}
+
+#[test]
+fn thread_queue_wire_contract_round_trips_exact_shapes() {
+    let request = json!({
+        "id": 7,
+        "method": "thread/queue/add",
+        "params": {
+            "threadId": "thread_1",
+            "input": [{"type": "text", "text": "queued"}],
+            "clientUserMessageId": "message_1"
+        }
+    });
+    let decoded: ClientRequest = serde_json::from_value(request.clone()).expect("queue request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+    assert_eq!(
+        Method::parse(METHOD_THREAD_QUEUE_ADD),
+        Some(Method::ThreadQueueAdd)
+    );
+
+    let notification = ServerNotification::ThreadQueueChanged(ThreadQueueChangedNotification {
+        thread_id: "thread_1".to_string(),
+    });
+    let wire: JsonRpcNotification = notification.clone().into();
+    assert_eq!(wire.method, METHOD_THREAD_QUEUE_CHANGED);
+    assert_eq!(
+        ServerNotification::try_from(wire).expect("queue notification"),
+        notification
+    );
+}
+
+#[test]
+fn project_wire_contract_round_trips_exact_shapes() {
+    let create = json!({
+        "id": 8,
+        "method": "project/create",
+        "params": {
+            "name": "Workspace",
+            "roots": [{"path": "/workspace"}],
+            "metadata": {"kind": "local"},
+            "idempotencyKey": "project-create-1"
+        }
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(create.clone()).expect("project/create request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), create);
+    assert_eq!(
+        Method::parse(METHOD_PROJECT_CREATE),
+        Some(Method::ProjectCreate)
+    );
+
+    let import = json!({
+        "id": 9,
+        "method": "project/import",
+        "params": {
+            "name": "Imported",
+            "roots": [{"path": "/workspace/imported"}],
+            "threads": ["thread_1"],
+            "idempotencyKey": "project-import-1"
+        }
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(import.clone()).expect("project/import request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), import);
+    assert_eq!(
+        Method::parse(METHOD_PROJECT_IMPORT),
+        Some(Method::ProjectImport)
+    );
+
+    let changed = ServerNotification::ProjectChanged(ProjectChangedNotification {
+        project_id: "project_1".to_string(),
+        change_type: ProjectChangeType::Created,
+    });
+    let wire: JsonRpcNotification = changed.clone().into();
+    assert_eq!(wire.method, METHOD_PROJECT_CHANGED);
+    assert_eq!(ServerNotification::try_from(wire).unwrap(), changed);
+
+    let unassigned = ServerNotification::ThreadProjectUpdated(ThreadProjectUpdatedNotification {
+        thread_id: "thread_1".to_string(),
+        project_id: None,
+    });
+    let wire: JsonRpcNotification = unassigned.clone().into();
+    assert_eq!(wire.method, METHOD_THREAD_PROJECT_UPDATED);
+    assert_eq!(
+        wire.params,
+        Some(json!({"threadId": "thread_1", "projectId": null}))
+    );
+    assert_eq!(ServerNotification::try_from(wire).unwrap(), unassigned);
 }
 
 #[test]
@@ -263,6 +351,58 @@ fn windows_sandbox_readiness_accepts_codex_optional_params() {
 }
 
 #[test]
+fn windows_sandbox_setup_and_warning_contract_round_trip() {
+    let request = json!({
+        "id": 12,
+        "method": "windowsSandbox/setupStart",
+        "params": {
+            "mode": "unelevated",
+            "cwd": "C:/workspace"
+        }
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(request.clone()).expect("decode setup start request");
+    assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+    assert_eq!(
+        Method::parse(METHOD_WINDOWS_SANDBOX_SETUP_START),
+        Some(Method::WindowsSandboxSetupStart)
+    );
+    assert_eq!(
+        ClientResponsePayload::WindowsSandboxSetupStart(WindowsSandboxSetupStartResponse {
+            started: true,
+        })
+        .into_response(RequestId::Integer(12))
+        .unwrap()
+        .result,
+        json!({"started": true})
+    );
+
+    let completed = ServerNotification::WindowsSandboxSetupCompleted(
+        WindowsSandboxSetupCompletedNotification {
+            mode: WindowsSandboxSetupMode::Unelevated,
+            success: false,
+            error: Some("setup failed".to_string()),
+        },
+    );
+    let completed_wire: JsonRpcNotification = completed.clone().into();
+    assert_eq!(completed_wire.method, "windowsSandbox/setupCompleted");
+    assert_eq!(
+        ServerNotification::try_from(completed_wire).unwrap(),
+        completed
+    );
+
+    let warning =
+        ServerNotification::WindowsWorldWritableWarning(WindowsWorldWritableWarningNotification {
+            sample_paths: vec!["C:/workspace/out".to_string()],
+            extra_count: 2,
+            failed_scan: false,
+        });
+    let warning_wire: JsonRpcNotification = warning.clone().into();
+    assert_eq!(warning_wire.method, "windows/worldWritableWarning");
+    assert_eq!(ServerNotification::try_from(warning_wire).unwrap(), warning);
+}
+
+#[test]
 fn v2_agent_message_phase_uses_the_canonical_enum_owner() {
     let item = json!({
         "type": "agentMessage",
@@ -292,6 +432,58 @@ fn thread_start_uses_v2_camel_case_fields() {
             "runtimeWorkspaceRoots": ["/workspace"],
             "sessionStartSource": "startup"
         })
+    );
+}
+
+#[test]
+fn thread_wire_uses_codex_typed_metadata_fields() {
+    let wire = json!({
+        "id": "thread-1",
+        "sessionId": "session-1",
+        "preview": "hello",
+        "ephemeral": false,
+        "projectId": null,
+        "historyMode": "legacy",
+        "modelProvider": "openai",
+        "createdAt": 1700000000,
+        "updatedAt": 1700000001,
+        "status": {"type": "idle"},
+        "path": "/tmp/thread.jsonl",
+        "cwd": "/workspace",
+        "cliVersion": "test",
+        "source": "appServer",
+        "canAcceptDirectInput": true,
+        "threadSource": "user",
+        "turns": []
+    });
+
+    let decoded: Thread = serde_json::from_value(wire.clone()).expect("thread wire");
+    assert_eq!(decoded.project_id, None);
+    assert_eq!(decoded.status, ThreadStatus::Idle);
+    assert_eq!(decoded.source, SessionSource::AppServer);
+    assert_eq!(decoded.thread_source, Some(ThreadSource::User));
+    assert_eq!(decoded.cwd, std::path::PathBuf::from("/workspace"));
+    assert_eq!(
+        decoded.path,
+        Some(std::path::PathBuf::from("/tmp/thread.jsonl"))
+    );
+    assert_eq!(
+        serde_json::to_value(decoded).expect("thread round trip"),
+        wire
+    );
+}
+
+#[test]
+fn thread_source_keeps_codex_feature_values_as_typed_strings() {
+    let source: ThreadSource =
+        serde_json::from_value(json!("automated_review")).expect("feature thread source");
+    assert_eq!(
+        source,
+        ThreadSource::Feature("automated_review".to_string())
+    );
+    assert_eq!(
+        serde_json::to_value(source).unwrap(),
+        json!("automated_review")
     );
 }
 
@@ -606,6 +798,54 @@ fn mcp_server_exact_methods_round_trip_codex_wire() {
     assert_eq!(decoded.method(), Method::McpServerToolCall);
     assert_eq!(serde_json::to_value(decoded).unwrap(), tool_request);
 
+    let start_request = json!({
+        "id": 8,
+        "method": "mcpServer/event/stream/start",
+        "params": {
+            "threadId": "thread_1",
+            "server": "codex_apps",
+            "subscriptionId": "subscription_1",
+            "name": "updates",
+            "arguments": {"scope": "thread"},
+            "_meta": {"requestId": "desktop-2"}
+        }
+    });
+    let decoded: ClientRequest = serde_json::from_value(start_request.clone())
+        .expect("decode mcpServer/event/stream/start request");
+    assert_eq!(decoded.method(), Method::McpServerEventStreamStart);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), start_request);
+
+    let stop_request = json!({
+        "id": 9,
+        "method": "mcpServer/event/stream/stop",
+        "params": {"subscriptionId": "subscription_1"}
+    });
+    let decoded: ClientRequest = serde_json::from_value(stop_request.clone())
+        .expect("decode mcpServer/event/stream/stop request");
+    assert_eq!(decoded.method(), Method::McpServerEventStreamStop);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), stop_request);
+
+    let notification = ServerNotification::McpServerEventStream(McpServerEventStreamNotification {
+        subscription_id: "subscription_1".to_string(),
+        notification: McpServerEventNotification {
+            method: "notifications/progress".to_string(),
+            params: json!({"progress": 0.5}),
+        },
+    });
+    assert_eq!(
+        serde_json::to_value(JsonRpcNotification::from(notification)).unwrap(),
+        json!({
+            "method": "mcpServer/event/stream/notification",
+            "params": {
+                "subscriptionId": "subscription_1",
+                "notification": {
+                    "method": "notifications/progress",
+                    "params": {"progress": 0.5}
+                }
+            }
+        })
+    );
+
     assert_eq!(
         serde_json::to_value(McpServerResourceReadResponse {
             contents: vec![McpServerResourceContent::Text {
@@ -614,6 +854,7 @@ fn mcp_server_exact_methods_round_trip_codex_wire() {
                 text: "# README".to_string(),
                 meta: None,
             }],
+            origin_call_id: None,
         })
         .unwrap(),
         json!({
@@ -621,7 +862,8 @@ fn mcp_server_exact_methods_round_trip_codex_wire() {
                 "uri": "docs://readme",
                 "mimeType": "text/markdown",
                 "text": "# README"
-            }]
+            }],
+            "originCallId": null
         })
     );
     assert_eq!(
@@ -631,6 +873,14 @@ fn mcp_server_exact_methods_round_trip_codex_wire() {
     assert_eq!(
         Method::parse(METHOD_MCP_SERVER_TOOL_CALL),
         Some(Method::McpServerToolCall)
+    );
+    assert_eq!(
+        Method::parse(METHOD_MCP_SERVER_EVENT_STREAM_START),
+        Some(Method::McpServerEventStreamStart)
+    );
+    assert_eq!(
+        Method::parse(METHOD_MCP_SERVER_EVENT_STREAM_STOP),
+        Some(Method::McpServerEventStreamStop)
     );
 }
 
@@ -744,6 +994,131 @@ fn model_list_keeps_codex_fields_with_multimodel_extensions() {
             "nextCursor": null
         })
     );
+}
+
+#[test]
+fn model_provider_capabilities_read_round_trips_exact_codex_shape() {
+    let expected = json!({
+        "id": 7,
+        "method": "modelProvider/capabilities/read",
+        "params": {}
+    });
+    let request: ClientRequest =
+        serde_json::from_value(expected.clone()).expect("decode provider capabilities request");
+    assert_eq!(request.method(), Method::ModelProviderCapabilitiesRead);
+    assert_eq!(
+        serde_json::to_value(request).expect("encode provider capabilities request"),
+        expected
+    );
+    assert_eq!(
+        Method::parse(METHOD_MODEL_PROVIDER_CAPABILITIES_READ),
+        Some(Method::ModelProviderCapabilitiesRead)
+    );
+    assert!(METHODS.contains(&METHOD_MODEL_PROVIDER_CAPABILITIES_READ));
+
+    let response = ModelProviderCapabilitiesReadResponse {
+        namespace_tools: true,
+        image_generation: false,
+        web_search: true,
+    };
+    assert_eq!(
+        serde_json::to_value(response).expect("encode provider capabilities response"),
+        json!({
+            "namespaceTools": true,
+            "imageGeneration": false,
+            "webSearch": true
+        })
+    );
+}
+
+#[test]
+fn environment_methods_round_trip_codex_shapes() {
+    let request = json!({
+        "id": 21,
+        "method": "environment/add",
+        "params": {
+            "environmentId": "remote-dev",
+            "execServerUrl": "ws://127.0.0.1:9000",
+            "connectTimeoutMs": 5000
+        }
+    });
+    let decoded: ClientRequest =
+        serde_json::from_value(request.clone()).expect("decode environment/add");
+    assert_eq!(decoded.method(), Method::EnvironmentAdd);
+    assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+
+    let info: ClientRequest = serde_json::from_value(json!({
+        "id": 22,
+        "method": "environment/info",
+        "params": {"environmentId": "local"}
+    }))
+    .expect("decode environment/info");
+    assert_eq!(info.method(), Method::EnvironmentInfo);
+
+    let info_response = EnvironmentInfoResponse {
+        shell: EnvironmentShellInfo {
+            name: "zsh".to_string(),
+            path: "/bin/zsh".to_string(),
+        },
+        cwd: Some(PathUri::parse("file:///workspace").expect("canonical cwd URI")),
+    };
+    assert_eq!(
+        serde_json::to_value(info_response).unwrap(),
+        json!({
+            "shell": {"name": "zsh", "path": "/bin/zsh"},
+            "cwd": "file:///workspace"
+        })
+    );
+    assert!(serde_json::from_value::<EnvironmentInfoResponse>(json!({
+        "shell": {"name": "zsh", "path": "/bin/zsh"},
+        "cwd": "/workspace"
+    }))
+    .is_err());
+    assert!(PathUri::parse("file:///workspace%00tmp").is_err());
+
+    let status = EnvironmentStatusResponse {
+        status: EnvironmentStatusKind::Disconnected,
+        error: Some("exec server offline".to_string()),
+    };
+    assert_eq!(
+        serde_json::to_value(status).unwrap(),
+        json!({"status": "disconnected", "error": "exec server offline"})
+    );
+    assert!(METHODS.contains(&METHOD_ENVIRONMENT_ADD));
+    assert!(METHODS.contains(&METHOD_ENVIRONMENT_INFO));
+    assert!(METHODS.contains(&METHOD_ENVIRONMENT_STATUS));
+}
+
+#[test]
+fn environment_connection_notifications_round_trip_codex_shapes() {
+    for (method, notification) in [
+        (
+            METHOD_THREAD_ENVIRONMENT_CONNECTED,
+            ServerNotification::EnvironmentConnected(EnvironmentConnectionNotification {
+                thread_id: "thread-1".to_string(),
+                environment_id: "remote-a".to_string(),
+            }),
+        ),
+        (
+            METHOD_THREAD_ENVIRONMENT_DISCONNECTED,
+            ServerNotification::EnvironmentDisconnected(EnvironmentConnectionNotification {
+                thread_id: "thread-1".to_string(),
+                environment_id: "remote-a".to_string(),
+            }),
+        ),
+    ] {
+        let wire: JsonRpcNotification = notification.clone().into();
+        assert_eq!(wire.method, method);
+        assert_eq!(
+            wire.params,
+            Some(json!({"threadId": "thread-1", "environmentId": "remote-a"}))
+        );
+        assert_eq!(
+            ServerNotification::try_from(wire).expect("decode environment notification"),
+            notification
+        );
+        assert!(NOTIFICATION_METHODS.contains(&method));
+    }
 }
 
 #[test]
@@ -898,6 +1273,46 @@ fn guardian_warning_notification_round_trips_exact_thread_scoped_shape() {
             "params": {
                 "threadId": "thread-guardian",
                 "message": "warning",
+                "extra": true
+            }
+        }),
+    ] {
+        assert!(serde_json::from_value::<ServerNotification>(malformed).is_err());
+    }
+}
+
+#[test]
+fn strict_review_required_notification_round_trips_codex_shape() {
+    let expected = json!({
+        "method": "autoApprovalReview/strictReviewRequired",
+        "params": {
+            "threadId": "thread-guardian",
+            "turnId": "turn-guardian",
+            "startedAtMs": 1_783_814_400_100i64
+        }
+    });
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode strict review notification");
+    assert_eq!(notification.method(), METHOD_STRICT_REVIEW_REQUIRED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_STRICT_REVIEW_REQUIRED);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC strict review notification"),
+        notification
+    );
+    assert_eq!(serde_json::to_value(notification).unwrap(), expected);
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_STRICT_REVIEW_REQUIRED));
+    for malformed in [
+        json!({
+            "method": "autoApprovalReview/strictReviewRequired",
+            "params": { "threadId": "thread-guardian", "turnId": "turn-guardian" }
+        }),
+        json!({
+            "method": "autoApprovalReview/strictReviewRequired",
+            "params": {
+                "threadId": "thread-guardian",
+                "turnId": "turn-guardian",
+                "startedAtMs": 1,
                 "extra": true
             }
         }),
@@ -1369,6 +1784,74 @@ fn thread_closed_notification_round_trips_exact_codex_shape() {
         expected
     );
     assert!(NOTIFICATION_METHODS.contains(&METHOD_THREAD_CLOSED));
+}
+
+#[test]
+fn thread_revert_round_trips_exact_codex_shapes() {
+    let request_value = json!({
+        "id": 41,
+        "method": "thread/revert",
+        "params": {
+            "threadId": "thread_1",
+            "beforeTurnId": "turn_2"
+        }
+    });
+    let request: ClientRequest =
+        serde_json::from_value(request_value.clone()).expect("decode thread/revert request");
+    assert_eq!(request.method(), Method::ThreadRevert);
+    assert_eq!(serde_json::to_value(request).unwrap(), request_value);
+    assert_eq!(
+        Method::parse(METHOD_THREAD_REVERT),
+        Some(Method::ThreadRevert)
+    );
+    assert!(METHODS.contains(&METHOD_THREAD_REVERT));
+
+    let thread: Thread = serde_json::from_value(json!({
+        "id": "thread_1",
+        "sessionId": "session_1",
+        "preview": "retained",
+        "ephemeral": false,
+        "projectId": null,
+        "historyMode": "paginated",
+        "modelProvider": "openai",
+        "createdAt": 10,
+        "updatedAt": 12,
+        "status": {"type": "idle"},
+        "cwd": "/workspace",
+        "cliVersion": "1.0.0",
+        "source": "appServer",
+        "turns": []
+    }))
+    .expect("decode metadata-only thread");
+    let response = ClientResponsePayload::ThreadRevert(ThreadRevertResponse {
+        thread,
+        turns_backwards_cursor: Some("turn-cursor".to_string()),
+        items_backwards_cursor: Some("item-cursor".to_string()),
+    })
+    .into_response(crate::RequestId::Integer(41))
+    .expect("encode thread/revert response");
+    assert_eq!(response.result["thread"]["turns"], json!([]));
+    assert_eq!(response.result["turnsBackwardsCursor"], "turn-cursor");
+    assert_eq!(response.result["itemsBackwardsCursor"], "item-cursor");
+
+    let notification_value = json!({
+        "method": "thread/reverted",
+        "params": {"threadId": "thread_1"}
+    });
+    let notification: ServerNotification = serde_json::from_value(notification_value.clone())
+        .expect("decode thread/reverted notification");
+    assert_eq!(notification.method(), METHOD_THREAD_REVERTED);
+    let raw: crate::JsonRpcNotification = notification.clone().into();
+    assert_eq!(raw.method, METHOD_THREAD_REVERTED);
+    assert_eq!(
+        ServerNotification::try_from(raw).expect("decode JSON-RPC thread/reverted notification"),
+        notification
+    );
+    assert_eq!(
+        serde_json::to_value(notification).unwrap(),
+        notification_value
+    );
+    assert!(NOTIFICATION_METHODS.contains(&METHOD_THREAD_REVERTED));
 }
 
 #[test]
@@ -2519,6 +3002,7 @@ fn lifecycle_notifications_round_trip_only_the_v2_shapes() {
         "sessionId": "session_1",
         "preview": "",
         "ephemeral": false,
+        "projectId": null,
         "historyMode": "legacy",
         "modelProvider": "openai",
         "createdAt": 10,
@@ -2526,6 +3010,7 @@ fn lifecycle_notifications_round_trip_only_the_v2_shapes() {
         "cwd": "/workspace",
         "cliVersion": "1.0.0",
         "source": "appServer",
+        "status": {"type": "idle"},
         "turns": []
     });
     let turn = json!({
@@ -2930,10 +3415,14 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "configWarning",
             "warning",
             "guardianWarning",
+            "autoApprovalReview/strictReviewRequired",
             "error",
             "skills/changed",
             "mcpServer/oauthLogin/completed",
             "mcpServer/startupStatus/updated",
+            "mcpServer/event/stream/notification",
+            "thread/environment/connected",
+            "thread/environment/disconnected",
             "app/list/updated",
             "scheduledTask/changed",
             "scheduledTask/run/updated",
@@ -2944,6 +3433,7 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "thread/deleted",
             "thread/unarchived",
             "thread/closed",
+            "thread/reverted",
             "thread/name/updated",
             "thread/status/changed",
             "turn/started",
@@ -2976,7 +3466,12 @@ fn typed_v2_envelope_schema_names_are_stable() {
             "thread/tokenUsage/updated",
             "thread/goal/updated",
             "thread/goal/cleared",
+            "thread/queue/changed",
+            "project/changed",
+            "thread/project/updated",
             "serverRequest/resolved",
+            "windows/worldWritableWarning",
+            "windowsSandbox/setupCompleted",
         ]
     );
 }

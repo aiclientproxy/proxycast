@@ -92,6 +92,7 @@ impl V2NotificationProjector {
             }
             "thread.goal.continuation" => return EventProjection::Direct(Vec::new()),
             "thread.settings.updated" => return self.project_thread_settings_updated(event),
+            "queue.promoted" => return self.project_thread_queue_changed(event),
             "provider.usage" => return self.project_token_usage(event),
             "hook.started" => return hook::project_started(&mut self.started_hook_run_ids, event),
             "hook.completed" => {
@@ -212,6 +213,16 @@ impl V2NotificationProjector {
                 thread_id,
                 thread_settings,
             },
+        )
+        .into()])
+    }
+
+    fn project_thread_queue_changed(&self, event: &AgentEvent) -> EventProjection {
+        let Some(thread_id) = required_event_id(event.thread_id.as_deref()) else {
+            return EventProjection::Reject(projection_error(event));
+        };
+        EventProjection::Direct(vec![ServerNotification::ThreadQueueChanged(
+            v2::ThreadQueueChangedNotification { thread_id },
         )
         .into()])
     }
@@ -1595,6 +1606,26 @@ mod tests {
                 .expect("side channel");
             assert_eq!(notifications[0].method, "agentSession/event");
         }
+    }
+
+    #[test]
+    fn queue_promotion_projects_exact_thread_queue_changed_notification() {
+        let notifications = V2NotificationProjector::default()
+            .project(event(
+                "queue.promoted",
+                json!({
+                    "queuedTurnId": "turn-1",
+                    "queuedSubmissionId": "turn-1",
+                }),
+            ))
+            .expect("queue promotion notification");
+
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].method, "thread/queue/changed");
+        assert_eq!(
+            notifications[0].params.as_ref().expect("queue params"),
+            &json!({"threadId": "thread-1"})
+        );
     }
 
     #[test]

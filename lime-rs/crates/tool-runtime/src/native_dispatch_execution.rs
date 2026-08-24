@@ -15,6 +15,7 @@ use crate::tool_result_projection::{
 use rmcp::model::{CallToolResult, ErrorCode, ErrorData};
 use serde_json::Value;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 pub struct RuntimeNativeDispatchToolRequest<'a> {
@@ -25,6 +26,7 @@ pub struct RuntimeNativeDispatchToolRequest<'a> {
     pub cancel_token: Option<CancellationToken>,
     pub turn_context: Option<&'a RuntimeToolTurnContext>,
     pub attempt: Option<crate::execution_orchestrator::RuntimeToolExecutionAttempt>,
+    pub filesystem_gateway: Option<Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>>,
 }
 
 pub type RuntimeNativeDispatchToolResult = Result<CallToolResult, ErrorData>;
@@ -126,6 +128,9 @@ pub async fn execute_runtime_native_dispatch_tool_typed(
         cancel_token: request.cancel_token,
         workspace_sandbox: None,
     });
+    if let Some(gateway) = request.filesystem_gateway {
+        runtime_context = runtime_context.with_filesystem_gateway(gateway);
+    }
     if let Some(attempt) = request.attempt {
         runtime_context = runtime_context
             .with_tool_identity(attempt.identity().clone())
@@ -159,6 +164,7 @@ mod tests {
             cancel_token: None,
             turn_context: None,
             attempt: None,
+            filesystem_gateway: None,
         })
         .await;
 
@@ -178,6 +184,7 @@ mod tests {
             cancel_token: None,
             turn_context: None,
             attempt: None,
+            filesystem_gateway: None,
         })
         .await
         .expect("workspace tool is dispatch-backed")
@@ -202,6 +209,7 @@ mod tests {
             cancel_token: Some(cancel_token),
             turn_context: None,
             attempt: None,
+            filesystem_gateway: None,
         })
         .await
         .expect("sleep is dispatch-backed");

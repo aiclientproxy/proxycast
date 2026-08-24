@@ -10,6 +10,8 @@ pub const WORLD_STATE_SOURCE: &str = "app_server_world_state";
 pub struct RuntimeWorldState {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<RuntimeWorldEnvironment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub environments: Vec<RuntimeWorldEnvironmentSelection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permissions: Option<RuntimeWorldPermissions>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -41,6 +43,30 @@ pub struct RuntimeWorldEnvironment {
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeWorldEnvironmentSelection {
+    pub environment_id: String,
+    pub cwd: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub runtime_workspace_roots: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub primary: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<RuntimeWorldEnvironmentStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shell: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeWorldEnvironmentStatus {
+    Pending,
+    Ready,
+    Disconnected,
+    Unknown,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -84,6 +110,7 @@ impl RuntimeWorldState {
 
     pub fn is_empty(&self) -> bool {
         self.environment.is_none()
+            && self.environments.is_empty()
             && self.permissions.is_none()
             && self.collaboration.is_none()
             && self.multi_agent.is_none()
@@ -97,8 +124,9 @@ impl RuntimeWorldState {
 
         let mut rendered = String::from("<environment_context>");
         if let Some(environment) = &self.environment {
-            render_environment(&mut rendered, environment);
+            render_environment(&mut rendered, environment, self.environments.is_empty());
         }
+        render_environments(&mut rendered, &self.environments);
         if let Some(permissions) = &self.permissions {
             render_permissions(&mut rendered, permissions);
         }
@@ -116,8 +144,14 @@ impl RuntimeWorldState {
     }
 }
 
-fn render_environment(rendered: &mut String, environment: &RuntimeWorldEnvironment) {
-    push_text_node(rendered, "cwd", environment.cwd.as_deref());
+fn render_environment(
+    rendered: &mut String,
+    environment: &RuntimeWorldEnvironment,
+    include_cwd: bool,
+) {
+    if include_cwd {
+        push_text_node(rendered, "cwd", environment.cwd.as_deref());
+    }
     push_text_node(
         rendered,
         "project_root",
@@ -143,6 +177,67 @@ fn render_environment(rendered: &mut String, environment: &RuntimeWorldEnvironme
             environment.reasoning_effort.as_deref(),
         );
         rendered.push_str(" />");
+    }
+}
+
+fn render_environments(rendered: &mut String, environments: &[RuntimeWorldEnvironmentSelection]) {
+    if environments.len() == 1 {
+        render_environment_selection_values(rendered, &environments[0], "  ");
+        return;
+    }
+    if environments.is_empty() {
+        return;
+    }
+    rendered.push_str("\n  <environments>");
+    for environment in environments {
+        rendered.push_str("\n    <environment id=\"");
+        push_xml_escaped_text(rendered, &environment.environment_id);
+        rendered.push_str(if environment.primary {
+            "\" primary=\"true\">"
+        } else {
+            "\" primary=\"false\">"
+        });
+        render_environment_selection_values(rendered, environment, "      ");
+        rendered.push_str("\n    </environment>");
+    }
+    rendered.push_str("\n  </environments>");
+}
+
+fn render_environment_selection_values(
+    rendered: &mut String,
+    environment: &RuntimeWorldEnvironmentSelection,
+    indent: &str,
+) {
+    rendered.push('\n');
+    rendered.push_str(indent);
+    rendered.push_str("<cwd>");
+    push_xml_escaped_text(rendered, &environment.cwd);
+    rendered.push_str("</cwd>");
+    let status = match environment.status {
+        Some(RuntimeWorldEnvironmentStatus::Pending) => Some("starting"),
+        Some(
+            RuntimeWorldEnvironmentStatus::Disconnected | RuntimeWorldEnvironmentStatus::Unknown,
+        ) => Some("unavailable"),
+        Some(RuntimeWorldEnvironmentStatus::Ready) | None => None,
+    };
+    if let Some(status) = status {
+        rendered.push('\n');
+        rendered.push_str(indent);
+        rendered.push_str("<status>");
+        rendered.push_str(status);
+        rendered.push_str("</status>");
+    }
+    if let Some(shell) = environment
+        .shell
+        .as_deref()
+        .map(str::trim)
+        .filter(|shell| !shell.is_empty())
+    {
+        rendered.push('\n');
+        rendered.push_str(indent);
+        rendered.push_str("<shell>");
+        push_xml_escaped_text(rendered, shell);
+        rendered.push_str("</shell>");
     }
 }
 
@@ -268,6 +363,7 @@ mod tests {
                 model: Some("claude".to_string()),
                 reasoning_effort: Some("high".to_string()),
             }),
+            environments: Vec::new(),
             permissions: Some(RuntimeWorldPermissions {
                 approval_policy: Some("on-request".to_string()),
                 sandbox_policy: Some("workspace-write".to_string()),
@@ -311,6 +407,44 @@ mod tests {
         assert_eq!(
             state.render_environment_context().as_deref(),
             Some("<environment_context>\n  <cwd>/tmp/workspace</cwd>\n</environment_context>")
+        );
+    }
+
+    #[test]
+    fn renders_multiple_execution_environments_with_primary_and_status() {
+        let state = RuntimeWorldState {
+            environment: Some(RuntimeWorldEnvironment {
+                cwd: Some("/remote/workspace".to_string()),
+                thread_id: Some("thread-1".to_string()),
+                ..RuntimeWorldEnvironment::default()
+            }),
+            environments: vec![
+                RuntimeWorldEnvironmentSelection {
+                    environment_id: "local".to_string(),
+                    cwd: "/local/workspace".to_string(),
+                    runtime_workspace_roots: vec!["/local/workspace".to_string()],
+                    primary: false,
+                    status: Some(RuntimeWorldEnvironmentStatus::Ready),
+                    shell: Some("zsh".to_string()),
+                },
+                RuntimeWorldEnvironmentSelection {
+                    environment_id: "remote".to_string(),
+                    cwd: "/remote/workspace".to_string(),
+                    runtime_workspace_roots: vec!["/remote/workspace".to_string()],
+                    primary: true,
+                    status: Some(RuntimeWorldEnvironmentStatus::Pending),
+                    shell: None,
+                },
+            ],
+            source: Some(WORLD_STATE_SOURCE.to_string()),
+            ..RuntimeWorldState::default()
+        };
+
+        assert_eq!(
+            state.render_environment_context().as_deref(),
+            Some(
+                "<environment_context>\n  <thread_id>thread-1</thread_id>\n  <environments>\n    <environment id=\"local\" primary=\"false\">\n      <cwd>/local/workspace</cwd>\n      <shell>zsh</shell>\n    </environment>\n    <environment id=\"remote\" primary=\"true\">\n      <cwd>/remote/workspace</cwd>\n      <status>starting</status>\n    </environment>\n  </environments>\n</environment_context>"
+            )
         );
     }
 }

@@ -386,6 +386,16 @@ export function createSessionClient(deps: AgentRuntimeSessionClientDeps = {}) {
     });
   }
 
+  async function forkAgentRuntimeSession(sessionId: string): Promise<string> {
+    const forkedSessionId =
+      await appServerSessionClient.forkAgentRuntimeSession(sessionId);
+    notifyAgentRuntimeSessionsChanged({
+      reason: "created",
+      sessionId: forkedSessionId,
+    });
+    return forkedSessionId;
+  }
+
   async function unarchiveAgentRuntimeSession(
     sessionId: string,
   ): Promise<void> {
@@ -408,6 +418,7 @@ export function createSessionClient(deps: AgentRuntimeSessionClientDeps = {}) {
     archiveAgentRuntimeSession,
     createAgentRuntimeSession,
     deleteAgentRuntimeSession,
+    forkAgentRuntimeSession,
     getAgentRuntimeSession,
     listAgentRuntimeSessions,
     unarchiveAgentRuntimeSession,
@@ -419,6 +430,7 @@ export const {
   archiveAgentRuntimeSession,
   createAgentRuntimeSession,
   deleteAgentRuntimeSession,
+  forkAgentRuntimeSession,
   getAgentRuntimeSession,
   listAgentRuntimeSessions,
   unarchiveAgentRuntimeSession,

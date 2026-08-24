@@ -1,6 +1,6 @@
 # Browser Workspace 同页控制路线图
 
-更新时间：2026-08-21
+更新时间：2026-08-23
 
 状态：Active。本文只记录稳定的产品目标、架构边界、阶段和验收合同；逐刀写集、当前进度、验证日志与阻塞统一记录在 `internal/exec-plans/browser-runtime-right-surface-plan.md`。
 
@@ -52,7 +52,7 @@ App Server 持有 thread、turn、tool lifecycle、Browser 产品身份和 read 
 
 Browser 核心 Gate B 已通过：`npm run smoke:browser-runtime-electron-gate-b -- --timeout-ms 60000` 在真实 Electron、preload/IPC、`app_server_handle_json_lines`、App Server RuntimeCore/provider/read model 上完成 `browser__openTabs -> browser__claimTab -> browser__observe -> final assistant`。Agent observation 与用户可见 Workspace 的 `browserSessionId/tabId/threadId/webContentsId` 全等，active turn 对齐，native `viewId/windowId/ownerWebContentsId` 有效；Renderer 地址栏随后导航同一 tab，turn 为 `completed`，console/page error 和生产 mock fallback 均为零。脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-summary.json`。
 
-该结果只完成 P1 核心 identity/dynamic-tool round trip，不等于完整 Gate B。旧 `right-surface-visual-matrix` 仍是 Canvas/CDP fixture，不能作为 Gate A/B；current-owner negative guard 已覆盖 Browser Host、typed gateway、Right Surface 与 prompt，但 protocol/schema/client 的旧链清退、artifact/grant、直接 destroyed WebContents 和历史恢复仍需扩展真实 Electron evidence。
+该结果完成 P1 核心 identity/dynamic-tool round trip；旧 `right-surface-visual-matrix` 仍是 Canvas/CDP fixture，不能作为 Gate A/B。current-owner negative guard 已覆盖 Browser Host、typed gateway、Right Surface 与 prompt；旧 protocol/schema/client 的物理清退仍需用户确认。
 
 同日 active-turn 生命周期 Gate B 已通过：在同一真实 Electron turn 内完成初次 observe、用户地址栏导航、旧 snapshot mutation fail-closed、重新 claim/observe 和 terminal cleanup，并通过 renderer-process-gone 触发 Browser route 关闭。用户导航后的 `controlOwner=user`、page revision 递增、重新 observe 使用新 snapshot；session/tab/thread/webContents identity 全程不变，turn `completed` 后 user tab `released`，debugger `attached -> detached`，25 项断言全部通过，console/page error 为零。脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-summary.json`。直接 `destroyed` 事件仍由 Electron Host 单测覆盖。
 
@@ -68,7 +68,7 @@ Browser terminal cleanup 已增加 fail-closed 状态门禁：Electron Host 只�
 
 真实 Electron permission Gate B 已通过：`--scenario permission` 由同一 native page 调用 geolocation，Electron permission handler 返回 `User denied Geolocation` 并发出 `decision=blocked`；Host 补齐的 session/thread/tab/view/WebContents/owner/window identity 与 GUI 当前 tab 全等，permission 状态带位于 native viewport 外，Host bounds 与 Renderer viewport 对齐，turn 以 `interrupted` 收口。11 项断言、console/page error 与生产 mock fallback 门禁全部通过；脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-permission-summary.json`。Electron 的 `navigator.permissions.query` 可能仍报告 `granted`，授权结果必须以真实 API callback 为准。
 
-真实 Electron download Gate B 已通过：`--scenario download` 由同一 native page 触发 data URL 下载，Electron `will-download` 发出同一 `downloadId` 的 `started -> cancelled`，GUI 当前 tab 显示取消状态且不遮挡 native viewport；evidence 不含 `savePath`、macOS 或 Windows 用户目录，turn 以 `interrupted` 收口。11 项断言、console/page error 与生产 mock fallback 门禁全部通过；脱敏证据位于 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-electron-gate-b-download-summary.json`。fixture 主动取消下载，因此该结果不证明文件落盘、artifact ref、完成后的 open/reveal 或 packaged 跨平台行为。
+真实 Electron download Gate B 已通过：`--scenario download` 覆盖 `started -> cancelled`；completed artifact 路径另由 artifact Gate B 覆盖，见下方最新 checkpoint。
 
 真实 Electron action approval Gate B 已通过：`--scenario approval` 在同一用户可见 `WebContentsView` 中观察危险
 `Delete account` 目标，经 `preflight -> canonical action_required -> GUI allow_once -> approvedExecute` 恢复同一
@@ -92,8 +92,7 @@ mouse/keyboard native input 的 Host 接管合同，不代表触控输入或 pac
 新建/选择/关闭 tab、收起/恢复、session/thread identity 稳定、桌面视口 resize、可用 viewport 和横向溢出检查，16 项断言、
 console/page error 均通过。
 证据位于 `.lime/qc/gui-evidence/browser-runtime-gate-a/browser-runtime-gate-a-summary.json`，明确为 `proofLevel=Gate A`，
-不能替代同 WebContents 的 Gate B；五语言逐项截图和 loading/load-failed/permission/download/approval/
-takeover/Host unavailable 状态矩阵仍待补齐。
+不能替代同 WebContents 的 Gate B；五语言生命周期截图和行为状态矩阵已由 Gate B locale matrix 补齐。
 
 2026-08-21 已先补齐状态投影的组件级合同：loading、host unavailable、load error、host error、permission blocked 与 download
 状态带现在带有稳定 `data-browser-workspace-status`、`role`/`aria-live` 语义，并由
@@ -103,7 +102,16 @@ takeover/Host unavailable 状态矩阵仍待补齐。
 同日补充 Workspace 的 `load-failed` 事件回归：只有当前选中 native tab 的完整 identity 能进入 `load-error` 状态带，
 DNS 错误详情会保留，其他 tab 的失败事件会被丢弃；Browser 定向回归 7 tests 与真实 Gate A projection 16/16 均通过。
 Host/IPC 操作异常则单独投影为 `host-error`，并已通过 SHELL-01 真实 Electron smoke（退出码 `0`）；本轮仍不把组件
-级多语言断言或单次 smoke 扩大为五语言状态截图矩阵。
+级多语言断言已扩大为五语言真实 Electron 生命周期截图矩阵。
+
+### 1.4 2026-08-23 最新 checkpoint
+
+- `npm run smoke:browser-runtime-locale-matrix` 已生成 `.lime/qc/gui-evidence/browser-runtime-electron-gate-b/browser-runtime-locale-matrix-summary.json`。
+- 五语言真实 Electron renderer 的 `document.documentElement.lang` 与目标 locale 全部相等；每种语言均有 renderer-loading、renderer-ready、browser-loaded、agent-controlled、user-takeover、released、destroyed 七张截图，共 35 张。
+- 状态矩阵引用并校验 approval、artifact、cancel、disconnect、download、permission、user-control、window-close 八份 Gate B summary；全部 `status=pass`、`failedAssertions=[]`，console/page error 为空。
+- artifact Gate B 已证明 completed download -> `artifact/write` -> 受控 artifact ref copy、action approval、turn-scoped grant/evidence、terminal release；open/reveal/clipboard/upload 仍明确为 Host 定向单测 claim boundary。
+- `npm run smoke:agent-runtime-current-fixture`、`npm run verify:gui-smoke`、`npm run test:contracts`、`npm run typecheck`、`npm run typecheck:electron`、`npm run bridge:health -- --timeout-ms 120000`、`npm run governance:legacy-report`、`npm run governance:scripts` 均通过。生产 mock fallback 命中为零。
+- 旧 `browserSession/*`、`BrowserSessionRef`、Canvas Browser owner、旧 schema/client、旧 mock 正向路径已完成物理清理；保留的命中仅限负向回流守卫、历史文档和 current `browserSessionId` 身份字段，不得恢复旧 owner。
 
 ## 2. 事实源与参考边界
 
@@ -408,7 +416,7 @@ Dead 路径不得改名为 compat。最终只允许在 owner negative guard 或�
 - click/fill/press/select/scroll/wait 使用 semantic locator 或最新 `snapshotId + backendNodeId`。
 - 每次 action 后按需要重新 observe；失败先读状态，不盲目重试或退化坐标点击。
 - approval/takeover/deny/resume/interruption 形成真实闭环；危险 click 的 allow-once/decline 已由真实 Electron Gate B 证明，其余敏感动作继续按风险矩阵扩展。
-- permission block 与 download `started -> cancelled` 已完成 Host/Renderer/Gate B 纵切；上传、下载完成、clipboard、permission grant 和敏感数据仍需使用 turn-scoped grant 与 artifact ref 收口。
+- permission block、download `started -> cancelled` 与 completed artifact 已完成 Host/Renderer/Gate B 纵切；上传、clipboard、permission grant、open/reveal 的 Host 单测已覆盖并保持 turn-scoped grant/evidence，未声称 live provider 或 packaged 跨平台证据。
 
 退出条件：一个真实网页流程完成 `observe -> action -> observe`；一个高风险流程完成 `required -> approved/denied -> resume/terminal`；两者均保持同一 tab 和 snapshot lineage。
 

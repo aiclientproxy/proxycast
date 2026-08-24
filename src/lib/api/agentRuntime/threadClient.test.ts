@@ -1262,6 +1262,53 @@ describe("agentRuntime threadClient", () => {
     unlisten();
   });
 
+  it("结构化 App Server client 默认应启用 drain route", async () => {
+    const appServerClient = appServerClientMock();
+    const notification = {
+      method: "item/agentMessage/delta",
+      params: {
+        delta: "结构化 client 的实时答复",
+        itemId: "item-structural-client",
+        threadId: "thread-structural-client",
+        turnId: "turn-structural-client",
+      },
+    } satisfies AppServerJsonRpcNotification;
+    vi.mocked(appServerClient.drainEvents)
+      .mockResolvedValueOnce([notification])
+      .mockResolvedValue([]);
+    vi.mocked(appServerClient.startTurn).mockResolvedValueOnce({
+      ...malformedAppServerResult({}),
+      notifications: [],
+    });
+    const client = createThreadClient({
+      appServerClient: { ...appServerClient },
+      invokeCommand: vi.fn() as unknown as AgentRuntimeCommandInvoke,
+      isAppServerTurnLifecycleAvailable: () => true,
+    });
+    const listener = vi.fn();
+    const eventName = "agent_stream_structural_client";
+    const unlisten = await listenAgentRuntimeEvent(eventName, listener);
+
+    await client.submitAgentRuntimeTurn(
+      turnStartParams({
+        threadId: "thread-structural-client",
+        eventName,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(listener).toHaveBeenCalledWith({
+        payload: expect.objectContaining({
+          type: "text_delta",
+          text: "结构化 client 的实时答复",
+          thread_id: "thread-structural-client",
+          turn_id: "turn-structural-client",
+        }),
+      });
+    });
+    unlisten();
+  });
+
   it("App Server submit 应立即投递请求结果中的 direct v2 notification", async () => {
     const appServerClient = appServerClientMock();
     vi.mocked(appServerClient.startTurn).mockResolvedValueOnce({

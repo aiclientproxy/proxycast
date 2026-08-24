@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "projectId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "projectId",
+    "threadId"
+  ],
+  "title": "ThreadProjectUpdatedNotification",
+  "type": "object"
+}

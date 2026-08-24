@@ -132,6 +132,37 @@ describe("defaultAgentRuntimeAdapter", () => {
     });
   });
 
+  it("archiveSession 应委托 current thread/archive client", async () => {
+    const client = {
+      ...mockRuntimeClient,
+      getAgentRuntimeSession: vi.fn().mockResolvedValue({
+        id: "session-9",
+        thread_id: "thread-9",
+        messages: [],
+      }),
+      archiveAgentRuntimeSession: vi.fn().mockResolvedValue(undefined),
+    };
+    const adapter = createAgentRuntimeAdapter({ client });
+
+    await expect(
+      adapter.archiveSession?.("session-9"),
+    ).resolves.toBeUndefined();
+    expect(client.archiveAgentRuntimeSession).toHaveBeenCalledWith("session-9");
+  });
+
+  it("forkSession 应返回 current thread/fork 创建的新 session", async () => {
+    const client = {
+      ...mockRuntimeClient,
+      forkAgentRuntimeSession: vi.fn().mockResolvedValue("session-forked"),
+    };
+    const adapter = createAgentRuntimeAdapter({ client });
+
+    await expect(adapter.forkSession?.("session-9")).resolves.toBe(
+      "session-forked",
+    );
+    expect(client.forkAgentRuntimeSession).toHaveBeenCalledWith("session-9");
+  });
+
   it("listSessions 应透传筛选参数给 runtime client", async () => {
     const client = {
       ...mockRuntimeClient,

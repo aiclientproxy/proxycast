@@ -35,6 +35,7 @@ export interface RenderWorkspaceRightSurfaceHostRuntimeParams {
   ensureBrowserWorkspaceOwner?: BrowserPanelProps["ensureOwner"];
   browserRightSurfaceInitialUrl?: string | null;
   browserRightSurfaceIntentTitle?: string | null;
+  browserRightSurfaceHistoricalProjection?: BrowserPanelProps["historicalProjection"];
   canvasWorkbenchRootPath: ShellPanelProps["projectRootPath"];
   expertInfoPanelProps: ExpertInfoPanelProps;
   filesRightSurfaceAvailable: boolean;
@@ -75,6 +76,7 @@ export function renderWorkspaceRightSurfaceHostRuntime({
   ensureBrowserWorkspaceOwner,
   browserRightSurfaceInitialUrl,
   browserRightSurfaceIntentTitle,
+  browserRightSurfaceHistoricalProjection,
   canvasWorkbenchRootPath,
   expertInfoPanelProps,
   filesRightSurfaceAvailable,
@@ -166,6 +168,7 @@ export function renderWorkspaceRightSurfaceHostRuntime({
                 runtimeSessionId={sceneSessionId}
                 threadId={sceneThreadId || ""}
                 onNavigate={onRightSurfaceBrowserNavigate}
+                historicalProjection={browserRightSurfaceHistoricalProjection}
               />
             ),
           },

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Starts an experimental MCP server event subscription for a Thread.",
+  "properties": {
+    "_meta": true,
+    "arguments": true,
+    "name": {
+      "type": "string"
+    },
+    "server": {
+      "type": "string"
+    },
+    "subscriptionId": {
+      "type": "string"
+    },
+    "threadId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "arguments",
+    "name",
+    "server",
+    "subscriptionId",
+    "threadId"
+  ],
+  "title": "McpServerEventStreamStartParams",
+  "type": "object"
+}

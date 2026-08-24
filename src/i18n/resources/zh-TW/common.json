@@ -268,5 +268,13 @@
   "common.modelCapabilities.reasoning.inactive": "無思考",
   "common.modelCapabilities.vision.active": "支援多模態",
   "common.modelCapabilities.vision.inactive": "無多模態",
+  "common.modelProviderCapabilities.title": "目前執行供應商能力",
+  "common.modelProviderCapabilities.loading": "正在讀取能力…",
+  "common.modelProviderCapabilities.namespaceTools.active": "工具命名空間",
+  "common.modelProviderCapabilities.namespaceTools.inactive": "無工具命名空間",
+  "common.modelProviderCapabilities.imageGeneration.active": "圖片生成",
+  "common.modelProviderCapabilities.imageGeneration.inactive": "無圖片生成",
+  "common.modelProviderCapabilities.webSearch.active": "網頁搜尋",
+  "common.modelProviderCapabilities.webSearch.inactive": "無網頁搜尋",
   "common.modelSelector.state.loginRequired": "需要登入"
 }

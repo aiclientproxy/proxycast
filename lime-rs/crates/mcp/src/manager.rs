@@ -27,12 +27,20 @@
 #![allow(dead_code)]
 
 use lime_core::DynEmitter;
+use rmcp::model::{
+    CancelledNotification, CancelledNotificationParam, ClientNotification, ClientRequest,
+    CustomRequest, ServerResult,
+};
 use rmcp::service::RunningService;
 use rmcp::RoleClient;
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
+use tokio::sync::oneshot;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::client::McpClientWrapper;
@@ -109,6 +117,7 @@ pub struct McpClientManager {
 
     elicitation_router: Option<crate::elicitation::ElicitationRequestRouter>,
     runtime_owner: Option<McpRuntimeOwner>,
+    server_notifications: broadcast::Sender<McpServerNotification>,
 }
 
 /// Immutable owner bound when a runtime MCP generation is created.
@@ -161,6 +170,7 @@ impl McpClientManager {
     /// 返回初始化的 McpClientManager 实例，连接池和缓存均为空。
     pub fn new(emitter: Option<DynEmitter>) -> Self {
         info!("创建 MCP 客户端管理器");
+        let (server_notifications, _) = broadcast::channel(256);
         Self {
             clients: Arc::new(RwLock::new(HashMap::new())),
             tool_cache: Arc::new(RwLock::new(None)),
@@ -169,6 +179,7 @@ impl McpClientManager {
             environment_registry: McpEnvironmentRegistry::local(),
             elicitation_router: None,
             runtime_owner: None,
+            server_notifications,
         }
     }
 
@@ -188,6 +199,7 @@ impl McpClientManager {
             !thread_id.trim().is_empty(),
             "runtime MCP thread id is required"
         );
+        let (server_notifications, _) = broadcast::channel(256);
         Self {
             clients: Arc::new(RwLock::new(HashMap::new())),
             tool_cache: Arc::new(RwLock::new(None)),
@@ -199,6 +211,7 @@ impl McpClientManager {
                 session_id,
                 thread_id,
             }),
+            server_notifications,
         }
     }
 
@@ -211,6 +224,98 @@ impl McpClientManager {
     /// 设置事件发射器
     pub fn set_emitter(&mut self, emitter: DynEmitter) {
         self.emitter = Some(emitter);
+    }
+
+    pub fn subscribe_server_notifications(&self) -> broadcast::Receiver<McpServerNotification> {
+        self.server_notifications.subscribe()
+    }
+
+    /// Open the MCP `events/stream` request and return its notification route.
+    ///
+    /// The request is deliberately kept pending in a task. MCP servers deliver
+    /// stream events as custom notifications while the request itself remains
+    /// open until the stream terminates.
+    pub async fn open_event_stream(
+        &self,
+        server_name: &str,
+        name: &str,
+        arguments: serde_json::Value,
+        meta: Option<serde_json::Value>,
+    ) -> Result<crate::McpEventStream, McpError> {
+        let service = self
+            .clients
+            .read()
+            .await
+            .get(server_name)
+            .and_then(|client| client.running_service_arc())
+            .ok_or_else(|| {
+                McpError::ConnectionFailed(format!(
+                    "MCP server '{server_name}' has no running transport"
+                ))
+            })?;
+
+        let receiver = self.subscribe_server_notifications();
+        let mut params = json!({
+            "name": name,
+            "arguments": arguments,
+        });
+        if let Some(meta) = meta {
+            if !meta.is_object() {
+                return Err(McpError::ConfigError(
+                    "MCP event request _meta must be a JSON object".to_string(),
+                ));
+            }
+            params["_meta"] = meta;
+        }
+
+        let request = service
+            .peer()
+            .send_cancellable_request(
+                ClientRequest::CustomRequest(CustomRequest::new("events/stream", Some(params))),
+                rmcp::service::PeerRequestOptions::no_options(),
+            )
+            .await
+            .map_err(|error| McpError::ConnectionFailed(error.to_string()))?;
+        let cancellation = CancellationToken::new();
+        let task_cancellation = cancellation.clone();
+        let (request_done_tx, request_done_rx) = oneshot::channel();
+        tokio::spawn(async move {
+            let request_id = request.id.clone();
+            let peer = request.peer.clone();
+            let response_future = async move {
+                request
+                    .rx
+                    .await
+                    .map_err(|_| rmcp::service::ServiceError::TransportClosed)?
+            };
+            let result = tokio::select! {
+                response = response_future => match response {
+                    Ok(ServerResult::CustomResult(_)) => Ok(()),
+                    Ok(_) => Err("MCP event stream returned an unexpected response".to_string()),
+                    Err(error) => Err(error.to_string()),
+                },
+                _ = task_cancellation.cancelled() => {
+                    let _ = peer.send_notification(
+                        ClientNotification::CancelledNotification(CancelledNotification {
+                            method: rmcp::model::CancelledNotificationMethod,
+                            params: CancelledNotificationParam {
+                                request_id,
+                                reason: Some("MCP event stream closed".to_string()),
+                            },
+                            extensions: Default::default(),
+                        }),
+                    ).await;
+                    Err("MCP event stream cancelled".to_string())
+                },
+            };
+            let _ = request_done_tx.send(result);
+        });
+
+        Ok(crate::McpEventStream::new(
+            receiver,
+            request_done_rx,
+            cancellation,
+        ))
     }
 
     // ========================================================================

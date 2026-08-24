@@ -370,6 +370,72 @@ async fn duplicate_queue_if_busy_input_reuses_existing_queued_turn() {
 }
 
 #[tokio::test]
+async fn thread_queue_update_preserves_ordered_input_and_capacity_is_bounded() {
+    use agent_protocol::AgentInput as OrderedInput;
+
+    let temp = tempfile::tempdir().expect("queue capacity tempdir");
+    let roots =
+        StorageRoots::initialize(temp.path(), temp.path().join("app-server")).expect("roots");
+    let projection_store =
+        Arc::new(ProjectionStore::initialize(&roots.projection_db_path).expect("projection store"));
+    let core = RuntimeCore::default().with_projection_store(projection_store);
+    core.start_session(AgentSessionStartParams {
+        session_id: Some("sess_thread_queue_capacity".to_string()),
+        thread_id: Some("thread_queue_capacity".to_string()),
+        app_id: "agent-chat".to_string(),
+        workspace_id: Some("workspace-current".to_string()),
+        business_object_ref: None,
+        locale: None,
+    })
+    .expect("session");
+
+    let first = core
+        .add_thread_queue_submission(
+            "thread_queue_capacity",
+            vec![OrderedInput::text("first")],
+            "client-1".to_string(),
+        )
+        .await
+        .expect("first queued submission");
+    let updated_input = vec![
+        OrderedInput::text("updated"),
+        OrderedInput::Mention {
+            name: "skill".to_string(),
+            path: "/workspace/skill".to_string(),
+        },
+    ];
+    core.update_thread_queue_submission("thread_queue_capacity", &first.id, updated_input.clone())
+        .await
+        .expect("update queued submission");
+    let listed = core
+        .list_thread_queue_submissions("thread_queue_capacity")
+        .await
+        .expect("list queued submissions");
+    assert_eq!(listed[0].input, updated_input);
+
+    for index in 2..=100 {
+        core.add_thread_queue_submission(
+            "thread_queue_capacity",
+            vec![OrderedInput::text(format!("queued-{index}"))],
+            format!("client-{index}"),
+        )
+        .await
+        .expect("queue within capacity");
+    }
+    let error = core
+        .add_thread_queue_submission(
+            "thread_queue_capacity",
+            vec![OrderedInput::text("overflow")],
+            "client-overflow".to_string(),
+        )
+        .await
+        .expect_err("queue capacity must fail closed");
+    assert!(error
+        .to_string()
+        .contains("queue cannot contain more than 100 submissions"));
+}
+
+#[tokio::test]
 async fn read_session_projects_queued_turn_input_snapshot() {
     let backend = Arc::new(RecordingBackend::default());
     let core = RuntimeCore::with_backend(backend);
@@ -993,21 +1059,37 @@ async fn resume_queued_turn_restores_queue_when_backend_fails_before_emit() {
     )
     .expect("complete running");
 
-    let error = core
+    let resumed = core
         .resume_next_queued_turn_if_idle("sess_queue_rollback", RuntimeHostContext::default())
         .await
-        .expect_err("resume should fail before backend emits");
-    assert!(matches!(error, RuntimeCoreError::Backend(_)));
+        .expect("queued turn should be admitted before backend completion");
+    assert!(matches!(
+        resumed,
+        QueuedTurnResume::Started { queued_turn_id, .. } if queued_turn_id == "turn_queued"
+    ));
 
-    let read = core
-        .read_session_current(AgentSessionReadParams {
-            session_id: "sess_queue_rollback".to_string(),
-            history_limit: None,
-            history_offset: None,
-            history_before_message_id: None,
+    let read =
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                let read = core
+                    .read_session_current(AgentSessionReadParams {
+                        session_id: "sess_queue_rollback".to_string(),
+                        history_limit: None,
+                        history_offset: None,
+                        history_before_message_id: None,
+                    })
+                    .await
+                    .expect("read session");
+                if read.turns.iter().any(|turn| {
+                    turn.turn_id == "turn_queued" && turn.status == AgentTurnStatus::Queued
+                }) {
+                    break read;
+                }
+                tokio::task::yield_now().await;
+            }
         })
         .await
-        .expect("read session");
+        .expect("queued turn was not restored after backend failed before emitting");
     assert!(read
         .turns
         .iter()

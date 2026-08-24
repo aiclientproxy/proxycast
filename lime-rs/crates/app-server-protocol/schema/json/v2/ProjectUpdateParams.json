@@ -1,0 +1,50 @@
+{
+  "$defs": {
+    "ProjectRoot": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "metadata": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": [
+        "null",
+        "object"
+      ]
+    },
+    "name": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "roots": {
+      "items": {
+        "$ref": "#/$defs/ProjectRoot"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "projectId"
+  ],
+  "title": "ProjectUpdateParams",
+  "type": "object"
+}

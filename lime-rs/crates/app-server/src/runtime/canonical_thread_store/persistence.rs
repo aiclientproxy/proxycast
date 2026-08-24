@@ -59,6 +59,26 @@ pub(super) fn create_thread_store_schema(
             thread_id TEXT PRIMARY KEY NOT NULL
                 REFERENCES thread_goals(thread_id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS projects (
+            project_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            metadata_json TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS project_roots (
+            project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+            ordinal INTEGER NOT NULL,
+            path TEXT NOT NULL,
+            PRIMARY KEY (project_id, ordinal),
+            UNIQUE (project_id, path)
+        );
+        CREATE TABLE IF NOT EXISTS project_idempotency_keys (
+            idempotency_key TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS idx_canonical_threads_archive_recency
             ON canonical_threads(archived, recency_at_ms DESC, updated_at_ms DESC, thread_id DESC);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_threads_session
@@ -67,6 +87,7 @@ pub(super) fn create_thread_store_schema(
             ON canonical_thread_spawn_edges(parent_thread_id, status);
         CREATE INDEX IF NOT EXISTS idx_thread_section_members_order
             ON thread_section_members(section_id, position, thread_id);
+        CREATE INDEX IF NOT EXISTS idx_projects_position ON projects(position, project_id);
         "#,
     )
     .map_err(store_error)?;

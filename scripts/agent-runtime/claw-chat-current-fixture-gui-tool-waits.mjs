@@ -72,6 +72,11 @@ export async function waitForGuiMcpStructuredContentCompleted(page, options) {
             !text.includes(toolName) &&
             /\d+\s*步/.test(text) &&
             text.includes("工具步骤"),
+          historicalTimelineCompacted: Boolean(
+            document.querySelector(
+              '[data-testid^="message-list-historical-timeline-preview:"]',
+            ),
+          ),
           envelopeVisible: forbiddenEnvelopeFragments.some((value) =>
             text.includes(value),
           ),
@@ -155,6 +160,17 @@ export async function expandAndInspectGuiMcpStructuredContentProcess(
   options,
 ) {
   await page.evaluate(() => {
+    const historicalTimelinePreviews = Array.from(
+      document.querySelectorAll(
+        '[data-testid^="message-list-historical-timeline-preview:"]',
+      ),
+    );
+    for (const preview of historicalTimelinePreviews) {
+      if (preview instanceof HTMLButtonElement) {
+        preview.click();
+      }
+    }
+
     const inlineToolSteps = Array.from(
       document.querySelectorAll('[data-testid="inline-tool-process-step"]'),
     );
@@ -170,6 +186,33 @@ export async function expandAndInspectGuiMcpStructuredContentProcess(
       });
       if (detailsButton instanceof HTMLButtonElement) {
         detailsButton.click();
+      }
+    }
+
+    const canonicalToolRows = Array.from(
+      document.querySelectorAll('[data-testid="tool-call-row"]'),
+    );
+    for (const row of canonicalToolRows) {
+      const rowText = row.textContent || "";
+      const toolName = row.getAttribute("data-tool-name") || "";
+      if (
+        !toolName.includes("mcp__docs__diagnostic_probe") &&
+        !rowText.includes("docs / diagnostic probe")
+      ) {
+        continue;
+      }
+      const resultButton = Array.from(row.querySelectorAll("button")).find(
+        (button) =>
+          /结果|result|expand|展开/i.test(
+            [
+              button.getAttribute("title") || "",
+              button.getAttribute("aria-label") || "",
+              button.textContent || "",
+            ].join("\n"),
+          ),
+      );
+      if (resultButton instanceof HTMLButtonElement) {
+        resultButton.click();
       }
     }
 
@@ -212,6 +255,21 @@ export async function expandAndInspectGuiMcpStructuredContentProcess(
           text: step.textContent || "",
           grouped: step.getAttribute("data-grouped") || "",
         }));
+        const canonicalToolRow = Array.from(
+          document.querySelectorAll('[data-testid="tool-call-row"]'),
+        ).find((row) => {
+          const rowText = row.textContent || "";
+          return (
+            row.getAttribute("data-tool-name") === toolName ||
+            rowText.includes(toolName) ||
+            rowText.includes(toolDisplayLabel)
+          );
+        });
+        const canonicalToolContainer = canonicalToolRow?.closest(
+          '[data-testid^="agent-thread-block:"]',
+        );
+        const canonicalToolText =
+          canonicalToolContainer?.textContent || canonicalToolRow?.textContent || "";
         const mcpProcessGroup = processGroups.find(
           (group) =>
             group.text.includes(answer) ||
@@ -226,8 +284,8 @@ export async function expandAndInspectGuiMcpStructuredContentProcess(
             step.text.includes(toolName) ||
             step.text.includes(toolDisplayLabel),
         );
-        const processText = mcpProcessGroup?.text || "";
-        const inlineText = mcpInlineStep?.text || "";
+        const processText = mcpProcessGroup?.text || canonicalToolText;
+        const inlineText = mcpInlineStep?.text || canonicalToolText;
         const visibleProcessText = inlineText || processText;
         const forbiddenEnvelopeFragments = [
           "request_metadata",
@@ -241,7 +299,8 @@ export async function expandAndInspectGuiMcpStructuredContentProcess(
         ];
         return {
           mcpProcessGroupExpanded:
-            Boolean(mcpInlineStep) || mcpProcessGroup?.expanded === "true",
+            Boolean(mcpInlineStep || canonicalToolRow) ||
+            mcpProcessGroup?.expanded === "true",
           hasStructuredAnswer: visibleProcessText.includes(answer),
           hasReferenceId: visibleProcessText.includes(referenceId),
           hasToolName:
@@ -259,6 +318,8 @@ export async function expandAndInspectGuiMcpStructuredContentProcess(
           processGroupText: processText,
           inlineToolStepCount: inlineToolSteps.length,
           inlineToolStepText: inlineText,
+          canonicalToolRowCount: canonicalToolRow ? 1 : 0,
+          canonicalToolText,
           bodyText: text,
         };
       },

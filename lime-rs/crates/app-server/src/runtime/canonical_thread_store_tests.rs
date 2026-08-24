@@ -76,6 +76,9 @@ fn production_storage_paths_keep_physical_table_owners_separate() {
         vec![
             "canonical_thread_spawn_edges".to_string(),
             "canonical_threads".to_string(),
+            "project_idempotency_keys".to_string(),
+            "project_roots".to_string(),
+            "projects".to_string(),
             "thread_goal_continuation_deferrals".to_string(),
             "thread_goal_turn_accounting".to_string(),
             "thread_goal_update_outbox".to_string(),
@@ -1224,6 +1227,7 @@ fn projection_store_is_the_canonical_thread_store_owner() {
     let archived = block_on(store.list_threads(ListThreadsParams {
         include_archived: true,
         section: None,
+        project: None,
         sort_by_section_position: false,
         page: page(SortDirection::Asc, 10),
     }))
@@ -1731,6 +1735,7 @@ fn opaque_cursors_page_threads_turns_and_items_stably() {
     let first = block_on(store.list_threads(ListThreadsParams {
         include_archived: false,
         section: None,
+        project: None,
         sort_by_section_position: false,
         page: page(SortDirection::Asc, 2),
     }))
@@ -1740,6 +1745,7 @@ fn opaque_cursors_page_threads_turns_and_items_stably() {
     let second = block_on(store.list_threads(ListThreadsParams {
         include_archived: false,
         section: None,
+        project: None,
         sort_by_section_position: false,
         page: PageRequest {
             cursor: first.next_cursor,

@@ -1,5 +1,12 @@
 {
   "$defs": {
+    "AgentMessageDelivery": {
+      "description": "Codex v2 assistant message delivery mode.\n\nThe current upstream contract only exposes `async`; keeping this as a\nclosed enum prevents arbitrary presentation strings from crossing the\nprotocol boundary.",
+      "enum": [
+        "async"
+      ],
+      "type": "string"
+    },
     "AgentMessageDeltaNotification": {
       "properties": {
         "delta": {
@@ -854,6 +861,21 @@
       ],
       "type": "string"
     },
+    "EnvironmentConnectionNotification": {
+      "properties": {
+        "environmentId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "environmentId",
+        "threadId"
+      ],
+      "type": "object"
+    },
     "ErrorNotification": {
       "additionalProperties": false,
       "description": "Reports a transient retry or terminal error for the current turn.",
@@ -1624,6 +1646,34 @@
       ],
       "type": "object"
     },
+    "McpServerEventNotification": {
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "params": true
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    "McpServerEventStreamNotification": {
+      "properties": {
+        "notification": {
+          "$ref": "#/$defs/McpServerEventNotification"
+        },
+        "subscriptionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "notification",
+        "subscriptionId"
+      ],
+      "type": "object"
+    },
     "McpServerOauthLoginCompletedNotification": {
       "additionalProperties": false,
       "properties": {
@@ -2115,6 +2165,33 @@
       ],
       "type": "string"
     },
+    "ProjectChangeType": {
+      "enum": [
+        "created",
+        "deleted",
+        "updated"
+      ],
+      "type": "string"
+    },
+    "ProjectChangedNotification": {
+      "properties": {
+        "changeType": {
+          "$ref": "#/$defs/ProjectChangeType"
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changeType",
+        "projectId"
+      ],
+      "type": "object"
+    },
+    "ReasoningEffort": {
+      "description": "Typed reasoning effort carried by collaboration tool calls.\n\nCodex accepts model-defined values in addition to its well-known levels.\nA transparent validated wrapper preserves those values without falling\nback to an untyped `String` field in the public Item contract.",
+      "type": "string"
+    },
     "ReasoningSummaryPartAddedNotification": {
       "properties": {
         "itemId": {
@@ -2301,6 +2378,33 @@
       ],
       "type": "object"
     },
+    "SessionSource": {
+      "description": "Origin of a thread session, aligned with Codex v2's typed source contract.",
+      "oneOf": [
+        {
+          "enum": [
+            "appServer",
+            "cli",
+            "exec",
+            "unknown",
+            "vscode"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "custom": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "SkillsChangedNotification": {
       "additionalProperties": false,
       "description": "Signals that the process-wide Skill catalog must be read again.",
@@ -2332,6 +2436,29 @@
       },
       "required": [
         "id"
+      ],
+      "type": "object"
+    },
+    "StrictReviewRequiredNotification": {
+      "additionalProperties": false,
+      "description": "Signals that a Guardian-backed tool review requires the strict-review\nsurface before execution continues.",
+      "properties": {
+        "startedAtMs": {
+          "description": "Unix timestamp (in milliseconds) when this review started.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "turnId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "startedAtMs",
+        "threadId",
+        "turnId"
       ],
       "type": "object"
     },
@@ -2478,6 +2605,13 @@
         "preview": {
           "type": "string"
         },
+        "projectId": {
+          "description": "Canonical project assignment owned by App Server, if any.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "recencyAt": {
           "format": "int64",
           "type": [
@@ -2506,22 +2640,19 @@
           "type": "string"
         },
         "source": {
-          "type": "string"
+          "$ref": "#/$defs/SessionSource"
         },
         "status": {
+          "$ref": "#/$defs/ThreadStatus"
+        },
+        "threadSource": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ThreadStatus"
+              "$ref": "#/$defs/ThreadSource"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "threadSource": {
-          "type": [
-            "null",
-            "string"
           ]
         },
         "turns": {
@@ -2544,8 +2675,10 @@
         "id",
         "modelProvider",
         "preview",
+        "projectId",
         "sessionId",
         "source",
+        "status",
         "updatedAt"
       ],
       "type": "object"
@@ -2762,6 +2895,16 @@
         },
         {
           "properties": {
+            "delivery": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AgentMessageDelivery"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "id": {
               "type": "string"
             },
@@ -2928,7 +3071,19 @@
                 }
               ]
             },
+            "pluginId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "processId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "scriptPath": {
               "type": [
                 "null",
                 "string"
@@ -3055,6 +3210,12 @@
               "type": [
                 "null",
                 "string"
+              ]
+            },
+            "readOnlyHint": {
+              "type": [
+                "boolean",
+                "null"
               ]
             },
             "result": {
@@ -3201,9 +3362,13 @@
               ]
             },
             "reasoningEffort": {
-              "type": [
-                "null",
-                "string"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ReasoningEffort"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "receiverThreadIds": {
@@ -3624,6 +3789,46 @@
       ],
       "type": "object"
     },
+    "ThreadProjectUpdatedNotification": {
+      "properties": {
+        "projectId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadQueueChangedNotification": {
+      "properties": {
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadRevertedNotification": {
+      "properties": {
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
     "ThreadSection": {
       "properties": {
         "id": {
@@ -3698,6 +3903,10 @@
         "threadSettings"
       ],
       "type": "object"
+    },
+    "ThreadSource": {
+      "description": "Analytics source classification for a thread.\n\nCodex keeps feature values open-ended while preserving a typed wire shape;\nthe same representation avoids a public untyped string field in Lime.",
+      "type": "string"
     },
     "ThreadStartedNotification": {
       "properties": {
@@ -4274,6 +4483,58 @@
         "id"
       ],
       "type": "object"
+    },
+    "WindowsSandboxSetupCompletedNotification": {
+      "properties": {
+        "error": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/WindowsSandboxSetupMode"
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode",
+        "success"
+      ],
+      "type": "object"
+    },
+    "WindowsSandboxSetupMode": {
+      "enum": [
+        "elevated",
+        "unelevated"
+      ],
+      "type": "string"
+    },
+    "WindowsWorldWritableWarningNotification": {
+      "properties": {
+        "extraCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failedScan": {
+          "type": "boolean"
+        },
+        "samplePaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "extraCount",
+        "failedScan",
+        "samplePaths"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4319,6 +4580,22 @@
         },
         "params": {
           "$ref": "#/$defs/GuardianWarningNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "autoApprovalReview/strictReviewRequired",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/StrictReviewRequiredNotification"
         }
       },
       "required": [
@@ -4383,6 +4660,54 @@
         },
         "params": {
           "$ref": "#/$defs/McpServerStatusUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "mcpServer/event/stream/notification",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/McpServerEventStreamNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "thread/environment/connected",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/EnvironmentConnectionNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "thread/environment/disconnected",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/EnvironmentConnectionNotification"
         }
       },
       "required": [
@@ -4543,6 +4868,22 @@
         },
         "params": {
           "$ref": "#/$defs/ThreadClosedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "thread/reverted",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadRevertedNotification"
         }
       },
       "required": [
@@ -5066,11 +5407,91 @@
     {
       "properties": {
         "method": {
+          "const": "thread/queue/changed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadQueueChangedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "project/changed",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProjectChangedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "thread/project/updated",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadProjectUpdatedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
           "const": "serverRequest/resolved",
           "type": "string"
         },
         "params": {
           "$ref": "#/$defs/ServerRequestResolvedNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "windows/worldWritableWarning",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/WindowsWorldWritableWarningNotification"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "method": {
+          "const": "windowsSandbox/setupCompleted",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/WindowsSandboxSetupCompletedNotification"
         }
       },
       "required": [

@@ -66,7 +66,7 @@ describe("Browser Electron Gate B", () => {
       "browser-runtime-electron-gate-b-download-summary.json",
     );
     expect(() => parseArgs(["--scenario", "unknown"])).toThrow(
-      "--scenario 必须是 projection、lifecycle、approval、user-control、cancel、window-close、disconnect、permission 或 download",
+      "--scenario 必须是 projection、lifecycle、approval、user-control、cancel、window-close、disconnect、permission、download 或 artifact",
     );
   });
 

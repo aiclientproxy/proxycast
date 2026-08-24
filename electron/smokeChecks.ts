@@ -195,7 +195,7 @@ export function createElectronSmokeRunner(
           },
           capabilities: {
             eventMethods: ["agentSession/event"],
-            experimental: true,
+            experimentalApi: true,
           },
         });
         const response = await options.appServerHost.handleJsonLines({

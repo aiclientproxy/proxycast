@@ -542,6 +542,51 @@
         }
       ]
     },
+    "EnvironmentAddParams": {
+      "properties": {
+        "connectTimeoutMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "environmentId": {
+          "type": "string"
+        },
+        "execServerUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "environmentId",
+        "execServerUrl"
+      ],
+      "type": "object"
+    },
+    "EnvironmentInfoParams": {
+      "properties": {
+        "environmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "environmentId"
+      ],
+      "type": "object"
+    },
+    "EnvironmentStatusParams": {
+      "properties": {
+        "environmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "environmentId"
+      ],
+      "type": "object"
+    },
     "ExperimentalFeatureEnablementSetParams": {
       "description": "Process-wide feature enablement updates.",
       "properties": {
@@ -759,8 +804,93 @@
       ],
       "type": "string"
     },
+    "ListMcpServerStatusParams": {
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServerStatusDetail"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "threadId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "McpServerEventStreamStartParams": {
+      "description": "Starts an experimental MCP server event subscription for a Thread.",
+      "properties": {
+        "_meta": true,
+        "arguments": true,
+        "name": {
+          "type": "string"
+        },
+        "server": {
+          "type": "string"
+        },
+        "subscriptionId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "arguments",
+        "name",
+        "server",
+        "subscriptionId",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "McpServerEventStreamStopParams": {
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId"
+      ],
+      "type": "object"
+    },
     "McpServerResourceReadParams": {
       "properties": {
+        "connectorId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "originCallId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "server": {
           "type": "string"
         },
@@ -779,6 +909,13 @@
         "uri"
       ],
       "type": "object"
+    },
+    "McpServerStatusDetail": {
+      "enum": [
+        "full",
+        "toolsAndAuthOnly"
+      ],
+      "type": "string"
     },
     "McpServerToolCallParams": {
       "properties": {
@@ -887,6 +1024,9 @@
           ]
         }
       },
+      "type": "object"
+    },
+    "ModelProviderCapabilitiesReadParams": {
       "type": "object"
     },
     "MultiAgentMode": {
@@ -1219,6 +1359,181 @@
       },
       "required": [
         "processHandle"
+      ],
+      "type": "object"
+    },
+    "ProjectCreateParams": {
+      "properties": {
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/ProjectRoot"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "name",
+        "roots"
+      ],
+      "type": "object"
+    },
+    "ProjectDeleteParams": {
+      "properties": {
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId"
+      ],
+      "type": "object"
+    },
+    "ProjectImportParams": {
+      "properties": {
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/ProjectRoot"
+          },
+          "type": "array"
+        },
+        "threads": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "name",
+        "roots"
+      ],
+      "type": "object"
+    },
+    "ProjectListParams": {
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ProjectMoveParams": {
+      "properties": {
+        "beforeProjectId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId"
+      ],
+      "type": "object"
+    },
+    "ProjectReadParams": {
+      "properties": {
+        "projectId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId"
+      ],
+      "type": "object"
+    },
+    "ProjectRoot": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "ProjectUpdateParams": {
+      "properties": {
+        "metadata": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "name": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/ProjectRoot"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "projectId"
       ],
       "type": "object"
     },
@@ -1616,9 +1931,13 @@
           "type": "string"
         },
         "threadSource": {
-          "type": [
-            "null",
-            "string"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadSource"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -1838,6 +2157,12 @@
             "string"
           ]
         },
+        "projectId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "searchTerm": {
           "type": [
             "null",
@@ -1961,11 +2286,136 @@
             }
           ]
         },
+        "projectId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "threadId": {
           "type": "string"
         }
       },
       "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadQueueAddParams": {
+      "properties": {
+        "clientUserMessageId": {
+          "type": "string"
+        },
+        "input": {
+          "items": {
+            "$ref": "#/$defs/UserInput"
+          },
+          "type": "array"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "clientUserMessageId",
+        "input",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadQueueDeleteParams": {
+      "properties": {
+        "queuedSubmissionId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "queuedSubmissionId",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadQueueListParams": {
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadQueueReorderParams": {
+      "properties": {
+        "queuedSubmissionIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "queuedSubmissionIds",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadQueueStartParams": {
+      "properties": {
+        "queuedSubmissionId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadQueueUpdateParams": {
+      "properties": {
+        "input": {
+          "items": {
+            "$ref": "#/$defs/UserInput"
+          },
+          "type": "array"
+        },
+        "queuedSubmissionId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input",
+        "queuedSubmissionId",
         "threadId"
       ],
       "type": "object"
@@ -2112,6 +2562,23 @@
         }
       },
       "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadRevertParams": {
+      "description": "Replace a paginated thread's durable history with the prefix before one turn.\n\nThis only changes persisted conversation history. It does not revert local file changes.",
+      "properties": {
+        "beforeTurnId": {
+          "description": "Turn excluded from the replacement history, together with every later turn.",
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "beforeTurnId",
         "threadId"
       ],
       "type": "object"
@@ -2387,6 +2854,10 @@
       ],
       "type": "string"
     },
+    "ThreadSource": {
+      "description": "Analytics source classification for a thread.\n\nCodex keeps feature values open-ended while preserving a typed wire shape;\nthe same representation avoids a public untyped string field in Lime.",
+      "type": "string"
+    },
     "ThreadSourceKind": {
       "enum": [
         "appServer",
@@ -2500,6 +2971,12 @@
           ]
         },
         "personality": true,
+        "projectId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "runtimeWorkspaceRoots": {
           "items": {
             "type": "string"
@@ -2540,9 +3017,13 @@
           ]
         },
         "threadSource": {
-          "type": [
-            "null",
-            "string"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadSource"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -2960,6 +3441,30 @@
       "additionalProperties": false,
       "description": "Empty parameters are accepted so the method can be called with `{}` by the\nDesktop client while the ingress also accepts Codex's omitted-params form.",
       "type": "object"
+    },
+    "WindowsSandboxSetupMode": {
+      "enum": [
+        "elevated",
+        "unelevated"
+      ],
+      "type": "string"
+    },
+    "WindowsSandboxSetupStartParams": {
+      "properties": {
+        "cwd": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/WindowsSandboxSetupMode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -3016,6 +3521,26 @@
         },
         "params": {
           "$ref": "#/$defs/ThreadResumeParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "thread/revert",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadRevertParams"
         }
       },
       "required": [
@@ -3687,6 +4212,266 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
+          "const": "thread/queue/add",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadQueueAddParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "thread/queue/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadQueueListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "thread/queue/update",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadQueueUpdateParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "thread/queue/delete",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadQueueDeleteParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "thread/queue/reorder",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadQueueReorderParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "thread/queue/start",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ThreadQueueStartParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "project/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProjectListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "project/read",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProjectReadParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "project/create",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProjectCreateParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "project/import",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProjectImportParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "project/update",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProjectUpdateParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "project/move",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProjectMoveParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "project/delete",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ProjectDeleteParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
           "const": "artifact/write",
           "type": "string"
         },
@@ -3747,11 +4532,131 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
+          "const": "mcpServerStatus/list",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ListMcpServerStatusParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "mcpServer/event/stream/start",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/McpServerEventStreamStartParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "mcpServer/event/stream/stop",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/McpServerEventStreamStopParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
           "const": "mcpServer/tool/call",
           "type": "string"
         },
         "params": {
           "$ref": "#/$defs/McpServerToolCallParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "environment/add",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/EnvironmentAddParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "environment/info",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/EnvironmentInfoParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "environment/status",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/EnvironmentStatusParams"
         }
       },
       "required": [
@@ -3933,11 +4838,51 @@
           "$ref": "#/$defs/RequestId"
         },
         "method": {
+          "const": "windowsSandbox/setupStart",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/WindowsSandboxSetupStartParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
           "const": "model/list",
           "type": "string"
         },
         "params": {
           "$ref": "#/$defs/ModelListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "modelProvider/capabilities/read",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/ModelProviderCapabilitiesReadParams"
         }
       },
       "required": [

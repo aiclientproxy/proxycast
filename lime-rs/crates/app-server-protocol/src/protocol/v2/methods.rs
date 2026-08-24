@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub const METHOD_THREAD_START: &str = "thread/start";
 pub const METHOD_THREAD_FORK: &str = "thread/fork";
 pub const METHOD_THREAD_RESUME: &str = "thread/resume";
+pub const METHOD_THREAD_REVERT: &str = "thread/revert";
 pub const METHOD_THREAD_READ: &str = "thread/read";
 pub const METHOD_THREAD_LIST: &str = "thread/list";
 pub const METHOD_THREAD_SECTION_MOVE: &str = "thread/section/move";
@@ -38,10 +39,29 @@ pub const METHOD_THREAD_BACKGROUND_TERMINALS_TERMINATE: &str =
 pub const METHOD_THREAD_GOAL_SET: &str = "thread/goal/set";
 pub const METHOD_THREAD_GOAL_GET: &str = "thread/goal/get";
 pub const METHOD_THREAD_GOAL_CLEAR: &str = "thread/goal/clear";
+pub const METHOD_THREAD_QUEUE_ADD: &str = "thread/queue/add";
+pub const METHOD_THREAD_QUEUE_LIST: &str = "thread/queue/list";
+pub const METHOD_THREAD_QUEUE_UPDATE: &str = "thread/queue/update";
+pub const METHOD_THREAD_QUEUE_DELETE: &str = "thread/queue/delete";
+pub const METHOD_THREAD_QUEUE_REORDER: &str = "thread/queue/reorder";
+pub const METHOD_THREAD_QUEUE_START: &str = "thread/queue/start";
+pub const METHOD_PROJECT_LIST: &str = "project/list";
+pub const METHOD_PROJECT_READ: &str = "project/read";
+pub const METHOD_PROJECT_CREATE: &str = "project/create";
+pub const METHOD_PROJECT_IMPORT: &str = "project/import";
+pub const METHOD_PROJECT_UPDATE: &str = "project/update";
+pub const METHOD_PROJECT_MOVE: &str = "project/move";
+pub const METHOD_PROJECT_DELETE: &str = "project/delete";
 pub const METHOD_ARTIFACT_WRITE: &str = "artifact/write";
 pub const METHOD_MEDIA_READ: &str = "media/read";
 pub const METHOD_MCP_SERVER_RESOURCE_READ: &str = "mcpServer/resource/read";
+pub const METHOD_MCP_SERVER_STATUS_LIST: &str = "mcpServerStatus/list";
+pub const METHOD_MCP_SERVER_EVENT_STREAM_START: &str = "mcpServer/event/stream/start";
+pub const METHOD_MCP_SERVER_EVENT_STREAM_STOP: &str = "mcpServer/event/stream/stop";
 pub const METHOD_MCP_SERVER_TOOL_CALL: &str = "mcpServer/tool/call";
+pub const METHOD_ENVIRONMENT_ADD: &str = "environment/add";
+pub const METHOD_ENVIRONMENT_INFO: &str = "environment/info";
+pub const METHOD_ENVIRONMENT_STATUS: &str = "environment/status";
 pub const METHOD_CONFIG_READ: &str = "config/read";
 pub const METHOD_CONFIG_VALUE_WRITE: &str = "config/value/write";
 pub const METHOD_CONFIG_BATCH_WRITE: &str = "config/batchWrite";
@@ -50,7 +70,9 @@ pub const METHOD_EXPERIMENTAL_FEATURE_LIST: &str = "experimentalFeature/list";
 pub const METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET: &str = "experimentalFeature/enablement/set";
 pub const METHOD_PERMISSION_PROFILE_LIST: &str = "permissionProfile/list";
 pub const METHOD_WINDOWS_SANDBOX_READINESS: &str = "windowsSandbox/readiness";
+pub const METHOD_WINDOWS_SANDBOX_SETUP_START: &str = "windowsSandbox/setupStart";
 pub const METHOD_MODEL_LIST: &str = "model/list";
+pub const METHOD_MODEL_PROVIDER_CAPABILITIES_READ: &str = "modelProvider/capabilities/read";
 pub const METHOD_APP_READ: &str = "app/read";
 pub const METHOD_APP_LIST: &str = "app/list";
 pub const METHOD_APP_INSTALLED: &str = "app/installed";
@@ -97,11 +119,16 @@ pub const METHOD_COMMAND_EXEC_RESIZE: &str = "command/exec/resize";
 pub const METHOD_COMMAND_EXEC_TERMINATE: &str = "command/exec/terminate";
 pub const METHOD_COMMAND_EXEC_OUTPUT_DELTA: &str = "command/exec/outputDelta";
 pub const METHOD_FS_CHANGED: &str = "fs/changed";
+pub const METHOD_WINDOWS_WORLD_WRITABLE_WARNING: &str = "windows/worldWritableWarning";
+pub const METHOD_WINDOWS_SANDBOX_SETUP_COMPLETED: &str = "windowsSandbox/setupCompleted";
+pub const METHOD_THREAD_ENVIRONMENT_CONNECTED: &str = "thread/environment/connected";
+pub const METHOD_THREAD_ENVIRONMENT_DISCONNECTED: &str = "thread/environment/disconnected";
 pub const METHOD_THREAD_STARTED: &str = "thread/started";
 pub const METHOD_THREAD_ARCHIVED: &str = "thread/archived";
 pub const METHOD_THREAD_DELETED: &str = "thread/deleted";
 pub const METHOD_THREAD_UNARCHIVED: &str = "thread/unarchived";
 pub const METHOD_THREAD_CLOSED: &str = "thread/closed";
+pub const METHOD_THREAD_REVERTED: &str = "thread/reverted";
 pub const METHOD_THREAD_NAME_UPDATED: &str = "thread/name/updated";
 pub const METHOD_THREAD_STATUS_CHANGED: &str = "thread/status/changed";
 pub const METHOD_TURN_STARTED: &str = "turn/started";
@@ -130,14 +157,19 @@ pub const METHOD_THREAD_SETTINGS_UPDATED: &str = "thread/settings/updated";
 pub const METHOD_THREAD_TOKEN_USAGE_UPDATED: &str = "thread/tokenUsage/updated";
 pub const METHOD_THREAD_GOAL_UPDATED: &str = "thread/goal/updated";
 pub const METHOD_THREAD_GOAL_CLEARED: &str = "thread/goal/cleared";
+pub const METHOD_THREAD_QUEUE_CHANGED: &str = "thread/queue/changed";
+pub const METHOD_PROJECT_CHANGED: &str = "project/changed";
+pub const METHOD_THREAD_PROJECT_UPDATED: &str = "thread/project/updated";
 pub const METHOD_SERVER_REQUEST_RESOLVED: &str = "serverRequest/resolved";
 pub const METHOD_CONFIG_WARNING: &str = "configWarning";
 pub const METHOD_WARNING: &str = "warning";
 pub const METHOD_GUARDIAN_WARNING: &str = "guardianWarning";
+pub const METHOD_STRICT_REVIEW_REQUIRED: &str = "autoApprovalReview/strictReviewRequired";
 pub const METHOD_ERROR: &str = "error";
 pub const METHOD_SKILLS_CHANGED: &str = "skills/changed";
 pub const METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED: &str = "mcpServer/oauthLogin/completed";
 pub const METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED: &str = "mcpServer/startupStatus/updated";
+pub const METHOD_MCP_SERVER_EVENT_STREAM_NOTIFICATION: &str = "mcpServer/event/stream/notification";
 pub const METHOD_CURRENT_TIME_READ: &str = "currentTime/read";
 pub const METHOD_MCP_SERVER_ELICITATION_REQUEST: &str = "mcpServer/elicitation/request";
 pub const METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL: &str =
@@ -156,6 +188,8 @@ pub enum Method {
     ThreadFork,
     #[serde(rename = "thread/resume")]
     ThreadResume,
+    #[serde(rename = "thread/revert")]
+    ThreadRevert,
     #[serde(rename = "thread/read")]
     ThreadRead,
     #[serde(rename = "thread/list")]
@@ -222,14 +256,52 @@ pub enum Method {
     ThreadGoalGet,
     #[serde(rename = "thread/goal/clear")]
     ThreadGoalClear,
+    #[serde(rename = "thread/queue/add")]
+    ThreadQueueAdd,
+    #[serde(rename = "thread/queue/list")]
+    ThreadQueueList,
+    #[serde(rename = "thread/queue/update")]
+    ThreadQueueUpdate,
+    #[serde(rename = "thread/queue/delete")]
+    ThreadQueueDelete,
+    #[serde(rename = "thread/queue/reorder")]
+    ThreadQueueReorder,
+    #[serde(rename = "thread/queue/start")]
+    ThreadQueueStart,
+    #[serde(rename = "project/list")]
+    ProjectList,
+    #[serde(rename = "project/read")]
+    ProjectRead,
+    #[serde(rename = "project/create")]
+    ProjectCreate,
+    #[serde(rename = "project/import")]
+    ProjectImport,
+    #[serde(rename = "project/update")]
+    ProjectUpdate,
+    #[serde(rename = "project/move")]
+    ProjectMove,
+    #[serde(rename = "project/delete")]
+    ProjectDelete,
     #[serde(rename = "artifact/write")]
     ArtifactWrite,
     #[serde(rename = "media/read")]
     MediaRead,
     #[serde(rename = "mcpServer/resource/read")]
     McpServerResourceRead,
+    #[serde(rename = "mcpServerStatus/list")]
+    McpServerStatusList,
+    #[serde(rename = "mcpServer/event/stream/start")]
+    McpServerEventStreamStart,
+    #[serde(rename = "mcpServer/event/stream/stop")]
+    McpServerEventStreamStop,
     #[serde(rename = "mcpServer/tool/call")]
     McpServerToolCall,
+    #[serde(rename = "environment/add")]
+    EnvironmentAdd,
+    #[serde(rename = "environment/info")]
+    EnvironmentInfo,
+    #[serde(rename = "environment/status")]
+    EnvironmentStatus,
     #[serde(rename = "config/read")]
     ConfigRead,
     #[serde(rename = "config/value/write")]
@@ -246,8 +318,12 @@ pub enum Method {
     PermissionProfileList,
     #[serde(rename = "windowsSandbox/readiness")]
     WindowsSandboxReadiness,
+    #[serde(rename = "windowsSandbox/setupStart")]
+    WindowsSandboxSetupStart,
     #[serde(rename = "model/list")]
     ModelList,
+    #[serde(rename = "modelProvider/capabilities/read")]
+    ModelProviderCapabilitiesRead,
     #[serde(rename = "app/read")]
     AppRead,
     #[serde(rename = "app/list")]
@@ -328,6 +404,7 @@ impl Method {
             Self::ThreadStart => METHOD_THREAD_START,
             Self::ThreadFork => METHOD_THREAD_FORK,
             Self::ThreadResume => METHOD_THREAD_RESUME,
+            Self::ThreadRevert => METHOD_THREAD_REVERT,
             Self::ThreadRead => METHOD_THREAD_READ,
             Self::ThreadList => METHOD_THREAD_LIST,
             Self::ThreadSectionMove => METHOD_THREAD_SECTION_MOVE,
@@ -363,10 +440,29 @@ impl Method {
             Self::ThreadGoalSet => METHOD_THREAD_GOAL_SET,
             Self::ThreadGoalGet => METHOD_THREAD_GOAL_GET,
             Self::ThreadGoalClear => METHOD_THREAD_GOAL_CLEAR,
+            Self::ThreadQueueAdd => METHOD_THREAD_QUEUE_ADD,
+            Self::ThreadQueueList => METHOD_THREAD_QUEUE_LIST,
+            Self::ThreadQueueUpdate => METHOD_THREAD_QUEUE_UPDATE,
+            Self::ThreadQueueDelete => METHOD_THREAD_QUEUE_DELETE,
+            Self::ThreadQueueReorder => METHOD_THREAD_QUEUE_REORDER,
+            Self::ThreadQueueStart => METHOD_THREAD_QUEUE_START,
+            Self::ProjectList => METHOD_PROJECT_LIST,
+            Self::ProjectRead => METHOD_PROJECT_READ,
+            Self::ProjectCreate => METHOD_PROJECT_CREATE,
+            Self::ProjectImport => METHOD_PROJECT_IMPORT,
+            Self::ProjectUpdate => METHOD_PROJECT_UPDATE,
+            Self::ProjectMove => METHOD_PROJECT_MOVE,
+            Self::ProjectDelete => METHOD_PROJECT_DELETE,
             Self::ArtifactWrite => METHOD_ARTIFACT_WRITE,
             Self::MediaRead => METHOD_MEDIA_READ,
             Self::McpServerResourceRead => METHOD_MCP_SERVER_RESOURCE_READ,
+            Self::McpServerStatusList => METHOD_MCP_SERVER_STATUS_LIST,
+            Self::McpServerEventStreamStart => METHOD_MCP_SERVER_EVENT_STREAM_START,
+            Self::McpServerEventStreamStop => METHOD_MCP_SERVER_EVENT_STREAM_STOP,
             Self::McpServerToolCall => METHOD_MCP_SERVER_TOOL_CALL,
+            Self::EnvironmentAdd => METHOD_ENVIRONMENT_ADD,
+            Self::EnvironmentInfo => METHOD_ENVIRONMENT_INFO,
+            Self::EnvironmentStatus => METHOD_ENVIRONMENT_STATUS,
             Self::ConfigRead => METHOD_CONFIG_READ,
             Self::ConfigValueWrite => METHOD_CONFIG_VALUE_WRITE,
             Self::ConfigBatchWrite => METHOD_CONFIG_BATCH_WRITE,
@@ -375,7 +471,9 @@ impl Method {
             Self::ExperimentalFeatureEnablementSet => METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET,
             Self::PermissionProfileList => METHOD_PERMISSION_PROFILE_LIST,
             Self::WindowsSandboxReadiness => METHOD_WINDOWS_SANDBOX_READINESS,
+            Self::WindowsSandboxSetupStart => METHOD_WINDOWS_SANDBOX_SETUP_START,
             Self::ModelList => METHOD_MODEL_LIST,
+            Self::ModelProviderCapabilitiesRead => METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
             Self::AppRead => METHOD_APP_READ,
             Self::AppList => METHOD_APP_LIST,
             Self::AppInstalled => METHOD_APP_INSTALLED,
@@ -420,6 +518,7 @@ impl Method {
             METHOD_THREAD_START => Some(Self::ThreadStart),
             METHOD_THREAD_FORK => Some(Self::ThreadFork),
             METHOD_THREAD_RESUME => Some(Self::ThreadResume),
+            METHOD_THREAD_REVERT => Some(Self::ThreadRevert),
             METHOD_THREAD_READ => Some(Self::ThreadRead),
             METHOD_THREAD_LIST => Some(Self::ThreadList),
             METHOD_THREAD_SECTION_MOVE => Some(Self::ThreadSectionMove),
@@ -457,10 +556,29 @@ impl Method {
             METHOD_THREAD_GOAL_SET => Some(Self::ThreadGoalSet),
             METHOD_THREAD_GOAL_GET => Some(Self::ThreadGoalGet),
             METHOD_THREAD_GOAL_CLEAR => Some(Self::ThreadGoalClear),
+            METHOD_THREAD_QUEUE_ADD => Some(Self::ThreadQueueAdd),
+            METHOD_THREAD_QUEUE_LIST => Some(Self::ThreadQueueList),
+            METHOD_THREAD_QUEUE_UPDATE => Some(Self::ThreadQueueUpdate),
+            METHOD_THREAD_QUEUE_DELETE => Some(Self::ThreadQueueDelete),
+            METHOD_THREAD_QUEUE_REORDER => Some(Self::ThreadQueueReorder),
+            METHOD_THREAD_QUEUE_START => Some(Self::ThreadQueueStart),
+            METHOD_PROJECT_LIST => Some(Self::ProjectList),
+            METHOD_PROJECT_READ => Some(Self::ProjectRead),
+            METHOD_PROJECT_CREATE => Some(Self::ProjectCreate),
+            METHOD_PROJECT_IMPORT => Some(Self::ProjectImport),
+            METHOD_PROJECT_UPDATE => Some(Self::ProjectUpdate),
+            METHOD_PROJECT_MOVE => Some(Self::ProjectMove),
+            METHOD_PROJECT_DELETE => Some(Self::ProjectDelete),
             METHOD_ARTIFACT_WRITE => Some(Self::ArtifactWrite),
             METHOD_MEDIA_READ => Some(Self::MediaRead),
             METHOD_MCP_SERVER_RESOURCE_READ => Some(Self::McpServerResourceRead),
+            METHOD_MCP_SERVER_STATUS_LIST => Some(Self::McpServerStatusList),
+            METHOD_MCP_SERVER_EVENT_STREAM_START => Some(Self::McpServerEventStreamStart),
+            METHOD_MCP_SERVER_EVENT_STREAM_STOP => Some(Self::McpServerEventStreamStop),
             METHOD_MCP_SERVER_TOOL_CALL => Some(Self::McpServerToolCall),
+            METHOD_ENVIRONMENT_ADD => Some(Self::EnvironmentAdd),
+            METHOD_ENVIRONMENT_INFO => Some(Self::EnvironmentInfo),
+            METHOD_ENVIRONMENT_STATUS => Some(Self::EnvironmentStatus),
             METHOD_CONFIG_READ => Some(Self::ConfigRead),
             METHOD_CONFIG_VALUE_WRITE => Some(Self::ConfigValueWrite),
             METHOD_CONFIG_BATCH_WRITE => Some(Self::ConfigBatchWrite),
@@ -471,7 +589,9 @@ impl Method {
             }
             METHOD_PERMISSION_PROFILE_LIST => Some(Self::PermissionProfileList),
             METHOD_WINDOWS_SANDBOX_READINESS => Some(Self::WindowsSandboxReadiness),
+            METHOD_WINDOWS_SANDBOX_SETUP_START => Some(Self::WindowsSandboxSetupStart),
             METHOD_MODEL_LIST => Some(Self::ModelList),
+            METHOD_MODEL_PROVIDER_CAPABILITIES_READ => Some(Self::ModelProviderCapabilitiesRead),
             METHOD_APP_READ => Some(Self::AppRead),
             METHOD_APP_LIST => Some(Self::AppList),
             METHOD_APP_INSTALLED => Some(Self::AppInstalled),
@@ -517,6 +637,7 @@ pub const METHODS: &[&str] = &[
     METHOD_THREAD_START,
     METHOD_THREAD_FORK,
     METHOD_THREAD_RESUME,
+    METHOD_THREAD_REVERT,
     METHOD_THREAD_READ,
     METHOD_THREAD_LIST,
     METHOD_THREAD_SECTION_MOVE,
@@ -550,10 +671,28 @@ pub const METHODS: &[&str] = &[
     METHOD_THREAD_GOAL_SET,
     METHOD_THREAD_GOAL_GET,
     METHOD_THREAD_GOAL_CLEAR,
+    METHOD_THREAD_QUEUE_ADD,
+    METHOD_THREAD_QUEUE_LIST,
+    METHOD_THREAD_QUEUE_UPDATE,
+    METHOD_THREAD_QUEUE_DELETE,
+    METHOD_THREAD_QUEUE_REORDER,
+    METHOD_THREAD_QUEUE_START,
+    METHOD_PROJECT_LIST,
+    METHOD_PROJECT_READ,
+    METHOD_PROJECT_CREATE,
+    METHOD_PROJECT_IMPORT,
+    METHOD_PROJECT_UPDATE,
+    METHOD_PROJECT_MOVE,
+    METHOD_PROJECT_DELETE,
     METHOD_ARTIFACT_WRITE,
     METHOD_MEDIA_READ,
     METHOD_MCP_SERVER_RESOURCE_READ,
+    METHOD_MCP_SERVER_EVENT_STREAM_START,
+    METHOD_MCP_SERVER_EVENT_STREAM_STOP,
     METHOD_MCP_SERVER_TOOL_CALL,
+    METHOD_ENVIRONMENT_ADD,
+    METHOD_ENVIRONMENT_INFO,
+    METHOD_ENVIRONMENT_STATUS,
     METHOD_CONFIG_READ,
     METHOD_CONFIG_VALUE_WRITE,
     METHOD_CONFIG_BATCH_WRITE,
@@ -562,7 +701,9 @@ pub const METHODS: &[&str] = &[
     METHOD_EXPERIMENTAL_FEATURE_ENABLEMENT_SET,
     METHOD_PERMISSION_PROFILE_LIST,
     METHOD_WINDOWS_SANDBOX_READINESS,
+    METHOD_WINDOWS_SANDBOX_SETUP_START,
     METHOD_MODEL_LIST,
+    METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
     METHOD_APP_READ,
     METHOD_APP_LIST,
     METHOD_APP_INSTALLED,
@@ -605,10 +746,12 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_CONFIG_WARNING,
     METHOD_WARNING,
     METHOD_GUARDIAN_WARNING,
+    METHOD_STRICT_REVIEW_REQUIRED,
     METHOD_ERROR,
     METHOD_SKILLS_CHANGED,
     METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
     METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED,
+    METHOD_MCP_SERVER_EVENT_STREAM_NOTIFICATION,
     METHOD_HOOK_STARTED,
     METHOD_HOOK_COMPLETED,
     METHOD_THREAD_STARTED,
@@ -616,6 +759,7 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_THREAD_DELETED,
     METHOD_THREAD_UNARCHIVED,
     METHOD_THREAD_CLOSED,
+    METHOD_THREAD_REVERTED,
     METHOD_THREAD_NAME_UPDATED,
     METHOD_THREAD_STATUS_CHANGED,
     METHOD_TURN_STARTED,
@@ -647,11 +791,18 @@ pub const NOTIFICATION_METHODS: &[&str] = &[
     METHOD_THREAD_TOKEN_USAGE_UPDATED,
     METHOD_THREAD_GOAL_UPDATED,
     METHOD_THREAD_GOAL_CLEARED,
+    METHOD_THREAD_QUEUE_CHANGED,
+    METHOD_PROJECT_CHANGED,
+    METHOD_THREAD_PROJECT_UPDATED,
     METHOD_SERVER_REQUEST_RESOLVED,
     METHOD_PROCESS_OUTPUT_DELTA,
     METHOD_PROCESS_EXITED,
     METHOD_COMMAND_EXEC_OUTPUT_DELTA,
     METHOD_FS_CHANGED,
+    METHOD_WINDOWS_WORLD_WRITABLE_WARNING,
+    METHOD_WINDOWS_SANDBOX_SETUP_COMPLETED,
+    METHOD_THREAD_ENVIRONMENT_CONNECTED,
+    METHOD_THREAD_ENVIRONMENT_DISCONNECTED,
 ];
 
 pub const SERVER_REQUEST_METHODS: &[&str] = &[

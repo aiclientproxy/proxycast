@@ -7,6 +7,7 @@ pub(super) fn session_status_from_event(event_type: &str) -> &'static str {
         "turn.completed" => "completed",
         "turn.failed" => "failed",
         "turn.canceled" => "canceled",
+        "history.rollback" => "idle",
         "action.required" => "waitingAction",
         "turn.accepted" | "turn.started" | "message.created" | "message.delta" => "running",
         _ => "active",

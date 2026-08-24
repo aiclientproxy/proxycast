@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.133.0",
+  "version": "1.134.0",
   "description": "Open-source full-stack desktop AI agent for global users: coding, research, content, files, terminals, tools, multimodal work, and multi-agent workflows.",
   "keywords": [
     "ai",
@@ -217,6 +217,7 @@
     "smoke:code-mode-electron-gate-b": "node scripts/agent-runtime/code-mode-electron-gate-b.mjs",
     "smoke:browser-runtime-gate-a": "node scripts/agent-runtime/browser-runtime-electron-gate-b.mjs --scenario projection",
     "smoke:browser-runtime-electron-gate-b": "node scripts/agent-runtime/browser-runtime-electron-gate-b.mjs",
+    "smoke:browser-runtime-locale-matrix": "node scripts/agent-runtime/browser-runtime-locale-matrix.mjs",
     "smoke:agent-session-recovery-cdp-gate": "node scripts/agent-runtime/agent-session-recovery-cdp-gate.mjs",
     "smoke:reopen-running-turn-cdp-gate": "node scripts/agent-runtime/reopen-running-turn-cdp-gate.mjs",
     "smoke:expert-skills-live-gate": "node scripts/agent-runtime/expert-skills-live-gate.mjs --allow-missing-live",

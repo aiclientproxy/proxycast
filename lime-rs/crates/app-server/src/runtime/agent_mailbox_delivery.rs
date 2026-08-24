@@ -75,32 +75,48 @@ impl RuntimeCore {
         let core = self.clone();
         Box::pin(async move {
             let (admitted_tx, admitted_rx) = tokio::sync::oneshot::channel();
-            tokio::spawn(async move {
-                let result = core
-                    .process_pending_session_work_with_options(
-                        &session_id,
-                        host,
-                        runtime_options,
-                        Some(admitted_tx),
-                    )
-                    .await;
-                if let Err(error) = result {
-                    if matches!(&error, RuntimeCoreError::PendingRoute { .. }) {
-                        tracing::debug!(
-                            session_id = %session_id,
-                            error = %error,
-                            "background agent mailbox TriggerTurn recovery is waiting for a route"
-                        );
-                    } else {
-                        tracing::warn!(
-                            session_id = %session_id,
-                            error = %error,
-                            "background agent mailbox TriggerTurn processing failed"
-                        );
-                    }
-                }
-            });
+            tokio::spawn(core.drain_pending_session_work(
+                session_id,
+                host,
+                runtime_options,
+                Some(admitted_tx),
+            ));
             let _ = admitted_rx.await;
+        })
+    }
+
+    pub(in crate::runtime) fn drain_pending_session_work(
+        &self,
+        session_id: String,
+        host: RuntimeHostContext,
+        runtime_options: Option<RuntimeOptions>,
+        admitted_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    ) -> BoxFuture<'static, ()> {
+        let core = self.clone();
+        Box::pin(async move {
+            let result = core
+                .process_pending_session_work_with_options(
+                    &session_id,
+                    host,
+                    runtime_options,
+                    admitted_tx,
+                )
+                .await;
+            if let Err(error) = result {
+                if matches!(&error, RuntimeCoreError::PendingRoute { .. }) {
+                    tracing::debug!(
+                        session_id = %session_id,
+                        error = %error,
+                        "background pending session work is waiting for a route"
+                    );
+                } else {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        error = %error,
+                        "background pending session work processing failed"
+                    );
+                }
+            }
         })
     }
 
@@ -116,7 +132,7 @@ impl RuntimeCore {
         let mut started = 0;
         loop {
             let resume = self
-                .resume_next_queued_turn_if_idle(session_id, host.clone())
+                .resume_next_queued_turn_for_recovery(session_id, host.clone())
                 .await;
             match resume {
                 Ok(super::session_control::QueuedTurnResume::Started {

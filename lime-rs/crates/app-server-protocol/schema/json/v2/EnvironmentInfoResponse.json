@@ -1,0 +1,44 @@
+{
+  "$defs": {
+    "EnvironmentShellInfo": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "path"
+      ],
+      "type": "object"
+    },
+    "PathUri": {
+      "description": "Canonical file URI owned by an execution environment",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "cwd": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathUri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "shell": {
+      "$ref": "#/$defs/EnvironmentShellInfo"
+    }
+  },
+  "required": [
+    "shell"
+  ],
+  "title": "EnvironmentInfoResponse",
+  "type": "object"
+}

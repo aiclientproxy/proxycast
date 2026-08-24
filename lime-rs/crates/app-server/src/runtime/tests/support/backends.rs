@@ -1,6 +1,8 @@
 use super::super::*;
+use async_trait::async_trait;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use tokio::sync::Notify;
 
 pub(in crate::runtime::tests) struct CompletedBackend;
 
@@ -369,6 +371,52 @@ impl ExecutionBackend for RunningCountingBackend {
         _request: CancelExecutionRequest,
         _sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+
+    async fn respond_action(
+        &self,
+        _request: ActionRespondRequest,
+        _sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub(in crate::runtime::tests) struct ExternallyTerminatedBackend {
+    pub(in crate::runtime::tests) requests: Mutex<Vec<ExecutionRequest>>,
+    pub(in crate::runtime::tests) start_count: AtomicUsize,
+    pub(in crate::runtime::tests) release_initial: Notify,
+}
+
+#[async_trait]
+impl ExecutionBackend for ExternallyTerminatedBackend {
+    async fn start_turn(
+        &self,
+        request: ExecutionRequest,
+        sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        let index = self.start_count.fetch_add(1, Ordering::SeqCst);
+        self.requests
+            .lock()
+            .expect("test backend requests mutex poisoned")
+            .push(request);
+        sink.emit(RuntimeEvent::new("turn.started", json!({})))?;
+        if index == 0 {
+            self.release_initial.notified().await;
+        } else {
+            std::future::pending::<()>().await;
+        }
+        Ok(())
+    }
+
+    async fn cancel_turn(
+        &self,
+        _request: CancelExecutionRequest,
+        _sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        self.release_initial.notify_one();
         Ok(())
     }
 

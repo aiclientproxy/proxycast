@@ -1,6 +1,6 @@
 use super::session_lifecycle::stored_session_hidden_from_user_recents;
 use super::status::{agent_turn_blocks_queue_resume, agent_turn_is_active};
-use super::{RuntimeCore, RuntimeCoreError};
+use super::{ProjectionStore, RuntimeCore, RuntimeCoreError};
 use agent_protocol::PageCursor;
 use app_server_protocol::protocol::v2::{
     ThreadLoadedListParams, ThreadLoadedListResponse, ThreadMetadataGitInfoUpdateParams,
@@ -329,6 +329,17 @@ impl RuntimeCore {
             .ok_or_else(|| RuntimeCoreError::Backend(format!("thread not found: {thread_id}")))?;
         let mut metadata = current.metadata;
         let metadata = metadata_object(&mut metadata);
+        if let Some(project_id) = params.project_id {
+            if project_id.is_empty() {
+                metadata.remove("projectId");
+                metadata.remove("project_id");
+            } else {
+                metadata.insert(
+                    "projectId".to_string(),
+                    serde_json::Value::String(project_id),
+                );
+            }
+        }
         if let Some(git_info) = params.git_info {
             apply_git_info_patch(metadata, git_info);
         }
@@ -526,6 +537,7 @@ impl RuntimeCore {
                 include_archived: params.include_archived,
                 page: store_page(params.page)?,
                 section: params.section,
+                project: params.project,
                 sort_by_section_position: params.sort_by_section_position,
             })
             .await
@@ -752,13 +764,19 @@ impl RuntimeCore {
         })
     }
 
-    fn canonical_thread_store(&self) -> Result<&dyn ThreadStore, RuntimeCoreError> {
+    pub(crate) fn canonical_thread_store(&self) -> Result<&dyn ThreadStore, RuntimeCoreError> {
         self.projection_store
             .as_deref()
             .map(|store| store as &dyn ThreadStore)
             .ok_or_else(|| {
                 RuntimeCoreError::Backend("canonical thread store is unavailable".to_string())
             })
+    }
+
+    pub(crate) fn canonical_projection_store(&self) -> Result<&ProjectionStore, RuntimeCoreError> {
+        self.projection_store.as_deref().ok_or_else(|| {
+            RuntimeCoreError::Backend("canonical thread store is unavailable".to_string())
+        })
     }
 }
 
@@ -1068,6 +1086,7 @@ mod tests {
                 include_archived: false,
                 turns_view: ThreadTurnsView::NotLoaded,
                 section: None,
+                project: None,
                 sort_by_section_position: false,
             })
             .await
@@ -1081,6 +1100,7 @@ mod tests {
                 include_archived: true,
                 turns_view: ThreadTurnsView::Full,
                 section: None,
+                project: None,
                 sort_by_section_position: false,
             })
             .await
@@ -1201,6 +1221,7 @@ mod tests {
                 include_archived: false,
                 turns_view: ThreadTurnsView::Full,
                 section: None,
+                project: None,
                 sort_by_section_position: false,
             })
             .await

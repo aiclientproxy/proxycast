@@ -98,6 +98,12 @@
         "string"
       ]
     },
+    "projectId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
     "searchTerm": {
       "type": [
         "null",

@@ -1,0 +1,30 @@
+{
+  "$defs": {
+    "EnvironmentStatusKind": {
+      "enum": [
+        "disconnected",
+        "pending",
+        "ready",
+        "unknown"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "error": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "status": {
+      "$ref": "#/$defs/EnvironmentStatusKind"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "EnvironmentStatusResponse",
+  "type": "object"
+}

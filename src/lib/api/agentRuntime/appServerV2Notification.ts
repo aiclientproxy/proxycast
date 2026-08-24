@@ -165,7 +165,10 @@ export function readAppServerV2NotificationRoute(
       const threadId = readString(params, "threadId");
       const turnId = readString(params, "turnId");
       const item = asRecord(params.item);
-      const itemId = readString(item, "id");
+      const itemId =
+        readString(item, "id") ??
+        readString(item, "itemId") ??
+        readString(item, "item_id");
       const timestampKey =
         notification.method === "item/started"
           ? "startedAtMs"

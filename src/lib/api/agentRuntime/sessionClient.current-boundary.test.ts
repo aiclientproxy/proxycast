@@ -52,6 +52,15 @@ function appServerClientMock(): AppServerSessionRpcClient {
       notifications: [],
       messages: [],
     }),
+    forkThread: vi.fn().mockResolvedValue({
+      id: 2,
+      result: {
+        thread: canonicalThread("session-forked", "thread-forked"),
+      },
+      response: { id: 2, result: {} },
+      notifications: [],
+      messages: [],
+    }),
     unarchiveThread: vi.fn().mockResolvedValue({
       id: 3,
       result: {

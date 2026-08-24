@@ -18,10 +18,12 @@ const {
   mockUseConfiguredProviders,
   mockUseProviderModels,
   mockFilterModelsByTheme,
+  mockReadModelProviderCapabilities,
 } = vi.hoisted(() => ({
   mockUseConfiguredProviders: vi.fn(),
   mockUseProviderModels: vi.fn(),
   mockFilterModelsByTheme: vi.fn(),
+  mockReadModelProviderCapabilities: vi.fn(),
 }));
 
 vi.mock("@/hooks/useConfiguredProviders", () => ({
@@ -59,6 +61,13 @@ vi.mock("@/hooks/useProviderModels", () => ({
 
 vi.mock("@/components/agent/chat/utils/modelThemePolicy", () => ({
   filterModelsByTheme: (...args: unknown[]) => mockFilterModelsByTheme(...args),
+}));
+
+vi.mock("@/lib/api/modelRegistry", () => ({
+  modelRegistryApi: {
+    readModelProviderCapabilities: (...args: unknown[]) =>
+      mockReadModelProviderCapabilities(...args),
+  },
 }));
 
 beforeEach(async () => {
@@ -104,6 +113,11 @@ beforeEach(async () => {
     filteredOutCount: 0,
     policyName: "none",
   }));
+  mockReadModelProviderCapabilities.mockResolvedValue({
+    namespaceTools: true,
+    imageGeneration: false,
+    webSearch: true,
+  });
 });
 
 afterEach(async () => {
@@ -113,6 +127,28 @@ afterEach(async () => {
 });
 
 describe("ModelSelector", () => {
+  it("打开选择器时应读取并展示当前 provider 的能力快照", async () => {
+    const { container } = renderModelSelector();
+
+    clickModelSelectorTrigger(container);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockReadModelProviderCapabilities).toHaveBeenCalledTimes(1);
+    expect(
+      document.body.querySelector(
+        '[data-testid="model-selector-provider-capability-panel"]',
+      ),
+    ).not.toBeNull();
+    const capabilityBadges = document.body.querySelector(
+      '[data-testid="model-provider-capabilities"]',
+    );
+    expect(capabilityBadges?.textContent).toContain("工具命名空间");
+    expect(capabilityBadges?.textContent).toContain("网页搜索");
+    expect(capabilityBadges?.textContent).toContain("无图片生成");
+  });
+
   it("应暴露稳定的禁用触发器供工作区验证", () => {
     const { container } = renderModelSelector({
       compactTrigger: true,

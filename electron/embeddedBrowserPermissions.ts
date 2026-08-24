@@ -2,7 +2,7 @@ import type { Session, WebContents } from "electron";
 
 type HostEventEmitter = (event: string, payload?: unknown) => void;
 
-export type EmbeddedBrowserPermissionDecision = "blocked";
+export type EmbeddedBrowserPermissionDecision = "blocked" | "pending";
 
 export interface EmbeddedBrowserPermissionRequestEvent {
   viewId: string;
@@ -23,6 +23,12 @@ interface EmbeddedBrowserPermissionController {
   findEntryByWebContents(
     webContents: WebContents,
   ): EmbeddedBrowserPermissionEntry | null;
+  deferPermissionRequest?: boolean;
+  onPendingPermission?: (
+    requestId: string,
+    viewId: string,
+    callback: (allowed: boolean) => void,
+  ) => void;
 }
 
 export function installEmbeddedBrowserPermissionHandling(
@@ -33,18 +39,25 @@ export function installEmbeddedBrowserPermissionHandling(
   browserSession.setPermissionRequestHandler(
     (webContents, permission, callback, details) => {
       const entry = controller.findEntryByWebContents(webContents);
-      callback(false);
       if (!entry) {
+        callback(false);
         return;
+      }
+      const requestId = createPermissionRequestId();
+      const deferred = controller.deferPermissionRequest === true;
+      if (deferred) {
+        controller.onPendingPermission?.(requestId, entry.viewId, callback);
+      } else {
+        callback(false);
       }
       emit("embedded-browser-view-permission-request", {
         viewId: entry.viewId,
-        requestId: createPermissionRequestId(),
+        requestId,
         permission: normalizePermission(permission),
         url: normalizeUrl(webContents.getURL()) ?? "",
         requestingUrl: normalizeUrl(details.requestingUrl),
         embeddingOrigin: normalizeUrl(readEmbeddingOrigin(details)),
-        decision: "blocked",
+        decision: deferred ? "pending" : "blocked",
       } satisfies EmbeddedBrowserPermissionRequestEvent);
     },
   );

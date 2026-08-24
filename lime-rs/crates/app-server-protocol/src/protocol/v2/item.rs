@@ -5,6 +5,43 @@ use std::collections::HashMap;
 
 use super::{McpToolCallError, McpToolCallResult};
 
+/// Codex v2 assistant message delivery mode.
+///
+/// The current upstream contract only exposes `async`; keeping this as a
+/// closed enum prevents arbitrary presentation strings from crossing the
+/// protocol boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentMessageDelivery {
+    Async,
+}
+
+/// Typed reasoning effort carried by collaboration tool calls.
+///
+/// Codex accepts model-defined values in addition to its well-known levels.
+/// A transparent validated wrapper preserves those values without falling
+/// back to an untyped `String` field in the public Item contract.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
+pub struct ReasoningEffort(String);
+
+impl ReasoningEffort {
+    pub fn new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        (!value.trim().is_empty()).then_some(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<String> for ReasoningEffort {
+    fn from(value: String) -> Self {
+        Self::new(value).expect("ReasoningEffort must not be empty")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "type",
@@ -35,6 +72,8 @@ pub enum ThreadItem {
         phase: Option<agent_protocol::response_item::MessagePhase>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         memory_citation: Option<MemoryCitation>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        delivery: Option<AgentMessageDelivery>,
     },
     Plan {
         id: String,
@@ -55,6 +94,10 @@ pub enum ThreadItem {
         id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         metadata: Option<ThreadItemMetadata>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plugin_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        script_path: Option<String>,
         command: String,
         cwd: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -94,6 +137,8 @@ pub enum ThreadItem {
         mcp_app_resource_uri: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         plugin_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        read_only_hint: Option<bool>,
         #[schemars(required, extend("type" = ["object", "null"]))]
         result: Option<Box<McpToolCallResult>>,
         #[schemars(required, extend("type" = ["object", "null"]))]
@@ -130,7 +175,7 @@ pub enum ThreadItem {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        reasoning_effort: Option<String>,
+        reasoning_effort: Option<ReasoningEffort>,
         #[serde(default)]
         agents_states: HashMap<String, CollabAgentState>,
     },

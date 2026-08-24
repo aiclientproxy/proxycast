@@ -268,5 +268,13 @@
   "common.modelCapabilities.reasoning.inactive": "思考なし",
   "common.modelCapabilities.vision.active": "マルチモーダル対応",
   "common.modelCapabilities.vision.inactive": "マルチモーダルなし",
+  "common.modelProviderCapabilities.title": "現在の実行プロバイダー能力",
+  "common.modelProviderCapabilities.loading": "能力を読み込み中…",
+  "common.modelProviderCapabilities.namespaceTools.active": "ツール名前空間",
+  "common.modelProviderCapabilities.namespaceTools.inactive": "ツール名前空間なし",
+  "common.modelProviderCapabilities.imageGeneration.active": "画像生成",
+  "common.modelProviderCapabilities.imageGeneration.inactive": "画像生成なし",
+  "common.modelProviderCapabilities.webSearch.active": "ウェブ検索",
+  "common.modelProviderCapabilities.webSearch.inactive": "ウェブ検索なし",
   "common.modelSelector.state.loginRequired": "ログインが必要"
 }

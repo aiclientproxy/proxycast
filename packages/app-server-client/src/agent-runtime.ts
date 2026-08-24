@@ -32,6 +32,7 @@ export type AgentRuntimeLifecycleNotification = Extract<
   {
     method:
       | "thread/started"
+      | "thread/reverted"
       | "turn/started"
       | "turn/completed"
       | "item/started"
@@ -47,7 +48,10 @@ export type AgentRuntimeLifecycleNotification = Extract<
       | "item/reasoning/summaryTextDelta"
       | "item/reasoning/summaryPartAdded"
       | "item/reasoning/textDelta"
-      | "thread/settings/updated";
+      | "thread/settings/updated"
+      | "thread/queue/changed"
+      | "thread/environment/connected"
+      | "thread/environment/disconnected";
   }
 >;
 
@@ -57,6 +61,7 @@ export type AgentRuntimeSignalNotification = Extract<
     method:
       | "error"
       | "guardianWarning"
+      | "autoApprovalReview/strictReviewRequired"
       | "turn/diff/updated"
       | "turn/moderationMetadata"
       | "turn/plan/updated";
@@ -329,6 +334,7 @@ function isAgentRuntimeSignalNotification(
 ): notification is AgentRuntimeSignalNotification {
   return (
     notification.method === "error" ||
+    notification.method === "autoApprovalReview/strictReviewRequired" ||
     notification.method === "turn/diff/updated" ||
     notification.method === "turn/moderationMetadata" ||
     notification.method === "turn/plan/updated"

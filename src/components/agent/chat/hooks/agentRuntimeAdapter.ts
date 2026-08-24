@@ -85,6 +85,8 @@ export interface AgentRuntimeAdapter {
     requestId: string,
   ): Promise<AgentRuntimeReplayedActionRequiredView | null>;
   renameSession(sessionId: string, title: string): Promise<void>;
+  archiveSession?: (sessionId: string) => Promise<void>;
+  forkSession?: (sessionId: string) => Promise<string>;
   deleteSession(sessionId: string): Promise<void>;
   setSessionExecutionStrategy(
     sessionId: string,
@@ -153,7 +155,13 @@ export interface AgentRuntimeAdapterDeps {
     | "steerAgentRuntimeTurn"
     | "submitAgentRuntimeTurn"
     | "updateAgentRuntimeThreadSettings"
-  >;
+  > &
+    Partial<
+      Pick<
+        AgentRuntimeClient,
+        "archiveAgentRuntimeSession" | "forkAgentRuntimeSession"
+      >
+    >;
   listenRuntimeEvent?: AgentRuntimeEventListener;
 }
 
@@ -341,6 +349,20 @@ export function createAgentRuntimeAdapter({
         name: title,
       });
     },
+    ...(client.archiveAgentRuntimeSession
+      ? {
+          async archiveSession(sessionId: string) {
+            await client.archiveAgentRuntimeSession!(sessionId);
+          },
+        }
+      : {}),
+    ...(client.forkAgentRuntimeSession
+      ? {
+          async forkSession(sessionId: string) {
+            return client.forkAgentRuntimeSession!(sessionId);
+          },
+        }
+      : {}),
     async deleteSession(sessionId) {
       await client.deleteAgentRuntimeSession(sessionId);
     },

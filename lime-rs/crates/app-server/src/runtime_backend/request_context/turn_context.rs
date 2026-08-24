@@ -1,8 +1,9 @@
 use crate::trace_context::w3c_trace_context;
 use crate::ExecutionRequest;
 use agent_protocol::world_state::{
-    RuntimeWorldEnvironment, RuntimeWorldMode, RuntimeWorldPermissions, RuntimeWorldState,
-    WORLD_STATE_SOURCE, WORLD_STATE_TURN_METADATA_KEY,
+    RuntimeWorldEnvironment, RuntimeWorldEnvironmentSelection, RuntimeWorldEnvironmentStatus,
+    RuntimeWorldMode, RuntimeWorldPermissions, RuntimeWorldState, WORLD_STATE_SOURCE,
+    WORLD_STATE_TURN_METADATA_KEY,
 };
 use agent_protocol::{CollaborationMode, ModeKind, MultiAgentMode};
 use lime_agent::{
@@ -107,6 +108,11 @@ fn world_state_from_request(
     working_dir: Option<&Path>,
     project_root: Option<&Path>,
 ) -> Option<RuntimeWorldState> {
+    let environments = world_environments_from_request(request);
+    let primary_cwd = environments
+        .iter()
+        .find(|environment| environment.primary)
+        .map(|environment| environment.cwd.clone());
     let collaboration =
         collaboration_mode_from_request(request, host_request).map(|mode| RuntimeWorldMode {
             mode: match mode.mode {
@@ -123,7 +129,8 @@ fn world_state_from_request(
     });
     let state = RuntimeWorldState {
         environment: Some(RuntimeWorldEnvironment {
-            cwd: working_dir.map(|path| path.to_string_lossy().into_owned()),
+            cwd: primary_cwd
+                .or_else(|| working_dir.map(|path| path.to_string_lossy().into_owned())),
             project_root: project_root.map(|path| path.to_string_lossy().into_owned()),
             workspace_id: scope.workspace_id.clone(),
             thread_id: Some(scope.thread_id.clone()),
@@ -132,6 +139,7 @@ fn world_state_from_request(
             model: Some(selection.model.clone()),
             reasoning_effort: selection.reasoning_effort.clone(),
         }),
+        environments,
         permissions,
         collaboration,
         multi_agent: Some(MultiAgentMode::from_reasoning_effort(
@@ -141,6 +149,51 @@ fn world_state_from_request(
         source: Some(WORLD_STATE_SOURCE.to_string()),
     };
     (!state.is_empty()).then_some(state)
+}
+
+fn world_environments_from_request(
+    request: &ExecutionRequest,
+) -> Vec<RuntimeWorldEnvironmentSelection> {
+    if let Some(mut snapshot) = request
+        .runtime_metadata()
+        .and_then(|metadata| metadata.get("environmentWorldState"))
+        .cloned()
+        .and_then(|value| {
+            serde_json::from_value::<Vec<RuntimeWorldEnvironmentSelection>>(value).ok()
+        })
+    {
+        snapshot.sort_by(|left, right| left.environment_id.cmp(&right.environment_id));
+        return snapshot;
+    }
+    let Some(value) = request
+        .runtime_metadata()
+        .and_then(|metadata| metadata.get("environments"))
+        .cloned()
+    else {
+        return Vec::new();
+    };
+    let Ok(selections) = serde_json::from_value::<
+        Vec<app_server_protocol::protocol::v2::TurnEnvironmentParams>,
+    >(value) else {
+        return Vec::new();
+    };
+    let primary_environment_id = selections
+        .first()
+        .map(|selection| selection.environment_id.clone());
+    let mut environments = selections
+        .into_iter()
+        .map(|selection| RuntimeWorldEnvironmentSelection {
+            primary: primary_environment_id.as_deref() == Some(selection.environment_id.as_str()),
+            status: (selection.environment_id == "local")
+                .then_some(RuntimeWorldEnvironmentStatus::Ready),
+            environment_id: selection.environment_id,
+            cwd: selection.cwd,
+            runtime_workspace_roots: selection.runtime_workspace_roots.unwrap_or_default(),
+            shell: None,
+        })
+        .collect::<Vec<_>>();
+    environments.sort_by(|left, right| left.environment_id.cmp(&right.environment_id));
+    environments
 }
 
 fn w3c_trace_context_metadata_from_request(request: &ExecutionRequest) -> Option<Value> {

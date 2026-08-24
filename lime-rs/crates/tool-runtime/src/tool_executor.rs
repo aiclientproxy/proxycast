@@ -22,12 +22,14 @@ pub struct RuntimeToolExecutionContextInput {
 #[derive(Debug, Clone)]
 pub struct RuntimeToolExecutionContext {
     working_directory: PathBuf,
+    environment_id: Option<String>,
     session_id: String,
     cancel_token: Option<CancellationToken>,
     workspace_sandbox: Option<RuntimeWorkspaceSandboxInput>,
     environment: HashMap<String, String>,
     tool_identity: Option<RuntimeToolExecutionIdentity>,
     execution_attempt: Option<crate::execution_orchestrator::RuntimeToolExecutionAttempt>,
+    filesystem_gateway: Option<Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,17 +59,23 @@ impl RuntimeToolExecutionContext {
     pub fn new(input: RuntimeToolExecutionContextInput) -> Self {
         Self {
             working_directory: input.working_directory,
+            environment_id: None,
             session_id: input.session_id,
             cancel_token: input.cancel_token,
             workspace_sandbox: input.workspace_sandbox,
             environment: HashMap::new(),
             tool_identity: None,
             execution_attempt: None,
+            filesystem_gateway: None,
         }
     }
 
     pub fn working_directory(&self) -> &PathBuf {
         &self.working_directory
+    }
+
+    pub fn environment_id(&self) -> Option<&str> {
+        self.environment_id.as_deref()
     }
 
     pub fn session_id(&self) -> &str {
@@ -100,8 +108,38 @@ impl RuntimeToolExecutionContext {
         self.execution_attempt.as_ref()
     }
 
+    pub fn filesystem_gateway(
+        &self,
+    ) -> Option<&Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>> {
+        self.filesystem_gateway.as_ref()
+    }
+
     pub fn with_tool_identity(mut self, identity: RuntimeToolExecutionIdentity) -> Self {
         self.tool_identity = Some(identity);
+        self
+    }
+
+    pub fn with_filesystem_gateway(
+        mut self,
+        gateway: Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>,
+    ) -> Self {
+        self.filesystem_gateway = Some(gateway);
+        self
+    }
+
+    pub fn with_optional_filesystem_gateway(
+        self,
+        gateway: Option<Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>>,
+    ) -> Self {
+        match gateway {
+            Some(gateway) => self.with_filesystem_gateway(gateway),
+            None => self,
+        }
+    }
+
+    fn with_tool_environment(mut self, environment: &crate::tool_call::ToolEnvironment) -> Self {
+        self.environment_id = Some(environment.environment_id.clone());
+        self.working_directory = environment.cwd.clone();
         self
     }
 
@@ -215,6 +253,23 @@ impl RuntimeToolExecutorHandle {
                 call.call_id(),
                 call.turn_id(),
             ));
+        let context = match call.environments() {
+            [] => context,
+            [environment] => context.with_tool_environment(environment),
+            environments => {
+                return Err(RuntimeToolExecutionError::new(
+                    format!(
+                        "tool '{}' has {} execution environments; exactly one is required",
+                        call.tool_name(),
+                        environments.len()
+                    ),
+                    Some(RuntimeToolPolicyErrorKind::ExecutionFailed(
+                        "tool_environment_ambiguous".to_string(),
+                    )),
+                )
+                .before_handler())
+            }
+        };
         self.executor
             .execute_call(call, &context, turn_context)
             .await
@@ -646,6 +701,7 @@ mod tests {
             Some(&metadata)
         );
         assert!(context.environment().is_empty());
+        assert!(context.environment_id().is_none());
         assert!(context.tool_identity().is_none());
         assert!(context.execution_attempt().is_none());
     }
@@ -664,7 +720,13 @@ mod tests {
                     .expect("execute_call must bind canonical tool identity");
                 Ok(RuntimeToolExecutionResult::new(
                     true,
-                    format!("{}:{}", identity.call_id(), identity.turn_id()),
+                    format!(
+                        "{}:{}:{}:{}",
+                        identity.call_id(),
+                        identity.turn_id(),
+                        request.context.environment_id().unwrap_or("none"),
+                        request.context.working_directory().display()
+                    ),
                     None,
                     HashMap::new(),
                 ))
@@ -696,7 +758,10 @@ mod tests {
             "call-canonical",
             "Echo",
             json!({}),
-            Vec::new(),
+            vec![crate::tool_call::ToolEnvironment::new(
+                "remote-tools",
+                PathBuf::from("/remote/workspace"),
+            )],
             Arc::new(NoopLifecycleEmitter),
         );
         let turn_context = RuntimeToolTurnContext {
@@ -713,7 +778,10 @@ mod tests {
             .await
             .expect("identified call should execute");
 
-        assert_eq!(result.output, "call-canonical:turn-canonical");
+        assert_eq!(
+            result.output,
+            "call-canonical:turn-canonical:remote-tools:/remote/workspace"
+        );
         assert_eq!(
             turn_context.metadata.get("tool_call_id"),
             Some(&json!("call-metadata"))

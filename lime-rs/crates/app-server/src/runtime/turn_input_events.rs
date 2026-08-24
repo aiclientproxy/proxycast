@@ -6,6 +6,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 pub(super) const TURN_INPUT_EVENT_TYPE: &str = "message.created";
+pub(super) const QUEUE_INPUT_ADDED_EVENT_TYPE: &str = "queue.added";
+pub(super) const QUEUE_INPUT_UPDATED_EVENT_TYPE: &str = "queue.updated";
 pub(super) const THREAD_GOAL_CONTINUATION_EVENT_TYPE: &str = "thread.goal.continuation";
 pub(super) const REVIEW_INPUT_EVENT_TYPE: &str = "review.input";
 
@@ -83,7 +85,7 @@ fn runtime_event_for_turn_input_kind(
 pub(super) fn turn_inputs_from_events(events: &[AgentEvent]) -> HashMap<String, Vec<AgentInput>> {
     events
         .iter()
-        .filter(|event| event.event_type == TURN_INPUT_EVENT_TYPE)
+        .filter(|event| is_turn_input_event_type(&event.event_type))
         .filter_map(turn_input_from_event)
         .collect()
 }
@@ -99,7 +101,10 @@ pub(super) fn is_turn_input_event(event: &AgentEvent) -> bool {
 pub(super) fn is_provider_input_event(event: &AgentEvent) -> bool {
     matches!(
         event.event_type.as_str(),
-        TURN_INPUT_EVENT_TYPE | THREAD_GOAL_CONTINUATION_EVENT_TYPE | REVIEW_INPUT_EVENT_TYPE
+        TURN_INPUT_EVENT_TYPE
+            | QUEUE_INPUT_UPDATED_EVENT_TYPE
+            | THREAD_GOAL_CONTINUATION_EVENT_TYPE
+            | REVIEW_INPUT_EVENT_TYPE
     ) && event
         .payload
         .get("mailbox")
@@ -107,13 +112,19 @@ pub(super) fn is_provider_input_event(event: &AgentEvent) -> bool {
 }
 
 pub(super) fn is_turn_input_event_type(event_type: &str) -> bool {
-    event_type == TURN_INPUT_EVENT_TYPE
+    matches!(
+        event_type,
+        TURN_INPUT_EVENT_TYPE | QUEUE_INPUT_ADDED_EVENT_TYPE | QUEUE_INPUT_UPDATED_EVENT_TYPE
+    )
 }
 
 pub(super) fn runtime_event_is_provider_input(event: &RuntimeEvent) -> bool {
     matches!(
         event.event_type.as_str(),
-        TURN_INPUT_EVENT_TYPE | THREAD_GOAL_CONTINUATION_EVENT_TYPE | REVIEW_INPUT_EVENT_TYPE
+        TURN_INPUT_EVENT_TYPE
+            | QUEUE_INPUT_UPDATED_EVENT_TYPE
+            | THREAD_GOAL_CONTINUATION_EVENT_TYPE
+            | REVIEW_INPUT_EVENT_TYPE
     ) && event
         .payload
         .get("mailbox")
@@ -121,7 +132,14 @@ pub(super) fn runtime_event_is_provider_input(event: &RuntimeEvent) -> bool {
 }
 
 fn turn_input_from_event(event: &AgentEvent) -> Option<(String, Vec<AgentInput>)> {
-    let turn_id = event.turn_id.clone()?;
+    let turn_id = event.turn_id.clone().or_else(|| {
+        event
+            .payload
+            .get("queuedTurnId")
+            .or_else(|| event.payload.get("queuedSubmissionId"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    })?;
     if let Some(input) = event
         .payload
         .get("input")

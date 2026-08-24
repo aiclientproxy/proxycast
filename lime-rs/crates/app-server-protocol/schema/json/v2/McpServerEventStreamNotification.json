@@ -1,0 +1,32 @@
+{
+  "$defs": {
+    "McpServerEventNotification": {
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "params": true
+      },
+      "required": [
+        "method",
+        "params"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "notification": {
+      "$ref": "#/$defs/McpServerEventNotification"
+    },
+    "subscriptionId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "notification",
+    "subscriptionId"
+  ],
+  "title": "McpServerEventStreamNotification",
+  "type": "object"
+}

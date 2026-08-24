@@ -1,3 +1,4 @@
+use super::queries::project_filter_mode;
 use super::*;
 
 pub(super) fn hydrate_thread_section(
@@ -290,6 +291,7 @@ pub(super) fn query_section_thread_page(
     conn: &Connection,
     include_archived: bool,
     section_id: &str,
+    project: Option<&Option<String>>,
     sort_by_section_position: bool,
     direction: SortDirection,
     cursor: Option<&CursorValue>,
@@ -325,14 +327,18 @@ pub(super) fn query_section_thread_page(
                 WHERE edge.child_thread_id = t.thread_id
                   AND edge.status = 'pending'
            )
+           AND (?5 = 0
+                OR (?5 = 1 AND json_extract(t.thread_json, '$.metadata.projectId') IS NULL)
+                OR (?5 = 2 AND json_extract(t.thread_json, '$.metadata.projectId') = ?6))
          {cursor_clause}
-         ORDER BY {position} {order}, t.thread_id {order} LIMIT ?5"
+         ORDER BY {position} {order}, t.thread_id {order} LIMIT ?7"
     );
     query_thread_rows(
         conn,
         &sql,
         include_archived,
         Some(section_id),
+        project,
         direction,
         cursor,
         limit,
@@ -342,6 +348,7 @@ pub(super) fn query_section_thread_page(
 pub(super) fn query_unsectioned_thread_page(
     conn: &Connection,
     include_archived: bool,
+    project: Option<&Option<String>>,
     direction: SortDirection,
     cursor: Option<&CursorValue>,
     limit: u32,
@@ -371,11 +378,23 @@ pub(super) fn query_unsectioned_thread_page(
                 WHERE edge.child_thread_id = t.thread_id
                   AND edge.status = 'pending'
            )
+           AND (?5 = 0
+                OR (?5 = 1 AND json_extract(t.thread_json, '$.metadata.projectId') IS NULL)
+                OR (?5 = 2 AND json_extract(t.thread_json, '$.metadata.projectId') = ?6))
          {cursor_clause}
          ORDER BY COALESCE(t.recency_at_ms, t.updated_at_ms) {order}, t.thread_id {order}
-         LIMIT ?5"
+         LIMIT ?7"
     );
-    query_thread_rows(conn, &sql, include_archived, None, direction, cursor, limit)
+    query_thread_rows(
+        conn,
+        &sql,
+        include_archived,
+        None,
+        project,
+        direction,
+        cursor,
+        limit,
+    )
 }
 
 fn query_thread_rows(
@@ -383,6 +402,7 @@ fn query_thread_rows(
     sql: &str,
     include_archived: bool,
     section_id: Option<&str>,
+    project: Option<&Option<String>>,
     direction: SortDirection,
     cursor: Option<&CursorValue>,
     limit: u32,
@@ -406,6 +426,8 @@ fn query_thread_rows(
                 section_id,
                 cursor.position,
                 cursor.id,
+                project_filter_mode(project),
+                project.and_then(Option::as_deref),
                 i64::from(limit)
             ],
             |row| {

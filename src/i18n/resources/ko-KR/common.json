@@ -268,5 +268,13 @@
   "common.modelCapabilities.reasoning.inactive": "사고 없음",
   "common.modelCapabilities.vision.active": "멀티모달 지원",
   "common.modelCapabilities.vision.inactive": "멀티모달 없음",
+  "common.modelProviderCapabilities.title": "현재 실행 공급자 기능",
+  "common.modelProviderCapabilities.loading": "기능을 읽는 중…",
+  "common.modelProviderCapabilities.namespaceTools.active": "도구 네임스페이스",
+  "common.modelProviderCapabilities.namespaceTools.inactive": "도구 네임스페이스 없음",
+  "common.modelProviderCapabilities.imageGeneration.active": "이미지 생성",
+  "common.modelProviderCapabilities.imageGeneration.inactive": "이미지 생성 없음",
+  "common.modelProviderCapabilities.webSearch.active": "웹 검색",
+  "common.modelProviderCapabilities.webSearch.inactive": "웹 검색 없음",
   "common.modelSelector.state.loginRequired": "로그인 필요"
 }

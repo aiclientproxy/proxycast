@@ -47,5 +47,5 @@
     }
   ],
   "description": "Resource content returned by the Codex MCP resource/read contract.",
-  "title": "McpServerResourceContent"
+  "title": "McpResourceContent"
 }

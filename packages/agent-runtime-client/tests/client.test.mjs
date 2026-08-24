@@ -415,6 +415,50 @@ test("sequence verifier fails closed for orphan direct tool completion", async (
   );
 });
 
+test("sequence verifier bypasses thread queue change notifications", async () => {
+  const received = [];
+  const runtime = createRuntimeClient({
+    sequenceVerifier: {
+      push() {
+        throw new Error("thread queue changes are not entity lifecycle events");
+      },
+      getViolations() {
+        return [];
+      },
+    },
+  });
+  runtime.subscribeLifecycleEvents((event) => received.push(event));
+  const notification = {
+    method: "thread/queue/changed",
+    params: { threadId: "thread-1" },
+  };
+
+  assert.equal(await runtime.dispatchEvent(notification), true);
+  assert.deepEqual(received, [notification]);
+});
+
+test("sequence verifier bypasses thread reverted notifications", async () => {
+  const received = [];
+  const runtime = createRuntimeClient({
+    sequenceVerifier: {
+      push() {
+        throw new Error("thread revert is not an entity lifecycle event");
+      },
+      getViolations() {
+        return [];
+      },
+    },
+  });
+  runtime.subscribeLifecycleEvents((event) => received.push(event));
+  const notification = {
+    method: "thread/reverted",
+    params: { threadId: "thread-1" },
+  };
+
+  assert.equal(await runtime.dispatchEvent(notification), true);
+  assert.deepEqual(received, [notification]);
+});
+
 test("collect-diagnostics keeps direct dispatch observable", async () => {
   const runtime = createAgentRuntimeClientFromSessionGateway(
     createMinimalSessionGateway(),

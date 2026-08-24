@@ -36,6 +36,12 @@
         }
       ]
     },
+    "projectId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
     "threadId": {
       "type": "string"
     }

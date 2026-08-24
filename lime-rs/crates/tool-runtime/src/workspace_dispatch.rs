@@ -36,6 +36,11 @@ impl RuntimeWorkspaceDispatch {
                 params: request.params,
                 working_directory: context.working_directory().clone(),
                 cancel_token: context.cancel_token().cloned(),
+                environment_id: context.environment_id().map(ToString::to_string),
+                filesystem_gateway: context.filesystem_gateway().cloned(),
+                sandbox_policy: request
+                    .turn_context
+                    .and_then(|turn| turn.sandbox_policy.clone()),
             })
             .await
         } else if file_search_canonical_tool_name(request.tool_name).is_some() {
@@ -44,6 +49,11 @@ impl RuntimeWorkspaceDispatch {
                 params: request.params,
                 working_directory: context.working_directory().clone(),
                 cancel_token: context.cancel_token().cloned(),
+                environment_id: context.environment_id().map(ToString::to_string),
+                filesystem_gateway: context.filesystem_gateway().cloned(),
+                sandbox_policy: request
+                    .turn_context
+                    .and_then(|turn| turn.sandbox_policy.clone()),
             })
             .await
         } else {

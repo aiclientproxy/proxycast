@@ -2,6 +2,9 @@ pub use app_server_protocol::app_server_method_catalog;
 pub use app_server_protocol::is_app_server_notification_method;
 pub use app_server_protocol::is_app_server_request_method;
 pub use app_server_protocol::protocol::v2::ServerNotification;
+pub use app_server_protocol::protocol::v2::ThreadRevertParams;
+pub use app_server_protocol::protocol::v2::ThreadRevertResponse;
+pub use app_server_protocol::protocol::v2::ThreadRevertedNotification;
 pub use app_server_protocol::protocol::v2::METHOD_HOOKS_LIST;
 pub use app_server_protocol::protocol::v2::METHOD_SKILLS_LIST;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_APPROVE_GUARDIAN_DENIED_ACTION;
@@ -14,6 +17,7 @@ pub use app_server_protocol::protocol::v2::METHOD_THREAD_DECREMENT_ELICITATION;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_INCREMENT_ELICITATION;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_INJECT_ITEMS;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_LOADED_LIST;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_REVERT;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH_OCCURRENCES;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SECTION_CREATE;
@@ -1519,6 +1523,10 @@ pub mod typed {
 
     pub fn read_thread(params: ThreadReadParams) -> TypedRequest<ThreadReadParams> {
         TypedRequest::new(METHOD_THREAD_READ, params)
+    }
+
+    pub fn revert_thread(params: ThreadRevertParams) -> TypedRequest<ThreadRevertParams> {
+        TypedRequest::new(METHOD_THREAD_REVERT, params)
     }
 
     pub fn list_threads(params: ThreadListParams) -> TypedRequest<ThreadListParams> {
@@ -4089,6 +4097,7 @@ mod tests {
             "sessionId": "session_1",
             "preview": "",
             "ephemeral": false,
+            "projectId": null,
             "historyMode": "legacy",
             "modelProvider": "openai",
             "createdAt": 10,
@@ -4096,6 +4105,7 @@ mod tests {
             "cwd": "/workspace",
             "cliVersion": "1.0.0",
             "source": "appServer",
+            "status": {"type": "idle"},
             "turns": []
         });
         let turn = json!({

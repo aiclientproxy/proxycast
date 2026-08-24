@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Signals that a Guardian-backed tool review requires the strict-review\nsurface before execution continues.",
+  "properties": {
+    "startedAtMs": {
+      "description": "Unix timestamp (in milliseconds) when this review started.",
+      "format": "int64",
+      "type": "integer"
+    },
+    "threadId": {
+      "type": "string"
+    },
+    "turnId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "startedAtMs",
+    "threadId",
+    "turnId"
+  ],
+  "title": "StrictReviewRequiredNotification",
+  "type": "object"
+}

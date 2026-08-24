@@ -1,4 +1,10 @@
 {
+  "$defs": {
+    "ThreadSource": {
+      "description": "Analytics source classification for a thread.\n\nCodex keeps feature values open-ended while preserving a typed wire shape;\nthe same representation avoids a public untyped string field in Lime.",
+      "type": "string"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
     "approvalPolicy": true,
@@ -93,9 +99,13 @@
       "type": "string"
     },
     "threadSource": {
-      "type": [
-        "null",
-        "string"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ThreadSource"
+        },
+        {
+          "type": "null"
+        }
       ]
     }
   },

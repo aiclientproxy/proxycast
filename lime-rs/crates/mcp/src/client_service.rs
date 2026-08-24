@@ -12,6 +12,7 @@ use rmcp::service::{NotificationContext, RequestContext, Service};
 use rmcp::RoleClient;
 use serde::Serialize;
 use serde_json::Value;
+use tokio::sync::broadcast;
 
 /// The one client service used by every production MCP transport.
 pub struct LimeMcpClientService {
@@ -46,8 +47,26 @@ impl LimeMcpClientService {
         session_id: String,
         thread_id: String,
     ) -> Self {
+        Self::with_runtime_elicitation_router_and_notifications(
+            server_name,
+            emitter,
+            elicitation_router,
+            session_id,
+            thread_id,
+            None,
+        )
+    }
+
+    pub fn with_runtime_elicitation_router_and_notifications(
+        server_name: String,
+        emitter: Option<DynEmitter>,
+        elicitation_router: crate::elicitation::ElicitationRequestRouter,
+        session_id: String,
+        thread_id: String,
+        notification_sender: Option<broadcast::Sender<crate::McpServerNotification>>,
+    ) -> Self {
         Self {
-            handler: LimeMcpClient::with_runtime_elicitation_router(
+            handler: LimeMcpClient::with_runtime_elicitation_router_and_notifications(
                 server_name,
                 emitter,
                 elicitation_router,
@@ -55,6 +74,7 @@ impl LimeMcpClientService {
                     session_id,
                     thread_id,
                 },
+                notification_sender,
             ),
         }
     }

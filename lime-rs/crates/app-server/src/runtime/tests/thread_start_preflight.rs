@@ -1,6 +1,7 @@
 use super::support::TestSessionDataSource;
 use super::*;
 use app_server_protocol::protocol::v2::ThreadSettings;
+use async_trait::async_trait;
 use serde_json::json;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

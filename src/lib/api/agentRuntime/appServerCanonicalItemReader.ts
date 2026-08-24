@@ -34,6 +34,10 @@ export function readCanonicalThreadItem(
   item: Record<string, unknown>,
   event: AppServerAgentEvent,
 ): Record<string, unknown> | null {
+  const runtimeToolItem = readRuntimeCanonicalToolThreadItem(item, event);
+  if (runtimeToolItem) {
+    return runtimeToolItem;
+  }
   const id = readString(item, "id");
   const type = readString(item, "type");
   const route = readItemRoute(event);
@@ -276,6 +280,61 @@ export function readCanonicalThreadItem(
   }
 }
 
+/**
+ * Accept the RuntimeCore canonical item envelope used by the app-server event
+ * stream before it is lowered to the public v2 item union.
+ */
+export function readRuntimeCanonicalToolThreadItem(
+  item: Record<string, unknown>,
+  event: AppServerAgentEvent,
+  fallbackStatus: ItemStatus = "completed",
+): Record<string, unknown> | null {
+  if (readString(item, "kind") !== "tool") {
+    return null;
+  }
+  const payload = normalizeRecord(item.payload);
+  if (!payload || readString(payload, "type") !== "tool") {
+    return null;
+  }
+  const toolName = readString(payload, "name");
+  const callId = readString(payload, "call_id", "callId");
+  const route = readItemRoute(event);
+  if (!toolName || !callId || !route) {
+    return null;
+  }
+
+  const status = normalizeItemStatus(readString(item, "status"), false) ?? fallbackStatus;
+  const output = normalizeRecord(payload.output);
+  const error = readString(output ?? {}, "error");
+  const structuredContent = output?.structuredContent ?? output?.structured_content;
+  return {
+    id: readString(item, "id", "itemId", "item_id") ?? callId,
+    thread_id: route.threadId,
+    turn_id: route.turnId,
+    sequence: event.sequence,
+    status,
+    started_at: event.timestamp,
+    updated_at: event.timestamp,
+    ...(isTerminalItemStatus(status) ? { completed_at: event.timestamp } : {}),
+    type: "tool_call",
+    tool_name: readString(payload, "name") ?? callId,
+    arguments: Array.isArray(payload.arguments) ? payload.arguments : [],
+    output: readString(output ?? {}, "text", "content", "output"),
+    ...(structuredContent !== undefined
+      ? { structured_content: structuredContent }
+      : {}),
+    duration_ms: readFiniteNumber(output ?? {}, "durationMs", "duration_ms"),
+    success:
+      readBoolean(output ?? {}, "success") ??
+      (status === "completed" ? !error : status === "failed" ? false : undefined),
+    ...(error ? { error } : {}),
+    metadata: {
+      ...(normalizeRecord(item.metadata) ?? {}),
+      callId,
+    },
+  };
+}
+
 function readOnlyFileChangeMetadata(value: unknown): boolean {
   const metadata = normalizeRecord(value);
   if (!metadata) {
@@ -433,7 +492,8 @@ export function readCanonicalToolThreadItem(
   if (!status) {
     return null;
   }
-  const output = readToolOutput(item);
+  const structuredContent = readStructuredContent(item, toolName);
+  const output = readToolOutput(item, toolName, structuredContent);
   const error = readDisplayText(item.error);
   const explicitSuccess = readBoolean(item, "success");
 
@@ -453,7 +513,7 @@ export function readCanonicalToolThreadItem(
         : toolName,
     arguments: item.arguments,
     output,
-    structured_content: readStructuredContent(item),
+    structured_content: structuredContent,
     output_truncated: readBoolean(item, "truncated"),
     duration_ms: readFiniteNumber(item, "durationMs"),
     success:
@@ -964,22 +1024,103 @@ function safeMediaDisplayName(value: string): string {
   }
 }
 
-function readToolOutput(item: Record<string, unknown>): string | undefined {
+function readToolOutput(
+  item: Record<string, unknown>,
+  toolName?: string,
+  structuredContent?: unknown,
+): string | undefined {
   const result = normalizeRecord(item.result);
   if (result) {
     return readDisplayText(result.output ?? result.content ?? result);
   }
   if (Array.isArray(item.contentItems)) {
-    return readDisplayText(item.contentItems);
+    const contentItems = item.contentItems.filter((entry) => {
+      if (!isMcpToolName(toolName) || structuredContent === undefined) {
+        return true;
+      }
+      const text = readDisplayText(entry);
+      return text === undefined || !isMcpStructuredContentText(text);
+    });
+    return readDisplayText(contentItems);
   }
   return undefined;
 }
 
 function readStructuredContent(
   item: Record<string, unknown>,
+  toolName?: string,
 ): unknown | undefined {
   const result = normalizeRecord(item.result);
-  return result?.structuredContent;
+  const direct = result?.structuredContent ?? result?.structured_content;
+  if (direct !== undefined) {
+    return direct;
+  }
+  if (!isMcpToolName(toolName) || !Array.isArray(item.contentItems)) {
+    return undefined;
+  }
+  for (const entry of item.contentItems) {
+    const text = readDisplayText(entry);
+    if (!text) {
+      continue;
+    }
+    const parsed = parseJsonValue(text);
+    if (parsed === null) {
+      continue;
+    }
+    const nested = normalizeRecord(parsed);
+    const nestedStructured =
+      nested?.structuredContent ?? nested?.structured_content;
+    if (nestedStructured !== undefined) {
+      return nestedStructured;
+    }
+    if (nested && !hasMcpProtocolEnvelope(nested)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function isMcpToolName(toolName: string | undefined): boolean {
+  return Boolean(toolName?.trim().toLowerCase().startsWith("mcp__"));
+}
+
+function parseJsonValue(value: string): unknown | null {
+  const trimmed = value.trim();
+  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) {
+    return null;
+  }
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function isMcpStructuredContentText(value: string): boolean {
+  const parsed = parseJsonValue(value);
+  const record = normalizeRecord(parsed);
+  if (!record) {
+    return false;
+  }
+  const nested = record.structuredContent ?? record.structured_content;
+  return nested !== undefined || !hasMcpProtocolEnvelope(record);
+}
+
+function hasMcpProtocolEnvelope(record: Record<string, unknown>): boolean {
+  return [
+    "jsonrpc",
+    "request_metadata",
+    "requestMetadata",
+    "runtime_metadata",
+    "runtimeMetadata",
+    "diagnostics",
+    "metadata",
+    "debug",
+    "_meta",
+    "trace",
+    "telemetry",
+    "raw",
+  ].some((key) => key in record);
 }
 
 function readDisplayText(value: unknown): string | undefined {

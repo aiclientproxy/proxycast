@@ -6,6 +6,10 @@ export interface ThreadWorkspaceHeaderViewModel {
   title: string;
   status: TaskStatus | null;
   workingDirectory: string | null;
+  canAcceptDirectInput: boolean | null;
+  onRename?: (title: string) => Promise<void>;
+  onArchive?: () => Promise<void>;
+  onFork?: () => Promise<void>;
 }
 
 interface BuildThreadWorkspaceHeaderViewModelParams {
@@ -16,6 +20,11 @@ interface BuildThreadWorkspaceHeaderViewModelParams {
   topic?: Topic | null;
   sessionWorkingDirectory?: string | null;
   projectRootPath?: string | null;
+  canonicalThreadStatus?: string | null;
+  canAcceptDirectInput?: boolean | null;
+  onRename?: (title: string) => Promise<void>;
+  onArchive?: () => Promise<void>;
+  onFork?: () => Promise<void>;
   isSending?: boolean;
   pendingActionCount?: number;
   untitledTaskLabel: string;
@@ -28,15 +37,42 @@ function normalizeText(value?: string | null): string | null {
 
 function resolveThreadWorkspaceStatus({
   topicStatus,
+  canonicalThreadStatus,
   isSending,
   pendingActionCount,
 }: {
   topicStatus?: TaskStatus | null;
+  canonicalThreadStatus?: string | null;
   isSending?: boolean;
   pendingActionCount?: number;
 }): TaskStatus | null {
   if ((pendingActionCount ?? 0) > 0) {
     return "waiting";
+  }
+  const normalizedCanonicalStatus = canonicalThreadStatus?.trim().toLowerCase();
+  switch (normalizedCanonicalStatus) {
+    case "queued":
+      return "queued";
+    case "active":
+    case "running":
+    case "interrupting":
+      return "running";
+    case "blocked":
+    case "waiting":
+    case "waiting_input":
+    case "waiting_request":
+      return "waiting";
+    case "failed":
+    case "system_error":
+      return "failed";
+    case "cancelled":
+    case "canceled":
+    case "completed":
+    case "done":
+    case "idle":
+      return "done";
+    default:
+      break;
   }
   if (isSending) {
     return "running";
@@ -52,6 +88,11 @@ export function buildThreadWorkspaceHeaderViewModel({
   topic,
   sessionWorkingDirectory,
   projectRootPath,
+  canonicalThreadStatus,
+  canAcceptDirectInput,
+  onRename,
+  onArchive,
+  onFork,
   isSending,
   pendingActionCount,
   untitledTaskLabel,
@@ -79,9 +120,14 @@ export function buildThreadWorkspaceHeaderViewModel({
     title,
     status: resolveThreadWorkspaceStatus({
       topicStatus: topic?.status,
+      canonicalThreadStatus,
       isSending,
       pendingActionCount,
     }),
     workingDirectory,
+    canAcceptDirectInput: canAcceptDirectInput ?? null,
+    ...(onRename ? { onRename } : {}),
+    ...(onArchive ? { onArchive } : {}),
+    ...(onFork ? { onFork } : {}),
   };
 }

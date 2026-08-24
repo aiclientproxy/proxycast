@@ -335,12 +335,13 @@ impl McpClientManager {
     fn client_service(&self, name: &str) -> crate::client_service::LimeMcpClientService {
         match (&self.elicitation_router, &self.runtime_owner) {
             (Some(router), Some(owner)) => {
-                crate::client_service::LimeMcpClientService::with_runtime_elicitation_router(
+                crate::client_service::LimeMcpClientService::with_runtime_elicitation_router_and_notifications(
                     name.to_string(),
                     self.emitter.clone(),
                     router.clone(),
                     owner.session_id.clone(),
                     owner.thread_id.clone(),
+                    Some(self.server_notifications.clone()),
                 )
             }
             _ => crate::client_service::LimeMcpClientService::new(

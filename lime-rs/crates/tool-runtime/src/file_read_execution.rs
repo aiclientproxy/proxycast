@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 const MAX_TEXT_FILE_SIZE: u64 = 10 * 1024 * 1024;
@@ -34,6 +35,9 @@ pub struct RuntimeFileReadRequest<'a> {
     pub params: &'a Value,
     pub working_directory: PathBuf,
     pub cancel_token: Option<CancellationToken>,
+    pub environment_id: Option<String>,
+    pub filesystem_gateway: Option<Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>>,
+    pub sandbox_policy: Option<String>,
 }
 
 pub fn file_read_tool_definition() -> RuntimeToolDefinition {
@@ -182,7 +186,81 @@ pub async fn execute_runtime_file_read_tool(
         )));
     }
 
+    if let Some(environment_id) = request
+        .environment_id
+        .as_deref()
+        .filter(|environment_id| *environment_id != "local")
+    {
+        let Some(gateway) = request.filesystem_gateway.as_ref() else {
+            return Some(Err(runtime_read_error(
+                ErrorCode::INTERNAL_ERROR,
+                format!("remote Environment '{environment_id}' filesystem gateway is unavailable"),
+            )));
+        };
+        return Some(
+            execute_remote_read(
+                request.params,
+                &request.working_directory,
+                environment_id,
+                Arc::clone(gateway),
+                request.sandbox_policy.as_deref(),
+            )
+            .await,
+        );
+    }
     Some(execute_read(request.params, &request.working_directory))
+}
+
+async fn execute_remote_read(
+    params: &Value,
+    working_directory: &Path,
+    environment_id: &str,
+    gateway: Arc<dyn crate::filesystem_gateway::RuntimeFileSystemGateway>,
+    sandbox_policy: Option<&str>,
+) -> Result<CallToolResult, ErrorData> {
+    let input: ReadInput = serde_json::from_value(params.clone()).map_err(|error| {
+        runtime_read_error(
+            ErrorCode::INVALID_PARAMS,
+            format!("Invalid Read parameters: {error}"),
+        )
+    })?;
+    let path = input
+        .path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| {
+            runtime_read_error(
+                ErrorCode::INVALID_PARAMS,
+                "Missing required parameter: path",
+            )
+        })?;
+    let full_path = resolve_path(path, working_directory);
+    let bytes = gateway
+        .read_file(environment_id, &full_path, sandbox_policy)
+        .await
+        .map_err(|error| runtime_read_error(ErrorCode::INTERNAL_ERROR, error))?;
+    let text = String::from_utf8(bytes.clone()).map_err(|_| {
+        runtime_read_error(
+            ErrorCode::INTERNAL_ERROR,
+            format!("Remote file is not UTF-8 text: {}", full_path.display()),
+        )
+    })?;
+    let output = format_text_with_lines(&text, line_range_from_input(&input));
+    Ok(runtime_tool_result_to_call_tool_result(
+        RuntimeToolResultParts {
+            success: true,
+            output: Some(output),
+            error: None,
+            metadata: HashMap::from([
+                ("file_type".to_string(), json!("text")),
+                ("analysis_type".to_string(), json!("textual")),
+                ("path".to_string(), json!(full_path.display().to_string())),
+                ("content_bytes".to_string(), json!(bytes.len())),
+                ("environment_id".to_string(), json!(environment_id)),
+            ]),
+        },
+    ))
 }
 
 fn execute_read(params: &Value, working_directory: &Path) -> Result<CallToolResult, ErrorData> {
@@ -628,6 +706,9 @@ mod tests {
             params: &json!({ "path": "sample.rs", "start_line": 2, "end_line": 3 }),
             working_directory: dir.path().to_path_buf(),
             cancel_token: None,
+            environment_id: None,
+            filesystem_gateway: None,
+            sandbox_policy: None,
         })
         .await
         .expect("read tool")
@@ -651,6 +732,9 @@ mod tests {
             params: &json!({ "path": "image.png" }),
             working_directory: dir.path().to_path_buf(),
             cancel_token: None,
+            environment_id: None,
+            filesystem_gateway: None,
+            sandbox_policy: None,
         })
         .await
         .expect("read tool");
@@ -665,6 +749,9 @@ mod tests {
             params: &json!({ "path": "sample.rs" }),
             working_directory: PathBuf::from("."),
             cancel_token: None,
+            environment_id: None,
+            filesystem_gateway: None,
+            sandbox_policy: None,
         })
         .await;
 

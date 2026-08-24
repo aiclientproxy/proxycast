@@ -171,7 +171,7 @@
     {
       "type": "agentMessage",
       "codexFields": ["id", "text", "phase", "memoryCitation"],
-      "limeFields": ["id", "text", "phase", "memoryCitation", "metadata"],
+      "limeFields": ["delivery", "id", "text", "phase", "memoryCitation", "metadata"],
       "statusful": false,
       "codexStreamMethods": ["item/agentMessage/delta"],
       "limeStreamMethods": ["item/agentMessage/delta"],
@@ -227,6 +227,8 @@
       ],
       "limeFields": [
         "id",
+        "pluginId",
+        "scriptPath",
         "command",
         "cwd",
         "processId",
@@ -293,6 +295,7 @@
         "appContext",
         "mcpAppResourceUri",
         "pluginId",
+        "readOnlyHint",
         "result",
         "error",
         "durationMs",

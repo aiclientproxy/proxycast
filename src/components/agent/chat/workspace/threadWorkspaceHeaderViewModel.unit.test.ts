@@ -29,6 +29,8 @@ describe("buildThreadWorkspaceHeaderViewModel", () => {
         topic: topic(),
         sessionWorkingDirectory: "/workspace/current",
         projectRootPath: "/workspace/project",
+        canonicalThreadStatus: "running",
+        canAcceptDirectInput: true,
         untitledTaskLabel: "未命名任务",
       }),
     ).toEqual({
@@ -36,7 +38,19 @@ describe("buildThreadWorkspaceHeaderViewModel", () => {
       title: "整理 GUI 对齐计划",
       status: "running",
       workingDirectory: "/workspace/current",
+      canAcceptDirectInput: true,
     });
+  });
+
+  it("应优先使用 canonical Thread status，而不是过期的 Topic 状态", () => {
+    expect(
+      buildThreadWorkspaceHeaderViewModel({
+        sessionId: "thread-1",
+        topic: topic({ status: "done" }),
+        canonicalThreadStatus: "active",
+        untitledTaskLabel: "未命名任务",
+      })?.status,
+    ).toBe("running");
   });
 
   it("Topic 标题尚未恢复时应使用入口 Thread 名称兜底", () => {
@@ -53,6 +67,7 @@ describe("buildThreadWorkspaceHeaderViewModel", () => {
       title: "恢复历史任务",
       status: "done",
       workingDirectory: "/workspace/project",
+      canAcceptDirectInput: null,
     });
   });
 

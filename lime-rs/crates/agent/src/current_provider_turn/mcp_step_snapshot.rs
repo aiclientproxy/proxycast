@@ -505,6 +505,10 @@ impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
                 serial_mcp_tool_names,
                 mcp_tool_environment_ids,
             );
+            let snapshot = match self.state.filesystem_gateway() {
+                Some(gateway) => snapshot.with_filesystem_gateway(gateway),
+                None => snapshot,
+            };
             if !attach_session {
                 return Ok(snapshot);
             }

@@ -8,68 +8,85 @@ use super::{
     CommandExecutionOutputDeltaNotification, CommandExecutionRequestApprovalParams,
     CommandExecutionTerminalInteractionNotification, ConfigBatchWriteParams, ConfigReadParams,
     ConfigValueWriteParams, ConfigWarningNotification, CurrentTimeReadParams,
-    DynamicToolCallParams, ErrorNotification, ExperimentalFeatureEnablementSetParams,
-    ExperimentalFeatureEnablementSetResponse, ExperimentalFeatureListParams,
-    ExperimentalFeatureListResponse, FileChangePatchUpdatedNotification,
-    FileChangeRequestApprovalParams, FsChangedNotification, FsCopyParams, FsCopyResponse,
-    FsCreateDirectoryParams, FsCreateDirectoryResponse, FsGetMetadataParams, FsGetMetadataResponse,
-    FsReadDirectoryParams, FsReadDirectoryResponse, FsReadFileParams, FsReadFileResponse,
-    FsRemoveParams, FsRemoveResponse, FsUnwatchParams, FsUnwatchResponse, FsWatchParams,
-    FsWatchResponse, FsWriteFileParams, FsWriteFileResponse, FuzzyFileSearchParams,
-    FuzzyFileSearchResponse, GuardianWarningNotification, HookCompletedNotification,
-    HookStartedNotification, HooksListParams, HooksListResponse, ItemCompletedNotification,
-    ItemGuardianApprovalReviewCompletedNotification, ItemGuardianApprovalReviewStartedNotification,
-    ItemStartedNotification, McpServerElicitationRequestParams,
-    McpServerOauthLoginCompletedNotification, McpServerResourceReadParams,
-    McpServerResourceReadResponse, McpServerStatusUpdatedNotification, McpServerToolCallParams,
-    McpServerToolCallResponse, McpToolCallProgressNotification, MediaReadParams, MediaReadResponse,
-    MemoryResetResponse, Method, ModelListParams, ModelListUpdatedNotification,
-    ModelReroutedNotification, ModelSafetyBufferingUpdatedNotification,
-    ModelVerificationNotification, PermissionProfileListParams, PermissionsRequestApprovalParams,
-    PlanDeltaNotification, PluginCatalogEnabledSetParams, PluginCatalogInstallParams,
-    PluginCatalogInstalledParams, PluginCatalogListParams, PluginCatalogReadParams,
-    PluginCatalogUninstallParams, PluginSearchParams, PluginSearchResponse,
-    ProcessExitedNotification, ProcessKillParams, ProcessKillResponse,
-    ProcessOutputDeltaNotification, ProcessResizePtyParams, ProcessResizePtyResponse,
-    ProcessSpawnParams, ProcessSpawnResponse, ProcessWriteStdinParams, ProcessWriteStdinResponse,
-    ReasoningSummaryPartAddedNotification, ReasoningSummaryTextDeltaNotification,
-    ReasoningTextDeltaNotification, ReviewStartParams, ReviewStartResponse,
-    ScheduledTaskChangedNotification, ScheduledTaskRunUpdatedNotification,
+    DynamicToolCallParams, EnvironmentAddParams, EnvironmentAddResponse,
+    EnvironmentConnectionNotification, EnvironmentInfoParams, EnvironmentInfoResponse,
+    EnvironmentStatusParams, EnvironmentStatusResponse, ErrorNotification,
+    ExperimentalFeatureEnablementSetParams, ExperimentalFeatureEnablementSetResponse,
+    ExperimentalFeatureListParams, ExperimentalFeatureListResponse,
+    FileChangePatchUpdatedNotification, FileChangeRequestApprovalParams, FsChangedNotification,
+    FsCopyParams, FsCopyResponse, FsCreateDirectoryParams, FsCreateDirectoryResponse,
+    FsGetMetadataParams, FsGetMetadataResponse, FsReadDirectoryParams, FsReadDirectoryResponse,
+    FsReadFileParams, FsReadFileResponse, FsRemoveParams, FsRemoveResponse, FsUnwatchParams,
+    FsUnwatchResponse, FsWatchParams, FsWatchResponse, FsWriteFileParams, FsWriteFileResponse,
+    FuzzyFileSearchParams, FuzzyFileSearchResponse, GuardianWarningNotification,
+    HookCompletedNotification, HookStartedNotification, HooksListParams, HooksListResponse,
+    ItemCompletedNotification, ItemGuardianApprovalReviewCompletedNotification,
+    ItemGuardianApprovalReviewStartedNotification, ItemStartedNotification,
+    ListMcpServerStatusParams, ListMcpServerStatusResponse, McpServerElicitationRequestParams,
+    McpServerEventStreamNotification, McpServerEventStreamStartParams,
+    McpServerEventStreamStartResponse, McpServerEventStreamStopParams,
+    McpServerEventStreamStopResponse, McpServerOauthLoginCompletedNotification,
+    McpServerResourceReadParams, McpServerResourceReadResponse, McpServerStatusUpdatedNotification,
+    McpServerToolCallParams, McpServerToolCallResponse, McpToolCallProgressNotification,
+    MediaReadParams, MediaReadResponse, MemoryResetResponse, Method, ModelListParams,
+    ModelListUpdatedNotification, ModelProviderCapabilitiesReadParams, ModelReroutedNotification,
+    ModelSafetyBufferingUpdatedNotification, ModelVerificationNotification,
+    PermissionProfileListParams, PermissionsRequestApprovalParams, PlanDeltaNotification,
+    PluginCatalogEnabledSetParams, PluginCatalogInstallParams, PluginCatalogInstalledParams,
+    PluginCatalogListParams, PluginCatalogReadParams, PluginCatalogUninstallParams,
+    PluginSearchParams, PluginSearchResponse, ProcessExitedNotification, ProcessKillParams,
+    ProcessKillResponse, ProcessOutputDeltaNotification, ProcessResizePtyParams,
+    ProcessResizePtyResponse, ProcessSpawnParams, ProcessSpawnResponse, ProcessWriteStdinParams,
+    ProcessWriteStdinResponse, ProjectChangedNotification, ProjectCreateParams,
+    ProjectCreateResponse, ProjectDeleteParams, ProjectDeleteResponse, ProjectImportParams,
+    ProjectImportResponse, ProjectListParams, ProjectListResponse, ProjectMoveParams,
+    ProjectMoveResponse, ProjectReadParams, ProjectReadResponse, ProjectUpdateParams,
+    ProjectUpdateResponse, ReasoningSummaryPartAddedNotification,
+    ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification, ReviewStartParams,
+    ReviewStartResponse, ScheduledTaskChangedNotification, ScheduledTaskRunUpdatedNotification,
     ServerRequestResolvedNotification, SkillsChangedNotification, SkillsConfigWriteParams,
     SkillsConfigWriteResponse, SkillsExtraRootsSetParams, SkillsExtraRootsSetResponse,
-    SkillsListParams, SkillsListResponse, ThreadApproveGuardianDeniedActionParams,
-    ThreadApproveGuardianDeniedActionResponse, ThreadArchiveParams, ThreadArchiveResponse,
-    ThreadArchivedNotification, ThreadBackgroundTerminalsCleanParams,
-    ThreadBackgroundTerminalsCleanResponse, ThreadBackgroundTerminalsListParams,
-    ThreadBackgroundTerminalsListResponse, ThreadBackgroundTerminalsTerminateParams,
-    ThreadBackgroundTerminalsTerminateResponse, ThreadClosedNotification, ThreadCompactStartParams,
-    ThreadCompactStartResponse, ThreadDecrementElicitationParams,
-    ThreadDecrementElicitationResponse, ThreadDeleteParams, ThreadDeleteResponse,
-    ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse, ThreadGoalClearParams,
-    ThreadGoalClearResponse, ThreadGoalClearedNotification, ThreadGoalGetParams,
-    ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
+    SkillsListParams, SkillsListResponse, StrictReviewRequiredNotification,
+    ThreadApproveGuardianDeniedActionParams, ThreadApproveGuardianDeniedActionResponse,
+    ThreadArchiveParams, ThreadArchiveResponse, ThreadArchivedNotification,
+    ThreadBackgroundTerminalsCleanParams, ThreadBackgroundTerminalsCleanResponse,
+    ThreadBackgroundTerminalsListParams, ThreadBackgroundTerminalsListResponse,
+    ThreadBackgroundTerminalsTerminateParams, ThreadBackgroundTerminalsTerminateResponse,
+    ThreadClosedNotification, ThreadCompactStartParams, ThreadCompactStartResponse,
+    ThreadDecrementElicitationParams, ThreadDecrementElicitationResponse, ThreadDeleteParams,
+    ThreadDeleteResponse, ThreadDeletedNotification, ThreadForkParams, ThreadForkResponse,
+    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
+    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
     ThreadGoalUpdatedNotification, ThreadIncrementElicitationParams,
     ThreadIncrementElicitationResponse, ThreadInjectItemsParams, ThreadInjectItemsResponse,
     ThreadItemsListParams, ThreadItemsListResponse, ThreadListParams, ThreadListResponse,
     ThreadLoadedListParams, ThreadLoadedListResponse, ThreadMemoryModeSetParams,
     ThreadMemoryModeSetResponse, ThreadMetadataUpdateParams, ThreadMetadataUpdateResponse,
-    ThreadNameUpdatedNotification, ThreadReadParams, ThreadReadResponse, ThreadResumeParams,
-    ThreadResumeResponse, ThreadSearchOccurrencesParams, ThreadSearchOccurrencesResponse,
-    ThreadSearchParams, ThreadSearchResponse, ThreadSectionCreateParams,
-    ThreadSectionCreateResponse, ThreadSectionDeleteParams, ThreadSectionDeleteResponse,
-    ThreadSectionListParams, ThreadSectionListResponse, ThreadSectionMoveParams,
-    ThreadSectionMoveResponse, ThreadSectionUpdateParams, ThreadSectionUpdateResponse,
-    ThreadSetNameParams, ThreadSetNameResponse, ThreadSettingsUpdateParams,
-    ThreadSettingsUpdateResponse, ThreadSettingsUpdatedNotification, ThreadShellCommandParams,
-    ThreadShellCommandResponse, ThreadStartParams, ThreadStartResponse, ThreadStartedNotification,
-    ThreadStatusChangedNotification, ThreadTokenUsageUpdatedNotification, ThreadTurnsListParams,
-    ThreadTurnsListResponse, ThreadUnarchiveParams, ThreadUnarchiveResponse,
-    ThreadUnarchivedNotification, ThreadUnsubscribeParams, ThreadUnsubscribeResponse,
-    ToolRequestUserInputParams, TurnCompletedNotification, TurnDiffUpdatedNotification,
-    TurnInterruptParams, TurnInterruptResponse, TurnModerationMetadataNotification,
-    TurnPlanUpdatedNotification, TurnStartParams, TurnStartResponse, TurnStartedNotification,
-    TurnSteerParams, TurnSteerResponse, WarningNotification, WindowsSandboxReadinessParams,
-    WindowsSandboxReadinessResponse, METHOD_APP_LIST_UPDATED,
+    ThreadNameUpdatedNotification, ThreadProjectUpdatedNotification, ThreadQueueAddParams,
+    ThreadQueueAddResponse, ThreadQueueChangedNotification, ThreadQueueDeleteParams,
+    ThreadQueueDeleteResponse, ThreadQueueListParams, ThreadQueueListResponse,
+    ThreadQueueReorderParams, ThreadQueueReorderResponse, ThreadQueueStartParams,
+    ThreadQueueStartResponse, ThreadQueueUpdateParams, ThreadQueueUpdateResponse, ThreadReadParams,
+    ThreadReadResponse, ThreadResumeParams, ThreadResumeResponse, ThreadRevertParams,
+    ThreadRevertResponse, ThreadRevertedNotification, ThreadSearchOccurrencesParams,
+    ThreadSearchOccurrencesResponse, ThreadSearchParams, ThreadSearchResponse,
+    ThreadSectionCreateParams, ThreadSectionCreateResponse, ThreadSectionDeleteParams,
+    ThreadSectionDeleteResponse, ThreadSectionListParams, ThreadSectionListResponse,
+    ThreadSectionMoveParams, ThreadSectionMoveResponse, ThreadSectionUpdateParams,
+    ThreadSectionUpdateResponse, ThreadSetNameParams, ThreadSetNameResponse,
+    ThreadSettingsUpdateParams, ThreadSettingsUpdateResponse, ThreadSettingsUpdatedNotification,
+    ThreadShellCommandParams, ThreadShellCommandResponse, ThreadStartParams, ThreadStartResponse,
+    ThreadStartedNotification, ThreadStatusChangedNotification,
+    ThreadTokenUsageUpdatedNotification, ThreadTurnsListParams, ThreadTurnsListResponse,
+    ThreadUnarchiveParams, ThreadUnarchiveResponse, ThreadUnarchivedNotification,
+    ThreadUnsubscribeParams, ThreadUnsubscribeResponse, ToolRequestUserInputParams,
+    TurnCompletedNotification, TurnDiffUpdatedNotification, TurnInterruptParams,
+    TurnInterruptResponse, TurnModerationMetadataNotification, TurnPlanUpdatedNotification,
+    TurnStartParams, TurnStartResponse, TurnStartedNotification, TurnSteerParams,
+    TurnSteerResponse, WarningNotification, WindowsSandboxReadinessParams,
+    WindowsSandboxReadinessResponse, WindowsSandboxSetupCompletedNotification,
+    WindowsSandboxSetupStartParams, WindowsSandboxSetupStartResponse,
+    WindowsWorldWritableWarningNotification, METHOD_APP_LIST_UPDATED,
     METHOD_COMMAND_EXECUTION_OUTPUT_DELTA, METHOD_COMMAND_EXECUTION_TERMINAL_INTERACTION,
     METHOD_COMMAND_EXEC_OUTPUT_DELTA, METHOD_CONFIG_WARNING, METHOD_CURRENT_TIME_READ,
     METHOD_ERROR, METHOD_FILE_CHANGE_PATCH_UPDATED, METHOD_FS_CHANGED, METHOD_GUARDIAN_WARNING,
@@ -77,17 +94,20 @@ use super::{
     METHOD_ITEM_AUTO_APPROVAL_REVIEW_STARTED, METHOD_ITEM_COMMAND_EXECUTION_REQUEST_APPROVAL,
     METHOD_ITEM_FILE_CHANGE_REQUEST_APPROVAL, METHOD_ITEM_PERMISSIONS_REQUEST_APPROVAL,
     METHOD_ITEM_TOOL_CALL, METHOD_ITEM_TOOL_REQUEST_USER_INPUT,
-    METHOD_MCP_SERVER_ELICITATION_REQUEST, METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
-    METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED, METHOD_MCP_TOOL_CALL_PROGRESS,
-    METHOD_MODEL_LIST_UPDATED, METHOD_MODEL_REROUTED, METHOD_MODEL_SAFETY_BUFFERING_UPDATED,
-    METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA, METHOD_PROCESS_EXITED,
-    METHOD_PROCESS_OUTPUT_DELTA, METHOD_REASONING_SUMMARY_PART_ADDED,
-    METHOD_REASONING_SUMMARY_TEXT_DELTA, METHOD_REASONING_TEXT_DELTA,
-    METHOD_SCHEDULED_TASK_CHANGED, METHOD_SCHEDULED_TASK_RUN_UPDATED,
-    METHOD_SERVER_REQUEST_RESOLVED, METHOD_SKILLS_CHANGED, METHOD_THREAD_CLOSED,
-    METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED, METHOD_THREAD_NAME_UPDATED,
-    METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED, METHOD_TURN_DIFF_UPDATED,
-    METHOD_TURN_MODERATION_METADATA, METHOD_TURN_PLAN_UPDATED, METHOD_WARNING,
+    METHOD_MCP_SERVER_ELICITATION_REQUEST, METHOD_MCP_SERVER_EVENT_STREAM_NOTIFICATION,
+    METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED, METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED,
+    METHOD_MCP_TOOL_CALL_PROGRESS, METHOD_MODEL_LIST_UPDATED, METHOD_MODEL_REROUTED,
+    METHOD_MODEL_SAFETY_BUFFERING_UPDATED, METHOD_MODEL_VERIFICATION, METHOD_PLAN_DELTA,
+    METHOD_PROCESS_EXITED, METHOD_PROCESS_OUTPUT_DELTA, METHOD_PROJECT_CHANGED,
+    METHOD_REASONING_SUMMARY_PART_ADDED, METHOD_REASONING_SUMMARY_TEXT_DELTA,
+    METHOD_REASONING_TEXT_DELTA, METHOD_SCHEDULED_TASK_CHANGED, METHOD_SCHEDULED_TASK_RUN_UPDATED,
+    METHOD_SERVER_REQUEST_RESOLVED, METHOD_SKILLS_CHANGED, METHOD_STRICT_REVIEW_REQUIRED,
+    METHOD_THREAD_CLOSED, METHOD_THREAD_ENVIRONMENT_CONNECTED,
+    METHOD_THREAD_ENVIRONMENT_DISCONNECTED, METHOD_THREAD_GOAL_CLEARED, METHOD_THREAD_GOAL_UPDATED,
+    METHOD_THREAD_NAME_UPDATED, METHOD_THREAD_PROJECT_UPDATED, METHOD_THREAD_QUEUE_CHANGED,
+    METHOD_THREAD_REVERTED, METHOD_THREAD_STATUS_CHANGED, METHOD_THREAD_TOKEN_USAGE_UPDATED,
+    METHOD_TURN_DIFF_UPDATED, METHOD_TURN_MODERATION_METADATA, METHOD_TURN_PLAN_UPDATED,
+    METHOD_WARNING, METHOD_WINDOWS_SANDBOX_SETUP_COMPLETED, METHOD_WINDOWS_WORLD_WRITABLE_WARNING,
 };
 use crate::{JsonRpcNotification, JsonRpcRequest, RequestId};
 use schemars::JsonSchema;
@@ -121,6 +141,11 @@ pub enum ClientRequest {
     ThreadResume {
         id: RequestId,
         params: ThreadResumeParams,
+    },
+    #[serde(rename = "thread/revert")]
+    ThreadRevert {
+        id: RequestId,
+        params: ThreadRevertParams,
     },
     #[serde(rename = "thread/read")]
     ThreadRead {
@@ -284,6 +309,71 @@ pub enum ClientRequest {
         id: RequestId,
         params: ThreadGoalClearParams,
     },
+    #[serde(rename = "thread/queue/add")]
+    ThreadQueueAdd {
+        id: RequestId,
+        params: ThreadQueueAddParams,
+    },
+    #[serde(rename = "thread/queue/list")]
+    ThreadQueueList {
+        id: RequestId,
+        params: ThreadQueueListParams,
+    },
+    #[serde(rename = "thread/queue/update")]
+    ThreadQueueUpdate {
+        id: RequestId,
+        params: ThreadQueueUpdateParams,
+    },
+    #[serde(rename = "thread/queue/delete")]
+    ThreadQueueDelete {
+        id: RequestId,
+        params: ThreadQueueDeleteParams,
+    },
+    #[serde(rename = "thread/queue/reorder")]
+    ThreadQueueReorder {
+        id: RequestId,
+        params: ThreadQueueReorderParams,
+    },
+    #[serde(rename = "thread/queue/start")]
+    ThreadQueueStart {
+        id: RequestId,
+        params: ThreadQueueStartParams,
+    },
+    #[serde(rename = "project/list")]
+    ProjectList {
+        id: RequestId,
+        params: ProjectListParams,
+    },
+    #[serde(rename = "project/read")]
+    ProjectRead {
+        id: RequestId,
+        params: ProjectReadParams,
+    },
+    #[serde(rename = "project/create")]
+    ProjectCreate {
+        id: RequestId,
+        params: ProjectCreateParams,
+    },
+    #[serde(rename = "project/import")]
+    ProjectImport {
+        id: RequestId,
+        params: ProjectImportParams,
+    },
+    #[serde(rename = "project/update")]
+    ProjectUpdate {
+        id: RequestId,
+        params: ProjectUpdateParams,
+    },
+    #[serde(rename = "project/move")]
+    ProjectMove {
+        id: RequestId,
+        params: ProjectMoveParams,
+    },
+    #[serde(rename = "project/delete")]
+    ProjectDelete {
+        id: RequestId,
+        params: ProjectDeleteParams,
+    },
     #[serde(rename = "artifact/write")]
     ArtifactWrite {
         id: RequestId,
@@ -299,10 +389,40 @@ pub enum ClientRequest {
         id: RequestId,
         params: McpServerResourceReadParams,
     },
+    #[serde(rename = "mcpServerStatus/list")]
+    McpServerStatusList {
+        id: RequestId,
+        params: ListMcpServerStatusParams,
+    },
+    #[serde(rename = "mcpServer/event/stream/start")]
+    McpServerEventStreamStart {
+        id: RequestId,
+        params: McpServerEventStreamStartParams,
+    },
+    #[serde(rename = "mcpServer/event/stream/stop")]
+    McpServerEventStreamStop {
+        id: RequestId,
+        params: McpServerEventStreamStopParams,
+    },
     #[serde(rename = "mcpServer/tool/call")]
     McpServerToolCall {
         id: RequestId,
         params: McpServerToolCallParams,
+    },
+    #[serde(rename = "environment/add")]
+    EnvironmentAdd {
+        id: RequestId,
+        params: EnvironmentAddParams,
+    },
+    #[serde(rename = "environment/info")]
+    EnvironmentInfo {
+        id: RequestId,
+        params: EnvironmentInfoParams,
+    },
+    #[serde(rename = "environment/status")]
+    EnvironmentStatus {
+        id: RequestId,
+        params: EnvironmentStatusParams,
     },
     #[serde(rename = "config/read")]
     ConfigRead {
@@ -345,10 +465,20 @@ pub enum ClientRequest {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         params: Option<WindowsSandboxReadinessParams>,
     },
+    #[serde(rename = "windowsSandbox/setupStart")]
+    WindowsSandboxSetupStart {
+        id: RequestId,
+        params: WindowsSandboxSetupStartParams,
+    },
     #[serde(rename = "model/list")]
     ModelList {
         id: RequestId,
         params: ModelListParams,
+    },
+    #[serde(rename = "modelProvider/capabilities/read")]
+    ModelProviderCapabilitiesRead {
+        id: RequestId,
+        params: ModelProviderCapabilitiesReadParams,
     },
     #[serde(rename = "app/read")]
     AppRead {
@@ -535,6 +665,7 @@ impl ClientRequest {
             Self::ThreadStart { id, .. }
             | Self::ThreadFork { id, .. }
             | Self::ThreadResume { id, .. }
+            | Self::ThreadRevert { id, .. }
             | Self::ThreadRead { id, .. }
             | Self::ThreadList { id, .. }
             | Self::ThreadSectionMove { id, .. }
@@ -568,10 +699,29 @@ impl ClientRequest {
             | Self::ThreadGoalSet { id, .. }
             | Self::ThreadGoalGet { id, .. }
             | Self::ThreadGoalClear { id, .. }
+            | Self::ThreadQueueAdd { id, .. }
+            | Self::ThreadQueueList { id, .. }
+            | Self::ThreadQueueUpdate { id, .. }
+            | Self::ThreadQueueDelete { id, .. }
+            | Self::ThreadQueueReorder { id, .. }
+            | Self::ThreadQueueStart { id, .. }
+            | Self::ProjectList { id, .. }
+            | Self::ProjectRead { id, .. }
+            | Self::ProjectCreate { id, .. }
+            | Self::ProjectImport { id, .. }
+            | Self::ProjectUpdate { id, .. }
+            | Self::ProjectMove { id, .. }
+            | Self::ProjectDelete { id, .. }
             | Self::ArtifactWrite { id, .. }
             | Self::MediaRead { id, .. }
             | Self::McpServerResourceRead { id, .. }
+            | Self::McpServerStatusList { id, .. }
+            | Self::McpServerEventStreamStart { id, .. }
+            | Self::McpServerEventStreamStop { id, .. }
             | Self::McpServerToolCall { id, .. }
+            | Self::EnvironmentAdd { id, .. }
+            | Self::EnvironmentInfo { id, .. }
+            | Self::EnvironmentStatus { id, .. }
             | Self::ConfigRead { id, .. }
             | Self::ConfigValueWrite { id, .. }
             | Self::ConfigBatchWrite { id, .. }
@@ -580,7 +730,9 @@ impl ClientRequest {
             | Self::ExperimentalFeatureEnablementSet { id, .. }
             | Self::PermissionProfileList { id, .. }
             | Self::WindowsSandboxReadiness { id, .. }
+            | Self::WindowsSandboxSetupStart { id, .. }
             | Self::ModelList { id, .. }
+            | Self::ModelProviderCapabilitiesRead { id, .. }
             | Self::AppRead { id, .. }
             | Self::AppList { id, .. }
             | Self::AppInstalled { id, .. }
@@ -625,6 +777,7 @@ impl ClientRequest {
             Self::ThreadStart { .. } => Method::ThreadStart,
             Self::ThreadFork { .. } => Method::ThreadFork,
             Self::ThreadResume { .. } => Method::ThreadResume,
+            Self::ThreadRevert { .. } => Method::ThreadRevert,
             Self::ThreadRead { .. } => Method::ThreadRead,
             Self::ThreadList { .. } => Method::ThreadList,
             Self::ThreadSectionMove { .. } => Method::ThreadSectionMove,
@@ -662,10 +815,29 @@ impl ClientRequest {
             Self::ThreadGoalSet { .. } => Method::ThreadGoalSet,
             Self::ThreadGoalGet { .. } => Method::ThreadGoalGet,
             Self::ThreadGoalClear { .. } => Method::ThreadGoalClear,
+            Self::ThreadQueueAdd { .. } => Method::ThreadQueueAdd,
+            Self::ThreadQueueList { .. } => Method::ThreadQueueList,
+            Self::ThreadQueueUpdate { .. } => Method::ThreadQueueUpdate,
+            Self::ThreadQueueDelete { .. } => Method::ThreadQueueDelete,
+            Self::ThreadQueueReorder { .. } => Method::ThreadQueueReorder,
+            Self::ThreadQueueStart { .. } => Method::ThreadQueueStart,
+            Self::ProjectList { .. } => Method::ProjectList,
+            Self::ProjectRead { .. } => Method::ProjectRead,
+            Self::ProjectCreate { .. } => Method::ProjectCreate,
+            Self::ProjectImport { .. } => Method::ProjectImport,
+            Self::ProjectUpdate { .. } => Method::ProjectUpdate,
+            Self::ProjectMove { .. } => Method::ProjectMove,
+            Self::ProjectDelete { .. } => Method::ProjectDelete,
             Self::ArtifactWrite { .. } => Method::ArtifactWrite,
             Self::MediaRead { .. } => Method::MediaRead,
             Self::McpServerResourceRead { .. } => Method::McpServerResourceRead,
+            Self::McpServerStatusList { .. } => Method::McpServerStatusList,
+            Self::McpServerEventStreamStart { .. } => Method::McpServerEventStreamStart,
+            Self::McpServerEventStreamStop { .. } => Method::McpServerEventStreamStop,
             Self::McpServerToolCall { .. } => Method::McpServerToolCall,
+            Self::EnvironmentAdd { .. } => Method::EnvironmentAdd,
+            Self::EnvironmentInfo { .. } => Method::EnvironmentInfo,
+            Self::EnvironmentStatus { .. } => Method::EnvironmentStatus,
             Self::ConfigRead { .. } => Method::ConfigRead,
             Self::ConfigValueWrite { .. } => Method::ConfigValueWrite,
             Self::ConfigBatchWrite { .. } => Method::ConfigBatchWrite,
@@ -676,7 +848,9 @@ impl ClientRequest {
             }
             Self::PermissionProfileList { .. } => Method::PermissionProfileList,
             Self::WindowsSandboxReadiness { .. } => Method::WindowsSandboxReadiness,
+            Self::WindowsSandboxSetupStart { .. } => Method::WindowsSandboxSetupStart,
             Self::ModelList { .. } => Method::ModelList,
+            Self::ModelProviderCapabilitiesRead { .. } => Method::ModelProviderCapabilitiesRead,
             Self::AppRead { .. } => Method::AppRead,
             Self::AppList { .. } => Method::AppList,
             Self::AppInstalled { .. } => Method::AppInstalled,
@@ -733,6 +907,7 @@ pub enum ClientResponsePayload {
     ThreadStart(ThreadStartResponse),
     ThreadFork(ThreadForkResponse),
     ThreadResume(ThreadResumeResponse),
+    ThreadRevert(ThreadRevertResponse),
     ThreadRead(ThreadReadResponse),
     ThreadList(ThreadListResponse),
     ThreadSectionMove(ThreadSectionMoveResponse),
@@ -766,11 +941,31 @@ pub enum ClientResponsePayload {
     ThreadGoalSet(ThreadGoalSetResponse),
     ThreadGoalGet(ThreadGoalGetResponse),
     ThreadGoalClear(ThreadGoalClearResponse),
+    ThreadQueueAdd(ThreadQueueAddResponse),
+    ThreadQueueList(ThreadQueueListResponse),
+    ThreadQueueUpdate(ThreadQueueUpdateResponse),
+    ThreadQueueDelete(ThreadQueueDeleteResponse),
+    ThreadQueueReorder(ThreadQueueReorderResponse),
+    ThreadQueueStart(ThreadQueueStartResponse),
+    ProjectList(ProjectListResponse),
+    ProjectRead(ProjectReadResponse),
+    ProjectCreate(ProjectCreateResponse),
+    ProjectImport(ProjectImportResponse),
+    ProjectUpdate(ProjectUpdateResponse),
+    ProjectMove(ProjectMoveResponse),
+    ProjectDelete(ProjectDeleteResponse),
     ArtifactWrite(ArtifactWriteResponse),
     MediaRead(MediaReadResponse),
     McpServerResourceRead(McpServerResourceReadResponse),
+    McpServerStatusList(ListMcpServerStatusResponse),
+    McpServerEventStreamStart(McpServerEventStreamStartResponse),
+    McpServerEventStreamStop(McpServerEventStreamStopResponse),
     McpServerToolCall(McpServerToolCallResponse),
+    EnvironmentAdd(EnvironmentAddResponse),
+    EnvironmentInfo(EnvironmentInfoResponse),
+    EnvironmentStatus(EnvironmentStatusResponse),
     WindowsSandboxReadiness(WindowsSandboxReadinessResponse),
+    WindowsSandboxSetupStart(WindowsSandboxSetupStartResponse),
     ExperimentalFeatureList(ExperimentalFeatureListResponse),
     ExperimentalFeatureEnablementSet(ExperimentalFeatureEnablementSetResponse),
     AppRead(AppsReadResponse),
@@ -811,6 +1006,7 @@ impl ClientResponsePayload {
             Self::ThreadStart(_) => Method::ThreadStart,
             Self::ThreadFork(_) => Method::ThreadFork,
             Self::ThreadResume(_) => Method::ThreadResume,
+            Self::ThreadRevert(_) => Method::ThreadRevert,
             Self::ThreadRead(_) => Method::ThreadRead,
             Self::ThreadList(_) => Method::ThreadList,
             Self::ThreadSectionMove(_) => Method::ThreadSectionMove,
@@ -846,11 +1042,31 @@ impl ClientResponsePayload {
             Self::ThreadGoalSet(_) => Method::ThreadGoalSet,
             Self::ThreadGoalGet(_) => Method::ThreadGoalGet,
             Self::ThreadGoalClear(_) => Method::ThreadGoalClear,
+            Self::ThreadQueueAdd(_) => Method::ThreadQueueAdd,
+            Self::ThreadQueueList(_) => Method::ThreadQueueList,
+            Self::ThreadQueueUpdate(_) => Method::ThreadQueueUpdate,
+            Self::ThreadQueueDelete(_) => Method::ThreadQueueDelete,
+            Self::ThreadQueueReorder(_) => Method::ThreadQueueReorder,
+            Self::ThreadQueueStart(_) => Method::ThreadQueueStart,
+            Self::ProjectList(_) => Method::ProjectList,
+            Self::ProjectRead(_) => Method::ProjectRead,
+            Self::ProjectCreate(_) => Method::ProjectCreate,
+            Self::ProjectImport(_) => Method::ProjectImport,
+            Self::ProjectUpdate(_) => Method::ProjectUpdate,
+            Self::ProjectMove(_) => Method::ProjectMove,
+            Self::ProjectDelete(_) => Method::ProjectDelete,
             Self::ArtifactWrite(_) => Method::ArtifactWrite,
             Self::MediaRead(_) => Method::MediaRead,
             Self::McpServerResourceRead(_) => Method::McpServerResourceRead,
+            Self::McpServerStatusList(_) => Method::McpServerStatusList,
+            Self::McpServerEventStreamStart(_) => Method::McpServerEventStreamStart,
+            Self::McpServerEventStreamStop(_) => Method::McpServerEventStreamStop,
             Self::McpServerToolCall(_) => Method::McpServerToolCall,
+            Self::EnvironmentAdd(_) => Method::EnvironmentAdd,
+            Self::EnvironmentInfo(_) => Method::EnvironmentInfo,
+            Self::EnvironmentStatus(_) => Method::EnvironmentStatus,
             Self::WindowsSandboxReadiness(_) => Method::WindowsSandboxReadiness,
+            Self::WindowsSandboxSetupStart(_) => Method::WindowsSandboxSetupStart,
             Self::ExperimentalFeatureList(_) => Method::ExperimentalFeatureList,
             Self::ExperimentalFeatureEnablementSet(_) => Method::ExperimentalFeatureEnablementSet,
             Self::AppRead(_) => Method::AppRead,
@@ -891,6 +1107,7 @@ impl ClientResponsePayload {
             Self::ThreadStart(response) => serde_json::to_value(response)?,
             Self::ThreadFork(response) => serde_json::to_value(response)?,
             Self::ThreadResume(response) => serde_json::to_value(response)?,
+            Self::ThreadRevert(response) => serde_json::to_value(response)?,
             Self::ThreadRead(response) => serde_json::to_value(response)?,
             Self::ThreadList(response) => serde_json::to_value(response)?,
             Self::ThreadSectionMove(response) => serde_json::to_value(response)?,
@@ -924,11 +1141,31 @@ impl ClientResponsePayload {
             Self::ThreadGoalSet(response) => serde_json::to_value(response)?,
             Self::ThreadGoalGet(response) => serde_json::to_value(response)?,
             Self::ThreadGoalClear(response) => serde_json::to_value(response)?,
+            Self::ThreadQueueAdd(response) => serde_json::to_value(response)?,
+            Self::ThreadQueueList(response) => serde_json::to_value(response)?,
+            Self::ThreadQueueUpdate(response) => serde_json::to_value(response)?,
+            Self::ThreadQueueDelete(response) => serde_json::to_value(response)?,
+            Self::ThreadQueueReorder(response) => serde_json::to_value(response)?,
+            Self::ThreadQueueStart(response) => serde_json::to_value(response)?,
+            Self::ProjectList(response) => serde_json::to_value(response)?,
+            Self::ProjectRead(response) => serde_json::to_value(response)?,
+            Self::ProjectCreate(response) => serde_json::to_value(response)?,
+            Self::ProjectImport(response) => serde_json::to_value(response)?,
+            Self::ProjectUpdate(response) => serde_json::to_value(response)?,
+            Self::ProjectMove(response) => serde_json::to_value(response)?,
+            Self::ProjectDelete(response) => serde_json::to_value(response)?,
             Self::ArtifactWrite(response) => serde_json::to_value(response)?,
             Self::MediaRead(response) => serde_json::to_value(response)?,
             Self::McpServerResourceRead(response) => serde_json::to_value(response)?,
+            Self::McpServerStatusList(response) => serde_json::to_value(response)?,
+            Self::McpServerEventStreamStart(response) => serde_json::to_value(response)?,
+            Self::McpServerEventStreamStop(response) => serde_json::to_value(response)?,
             Self::McpServerToolCall(response) => serde_json::to_value(response)?,
+            Self::EnvironmentAdd(response) => serde_json::to_value(response)?,
+            Self::EnvironmentInfo(response) => serde_json::to_value(response)?,
+            Self::EnvironmentStatus(response) => serde_json::to_value(response)?,
             Self::WindowsSandboxReadiness(response) => serde_json::to_value(response)?,
+            Self::WindowsSandboxSetupStart(response) => serde_json::to_value(response)?,
             Self::ExperimentalFeatureList(response) => serde_json::to_value(response)?,
             Self::ExperimentalFeatureEnablementSet(response) => serde_json::to_value(response)?,
             Self::AppRead(response) => serde_json::to_value(response)?,
@@ -1143,6 +1380,8 @@ pub enum ServerNotification {
     Warning(WarningNotification),
     #[serde(rename = "guardianWarning")]
     GuardianWarning(GuardianWarningNotification),
+    #[serde(rename = "autoApprovalReview/strictReviewRequired")]
+    StrictReviewRequired(StrictReviewRequiredNotification),
     #[serde(rename = "error")]
     Error(ErrorNotification),
     #[serde(rename = "skills/changed")]
@@ -1151,6 +1390,12 @@ pub enum ServerNotification {
     McpServerOauthLoginCompleted(McpServerOauthLoginCompletedNotification),
     #[serde(rename = "mcpServer/startupStatus/updated")]
     McpServerStatusUpdated(McpServerStatusUpdatedNotification),
+    #[serde(rename = "mcpServer/event/stream/notification")]
+    McpServerEventStream(McpServerEventStreamNotification),
+    #[serde(rename = "thread/environment/connected")]
+    EnvironmentConnected(EnvironmentConnectionNotification),
+    #[serde(rename = "thread/environment/disconnected")]
+    EnvironmentDisconnected(EnvironmentConnectionNotification),
     #[serde(rename = "app/list/updated")]
     AppListUpdated(AppListUpdatedNotification),
     #[serde(rename = "scheduledTask/changed")]
@@ -1171,6 +1416,8 @@ pub enum ServerNotification {
     ThreadUnarchived(ThreadUnarchivedNotification),
     #[serde(rename = "thread/closed")]
     ThreadClosed(ThreadClosedNotification),
+    #[serde(rename = "thread/reverted")]
+    ThreadReverted(ThreadRevertedNotification),
     #[serde(rename = "thread/name/updated")]
     ThreadNameUpdated(ThreadNameUpdatedNotification),
     #[serde(rename = "thread/status/changed")]
@@ -1235,8 +1482,18 @@ pub enum ServerNotification {
     ThreadGoalUpdated(ThreadGoalUpdatedNotification),
     #[serde(rename = "thread/goal/cleared")]
     ThreadGoalCleared(ThreadGoalClearedNotification),
+    #[serde(rename = "thread/queue/changed")]
+    ThreadQueueChanged(ThreadQueueChangedNotification),
+    #[serde(rename = "project/changed")]
+    ProjectChanged(ProjectChangedNotification),
+    #[serde(rename = "thread/project/updated")]
+    ThreadProjectUpdated(ThreadProjectUpdatedNotification),
     #[serde(rename = "serverRequest/resolved")]
     ServerRequestResolved(ServerRequestResolvedNotification),
+    #[serde(rename = "windows/worldWritableWarning")]
+    WindowsWorldWritableWarning(WindowsWorldWritableWarningNotification),
+    #[serde(rename = "windowsSandbox/setupCompleted")]
+    WindowsSandboxSetupCompleted(WindowsSandboxSetupCompletedNotification),
 }
 
 impl ServerNotification {
@@ -1245,10 +1502,14 @@ impl ServerNotification {
             Self::ConfigWarning(_) => METHOD_CONFIG_WARNING,
             Self::Warning(_) => METHOD_WARNING,
             Self::GuardianWarning(_) => METHOD_GUARDIAN_WARNING,
+            Self::StrictReviewRequired(_) => METHOD_STRICT_REVIEW_REQUIRED,
             Self::Error(_) => METHOD_ERROR,
             Self::SkillsChanged(_) => METHOD_SKILLS_CHANGED,
             Self::McpServerOauthLoginCompleted(_) => METHOD_MCP_SERVER_OAUTH_LOGIN_COMPLETED,
             Self::McpServerStatusUpdated(_) => METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED,
+            Self::McpServerEventStream(_) => METHOD_MCP_SERVER_EVENT_STREAM_NOTIFICATION,
+            Self::EnvironmentConnected(_) => METHOD_THREAD_ENVIRONMENT_CONNECTED,
+            Self::EnvironmentDisconnected(_) => METHOD_THREAD_ENVIRONMENT_DISCONNECTED,
             Self::AppListUpdated(_) => METHOD_APP_LIST_UPDATED,
             Self::ScheduledTaskChanged(_) => METHOD_SCHEDULED_TASK_CHANGED,
             Self::ScheduledTaskRunUpdated(_) => METHOD_SCHEDULED_TASK_RUN_UPDATED,
@@ -1259,6 +1520,7 @@ impl ServerNotification {
             Self::ThreadDeleted(_) => "thread/deleted",
             Self::ThreadUnarchived(_) => "thread/unarchived",
             Self::ThreadClosed(_) => METHOD_THREAD_CLOSED,
+            Self::ThreadReverted(_) => METHOD_THREAD_REVERTED,
             Self::ThreadNameUpdated(_) => METHOD_THREAD_NAME_UPDATED,
             Self::ThreadStatusChanged(_) => METHOD_THREAD_STATUS_CHANGED,
             Self::TurnStarted(_) => "turn/started",
@@ -1294,6 +1556,11 @@ impl ServerNotification {
             Self::ThreadGoalUpdated(_) => METHOD_THREAD_GOAL_UPDATED,
             Self::ThreadGoalCleared(_) => METHOD_THREAD_GOAL_CLEARED,
             Self::ServerRequestResolved(_) => METHOD_SERVER_REQUEST_RESOLVED,
+            Self::WindowsWorldWritableWarning(_) => METHOD_WINDOWS_WORLD_WRITABLE_WARNING,
+            Self::WindowsSandboxSetupCompleted(_) => METHOD_WINDOWS_SANDBOX_SETUP_COMPLETED,
+            Self::ThreadQueueChanged(_) => METHOD_THREAD_QUEUE_CHANGED,
+            Self::ProjectChanged(_) => METHOD_PROJECT_CHANGED,
+            Self::ThreadProjectUpdated(_) => METHOD_THREAD_PROJECT_UPDATED,
         }
     }
 }
@@ -1313,6 +1580,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
             METHOD_GUARDIAN_WARNING => serde_json::from_value(params)
                 .map(Self::GuardianWarning)
                 .map_err(|error| error.to_string()),
+            METHOD_STRICT_REVIEW_REQUIRED => serde_json::from_value(params)
+                .map(Self::StrictReviewRequired)
+                .map_err(|error| error.to_string()),
             METHOD_ERROR => serde_json::from_value(params)
                 .map(Self::Error)
                 .map_err(|error| error.to_string()),
@@ -1324,6 +1594,15 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED => serde_json::from_value(params)
                 .map(Self::McpServerStatusUpdated)
+                .map_err(|error| error.to_string()),
+            METHOD_MCP_SERVER_EVENT_STREAM_NOTIFICATION => serde_json::from_value(params)
+                .map(Self::McpServerEventStream)
+                .map_err(|error| error.to_string()),
+            METHOD_THREAD_ENVIRONMENT_CONNECTED => serde_json::from_value(params)
+                .map(Self::EnvironmentConnected)
+                .map_err(|error| error.to_string()),
+            METHOD_THREAD_ENVIRONMENT_DISCONNECTED => serde_json::from_value(params)
+                .map(Self::EnvironmentDisconnected)
                 .map_err(|error| error.to_string()),
             METHOD_APP_LIST_UPDATED => serde_json::from_value(params)
                 .map(Self::AppListUpdated)
@@ -1354,6 +1633,9 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
                 .map_err(|error| error.to_string()),
             METHOD_THREAD_CLOSED => serde_json::from_value(params)
                 .map(Self::ThreadClosed)
+                .map_err(|error| error.to_string()),
+            METHOD_THREAD_REVERTED => serde_json::from_value(params)
+                .map(Self::ThreadReverted)
                 .map_err(|error| error.to_string()),
             METHOD_THREAD_NAME_UPDATED => serde_json::from_value(params)
                 .map(Self::ThreadNameUpdated)
@@ -1454,6 +1736,21 @@ impl TryFrom<JsonRpcNotification> for ServerNotification {
             METHOD_SERVER_REQUEST_RESOLVED => serde_json::from_value(params)
                 .map(Self::ServerRequestResolved)
                 .map_err(|error| error.to_string()),
+            METHOD_WINDOWS_WORLD_WRITABLE_WARNING => serde_json::from_value(params)
+                .map(Self::WindowsWorldWritableWarning)
+                .map_err(|error| error.to_string()),
+            METHOD_WINDOWS_SANDBOX_SETUP_COMPLETED => serde_json::from_value(params)
+                .map(Self::WindowsSandboxSetupCompleted)
+                .map_err(|error| error.to_string()),
+            METHOD_THREAD_QUEUE_CHANGED => serde_json::from_value(params)
+                .map(Self::ThreadQueueChanged)
+                .map_err(|error| error.to_string()),
+            METHOD_PROJECT_CHANGED => serde_json::from_value(params)
+                .map(Self::ProjectChanged)
+                .map_err(|error| error.to_string()),
+            METHOD_THREAD_PROJECT_UPDATED => serde_json::from_value(params)
+                .map(Self::ThreadProjectUpdated)
+                .map_err(|error| error.to_string()),
             method => Err(format!("unknown v2 notification method: {method}")),
         }
     }
@@ -1469,6 +1766,9 @@ impl From<ServerNotification> for JsonRpcNotification {
             ServerNotification::GuardianWarning(params) => {
                 jsonrpc_notification(METHOD_GUARDIAN_WARNING, params)
             }
+            ServerNotification::StrictReviewRequired(params) => {
+                jsonrpc_notification(METHOD_STRICT_REVIEW_REQUIRED, params)
+            }
             ServerNotification::Error(params) => jsonrpc_notification(METHOD_ERROR, params),
             ServerNotification::SkillsChanged(params) => {
                 jsonrpc_notification(METHOD_SKILLS_CHANGED, params)
@@ -1478,6 +1778,15 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::McpServerStatusUpdated(params) => {
                 jsonrpc_notification(METHOD_MCP_SERVER_STARTUP_STATUS_UPDATED, params)
+            }
+            ServerNotification::McpServerEventStream(params) => {
+                jsonrpc_notification(METHOD_MCP_SERVER_EVENT_STREAM_NOTIFICATION, params)
+            }
+            ServerNotification::EnvironmentConnected(params) => {
+                jsonrpc_notification(METHOD_THREAD_ENVIRONMENT_CONNECTED, params)
+            }
+            ServerNotification::EnvironmentDisconnected(params) => {
+                jsonrpc_notification(METHOD_THREAD_ENVIRONMENT_DISCONNECTED, params)
             }
             ServerNotification::AppListUpdated(params) => {
                 jsonrpc_notification(METHOD_APP_LIST_UPDATED, params)
@@ -1508,6 +1817,9 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::ThreadClosed(params) => {
                 jsonrpc_notification(METHOD_THREAD_CLOSED, params)
+            }
+            ServerNotification::ThreadReverted(params) => {
+                jsonrpc_notification(METHOD_THREAD_REVERTED, params)
             }
             ServerNotification::ThreadNameUpdated(params) => {
                 jsonrpc_notification(METHOD_THREAD_NAME_UPDATED, params)
@@ -1603,6 +1915,21 @@ impl From<ServerNotification> for JsonRpcNotification {
             }
             ServerNotification::ServerRequestResolved(params) => {
                 jsonrpc_notification(METHOD_SERVER_REQUEST_RESOLVED, params)
+            }
+            ServerNotification::WindowsWorldWritableWarning(params) => {
+                jsonrpc_notification(METHOD_WINDOWS_WORLD_WRITABLE_WARNING, params)
+            }
+            ServerNotification::WindowsSandboxSetupCompleted(params) => {
+                jsonrpc_notification(METHOD_WINDOWS_SANDBOX_SETUP_COMPLETED, params)
+            }
+            ServerNotification::ThreadQueueChanged(params) => {
+                jsonrpc_notification(METHOD_THREAD_QUEUE_CHANGED, params)
+            }
+            ServerNotification::ProjectChanged(params) => {
+                jsonrpc_notification(METHOD_PROJECT_CHANGED, params)
+            }
+            ServerNotification::ThreadProjectUpdated(params) => {
+                jsonrpc_notification(METHOD_THREAD_PROJECT_UPDATED, params)
             }
         }
     }

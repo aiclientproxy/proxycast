@@ -262,7 +262,11 @@ async fn file_change_decline_uses_one_typed_request_and_projects_the_terminal_re
             .response
             .lock()
             .expect("file change response mutex poisoned"),
-        Some(json!({ "confirmed": false }))
+        Some(json!({
+            "confirmed": false,
+            "decision": "decline",
+            "decisionScope": "once",
+        }))
     );
 
     write_message(

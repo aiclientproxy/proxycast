@@ -527,6 +527,45 @@ export type AppServerUsageStatsModelRankingListResponse =
   protocol.UsageStatsModelRankingListResponse;
 export type AppServerUsageStatsDailyTrendsListResponse =
   protocol.UsageStatsDailyTrendsListResponse;
+export type AppServerWindowsSandboxReadinessParams =
+  protocol.WindowsSandboxReadinessParams;
+export type AppServerWindowsSandboxReadinessResponse =
+  protocol.WindowsSandboxReadinessResponse;
+export type AppServerWindowsSandboxSetupStartParams =
+  protocol.WindowsSandboxSetupStartParams;
+export type AppServerWindowsSandboxSetupStartResponse =
+  protocol.WindowsSandboxSetupStartResponse;
+export type AppServerModelProviderCapabilitiesReadParams =
+  protocol.ModelProviderCapabilitiesReadParams;
+export type AppServerModelProviderCapabilitiesReadResponse =
+  protocol.ModelProviderCapabilitiesReadResponse;
+export type AppServerEnvironmentAddParams = protocol.EnvironmentAddParams;
+export type AppServerEnvironmentAddResponse = protocol.EnvironmentAddResponse;
+export type AppServerEnvironmentInfoParams = protocol.EnvironmentInfoParams;
+export type AppServerEnvironmentInfoResponse = protocol.EnvironmentInfoResponse;
+export type AppServerEnvironmentStatusParams = protocol.EnvironmentStatusParams;
+export type AppServerEnvironmentStatusResponse =
+  protocol.EnvironmentStatusResponse;
+export type AppServerThreadQueueAddParams = protocol.ThreadQueueAddParams;
+export type AppServerThreadQueueAddResponse = protocol.ThreadQueueAddResponse;
+export type AppServerThreadQueueListParams = protocol.ThreadQueueListParams;
+export type AppServerThreadQueueListResponse =
+  protocol.ThreadQueueListResponse;
+export type AppServerThreadQueueUpdateParams = protocol.ThreadQueueUpdateParams;
+export type AppServerThreadQueueUpdateResponse =
+  protocol.ThreadQueueUpdateResponse;
+export type AppServerThreadQueueDeleteParams = protocol.ThreadQueueDeleteParams;
+export type AppServerThreadQueueDeleteResponse =
+  protocol.ThreadQueueDeleteResponse;
+export type AppServerThreadQueueReorderParams =
+  protocol.ThreadQueueReorderParams;
+export type AppServerThreadQueueReorderResponse =
+  protocol.ThreadQueueReorderResponse;
+export type AppServerThreadQueueStartParams = protocol.ThreadQueueStartParams;
+export type AppServerThreadQueueStartResponse =
+  protocol.ThreadQueueStartResponse;
+export type AppServerThreadQueueChangedNotification =
+  protocol.ThreadQueueChangedNotification;
 
 export type AppServerRequestResult<T> = {
   id: AppServerRequestId;

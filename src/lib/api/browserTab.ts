@@ -36,6 +36,111 @@ export interface BrowserTabState extends EmbeddedBrowserViewState {
   windowId: number;
 }
 
+/**
+ * Historical Browser projection is deliberately not a BrowserTabState. It is
+ * a read-only replay fact and must never be passed to the Electron host.
+ */
+export interface BrowserTabHistoricalProjection {
+  browserSessionId: string;
+  tabId: string;
+  threadId: string;
+  url: string;
+  title: string;
+  pageRevision: number;
+  mark: BrowserTabMark | null;
+  origin: BrowserTabOrigin;
+  selected: boolean;
+  snapshotId: string | null;
+  replayedAt: string | null;
+  readOnly: true;
+}
+
+export interface BrowserTabHistoricalSource {
+  mode: "historical" | "replay";
+  browserSessionId: string;
+  tabId: string;
+  threadId: string;
+  url: string;
+  title?: string | null;
+  pageRevision?: number | null;
+  mark?: BrowserTabMark | null;
+  origin?: BrowserTabOrigin | null;
+  selected?: boolean | null;
+  snapshotId?: string | null;
+  replayedAt?: string | null;
+}
+
+export function createBrowserTabHistoricalProjection(
+  source: BrowserTabHistoricalSource,
+): BrowserTabHistoricalProjection | null {
+  const browserSessionId = source.browserSessionId.trim();
+  const tabId = source.tabId.trim();
+  const threadId = source.threadId.trim();
+  const url = source.url.trim();
+  if (!browserSessionId || !tabId || !threadId || !url) {
+    return null;
+  }
+  const pageRevision = source.pageRevision ?? 0;
+  if (!Number.isInteger(pageRevision) || pageRevision < 0) {
+    return null;
+  }
+  return {
+    browserSessionId,
+    tabId,
+    threadId,
+    url,
+    title: source.title?.trim() || url,
+    pageRevision,
+    mark:
+      source.mark === "deliverable" || source.mark === "handoff"
+        ? source.mark
+        : null,
+    origin: source.origin === "user" ? "user" : "agent",
+    selected: source.selected !== false,
+    snapshotId: source.snapshotId?.trim() || null,
+    replayedAt: source.replayedAt?.trim() || null,
+    readOnly: true,
+  };
+}
+
+export function readBrowserTabHistoricalProjection(
+  value: unknown,
+): BrowserTabHistoricalProjection | null {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+  const mode = record.mode;
+  if (mode !== "historical" && mode !== "replay") {
+    return null;
+  }
+  const source = {
+    mode,
+    browserSessionId: record.browserSessionId,
+    tabId: record.tabId,
+    threadId: record.threadId,
+    url: record.url,
+    title: record.title,
+    pageRevision: record.pageRevision,
+    mark: record.mark,
+    origin: record.origin,
+    selected: record.selected,
+    snapshotId: record.snapshotId,
+    replayedAt: record.replayedAt,
+  };
+  if (
+    typeof source.browserSessionId !== "string" ||
+    typeof source.tabId !== "string" ||
+    typeof source.threadId !== "string" ||
+    typeof source.url !== "string"
+  ) {
+    return null;
+  }
+  return createBrowserTabHistoricalProjection(
+    source as BrowserTabHistoricalSource,
+  );
+}
+
 export interface BrowserTabMountParams extends Record<string, unknown> {
   browserSessionId: string;
   bounds: EmbeddedBrowserBounds;
@@ -58,7 +163,17 @@ export interface BrowserTabEventIdentity {
 export type BrowserTabLoadFailedEvent = EmbeddedBrowserViewLoadFailedEvent &
   BrowserTabEventIdentity;
 export type BrowserTabDownloadEvent = EmbeddedBrowserDownloadEvent &
-  BrowserTabEventIdentity;
+  BrowserTabEventIdentity & {
+    artifactRef?: string;
+    artifactFilename?: string;
+    artifactMimeType?: string | null;
+    artifactCreatedAt?: string;
+    artifactPersistedAt?: string;
+    artifactSidecarPath?: string;
+    artifactContentStatus?: string;
+    artifactStatus?: "failed";
+    artifactError?: string;
+  };
 export type BrowserTabPermissionRequestEvent =
   EmbeddedBrowserPermissionRequestEvent & BrowserTabEventIdentity;
 
@@ -309,6 +424,30 @@ function assertBrowserTabDownloadEvent(
     typeof record.state !== "string"
   ) {
     throw new Error("Browser tab 下载事件字段不完整。");
+  }
+  if (
+    record.artifactRef !== undefined &&
+    typeof record.artifactRef !== "string"
+  ) {
+    throw new Error("Browser tab artifact ref 字段不完整。");
+  }
+  for (const key of [
+    "artifactFilename",
+    "artifactCreatedAt",
+    "artifactPersistedAt",
+    "artifactSidecarPath",
+    "artifactContentStatus",
+    "artifactError",
+  ]) {
+    if (record[key] !== undefined && typeof record[key] !== "string") {
+      throw new Error("Browser tab artifact 元数据字段不完整。");
+    }
+  }
+  if (
+    record.artifactStatus !== undefined &&
+    record.artifactStatus !== "failed"
+  ) {
+    throw new Error("Browser tab artifact 状态字段不完整。");
   }
 }
 

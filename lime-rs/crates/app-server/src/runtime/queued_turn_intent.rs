@@ -115,7 +115,13 @@ pub(super) fn runtime_options_from_events(
         .iter()
         .filter(|event| event.event_type == "queue.added")
     {
-        let Some(turn_id) = event.turn_id.as_deref() else {
+        let Some(turn_id) = event.turn_id.as_deref().or_else(|| {
+            event
+                .payload
+                .get("queuedTurnId")
+                .or_else(|| event.payload.get("queuedSubmissionId"))
+                .and_then(Value::as_str)
+        }) else {
             continue;
         };
         if !queued_turn_ids.contains(turn_id) {

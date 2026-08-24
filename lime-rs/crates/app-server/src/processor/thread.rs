@@ -2,6 +2,7 @@ mod guardian;
 mod inject_items;
 pub(super) mod projection;
 
+use super::v2_notifications::{project_events, V2NotificationProjector};
 use super::{
     dispatch_result, parse_params, to_jsonrpc_error, ConnectionRequestId, RequestProcessor,
     RpcDispatch,
@@ -13,15 +14,17 @@ use app_server_protocol::protocol::v2::{
     ThreadDeleteParams, ThreadDeleteResponse, ThreadDeletedNotification, ThreadHistoryMode,
     ThreadIncrementElicitationParams, ThreadIncrementElicitationResponse, ThreadItem,
     ThreadItemsListParams, ThreadListParams, ThreadLoadedListParams, ThreadMetadataUpdateParams,
-    ThreadMetadataUpdateResponse, ThreadNameUpdatedNotification, ThreadReadParams,
-    ThreadResumeParams, ThreadResumeResponse, ThreadSearchOccurrencesParams, ThreadSearchParams,
-    ThreadSetNameParams, ThreadStartParams, ThreadStartResponse, ThreadStatus,
+    ThreadMetadataUpdateResponse, ThreadNameUpdatedNotification, ThreadProjectUpdatedNotification,
+    ThreadReadParams, ThreadResumeParams, ThreadResumeResponse, ThreadRevertParams,
+    ThreadRevertResponse, ThreadRevertedNotification, ThreadSearchOccurrencesParams,
+    ThreadSearchParams, ThreadSetNameParams, ThreadStartParams, ThreadStartResponse, ThreadStatus,
     ThreadTurnsListParams, ThreadUnarchiveParams, ThreadUnarchiveResponse,
     ThreadUnarchivedNotification, ThreadUnsubscribeParams, ThreadUnsubscribeResponse,
     ThreadUnsubscribeStatus, Turn, TurnItemsView, TurnStatus, TurnsPage,
 };
 use app_server_protocol::{
-    error_codes, AgentSessionStartParams, BusinessObjectRef, JsonRpcError, JsonRpcNotification,
+    error_codes, AgentSessionStartParams, AgentSessionTurnCancelParams, BusinessObjectRef,
+    JsonRpcError, JsonRpcNotification,
 };
 use projection::{
     lower_thread_items_list_params, lower_thread_list_params, lower_thread_read_params,
@@ -80,6 +83,9 @@ impl RequestProcessor {
             .loaded_session_id_for_thread(thread_id.as_str())
             .is_none()
         {
+            self.close_mcp_event_streams_for_thread(thread_id.as_str())
+                .await;
+            self.forget_environment_selections(thread_id.as_str());
             self.thread_states.remove_thread(&thread_id).await;
             return dispatch_result(ThreadUnsubscribeResponse {
                 status: ThreadUnsubscribeStatus::NotLoaded,
@@ -170,11 +176,33 @@ impl RequestProcessor {
         params.thread_id = required_thread_value(&params.thread_id, "thread/metadata/update")?;
         Uuid::parse_str(&params.thread_id)
             .map_err(|error| invalid_request(format!("invalid thread id: {error}")))?;
-        if params.git_info.is_none() {
+        if params.project_id.is_none() && params.git_info.is_none() {
             return Err(invalid_request(
                 "thread metadata update must include at least one field",
             ));
         }
+        let previous_project_id = if params.project_id.is_some() {
+            let current = self
+                .runtime
+                .read_thread(agent_protocol::thread::ThreadReadParams {
+                    thread_id: agent_protocol::ThreadId::new(params.thread_id.clone()),
+                    turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
+                })
+                .await
+                .map_err(to_jsonrpc_error)?;
+            metadata_optional_string(&current.thread.metadata, "projectId")
+        } else {
+            None
+        };
+        let next_project_id = match params.project_id.as_deref() {
+            Some("") => Some(None),
+            Some(project_id) => {
+                self.ensure_project_exists(project_id, "thread/metadata/update")
+                    .await?;
+                Some(Some(project_id.to_string()))
+            }
+            None => None,
+        };
         if let Some(git_info) = params.git_info.as_mut() {
             if git_info.sha.is_none() && git_info.branch.is_none() && git_info.origin_url.is_none()
             {
@@ -184,6 +212,7 @@ impl RequestProcessor {
             normalize_git_field(&mut git_info.branch, "gitInfo.branch")?;
             normalize_git_field(&mut git_info.origin_url, "gitInfo.originUrl")?;
         }
+        let thread_id = params.thread_id.clone();
         let thread = self
             .runtime
             .update_thread_metadata(params)
@@ -192,6 +221,17 @@ impl RequestProcessor {
         let thread =
             project_thread_read_response(agent_protocol::thread::ThreadReadResponse { thread })?
                 .thread;
+        if let Some(project_id) = next_project_id {
+            if previous_project_id != project_id {
+                self.publish_server_notification(ServerNotification::ThreadProjectUpdated(
+                    ThreadProjectUpdatedNotification {
+                        thread_id,
+                        project_id,
+                    },
+                ))
+                .await;
+            }
+        }
         dispatch_result(ThreadMetadataUpdateResponse { thread })
     }
 
@@ -223,9 +263,14 @@ impl RequestProcessor {
         let thread_id = required_thread_value(&params.thread_id, "thread/delete")?;
         let deleted = self
             .runtime
-            .delete_thread(agent_protocol::ThreadId::new(thread_id))
+            .delete_thread(agent_protocol::ThreadId::new(thread_id.clone()))
             .await
             .map_err(to_jsonrpc_error)?;
+        for deleted_thread in &deleted {
+            self.close_mcp_event_streams_for_thread(&deleted_thread.thread_id)
+                .await;
+            self.forget_environment_selections(&deleted_thread.thread_id);
+        }
         let notifications = deleted
             .into_iter()
             .map(|thread| {
@@ -256,6 +301,8 @@ impl RequestProcessor {
         if !changed {
             return Ok(dispatch);
         }
+        self.close_mcp_event_streams_for_thread(&thread_id).await;
+        self.forget_environment_selections(&thread_id);
         let notification: JsonRpcNotification =
             ServerNotification::ThreadArchived(ThreadArchivedNotification { thread_id }).into();
         Ok(dispatch.with_notification(notification))
@@ -292,6 +339,10 @@ impl RequestProcessor {
         self.ensure_initialized()?;
         let params: ThreadStartParams = parse_params(params)?;
         validate_dynamic_tools(params.dynamic_tools.as_deref())?;
+        if let Some(project_id) = params.project_id.as_deref() {
+            self.ensure_project_exists(project_id, "thread/start")
+                .await?;
+        }
         let selection = self
             .runtime
             .resolve_thread_start_model_selection(
@@ -309,10 +360,10 @@ impl RequestProcessor {
         let service_tier = selection.service_tier;
         let cwd = params.cwd.clone().unwrap_or_default();
         let history_mode = params.history_mode.clone().unwrap_or_default();
-        let source = params
-            .thread_source
-            .clone()
-            .unwrap_or_else(|| "appServer".to_string());
+        let environments = self
+            .normalize_environment_selections(params.environments.clone())
+            .await?;
+        let source = "appServer";
         let thread_id = Uuid::now_v7().to_string();
         let session_id = thread_id.clone();
         let metadata = json!({
@@ -323,6 +374,7 @@ impl RequestProcessor {
             "historyMode": history_mode,
             "source": source,
             "threadSource": params.thread_source,
+            "projectId": params.project_id,
             "ephemeral": params.ephemeral.unwrap_or(false),
             "runtimeWorkspaceRoots": params.runtime_workspace_roots,
             "serviceTier": service_tier,
@@ -335,7 +387,7 @@ impl RequestProcessor {
             "developerInstructions": params.developer_instructions,
             "personality": params.personality,
             "sessionStartSource": params.session_start_source,
-            "environments": params.environments,
+            "environments": environments.clone(),
             "dynamicTools": params.dynamic_tools,
             "selectedCapabilityRoots": params.selected_capability_roots,
             "allowProviderModelFallback": params.allow_provider_model_fallback,
@@ -363,6 +415,12 @@ impl RequestProcessor {
         self.runtime
             .start_session(start_params)
             .map_err(to_jsonrpc_error)?;
+        self.record_environment_selections(&thread_id, environments.as_deref());
+        self.append_environment_world_state(
+            &session_id,
+            Some(environments.as_deref().unwrap_or_default()),
+        )
+        .map_err(to_jsonrpc_error)?;
         let thread = self
             .runtime
             .read_thread(agent_protocol::thread::ThreadReadParams {
@@ -376,6 +434,9 @@ impl RequestProcessor {
             "thread/started",
             Some(serde_json::json!({ "thread": thread.clone() })),
         );
+        let environment_notifications = self
+            .environment_selection_notifications(&thread.id, environments.as_deref())
+            .await;
         dispatch_result(ThreadStartResponse {
             thread,
             model,
@@ -400,7 +461,11 @@ impl RequestProcessor {
             reasoning_effort: None,
             multi_agent_mode: agent_protocol::MultiAgentMode::default(),
         })
-        .map(|dispatch| dispatch.with_notification(thread_started))
+        .map(|dispatch| {
+            dispatch
+                .with_notification(thread_started)
+                .with_notifications(environment_notifications)
+        })
     }
 
     pub(super) async fn handle_thread_resume_v2(
@@ -470,10 +535,16 @@ impl RequestProcessor {
         let metadata = thread.extra.as_ref().unwrap_or(&serde_json::Value::Null);
         let model = required_metadata_string(metadata, &["modelName", "model"], "model")?;
         let model_provider = required_thread_resume_value(&thread.model_provider, "modelProvider")?;
+        let environments = persisted_environment_selections(metadata)?;
+        let environments = self.normalize_environment_selections(environments).await?;
+        self.record_environment_selections(&thread.id, environments.as_deref());
+        let environment_notifications = self
+            .environment_selection_notifications(&thread.id, environments.as_deref())
+            .await;
 
         let response = dispatch_result(ThreadResumeResponse {
             service_tier: metadata_optional_string(metadata, "serviceTier"),
-            cwd: thread.cwd.clone(),
+            cwd: thread.cwd.to_string_lossy().to_string(),
             runtime_workspace_roots: metadata_string_array(metadata, "runtimeWorkspaceRoots"),
             instruction_sources: metadata_string_array(metadata, "instructionSources"),
             approval_policy: metadata_value(metadata, "approvalPolicy"),
@@ -496,8 +567,80 @@ impl RequestProcessor {
             self.runtime
                 .maybe_start_thread_goal_if_idle(&session_id, self.runtime_host_context())
                 .await;
+            self.runtime
+                .wake_thread_queue_if_idle(&thread_id, self.runtime_host_context());
         }
-        Ok(response)
+        Ok(response.with_notifications(environment_notifications))
+    }
+
+    pub(super) async fn handle_thread_revert_v2(
+        &self,
+        params: Option<serde_json::Value>,
+    ) -> Result<RpcDispatch, JsonRpcError> {
+        self.ensure_initialized()?;
+        let params: ThreadRevertParams = parse_params(params)?;
+        let thread_id = required_thread_value(&params.thread_id, "thread/revert")?;
+        let before_turn_id = required_non_empty(&params.before_turn_id, "beforeTurnId")?;
+        self.ensure_direct_input_allowed(&thread_id).await?;
+
+        // Revert has the same cancellation contract as turn/interrupt. Resume first so a
+        // cold thread is hydrated and the runtime snapshot is authoritative.
+        let resumed = self
+            .runtime
+            .resume_thread(agent_protocol::ThreadId::new(thread_id.clone()))
+            .await
+            .map_err(to_jsonrpc_error)?;
+        let mut notifications = Vec::new();
+        if let Some(active_turn_id) = resumed.active_turn_id {
+            let session_id = resumed.thread.session_id.to_string();
+            let turn_id = active_turn_id.as_str().to_string();
+            self.runtime
+                .ensure_turn_interruptible(&session_id, &turn_id)
+                .map_err(to_jsonrpc_error)?;
+            self.abort_server_requests_for_turn(thread_id.clone(), turn_id.clone())
+                .await;
+            let output = self
+                .runtime
+                .cancel_turn(
+                    AgentSessionTurnCancelParams {
+                        session_id,
+                        turn_id,
+                    },
+                    self.runtime_host_context(),
+                )
+                .await
+                .map_err(to_jsonrpc_error)?;
+            let mut projector = V2NotificationProjector::default();
+            notifications.extend(project_events(&mut projector, output.events)?);
+        }
+
+        let reverted = self
+            .runtime
+            .revert_thread_history(
+                agent_protocol::ThreadId::new(thread_id.clone()),
+                agent_protocol::TurnId::new(before_turn_id),
+            )
+            .await
+            .map_err(to_jsonrpc_error)?;
+        let mut thread =
+            project_thread_read_response(agent_protocol::thread::ThreadReadResponse {
+                thread: reverted.thread,
+            })?
+            .thread;
+        thread.turns.clear();
+        notifications.push(
+            ServerNotification::ThreadReverted(ThreadRevertedNotification { thread_id }).into(),
+        );
+        Ok(dispatch_result(ThreadRevertResponse {
+            thread,
+            turns_backwards_cursor: reverted
+                .turns_backwards_cursor
+                .map(thread_store::StoreCursor::into_string),
+            items_backwards_cursor: reverted
+                .items_backwards_cursor
+                .map(thread_store::StoreCursor::into_string),
+        })?
+        .with_notifications(notifications))
     }
 
     async fn build_thread_resume_initial_turns_page(
@@ -547,6 +690,10 @@ impl RequestProcessor {
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
         let params: ThreadListParams = parse_params(params)?;
+        if let Some(Some(project_id)) = params.project_id.as_ref() {
+            self.ensure_project_exists(project_id, "thread/list")
+                .await?;
+        }
         let response = self
             .runtime
             .list_threads(lower_thread_list_params(&params)?)
@@ -624,16 +771,14 @@ impl RequestProcessor {
 }
 
 fn normalize_thread_resume_snapshot(thread: &mut Thread, active_turn_id: Option<&str>) {
-    let active_flags = match thread.status.as_ref() {
-        Some(ThreadStatus::Active { active_flags }) => active_flags.clone(),
+    let active_flags = match &thread.status {
+        ThreadStatus::Active { active_flags } => active_flags.clone(),
         _ => Vec::new(),
     };
     thread.status = match active_turn_id {
-        Some(_) => Some(ThreadStatus::Active { active_flags }),
-        None if matches!(thread.status, Some(ThreadStatus::SystemError)) => {
-            Some(ThreadStatus::SystemError)
-        }
-        None => Some(ThreadStatus::Idle),
+        Some(_) => ThreadStatus::Active { active_flags },
+        None if matches!(thread.status, ThreadStatus::SystemError) => ThreadStatus::SystemError,
+        None => ThreadStatus::Idle,
     };
     normalize_resume_turns(&mut thread.turns, active_turn_id);
 }
@@ -735,6 +880,17 @@ fn required_thread_value(value: &str, method: &str) -> Result<String, JsonRpcErr
         return Err(JsonRpcError::new(
             error_codes::INVALID_PARAMS,
             format!("{method} requires a non-empty threadId"),
+        ));
+    }
+    Ok(value.to_string())
+}
+
+fn required_non_empty(value: &str, field: &str) -> Result<String, JsonRpcError> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(JsonRpcError::new(
+            error_codes::INVALID_PARAMS,
+            format!("{field} must not be empty"),
         ));
     }
     Ok(value.to_string())
@@ -866,11 +1022,29 @@ fn metadata_value(metadata: &serde_json::Value, key: &str) -> serde_json::Value 
         .unwrap_or(serde_json::Value::Null)
 }
 
+fn persisted_environment_selections(
+    metadata: &serde_json::Value,
+) -> Result<Option<Vec<app_server_protocol::protocol::v2::TurnEnvironmentParams>>, JsonRpcError> {
+    let Some(value) = metadata.get("environments") else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    serde_json::from_value(value.clone())
+        .map(Some)
+        .map_err(|error| {
+            invalid_request(format!(
+                "thread/resume persisted environments are invalid: {error}"
+            ))
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn thread(status: Option<ThreadStatus>, turns: Vec<Turn>) -> Thread {
+    fn thread(status: ThreadStatus, turns: Vec<Turn>) -> Thread {
         Thread {
             id: "thread-1".to_string(),
             extra: None,
@@ -881,6 +1055,7 @@ mod tests {
             ephemeral: false,
             section: None,
             section_entered_at: None,
+            project_id: None,
             history_mode: ThreadHistoryMode::Legacy,
             model_provider: "provider".to_string(),
             created_at: 1,
@@ -888,9 +1063,9 @@ mod tests {
             recency_at: None,
             status,
             path: None,
-            cwd: String::new(),
+            cwd: std::path::PathBuf::new(),
             cli_version: String::new(),
-            source: "appServer".to_string(),
+            source: app_server_protocol::protocol::v2::SessionSource::AppServer,
             can_accept_direct_input: Some(true),
             thread_source: None,
             agent_nickname: None,
@@ -917,7 +1092,7 @@ mod tests {
     #[test]
     fn resume_snapshot_keeps_live_turn_in_progress_and_thread_active() {
         let mut snapshot = thread(
-            Some(ThreadStatus::Idle),
+            ThreadStatus::Idle,
             vec![turn("turn-live", TurnStatus::InProgress)],
         );
 
@@ -925,9 +1100,9 @@ mod tests {
 
         assert_eq!(
             snapshot.status,
-            Some(ThreadStatus::Active {
+            ThreadStatus::Active {
                 active_flags: Vec::new(),
-            })
+            }
         );
         assert_eq!(snapshot.turns[0].status, TurnStatus::InProgress);
     }
@@ -935,9 +1110,9 @@ mod tests {
     #[test]
     fn resume_snapshot_interrupts_non_active_stale_turn() {
         let mut snapshot = thread(
-            Some(ThreadStatus::Active {
+            ThreadStatus::Active {
                 active_flags: Vec::new(),
-            }),
+            },
             vec![
                 turn("turn-stale", TurnStatus::InProgress),
                 turn("turn-live", TurnStatus::InProgress),
@@ -953,19 +1128,39 @@ mod tests {
     #[test]
     fn resume_snapshot_without_live_turn_is_idle_but_preserves_system_error() {
         let mut idle_snapshot = thread(
-            Some(ThreadStatus::Active {
+            ThreadStatus::Active {
                 active_flags: Vec::new(),
-            }),
+            },
             vec![turn("turn-stale", TurnStatus::InProgress)],
         );
-        let mut error_snapshot = thread(Some(ThreadStatus::SystemError), Vec::new());
+        let mut error_snapshot = thread(ThreadStatus::SystemError, Vec::new());
 
         normalize_thread_resume_snapshot(&mut idle_snapshot, None);
         normalize_thread_resume_snapshot(&mut error_snapshot, None);
 
-        assert_eq!(idle_snapshot.status, Some(ThreadStatus::Idle));
+        assert_eq!(idle_snapshot.status, ThreadStatus::Idle);
         assert_eq!(idle_snapshot.turns[0].status, TurnStatus::Interrupted);
-        assert_eq!(error_snapshot.status, Some(ThreadStatus::SystemError));
+        assert_eq!(error_snapshot.status, ThreadStatus::SystemError);
+    }
+
+    #[test]
+    fn resume_reads_typed_environment_selections_from_thread_metadata() {
+        let selections = persisted_environment_selections(&serde_json::json!({
+            "environments": [{
+                "environmentId": "local",
+                "cwd": "/workspace",
+                "runtimeWorkspaceRoots": ["/workspace"]
+            }]
+        }))
+        .expect("persisted selections should parse")
+        .expect("persisted selections should exist");
+
+        assert_eq!(selections[0].environment_id, "local");
+        assert_eq!(selections[0].cwd, "/workspace");
+        assert!(persisted_environment_selections(&serde_json::json!({
+            "environments": "invalid"
+        }))
+        .is_err());
     }
 
     #[test]

@@ -288,12 +288,13 @@ async fn seed_durable_queued_turn(core: &RuntimeCore) {
         .await
         .expect("persist queued route generation turn");
     assert_eq!(queued.response.turn.status, AgentTurnStatus::Queued);
-    core.append_external_runtime_events(
-        SESSION_ID,
-        Some(ACTIVE_TURN_ID),
-        vec![RuntimeEvent::new("turn.completed", json!({}))],
-    )
-    .expect("complete active route generation turn");
+    core.event_appender()
+        .append_external_runtime_events(
+            SESSION_ID,
+            Some(ACTIVE_TURN_ID),
+            vec![RuntimeEvent::new("turn.completed", json!({}))],
+        )
+        .expect("complete active route generation turn");
 }
 
 #[tokio::test]
@@ -373,6 +374,24 @@ async fn committed_generation_retries_durable_queued_turn_once_after_pending_rou
         .send(())
         .expect("release generation one recovery");
     backend.wait_for_successes(1).await;
+    timeout(Duration::from_secs(2), async {
+        loop {
+            let completed = restarted
+                .session_snapshot(SESSION_ID)
+                .expect("recovered route generation session")
+                .1
+                .iter()
+                .any(|turn| {
+                    turn.turn_id == QUEUED_TURN_ID && turn.status == AgentTurnStatus::Completed
+                });
+            if completed {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("completed route generation turn projection");
 
     assert_eq!(
         backend.attempts(),

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "beforeProjectId": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "projectId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "projectId"
+  ],
+  "title": "ProjectMoveParams",
+  "type": "object"
+}

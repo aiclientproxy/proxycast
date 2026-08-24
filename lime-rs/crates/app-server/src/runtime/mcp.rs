@@ -7,10 +7,13 @@ impl RuntimeCore {
         self.app_data_source.list_mcp_servers().await
     }
 
-    pub async fn list_mcp_servers_with_status(
+    pub async fn list_mcp_servers_with_status_v2(
         &self,
-    ) -> Result<McpServerStatusListResponse, RuntimeCoreError> {
-        self.app_data_source.list_mcp_servers_with_status().await
+        params: v2::ListMcpServerStatusParams,
+    ) -> Result<v2::ListMcpServerStatusResponse, RuntimeCoreError> {
+        self.app_data_source
+            .list_mcp_servers_with_status_v2(params)
+            .await
     }
 
     pub async fn create_mcp_server(
@@ -186,6 +189,7 @@ impl RuntimeCore {
             Some(value) => Some(value.trim()),
             None => None,
         };
+        let origin_call_id = params.origin_call_id.clone();
         if let Some(thread_id) = thread_id {
             let thread = self
                 .read_thread(agent_protocol::thread::ThreadReadParams {
@@ -193,23 +197,86 @@ impl RuntimeCore {
                     turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
                 })
                 .await?;
-            self.backend
+            let mut response = self
+                .backend
                 .read_mcp_runtime_resource(
                     &thread.thread.session_id.to_string(),
                     thread_id,
                     server,
                     uri,
                 )
-                .await
+                .await?;
+            response.origin_call_id = origin_call_id;
+            Ok(response)
         } else {
             self.app_data_source
                 .read_mcp_server_resource(v2::McpServerResourceReadParams {
                     thread_id: None,
+                    origin_call_id,
                     server: server.to_string(),
                     uri: uri.to_string(),
+                    connector_id: params.connector_id,
                 })
                 .await
         }
+    }
+
+    pub async fn subscribe_mcp_server_events(
+        &self,
+        thread_id: &str,
+    ) -> Result<tokio::sync::broadcast::Receiver<lime_mcp::McpServerNotification>, RuntimeCoreError>
+    {
+        let thread = self
+            .read_thread(agent_protocol::thread::ThreadReadParams {
+                thread_id: agent_protocol::ThreadId::from(thread_id.to_string()),
+                turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
+            })
+            .await?;
+        self.backend
+            .subscribe_mcp_runtime_events(&thread.thread.session_id.to_string(), thread_id)
+            .await
+    }
+
+    pub async fn open_mcp_server_event_stream(
+        &self,
+        thread_id: &str,
+        server: &str,
+        name: &str,
+        arguments: serde_json::Value,
+        meta: Option<serde_json::Value>,
+    ) -> Result<lime_mcp::McpEventStream, RuntimeCoreError> {
+        let thread = self
+            .read_thread(agent_protocol::thread::ThreadReadParams {
+                thread_id: agent_protocol::ThreadId::from(thread_id.to_string()),
+                turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
+            })
+            .await?;
+        self.backend
+            .open_mcp_runtime_event_stream(
+                &thread.thread.session_id.to_string(),
+                thread_id,
+                server,
+                name,
+                arguments,
+                meta,
+            )
+            .await
+    }
+
+    pub async fn has_mcp_server_for_thread(
+        &self,
+        thread_id: &str,
+        server: &str,
+    ) -> Result<bool, RuntimeCoreError> {
+        let thread = self
+            .read_thread(agent_protocol::thread::ThreadReadParams {
+                thread_id: agent_protocol::ThreadId::from(thread_id.to_string()),
+                turns_view: agent_protocol::ThreadTurnsView::NotLoaded,
+            })
+            .await?;
+        self.backend
+            .has_mcp_runtime_server(&thread.thread.session_id.to_string(), thread_id, server)
+            .await
     }
 
     pub async fn subscribe_mcp_resource(

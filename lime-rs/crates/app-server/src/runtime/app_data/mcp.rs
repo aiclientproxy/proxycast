@@ -18,10 +18,17 @@ pub trait McpAppDataSource: Send + Sync {
         Ok(McpServerListResponse::default())
     }
 
-    async fn list_mcp_servers_with_status(
+    async fn list_mcp_servers_with_status_v2(
         &self,
-    ) -> Result<McpServerStatusListResponse, RuntimeCoreError> {
-        Ok(McpServerStatusListResponse::default())
+        _params: app_server_protocol::protocol::v2::ListMcpServerStatusParams,
+    ) -> Result<app_server_protocol::protocol::v2::ListMcpServerStatusResponse, RuntimeCoreError>
+    {
+        Ok(
+            app_server_protocol::protocol::v2::ListMcpServerStatusResponse {
+                data: Vec::new(),
+                next_cursor: None,
+            },
+        )
     }
 
     async fn create_mcp_server(

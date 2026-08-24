@@ -77,7 +77,8 @@ pub(in crate::runtime) fn provider_turn_history_excluding_current_turn_input(
     sidecar_store: Option<&super::SidecarStore>,
     turn_id: &str,
 ) -> Result<ProviderTurnHistory, super::RuntimeCoreError> {
-    let (replacement_history, events) = provider_history_source(stored);
+    let effective_events = super::history_replacement::effective_events(&stored.events);
+    let (replacement_history, events) = provider_history_source(&effective_events);
     let events = events
         .into_iter()
         .filter(|event| {
@@ -103,7 +104,7 @@ pub(in crate::runtime) fn provider_turn_history_excluding_current_turn_input(
     );
     Ok(ProviderTurnHistory {
         messages,
-        previous_route: latest_completed_provider_route(&stored.events, turn_id),
+        previous_route: latest_completed_provider_route(&effective_events, turn_id),
     })
 }
 
@@ -211,15 +212,14 @@ fn escape_xml_text(value: &str) -> String {
 }
 
 fn provider_history_source(
-    stored: &StoredSession,
+    events: &[AgentEvent],
 ) -> (Option<Vec<CurrentProviderMessage>>, Vec<AgentEvent>) {
-    let Some(compaction) = stored
-        .events
+    let Some(compaction) = events
         .iter()
         .rev()
         .find(|event| event.event_type == "context.compaction.completed")
     else {
-        return (None, stored.events.clone());
+        return (None, events.to_vec());
     };
     let replacement_history = replacement_history_from_compaction(compaction);
     let Some(tail_start_turn_id) = compaction
@@ -229,26 +229,22 @@ fn provider_history_source(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
-        return (None, stored.events.clone());
+        return (None, events.to_vec());
     };
 
-    let Some(start_index) = stored
-        .events
+    let Some(start_index) = events
         .iter()
         .position(|event| event.turn_id.as_deref() == Some(tail_start_turn_id))
     else {
         // A malformed or imported compaction marker must never discard history.
-        return (None, stored.events.clone());
+        return (None, events.to_vec());
     };
     let Some(replacement_history) = replacement_history else {
         // Legacy compaction markers do not carry a durable replacement history. Rebuild the
         // complete event history instead of guessing which prefix can be dropped.
-        return (None, stored.events.clone());
+        return (None, events.to_vec());
     };
-    (
-        Some(replacement_history),
-        stored.events[start_index..].to_vec(),
-    )
+    (Some(replacement_history), events[start_index..].to_vec())
 }
 
 fn replacement_history_from_compaction(event: &AgentEvent) -> Option<Vec<CurrentProviderMessage>> {
@@ -820,13 +816,51 @@ mod tests {
             tail,
         ]);
 
-        let (replacement, events) = provider_history_source(&stored);
+        let (replacement, events) = provider_history_source(&stored.events);
         let replacement = replacement.expect("replacement history");
         assert_eq!(events.len(), 1);
         assert!(matches!(
             &replacement[0].content[..],
             [CurrentProviderContent::Text(text)] if text == "remember this"
         ));
+    }
+
+    #[test]
+    fn history_replacement_keeps_provider_prefix_and_removes_reverted_turn() {
+        let stored = stored_with_events(vec![
+            turn_event(
+                1,
+                "turn-1",
+                "message.created",
+                json!({"input": [{"type": "text", "text": "prefix"}]}),
+            ),
+            turn_event(2, "turn-1", "turn.completed", json!({})),
+            turn_event(
+                3,
+                "turn-2",
+                "message.created",
+                json!({"input": [{"type": "text", "text": "reverted"}]}),
+            ),
+            turn_event(4, "turn-2", "turn.completed", json!({})),
+            event(
+                5,
+                super::super::history_replacement::HISTORY_ROLLBACK_EVENT_TYPE,
+                json!({"rollbackToSequence": 2}),
+            ),
+        ]);
+
+        let history = provider_history_excluding_current_turn_input(&stored, None, "turn-3")
+            .expect("provider history after replacement");
+        let texts = history
+            .iter()
+            .flat_map(|message| message.content.iter())
+            .filter_map(|content| match content {
+                CurrentProviderContent::Text(text) => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(texts.contains(&"prefix"));
+        assert!(!texts.contains(&"reverted"));
     }
 
     #[test]
@@ -845,7 +879,7 @@ mod tests {
             compaction,
         ]);
 
-        let (replacement, events) = provider_history_source(&stored);
+        let (replacement, events) = provider_history_source(&stored.events);
         assert!(replacement.is_none());
         assert_eq!(events.len(), 2);
     }

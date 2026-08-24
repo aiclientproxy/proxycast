@@ -35,10 +35,29 @@ impl RequestProcessor {
         event_callback: Option<&mut (dyn FnMut(JsonRpcMessage) + Send)>,
     ) -> Result<RpcDispatch, JsonRpcError> {
         self.ensure_initialized()?;
-        let params: TurnStartParams = parse_params(params)?;
+        let mut params: TurnStartParams = parse_params(params)?;
         self.ensure_direct_input_allowed(&params.thread_id).await?;
+        params.environments = self
+            .normalize_environment_selections(params.environments.take())
+            .await?;
+        self.ensure_environment_execution_lowering(params.environments.as_deref())?;
         let session_id = self.resolve_loaded_v2_thread_session(&params.thread_id)?;
-        let runtime_params = lower_turn_start_params(&params, session_id)?;
+        self.record_environment_selections(&params.thread_id, params.environments.as_deref());
+        self.append_environment_world_state(&session_id, params.environments.as_deref())
+            .map_err(to_jsonrpc_error)?;
+        let environment_world_state = self
+            .environment_world_state_snapshot(params.environments.as_deref())
+            .await;
+        let mut runtime_params = lower_turn_start_params(&params, session_id)?;
+        if !environment_world_state.is_empty() {
+            insert_runtime_metadata(
+                &mut runtime_params,
+                "environmentWorldState",
+                serde_json::to_value(environment_world_state).map_err(|error| {
+                    invalid_params(format!("invalid Environment world-state snapshot: {error}"))
+                })?,
+            );
+        }
         let host = self.runtime_host_context();
         let mut notifications: Vec<JsonRpcNotification> = Vec::new();
         if let Some(thread_settings) = self
@@ -64,6 +83,10 @@ impl RequestProcessor {
             .await
             .map_err(to_jsonrpc_error)?;
         let response = v2_start_response(output.response);
+        let environment_notifications = self
+            .environment_selection_notifications(&params.thread_id, params.environments.as_deref())
+            .await;
+        notifications.extend(environment_notifications);
         Ok(dispatch_result(response)?.with_notifications(notifications))
     }
 
@@ -298,6 +321,22 @@ fn lower_runtime_options(params: &TurnStartParams) -> Result<Option<RuntimeOptio
     } else {
         Ok(None)
     }
+}
+
+fn insert_runtime_metadata(params: &mut crate::runtime::TurnStartRequest, key: &str, value: Value) {
+    let options = params
+        .runtime_options
+        .get_or_insert_with(RuntimeOptions::default);
+    let metadata = options
+        .runtime_metadata_mut()
+        .get_or_insert_with(|| Value::Object(Map::new()));
+    if !metadata.is_object() {
+        *metadata = Value::Object(Map::new());
+    }
+    metadata
+        .as_object_mut()
+        .expect("runtime metadata object")
+        .insert(key.to_string(), value);
 }
 
 fn lower_application_metadata(

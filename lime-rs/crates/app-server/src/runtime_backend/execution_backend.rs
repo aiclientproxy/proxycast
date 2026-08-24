@@ -142,6 +142,15 @@ impl ExecutionBackend for RuntimeBackend {
         Ok(())
     }
 
+    fn set_filesystem_gateway(
+        &self,
+        gateway: Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>,
+    ) -> Result<(), RuntimeCoreError> {
+        self.agent_state
+            .install_filesystem_gateway(gateway)
+            .map_err(RuntimeCoreError::Backend)
+    }
+
     fn effective_turn_runtime_options(
         &self,
         request: &ExecutionRequest,
@@ -400,6 +409,7 @@ impl ExecutionBackend for RuntimeBackend {
         Ok(
             app_server_protocol::protocol::v2::McpServerResourceReadResponse {
                 contents: content.into_iter().collect(),
+                origin_call_id: None,
             },
         )
     }
@@ -423,6 +433,72 @@ impl ExecutionBackend for RuntimeBackend {
         .await?;
         self.agent_state
             .call_mcp_tool(session_id, thread_id, server, tool, arguments)
+            .await
+            .map_err(RuntimeCoreError::Backend)
+    }
+
+    async fn subscribe_mcp_runtime_events(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+    ) -> Result<tokio::sync::broadcast::Receiver<lime_mcp::McpServerNotification>, RuntimeCoreError>
+    {
+        let db = initialize_runtime_database(self.db.as_ref())?;
+        self.ensure_agent_initialized(&db).await?;
+        mcp_bridges::ensure_thread_mcp_runtime_if_available(
+            &self.agent_state,
+            &self.app_data_source,
+            session_id,
+            thread_id,
+        )
+        .await?;
+        self.agent_state
+            .subscribe_mcp_server_notifications(session_id, thread_id)
+            .await
+            .map_err(RuntimeCoreError::Backend)
+    }
+
+    async fn open_mcp_runtime_event_stream(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server: &str,
+        name: &str,
+        arguments: serde_json::Value,
+        meta: Option<serde_json::Value>,
+    ) -> Result<lime_mcp::McpEventStream, RuntimeCoreError> {
+        let db = initialize_runtime_database(self.db.as_ref())?;
+        self.ensure_agent_initialized(&db).await?;
+        mcp_bridges::ensure_thread_mcp_runtime_if_available(
+            &self.agent_state,
+            &self.app_data_source,
+            session_id,
+            thread_id,
+        )
+        .await?;
+        self.agent_state
+            .open_mcp_event_stream(session_id, thread_id, server, name, arguments, meta)
+            .await
+            .map_err(RuntimeCoreError::Backend)
+    }
+
+    async fn has_mcp_runtime_server(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server: &str,
+    ) -> Result<bool, RuntimeCoreError> {
+        let db = initialize_runtime_database(self.db.as_ref())?;
+        self.ensure_agent_initialized(&db).await?;
+        mcp_bridges::ensure_thread_mcp_runtime_if_available(
+            &self.agent_state,
+            &self.app_data_source,
+            session_id,
+            thread_id,
+        )
+        .await?;
+        self.agent_state
+            .has_mcp_server(session_id, thread_id, server)
             .await
             .map_err(RuntimeCoreError::Backend)
     }

@@ -11,6 +11,8 @@ mod connect;
 mod conversation_import;
 mod diagnostics;
 mod dispatch;
+pub(crate) mod environment;
+pub(crate) mod environment_exec;
 mod experimental_feature;
 mod fs;
 mod fuzzy_file_search;
@@ -23,6 +25,7 @@ mod mcp;
 mod media;
 mod memory_store;
 mod model;
+mod notifications;
 mod permission_profile;
 mod plugin;
 mod process;
@@ -38,6 +41,7 @@ mod soul;
 mod thread;
 mod thread_fork;
 mod thread_goal;
+mod thread_queue;
 mod thread_resume_context;
 mod thread_sections;
 mod turn;
@@ -81,6 +85,9 @@ use app_server_protocol::PlatformInfo;
 use app_server_protocol::RequestId;
 use app_server_protocol::METHOD_CANCEL_REQUEST;
 use config_warning::ConfigWarningProvider;
+use environment::EnvironmentRegistry;
+use mcp::McpEventStreamTask;
+pub(crate) use notifications::{ConnectionServerNotificationHook, ServerNotificationHook};
 // ProjectGit* 类型已移至 processor/project_git.rs
 use app_server_protocol::ServerCapabilities;
 use app_server_protocol::ServerInfo;
@@ -91,7 +98,7 @@ use app_server_protocol::SERVER_NAME;
 use app_server_transport::ConnectionId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
 use tracing::Instrument;
@@ -103,14 +110,6 @@ pub(crate) type TurnInterruptHook =
 pub(crate) use crate::command_exec::CommandExecNotificationHook;
 pub(crate) use crate::fs::FsNotificationHook;
 pub(crate) use crate::process::ProcessNotificationHook;
-pub(crate) type ServerNotificationHook = Arc<
-    dyn Fn(
-            app_server_protocol::protocol::v2::ServerNotification,
-        ) -> futures::future::BoxFuture<'static, ()>
-        + Send
-        + Sync,
->;
-
 #[derive(Clone)]
 pub struct RequestProcessor {
     state: Arc<Mutex<ProcessorState>>,
@@ -124,6 +123,11 @@ pub struct RequestProcessor {
     request_serialization_queues: RequestSerializationQueues,
     turn_interrupt_hook: Option<TurnInterruptHook>,
     server_notification_hook: Option<ServerNotificationHook>,
+    connection_server_notification_hook: Option<ConnectionServerNotificationHook>,
+    mcp_event_streams: Arc<Mutex<HashMap<(ConnectionId, String), McpEventStreamTask>>>,
+    pub(crate) environment_registry: Arc<EnvironmentRegistry>,
+    environment_execution_lowering: bool,
+    selected_environment_threads: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 }
 
 #[derive(Debug, Default)]
@@ -159,6 +163,26 @@ impl RequestProcessor {
         runtime: RuntimeCore,
         thread_states: ThreadStateManager,
     ) -> Self {
+        Self::new_with_thread_states_and_environment_storage(runtime, thread_states, None)
+    }
+
+    pub(crate) fn new_with_thread_states_and_environment_storage(
+        runtime: RuntimeCore,
+        thread_states: ThreadStateManager,
+        environment_storage_path: Option<std::path::PathBuf>,
+    ) -> Self {
+        let environment_registry = Arc::new(match environment_storage_path {
+            Some(path) => EnvironmentRegistry::new_with_storage(path),
+            None => EnvironmentRegistry::new(),
+        });
+        if let Some(execution_process) = runtime.execution_process_server() {
+            execution_process.attach_environment_registry(Arc::clone(&environment_registry));
+        }
+        let filesystem_gateway: Arc<
+            dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway,
+        > = environment_registry.clone();
+        let environment_execution_lowering =
+            runtime.set_filesystem_gateway(filesystem_gateway).is_ok();
         Self {
             state: Arc::new(Mutex::new(ProcessorState::default())),
             runtime: Arc::new(runtime),
@@ -171,60 +195,17 @@ impl RequestProcessor {
             request_serialization_queues: RequestSerializationQueues::default(),
             turn_interrupt_hook: None,
             server_notification_hook: None,
+            connection_server_notification_hook: None,
+            mcp_event_streams: Arc::new(Mutex::new(HashMap::new())),
+            environment_registry,
+            environment_execution_lowering,
+            selected_environment_threads: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     pub(crate) fn with_turn_interrupt_hook(mut self, hook: TurnInterruptHook) -> Self {
         self.turn_interrupt_hook = Some(hook);
         self
-    }
-
-    pub(crate) fn with_server_notification_hook(mut self, hook: ServerNotificationHook) -> Self {
-        self.server_notification_hook = Some(hook);
-        self
-    }
-
-    pub(crate) fn with_process_notification_hook(mut self, hook: ProcessNotificationHook) -> Self {
-        self.process = self.process.with_notification_hook(hook);
-        self
-    }
-
-    pub(crate) fn with_command_exec_notification_hook(
-        mut self,
-        hook: CommandExecNotificationHook,
-    ) -> Self {
-        self.command_exec = self.command_exec.with_notification_hook(hook);
-        self
-    }
-
-    pub(crate) fn with_fs_notification_hook(mut self, hook: FsNotificationHook) -> Self {
-        self.fs = self.fs.with_notification_hook(hook);
-        self
-    }
-
-    pub(crate) async fn close_process_connection(&self, connection_id: ConnectionId) {
-        self.process.connection_closed(connection_id).await;
-    }
-
-    pub(crate) async fn close_command_exec_connection(&self, connection_id: ConnectionId) {
-        self.command_exec.connection_closed(connection_id).await;
-    }
-
-    pub(crate) async fn close_fs_connection(&self, connection_id: ConnectionId) {
-        self.fs.connection_closed(connection_id).await;
-    }
-
-    pub(crate) async fn activate_process(&self, connection_id: ConnectionId, process_handle: &str) {
-        self.process.activate(connection_id, process_handle).await;
-    }
-
-    pub(super) async fn publish_server_notification(
-        &self,
-        notification: app_server_protocol::protocol::v2::ServerNotification,
-    ) {
-        if let Some(hook) = self.server_notification_hook.as_ref() {
-            hook(notification).await;
-        }
     }
 
     pub(super) async fn abort_server_requests_for_turn(&self, thread_id: String, turn_id: String) {

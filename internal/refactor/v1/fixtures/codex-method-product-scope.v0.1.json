@@ -20,8 +20,8 @@
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 140,
-      "product-scope-excluded": 78,
+      "implemented": 146,
+      "product-scope-excluded": 72,
       "planned": 3
     }
   },
@@ -444,19 +444,18 @@
       "methods": ["config/mcpServer/reload"]
     },
     {
-      "id": "environment-excluded",
+      "id": "environment-current",
       "direction": "clientRequest",
       "productArea": "environment",
-      "status": "product-scope-excluded",
-      "priority": "none",
-      "owner": "product-scope",
-      "counterpartRule": "none",
-      "rationale": "Codex environment/add|info|status manages named remote exec-server WebSocket environments and their shell/cwd readiness. Lime Desktop has no remote exec-server registry, connection recovery, or environment picker; its local execution owner already carries cwd and environment identity through RuntimeCore/tool-runtime. Adding these methods would create a second execution backend rather than a user workflow.",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "App Server EnvironmentRegistry + Thread/Turn selection lowering",
+      "counterpartRule": "same-name",
       "evidence": [
-        "lime-rs/crates/app-server/src/processor/turn.rs",
-        "lime-rs/crates/tool-runtime/src/tool_call.rs",
-        "lime-rs/crates/tool-runtime/src/mcp_connection/scope.rs",
-        "internal/aiprompts/architecture.md"
+        "lime-rs/crates/app-server/src/processor/environment.rs",
+        "lime-rs/crates/app-server/tests/environment_jsonrpc.rs",
+        "lime-rs/crates/app-server/src/processor/thread.rs",
+        "lime-rs/crates/app-server/src/processor/turn.rs"
       ],
       "methods": ["environment/add", "environment/info", "environment/status"]
     },
@@ -640,18 +639,19 @@
       "methods": ["memory/reset"]
     },
     {
-      "id": "model-provider-capabilities-excluded",
+      "id": "model-provider-capabilities-current",
       "direction": "clientRequest",
       "productArea": "model",
-      "status": "product-scope-excluded",
-      "priority": "none",
-      "owner": "model catalog + per-thread route capability owner",
-      "counterpartRule": "none",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "model-provider provider capability route + App Server current provider resolver",
+      "counterpartRule": "same-name",
       "evidence": [
-        "lime-rs/crates/app-server/src/runtime/model_providers.rs",
-        "internal/exec-plans/codex-alignment-v1-coordination-plan.md"
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/model.rs",
+        "lime-rs/crates/app-server/src/processor/model.rs",
+        "lime-rs/crates/app-server/tests/model_provider_capabilities_jsonrpc.rs",
+        "src/lib/api/modelRegistry.ts"
       ],
-      "rationale": "Codex reads one global configured provider. Lime selects provider/model per thread route, so a parameterless global capability read is ambiguous, had no product consumer, and would expose static metadata as current route truth.",
       "methods": ["modelProvider/capabilities/read"]
     },
     {
@@ -1223,18 +1223,18 @@
       "methods": ["skills/changed"]
     },
     {
-      "id": "environment-notification-excluded",
+      "id": "environment-notification-current",
       "direction": "serverNotification",
       "productArea": "environment",
-      "status": "product-scope-excluded",
-      "priority": "none",
-      "owner": "Renderer notification drift diagnostics",
-      "counterpartRule": "none",
-      "rationale": "Connection lifecycle notifications belong to Codex remote exec-server environments. Lime has no corresponding remote environment owner or Desktop state surface; they remain method-only diagnostics and must not enter Header, timeline, or pending interaction projections.",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "App Server EnvironmentRegistry selection lifecycle + typed notification bus",
+      "counterpartRule": "same-name",
       "evidence": [
-        "src/lib/api/agentRuntime/appServerNotificationDrift.ts",
-        "internal/refactor/v2/EVENT-PROJECTIONS.md",
-        "internal/aiprompts/architecture.md"
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/environment.rs",
+        "lime-rs/crates/app-server/src/processor/environment.rs",
+        "lime-rs/crates/app-server/src/processor/thread.rs",
+        "packages/app-server-client/src/server-notifications.ts"
       ],
       "methods": [
         "thread/environment/connected",

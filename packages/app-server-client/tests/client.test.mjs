@@ -181,6 +181,7 @@ const {
   METHOD_CONFIG_READ,
   METHOD_CONFIG_VALUE_WRITE,
   METHOD_MODEL_LIST,
+  METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
   METHOD_HOOKS_LIST,
   METHOD_SKILLS_CONFIG_WRITE,
   METHOD_SKILLS_EXTRA_ROOTS_SET,
@@ -604,6 +605,64 @@ test("builds Codex v2 model list requests with opaque pagination", () => {
     limit: 25,
     includeHidden: true,
   });
+});
+
+test("builds Codex v2 model provider capabilities read requests with empty params", () => {
+  const client = new AppServerClient();
+
+  const capabilities = client.readModelProviderCapabilities();
+
+  assert.equal(capabilities.id, 1);
+  assert.equal(capabilities.method, METHOD_MODEL_PROVIDER_CAPABILITIES_READ);
+  assert.deepEqual(capabilities.params, {});
+});
+
+test("builds Codex v2 thread queue requests with typed payloads", () => {
+  const client = new AppServerClient();
+
+  const add = client.addThreadQueue({
+    threadId: "thread-1",
+    clientUserMessageId: "client-1",
+    input: [{ type: "text", text: "queued work" }],
+  });
+  const list = client.listThreadQueue({
+    threadId: "thread-1",
+    cursor: "2",
+    limit: 10,
+  });
+  const update = client.updateThreadQueue({
+    threadId: "thread-1",
+    queuedSubmissionId: "queued-1",
+    input: [{ type: "text", text: "updated work" }],
+  });
+  const remove = client.deleteThreadQueue({
+    threadId: "thread-1",
+    queuedSubmissionId: "queued-1",
+  });
+  const reorder = client.reorderThreadQueue({
+    threadId: "thread-1",
+    queuedSubmissionIds: ["queued-2", "queued-1"],
+  });
+  const start = client.startThreadQueue({
+    threadId: "thread-1",
+    queuedSubmissionId: "queued-2",
+  });
+
+  assert.deepEqual(add, {
+    id: 1,
+    method: "thread/queue/add",
+    params: {
+      threadId: "thread-1",
+      clientUserMessageId: "client-1",
+      input: [{ type: "text", text: "queued work" }],
+    },
+  });
+  assert.equal(list.method, "thread/queue/list");
+  assert.equal(update.method, "thread/queue/update");
+  assert.equal(remove.method, "thread/queue/delete");
+  assert.equal(reorder.method, "thread/queue/reorder");
+  assert.equal(start.method, "thread/queue/start");
+  assert.equal(start.id, 6);
 });
 
 test("builds Codex v2 collaboration mode list requests", () => {
@@ -1201,6 +1260,10 @@ test("builds thread control requests with current App Server methods", () => {
       itemsView: "summary",
     },
   });
+  const revert = client.revertThread({
+    threadId: "thread_1",
+    beforeTurnId: "turn_1",
+  });
   assert.equal(compact.id, 1);
   assert.equal(compact.method, METHOD_THREAD_COMPACT_START);
   assert.deepEqual(compact.params, {
@@ -1216,6 +1279,12 @@ test("builds thread control requests with current App Server methods", () => {
       sortDirection: "desc",
       itemsView: "summary",
     },
+  });
+  assert.equal(revert.id, 3);
+  assert.equal(revert.method, "thread/revert");
+  assert.deepEqual(revert.params, {
+    threadId: "thread_1",
+    beforeTurnId: "turn_1",
   });
   const checkpointClient = new AppServerClient();
   const list = checkpointClient.listAgentSessionFileCheckpoints({
@@ -4458,6 +4527,27 @@ test("routes typed error notifications through the signal router", async () => {
   assert.equal(agentRuntimeLifecycleNotification(notification), undefined);
   assert.equal(await router.dispatch(notification), true);
   unsubscribeSignal();
+  assert.deepEqual(signals, [notification]);
+});
+
+test("routes strict review requirements only through the signal router", async () => {
+  const notification = {
+    method: "autoApprovalReview/strictReviewRequired",
+    params: {
+      startedAtMs: 1_783_814_400_100,
+      threadId: "thread_external",
+      turnId: "turn_external",
+    },
+  };
+  const router = new AppServerAgentEventRouter();
+  const lifecycle = [];
+  const signals = [];
+  router.subscribeLifecycle((event) => lifecycle.push(event));
+  router.subscribeSignal((event) => signals.push(event));
+
+  assert.equal(agentRuntimeLifecycleNotification(notification), undefined);
+  assert.equal(await router.dispatch(notification), true);
+  assert.deepEqual(lifecycle, []);
   assert.deepEqual(signals, [notification]);
 });
 

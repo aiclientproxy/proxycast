@@ -165,8 +165,10 @@ impl RuntimeToolExecutor for RuntimeMcpResourceExecutor {
                             thread_id,
                             McpServerResourceReadParams {
                                 thread_id: Some(thread_id.to_string()),
+                                origin_call_id: None,
                                 server: server.to_string(),
                                 uri: uri.to_string(),
+                                connector_id: None,
                             },
                         )
                         .await
@@ -465,6 +467,7 @@ mod tests {
                         meta: None,
                     },
                 ],
+                origin_call_id: None,
             })
         }
     }

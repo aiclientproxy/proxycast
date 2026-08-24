@@ -48,6 +48,24 @@ describe("openai-compatible-fixture-server", () => {
     );
   });
 
+  it("由 fixture close 统一回收连接，不发布会截断工具间隔的短 idle TTL", async () => {
+    const fixture = await startFixture();
+    const response = await fetch(`${fixture.baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: DEFAULT_FIXTURE_MODEL,
+        messages: [{ role: "user", content: "ping" }],
+        stream: true,
+      }),
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.headers.get("connection")).toBe("keep-alive");
+    expect(response.headers.get("keep-alive")).toBeNull();
+    await expect(response.text()).resolves.toContain("data: [DONE]");
+  });
+
   it("不得通过强杀 active connection 掩盖 provider 生命周期缺陷", () => {
     const source = fs.readFileSync(
       path.resolve("scripts/lib/openai-compatible-fixture-server.mjs"),

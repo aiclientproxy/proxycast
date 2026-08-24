@@ -36,6 +36,11 @@ const RETIRED_QUEUED_TURN_SNAPSHOT_PATHS = [
   "src/lib/api/queuedTurn.test.ts",
   "src/lib/api/queuedTurn.d.ts",
 ];
+const CURRENT_QUEUE_READER_PATHS = [
+  "src/lib/api/agentRuntime/threadQueueClient.ts",
+  "src/components/agent/chat/hooks/useAgentSessionThreadQueue.ts",
+  "src/components/agent/chat/components/ThreadQueueStatus.tsx",
+];
 
 describe("queued turn current owner boundary", () => {
   it("已迁出的 Renderer/UI/send surface 不得重新读取 queued snapshot", () => {
@@ -87,5 +92,35 @@ describe("queued turn current owner boundary", () => {
       expect(source, relativePath).not.toContain("onPromoteQueuedTurn");
       expect(source, relativePath).not.toContain("onRemoveQueuedTurn");
     }
+  });
+
+  it("GUI Queue consumer 只读取 typed list/changed，不恢复 renderer snapshot owner", () => {
+    for (const relativePath of CURRENT_QUEUE_READER_PATHS) {
+      expect(existsSync(join(cwd(), relativePath)), relativePath).toBe(true);
+      const source = readFileSync(join(cwd(), relativePath), "utf8");
+      expect(source, relativePath).not.toContain('from "@/lib/api/queuedTurn"');
+      expect(source, relativePath).not.toContain("QueuedTurnSnapshot");
+      expect(source, relativePath).not.toContain("safeInvoke(");
+    }
+
+    const gateway = readFileSync(
+      join(cwd(), "src/lib/api/agentRuntime/threadQueueClient.ts"),
+      "utf8",
+    );
+    expect(gateway).toContain("listThreadQueue");
+    expect(gateway).not.toContain("addThreadQueue");
+    expect(gateway).not.toContain("updateThreadQueue");
+    expect(gateway).not.toContain("deleteThreadQueue");
+    expect(gateway).not.toContain("reorderThreadQueue");
+    expect(gateway).not.toContain("startThreadQueue");
+
+    const hook = readFileSync(
+      join(
+        cwd(),
+        "src/components/agent/chat/hooks/useAgentSessionThreadQueue.ts",
+      ),
+      "utf8",
+    );
+    expect(hook).toContain('notification.method !== "thread/queue/changed"');
   });
 });

@@ -78,9 +78,48 @@ function passingEvidence(task, overrides = {}) {
       invokeErrorCount: 0,
     },
     recovery: {
-      sessionReopen: { status: "pass", sessionId },
       cancelNoGhostWrite: { status: "not_run" },
       approvalResume: { status: "not_run" },
+      coldRestart: {
+        status: "pass",
+        previousElectronPid: 100,
+        restartedElectronPid: 200,
+        electronProcessReplaced: true,
+        appServerProcessReplaced: true,
+        previousProcessTree: { appServerPids: [101] },
+        restartedProcessTree: { appServerPids: [201] },
+        previousProcessTreeExit: { exited: true },
+        renderer: { electron: true, preloadInvokeBridge: true },
+        identity: { sessionId, threadId, turnId },
+        projection: {
+          stable: true,
+          beforeSha256: "c".repeat(64),
+          afterSha256: "c".repeat(64),
+        },
+        toolLifecycleVisible: true,
+        diffArtifactVisible: true,
+        artifactPreview: {
+          status: "pass",
+          contentVisible: true,
+          unavailableErrorVisible: false,
+          artifactReadSeen: true,
+        },
+        approvalCompleted: true,
+        cancelNoGhostWrite: true,
+        patch: {
+          stable: true,
+          beforeSha256: patchSha256,
+          afterSha256: patchSha256,
+        },
+        providerRequestCountStable: true,
+        bridge: {
+          appServerHandleJsonLinesSeen: true,
+          mockFallbackHitCount: 0,
+          invokeErrorCount: 0,
+        },
+        consoleErrorCount: 0,
+        pageErrorCount: 0,
+      },
     },
     verifier: {
       status: "pass",
@@ -127,6 +166,27 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
           task.desktopRisks.length >= 3,
       ),
     ).toBe(true);
+    expect(manifest.suiteRequirements.recoveryCoverage).toEqual([
+      "cancel_no_ghost_write",
+      "approval_resume",
+      "cold_restart",
+    ]);
+    expect(manifest.evidenceContract.requiredGateB).toEqual([
+      "realElectronHost",
+      "preloadInvokeBridge",
+      "appServerHandleJsonLines",
+      "canonicalIdentity",
+      "terminalReadModel",
+      "visibleTerminal",
+      "visibleToolLifecycle",
+      "visibleDiffArtifact",
+      "artifactContentAvailable",
+      "coldRestart",
+      "productionMockFallbackZero",
+      "invokeErrorsZero",
+      "consoleErrorsZero",
+      "pageErrorsZero",
+    ]);
   });
 
   it("preflights original instructions, task metadata, and separate verifier mode", () => {
@@ -254,6 +314,22 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
       }),
       "verifierArtifactsComplete",
     ],
+    [
+      "cold restart without process-tree exit",
+      (evidence) => ({
+        ...evidence,
+        gateB: { pass: false },
+        desktopCodingPass: false,
+        recovery: {
+          ...evidence.recovery,
+          coldRestart: {
+            ...evidence.recovery.coldRestart,
+            previousProcessTreeExit: { exited: false },
+          },
+        },
+      }),
+      "coldRestart",
+    ],
   ])("rejects %s", (_label, mutate, assertionName) => {
     const evidence = mutate(passingEvidence(manifest.tasks[0]));
     const verdict = evaluateDesktopTrial({ evidence, manifest, repoRoot });
@@ -275,14 +351,11 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
     const evidenceList = manifest.tasks.map((task, index) =>
       passingEvidence(task, {
         recovery: {
-          sessionReopen: {
-            status: "pass",
-            sessionId: `desktop-${task.id}`,
-          },
           cancelNoGhostWrite: {
             status: index === 0 ? "pass" : "not_run",
           },
           approvalResume: { status: index === 3 ? "pass" : "not_run" },
+          coldRestart: passingEvidence(task).recovery.coldRestart,
         },
       }),
     );
@@ -292,7 +365,7 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
     expect(suite.recoveryCoverage).toEqual({
       cancel_no_ghost_write: true,
       approval_resume: true,
-      session_reopen: true,
+      cold_restart: true,
     });
 
     evidenceList[0].recovery.cancelNoGhostWrite.status = "not_run";
@@ -303,5 +376,17 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
     });
     expect(incomplete.desktopCodingPass).toBe(false);
     expect(incomplete.failedAssertions).toContain("recoveryCoverageComplete");
+
+    evidenceList[0].recovery.cancelNoGhostWrite.status = "pass";
+    evidenceList.forEach((evidence) => {
+      evidence.recovery.coldRestart.status = "not_run";
+    });
+    const restartIncomplete = evaluateDesktopSuite({
+      evidenceList,
+      manifest,
+      repoRoot,
+    });
+    expect(restartIncomplete.desktopCodingPass).toBe(false);
+    expect(restartIncomplete.recoveryCoverage.cold_restart).toBe(false);
   });
 });

@@ -42,6 +42,10 @@ declare module "./connection.js" {
       params: protocol.ThreadReadParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadReadResponse>>;
+    revertThread(
+      params: protocol.ThreadRevertParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadRevertResponse>>;
     listThreads(
       params?: protocol.ThreadListParams,
       options?: AppServerRequestOptions,
@@ -108,6 +112,30 @@ declare module "./connection.js" {
       params: protocol.ThreadMetadataUpdateParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadMetadataUpdateResponse>>;
+    addThreadQueue(
+      params: protocol.ThreadQueueAddParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadQueueAddResponse>>;
+    listThreadQueue(
+      params: protocol.ThreadQueueListParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadQueueListResponse>>;
+    updateThreadQueue(
+      params: protocol.ThreadQueueUpdateParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadQueueUpdateResponse>>;
+    deleteThreadQueue(
+      params: protocol.ThreadQueueDeleteParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadQueueDeleteResponse>>;
+    reorderThreadQueue(
+      params: protocol.ThreadQueueReorderParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadQueueReorderResponse>>;
+    startThreadQueue(
+      params: protocol.ThreadQueueStartParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.ThreadQueueStartResponse>>;
     listThreadTurns(
       params: protocol.ThreadTurnsListParams,
       options?: AppServerRequestOptions,
@@ -465,8 +493,11 @@ declare module "./connection.js" {
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.McpServerListResponse>>;
     listMcpServersWithStatus(
+      params?: protocol.ListMcpServerStatusParams,
       options?: AppServerRequestOptions,
-    ): Promise<AppServerRequestResult<protocol.McpServerStatusListResponse>>;
+    ): Promise<
+      AppServerRequestResult<protocol.ListMcpServerStatusResponse>
+    >;
     createMcpServer(
       params: protocol.McpServerCreateParams,
       options?: AppServerRequestOptions,
@@ -1065,10 +1096,34 @@ declare module "./connection.js" {
     ): Promise<
       AppServerRequestResult<protocol.WindowsSandboxReadinessResponse>
     >;
+    startWindowsSandboxSetup(
+      params: protocol.WindowsSandboxSetupStartParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.WindowsSandboxSetupStartResponse>
+    >;
     listModels(
       params?: protocol.ModelListParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ModelListResponse>>;
+    readModelProviderCapabilities(
+      params?: protocol.ModelProviderCapabilitiesReadParams,
+      options?: AppServerRequestOptions,
+    ): Promise<
+      AppServerRequestResult<protocol.ModelProviderCapabilitiesReadResponse>
+    >;
+    addEnvironment(
+      params: protocol.EnvironmentAddParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.EnvironmentAddResponse>>;
+    readEnvironmentInfo(
+      params: protocol.EnvironmentInfoParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.EnvironmentInfoResponse>>;
+    readEnvironmentStatus(
+      params: protocol.EnvironmentStatusParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.EnvironmentStatusResponse>>;
     listModelPreferences(
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ModelPreferencesListResponse>>;

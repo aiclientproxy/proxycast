@@ -90,9 +90,7 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
   } | null>(null);
   const runtimeReadyWorkspaceRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
-  const pendingSessionMetadataSyncCancelRef = useRef<(() => void) | null>(
-    null,
-  );
+  const pendingSessionMetadataSyncCancelRef = useRef<(() => void) | null>(null);
   const currentAssistantMsgIdRef = useRef<string | null>(null);
   const currentStreamingSessionIdRef = useRef<string | null>(null);
   const currentStreamingEventNameRef = useRef<string | null>(null);
@@ -863,6 +861,8 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
     refreshSessionReadModel: session.refreshSessionReadModel,
     deleteTopic: session.deleteTopic,
     renameTopic: session.renameTopic,
+    archiveTopic: session.archiveTopic,
+    forkTopic: session.forkTopic,
     loadTopics: session.loadTopics,
     updateTopicSnapshot: session.updateTopicSnapshot,
 

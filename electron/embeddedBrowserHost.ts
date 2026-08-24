@@ -1,9 +1,12 @@
 import {
+  app,
   session,
   WebContentsView,
   type BrowserWindow,
   type Rectangle,
 } from "./electronRuntime";
+import path from "node:path";
+import { mkdirSync } from "node:fs";
 import { installEmbeddedBrowserContextMenu } from "./embeddedBrowserContextMenu";
 import { installEmbeddedBrowserDownloadHandling } from "./embeddedBrowserDownloads";
 import { installEmbeddedBrowserPermissionHandling } from "./embeddedBrowserPermissions";
@@ -92,6 +95,11 @@ interface EmbeddedBrowserEntry {
   findRequestId: number | null;
 }
 
+type PendingPermission = {
+  viewId: string;
+  callback: (allowed: boolean) => void;
+};
+
 export interface EmbeddedBrowserNativeView {
   state: EmbeddedBrowserViewState;
   view: WebContentsView;
@@ -109,11 +117,25 @@ export function isEmbeddedBrowserCommand(
 
 export class ElectronEmbeddedBrowserHost {
   #entries = new Map<string, EmbeddedBrowserEntry>();
+  #downloadPaths = new Map<string, string>();
+  #pendingPermissions = new Map<string, PendingPermission>();
+  #deferPermissions = false;
   #emit: HostEventEmitter;
   #sessionHandlersInstalled = false;
+  readonly #downloadDirectory: string;
 
-  constructor(emit: HostEventEmitter = () => undefined) {
+  constructor(
+    emit: HostEventEmitter = () => undefined,
+    options: { deferPermissions?: boolean } = {},
+  ) {
     this.#emit = emit;
+    this.#deferPermissions = options.deferPermissions === true;
+    const userDataRoot =
+      typeof app.getPath === "function"
+        ? app.getPath("userData")
+        : process.env.TMPDIR || process.cwd();
+    this.#downloadDirectory = path.join(userDataRoot, "browser-downloads");
+    mkdirSync(this.#downloadDirectory, { recursive: true });
   }
 
   async invoke(
@@ -177,6 +199,49 @@ export class ElectronEmbeddedBrowserHost {
       view: entry.view,
       window: entry.window,
     };
+  }
+
+  /** 仅供 Browser Host 以受控 downloadId 解析完成下载，不暴露给 Renderer。 */
+  resolveDownloadPath(downloadId: string): string | null {
+    return this.#downloadPaths.get(downloadId) ?? null;
+  }
+
+  resolvePermission(
+    requestId: string,
+    allowed: boolean,
+    expectedViewId?: string,
+  ): boolean {
+    const pending = this.#pendingPermissions.get(requestId);
+    if (!pending || (expectedViewId && pending.viewId !== expectedViewId)) {
+      return false;
+    }
+    this.#pendingPermissions.delete(requestId);
+    pending.callback(allowed);
+    return true;
+  }
+
+  clearPendingPermission(requestId: string, expectedViewId?: string): boolean {
+    const pending = this.#pendingPermissions.get(requestId);
+    if (!pending || (expectedViewId && pending.viewId !== expectedViewId)) {
+      return false;
+    }
+    this.#pendingPermissions.delete(requestId);
+    pending.callback(false);
+    return true;
+  }
+
+  clearPendingPermissions(viewId?: string): void {
+    for (const [requestId, pending] of this.#pendingPermissions) {
+      if (viewId && pending.viewId !== viewId) {
+        continue;
+      }
+      this.#pendingPermissions.delete(requestId);
+      pending.callback(false);
+    }
+  }
+
+  pendingPermissionViewId(requestId: string): string | null {
+    return this.#pendingPermissions.get(requestId)?.viewId ?? null;
   }
 
   async #mount(
@@ -329,6 +394,12 @@ export class ElectronEmbeddedBrowserHost {
     }
 
     this.#entries.delete(viewId);
+    for (const [requestId, pending] of this.#pendingPermissions) {
+      if (pending.viewId === viewId) {
+        pending.callback(false);
+        this.#pendingPermissions.delete(requestId);
+      }
+    }
     detachEntryFromWindow(entry);
     closeEntryView(entry);
     this.#emit("embedded-browser-view-destroyed", {
@@ -494,6 +565,22 @@ export class ElectronEmbeddedBrowserHost {
     const controller = {
       findEntryByWebContents: (webContents: ElectronWebContents) =>
         this.#findEntryByWebContents(webContents),
+      onCompletedDownload: (downloadId: string, savePath: string) => {
+        this.#downloadPaths.set(downloadId, savePath);
+      },
+      resolveSavePath: (filename: string) =>
+        path.join(this.#downloadDirectory, sanitizeDownloadFilename(filename)),
+      deferPermissionRequest: this.#deferPermissions,
+      onPendingPermission: (
+        requestId: string,
+        viewId: string,
+        callback: (allowed: boolean) => void,
+      ) => {
+        this.#pendingPermissions.set(requestId, {
+          viewId,
+          callback,
+        });
+      },
     };
     installEmbeddedBrowserDownloadHandling(
       embeddedSession,
@@ -790,10 +877,7 @@ function detachEntryFromWindow(entry: EmbeddedBrowserEntry): void {
       );
       entry.window.contentView.removeChildView(entry.view);
     }
-    entry.view.webContents.off(
-      "destroyed",
-      entry.webContentsDestroyedListener,
-    );
+    entry.view.webContents.off("destroyed", entry.webContentsDestroyedListener);
     entry.view.webContents.off(
       "render-process-gone",
       entry.webContentsGoneListener,
@@ -885,6 +969,11 @@ function normalizeHttpUrl(value: string): string | null {
   } catch {
     return null;
   }
+}
+
+function sanitizeDownloadFilename(value: string): string {
+  const normalized = value.trim().replace(/[^a-zA-Z0-9._-]+/g, "_");
+  return normalized || "download";
 }
 
 function classifyLoadFailure(

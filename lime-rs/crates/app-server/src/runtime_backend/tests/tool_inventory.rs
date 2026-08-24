@@ -17,7 +17,10 @@ use crate::UsageStatsAppDataSource;
 use crate::VoiceAppDataSource;
 use crate::WorkspaceAppDataSource;
 use crate::WorkspaceSkillBindingAppDataSource;
-use app_server_protocol::McpServerStatusListResponse;
+use app_server_protocol::protocol::v2::{
+    ListMcpServerStatusParams, ListMcpServerStatusResponse, McpAuthStatus, McpResource,
+    McpServerConnectionStatus, McpServerStatus,
+};
 use app_server_protocol::McpToolListResponse;
 use async_trait::async_trait;
 use serde_json::json;
@@ -25,14 +28,14 @@ use std::sync::Mutex;
 
 #[derive(Default)]
 struct TestMcpInventoryDataSource {
-    server_status_response: Mutex<Option<Result<McpServerStatusListResponse, String>>>,
+    server_status_response: Mutex<Option<Result<ListMcpServerStatusResponse, String>>>,
     tool_list_response: Mutex<Option<Result<McpToolListResponse, String>>>,
 }
 
 impl TestMcpInventoryDataSource {
     fn with_server_status_response(
         self,
-        response: Result<McpServerStatusListResponse, String>,
+        response: Result<ListMcpServerStatusResponse, String>,
     ) -> Self {
         *self
             .server_status_response
@@ -70,9 +73,10 @@ impl RightSurfaceAppDataSource for TestMcpInventoryDataSource {}
 
 #[async_trait]
 impl McpAppDataSource for TestMcpInventoryDataSource {
-    async fn list_mcp_servers_with_status(
+    async fn list_mcp_servers_with_status_v2(
         &self,
-    ) -> Result<McpServerStatusListResponse, RuntimeCoreError> {
+        _params: ListMcpServerStatusParams,
+    ) -> Result<ListMcpServerStatusResponse, RuntimeCoreError> {
         let response = self
             .server_status_response
             .lock()
@@ -81,7 +85,10 @@ impl McpAppDataSource for TestMcpInventoryDataSource {
         match response {
             Some(Ok(response)) => Ok(response),
             Some(Err(message)) => Err(RuntimeCoreError::Backend(message)),
-            None => Ok(McpServerStatusListResponse::default()),
+            None => Ok(ListMcpServerStatusResponse {
+                data: Vec::new(),
+                next_cursor: None,
+            }),
         }
     }
 
@@ -96,6 +103,33 @@ impl McpAppDataSource for TestMcpInventoryDataSource {
             Some(Err(message)) => Err(RuntimeCoreError::Backend(message)),
             None => Ok(McpToolListResponse::default()),
         }
+    }
+}
+
+fn server_status(name: &str, supports_resources: bool) -> McpServerStatus {
+    McpServerStatus {
+        name: name.to_string(),
+        runtime_status: Some(McpServerConnectionStatus::Connected),
+        plugin_id: None,
+        server_info: None,
+        tools: Default::default(),
+        resources: if supports_resources {
+            vec![McpResource {
+                annotations: None,
+                description: None,
+                mime_type: None,
+                name: "resource".to_string(),
+                size: None,
+                title: None,
+                uri: format!("{name}://resource"),
+                icons: None,
+                meta: None,
+            }]
+        } else {
+            Vec::new()
+        },
+        resource_templates: Vec::new(),
+        auth_status: McpAuthStatus::Unknown,
     }
 }
 
@@ -163,14 +197,9 @@ async fn read_inventory_without_initialized_agent(
 #[tokio::test]
 async fn runtime_backend_tool_inventory_reads_current_mcp_snapshot() {
     let data_source = TestMcpInventoryDataSource::default()
-        .with_server_status_response(Ok(McpServerStatusListResponse {
-            servers: vec![json!({
-                "name": "context7",
-                "is_running": true,
-                "runtime_status": {
-                    "supports_resources": true
-                }
-            })],
+        .with_server_status_response(Ok(ListMcpServerStatusResponse {
+            data: vec![server_status("context7", true)],
+            next_cursor: None,
         }))
         .with_tool_list_response(Ok(McpToolListResponse {
             tools: vec![
@@ -332,14 +361,9 @@ async fn runtime_backend_tool_inventory_does_not_project_plugin_private_targets(
 #[tokio::test]
 async fn runtime_backend_tool_inventory_projects_mcp_bridge_before_agent_initialization() {
     let data_source = TestMcpInventoryDataSource::default()
-        .with_server_status_response(Ok(McpServerStatusListResponse {
-            servers: vec![json!({
-                "name": "context7",
-                "is_running": true,
-                "runtime_status": {
-                    "supports_resources": true
-                }
-            })],
+        .with_server_status_response(Ok(ListMcpServerStatusResponse {
+            data: vec![server_status("context7", true)],
+            next_cursor: None,
         }))
         .with_tool_list_response(Ok(McpToolListResponse {
             tools: vec![
@@ -424,14 +448,9 @@ async fn runtime_backend_tool_inventory_projects_mcp_bridge_before_agent_initial
 #[tokio::test]
 async fn runtime_backend_tool_inventory_keeps_warning_for_invalid_mcp_snapshot() {
     let data_source = TestMcpInventoryDataSource::default()
-        .with_server_status_response(Ok(McpServerStatusListResponse {
-            servers: vec![json!({
-                "name": "docs",
-                "isRunning": true,
-                "runtimeStatus": {
-                    "supportsResources": true
-                }
-            })],
+        .with_server_status_response(Ok(ListMcpServerStatusResponse {
+            data: vec![server_status("docs", true)],
+            next_cursor: None,
         }))
         .with_tool_list_response(Ok(McpToolListResponse {
             tools: vec![json!({

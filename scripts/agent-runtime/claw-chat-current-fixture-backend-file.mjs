@@ -41,6 +41,7 @@ function writeFixtureConfig(configPath, overrides = {}) {
   const serverHost = overrides.serverHost ?? "127.0.0.1";
   const serverPort = overrides.serverPort ?? 8999;
   const serverApiKey = overrides.serverApiKey ?? LOCAL_IMAGE_SERVER_API_KEY;
+  const language = String(overrides.language ?? "").trim();
   const imageProviderId = String(overrides.imageProviderId ?? "").trim();
   const imageModelId = String(overrides.imageModelId ?? "").trim();
   const soulStyleProfileId = String(overrides.soulStyleProfileId ?? "").trim();
@@ -59,6 +60,7 @@ function writeFixtureConfig(configPath, overrides = {}) {
       `  host: ${serverHost}`,
       `  port: ${serverPort}`,
       `  api_key: ${serverApiKey}`,
+      ...(language ? [`language: ${language}`] : []),
       "workspace_preferences:",
       "  media_defaults:",
       "    image:",

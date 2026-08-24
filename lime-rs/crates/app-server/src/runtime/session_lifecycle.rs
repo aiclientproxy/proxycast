@@ -15,12 +15,8 @@ fn stored_session_to_overview(
     active_turn_id: Option<&str>,
 ) -> AgentSessionOverview {
     let session = &stored.session;
-    let runtime_state = resolve_agent_session_runtime_state(
-        session.status,
-        0,
-        &stored.turns,
-        active_turn_id,
-    );
+    let runtime_state =
+        resolve_agent_session_runtime_state(session.status, 0, &stored.turns, active_turn_id);
     let explicit_title = session
         .business_object_ref
         .as_ref()
@@ -183,7 +179,9 @@ impl RuntimeCore {
             .map(|stored| {
                 stored_session_to_overview(
                     stored,
-                    active_turn_ids.get(&stored.session.session_id).map(String::as_str),
+                    active_turn_ids
+                        .get(&stored.session.session_id)
+                        .map(String::as_str),
                 )
             })
             .filter(|overview| {

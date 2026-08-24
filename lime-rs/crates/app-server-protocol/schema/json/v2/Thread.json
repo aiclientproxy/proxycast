@@ -1,5 +1,12 @@
 {
   "$defs": {
+    "AgentMessageDelivery": {
+      "description": "Codex v2 assistant message delivery mode.\n\nThe current upstream contract only exposes `async`; keeping this as a\nclosed enum prevents arbitrary presentation strings from crossing the\nprotocol boundary.",
+      "enum": [
+        "async"
+      ],
+      "type": "string"
+    },
     "ByteRange": {
       "properties": {
         "end": {
@@ -661,6 +668,37 @@
         }
       ]
     },
+    "ReasoningEffort": {
+      "description": "Typed reasoning effort carried by collaboration tool calls.\n\nCodex accepts model-defined values in addition to its well-known levels.\nA transparent validated wrapper preserves those values without falling\nback to an untyped `String` field in the public Item contract.",
+      "type": "string"
+    },
+    "SessionSource": {
+      "description": "Origin of a thread session, aligned with Codex v2's typed source contract.",
+      "oneOf": [
+        {
+          "enum": [
+            "appServer",
+            "cli",
+            "exec",
+            "unknown",
+            "vscode"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "custom": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "SleepItem": {
       "properties": {
         "durationMs": {
@@ -805,6 +843,16 @@
         },
         {
           "properties": {
+            "delivery": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AgentMessageDelivery"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "id": {
               "type": "string"
             },
@@ -971,7 +1019,19 @@
                 }
               ]
             },
+            "pluginId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
             "processId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "scriptPath": {
               "type": [
                 "null",
                 "string"
@@ -1098,6 +1158,12 @@
               "type": [
                 "null",
                 "string"
+              ]
+            },
+            "readOnlyHint": {
+              "type": [
+                "boolean",
+                "null"
               ]
             },
             "result": {
@@ -1244,9 +1310,13 @@
               ]
             },
             "reasoningEffort": {
-              "type": [
-                "null",
-                "string"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ReasoningEffort"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "receiverThreadIds": {
@@ -1665,6 +1735,10 @@
       ],
       "type": "object"
     },
+    "ThreadSource": {
+      "description": "Analytics source classification for a thread.\n\nCodex keeps feature values open-ended while preserving a typed wire shape;\nthe same representation avoids a public untyped string field in Lime.",
+      "type": "string"
+    },
     "ThreadStatus": {
       "description": "Canonical v2 thread status.",
       "oneOf": [
@@ -2057,6 +2131,13 @@
     "preview": {
       "type": "string"
     },
+    "projectId": {
+      "description": "Canonical project assignment owned by App Server, if any.",
+      "type": [
+        "null",
+        "string"
+      ]
+    },
     "recencyAt": {
       "format": "int64",
       "type": [
@@ -2085,22 +2166,19 @@
       "type": "string"
     },
     "source": {
-      "type": "string"
+      "$ref": "#/$defs/SessionSource"
     },
     "status": {
+      "$ref": "#/$defs/ThreadStatus"
+    },
+    "threadSource": {
       "anyOf": [
         {
-          "$ref": "#/$defs/ThreadStatus"
+          "$ref": "#/$defs/ThreadSource"
         },
         {
           "type": "null"
         }
-      ]
-    },
-    "threadSource": {
-      "type": [
-        "null",
-        "string"
       ]
     },
     "turns": {
@@ -2123,8 +2201,10 @@
     "id",
     "modelProvider",
     "preview",
+    "projectId",
     "sessionId",
     "source",
+    "status",
     "updatedAt"
   ],
   "title": "Thread",

@@ -80,6 +80,7 @@ pub struct RuntimeToolStepSnapshot {
     tool_environment_ids: Arc<HashMap<String, String>>,
     code_mode_session: Option<RuntimeCodeModeSessionHandle>,
     code_mode_tools: Arc<Vec<RuntimeCodeModeTool>>,
+    filesystem_gateway: Option<Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>>,
 }
 
 impl RuntimeToolStepSnapshot {
@@ -94,6 +95,7 @@ impl RuntimeToolStepSnapshot {
             tool_environment_ids: Arc::new(HashMap::new()),
             code_mode_session: None,
             code_mode_tools: Arc::new(Vec::new()),
+            filesystem_gateway: None,
         }
     }
 
@@ -110,6 +112,7 @@ impl RuntimeToolStepSnapshot {
             tool_environment_ids: Arc::new(tool_environment_ids.into_iter().collect()),
             code_mode_session: None,
             code_mode_tools: Arc::new(Vec::new()),
+            filesystem_gateway: None,
         }
     }
 
@@ -136,6 +139,20 @@ impl RuntimeToolStepSnapshot {
 
     fn code_mode_session(&self) -> Option<&RuntimeCodeModeSessionHandle> {
         self.code_mode_session.as_ref()
+    }
+
+    pub fn filesystem_gateway(
+        &self,
+    ) -> Option<&Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>> {
+        self.filesystem_gateway.as_ref()
+    }
+
+    pub fn with_filesystem_gateway(
+        mut self,
+        gateway: Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>,
+    ) -> Self {
+        self.filesystem_gateway = Some(gateway);
+        self
     }
 }
 
@@ -1997,6 +2014,7 @@ async fn execute_calls(
             turn_context.cloned(),
             environment_id,
             working_directory.clone(),
+            tool_step_snapshot.filesystem_gateway().cloned(),
             cancel_token.clone(),
             lifecycle_emitter.clone(),
             call,
@@ -2171,6 +2189,7 @@ async fn execute_call(
     turn_context: Option<agent_protocol::turn_context::TurnContextOverride>,
     environment_id: String,
     working_directory: PathBuf,
+    filesystem_gateway: Option<Arc<dyn tool_runtime::filesystem_gateway::RuntimeFileSystemGateway>>,
     cancel_token: Option<CancellationToken>,
     lifecycle_emitter: Arc<dyn ToolLifecycleEmitter>,
     call: CurrentProviderToolCall,
@@ -2180,7 +2199,8 @@ async fn execute_call(
         session_id,
         cancel_token,
         workspace_sandbox: None,
-    });
+    })
+    .with_optional_filesystem_gateway(filesystem_gateway);
     let provider_metadata =
         serde_json::Value::Object(call.provider_metadata.clone().into_iter().collect());
     let tool_call = ToolCall::new(

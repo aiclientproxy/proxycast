@@ -1,9 +1,13 @@
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { BrowserTabState } from "@/lib/api/browserTab";
+import type {
+  BrowserTabHistoricalProjection,
+  BrowserTabState,
+} from "@/lib/api/browserTab";
 import type { BrowserWorkspaceOwner } from "@/lib/api/browserWorkspace";
 import { resolveWorkspaceBrowserControlPresentation } from "../../workspaceBrowserControlMode";
 import { BrowserWorkspace } from "./BrowserWorkspace";
+import { BrowserWorkspaceHistorical } from "./BrowserWorkspaceHistorical";
 
 export interface RightSurfaceBrowserPanelProps {
   ensureOwner?: () => Promise<BrowserWorkspaceOwner | null>;
@@ -14,6 +18,7 @@ export interface RightSurfaceBrowserPanelProps {
   lifecycleState?: string | null;
   active?: boolean;
   onNavigate?: (url: string, title?: string | null) => void;
+  historicalProjection?: BrowserTabHistoricalProjection | null;
 }
 
 export const RightSurfaceBrowserPanel = memo(function RightSurfaceBrowserPanel({
@@ -25,6 +30,7 @@ export const RightSurfaceBrowserPanel = memo(function RightSurfaceBrowserPanel({
   lifecycleState,
   active = true,
   onNavigate,
+  historicalProjection = null,
 }: RightSurfaceBrowserPanelProps) {
   const { t } = useTranslation("agent");
   const [selectedState, setSelectedState] = useState<BrowserTabState | null>(
@@ -47,6 +53,10 @@ export const RightSurfaceBrowserPanel = memo(function RightSurfaceBrowserPanel({
 
   if (!active) {
     return null;
+  }
+
+  if (historicalProjection) {
+    return <BrowserWorkspaceHistorical projection={historicalProjection} />;
   }
 
   const overlayClassName =

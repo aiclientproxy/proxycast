@@ -14,23 +14,42 @@ import type {
   ConversationImportSourceClient as GeneratedConversationImportSourceClient,
   ConversationImportSourceStatus as GeneratedConversationImportSourceStatus,
   ConversationImportThreadStatus as GeneratedConversationImportThreadStatus,
+  FsReadDirectoryEntry,
   GeneratedAppServerRequestSerializationScope,
   TurnInterruptParams as GeneratedTurnInterruptParams,
   TurnInterruptResponse as GeneratedTurnInterruptResponse,
   TurnStartParams as GeneratedTurnStartParams,
   TurnStartResponse as GeneratedTurnStartResponse,
+  UserInput,
   WorkspaceRightSurfacePendingChangedParams as GeneratedWorkspaceRightSurfacePendingChangedParams,
 } from "./generated/protocol-types.js";
 export * from "./generated/protocol-types.js";
-export {
-  METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
-} from "./generated/protocol-types.js";
+export { METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE } from "./generated/protocol-types.js";
 export const JSONRPC_VERSION = "2.0";
 export const PROTOCOL_VERSION = "appserver.v0";
 export const SERVER_NAME = "app-server";
 export const METHOD_CANCEL_REQUEST = "$/cancelRequest";
 export const METHOD_VOICE_TRANSCRIPTION_POLISH_TEXT =
   "voiceTranscription/polishText";
+export const METHOD_FS_READ_FILE = "fs/readFile";
+export const METHOD_FS_WRITE_FILE = "fs/writeFile";
+export const METHOD_FS_CREATE_DIRECTORY = "fs/createDirectory";
+export const METHOD_FS_GET_METADATA = "fs/getMetadata";
+export const METHOD_FS_READ_DIRECTORY = "fs/readDirectory";
+export const METHOD_FS_REMOVE = "fs/remove";
+export const METHOD_FS_COPY = "fs/copy";
+export const METHOD_FS_WATCH = "fs/watch";
+export const METHOD_FS_UNWATCH = "fs/unwatch";
+export const METHOD_FS_CHANGED = "fs/changed";
+
+export interface FsReadDirectoryResponse {
+  entries: FsReadDirectoryEntry[];
+}
+
+export interface FsChangedNotification {
+  changedPaths: string[];
+  watchId: string;
+}
 
 export const CONVERSATION_IMPORT_SOURCE_CLIENTS = [
   "codex",
@@ -152,7 +171,7 @@ export type ClientInfo = {
 
 export type ClientCapabilities = {
   eventMethods?: string[];
-  experimental?: boolean;
+  experimentalApi?: boolean;
   optOutNotificationMethods?: string[];
 };
 
@@ -587,6 +606,10 @@ export type StructuredOutputContract = {
 
 /** v2 `turn/start` 是当前 runtime 主链唯一的 turn-start payload。 */
 export type AgentSessionTurnStartParams = GeneratedTurnStartParams;
+
+export interface TurnStartParams extends GeneratedTurnStartParams {
+  input: UserInput[];
+}
 
 export type AgentSessionTurnStartRequest = JsonRpcRequest & {
   method: typeof METHOD_TURN_START;

@@ -9,12 +9,14 @@ use agent_protocol::{Thread, ThreadId};
 
 use crate::{
     AppendThreadItemsParams, ApplyThreadHistoryParams, ApplyThreadHistoryResult,
-    ArchiveThreadParams, CreateThreadParams, CreateThreadSectionParams, DeleteThreadParams,
-    DeleteThreadSectionParams, ItemPage, ListItemsParams, ListThreadSectionsParams,
-    ListThreadsParams, ListTurnsParams, MoveThreadToSectionParams, ReadThreadParams,
-    RenameThreadSectionParams, SearchThreadOccurrencesParams, SearchThreadsParams,
-    StoredThreadSection, ThreadOccurrenceSearchPage, ThreadPage, ThreadSearchPage,
-    ThreadSectionPage, ThreadStoreResult, TurnPage, UpdateThreadMetadataParams,
+    ArchiveThreadParams, CreateProjectParams, CreateThreadParams, CreateThreadSectionParams,
+    CreatedProject, DeleteThreadParams, DeleteThreadSectionParams, DeletedProject, ItemPage,
+    ListItemsParams, ListProjectsParams, ListThreadSectionsParams, ListThreadsParams,
+    ListTurnsParams, MoveProjectParams, MoveThreadToSectionParams, ProjectMoveOutcome,
+    ReadThreadParams, RenameThreadSectionParams, SearchThreadOccurrencesParams,
+    SearchThreadsParams, StoredProject, StoredProjectsPage, StoredThreadSection,
+    ThreadOccurrenceSearchPage, ThreadPage, ThreadSearchPage, ThreadSectionPage, ThreadStoreError,
+    ThreadStoreResult, TurnPage, UpdateProjectParams, UpdateThreadMetadataParams, UpdatedProject,
 };
 
 /// Future returned by [`ThreadStore`] operations.
@@ -116,6 +118,66 @@ pub trait ThreadStore: Any + Send + Sync {
 
     /// Returns the latest materialized sequence for repair/resume comparisons.
     fn history_sequence(&self, thread_id: ThreadId) -> ThreadStoreFuture<'_, Option<u64>>;
+
+    fn list_projects(
+        &self,
+        _params: ListProjectsParams,
+    ) -> ThreadStoreFuture<'_, StoredProjectsPage> {
+        Box::pin(async {
+            Err(ThreadStoreError::unsupported(
+                "project persistence is unavailable",
+            ))
+        })
+    }
+
+    fn read_project(&self, _project_id: String) -> ThreadStoreFuture<'_, Option<StoredProject>> {
+        Box::pin(async {
+            Err(ThreadStoreError::unsupported(
+                "project persistence is unavailable",
+            ))
+        })
+    }
+
+    fn create_project(
+        &self,
+        _params: CreateProjectParams,
+    ) -> ThreadStoreFuture<'_, CreatedProject> {
+        Box::pin(async {
+            Err(ThreadStoreError::unsupported(
+                "project persistence is unavailable",
+            ))
+        })
+    }
+
+    fn update_project(
+        &self,
+        _params: UpdateProjectParams,
+    ) -> ThreadStoreFuture<'_, Option<UpdatedProject>> {
+        Box::pin(async {
+            Err(ThreadStoreError::unsupported(
+                "project persistence is unavailable",
+            ))
+        })
+    }
+
+    fn move_project(
+        &self,
+        _params: MoveProjectParams,
+    ) -> ThreadStoreFuture<'_, Option<ProjectMoveOutcome>> {
+        Box::pin(async {
+            Err(ThreadStoreError::unsupported(
+                "project persistence is unavailable",
+            ))
+        })
+    }
+
+    fn delete_project(&self, _project_id: String) -> ThreadStoreFuture<'_, Option<DeletedProject>> {
+        Box::pin(async {
+            Err(ThreadStoreError::unsupported(
+                "project persistence is unavailable",
+            ))
+        })
+    }
 }
 
 #[cfg(test)]

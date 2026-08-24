@@ -1,42 +1,38 @@
-## Lime v1.133.0
+## Lime v1.134.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- Completed the Right Surface Browser Workspace same-tab current path, unifying Electron `WebContentsView`, BrowserRoute, dynamic tools, and visible state projection.
-- Added a two-phase preflight/approvedExecute contract for high-risk Browser actions with allow-once, decline, cancel, user takeover, and fail-closed identity checks.
-- Added Browser Gate A/Gate B scenarios and evidence entry points for approval, cancel, disconnect, download, permission, user control, and window close.
-- Improved Agent session recovery, stream resumption, historical Thread/Turn/Item projection, and cold-read normalization for unfinished turns.
+- Extended the Browser Workspace with historical pages and same-tab state projection for unified restore, navigation, and visible state reads.
+- Added v2 JSON-RPC contracts for App Server environment management, MCP event streams, and model-provider capability queries.
+- Added Windows sandbox setup/status, provider capability badges, and a multilingual Browser runtime matrix entry point.
 
 ### Fixes
 
-- Fixed session/thread/turn/item/call identity boundaries across Browser dynamic tools, Electron reverse requests, App Server JSON-RPC, and RuntimeCore.
-- Fixed separation of native user input from Agent CDP input; user takeover now revokes the debugger, snapshot, approval token, and active turn so stale mutations cannot replay.
-- Fixed dynamic-tool lifecycle, approval terminal states, disconnect/cancel/window-close cleanup, and download/permission state projection.
-- Fixed Agent flow control, resume binding, history merging, terminal messages, and interrupted content across duplicate notifications, late events, and reloads.
-- Fixed cross-platform execution-process environment construction and converged Windows and macOS/Linux environment and shell inheritance behavior.
+- Fixed identity and terminal cleanup across Browser, Electron reverse requests, App Server, and RuntimeCore for historical pages, downloads, permissions, and window lifecycles.
+- Fixed GUI projection consistency for historical Thread/Turn/Item merges, session recovery, streamed events, and unfinished Agent turns.
+- Fixed MCP client/manager lifecycle boundaries, tool-execution orchestration, execution environments, and Windows sandbox readiness behavior.
 
 ### Improvements and Refactoring
 
-- Converged Browser, approval, and session state on the single Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI product chain.
-- Refactored BrowserTabHost, the dynamic-tool Host, session-state hooks, Browser Workspace status, and related protocol/schema/generated client surfaces to remove duplicate state machines and retired entries.
-- Updated architecture, Browser roadmap, Agent runtime recovery, benchmark, and test-governance records with explicit current/compat/deprecated/dead boundaries.
+- Converged environment, MCP, provider capability, sandbox, and Browser historical surfaces on the current App Server JSON-RPC and RuntimeCore product chain.
+- Refactored App Server v2 schemas, generated clients, Agent session gateways, model selection, and settings projections; removed the retired Playwright browser-tool entry and assets.
+- Added Electron Gate B artifact, cold-start, locale-matrix, environment, and provider-capability test and evidence paths.
 
 ### Testing and Quality
 
-- Added and expanded BrowserTabHost, dynamic-tool, App Server, Rust tool-runtime, Agent session-state, flow-control, Browser Workspace, and protocol-contract tests.
-- Added real Electron Browser Gate A/Gate B evidence scripts covering approval, cancellation, disconnect, download, permission, user takeover, and window close.
-- Release validation covers version consistency, TypeScript typecheck, protocol contracts, affected Rust/frontend tests, GUI smoke, the Agent current fixture, governance, and local gates; exact results are recorded in the release plan.
+- Expanded App Server protocol contracts, MCP exact JSON-RPC, Rust tool-runtime, historical Browser Workspace, model capability, Windows sandbox, and Agent session tests.
+- Added real Electron Browser Gate B, cold-restart, and multilingual scenarios; release gates cover version consistency, typecheck, protocol contracts, related Rust/frontend tests, GUI smoke, the current fixture, and governance scans.
 
 ### Documentation
 
-- Updated the architecture, Browser current-owner, approval, user-takeover, session-recovery, and Gate A/Gate B evidence documentation.
-- Added the v1.133.0 release execution plan with candidate scope, validation results, and platform/packaging evidence boundaries.
+- Updated architecture, Browser roadmap, Codex alignment plans, desktop smoke, script governance, and protocol-schema sources with current/compat/deprecated/dead boundaries.
+- Added the v1.134.0 release execution plan with candidate scope, validation results, and platform/packaging evidence boundaries.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.133.0`.
+- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.134.0`.
 - Windows installers, signing, notarization, official release assets, and live-provider evidence still require the corresponding platform or CI runner and are not claimed locally.
 
-**Full changes**: `v1.132.0` -> `v1.133.0`
+**Full changes**: `v1.133.0` -> `v1.134.0`

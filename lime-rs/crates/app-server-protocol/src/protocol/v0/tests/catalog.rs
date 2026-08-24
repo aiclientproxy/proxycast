@@ -388,6 +388,10 @@ fn app_server_request_serialization_scope_covers_high_risk_methods() {
         Some(AppServerRequestSerializationScope::Thread)
     );
     assert_eq!(
+        app_server_request_serialization_scope(crate::protocol::v2::METHOD_THREAD_REVERT),
+        Some(AppServerRequestSerializationScope::Thread)
+    );
+    assert_eq!(
         app_server_request_serialization_scope(
             crate::protocol::v2::METHOD_THREAD_INCREMENT_ELICITATION
         ),

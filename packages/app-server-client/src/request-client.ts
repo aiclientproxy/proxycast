@@ -29,6 +29,7 @@ export interface AppServerClient {
     params?: protocol.AgentSessionListParams,
   ): protocol.JsonRpcRequest;
   readThread(params: protocol.ThreadReadParams): protocol.JsonRpcRequest;
+  revertThread(params: protocol.ThreadRevertParams): protocol.JsonRpcRequest;
   listThreads(params?: protocol.ThreadListParams): protocol.JsonRpcRequest;
   moveThreadToSection(
     params: protocol.ThreadSectionMoveParams,
@@ -70,6 +71,24 @@ export interface AppServerClient {
   setThreadName(params: protocol.ThreadSetNameParams): protocol.JsonRpcRequest;
   updateThreadMetadata(
     params: protocol.ThreadMetadataUpdateParams,
+  ): protocol.JsonRpcRequest;
+  addThreadQueue(
+    params: protocol.ThreadQueueAddParams,
+  ): protocol.JsonRpcRequest;
+  listThreadQueue(
+    params: protocol.ThreadQueueListParams,
+  ): protocol.JsonRpcRequest;
+  updateThreadQueue(
+    params: protocol.ThreadQueueUpdateParams,
+  ): protocol.JsonRpcRequest;
+  deleteThreadQueue(
+    params: protocol.ThreadQueueDeleteParams,
+  ): protocol.JsonRpcRequest;
+  reorderThreadQueue(
+    params: protocol.ThreadQueueReorderParams,
+  ): protocol.JsonRpcRequest;
+  startThreadQueue(
+    params: protocol.ThreadQueueStartParams,
   ): protocol.JsonRpcRequest;
   listThreadTurns(
     params: protocol.ThreadTurnsListParams,
@@ -290,7 +309,9 @@ export interface AppServerClient {
     params: protocol.KnowledgeValidateContextRunParams,
   ): protocol.JsonRpcRequest;
   listMcpServers(): protocol.JsonRpcRequest;
-  listMcpServersWithStatus(): protocol.JsonRpcRequest;
+  listMcpServersWithStatus(
+    params?: protocol.ListMcpServerStatusParams,
+  ): protocol.JsonRpcRequest;
   createMcpServer(
     params: protocol.McpServerCreateParams,
   ): protocol.JsonRpcRequest;
@@ -640,7 +661,22 @@ export interface AppServerClient {
   readWindowsSandboxReadiness(
     params?: protocol.WindowsSandboxReadinessParams,
   ): protocol.JsonRpcRequest;
+  startWindowsSandboxSetup(
+    params: protocol.WindowsSandboxSetupStartParams,
+  ): protocol.JsonRpcRequest;
   listModels(params?: protocol.ModelListParams): protocol.JsonRpcRequest;
+  readModelProviderCapabilities(
+    params?: protocol.ModelProviderCapabilitiesReadParams,
+  ): protocol.JsonRpcRequest;
+  addEnvironment(
+    params: protocol.EnvironmentAddParams,
+  ): protocol.JsonRpcRequest;
+  readEnvironmentInfo(
+    params: protocol.EnvironmentInfoParams,
+  ): protocol.JsonRpcRequest;
+  readEnvironmentStatus(
+    params: protocol.EnvironmentStatusParams,
+  ): protocol.JsonRpcRequest;
   listModelPreferences(): protocol.JsonRpcRequest;
   readModelSyncState(): protocol.JsonRpcRequest;
   listModelProviders(): protocol.JsonRpcRequest;

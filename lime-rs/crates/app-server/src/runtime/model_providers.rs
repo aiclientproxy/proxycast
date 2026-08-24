@@ -91,6 +91,19 @@ impl RouteRecoveryCoordinator {
 }
 
 impl RuntimeCore {
+    pub(crate) fn current_model_provider_route(
+        &self,
+    ) -> Result<(String, Option<String>), RuntimeCoreError> {
+        let config =
+            lime_core::config::ConfigManager::load(&self.app_config_path).map_err(|error| {
+                RuntimeCoreError::Backend(format!("读取模型 provider 配置失败: {error}"))
+            })?;
+        let provider = config.config().default_provider.trim().to_string();
+        let base_url =
+            configured_provider_base_url(config.config(), &provider).map(ToString::to_string);
+        Ok((provider, base_url))
+    }
+
     pub(crate) async fn model_catalog_generation(&self) -> Result<u64, RuntimeCoreError> {
         self.app_data_source.read_model_route_generation().await
     }
@@ -333,6 +346,23 @@ impl RuntimeCore {
         &self,
     ) -> Result<ModelProviderAliasListResponse, RuntimeCoreError> {
         self.app_data_source.list_model_provider_aliases().await
+    }
+}
+
+pub(crate) fn configured_provider_base_url<'a>(
+    config: &'a lime_core::config::Config,
+    provider: &str,
+) -> Option<&'a str> {
+    match provider
+        .to_ascii_lowercase()
+        .replace(['-', ' '], "_")
+        .as_str()
+    {
+        "openai" | "openai_response" | "openai_responses" | "responses" | "codex" => {
+            config.providers.openai.base_url.as_deref()
+        }
+        "claude" | "anthropic" => config.providers.claude.base_url.as_deref(),
+        _ => None,
     }
 }
 

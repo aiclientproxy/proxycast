@@ -13,7 +13,6 @@
     "scripts/knowledge",
     "scripts/lib",
     "scripts/mcp",
-    "scripts/playwright",
     "scripts/smoke"
   ],
   "ignoredLocalDirectories": ["scripts/__pycache__"],

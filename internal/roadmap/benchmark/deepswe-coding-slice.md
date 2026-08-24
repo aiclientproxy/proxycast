@@ -1,6 +1,6 @@
 # DeepSWE Coding 测试切片 v2
 
-> status: DSW-07 schema 1.3 + Pier 0.3.1 contract passed / 0 verified score / Desktop Smoke 5 controlled Gate B and recovery passed / combined verdict pending live verifier
+> status: DSW-07 schema 1.3 + Pier 0.3.1 contract passed / 0 verified score / Desktop Smoke 5 controlled Gate B and cold-restart recovery passed / combined verdict pending live verifier
 > owner: evaluation + agent-runtime
 > source_commit: `435ee89ec2f2e2289f33b0da4f992f0b7b7266b9`
 > source_schema: `1.3`
@@ -94,7 +94,7 @@ npm run harness:deepswe:desktop:aggregate -- .lime/benchmark/v2/desktop/controll
 
 `deepswe-desktop-trial-v1` 是单 trial 的唯一事实源，必须同时绑定原始 instruction SHA、仓库 base commit、workspace、session/thread/turn、provider tool lifecycle、projected lifecycle、test stdout、GUI/read model、patch SHA 与 verifier 状态。受控 runner 的 `trialKind=controlled_product_smoke` 只证明真实桌面产品链；只有 `trialKind=live_deepswe` 且 Gate B、Pier artifacts、同一 patch SHA 都通过，才允许 `DesktopCodingPass=true`。
 
-2026-08-19 的完整受控复验已覆盖五题：`happy-dom-abort-pending-body-reads`、`go-genai-streamed-function-args`、`httpx-multipart-response-parsing`、`fd-deterministic-multi-key-sorting`、`yjs-map-conflict-detection` 均通过 Electron Gate B。runner 对 TypeScript fixture 使用无依赖 Node test 执行 `.ts` 源码逻辑，并在临时 Electron 环境显式复用已安装的 Rust stable toolchain；这些只解决受控环境可复现性，不扩大能力声明。
+2026-08-22 的最终受控复验已覆盖五题：`happy-dom-abort-pending-body-reads`、`go-genai-streamed-function-args`、`httpx-multipart-response-parsing`、`fd-deterministic-multi-key-sorting`、`yjs-map-conflict-detection` 均通过 Electron Gate B。每题都强制关闭原 Electron/App Server 整棵进程树后，以同一 `runtimeEnv`、userData 和 App Server dataDir 冷启动，并比较 canonical Thread/Turn/Item、工具生命周期、diff/artifact、approval/cancel marker、patch SHA 与 Provider request count；当前 `cold_restart` 是唯一可完成的重启 recovery contract。旧同进程页面 reload 只作为历史诊断证据。runner 对 TypeScript fixture 使用无依赖 Node test 执行 `.ts` 源码逻辑，并在临时 Electron 环境显式复用已安装的 Rust stable toolchain；这些只解决受控环境可复现性，不扩大能力声明。
 
 ## 4. Lime Adapter 合同
 
@@ -267,7 +267,7 @@ adapter 首次完成后运行 Smoke 10 三个独立批次。此阶段只做信�
 
 ## 14. 2026-08-19 Desktop Smoke 5 全题受控复验
 
-- fresh suite：`.lime/benchmark/v2/desktop/controlled-final/20260819T000134Z/summary.json`，五题 `controlledTrialCount=5`、`controlledGateBComplete=true`，每题真实 Electron/preload/IPC/App Server/RuntimeCore/read model/GUI、native test、terminal、diff、session reopen 与零 mock/invoke/console/page error 均通过。
+- fresh suite：`.lime/benchmark/v2/desktop/controlled-final/20260819T000134Z/summary.json`，五题 `controlledTrialCount=5`、`controlledGateBComplete=true`，每题真实 Electron/preload/IPC/App Server/RuntimeCore/read model/GUI、native test、terminal、diff 与零 mock/invoke/console/page error 均通过；该历史 suite 不定义当前 recovery 合同。
 - 受控失败修复：Node 23.4 不接受 `--experimental-strip-types`，TypeScript fixture 改为 Node 内置 test 读取并执行 `.ts` 函数；Electron 临时 `HOME` 使 rustup 找不到 stable，runner 仅在该受控环境注入现有 `RUSTUP_HOME/CARGO_HOME`，Rust fixture 使用 `cargo +stable`。
 - 结论仍为 `status=product_path_only`、`desktopCodingPass=false`：受控 provider 没有 live DeepSWE sampling，`verifier=not_run` 且没有 Pier `reward.json`、`ctrf.json`、`test-stdout.txt`，因此不产生分数，也不关闭 DSW-09/10/11。
 
@@ -275,7 +275,7 @@ adapter 首次完成后运行 Smoke 10 三个独立批次。此阶段只做信�
 
 - App Server production runtime 的 artifact content owner 改为 `WorkspaceArtifactContentProvider`：inline content 优先；无 inline 时只从 artifact metadata 声明的 `cwd`、`workingDir`、`working_dir` 或 `environments[].cwd` 解析 workspace，canonical 后读取 workspace 内相对/绝对路径。它拒绝 `..` 越界、workspace 外绝对路径、非 UTF-8 和超过 1 MiB 的文件，也不回退进程 cwd。
 - Desktop Gate B 新增 `artifactContentAvailable`：真实点击消息 artifact card，等待 `canvas-workbench-code-preview`，断言修改后的独有正文 marker 可见、错误文案 `App Server artifact 内容不可用` 不可见、Electron IPC trace 命中 `artifact/read`，并单独保存 `*.artifact-preview.png`。
-- fresh suite：`.lime/benchmark/v2/desktop/controlled-artifact-final/20260819T022022Z/summary.json`。TS、Go、Python、Rust、JavaScript 五题均 `gateBPass=true`、`artifactContentAvailable=true`；`controlledGateBComplete=true`、`recoveryCoverageComplete=true`，每题 session reopen、approval resume、cancel no-ghost-write 通过，native test 通过，mock/invoke/console/page error 均为零。
+- fresh suite：`.lime/benchmark/v2/desktop/controlled-artifact-final/20260819T022022Z/summary.json`。TS、Go、Python、Rust、JavaScript 五题均 `gateBPass=true`、`artifactContentAvailable=true`；`controlledGateBComplete=true`、`recoveryCoverageComplete=true`，每题 approval resume、cancel no-ghost-write 通过，native test 通过，mock/invoke/console/page error 均为零；该历史 suite 不定义当前 recovery 合同。
 - 前一次 Yjs attempt 6 无首事件的现场保留为一次性 transport/进程时序诊断：连接诊断单题证明第 6 次 SSE response 正常 `finish/close`，随后无重试的完整五题 suite 也通过。未找到可重复的 fixture index、tool defer 或 stream close 缺陷，因此不增加掩盖失败的自动重试，也不放宽 terminal fail-closed。
 - 证据边界不变：完整 suite 仍为 `status=product_path_only`、`liveTrialCount=0`、`desktopCodingPass=false`。受控 provider、artifact 正文与 recovery 只能证明真实产品链，不能替代 live DeepSWE sampling、Pier verifier、同一 patch SHA 或三轮能力统计。
 

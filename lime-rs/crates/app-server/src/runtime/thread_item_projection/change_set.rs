@@ -96,9 +96,6 @@ impl ChangeSetAccumulator {
 
     pub(super) fn push_turn(&mut self, turn: Turn, sequence: u64) -> Option<Turn> {
         let key = turn.turn_id.to_string();
-        if self.removed_turn_indexes.contains_key(&key) {
-            return None;
-        }
         if let Some(index) = self.turn_indexes.get(&key).copied() {
             let previous = self.changed_turns[index]
                 .take()

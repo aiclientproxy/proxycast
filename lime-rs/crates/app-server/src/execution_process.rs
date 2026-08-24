@@ -1,8 +1,13 @@
+use crate::processor::environment::EnvironmentRegistry;
+use crate::processor::environment_exec::RemoteExecClient;
 use app_server_protocol::protocol::v2::ThreadBackgroundTerminal;
-use serde_json::json;
+use base64::Engine;
+use serde::Deserialize;
+use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
 use tool_runtime::execution_decision::{
     decide_tool_execution, ToolExecutionDecisionInput, ToolExecutionDecisionKind,
     ToolExecutionPolicyDecisionOptions,
@@ -36,6 +41,7 @@ const OUTPUT_BYTE_CAP: usize = 4 * 1024 * 1024;
 #[derive(Debug, Clone, Default)]
 pub struct ExecutionProcessServer {
     inner: Arc<Mutex<ExecutionProcessState>>,
+    environment_registry: Arc<std::sync::RwLock<Option<Arc<EnvironmentRegistry>>>>,
 }
 
 #[derive(Debug)]
@@ -49,8 +55,22 @@ struct ExecutionProcessState {
 #[derive(Debug)]
 struct ExecutionProcessEntry {
     handle: Option<LocalExecutionProcessControlHandle>,
+    remote_control: Option<RemoteProcessControl>,
+    snapshot: Option<ExecutionProcessSnapshot>,
     final_snapshot: Option<ExecutionProcessSnapshot>,
     background: Option<BackgroundTerminalEntry>,
+}
+
+#[derive(Debug, Clone)]
+struct RemoteProcessControl {
+    commands: mpsc::UnboundedSender<RemoteProcessCommand>,
+}
+
+#[derive(Debug)]
+enum RemoteProcessCommand {
+    Write(Vec<u8>),
+    Signal,
+    Terminate,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +123,8 @@ pub enum ExecutionProcessError {
     Canceled(String),
     #[error("Execution process only supports shell tools")]
     UnsupportedTool,
+    #[error("Execution environment is not available for process execution: {0}")]
+    UnsupportedEnvironment(String),
     #[error("Failed to prepare sandboxed execution process: {0}")]
     Sandbox(String),
     #[error("Failed to control execution process: {0}")]
@@ -112,6 +134,13 @@ pub enum ExecutionProcessError {
 }
 
 impl ExecutionProcessServer {
+    pub(crate) fn attach_environment_registry(&self, registry: Arc<EnvironmentRegistry>) {
+        *self
+            .environment_registry
+            .write()
+            .expect("Environment registry lock must not be poisoned") = Some(registry);
+    }
+
     pub fn register_process_handle(
         &self,
         handle: LocalExecutionProcessControlHandle,
@@ -134,6 +163,8 @@ impl ExecutionProcessServer {
             process_id,
             ExecutionProcessEntry {
                 handle: if is_terminal { None } else { Some(handle) },
+                remote_control: None,
+                snapshot: Some(snapshot.clone()),
                 final_snapshot: if is_terminal { Some(snapshot) } else { None },
                 background: None,
             },
@@ -164,6 +195,8 @@ impl ExecutionProcessServer {
             .get_mut(&process_id)
             .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.clone()))?;
         entry.handle = None;
+        entry.remote_control = None;
+        entry.snapshot = Some(snapshot.clone());
         entry.final_snapshot = Some(snapshot);
         Ok(())
     }
@@ -191,6 +224,9 @@ impl ExecutionProcessServer {
     ) -> Result<ExecutionProcessSnapshot, ExecutionProcessError> {
         if request.command.is_empty() {
             return Err(ExecutionProcessError::EmptyCommand);
+        }
+        if request.environment_id != "local" {
+            return self.start_remote_process(thread_scope, request).await;
         }
         let requested_working_directory = request.working_directory;
         let working_directory =
@@ -258,6 +294,8 @@ impl ExecutionProcessServer {
                 process_id.clone(),
                 ExecutionProcessEntry {
                     handle: None,
+                    remote_control: None,
+                    snapshot: None,
                     final_snapshot: None,
                     background,
                 },
@@ -324,6 +362,106 @@ impl ExecutionProcessServer {
         Ok(snapshot)
     }
 
+    async fn start_remote_process(
+        &self,
+        thread_scope: Option<(&str, &str)>,
+        request: LiveExecutionRequest,
+    ) -> Result<ExecutionProcessSnapshot, ExecutionProcessError> {
+        let registry = self
+            .environment_registry
+            .read()
+            .map_err(|_| ExecutionProcessError::Lock)?
+            .clone()
+            .ok_or_else(|| {
+                ExecutionProcessError::UnsupportedEnvironment(request.environment_id.clone())
+            })?;
+        let client = registry
+            .execution_client(&request.environment_id)
+            .await
+            .map_err(ExecutionProcessError::UnsupportedEnvironment)?;
+        let cwd = remote_path_uri(&request.working_directory)
+            .map_err(ExecutionProcessError::WorkingDirectory)?;
+        let sandbox = remote_sandbox_context(&request, &cwd)?;
+        let response: RemoteProcessStartResponse = client
+            .request(
+                "process/start",
+                json!({
+                    "processId": request.process_id.clone(),
+                    "argv": request.command.clone(),
+                    "cwd": cwd,
+                    "env": request.env.clone(),
+                    "tty": request.tty,
+                    "pipeStdin": true,
+                    "arg0": Value::Null,
+                    "sandbox": sandbox,
+                }),
+            )
+            .await
+            .map_err(ExecutionProcessError::Start)?;
+        if response.process_id != request.process_id {
+            return Err(ExecutionProcessError::Start(format!(
+                "exec-server returned process id `{}` for `{}`",
+                response.process_id, request.process_id
+            )));
+        }
+
+        let (commands, receiver) = mpsc::unbounded_channel();
+        let process_id = request.process_id.clone();
+        let snapshot = ExecutionProcessSnapshot {
+            process_id: process_id.clone(),
+            tool_id: request.tool_id.clone(),
+            tool_name: request.tool_name.clone(),
+            status: tool_runtime::execution_process::ExecutionProcessStatus::Running,
+            exit_code: None,
+            elapsed_ms: 0,
+            output_bytes: 0,
+            output_omitted_bytes: 0,
+            output_truncated: false,
+            retained_output: String::new(),
+            failure: None,
+        };
+        let background = thread_scope.map(|(thread_id, display_command)| BackgroundTerminalEntry {
+            thread_id: thread_id.to_string(),
+            public_process_id: 0,
+            item_id: request.tool_id.clone(),
+            command: display_command.trim().to_string(),
+            cwd: request.working_directory.to_string_lossy().to_string(),
+            listed: true,
+        });
+        {
+            let mut state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
+            if state.processes.contains_key(&process_id) {
+                return Err(ExecutionProcessError::ProcessExists(process_id));
+            }
+            let background = background.map(|mut background| {
+                background.public_process_id = state.next_background_process_id;
+                state.next_background_process_id =
+                    state.next_background_process_id.saturating_add(1);
+                background
+            });
+            state.processes.insert(
+                process_id.clone(),
+                ExecutionProcessEntry {
+                    handle: None,
+                    remote_control: Some(RemoteProcessControl { commands }),
+                    snapshot: Some(snapshot.clone()),
+                    final_snapshot: None,
+                    background,
+                },
+            );
+        }
+        let inner = Arc::clone(&self.inner);
+        tokio::spawn(run_remote_process(
+            inner,
+            client,
+            process_id,
+            request.tool_id,
+            request.tool_name,
+            receiver,
+        ));
+        Ok(snapshot)
+    }
+
     pub fn list_background_terminals(
         &self,
         thread_id: &str,
@@ -334,11 +472,21 @@ impl ExecutionProcessServer {
             .values()
             .filter_map(|entry| {
                 let background = entry.background.as_ref()?;
-                let handle = entry.handle.as_ref()?;
-                if background.thread_id != thread_id
-                    || !background.listed
-                    || handle.status().status.is_terminal()
-                {
+                if background.thread_id != thread_id || !background.listed {
+                    return None;
+                }
+                let active = entry
+                    .handle
+                    .as_ref()
+                    .map(|handle| !handle.status().status.is_terminal())
+                    .or_else(|| {
+                        entry
+                            .snapshot
+                            .as_ref()
+                            .map(|snapshot| !snapshot.status.is_terminal())
+                    })
+                    .unwrap_or(false);
+                if !active {
                     return None;
                 }
                 Some((
@@ -387,9 +535,16 @@ impl ExecutionProcessServer {
                 entry.handle.as_ref().and_then(|handle| {
                     (!handle.status().status.is_terminal()).then(|| handle.clone())
                 }),
+                entry.remote_control.clone(),
             )
         };
         tool_runtime::unified_exec::forget_process_session(&process.0);
+        if let Some(control) = process.2 {
+            return Ok(control
+                .commands
+                .send(RemoteProcessCommand::Terminate)
+                .is_ok());
+        }
         let Some(handle) = process.1 else {
             return Ok(false);
         };
@@ -413,12 +568,16 @@ impl ExecutionProcessServer {
                         entry.handle.as_ref().and_then(|handle| {
                             (!handle.status().status.is_terminal()).then(|| handle.clone())
                         }),
+                        entry.remote_control.clone(),
                     ))
                 })
                 .collect::<Vec<_>>()
         };
-        for (process_id, handle) in processes {
+        for (process_id, handle, remote_control) in processes {
             tool_runtime::unified_exec::forget_process_session(&process_id);
+            if let Some(control) = remote_control {
+                let _ = control.commands.send(RemoteProcessCommand::Terminate);
+            }
             if let Some(handle) = handle {
                 let _ = handle.terminate();
             }
@@ -432,6 +591,17 @@ impl ExecutionProcessServer {
             .processes
             .get(process_id)
             .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()))?;
+        if let Some(control) = entry.remote_control.as_ref() {
+            control
+                .commands
+                .send(RemoteProcessCommand::Write(data.to_vec()))
+                .map_err(|_| {
+                    ExecutionProcessError::Control(
+                        "remote process control channel closed".to_string(),
+                    )
+                })?;
+            return Ok(());
+        }
         let Some(handle) = entry.handle.as_ref() else {
             return Err(ExecutionProcessError::ProcessNotFound(
                 process_id.to_string(),
@@ -452,6 +622,20 @@ impl ExecutionProcessServer {
             .processes
             .get(process_id)
             .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()))?;
+        if let Some(control) = entry.remote_control.as_ref() {
+            control
+                .commands
+                .send(RemoteProcessCommand::Terminate)
+                .map_err(|_| {
+                    ExecutionProcessError::Control(
+                        "remote process control channel closed".to_string(),
+                    )
+                })?;
+            return entry
+                .snapshot
+                .clone()
+                .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()));
+        }
         let Some(handle) = entry.handle.as_ref() else {
             return entry
                 .final_snapshot
@@ -462,6 +646,33 @@ impl ExecutionProcessServer {
             .terminate()
             .map_err(|error| ExecutionProcessError::Control(format!("{error:?}")))?;
         Ok(handle.status())
+    }
+
+    pub fn signal(&self, process_id: &str) -> Result<(), ExecutionProcessError> {
+        let state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
+        let entry = state
+            .processes
+            .get(process_id)
+            .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()))?;
+        if let Some(control) = entry.remote_control.as_ref() {
+            control
+                .commands
+                .send(RemoteProcessCommand::Signal)
+                .map_err(|_| {
+                    ExecutionProcessError::Control(
+                        "remote process control channel closed".to_string(),
+                    )
+                })?;
+            return Ok(());
+        }
+        let Some(handle) = entry.handle.as_ref() else {
+            return Err(ExecutionProcessError::ProcessNotFound(
+                process_id.to_string(),
+            ));
+        };
+        handle
+            .write_stdin(&[3])
+            .map_err(|error| ExecutionProcessError::Control(format!("{error:?}")))
     }
 
     pub fn status(
@@ -475,6 +686,12 @@ impl ExecutionProcessServer {
             .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()))?;
         if let Some(snapshot) = &entry.final_snapshot {
             return Ok(snapshot.clone());
+        }
+        if entry.remote_control.is_some() {
+            return entry
+                .snapshot
+                .clone()
+                .ok_or_else(|| ExecutionProcessError::ProcessNotFound(process_id.to_string()));
         }
         let Some(handle) = entry.handle.as_ref() else {
             return Err(ExecutionProcessError::ProcessNotFound(
@@ -794,6 +1011,273 @@ fn normalized_tool_name(tool_name: &str) -> String {
         .filter(|character| character.is_ascii_alphanumeric())
         .map(|character| character.to_ascii_lowercase())
         .collect()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteProcessStartResponse {
+    process_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteProcessReadResponse {
+    #[serde(default)]
+    chunks: Vec<RemoteProcessOutputChunk>,
+    #[serde(default)]
+    next_seq: u64,
+    #[serde(default)]
+    exited: bool,
+    exit_code: Option<i32>,
+    #[serde(default)]
+    closed: bool,
+    failure: Option<String>,
+    #[serde(default)]
+    sandbox_denied: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteProcessOutputChunk {
+    seq: u64,
+    stream: String,
+    chunk: String,
+}
+
+fn remote_sandbox_context(
+    request: &LiveExecutionRequest,
+    cwd: &app_server_protocol::protocol::v2::PathUri,
+) -> Result<Value, ExecutionProcessError> {
+    let Some(label) = request
+        .sandbox_policy
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(Value::Null);
+    };
+    let (file_system, network) = match label.to_ascii_lowercase().replace('_', "-").as_str() {
+        "read-only" => (
+            json!({
+                "type": "restricted",
+                "entries": [{
+                    "path": {"type": "path", "path": cwd.as_str()},
+                    "access": "read"
+                }]
+            }),
+            "restricted",
+        ),
+        "workspace-write" => (
+            json!({
+                "type": "restricted",
+                "entries": [{
+                    "path": {"type": "path", "path": cwd.as_str()},
+                    "access": "write"
+                }]
+            }),
+            "restricted",
+        ),
+        "danger-full-access" => (json!({"type": "unrestricted"}), "enabled"),
+        other => {
+            return Err(ExecutionProcessError::SandboxDenied {
+                reason_code: "remote_unknown_sandbox_policy".to_string(),
+                message: format!("remote Environment cannot lower sandbox policy `{other}`"),
+            });
+        }
+    };
+    Ok(json!({
+        "permissions": {
+            "type": "managed",
+            "fileSystem": file_system,
+            "network": network,
+        },
+        "cwd": cwd.as_str(),
+        "workspaceRoots": [cwd.as_str()],
+        "windowsSandboxLevel": "disabled",
+        "windowsSandboxPrivateDesktop": false,
+        "useLegacyLandlock": false,
+    }))
+}
+
+fn remote_path_uri(path: &Path) -> Result<app_server_protocol::protocol::v2::PathUri, String> {
+    let rendered = path.to_string_lossy();
+    if rendered.len() >= 3
+        && rendered.as_bytes()[0].is_ascii_alphabetic()
+        && rendered.as_bytes()[1] == b':'
+        && matches!(rendered.as_bytes()[2], b'/' | b'\\')
+    {
+        let normalized = rendered.replace('\\', "/");
+        return app_server_protocol::protocol::v2::PathUri::parse(&format!("file:///{normalized}"));
+    }
+    app_server_protocol::protocol::v2::PathUri::from_host_path(path)
+}
+
+async fn run_remote_process(
+    inner: Arc<Mutex<ExecutionProcessState>>,
+    client: Arc<RemoteExecClient>,
+    process_id: String,
+    tool_id: String,
+    tool_name: String,
+    mut commands: mpsc::UnboundedReceiver<RemoteProcessCommand>,
+) {
+    let started_at = std::time::Instant::now();
+    let mut read_future = Box::pin(client.request::<RemoteProcessReadResponse>(
+        "process/read",
+        json!({
+            "processId": process_id.clone(),
+            "afterSeq": Value::Null,
+            "maxBytes": 256 * 1024,
+            "waitMs": 500,
+        }),
+    ));
+    let terminal = loop {
+        tokio::select! {
+            command = commands.recv() => {
+                let Some(command) = command else { break false };
+                match command {
+                    RemoteProcessCommand::Write(data) => {
+                        let _ = client.request::<Value>("process/write", json!({
+                            "processId": process_id.clone(),
+                            "chunk": base64::engine::general_purpose::STANDARD.encode(data),
+                            "writeId": uuid::Uuid::new_v4().to_string(),
+                        })).await;
+                    }
+                    RemoteProcessCommand::Signal => {
+                        let _ = client.request::<Value>("process/signal", json!({
+                            "processId": process_id.clone(),
+                            "signal": "interrupt",
+                        })).await;
+                    }
+                    RemoteProcessCommand::Terminate => {
+                        let _ = client.request::<Value>("process/terminate", json!({
+                            "processId": process_id.clone(),
+                        })).await;
+                    }
+                }
+            }
+            response = &mut read_future => {
+                let response = match response {
+                    Ok(response) => response,
+                    Err(error) => {
+                        finish_remote_process(&inner, &process_id, &tool_id, &tool_name, started_at.elapsed().as_millis() as u64, Some(error), false, None).await;
+                        break true;
+                    }
+                };
+                for chunk in response.chunks {
+                    let raw_bytes = match base64::engine::general_purpose::STANDARD.decode(chunk.chunk) {
+                        Ok(bytes) => bytes,
+                        Err(error) => {
+                            finish_remote_process(&inner, &process_id, &tool_id, &tool_name, started_at.elapsed().as_millis() as u64, Some(format!("invalid process/read output: {error}")), false, None).await;
+                            return;
+                        }
+                    };
+                    let kind = if chunk.stream.eq_ignore_ascii_case("stderr") {
+                        tool_runtime::execution_process::ExecutionOutputKind::Stderr
+                    } else {
+                        tool_runtime::execution_process::ExecutionOutputKind::Stdout
+                    };
+                    let delta = tool_runtime::execution_process::ExecutionOutputDelta {
+                        process_id: process_id.clone(),
+                        tool_id: tool_id.clone(),
+                        // Environment process cursors are zero-based; the local
+                        // execution stream reserves sequence 0 as the initial cursor.
+                        sequence: chunk.seq.saturating_add(1),
+                        kind,
+                        delta: String::from_utf8_lossy(&raw_bytes).into_owned(),
+                        bytes: raw_bytes.len() as u64,
+                        omitted_bytes: 0,
+                        truncated: false,
+                        raw_bytes,
+                    };
+                    if let Ok(mut state) = inner.lock() {
+                        if let Some(entry) = state.processes.get_mut(&process_id) {
+                            if let Some(snapshot) = entry.snapshot.as_mut() {
+                                snapshot.output_bytes = snapshot.output_bytes.saturating_add(delta.bytes);
+                                snapshot.retained_output.push_str(&delta.delta);
+                                if snapshot.retained_output.len() > 128 * 1024 {
+                                    let trim = snapshot.retained_output.len() - 128 * 1024;
+                                    snapshot.retained_output.drain(..trim);
+                                    snapshot.output_omitted_bytes = snapshot.output_omitted_bytes.saturating_add(trim as u64);
+                                    snapshot.output_truncated = true;
+                                }
+                            }
+                        }
+                        push_output(&mut state, delta);
+                    }
+                }
+                if response.exited || response.closed || response.failure.is_some() || response.sandbox_denied {
+                    finish_remote_process(&inner, &process_id, &tool_id, &tool_name, started_at.elapsed().as_millis() as u64, response.failure, response.sandbox_denied, response.exit_code).await;
+                    break true;
+                }
+                let after_seq = Some(response.next_seq);
+                read_future = Box::pin(client.request::<RemoteProcessReadResponse>(
+                    "process/read",
+                    json!({
+                        "processId": process_id.clone(),
+                        "afterSeq": after_seq,
+                        "maxBytes": 256 * 1024,
+                        "waitMs": 500,
+                    }),
+                ));
+            }
+        }
+    };
+    if !terminal {
+        finish_remote_process(
+            &inner,
+            &process_id,
+            &tool_id,
+            &tool_name,
+            started_at.elapsed().as_millis() as u64,
+            Some("remote process control channel closed".to_string()),
+            false,
+            None,
+        )
+        .await;
+    }
+}
+
+async fn finish_remote_process(
+    inner: &Arc<Mutex<ExecutionProcessState>>,
+    process_id: &str,
+    tool_id: &str,
+    tool_name: &str,
+    elapsed_ms: u64,
+    failure: Option<String>,
+    sandbox_denied: bool,
+    exit_code: Option<i32>,
+) {
+    if let Ok(mut state) = inner.lock() {
+        if let Some(entry) = state.processes.get_mut(process_id) {
+            let mut snapshot = entry
+                .snapshot
+                .clone()
+                .unwrap_or_else(|| ExecutionProcessSnapshot {
+                    process_id: process_id.to_string(),
+                    tool_id: tool_id.to_string(),
+                    tool_name: tool_name.to_string(),
+                    status: tool_runtime::execution_process::ExecutionProcessStatus::Running,
+                    exit_code: None,
+                    elapsed_ms: 0,
+                    output_bytes: 0,
+                    output_omitted_bytes: 0,
+                    output_truncated: false,
+                    retained_output: String::new(),
+                    failure: None,
+                });
+            snapshot.status = if failure.is_some() || sandbox_denied {
+                tool_runtime::execution_process::ExecutionProcessStatus::Failed
+            } else {
+                tool_runtime::execution_process::ExecutionProcessStatus::Exited
+            };
+            snapshot.exit_code = exit_code;
+            snapshot.elapsed_ms = elapsed_ms;
+            snapshot.failure = failure;
+            entry.snapshot = Some(snapshot.clone());
+            entry.remote_control = None;
+            entry.final_snapshot = Some(snapshot);
+        }
+    }
 }
 
 fn push_output(state: &mut ExecutionProcessState, mut delta: ExecutionOutputDelta) {

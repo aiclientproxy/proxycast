@@ -48,6 +48,12 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
+      name: "revertThread",
+      method: protocol.METHOD_THREAD_REVERT,
+      kind: "request",
+      params: "required",
+    },
+    {
       name: "listThreads",
       method: protocol.METHOD_THREAD_LIST,
       kind: "request",
@@ -140,6 +146,42 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
     {
       name: "updateThreadMetadata",
       method: protocol.METHOD_THREAD_METADATA_UPDATE,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "addThreadQueue",
+      method: protocol.METHOD_THREAD_QUEUE_ADD,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "listThreadQueue",
+      method: protocol.METHOD_THREAD_QUEUE_LIST,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "updateThreadQueue",
+      method: protocol.METHOD_THREAD_QUEUE_UPDATE,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "deleteThreadQueue",
+      method: protocol.METHOD_THREAD_QUEUE_DELETE,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "reorderThreadQueue",
+      method: protocol.METHOD_THREAD_QUEUE_REORDER,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "startThreadQueue",
+      method: protocol.METHOD_THREAD_QUEUE_START,
       kind: "request",
       params: "required",
     },
@@ -657,7 +699,7 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       name: "listMcpServersWithStatus",
       method: protocol.METHOD_MCP_SERVER_STATUS_LIST,
       kind: "request",
-      params: "none",
+      params: "optional-empty",
     },
     {
       name: "createMcpServer",
@@ -1518,10 +1560,40 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "optional-empty",
     },
     {
+      name: "startWindowsSandboxSetup",
+      method: protocol.METHOD_WINDOWS_SANDBOX_SETUP_START,
+      kind: "request",
+      params: "required",
+    },
+    {
       name: "listModels",
       method: protocol.METHOD_MODEL_LIST,
       kind: "request",
       params: "optional-empty",
+    },
+    {
+      name: "readModelProviderCapabilities",
+      method: protocol.METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
+      kind: "request",
+      params: "optional-empty",
+    },
+    {
+      name: "addEnvironment",
+      method: protocol.METHOD_ENVIRONMENT_ADD,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "readEnvironmentInfo",
+      method: protocol.METHOD_ENVIRONMENT_INFO,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "readEnvironmentStatus",
+      method: protocol.METHOD_ENVIRONMENT_STATUS,
+      kind: "request",
+      params: "required",
     },
     {
       name: "listModelPreferences",

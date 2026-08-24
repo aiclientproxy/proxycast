@@ -1,0 +1,46 @@
+{
+  "$defs": {
+    "ProjectRoot": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "idempotencyKey": {
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": [
+        "null",
+        "object"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "roots": {
+      "items": {
+        "$ref": "#/$defs/ProjectRoot"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "idempotencyKey",
+    "name",
+    "roots"
+  ],
+  "title": "ProjectCreateParams",
+  "type": "object"
+}

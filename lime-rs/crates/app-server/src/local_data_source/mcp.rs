@@ -2,7 +2,9 @@ use super::data_error;
 use super::values_from_serializable_vec;
 use crate::RuntimeCoreError;
 use app_server_protocol::protocol::v2::{
-    McpServerResourceContent, McpServerResourceReadParams, McpServerResourceReadResponse,
+    ListMcpServerStatusParams, ListMcpServerStatusResponse, McpAuthStatus, McpResource,
+    McpResourceTemplate, McpServerConnectionStatus, McpServerInfo, McpServerResourceContent,
+    McpServerResourceReadParams, McpServerResourceReadResponse, McpServerStatus, McpTool,
 };
 use app_server_protocol::McpContent;
 use app_server_protocol::McpPromptGetParams;
@@ -47,33 +49,140 @@ pub(crate) fn list_mcp_servers(
     })
 }
 
-pub(crate) async fn list_mcp_servers_with_status(
+pub(crate) async fn list_mcp_servers_with_status_v2(
     db: &DbConnection,
     manager: &McpManagerState,
-) -> Result<McpServerStatusListResponse, RuntimeCoreError> {
+    params: ListMcpServerStatusParams,
+) -> Result<ListMcpServerStatusResponse, RuntimeCoreError> {
     let servers = McpService::get_all(db).map_err(data_error)?;
     let manager = manager.lock().await;
-    let mut result = Vec::with_capacity(servers.len());
+    let tools = manager.list_tools().await.map_err(mcp_error)?;
+    let resources = manager.list_resources().await.map_err(mcp_error)?;
+    let resource_templates = manager.list_resource_templates().await.map_err(mcp_error)?;
+
+    let mut data = Vec::with_capacity(servers.len());
     for server in servers {
         let parsed_config = parse_mcp_server_config(&server.server_config);
         let runtime_status = manager
             .get_server_runtime_status(&server.name, Some(&parsed_config))
             .await;
-        result.push(json!({
-            "id": server.id,
-            "name": server.name,
-            "description": server.description,
-            "config": parsed_config,
-            "is_running": runtime_status.is_running,
-            "server_info": runtime_status.server_info,
-            "runtime_status": runtime_status,
-            "enabled_lime": server.enabled_lime,
-            "enabled_claude": server.enabled_claude,
-            "enabled_codex": server.enabled_codex,
-            "enabled_gemini": server.enabled_gemini,
-        }));
+        let runtime_status_kind = if !runtime_status.enabled {
+            Some(McpServerConnectionStatus::Disabled)
+        } else if runtime_status.is_running {
+            Some(McpServerConnectionStatus::Connected)
+        } else {
+            Some(McpServerConnectionStatus::NotStarted)
+        };
+        let server_info = runtime_status
+            .server_info
+            .as_ref()
+            .map(|info| McpServerInfo {
+                name: info.name.clone(),
+                title: None,
+                version: info.version.clone(),
+                description: None,
+                icons: None,
+                website_url: None,
+            });
+        let auth_status = match runtime_status.auth_status.mode.as_str() {
+            "oauth" => McpAuthStatus::OAuth,
+            "static_headers" if runtime_status.auth_status.available => McpAuthStatus::BearerToken,
+            "none" => McpAuthStatus::Unsupported,
+            _ => McpAuthStatus::Unknown,
+        };
+        let server_tools = tools
+            .iter()
+            .filter(|tool| tool.server_name == server.name)
+            .map(|tool| {
+                let name = lime_mcp::naming::extract_runtime_inner_tool_name(
+                    &tool.server_name,
+                    &tool.name,
+                )
+                .unwrap_or(&tool.name)
+                .to_string();
+                (
+                    name.clone(),
+                    McpTool {
+                        name,
+                        title: None,
+                        description: Some(tool.description.clone()),
+                        input_schema: tool.input_schema.clone(),
+                        output_schema: tool.output_schema.clone(),
+                        annotations: None,
+                        icons: None,
+                        meta: None,
+                    },
+                )
+            })
+            .collect();
+        let server_resources = resources
+            .iter()
+            .filter(|resource| resource.server_name == server.name)
+            .map(|resource| McpResource {
+                annotations: None,
+                description: resource.description.clone(),
+                mime_type: resource.mime_type.clone(),
+                name: resource.name.clone(),
+                size: None,
+                title: None,
+                uri: resource.uri.clone(),
+                icons: None,
+                meta: resource.meta.clone(),
+            })
+            .collect();
+        let server_resource_templates = resource_templates
+            .iter()
+            .filter(|template| template.server_name == server.name)
+            .map(|template| McpResourceTemplate {
+                annotations: None,
+                uri_template: template.uri_template.clone(),
+                name: template.name.clone(),
+                title: template.title.clone(),
+                description: template.description.clone(),
+                mime_type: template.mime_type.clone(),
+            })
+            .collect();
+        let include_inventory = !matches!(
+            params.detail,
+            Some(app_server_protocol::protocol::v2::McpServerStatusDetail::ToolsAndAuthOnly)
+        );
+        data.push(McpServerStatus {
+            name: server.name,
+            runtime_status: runtime_status_kind,
+            plugin_id: None,
+            server_info,
+            tools: if include_inventory {
+                server_tools
+            } else {
+                Default::default()
+            },
+            resources: if include_inventory {
+                server_resources
+            } else {
+                Vec::new()
+            },
+            resource_templates: if include_inventory {
+                server_resource_templates
+            } else {
+                Vec::new()
+            },
+            auth_status,
+        });
     }
-    Ok(McpServerStatusListResponse { servers: result })
+
+    let start = params
+        .cursor
+        .as_deref()
+        .unwrap_or("0")
+        .parse::<usize>()
+        .unwrap_or(0);
+    let limit = params.limit.unwrap_or(100).clamp(1, 1000) as usize;
+    let end = (start + limit).min(data.len());
+    let next_cursor = (end < data.len()).then(|| end.to_string());
+    Ok(ListMcpServerStatusResponse {
+        data: data.into_iter().skip(start).take(limit).collect(),
+        next_cursor,
+    })
 }
 
 pub(crate) fn create_mcp_server(
@@ -333,6 +442,7 @@ pub(crate) async fn read_mcp_server_resource(
     };
     Ok(McpServerResourceReadResponse {
         contents: content.into_iter().collect(),
+        origin_call_id: None,
     })
 }
 

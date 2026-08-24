@@ -17,8 +17,68 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
+    name: "readWindowsSandboxReadiness",
+    method: constants.APP_SERVER_METHOD_WINDOWS_SANDBOX_READINESS,
+    params: "optional-empty",
+  },
+  {
+    name: "startWindowsSandboxSetup",
+    method: constants.APP_SERVER_METHOD_WINDOWS_SANDBOX_SETUP_START,
+    params: "required",
+  },
+  {
+    name: "readModelProviderCapabilities",
+    method: constants.APP_SERVER_METHOD_MODEL_PROVIDER_CAPABILITIES_READ,
+    params: "optional-empty",
+  },
+  {
+    name: "addEnvironment",
+    method: constants.APP_SERVER_METHOD_ENVIRONMENT_ADD,
+    params: "required",
+  },
+  {
+    name: "readEnvironmentInfo",
+    method: constants.APP_SERVER_METHOD_ENVIRONMENT_INFO,
+    params: "required",
+  },
+  {
+    name: "readEnvironmentStatus",
+    method: constants.APP_SERVER_METHOD_ENVIRONMENT_STATUS,
+    params: "required",
+  },
+  {
     name: "forkThread",
     method: constants.APP_SERVER_METHOD_THREAD_FORK,
+    params: "required",
+  },
+  {
+    name: "addThreadQueue",
+    method: constants.APP_SERVER_METHOD_THREAD_QUEUE_ADD,
+    params: "required",
+  },
+  {
+    name: "listThreadQueue",
+    method: constants.APP_SERVER_METHOD_THREAD_QUEUE_LIST,
+    params: "required",
+  },
+  {
+    name: "updateThreadQueue",
+    method: constants.APP_SERVER_METHOD_THREAD_QUEUE_UPDATE,
+    params: "required",
+  },
+  {
+    name: "deleteThreadQueue",
+    method: constants.APP_SERVER_METHOD_THREAD_QUEUE_DELETE,
+    params: "required",
+  },
+  {
+    name: "reorderThreadQueue",
+    method: constants.APP_SERVER_METHOD_THREAD_QUEUE_REORDER,
+    params: "required",
+  },
+  {
+    name: "startThreadQueue",
+    method: constants.APP_SERVER_METHOD_THREAD_QUEUE_START,
     params: "required",
   },
   {
@@ -629,7 +689,8 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
   },
   {
     name: "createTranscriptionMediaTaskArtifact",
-    method: constants.APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
+    method:
+      constants.APP_SERVER_METHOD_MEDIA_TASK_ARTIFACT_TRANSCRIPTION_CREATE,
     params: "required",
   },
   {

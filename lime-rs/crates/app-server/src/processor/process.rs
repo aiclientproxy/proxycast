@@ -7,6 +7,14 @@ use app_server_protocol::JsonRpcError;
 use serde_json::Value;
 
 impl RequestProcessor {
+    pub(crate) async fn activate_process(
+        &self,
+        connection_id: app_server_transport::ConnectionId,
+        process_handle: &str,
+    ) {
+        self.process.activate(connection_id, process_handle).await;
+    }
+
     pub(super) async fn handle_process_spawn_impl(
         &self,
         params: Option<Value>,

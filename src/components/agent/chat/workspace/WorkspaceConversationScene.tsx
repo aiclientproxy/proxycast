@@ -43,6 +43,7 @@ import {
 } from "./WorkspaceStyles";
 import { ThreadWorkspaceHeader } from "./ThreadWorkspaceHeader";
 import type { ThreadWorkspaceHeaderViewModel } from "./threadWorkspaceHeaderViewModel";
+import { ThreadQueueStatus } from "../components/ThreadQueueStatus";
 
 type WorkspaceMainAreaProps = Omit<
   ComponentProps<typeof WorkspaceMainArea>,
@@ -78,6 +79,7 @@ interface WorkspaceChatContentParams {
   a2uiSubmissionNotice?: A2UISubmissionNoticeData | null;
   showInlineInputbar: boolean;
   inputbarNode: ReactNode;
+  queueStatusNode: ReactNode;
   copy: WorkspaceChatContentCopy;
 }
 
@@ -133,6 +135,7 @@ function renderWorkspaceChatContent({
   a2uiSubmissionNotice,
   showInlineInputbar,
   inputbarNode,
+  queueStatusNode,
   copy,
 }: WorkspaceChatContentParams): ReactNode {
   const pendingA2UISource = messageListProps.activePendingA2UISource ?? null;
@@ -250,6 +253,7 @@ function renderWorkspaceChatContent({
                   </button>
                 </div>
               ) : null}
+              {queueStatusNode}
               {showInlineInputbar ? (
                 <ChatInputSlot data-testid="workspace-inline-input-slot">
                   {inputbarNode}
@@ -437,6 +441,9 @@ export function WorkspaceConversationScene({
   const agentT = t as unknown as AgentNamespaceTranslation;
   const text = (key: string) =>
     String(agentT(`agentChat.workspaceConversation.${key}`));
+  const queueStatusNode = (
+    <ThreadQueueStatus threadId={messageListProps.threadRead?.thread_id} />
+  );
   const chatContent = renderWorkspaceChatContent({
     landingSurface,
     stepProgressProps,
@@ -456,6 +463,7 @@ export function WorkspaceConversationScene({
     showInlineInputbar:
       !contextWorkspaceEnabled && !shouldHideGeneralWorkbenchInputForTheme,
     inputbarNode,
+    queueStatusNode,
     copy: {
       entryBannerClose: text("entryBanner.close"),
       entryBannerCloseAria: text("entryBanner.closeAria"),

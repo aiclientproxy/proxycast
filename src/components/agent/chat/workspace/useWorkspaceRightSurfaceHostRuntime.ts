@@ -36,6 +36,7 @@ interface UseWorkspaceRightSurfaceHostRuntimeParams extends Omit<
   | "browserRightSurfaceAvailable"
   | "browserRightSurfaceInitialUrl"
   | "browserRightSurfaceIntentTitle"
+  | "browserRightSurfaceHistoricalProjection"
   | "filesRightSurfaceAvailable"
   | "filesRightSurfaceTarget"
   | "pluginSurfaceRightSurface"
@@ -100,6 +101,9 @@ export function useWorkspaceRightSurfaceHostRuntime({
       rightSurfaceRuntime.browserRightSurfaceIntent?.launchUrl ?? null,
     browserRightSurfaceIntentTitle:
       rightSurfaceRuntime.browserRightSurfaceIntent?.title ?? null,
+    browserRightSurfaceHistoricalProjection:
+      rightSurfaceRuntime.browserRightSurfaceIntent?.historicalProjection ??
+      null,
     filesRightSurfaceAvailable: rightSurfaceRuntime.filesRightSurfaceAvailable,
     filesRightSurfaceTarget: rightSurfaceRuntime.filesRightSurfaceTarget,
     pluginSurfaceRightSurface: rightSurfaceRuntime.pluginSurfaceRightSurface,

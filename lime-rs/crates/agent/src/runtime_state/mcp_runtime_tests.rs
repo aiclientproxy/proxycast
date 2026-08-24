@@ -544,3 +544,90 @@ lines.on("line", (line) => {
     ));
     state.clear_mcp_runtimes().await;
 }
+
+#[tokio::test]
+async fn replacing_generation_shuts_down_previous_servers() {
+    let Some(node) = node_binary() else {
+        return;
+    };
+    let temp_dir = tempfile::tempdir().expect("create replacement cleanup fixture directory");
+    let server_path = temp_dir.path().join("replacement-cleanup-server.mjs");
+    std::fs::write(
+        &server_path,
+        r#"
+import readline from "node:readline";
+
+const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+const send = (message) => process.stdout.write(JSON.stringify(message) + "\n");
+
+lines.on("line", (line) => {
+  if (!line.trim()) return;
+  const message = JSON.parse(line);
+  if (message.method === "initialize") {
+    send({
+      jsonrpc: "2.0",
+      id: message.id,
+      result: {
+        protocolVersion: "2025-03-26",
+        capabilities: { tools: {} },
+        serverInfo: { name: "replacement-cleanup-fixture", version: "1.0.0" },
+      },
+    });
+    return;
+  }
+  if (message.method === "notifications/initialized") return;
+  if (message.method === "tools/list") {
+    send({
+      jsonrpc: "2.0",
+      id: message.id,
+      result: {
+        tools: [{
+          name: "cleanup_tool",
+          description: "replacement cleanup fixture",
+          inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        }],
+      },
+    });
+  }
+});
+"#,
+    )
+    .expect("write replacement cleanup MCP fixture");
+
+    let state = AgentRuntimeState::new();
+    let previous = state
+        .ensure_mcp_runtime_generation(
+            "session-replacement".to_string(),
+            "thread-replacement".to_string(),
+            ElicitationRequestRouter::default(),
+            vec![stdio_server_spec(
+                "cleanup",
+                node,
+                vec![server_path.to_string_lossy().into_owned()],
+                true,
+            )],
+        )
+        .await
+        .expect("publish initial MCP generation");
+    assert!(previous.has_server("cleanup").await);
+
+    let replacement = state
+        .ensure_mcp_runtime_generation(
+            "session-replacement".to_string(),
+            "thread-replacement".to_string(),
+            ElicitationRequestRouter::default(),
+            Vec::new(),
+        )
+        .await
+        .expect("publish replacement MCP generation");
+
+    assert!(!previous.has_server("cleanup").await);
+    assert!(Arc::ptr_eq(
+        &replacement,
+        &state
+            .mcp_runtime("session-replacement", "thread-replacement")
+            .await
+            .expect("replacement generation remains current"),
+    ));
+    state.clear_mcp_runtimes().await;
+}

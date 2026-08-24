@@ -9,7 +9,7 @@ use crate::active_time::ElicitationPauseState;
 use crate::elicitation::{
     ElicitationOwnerGate, ElicitationOwnerGuard, ElicitationRequestRouter, ElicitationRouterError,
 };
-use crate::events::{McpResourceUpdatedPayload, McpResourcesUpdatedPayload};
+use crate::events::{McpResourceUpdatedPayload, McpResourcesUpdatedPayload, McpServerNotification};
 use crate::McpRuntimeOwner;
 use lime_core::DynEmitter;
 use rmcp::{
@@ -23,6 +23,7 @@ use rmcp::{
     ClientHandler, RoleClient,
 };
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tool_runtime::mcp_connection::McpCallScope;
 use tracing::{debug, info, warn};
 
@@ -54,11 +55,12 @@ pub struct LimeMcpClient {
     runtime_owner: Option<McpRuntimeOwner>,
     elicitation_pause_state: ElicitationPauseState,
     elicitation_owner: ElicitationOwnerGate,
+    notification_sender: Option<broadcast::Sender<McpServerNotification>>,
 }
 
 impl LimeMcpClient {
     pub fn new(server_name: String, emitter: Option<DynEmitter>) -> Self {
-        Self::from_parts(server_name, emitter, None, None)
+        Self::from_parts(server_name, emitter, None, None, None)
     }
 
     pub fn with_elicitation_router(
@@ -66,7 +68,7 @@ impl LimeMcpClient {
         emitter: Option<DynEmitter>,
         elicitation_router: ElicitationRequestRouter,
     ) -> Self {
-        Self::from_parts(server_name, emitter, Some(elicitation_router), None)
+        Self::from_parts(server_name, emitter, Some(elicitation_router), None, None)
     }
 
     pub fn with_runtime_elicitation_router(
@@ -75,11 +77,28 @@ impl LimeMcpClient {
         elicitation_router: ElicitationRequestRouter,
         runtime_owner: McpRuntimeOwner,
     ) -> Self {
+        Self::with_runtime_elicitation_router_and_notifications(
+            server_name,
+            emitter,
+            elicitation_router,
+            runtime_owner,
+            None,
+        )
+    }
+
+    pub fn with_runtime_elicitation_router_and_notifications(
+        server_name: String,
+        emitter: Option<DynEmitter>,
+        elicitation_router: ElicitationRequestRouter,
+        runtime_owner: McpRuntimeOwner,
+        notification_sender: Option<broadcast::Sender<McpServerNotification>>,
+    ) -> Self {
         Self::from_parts(
             server_name,
             emitter,
             Some(elicitation_router),
             Some(runtime_owner),
+            notification_sender,
         )
     }
 
@@ -88,6 +107,7 @@ impl LimeMcpClient {
         emitter: Option<DynEmitter>,
         elicitation_router: Option<ElicitationRequestRouter>,
         runtime_owner: Option<McpRuntimeOwner>,
+        notification_sender: Option<broadcast::Sender<McpServerNotification>>,
     ) -> Self {
         Self {
             emitter,
@@ -97,6 +117,7 @@ impl LimeMcpClient {
             runtime_owner,
             elicitation_pause_state: ElicitationPauseState::new(),
             elicitation_owner: ElicitationOwnerGate::default(),
+            notification_sender,
         }
     }
 
@@ -285,6 +306,23 @@ impl ClientHandler for LimeMcpClient {
                 server_name: self.server_name.clone(),
             },
         );
+    }
+
+    async fn on_custom_notification(
+        &self,
+        notification: rmcp::model::CustomNotification,
+        _context: NotificationContext<RoleClient>,
+    ) {
+        let params = notification
+            .params
+            .unwrap_or(serde_json::Value::Object(Default::default()));
+        if let Some(sender) = &self.notification_sender {
+            let _ = sender.send(McpServerNotification {
+                server_name: self.server_name.clone(),
+                method: notification.method,
+                params,
+            });
+        }
     }
 }
 

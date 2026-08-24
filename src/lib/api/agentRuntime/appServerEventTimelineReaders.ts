@@ -8,7 +8,10 @@ import {
   readToolCallId,
   readToolName,
 } from "./appServerEventPayloadUtils";
-import { readCanonicalToolThreadItem } from "./appServerCanonicalItemReader";
+import {
+  readCanonicalToolThreadItem,
+  readRuntimeCanonicalToolThreadItem,
+} from "./appServerCanonicalItemReader";
 
 export function readArtifactSnapshotSignalFromPayload(
   payload: Record<string, unknown>,
@@ -664,6 +667,14 @@ export function readAgentThreadItemFromPayload(
   const canonicalToolItem = readCanonicalToolThreadItem(item, event);
   if (canonicalToolItem) {
     return canonicalToolItem;
+  }
+  const runtimeToolItem = readRuntimeCanonicalToolThreadItem(
+    item,
+    event,
+    fallbackStatus,
+  );
+  if (runtimeToolItem) {
+    return runtimeToolItem;
   }
   const itemType = readString(item, "type") ?? "agent_message";
   const baseItem = readAgentThreadItemBase(item, event, fallbackStatus);

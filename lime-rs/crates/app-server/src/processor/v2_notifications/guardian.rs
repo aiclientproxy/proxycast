@@ -42,10 +42,10 @@ pub(super) fn project_started(event: &AgentEvent) -> EventProjection {
         .or_else(|| payload.get("target_item_id"))
         .and_then(Value::as_str)
         .map(str::to_string);
-    EventProjection::Direct(vec![ServerNotification::ItemAutoApprovalReviewStarted(
+    let mut notifications = vec![ServerNotification::ItemAutoApprovalReviewStarted(
         v2::ItemGuardianApprovalReviewStartedNotification {
-            thread_id,
-            turn_id,
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
             started_at_ms,
             review_id,
             target_item_id,
@@ -58,7 +58,19 @@ pub(super) fn project_started(event: &AgentEvent) -> EventProjection {
             action,
         },
     )
-    .into()])
+    .into()];
+    // Every Guardian review currently enters through the strict-auto-review
+    // approval path; expose the exact Codex notification alongside the item
+    // review lifecycle without creating a second approval state machine.
+    notifications.push(
+        ServerNotification::StrictReviewRequired(v2::StrictReviewRequiredNotification {
+            thread_id,
+            turn_id,
+            started_at_ms,
+        })
+        .into(),
+    );
+    EventProjection::Direct(notifications)
 }
 
 pub(super) fn project_completed(event: &AgentEvent) -> EventProjection {
@@ -247,6 +259,15 @@ mod tests {
         let started_params = started[0].params.as_ref().expect("started params");
         assert_eq!(started_params["review"]["status"], "inProgress");
         assert_eq!(started_params["action"]["type"], "command");
+        assert_eq!(started[1].method, "autoApprovalReview/strictReviewRequired");
+        assert_eq!(
+            started[1].params.as_ref().expect("strict review params"),
+            &json!({
+                "threadId": "thread-guardian",
+                "turnId": "turn-guardian",
+                "startedAtMs": 1_783_814_400_100i64
+            })
+        );
 
         let EventProjection::Direct(completed) = project_completed(&event(
             "guardian.review.completed",

@@ -5,10 +5,20 @@ import {
   CircleDot,
   Clock3,
   FolderOpen,
+  GitFork,
   LoaderCircle,
+  MoreHorizontal,
+  Pencil,
+  Archive,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TaskStatus } from "../hooks/agentChatShared";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 interface ThreadWorkspaceHeaderProps {
@@ -16,6 +26,10 @@ interface ThreadWorkspaceHeaderProps {
   title: string;
   status: TaskStatus | null;
   workingDirectory: string | null;
+  canAcceptDirectInput?: boolean | null;
+  onRename?: (title: string) => Promise<void>;
+  onArchive?: () => Promise<void>;
+  onFork?: () => Promise<void>;
   actions?: ReactNode;
 }
 
@@ -73,9 +87,14 @@ export function ThreadWorkspaceHeader({
   title,
   status,
   workingDirectory,
+  canAcceptDirectInput = null,
+  onRename,
+  onArchive,
+  onFork,
   actions,
 }: ThreadWorkspaceHeaderProps) {
   const { t } = useTranslation("agent");
+  const { t: tNavigation } = useTranslation("navigation");
   const currentStatus = status ? statusMeta[status] : null;
   const statusLabel = currentStatus
     ? String(
@@ -88,6 +107,18 @@ export function ThreadWorkspaceHeader({
       )
     : null;
   const StatusIcon = currentStatus?.Icon;
+  const handleRename = () => {
+    if (!onRename || typeof window === "undefined") {
+      return;
+    }
+    const nextTitle = window.prompt(
+      String(tNavigation("sidebar.conversations.rename.prompt")),
+      title,
+    );
+    if (nextTitle?.trim()) {
+      void onRename(nextTitle);
+    }
+  };
 
   return (
     <header
@@ -95,6 +126,9 @@ export function ThreadWorkspaceHeader({
       data-testid="thread-workspace-header"
       data-session-id={sessionId}
       data-status={status ?? undefined}
+      data-can-accept-direct-input={
+        canAcceptDirectInput === null ? undefined : String(canAcceptDirectInput)
+      }
     >
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <h1
@@ -135,12 +169,63 @@ export function ThreadWorkspaceHeader({
           </span>
         ) : null}
       </div>
-      {actions ? (
+      {actions || onRename || onArchive || onFork ? (
         <div
-          className="flex min-w-0 shrink-0 items-center justify-end"
+          className="flex min-w-0 shrink-0 items-center justify-end gap-1"
           data-testid="thread-workspace-header-actions"
         >
           {actions}
+          {onRename || onArchive || onFork ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] text-[color:var(--lime-chrome-muted)] transition hover:bg-[color:var(--lime-chrome-tab-hover)] hover:text-[color:var(--lime-chrome-text)]"
+                  aria-label={String(
+                    tNavigation("sidebar.conversations.openActionMenu", {
+                      title,
+                    }),
+                  )}
+                  title={String(
+                    tNavigation("sidebar.conversations.moreActions"),
+                  )}
+                  data-testid="thread-workspace-header-action-menu"
+                >
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-36 p-1">
+                {onRename ? (
+                  <DropdownMenuItem onClick={handleRename}>
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    {String(tNavigation("sidebar.conversations.menu.rename"))}
+                  </DropdownMenuItem>
+                ) : null}
+                {onFork ? (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      void onFork();
+                    }}
+                  >
+                    <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
+                    {String(
+                      tNavigation("navigation.sidebar.conversations.menu.fork"),
+                    )}
+                  </DropdownMenuItem>
+                ) : null}
+                {onArchive ? (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      void onArchive();
+                    }}
+                  >
+                    <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+                    {String(tNavigation("sidebar.conversations.menu.archive"))}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
       ) : null}
     </header>

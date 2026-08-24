@@ -88,6 +88,7 @@ const embeddedBrowserHost = new ElectronEmbeddedBrowserHost(
     browserTabHostRef.current?.observeEmbeddedEvent(event, payload);
     broadcast(event, payload);
   },
+  { deferPermissions: true },
 );
 const browserTabHost = new ElectronBrowserTabHost(
   embeddedBrowserHost,
@@ -95,6 +96,9 @@ const browserTabHost = new ElectronBrowserTabHost(
 );
 browserTabHostRef.current = browserTabHost;
 const appServerHost = new ElectronAppServerHost(browserTabHost);
+browserTabHost.setArtifactWriter((params) =>
+  appServerHost.request("artifact/write", params),
+);
 browserTabHost.setTurnInterruptHandler(async (threadId, turnId) => {
   await appServerHost.request("turn/interrupt", { threadId, turnId });
 });

@@ -67,9 +67,7 @@ impl RuntimeCore {
         if self.is_pending_agent_control_thread(&stored.session.thread_id)? {
             return Ok(None);
         }
-        let active_turn_id = self
-            .active_turn_id_for_session(&params.session_id)
-            .await?;
+        let active_turn_id = self.active_turn_id_for_session(&params.session_id).await?;
         let mut read_snapshot = stored.clone();
         super::status::normalize_agent_session_runtime_snapshot(
             &mut read_snapshot.session,
@@ -137,9 +135,7 @@ impl RuntimeCore {
         } else {
             Vec::new()
         };
-        let active_turn_id = self
-            .active_turn_id_for_session(&params.session_id)
-            .await?;
+        let active_turn_id = self.active_turn_id_for_session(&params.session_id).await?;
         Ok(Some(
             projection_load_context(
                 projection,
@@ -228,6 +224,7 @@ pub(in crate::runtime) async fn projection_load_context(
     projection_store: &super::ProjectionStore,
     active_turn_id: Option<&str>,
 ) -> Result<SessionLoadContext, RuntimeCoreError> {
+    let events = super::history_replacement::effective_events(&events);
     let stored = StoredSession {
         session: projection.session.clone(),
         turns: projection.turns.clone(),

@@ -268,5 +268,13 @@
   "common.modelCapabilities.reasoning.inactive": "无思考",
   "common.modelCapabilities.vision.active": "支持多模态",
   "common.modelCapabilities.vision.inactive": "无多模态",
+  "common.modelProviderCapabilities.title": "当前运行提供商能力",
+  "common.modelProviderCapabilities.loading": "正在读取能力…",
+  "common.modelProviderCapabilities.namespaceTools.active": "工具命名空间",
+  "common.modelProviderCapabilities.namespaceTools.inactive": "无工具命名空间",
+  "common.modelProviderCapabilities.imageGeneration.active": "图片生成",
+  "common.modelProviderCapabilities.imageGeneration.inactive": "无图片生成",
+  "common.modelProviderCapabilities.webSearch.active": "网页搜索",
+  "common.modelProviderCapabilities.webSearch.inactive": "无网页搜索",
   "common.modelSelector.state.loginRequired": "需要登录"
 }

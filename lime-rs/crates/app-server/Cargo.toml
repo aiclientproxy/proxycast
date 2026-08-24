@@ -62,11 +62,13 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 tool-runtime.workspace = true
 thread-store.workspace = true
 tracing.workspace = true
 tracing-opentelemetry.workspace = true
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+urlencoding.workspace = true
 url.workspace = true
 uuid.workspace = true
 zip.workspace = true

@@ -8,8 +8,9 @@
       },
       "type": "array"
     },
-    "experimental": {
+    "experimentalApi": {
       "default": false,
+      "description": "Opt into Codex v2 experimental methods for this connection.",
       "type": "boolean"
     },
     "optOutNotificationMethods": {

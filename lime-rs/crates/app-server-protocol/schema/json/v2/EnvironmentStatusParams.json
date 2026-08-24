@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "environmentId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "environmentId"
+  ],
+  "title": "EnvironmentStatusParams",
+  "type": "object"
+}

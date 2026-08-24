@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "connectTimeoutMs": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "environmentId": {
+      "type": "string"
+    },
+    "execServerUrl": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "environmentId",
+    "execServerUrl"
+  ],
+  "title": "EnvironmentAddParams",
+  "type": "object"
+}
