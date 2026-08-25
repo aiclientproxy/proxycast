@@ -2,7 +2,7 @@
 
 状态：implementation in progress / coverage baseline
 
-上游事实源是 Codex c4f42d161ae44a8d696ee9fb595709661979d187。表中的 72 个 notification 和 11 个 reverse request 是审计全集，不代表 Lime 会无条件复制所有 Codex 产品功能。Codex c9c6c0daa994109cec50fddcb57d076fdf9e738c 的 method 增量只新增 `server/diagnostics` client request，notification 与 reverse request 集合未变化；xuanlan 原稿记录的 10 类 request 未包含当前 revision 的 currentTime/read，本文件以 Codex/v1 机器清单为准。
+本文件与 `render-projection-coverage.v0.1.json` 仍是 Codex c4f42d161ae44a8d696ee9fb595709661979d187 / c9c6c0d 的独立投影基线，覆盖当时的 72 个 notification 和 11 个 reverse request，不得当作当前注册表全集。当前 method 产品范围事实源已更新到 Codex `99660ab3`，共 78 个 notification；新增的 Queue、Project、Revert、Strict Review 与 MCP event stream 6 个 notification 已由完整对齐计划、current manifest 和各自 Electron Gate B 追踪。重新生成本投影 fixture 前保留原 schema hash 和计数，禁止只改 revision/数字伪造升级。xuanlan 原稿记录的 10 类 request 未包含 currentTime/read，本文件继续以其锁定版本的机器清单为准。
 
 每项必须有且只有一种裁决：
 

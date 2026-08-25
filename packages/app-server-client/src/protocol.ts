@@ -2074,10 +2074,6 @@ export type McpServerListResponse = {
   servers: unknown[];
 };
 
-export type McpServerStatusListResponse = {
-  servers: unknown[];
-};
-
 export type McpServerCreateParams = {
   server: unknown;
 };

@@ -184,6 +184,7 @@ async fn mcp_resource_read_rehydrates_session_runtime_without_starting_turn() {
         "thread-history",
         "missing-server",
         "ui://missing-server/app.html",
+        None,
     )
     .await
     .expect_err("empty fixture runtime has no MCP server");

@@ -1,14 +1,18 @@
 import {
   Check,
   ChevronDown,
+  CircleAlert,
+  CircleCheck,
   CircleDot,
   GitBranch,
   GitCommitHorizontal,
   GitCompare,
   ExternalLink,
+  Loader2,
   Monitor,
   Plus,
   Search,
+  Server,
 } from "lucide-react";
 import React from "react";
 import {
@@ -17,11 +21,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { ProjectGitStatus } from "@/lib/api/projectGit";
+import type { ThreadEnvironmentLifecycleState } from "../hooks/useThreadEnvironmentLifecycleStatus";
 
 export interface TaskCenterEnvironmentPanelProps {
   normalizedProjectRootPath: string | null;
   status: ProjectGitStatus | null;
   environmentStatusLabel: string;
+  lifecycleStatuses?: readonly ThreadEnvironmentLifecycleState[];
   changeSummary?: { additions: number; deletions: number } | null;
   branchLabel: string;
   changeCount: number;
@@ -43,6 +49,7 @@ export function TaskCenterEnvironmentPanel({
   normalizedProjectRootPath,
   status,
   environmentStatusLabel,
+  lifecycleStatuses = [],
   changeSummary,
   branchLabel,
   changeCount,
@@ -70,6 +77,12 @@ export function TaskCenterEnvironmentPanel({
   const canCreateBranch =
     branchSearchQuery.trim().length > 0 &&
     !branches.includes(branchSearchQuery.trim());
+  const visibleLifecycleStatuses =
+    lifecycleStatuses.length > 0
+      ? lifecycleStatuses
+      : ([
+          { environmentId: "local", status: "connected" },
+        ] satisfies ThreadEnvironmentLifecycleState[]);
 
   return (
     <PopoverContent
@@ -136,15 +149,98 @@ export function TaskCenterEnvironmentPanel({
           </span>
         </div>
 
-        <div
-          className="flex w-full min-w-0 items-center gap-2 rounded-lg px-1.5 py-1.5 leading-4"
-          data-testid="task-center-environment-local"
-        >
-          <Monitor className="h-3.5 w-3.5 shrink-0 text-[color:var(--lime-text-muted)]" />
-          <span className="min-w-0 flex-1 truncate">
-            {text(translate, "agentChat.navbar.environment.local", "本地")}
-          </span>
-          <ChevronDown className="h-3 w-3 shrink-0 text-[color:var(--lime-text-faint)]" />
+        <div className="border-y border-[color:var(--lime-surface-border)] py-1">
+          <div className="px-1.5 pb-1 pt-0.5 text-[11px] font-medium text-[color:var(--lime-text-faint)]">
+            {text(
+              translate,
+              "agentChat.navbar.environment.runtimeTitle",
+              "运行环境",
+            )}
+          </div>
+          {visibleLifecycleStatuses.map((environment) => {
+            const isLocal = environment.environmentId === "local";
+            const statusLabel =
+              environment.status === "connected"
+                ? text(
+                    translate,
+                    "agentChat.navbar.environment.status.connected",
+                    "已连接",
+                  )
+                : environment.status === "disconnected"
+                  ? text(
+                      translate,
+                      "agentChat.navbar.environment.status.disconnected",
+                      "连接已断开",
+                    )
+                  : text(
+                      translate,
+                      "agentChat.navbar.environment.status.pending",
+                      "连接中",
+                    );
+            const StatusIcon =
+              environment.status === "connected"
+                ? CircleCheck
+                : environment.status === "disconnected"
+                  ? CircleAlert
+                  : Loader2;
+            return (
+              <div
+                key={environment.environmentId}
+                className="flex min-h-8 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 py-1.5 leading-4"
+                data-testid={
+                  isLocal
+                    ? "task-center-environment-local"
+                    : "task-center-environment-runtime"
+                }
+                data-environment-id={environment.environmentId}
+                data-environment-status={environment.status}
+                data-protocol-method={
+                  lifecycleStatuses.length === 0
+                    ? undefined
+                    : environment.status === "disconnected"
+                      ? "thread/environment/disconnected"
+                      : environment.status === "connected"
+                        ? "thread/environment/connected"
+                        : undefined
+                }
+              >
+                {isLocal ? (
+                  <Monitor className="h-3.5 w-3.5 shrink-0 text-[color:var(--lime-text-muted)]" />
+                ) : (
+                  <Server className="h-3.5 w-3.5 shrink-0 text-[color:var(--lime-text-muted)]" />
+                )}
+                <span
+                  className="min-w-0 flex-1 truncate"
+                  title={environment.environmentId}
+                >
+                  {isLocal
+                    ? text(
+                        translate,
+                        "agentChat.navbar.environment.local",
+                        "本地",
+                      )
+                    : environment.environmentId}
+                </span>
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 text-xs ${
+                    environment.status === "connected"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : environment.status === "disconnected"
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-amber-600 dark:text-amber-400"
+                  }`}
+                >
+                  <StatusIcon
+                    className={`h-3.5 w-3.5 ${
+                      environment.status === "pending" ? "animate-spin" : ""
+                    }`}
+                    aria-hidden="true"
+                  />
+                  {statusLabel}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         {hasGitRepository ? (

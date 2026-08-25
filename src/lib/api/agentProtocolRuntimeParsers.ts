@@ -386,6 +386,41 @@ export function parseAgentRuntimeEvent(
         code: event.code as string | undefined,
         message: (event.message as string) || "Unknown warning",
       };
+    case "strict_review_required":
+      return typeof event.started_at_ms === "number" &&
+        Number.isFinite(event.started_at_ms)
+        ? {
+            type: "strict_review_required",
+            started_at_ms: event.started_at_ms,
+          }
+        : null;
+    case "guardian_review_started":
+    case "guardian_review_completed": {
+      const review = normalizeRecord(event.review);
+      const action = normalizeRecord(event.action);
+      if (
+        typeof event.review_id !== "string" ||
+        !event.review_id.trim() ||
+        !review ||
+        !action
+      ) {
+        return null;
+      }
+      const common = {
+        review_id: event.review_id,
+        ...(typeof event.target_item_id === "string" &&
+        event.target_item_id.trim()
+          ? { target_item_id: event.target_item_id }
+          : {}),
+        review,
+        action,
+      };
+      return type === "guardian_review_started"
+        ? { type, ...common }
+        : event.decision_source === "agent"
+          ? { type, ...common, decision_source: "agent" }
+          : null;
+    }
     default:
       return null;
   }

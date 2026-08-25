@@ -31,6 +31,10 @@ import type { MessageListRenderGroup } from "./MessageList.types";
 import { resolveMessageListItemProjection } from "./messageListItemProjection";
 import type { SearchResultPreviewItem } from "../utils/searchResultPreview";
 import { canonicalAgentMessageItemId } from "../utils/contentPartTimeline";
+import {
+  ThreadRevertTrigger,
+  type ThreadRevertTarget,
+} from "./ThreadRevertTrigger";
 
 function contentPartDebugSignature(parts: Message["contentParts"]): string {
   return (parts || [])
@@ -147,6 +151,7 @@ export interface MessageListItemProps {
   onOpenSubagentSession?: (sessionId: string) => void;
   onPermissionResponse?: (response: ConfirmResponse) => void;
   onQuoteMessage?: (content: string, id: string) => void;
+  onRequestThreadRevert?: (target: ThreadRevertTarget) => void;
   onSaveMessageAsKnowledge?: (source: {
     messageId: string;
     content: string;
@@ -212,6 +217,7 @@ export function MessageListItem({
   onOpenSubagentSession,
   onPermissionResponse,
   onQuoteMessage,
+  onRequestThreadRevert,
   onSaveMessageAsKnowledge,
   onSaveMessageAsSkill,
   onWriteFile,
@@ -291,6 +297,18 @@ export function MessageListItem({
   const canSaveMessageAsKnowledge = Boolean(
     onSaveMessageAsKnowledge && projection.canSaveMessageAsKnowledge,
   );
+  const revertTurnId = msg.runtimeTurnId?.trim() || "";
+  const revertThreadId = threadRead?.thread_id?.trim() || "";
+  const canRevertThread = Boolean(
+    msg.role === "user" &&
+    onRequestThreadRevert &&
+    revertThreadId &&
+    revertTurnId &&
+    !revertTurnId.startsWith("pending-turn:") &&
+    !isSending &&
+    !hasActiveInteractiveRuntime &&
+    threadRead?.can_accept_direct_input !== false,
+  );
   const showMessageActions =
     (msg.role === "assistant" &&
       Boolean(msg.imageWorkbenchPreview) &&
@@ -333,6 +351,16 @@ export function MessageListItem({
           >
             <Pencil size={13} />
           </button>
+        ) : null}
+        {canRevertThread && onRequestThreadRevert ? (
+          <ThreadRevertTrigger
+            target={{
+              messageId: msg.id,
+              threadId: revertThreadId,
+              beforeTurnId: revertTurnId,
+            }}
+            onRequest={onRequestThreadRevert}
+          />
         ) : null}
       </div>
     ) : null;

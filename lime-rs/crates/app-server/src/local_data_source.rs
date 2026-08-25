@@ -112,7 +112,6 @@ use app_server_protocol::McpServerImportFromAppResponse;
 use app_server_protocol::McpServerLifecycleResponse;
 use app_server_protocol::McpServerListResponse;
 use app_server_protocol::McpServerStartParams;
-use app_server_protocol::McpServerStatusListResponse;
 use app_server_protocol::McpServerStopParams;
 use app_server_protocol::McpServerUpdateParams;
 use app_server_protocol::McpToolListForContextParams;

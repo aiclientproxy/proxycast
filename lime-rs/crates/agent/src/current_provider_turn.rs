@@ -35,6 +35,7 @@ use tool_runtime::tool_lifecycle::{ToolLifecycleEmitter, ToolLifecycleEvent, Too
 #[cfg(test)]
 mod agent_control_tests;
 mod dynamic_tool_bridge;
+mod environment;
 mod hook_step_snapshot;
 #[cfg(test)]
 mod input_tests;

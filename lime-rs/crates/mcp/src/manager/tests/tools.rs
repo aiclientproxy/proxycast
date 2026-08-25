@@ -1,9 +1,30 @@
 use super::super::bridge_tool_timeout;
-use super::super::tools::{normalize_tool_input_schema, tool_result_output_schema};
+use super::super::tools::{
+    app_tool_authority_from_meta, normalize_tool_input_schema, tool_result_output_schema,
+};
 use super::common::*;
 use crate::manager::McpClientManager;
 use crate::types::{McpContent, McpError, McpToolDefinition};
 use std::time::Duration;
+
+#[test]
+fn app_tool_authority_uses_exact_connector_link_and_account_requirement() {
+    let meta = rmcp::model::Meta(
+        serde_json::json!({
+            "connector_id": " calendar ",
+            "link_id": "link-calendar",
+            "_codex_apps": { "requires_explicit_link_id": true }
+        })
+        .as_object()
+        .expect("tool metadata")
+        .clone(),
+    );
+
+    let authority = app_tool_authority_from_meta(Some(&meta));
+    assert_eq!(authority.connector_id.as_deref(), Some("calendar"));
+    assert_eq!(authority.link_id.as_deref(), Some("link-calendar"));
+    assert!(authority.requires_explicit_link_id);
+}
 
 #[test]
 fn bridge_tool_timeout_preserves_explicit_and_startup_fallback_values() {

@@ -366,6 +366,7 @@ impl ExecutionBackend for RuntimeBackend {
         thread_id: &str,
         server: &str,
         uri: &str,
+        meta: Option<Value>,
     ) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, RuntimeCoreError>
     {
         let db = initialize_runtime_database(self.db.as_ref())?;
@@ -379,39 +380,35 @@ impl ExecutionBackend for RuntimeBackend {
         .await?;
         let content = self
             .agent_state
-            .read_mcp_resource(session_id, thread_id, server, uri)
+            .read_mcp_resource_with_meta(session_id, thread_id, server, uri, meta)
             .await
             .map_err(RuntimeCoreError::Backend)?;
-        let content = match (content.text, content.blob) {
-            (Some(text), None) => Some(
-                app_server_protocol::protocol::v2::McpServerResourceContent::Text {
-                    uri: content.uri,
-                    mime_type: content.mime_type,
-                    text,
-                    meta: content.meta,
-                },
-            ),
-            (None, Some(blob)) => Some(
-                app_server_protocol::protocol::v2::McpServerResourceContent::Blob {
-                    uri: content.uri,
-                    mime_type: content.mime_type,
-                    blob,
-                    meta: content.meta,
-                },
-            ),
-            (None, None) => None,
-            (Some(_), Some(_)) => {
-                return Err(RuntimeCoreError::Backend(
-                    "MCP resource response contained both text and blob".to_string(),
-                ));
-            }
-        };
-        Ok(
-            app_server_protocol::protocol::v2::McpServerResourceReadResponse {
-                contents: content.into_iter().collect(),
-                origin_call_id: None,
-            },
+        lower_mcp_resource_content(content)
+    }
+
+    async fn read_mcp_runtime_resource_for_origin(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server: &str,
+        origin: &lime_mcp::McpResourceOrigin,
+    ) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, RuntimeCoreError>
+    {
+        let db = initialize_runtime_database(self.db.as_ref())?;
+        self.ensure_agent_initialized(&db).await?;
+        mcp_bridges::ensure_thread_mcp_runtime_if_available(
+            &self.agent_state,
+            &self.app_data_source,
+            session_id,
+            thread_id,
         )
+        .await?;
+        let content = self
+            .agent_state
+            .read_mcp_resource_for_origin(session_id, thread_id, server, origin)
+            .await
+            .map_err(RuntimeCoreError::Backend)?;
+        lower_mcp_resource_content(content)
     }
 
     async fn call_mcp_runtime_tool(
@@ -502,6 +499,41 @@ impl ExecutionBackend for RuntimeBackend {
             .await
             .map_err(RuntimeCoreError::Backend)
     }
+}
+
+fn lower_mcp_resource_content(
+    content: lime_mcp::McpResourceContent,
+) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, RuntimeCoreError> {
+    let content = match (content.text, content.blob) {
+        (Some(text), None) => Some(
+            app_server_protocol::protocol::v2::McpServerResourceContent::Text {
+                uri: content.uri,
+                mime_type: content.mime_type,
+                text,
+                meta: content.meta,
+            },
+        ),
+        (None, Some(blob)) => Some(
+            app_server_protocol::protocol::v2::McpServerResourceContent::Blob {
+                uri: content.uri,
+                mime_type: content.mime_type,
+                blob,
+                meta: content.meta,
+            },
+        ),
+        (None, None) => None,
+        (Some(_), Some(_)) => {
+            return Err(RuntimeCoreError::Backend(
+                "MCP resource response contained both text and blob".to_string(),
+            ));
+        }
+    };
+    Ok(
+        app_server_protocol::protocol::v2::McpServerResourceReadResponse {
+            contents: content.into_iter().collect(),
+            origin_call_id: None,
+        },
+    )
 }
 
 fn action_response_error(code: &str, request_id: &str) -> RuntimeCoreError {

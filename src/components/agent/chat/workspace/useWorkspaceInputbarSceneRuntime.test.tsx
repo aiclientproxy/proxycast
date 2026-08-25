@@ -10,6 +10,13 @@ const mockPendingInteractionRuntime = vi.hoisted(() => ({
   interactions: [] as unknown[],
   respond: vi.fn(() => ({ accepted: true })),
 }));
+const mockStrictReviewRuntime = vi.hoisted(() => ({
+  status: null as null | {
+    startedAtMs: number;
+    threadId: string;
+    turnId: string;
+  },
+}));
 
 vi.mock("../components/Inputbar", () => ({
   Inputbar: (props: { overlayAccessory?: React.ReactNode }) => {
@@ -20,6 +27,10 @@ vi.mock("../components/Inputbar", () => ({
 
 vi.mock("../hooks/usePendingInteractions", () => ({
   usePendingInteractions: () => mockPendingInteractionRuntime,
+}));
+
+vi.mock("../hooks/useStrictReviewStatus", () => ({
+  useStrictReviewStatus: () => mockStrictReviewRuntime.status,
 }));
 
 vi.mock("./WorkspaceHarnessDialogs", () => ({
@@ -282,6 +293,7 @@ beforeEach(async () => {
     }
   ).IS_REACT_ACT_ENVIRONMENT = true;
   mockPendingInteractionRuntime.interactions = [];
+  mockStrictReviewRuntime.status = null;
   await changeLimeLocale("zh-CN");
 });
 
@@ -300,6 +312,29 @@ afterEach(() => {
 });
 
 describe("useWorkspaceInputbarSceneRuntime", () => {
+  it("strict review 状态应位于 Composer 上方且不替换 Inputbar", () => {
+    mockStrictReviewRuntime.status = {
+      startedAtMs: 1_783_814_400_100,
+      threadId: "thread-1",
+      turnId: "turn-1",
+    };
+    const container = renderHookNode(
+      createDefaultProps({ threadId: "thread-1" }),
+    );
+
+    const status = container.querySelector(
+      '[data-testid="strict-review-status"]',
+    );
+    const inputbar = container.querySelector('[data-testid="inputbar-mock"]');
+    expect(status).not.toBeNull();
+    expect(inputbar).not.toBeNull();
+    expect(
+      Boolean(
+        status && inputbar && status.compareDocumentPosition(inputbar) & 4,
+      ),
+    ).toBe(true);
+  });
+
   it("typed MCP interaction 应位于 Composer 上方且不替换 Inputbar", () => {
     mockPendingInteractionRuntime.interactions = [
       {

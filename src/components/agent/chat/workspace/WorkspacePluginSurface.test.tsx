@@ -267,6 +267,7 @@ describe("WorkspacePluginSurface", () => {
       activeStrategy: "webContentsView",
       supportedStrategies: ["webContentsView"],
       mcpApp: {
+        connectorId: "connector-demo",
         resourceUri: "ui://demo/report.html",
         serverName: "plugin__demo__server",
         toolItemId: "item-1",
@@ -281,7 +282,11 @@ describe("WorkspacePluginSurface", () => {
     expect(mcpApiMocks.readResource).toHaveBeenCalledWith(
       "plugin__demo__server",
       "ui://demo/report.html",
-      { threadId: "thread-1" },
+      {
+        threadId: "thread-1",
+        originCallId: "item-1",
+        connectorId: "connector-demo",
+      },
     );
     expect(
       embeddedBrowserMocks.loadEmbeddedBrowserViewHtml,
@@ -297,6 +302,51 @@ describe("WorkspacePluginSurface", () => {
       embeddedBrowserMocks.navigateEmbeddedBrowserView,
     ).not.toHaveBeenCalledWith(
       expect.objectContaining({ url: "ui://demo/report.html" }),
+    );
+  });
+
+  it("codex_apps 资源不依赖本地 Plugin catalog", async () => {
+    const appsSurface: WorkspacePluginSurfaceDescriptor = {
+      appId: "calendar",
+      title: "Calendar",
+      containerId: "mcp-app-item-app-calendar",
+      activeStrategy: "webContentsView",
+      supportedStrategies: ["webContentsView"],
+      mcpApp: {
+        connectorId: "calendar",
+        resourceUri: "ui://calendar/event.html",
+        serverName: "codex_apps",
+        toolItemId: "item-app-calendar",
+      },
+    };
+    mcpApiMocks.readResource.mockResolvedValueOnce({
+      uri: "ui://calendar/event.html",
+      mime_type: "text/html;profile=mcp-app",
+      text: "<!doctype html><main>Calendar event</main>",
+    });
+
+    await renderSurface({
+      runtimeOwner: { sessionId: "session-1", threadId: "thread-1" },
+      surface: appsSurface,
+    });
+
+    expect(pluginCatalogMocks.listInstalledPluginCatalog).not.toHaveBeenCalled();
+    expect(mcpApiMocks.readResource).toHaveBeenCalledWith(
+      "codex_apps",
+      "ui://calendar/event.html",
+      {
+        threadId: "thread-1",
+        originCallId: "item-app-calendar",
+        connectorId: "calendar",
+      },
+    );
+    expect(
+      embeddedBrowserMocks.loadEmbeddedBrowserViewHtml,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "mcpApp",
+        sourceUri: "ui://calendar/event.html",
+      }),
     );
   });
 
@@ -409,7 +459,7 @@ describe("WorkspacePluginSurface", () => {
     expect(mcpApiMocks.readResource).toHaveBeenCalledWith(
       "plugin__demo__server",
       "ui://demo/report.html",
-      { threadId: "thread-1" },
+      { threadId: "thread-1", originCallId: "item-async" },
     );
     expect(
       embeddedBrowserMocks.loadEmbeddedBrowserViewHtml,

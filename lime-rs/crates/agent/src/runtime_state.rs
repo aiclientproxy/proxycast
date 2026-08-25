@@ -627,6 +627,33 @@ impl AgentRuntimeState {
             .await
     }
 
+    pub async fn read_mcp_resource_with_meta(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server_name: &str,
+        uri: &str,
+        meta: Option<serde_json::Value>,
+    ) -> Result<lime_mcp::McpResourceContent, String> {
+        self.mcp_runtime(session_id, thread_id)
+            .await?
+            .read_resource_with_meta(server_name, uri, meta)
+            .await
+    }
+
+    pub async fn read_mcp_resource_for_origin(
+        &self,
+        session_id: &str,
+        thread_id: &str,
+        server_name: &str,
+        origin: &lime_mcp::McpResourceOrigin,
+    ) -> Result<lime_mcp::McpResourceContent, String> {
+        self.mcp_runtime(session_id, thread_id)
+            .await?
+            .read_resource_for_origin(server_name, thread_id, origin)
+            .await
+    }
+
     pub async fn list_mcp_resource_page(
         &self,
         session_id: &str,

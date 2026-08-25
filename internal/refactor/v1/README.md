@@ -45,23 +45,23 @@ Codex 对齐的是上图从协议到恢复的语义；grok-build 对齐的是 `m
 
 | 参考仓库                                    | commit                                     | 允许借鉴                                                                                                    |
 | ------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `/Users/coso/Documents/dev/rust/codex`      | `c9c6c0daa994109cec50fddcb57d076fdf9e738c` | runtime、App Server、Thread/Turn/Item、工具、MCP、Skills、Plugins、Multi-Agent、恢复和测试语义              |
+| `/Users/coso/Documents/dev/rust/codex`      | `99660ab3c7b861c916e467581fa9b8723504d66b` | runtime、App Server、Thread/Turn/Item、工具、MCP、Skills、Plugins、Multi-Agent、恢复和测试语义              |
 | `/Users/coso/Documents/dev/rust/grok-build` | `6e386420825bd44ae648c63e7c8cba12fcec9401` | model control plane：catalog、model selection/switch、capability、tool subset、retry/circuit breaker        |
 | `/Users/coso/Documents/dev/js/opencode`     | `fab213312927ea64cf968832c527206e8c944f9e` | provider wire plane：endpoint union、canonical content/lowering、媒体、协议 stream reducer、provider policy |
 
-三个 commit 均为对应参考仓库当前 HEAD，是本主线唯一的 reference lock。
+三个 commit 是本主线各参考仓库的显式 reference lock；只有对应审计更新后才能移动，不能用未落库的工作树状态替代。
 
 ### Revision lock 口径
 
 同一主线只能有一个 reference lock；下游 fixture 和切片记录允许暂时落后，但必须显式登记：
 
-| 位置                                                                     | 当前 revision | 口径                                                                 |
-| ------------------------------------------------------------------------ | ------------- | -------------------------------------------------------------------- |
-| 本表、`fixtures/codex-method-product-scope.v0.1.json`                    | `c9c6c0d…`    | 已对齐当前 Codex HEAD；本轮增量确认新增 1 条 excluded client request |
-| `internal/test/snapshots/**`                                             | `4c43465…`    | 独立 Gate A 快照基线；升级必须重新生成场景映射                       |
-| `fixtures/item-inventory.v0.1.json`                                      | `c4f42d16…`   | 独立 Item/schema hash 基线；升级必须重新导出完整上游 schema          |
-| [09](09-tool-turn-snapshot-progress.md)                                  | `9fc715c0…`   | 历史 Tool/Hook 审计基线；current Hook 字段由后续切片单独收敛         |
-| [04](04-execution-plan.md) 各切片记录、`internal/exec-plans/**` 历史证据 | 按当轮记录    | 历史 evidence，保留写入时的 revision，不回改                         |
+| 位置                                                                     | 当前 revision | 口径                                                         |
+| ------------------------------------------------------------------------ | ------------- | ------------------------------------------------------------ |
+| 本表、`fixtures/codex-method-product-scope.v0.1.json`                    | `99660ab3…`   | 当前 Codex HEAD 的 245 个方向化 identity 已完成三态产品裁决  |
+| `internal/test/snapshots/**`                                             | `4c43465…`    | 独立 Gate A 快照基线；升级必须重新生成场景映射               |
+| `fixtures/item-inventory.v0.1.json`                                      | `c4f42d16…`   | 独立 Item/schema hash 基线；升级必须重新导出完整上游 schema  |
+| [09](09-tool-turn-snapshot-progress.md)                                  | `9fc715c0…`   | 历史 Tool/Hook 审计基线；current Hook 字段由后续切片单独收敛 |
+| [04](04-execution-plan.md) 各切片记录、`internal/exec-plans/**` 历史证据 | 按当轮记录    | 历史 evidence，保留写入时的 revision，不回改                 |
 
 `internal/research/refactor/v2/**` 与 `internal/exec-plans/project-gate-a-b-acceptance-plan.md`
 是各自独立的基线，不受本 lock 约束。

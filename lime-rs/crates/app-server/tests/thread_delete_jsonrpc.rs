@@ -132,7 +132,7 @@ async fn thread_delete_removes_every_persisted_owner_over_public_jsonl() {
     event_log
         .append(&AgentEvent {
             event_id: "evt-thread-delete-proof".to_string(),
-            sequence: 1,
+            sequence: next_event_sequence(&event_log, &session_id),
             session_id: session_id.clone(),
             thread_id: Some(thread_id.clone()),
             turn_id: None,
@@ -165,7 +165,7 @@ async fn thread_delete_removes_every_persisted_owner_over_public_jsonl() {
     event_log
         .append(&AgentEvent {
             event_id: "evt-thread-delete-pending-proof".to_string(),
-            sequence: 1,
+            sequence: next_event_sequence(&event_log, &pending_session_id),
             session_id: pending_session_id.clone(),
             thread_id: Some(pending_thread_id.clone()),
             turn_id: None,
@@ -419,6 +419,15 @@ async fn thread_delete_removes_every_persisted_owner_over_public_jsonl() {
         Some(json!(error_codes::RUNTIME_ERROR)),
         "thread/read after restart must fail: {read:#?}"
     );
+}
+
+fn next_event_sequence(event_log: &EventLogWriter, session_id: &str) -> u64 {
+    event_log
+        .read_session_events(session_id)
+        .expect("read event log before seeding delete proof")
+        .last()
+        .map(|record| record.event.sequence + 1)
+        .unwrap_or(1)
 }
 
 async fn initialize_direct(server: &AppServer) {

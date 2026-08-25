@@ -954,28 +954,11 @@ impl RuntimeCore {
             .await
             .map_err(|error| steer_runtime_error(error, expected_turn_id))?;
 
-        let input_text = user_input_text(&prepared_input.durable);
-        let explicit_item_id = client_user_message_id
-            .as_deref()
-            .map(|client_id| format!("steer-{client_id}"))
-            .unwrap_or_else(|| format!("steer-{}", Uuid::new_v4()));
-        let mut payload = json!({
-            "itemId": explicit_item_id,
-            "role": "user",
-            "visibility": "user_visible",
-            "source": "turn/steer",
-            "input": prepared_input.durable,
-            "content": {
-                "kind": "inline_text",
-                "text": input_text,
-            },
-        });
-        if let Some(client_id) = client_user_message_id
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-        {
-            payload["clientId"] = Value::String(client_id);
-        }
+        let payload = steer_input_event_payload(
+            "turn/steer",
+            prepared_input.durable,
+            client_user_message_id.as_deref(),
+        );
         let events = self.append_runtime_events(
             &session.session_id,
             &session.thread_id,
@@ -1969,7 +1952,7 @@ impl RuntimeCore {
             .steer_for_turn_id_with_metadata(
                 requested_turn_id,
                 vec![RuntimeSessionInput::User(prepared_input.provider)],
-                client_user_message_id,
+                client_user_message_id.clone(),
                 trace,
             )
             .await
@@ -2006,22 +1989,18 @@ impl RuntimeCore {
             };
             turn
         };
+        let payload = steer_input_event_payload(
+            "session_steer",
+            prepared_input.durable,
+            client_user_message_id.as_deref(),
+        );
         let events = self.append_runtime_events(
             &session.session_id,
             &session.thread_id,
             Some(&active_turn_id),
             vec![RuntimeEvent::new(
                 super::turn_input_events::TURN_INPUT_EVENT_TYPE,
-                json!({
-                    "role": "user",
-                    "visibility": "user_visible",
-                    "source": "session_steer",
-                    "input": prepared_input.durable,
-                    "content": {
-                        "kind": "inline_text",
-                        "text": user_input_text(&params.input),
-                    },
-                }),
+                payload,
             )],
         )?;
         if let Some(callback) = event_callback.as_deref_mut() {
@@ -3076,6 +3055,35 @@ fn runtime_error_from_session_task_failure(error: RuntimeSessionTaskFailure) -> 
     } else {
         RuntimeCoreError::Backend(error.message)
     }
+}
+
+fn steer_input_event_payload(
+    source: &str,
+    input: Vec<agent_protocol::AgentInput>,
+    client_user_message_id: Option<&str>,
+) -> Value {
+    let input_text = user_input_text(&input);
+    let explicit_item_id = client_user_message_id
+        .map(|client_id| format!("steer-{client_id}"))
+        .unwrap_or_else(|| format!("steer-{}", Uuid::new_v4()));
+    let mut payload = json!({
+        "itemId": explicit_item_id,
+        "role": "user",
+        "visibility": "user_visible",
+        "source": source,
+        "input": input,
+        "content": {
+            "kind": "inline_text",
+            "text": input_text,
+        },
+    });
+    if let Some(client_id) = client_user_message_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        payload["clientId"] = Value::String(client_id.to_string());
+    }
+    payload
 }
 
 fn steer_runtime_error(error: RuntimeSessionLoopError, expected_turn_id: &str) -> RuntimeCoreError {

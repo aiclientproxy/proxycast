@@ -12,7 +12,9 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { McpServerInfo, McpServerOAuthLoginOptions } from "@/lib/api/mcp";
 import type { McpServerConnectionState } from "@/hooks/useMcp";
+import type { McpEventStreamStateMap } from "@/lib/mcp/eventStreamProjection";
 import { McpServerRow } from "./McpServerRow";
+import { McpEventStreamStatus } from "./McpEventStreamStatus";
 import { getMcpServerListSummary } from "./mcpServerListModel";
 
 interface McpServerListProps {
@@ -30,6 +32,7 @@ interface McpServerListProps {
   onSelectServer?: (server: McpServerInfo) => void;
   selectedServerName?: string;
   serverConnectionStates: Record<string, McpServerConnectionState>;
+  eventStreams: McpEventStreamStateMap;
 }
 
 export function McpServerList({
@@ -44,6 +47,7 @@ export function McpServerList({
   onSelectServer,
   selectedServerName,
   serverConnectionStates,
+  eventStreams,
 }: McpServerListProps) {
   const { t } = useTranslation("settings");
   const [operatingServer, setOperatingServer] = useState<string | null>(null);
@@ -119,6 +123,8 @@ export function McpServerList({
           </div>
         </div>
       )}
+
+      <McpEventStreamStatus eventStreams={eventStreams} />
 
       {/* 服务器列表 */}
       <div className="flex-1 overflow-auto p-4">

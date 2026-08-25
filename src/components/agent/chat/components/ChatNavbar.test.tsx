@@ -6,12 +6,23 @@ import { ChatNavbar } from "./ChatNavbar";
 
 const {
   mockProjectSelector,
+  mockThreadProjectSelector,
   mockRequestChatHostOpenPath,
   mockEnsureProjectWorkspace,
 } = vi.hoisted(() => ({
   mockProjectSelector: vi.fn(),
+  mockThreadProjectSelector: vi.fn(),
   mockRequestChatHostOpenPath: vi.fn(),
   mockEnsureProjectWorkspace: vi.fn(),
+}));
+
+vi.mock("./ThreadProjectSelector", () => ({
+  ThreadProjectSelector: (props: Record<string, unknown>) => {
+    mockThreadProjectSelector(props);
+    return props.threadId ? (
+      <div data-testid="thread-project-selector" />
+    ) : null;
+  },
 }));
 
 vi.mock("@/components/projects/ProjectSelector", () => ({
@@ -435,6 +446,32 @@ describe("ChatNavbar", () => {
     });
 
     expect(onProjectChange).toHaveBeenCalledWith("project-1");
+  });
+
+  it("普通对话顶栏应为 canonical Thread 显示独立的对话项目入口", () => {
+    const container = renderChatNavbar({
+      threadId: "thread-1",
+      projectId: "workspace-1",
+      workspaceRootPath: "/workspace/lime",
+      openedProjects: [
+        {
+          id: "workspace-1",
+          name: "Lime",
+          rootPath: "/workspace/lime",
+        },
+      ],
+    });
+
+    expect(
+      container.querySelector('[data-testid="thread-project-selector"]'),
+    ).not.toBeNull();
+    expect(mockThreadProjectSelector).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        threadId: "thread-1",
+        workspaceName: "Lime",
+        workspaceRootPath: "/workspace/lime",
+      }),
+    );
   });
 
   it("任务中心工作区 tab 应显示目录名并支持关闭", () => {

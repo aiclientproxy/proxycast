@@ -44,6 +44,7 @@ export function createInitialConversationProjectionState(
     items: {},
     item_order_by_turn: {},
     pending_interactions: {},
+    strict_reviews: {},
     notices: [],
     orphan_deltas: {},
     diagnostics: [],
@@ -108,11 +109,14 @@ export function reduceConversationProjection(
     case "turn_started":
       return upsertTurn(next, event.turn, event.source, event.event_id);
     case "turn_completed":
-      return upsertTurn(
-        { ...next, status: statusFromTurn(event.turn.status) },
-        event.turn,
-        event.source,
-        event.event_id,
+      return clearStrictReview(
+        upsertTurn(
+          { ...next, status: statusFromTurn(event.turn.status) },
+          event.turn,
+          event.source,
+          event.event_id,
+        ),
+        event.turn.id,
       );
     case "turn_diff_updated":
       return applyTurnDiffUpdate(next, event);
@@ -128,10 +132,15 @@ export function reduceConversationProjection(
         code: "guardian_warning",
         message: event.message,
       });
+    case "strict_review_required":
+      return applyStrictReviewRequired(next, event);
     case "guardian_review_started":
       return applyGuardianReviewStarted(next, event);
     case "guardian_review_completed":
-      return applyGuardianReviewCompleted(next, event);
+      return clearStrictReview(
+        applyGuardianReviewCompleted(next, event),
+        event.turn_id,
+      );
     case "item_started":
     case "item_updated":
     case "item_completed":
@@ -162,6 +171,7 @@ export function selectConversationProjection(
     turns,
     items,
     pending_interactions: Object.values(state.pending_interactions),
+    strict_reviews: Object.values(state.strict_reviews),
     notices: state.notices,
     diagnostics: state.diagnostics,
   };
@@ -665,6 +675,37 @@ function applyGuardianReviewStarted(
   };
 }
 
+function applyStrictReviewRequired(
+  state: ConversationProjectionState,
+  event: Extract<
+    ConversationProjectionEvent,
+    { type: "strict_review_required" }
+  >,
+): ConversationProjectionState {
+  return {
+    ...state,
+    strict_reviews: {
+      ...state.strict_reviews,
+      [event.turn_id]: {
+        thread_id: event.thread_id,
+        turn_id: event.turn_id,
+        started_at_ms: event.started_at_ms,
+      },
+    },
+  };
+}
+
+function clearStrictReview(
+  state: ConversationProjectionState,
+  turnId: string,
+): ConversationProjectionState {
+  if (!state.strict_reviews[turnId]) {
+    return state;
+  }
+  const { [turnId]: _removed, ...strictReviews } = state.strict_reviews;
+  return { ...state, strict_reviews: strictReviews };
+}
+
 function applyGuardianReviewCompleted(
   state: ConversationProjectionState,
   event: Extract<
@@ -821,6 +862,7 @@ function eventThreadIdOf(
     case "turn_diff_updated":
     case "turn_moderation_metadata":
     case "guardian_warning":
+    case "strict_review_required":
       return event.thread_id;
     case "guardian_review_started":
     case "guardian_review_completed":

@@ -69,6 +69,7 @@ struct RemoteProcessControl {
 #[derive(Debug)]
 enum RemoteProcessCommand {
     Write(Vec<u8>),
+    #[cfg(test)]
     Signal,
     Terminate,
 }
@@ -648,6 +649,7 @@ impl ExecutionProcessServer {
         Ok(handle.status())
     }
 
+    #[cfg(test)]
     pub fn signal(&self, process_id: &str) -> Result<(), ExecutionProcessError> {
         let state = self.inner.lock().map_err(|_| ExecutionProcessError::Lock)?;
         let entry = state
@@ -1142,6 +1144,7 @@ async fn run_remote_process(
                             "writeId": uuid::Uuid::new_v4().to_string(),
                         })).await;
                     }
+                    #[cfg(test)]
                     RemoteProcessCommand::Signal => {
                         let _ = client.request::<Value>("process/signal", json!({
                             "processId": process_id.clone(),

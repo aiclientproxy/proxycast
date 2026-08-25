@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.134.0",
+  "version": "1.135.0",
   "description": "Open-source full-stack desktop AI agent for global users: coding, research, content, files, terminals, tools, multimodal work, and multi-agent workflows.",
   "keywords": [
     "ai",
@@ -229,8 +229,16 @@
     "smoke:local-history-import-visual-audit": "node scripts/electron/local-history-import-visual-audit-smoke.mjs",
     "smoke:local-history-import-real-sample-visual-audit": "node scripts/electron/local-history-import-real-sample-visual-audit-smoke.mjs",
     "smoke:mcp-config-electron-fixture": "node scripts/electron/mcp-config-fixture-smoke.mjs",
+    "smoke:model-provider-capabilities-electron-gate-b": "node scripts/electron/model-provider-capabilities-gate-b.mjs",
+    "smoke:thread-queue-electron-gate-b": "node scripts/electron/thread-queue-gate-b.mjs",
+    "smoke:thread-revert-electron-gate-b": "node scripts/electron/thread-revert-gate-b.mjs",
+    "smoke:project-directory-electron-gate-b": "node scripts/electron/project-directory-gate-b.mjs",
+    "smoke:strict-review-electron-gate-b": "node scripts/electron/strict-review-gate-b.mjs",
+    "smoke:environment-lifecycle-electron-gate-b": "node scripts/electron/environment-lifecycle-gate-b.mjs",
     "smoke:mcp-oauth-notification-electron-fixture": "npm run build:renderer:electron && node scripts/electron/mcp-oauth-notification-fixture-smoke.mjs",
     "smoke:mcp-startup-notification-electron-fixture": "npm run build:renderer:electron && node scripts/electron/mcp-startup-notification-fixture-smoke.mjs",
+    "smoke:mcp-event-stream-electron-gate-b": "npm run build:renderer:electron && node scripts/electron/mcp-event-stream-gate-b.mjs",
+    "smoke:mcp-resource-origin-electron-gate-b": "node scripts/electron/mcp-resource-origin-gate-b.mjs",
     "smoke:settings-about-electron-fixture": "node scripts/electron/settings-about-fixture-smoke.mjs",
     "smoke:settings-stats-electron-fixture": "node scripts/electron/settings-stats-fixture-smoke.mjs",
     "smoke:settings-environment-electron-fixture": "node scripts/electron/settings-environment-fixture-smoke.mjs",

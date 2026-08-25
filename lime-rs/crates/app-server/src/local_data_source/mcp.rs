@@ -24,7 +24,6 @@ use app_server_protocol::McpServerLifecycleResponse;
 use app_server_protocol::McpServerListResponse;
 use app_server_protocol::McpServerOauthLoginParams;
 use app_server_protocol::McpServerStartParams;
-use app_server_protocol::McpServerStatusListResponse;
 use app_server_protocol::McpServerStopParams;
 use app_server_protocol::McpServerUpdateParams;
 use app_server_protocol::McpToolListForContextParams;
@@ -36,7 +35,6 @@ use lime_mcp::McpError;
 use lime_mcp::McpManagerState;
 use lime_mcp::McpServerConfig;
 use lime_services::mcp_service::McpService;
-use serde_json::json;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::Path;
@@ -84,12 +82,7 @@ pub(crate) async fn list_mcp_servers_with_status_v2(
                 icons: None,
                 website_url: None,
             });
-        let auth_status = match runtime_status.auth_status.mode.as_str() {
-            "oauth" => McpAuthStatus::OAuth,
-            "static_headers" if runtime_status.auth_status.available => McpAuthStatus::BearerToken,
-            "none" => McpAuthStatus::Unsupported,
-            _ => McpAuthStatus::Unknown,
-        };
+        let auth_status = lower_mcp_auth_status(&runtime_status.auth_status);
         let server_tools = tools
             .iter()
             .filter(|tool| tool.server_name == server.name)
@@ -474,6 +467,16 @@ fn parse_mcp_server_config(config_value: &Value) -> McpServerConfig {
     McpServerConfig::from_value(config_value.clone()).unwrap_or_default()
 }
 
+fn lower_mcp_auth_status(status: &lime_mcp::McpServerAuthStatus) -> McpAuthStatus {
+    match (status.mode.as_str(), status.available) {
+        ("oauth", true) => McpAuthStatus::OAuth,
+        ("oauth", false) => McpAuthStatus::NotLoggedIn,
+        ("static_headers", true) => McpAuthStatus::BearerToken,
+        ("none", _) => McpAuthStatus::Unsupported,
+        _ => McpAuthStatus::Unknown,
+    }
+}
+
 fn mcp_server_from_value(value: Value) -> Result<McpServer, RuntimeCoreError> {
     serde_json::from_value(value).map_err(data_error)
 }
@@ -503,5 +506,43 @@ fn to_mcp_content(content: lime_mcp::McpContent) -> McpContent {
         lime_mcp::McpContent::Resource { uri, text, blob } => {
             McpContent::Resource { uri, text, blob }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn auth_status(mode: &str, available: bool) -> lime_mcp::McpServerAuthStatus {
+        lime_mcp::McpServerAuthStatus {
+            mode: mode.to_string(),
+            available,
+            reason_code: None,
+            action_plan: None,
+        }
+    }
+
+    #[test]
+    fn lowers_exact_mcp_auth_states() {
+        assert_eq!(
+            lower_mcp_auth_status(&auth_status("oauth", false)),
+            McpAuthStatus::NotLoggedIn
+        );
+        assert_eq!(
+            lower_mcp_auth_status(&auth_status("oauth", true)),
+            McpAuthStatus::OAuth
+        );
+        assert_eq!(
+            lower_mcp_auth_status(&auth_status("static_headers", true)),
+            McpAuthStatus::BearerToken
+        );
+        assert_eq!(
+            lower_mcp_auth_status(&auth_status("none", true)),
+            McpAuthStatus::Unsupported
+        );
+        assert_eq!(
+            lower_mcp_auth_status(&auth_status("static_headers", false)),
+            McpAuthStatus::Unknown
+        );
     }
 }

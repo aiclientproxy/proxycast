@@ -232,6 +232,7 @@ fn canonical_mcp_output_projects_codex_result_shape_when_only_truncation_remains
             call_id: "mcp-1".to_string(),
             server_name: "node_repl".to_string(),
             tool_name: "exec".to_string(),
+            app_context: None,
             mcp_app_resource_uri: None,
             plugin_id: None,
             arguments: Vec::new(),
@@ -284,6 +285,13 @@ fn canonical_mcp_output_is_size_bounded_and_redacts_sensitive_fields() {
             call_id: "mcp-safe".to_string(),
             server_name: "docs".to_string(),
             tool_name: "search".to_string(),
+            app_context: Some(canonical::McpToolCallAppContext {
+                connector_id: "docs".to_string(),
+                link_id: Some("account-1".to_string()),
+                resource_uri: Some("ui://plugin/docs.html".to_string()),
+                app_name: Some("Docs".to_string()),
+                action_name: Some("search".to_string()),
+            }),
             mcp_app_resource_uri: Some("ui://plugin/docs.html".to_string()),
             plugin_id: Some("docs-plugin".to_string()),
             arguments: vec![canonical::ToolArgument {
@@ -306,6 +314,7 @@ fn canonical_mcp_output_is_size_bounded_and_redacts_sensitive_fields() {
     let projected = project_thread(thread).expect("project bounded MCP result");
     let v2::ThreadItem::McpToolCall {
         arguments,
+        app_context,
         mcp_app_resource_uri,
         plugin_id,
         result,
@@ -318,6 +327,17 @@ fn canonical_mcp_output_is_size_bounded_and_redacts_sensitive_fields() {
     let wire = serde_json::to_value(result).expect("MCP result wire");
     assert!(serde_json::to_vec(result).unwrap().len() <= MAX_DISPLAY_JSON_BYTES);
     assert_eq!(arguments[0]["value"], "[redacted]");
+    assert_eq!(
+        app_context,
+        &Some(v2::McpToolCallAppContext {
+            connector_id: "docs".to_string(),
+            link_id: Some("account-1".to_string()),
+            resource_uri: Some("ui://plugin/docs.html".to_string()),
+            app_name: Some("Docs".to_string()),
+            template_id: None,
+            action_name: Some("search".to_string()),
+        })
+    );
     assert_eq!(
         mcp_app_resource_uri.as_deref(),
         Some("ui://plugin/docs.html")

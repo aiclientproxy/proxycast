@@ -44,6 +44,7 @@ describe("workspacePluginSurfaceModel", () => {
         metadata: {
           canonical_type: "mcpToolCall",
           server: "plugin__demo__server",
+          app_context: { connectorId: "connector-demo" },
           plugin_id: "demo-plugin",
           mcp_app_resource_uri: "ui://demo/report.html",
         },
@@ -58,6 +59,7 @@ describe("workspacePluginSurfaceModel", () => {
         activeStrategy: "webContentsView",
         supportedStrategies: ["webContentsView"],
         mcpApp: {
+          connectorId: "connector-demo",
           resourceUri: "ui://demo/report.html",
           serverName: "plugin__demo__server",
           toolItemId: "item-mcp-app-1",
@@ -88,6 +90,49 @@ describe("workspacePluginSurfaceModel", () => {
         ["mcp-app-item-mcp-app-1"],
       ),
     ).toEqual([]);
+  });
+
+  it("应从 codex_apps canonical appContext 恢复无 Plugin identity 的资源面板", () => {
+    expect(
+      buildWorkspacePluginSurfacesFromThreadItems([
+        {
+          id: "item-app-calendar",
+          thread_id: "thread-1",
+          turn_id: "turn-1",
+          sequence: 4,
+          status: "completed",
+          started_at: "2026-08-04T00:00:00.000Z",
+          updated_at: "2026-08-04T00:00:01.000Z",
+          completed_at: "2026-08-04T00:00:01.000Z",
+          type: "tool_call",
+          tool_name: "mcp__codex_apps__calendar_search",
+          success: true,
+          metadata: {
+            canonical_type: "mcpToolCall",
+            server: "codex_apps",
+            app_context: {
+              connectorId: "calendar",
+              appName: "Calendar",
+            },
+            mcp_app_resource_uri: "ui://calendar/event.html",
+          },
+        },
+      ]),
+    ).toEqual([
+      {
+        appId: "calendar",
+        title: "Calendar",
+        containerId: "mcp-app-item-app-calendar",
+        activeStrategy: "webContentsView",
+        supportedStrategies: ["webContentsView"],
+        mcpApp: {
+          connectorId: "calendar",
+          resourceUri: "ui://calendar/event.html",
+          serverName: "codex_apps",
+          toolItemId: "item-app-calendar",
+        },
+      },
+    ]);
   });
 
   it("应按 canonical thread identity 过滤旧会话 item", () => {

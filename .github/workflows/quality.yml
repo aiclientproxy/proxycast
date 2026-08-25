@@ -361,6 +361,9 @@ jobs:
           node scripts/lib/rusty-v8-artifacts.mjs --github-env
           cargo clean --manifest-path lime-rs/Cargo.toml -p v8
 
+      - name: Prepare sherpa-onnx runtime
+        run: node scripts/prepare-sherpa-onnx-runtime.mjs --target x86_64-pc-windows-msvc
+
       - name: Build Windows app-server and code-mode-host sidecars
         run: cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host
 

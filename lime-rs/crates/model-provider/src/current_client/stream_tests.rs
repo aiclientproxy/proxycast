@@ -495,6 +495,72 @@ async fn openai_finish_reason_is_terminal_without_done_sentinel() {
 }
 
 #[tokio::test]
+async fn openai_node_style_chunked_keep_alive_finishes_after_done_sentinel() {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind fixture server");
+    let address = listener.local_addr().expect("fixture address");
+    let body = concat!(
+        "data: {\"id\":\"chatcmpl-node\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"fixture\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"DESKTOP_GO_TASK_VISIBLE\"},\"finish_reason\":null}]}\n\n",
+        "data: {\"id\":\"chatcmpl-node\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"fixture\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n",
+        "data: [DONE]\n\n",
+    );
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.expect("accept request");
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 1024];
+        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+            let read = socket.read(&mut buffer).await.expect("read request");
+            if read == 0 {
+                return;
+            }
+            request.extend_from_slice(&buffer[..read]);
+        }
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\n\r\n{:X}\r\n{body}\r\n0\r\n\r\n",
+            body.len(),
+        );
+        socket
+            .write_all(response.as_bytes())
+            .await
+            .expect("write response");
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    });
+
+    let response = Client::builder()
+        .no_proxy()
+        .pool_idle_timeout(Duration::from_secs(300))
+        .build()
+        .expect("HTTP client")
+        .get(format!("http://{address}"))
+        .send()
+        .await
+        .expect("SSE response");
+    let mut stream = Box::pin(openai_chat_sse(response));
+    let events = timeout(Duration::from_secs(1), async {
+        let mut events = Vec::new();
+        while let Some(event) = stream.next().await {
+            events.push(event.expect("provider event"));
+        }
+        events
+    })
+    .await
+    .expect("chunked keep-alive response should finish");
+
+    assert!(events.iter().any(|event| {
+        matches!(
+            event,
+            CanonicalLlmEvent::TextDelta { text, .. }
+                if text == "DESKTOP_GO_TASK_VISIBLE"
+        )
+    }));
+    assert!(events
+        .iter()
+        .any(|event| matches!(event, CanonicalLlmEvent::Finish { .. })));
+    server.await.expect("fixture server");
+}
+
+#[tokio::test]
 async fn responses_finish_releases_http_body_before_consumer_polls_again() {
     assert_finish_releases_http_body(
         "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-close\",\"output\":[]}}\n\n",

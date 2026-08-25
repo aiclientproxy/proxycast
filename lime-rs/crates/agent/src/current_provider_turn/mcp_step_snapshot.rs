@@ -368,6 +368,21 @@ fn mcp_tool_definitions(
         .collect()
 }
 
+fn resolved_tool_environment_ids(
+    definitions: &[RuntimeToolDefinition],
+    mut explicit_environment_ids: HashMap<String, String>,
+    default_environment_id: Option<&str>,
+) -> HashMap<String, String> {
+    if let Some(environment_id) = default_environment_id {
+        for definition in definitions {
+            explicit_environment_ids
+                .entry(definition.name.clone())
+                .or_insert_with(|| environment_id.to_string());
+        }
+    }
+    explicit_environment_ids
+}
+
 #[derive(Clone)]
 struct CurrentTurnToolStepSnapshotSource {
     state: AgentRuntimeState,
@@ -455,6 +470,8 @@ impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
                         Ok((tool_name, environment_id.to_string()))
                     })
                     .collect::<Result<HashMap<_, _>, String>>()?;
+            let default_environment_id =
+                super::environment::primary_environment_id(self.turn_context.as_ref());
             let executor = RuntimeToolExecutorHandle::new(Arc::new(CurrentTurnToolExecutor {
                 state: self.state.clone(),
                 policy: self.policy.clone(),
@@ -493,17 +510,22 @@ impl RuntimeToolStepSnapshotSource for CurrentTurnToolStepSnapshotSource {
                 self.supports_custom_tools,
                 code_mode_session.is_some(),
             )?;
-            let definitions = tool_plan
+            let definitions: Vec<RuntimeToolDefinition> = tool_plan
                 .model_visible_tools
                 .into_iter()
                 .map(|tool| tool.definition)
                 .collect();
             let nested_tools = tool_plan.nested_tools;
+            let tool_environment_ids = resolved_tool_environment_ids(
+                &definitions,
+                mcp_tool_environment_ids,
+                default_environment_id.as_deref(),
+            );
             let snapshot = RuntimeToolStepSnapshot::with_tool_metadata(
                 definitions,
                 executor,
                 serial_mcp_tool_names,
-                mcp_tool_environment_ids,
+                tool_environment_ids,
             );
             let snapshot = match self.state.filesystem_gateway() {
                 Some(gateway) => snapshot.with_filesystem_gateway(gateway),
@@ -590,6 +612,28 @@ mod tests {
         assert!(compact.iter().any(|tool| tool.name == "request_user_input"));
         assert!(!compact.iter().any(|tool| tool.name == "update_plan"));
         assert!(direct.is_empty());
+    }
+
+    #[test]
+    fn primary_environment_defaults_native_tools_without_overriding_mcp_provenance() {
+        let definitions = vec![
+            RuntimeToolDefinition::new("exec_command", "Execute", json!({})),
+            RuntimeToolDefinition::new("docs__search", "Search docs", json!({})),
+        ];
+        let environment_ids = resolved_tool_environment_ids(
+            &definitions,
+            HashMap::from([("docs__search".to_string(), "local".to_string())]),
+            Some("remote-primary"),
+        );
+
+        assert_eq!(
+            environment_ids.get("exec_command").map(String::as_str),
+            Some("remote-primary")
+        );
+        assert_eq!(
+            environment_ids.get("docs__search").map(String::as_str),
+            Some("local")
+        );
     }
 
     #[test]

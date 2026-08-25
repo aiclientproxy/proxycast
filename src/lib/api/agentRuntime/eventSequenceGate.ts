@@ -128,6 +128,7 @@ function processNotification(
     if (
       notification.method === "warning" ||
       notification.method === "guardianWarning" ||
+      notification.method === "autoApprovalReview/strictReviewRequired" ||
       notification.method === "error" ||
       notification.method === "item/autoApprovalReview/started" ||
       notification.method === "item/autoApprovalReview/completed" ||

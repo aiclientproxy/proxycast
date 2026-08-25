@@ -30,9 +30,25 @@ async fn exact_mcp_methods_are_registered_and_fail_closed_on_invalid_identity() 
         .as_str()
         .is_some_and(|message| message.contains("requires server and uri")));
 
-    let tool_error = request_error(
+    let origin_without_thread = request_error(
         &server,
         3,
+        METHOD_MCP_SERVER_RESOURCE_READ,
+        json!({
+            "server": "codex_apps",
+            "uri": "ui://calendar/event",
+            "originCallId": "item-calendar"
+        }),
+    )
+    .await;
+    assert_eq!(origin_without_thread["error"]["code"], -32600);
+    assert!(origin_without_thread["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("originCallId requires threadId")));
+
+    let tool_error = request_error(
+        &server,
+        4,
         METHOD_MCP_SERVER_TOOL_CALL,
         json!({"threadId": "", "server": "docs", "tool": "search"}),
     )
@@ -185,6 +201,34 @@ async fn mcp_event_stream_uses_public_transport_and_cleans_up_on_stop() {
         json!({
             "jsonrpc": "2.0",
             "id": 4,
+            "method": METHOD_MCP_SERVER_RESOURCE_READ,
+            "params": {
+                "threadId": thread_id,
+                "server": "plugin__event-plugin__events",
+                "uri": "ui://calendar/event",
+                "connectorId": "calendar"
+            }
+        }),
+    )
+    .await;
+    let resource = read_response(&mut output_lines, 4).await;
+    let resource_meta: Value = serde_json::from_str(
+        resource["result"]["contents"][0]["text"]
+            .as_str()
+            .expect("resource metadata text"),
+    )
+    .expect("decode resource metadata");
+    assert_eq!(
+        resource_meta.pointer("/x-codex-turn-metadata/mcp_request_meta/selected_connector_ids/0"),
+        Some(&json!("calendar"))
+    );
+    assert_eq!(resource["result"]["originCallId"], Value::Null);
+
+    write_message(
+        &mut input_client,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 5,
             "method": METHOD_MCP_SERVER_EVENT_STREAM_START,
             "params": {
                 "threadId": thread_id,
@@ -229,7 +273,7 @@ async fn mcp_event_stream_uses_public_transport_and_cleans_up_on_stop() {
 
     let started_response = after_active
         .iter()
-        .find(|message| message["id"] == json!(4))
+        .find(|message| message["id"] == json!(5))
         .expect("event stream start response after active barrier");
     assert!(
         started_response.get("error").is_none(),
@@ -240,13 +284,13 @@ async fn mcp_event_stream_uses_public_transport_and_cleans_up_on_stop() {
         &mut input_client,
         json!({
             "jsonrpc": "2.0",
-            "id": 5,
+            "id": 6,
             "method": METHOD_MCP_SERVER_EVENT_STREAM_STOP,
             "params": {"subscriptionId": "subscription-1"}
         }),
     )
     .await;
-    let stopped = read_response(&mut output_lines, 5).await;
+    let stopped = read_response(&mut output_lines, 6).await;
     assert_eq!(stopped["result"], json!({}));
 
     drop(input_client);
@@ -288,10 +332,16 @@ rl.on("line", (line) => {
   if (!line.trim()) return;
   const message = JSON.parse(line);
   if (message.method === "initialize") {
-    send({jsonrpc:"2.0", id:message.id, result:{protocolVersion:"2025-03-26", capabilities:{}, serverInfo:{name:"event-fixture", version:"1"}}});
+    send({jsonrpc:"2.0", id:message.id, result:{protocolVersion:"2025-03-26", capabilities:{resources:{}}, serverInfo:{name:"event-fixture", version:"1"}}});
   } else if (message.method === "notifications/initialized") {
   } else if (message.method === "tools/list") {
     send({jsonrpc:"2.0", id:message.id, result:{tools:[]}});
+  } else if (message.method === "resources/read") {
+    send({jsonrpc:"2.0", id:message.id, result:{contents:[{
+      uri:message.params?.uri,
+      mimeType:"application/json",
+      text:JSON.stringify(message.params?._meta ?? null)
+    }]}});
   } else if (message.method === "events/stream") {
     const meta = {"io.modelcontextprotocol/subscriptionId": message.id, provider:"event-fixture"};
     send({jsonrpc:"2.0", method:"notifications/events/active", params:{_meta:meta, status:"active"}});

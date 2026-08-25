@@ -34067,9 +34067,9 @@
         "McpAuthStatus": {
           "description": "Authentication state reported by the current MCP inventory contract.",
           "enum": [
-            "bearertoken",
-            "notloggedin",
-            "oauth",
+            "bearerToken",
+            "notLoggedIn",
+            "oAuth",
             "unknown",
             "unsupported"
           ],
@@ -34571,9 +34571,9 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "description": "Authentication state reported by the current MCP inventory contract.",
       "enum": [
-        "bearertoken",
-        "notloggedin",
-        "oauth",
+        "bearerToken",
+        "notLoggedIn",
+        "oAuth",
         "unknown",
         "unsupported"
       ],
@@ -35649,9 +35649,9 @@
         "McpAuthStatus": {
           "description": "Authentication state reported by the current MCP inventory contract.",
           "enum": [
-            "bearertoken",
-            "notloggedin",
-            "oauth",
+            "bearerToken",
+            "notLoggedIn",
+            "oAuth",
             "unknown",
             "unsupported"
           ],

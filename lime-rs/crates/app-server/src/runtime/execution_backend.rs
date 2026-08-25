@@ -142,10 +142,24 @@ pub trait ExecutionBackend: Send + Sync {
         _thread_id: &str,
         _server: &str,
         _uri: &str,
+        _meta: Option<serde_json::Value>,
     ) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, RuntimeCoreError>
     {
         Err(RuntimeCoreError::Backend(
             "runtime backend does not expose MCP resources".to_string(),
+        ))
+    }
+
+    async fn read_mcp_runtime_resource_for_origin(
+        &self,
+        _session_id: &str,
+        _thread_id: &str,
+        _server: &str,
+        _origin: &lime_mcp::McpResourceOrigin,
+    ) -> Result<app_server_protocol::protocol::v2::McpServerResourceReadResponse, RuntimeCoreError>
+    {
+        Err(RuntimeCoreError::Backend(
+            "runtime backend does not expose origin-scoped MCP resources".to_string(),
         ))
     }
 

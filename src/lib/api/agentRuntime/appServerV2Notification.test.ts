@@ -291,8 +291,7 @@ describe("App Server v2 direct notifications", () => {
     const payload = projectAppServerV2NotificationPayload(notification);
     expect(payload).toMatchObject({
       code: "guardian_warning",
-      message:
-        "Guardian review rejected too many requests; turn interrupted.",
+      message: "Guardian review rejected too many requests; turn interrupted.",
       protocol_method: "guardianWarning",
       type: "guardian_warning",
     });
@@ -304,8 +303,7 @@ describe("App Server v2 direct notifications", () => {
     expect(event).toMatchObject({
       type: "guardian_warning",
       thread_id: threadId,
-      message:
-        "Guardian review rejected too many requests; turn interrupted.",
+      message: "Guardian review rejected too many requests; turn interrupted.",
     });
     const reducer = createConversationProjectionReducer({ threadId });
     reducer.dispatch(event!);
@@ -314,8 +312,7 @@ describe("App Server v2 direct notifications", () => {
       thread_id: threadId,
       level: "warning",
       code: "guardian_warning",
-      message:
-        "Guardian review rejected too many requests; turn interrupted.",
+      message: "Guardian review rejected too many requests; turn interrupted.",
     });
     expect(
       projectAgentRuntimeSequenceGateNotifications(
@@ -951,6 +948,65 @@ describe("App Server v2 direct notifications", () => {
     unlisten();
   });
 
+  it("取消回合关闭旧 route 后，旧 delta 不应绑定到下一回合", async () => {
+    let subscription: AppServerEventBusSubscription | undefined;
+    const eventBus = {
+      subscribe(next: AppServerEventBusSubscription) {
+        subscription = next;
+        return vi.fn();
+      },
+    };
+    const router = new AppServerAgentSessionEventDrainRouter(
+      { drainEvents: () => [] },
+      eventBus,
+    );
+    const oldEventName = "agent_stream_cancelled_old";
+    const nextEventName = "agent_stream_cancelled_next";
+    const oldTurnId = "turn-cancelled-old";
+    const nextTurnId = "turn-cancelled-next";
+    const received: unknown[] = [];
+    const listen = createAgentRuntimeEventListener({
+      listen: vi.fn().mockResolvedValue(vi.fn()),
+    });
+    const unlisten = await listen(nextEventName, (event) => {
+      received.push(event.payload);
+    });
+    router.register({ eventName: oldEventName, sessionId: threadId });
+
+    const oldDelta = directNotification("item/agentMessage/delta", {
+      delta: "旧回合正文",
+      itemId: "item-old",
+      threadId,
+      turnId: oldTurnId,
+    });
+    subscription?.onNotifications?.([oldDelta]);
+    router.close({
+      eventName: oldEventName,
+      sessionId: threadId,
+      turnId: oldTurnId,
+    });
+    router.register({ eventName: nextEventName, sessionId: threadId });
+
+    subscription?.onNotifications?.([
+      oldDelta,
+      directNotification("item/agentMessage/delta", {
+        delta: "新回合正文",
+        itemId: "item-next",
+        threadId,
+        turnId: nextTurnId,
+      }),
+    ]);
+
+    expect(received).toEqual([
+      expect.objectContaining({
+        text: "新回合正文",
+        turn_id: nextTurnId,
+        type: "text_delta",
+      }),
+    ]);
+    unlisten();
+  });
+
   it.each([
     ["response 先到", true],
     ["drain 先到", false],
@@ -1003,6 +1059,58 @@ describe("App Server v2 direct notifications", () => {
       unlisten();
     },
   );
+
+  it("字段顺序和顶层 envelope 不同的 direct delta 仍应识别为 response/drain 镜像", async () => {
+    let subscription: AppServerEventBusSubscription | undefined;
+    const eventBus = {
+      subscribe(next: AppServerEventBusSubscription) {
+        subscription = next;
+        return vi.fn();
+      },
+    };
+    const router = new AppServerAgentSessionEventDrainRouter(
+      { drainEvents: () => [] },
+      eventBus,
+    );
+    const received: unknown[] = [];
+    const eventName = "agent_stream_direct_v2_stable_mirror";
+    const listen = createAgentRuntimeEventListener({
+      listen: vi.fn().mockResolvedValue(vi.fn()),
+    });
+    const unlisten = await listen(eventName, (event) => {
+      received.push(event.payload);
+    });
+    const route = router.register({ eventName, sessionId: threadId });
+    const responseNotification = {
+      method: "item/agentMessage/delta",
+      params: {
+        delta: "唯一首字",
+        itemId: "item-stable-mirrored",
+        threadId,
+        turnId,
+      },
+      transport: "response",
+    } as AppServerJsonRpcNotification;
+    const drainNotification = {
+      metadata: { source: "drain" },
+      method: "item/agentMessage/delta",
+      params: {
+        turnId,
+        threadId,
+        itemId: "item-stable-mirrored",
+        delta: "唯一首字",
+      },
+    } as AppServerJsonRpcNotification;
+
+    route?.publish([responseNotification]);
+    subscription?.onNotifications?.([drainNotification]);
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toEqual(
+      expect.objectContaining({ text: "唯一首字", type: "text_delta" }),
+    );
+    unlisten();
+  });
 
   it("同一来源的相同 direct delta 不应被跨来源去重误删", async () => {
     const eventBus = {
@@ -1480,6 +1588,42 @@ describe("App Server v2 direct notifications", () => {
       },
     ]);
 
+    const strictNotification = directNotification(
+      "autoApprovalReview/strictReviewRequired",
+      {
+        startedAtMs: 1_783_814_400_100,
+        threadId,
+        turnId,
+      },
+    );
+    expect(readAppServerV2NotificationRoute(strictNotification)).toEqual({
+      terminal: false,
+      threadId,
+      turnId,
+    });
+    const strictPayload =
+      projectAppServerV2NotificationPayload(strictNotification);
+    expect(strictPayload).toMatchObject({
+      protocol_method: "autoApprovalReview/strictReviewRequired",
+      server_event_emitted_at: 1_783_814_400_100,
+      started_at_ms: 1_783_814_400_100,
+      type: "strict_review_required",
+    });
+    const strictEvent = conversationProjectionEventFromPayload(
+      strictPayload ?? {},
+      "live",
+      "guardian-strict",
+    );
+    expect(strictEvent?.type).toBe("strict_review_required");
+    if (strictEvent) reducer.dispatch(strictEvent);
+    expect(reducer.getProjection().strict_reviews).toEqual([
+      {
+        started_at_ms: 1_783_814_400_100,
+        thread_id: threadId,
+        turn_id: turnId,
+      },
+    ]);
+
     const completedNotification = directNotification(
       "item/autoApprovalReview/completed",
       {
@@ -1518,6 +1662,22 @@ describe("App Server v2 direct notifications", () => {
         },
       },
     ]);
+    expect(reducer.getProjection().strict_reviews).toEqual([]);
+  });
+
+  it("rejects malformed strict-review notifications", () => {
+    for (const params of [
+      { startedAtMs: "now", threadId, turnId },
+      { startedAtMs: 1, threadId },
+      { startedAtMs: 1, threadId, turnId, extra: true },
+    ]) {
+      const notification = directNotification(
+        "autoApprovalReview/strictReviewRequired",
+        params,
+      );
+      expect(readAppServerV2NotificationRoute(notification)).toBeNull();
+      expect(projectAppServerV2NotificationPayload(notification)).toBeNull();
+    }
   });
 
   it("rejects Guardian reviews with invalid optional field types", () => {

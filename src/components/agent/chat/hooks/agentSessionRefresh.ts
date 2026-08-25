@@ -14,15 +14,24 @@ export interface AgentSessionDetailRefreshRequest {
   detailMergeMode?: AgentSessionDetailMergeMode | null;
 }
 
+export type AgentSessionReadModelTimelineMode = "merge" | "replace";
+
+export interface AgentSessionReadModelRefreshRequest {
+  timelineMode?: AgentSessionReadModelTimelineMode;
+}
+
 export interface AgentSessionReadModelSnapshot {
   threadRead: AgentRuntimeThreadReadModel | null;
+  timelineMode: AgentSessionReadModelTimelineMode;
 }
 
 export function createAgentSessionReadModelSnapshot(
   threadRead?: AgentRuntimeThreadReadModel | null,
+  request?: AgentSessionReadModelRefreshRequest,
 ): AgentSessionReadModelSnapshot {
   return {
     threadRead: threadRead ?? null,
+    timelineMode: request?.timelineMode ?? "merge",
   };
 }
 
@@ -31,10 +40,40 @@ export function mergeAgentSessionReadModelThreadItems(
   snapshot: AgentSessionReadModelSnapshot,
 ): AgentThreadItem[] {
   const incomingItems = snapshot.threadRead?.thread_items;
+  if (snapshot.timelineMode === "replace") {
+    return Array.isArray(incomingItems) ? [...incomingItems] : [];
+  }
   if (!Array.isArray(incomingItems) || incomingItems.length === 0) {
     return currentItems;
   }
   return mergeRuntimeSyncThreadItems(currentItems, incomingItems);
+}
+
+export function filterAgentSessionReadModelTurns<T extends { id: string }>(
+  currentTurns: T[],
+  snapshot: AgentSessionReadModelSnapshot,
+): T[] {
+  if (snapshot.timelineMode !== "replace") return currentTurns;
+  const turnIds = new Set(
+    (snapshot.threadRead?.turns ?? []).map((turn) => turn.turn_id),
+  );
+  return currentTurns.filter((turn) => turnIds.has(turn.id));
+}
+
+export function filterAgentSessionReadModelMessages<
+  T extends { runtimeTurnId?: string | null },
+>(currentMessages: T[], snapshot: AgentSessionReadModelSnapshot): T[] {
+  if (snapshot.timelineMode !== "replace") return currentMessages;
+  const turnIds = new Set([
+    ...(snapshot.threadRead?.turns ?? []).map((turn) => turn.turn_id),
+    ...(snapshot.threadRead?.thread_items ?? []).flatMap((item) =>
+      item.turn_id ? [item.turn_id] : [],
+    ),
+  ]);
+  return currentMessages.filter((message) => {
+    const turnId = message.runtimeTurnId?.trim();
+    return !turnId || turnIds.has(turnId);
+  });
 }
 
 export async function hydrateFreshAgentSessionReadModel(
@@ -141,6 +180,7 @@ interface RefreshAgentSessionReadModelOptions {
   targetSessionId?: string;
   applyReadModelSnapshot: (snapshot: AgentSessionReadModelSnapshot) => void;
   onWarn?: (error: unknown) => void;
+  request?: AgentSessionReadModelRefreshRequest;
 }
 
 export async function refreshAgentSessionReadModelState(
@@ -163,7 +203,9 @@ export async function refreshAgentSessionReadModelState(
     if (sessionIdRef.current !== resolvedSessionId) {
       return false;
     }
-    applyReadModelSnapshot(createAgentSessionReadModelSnapshot(threadRead));
+    applyReadModelSnapshot(
+      createAgentSessionReadModelSnapshot(threadRead, options.request),
+    );
     return true;
   } catch (error) {
     onWarn?.(error);

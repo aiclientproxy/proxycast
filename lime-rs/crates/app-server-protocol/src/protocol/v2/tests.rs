@@ -768,6 +768,19 @@ fn media_read_round_trips_thread_scoped_shape() {
 
 #[test]
 fn mcp_server_exact_methods_round_trip_codex_wire() {
+    assert_eq!(
+        serde_json::to_value(McpAuthStatus::NotLoggedIn).unwrap(),
+        json!("notLoggedIn")
+    );
+    assert_eq!(
+        serde_json::to_value(McpAuthStatus::BearerToken).unwrap(),
+        json!("bearerToken")
+    );
+    assert_eq!(
+        serde_json::to_value(McpAuthStatus::OAuth).unwrap(),
+        json!("oAuth")
+    );
+
     let resource_request = json!({
         "id": 6,
         "method": "mcpServer/resource/read",

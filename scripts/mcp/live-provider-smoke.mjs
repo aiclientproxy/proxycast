@@ -323,12 +323,12 @@ export async function runMcpLiveProviderSmoke({
       {},
       entries,
     );
-    const statusServer = Array.isArray(statusResult?.servers)
-      ? statusResult.servers.find((server) => server?.name === serverName)
+    const statusServer = Array.isArray(statusResult?.data)
+      ? statusResult.data.find((server) => server?.name === serverName)
       : null;
     assert(statusServer, "mcpServerStatus/list did not return live provider");
     assert(
-      statusServer.is_running === true,
+      statusServer.runtimeStatus === "connected",
       "live provider did not reach running status",
     );
 
@@ -463,15 +463,12 @@ export async function runMcpLiveProviderSmoke({
       serverName,
       provider: live.evidence,
       status: {
-        transport: statusServer.runtime_status?.transport ?? null,
-        supportsTools:
-          statusServer.server_info?.supports_tools ??
-          statusServer.runtime_status?.server_info?.supports_tools ??
-          null,
+        transport: live.serverConfig.transport ?? null,
+        runtimeStatus: statusServer.runtimeStatus ?? null,
+        supportsTools: Object.keys(statusServer.tools ?? {}).length > 0,
         supportsResources:
-          statusServer.server_info?.supports_resources ??
-          statusServer.runtime_status?.server_info?.supports_resources ??
-          null,
+          Array.isArray(statusServer.resources) &&
+          statusServer.resources.length > 0,
       },
       toolCount: liveTools.length,
       toolsForContextCount: liveToolsForContext.length,

@@ -2,6 +2,10 @@ import type { ComponentProps, ReactNode } from "react";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { startReview } from "@/lib/api/review";
+import {
+  revertThreadHistory,
+  type ThreadRevertRequest,
+} from "@/lib/api/threadRevert";
 import type { ThreadGoal } from "@limecloud/app-server-client";
 import { StepProgress } from "@/components/workspace/layout/StepProgress";
 import { useWorkspaceNavigationActions } from "./useWorkspaceNavigationActions";
@@ -26,6 +30,7 @@ import type { CodingWorkbenchRecoveryContext } from "./codingWorkbenchRecovery";
 import type { GeneralWorkbenchCreationTaskEvent } from "../components/generalWorkbenchWorkflowData";
 import type { GeneralWorkbenchTaskRailContextInput } from "../components/generalWorkbenchTaskRailViewModel";
 import type { CanonicalChildThreadSummary } from "../projection/canonicalChildThreadSummary";
+import type { AgentSessionReadModelRefreshRequest } from "../hooks/agentSessionRefresh";
 import { useWorkspaceTaskRailRuntime } from "./useWorkspaceTaskRailRuntime";
 import { useSessionRuntimeProjectionDeferral } from "./useSessionRuntimeProjectionDeferral";
 import {
@@ -182,7 +187,9 @@ export interface WorkspaceConversationMessageListRuntime {
   onSaveMessageAsKnowledge?: ConversationScenePresentationParams["messageList"]["onSaveMessageAsKnowledge"];
   onOpenSubagentSession: ConversationScenePresentationParams["messageList"]["onOpenSubagentSession"];
   onPermissionResponse: ConversationScenePresentationParams["messageList"]["onPermissionResponse"];
-  onRefreshSessionReadModel?: () => void | Promise<unknown>;
+  onRefreshSessionReadModel?: (
+    request?: AgentSessionReadModelRefreshRequest,
+  ) => void | Promise<unknown>;
   pendingPromotedA2UIActionRequest: unknown;
   collapseCodeBlocks: ConversationScenePresentationParams["messageList"]["collapseCodeBlocks"];
   shouldCollapseCodeBlock: ConversationScenePresentationParams["messageList"]["shouldCollapseCodeBlock"];
@@ -464,6 +471,20 @@ export function useWorkspaceConversationSceneRuntime({
     await onRefreshSessionReadModel?.();
     return result;
   }, [onRefreshSessionReadModel, projectedThreadRead?.thread_id]);
+  const onRevertThread = useCallback(
+    async (request: ThreadRevertRequest) => {
+      const activeThreadId = projectedThreadRead?.thread_id?.trim() || "";
+      if (!activeThreadId || request.threadId.trim() !== activeThreadId) {
+        throw new Error("Thread revert target is no longer active");
+      }
+      await revertThreadHistory({
+        threadId: activeThreadId,
+        beforeTurnId: request.beforeTurnId,
+      });
+      await onRefreshSessionReadModel?.({ timelineMode: "replace" });
+    },
+    [onRefreshSessionReadModel, projectedThreadRead?.thread_id],
+  );
   const codingWorkbenchViews = useMemo(
     () =>
       buildWorkspaceConversationCodingViews({
@@ -669,6 +690,7 @@ export function useWorkspaceConversationSceneRuntime({
       onDeleteMessage,
       onEditMessage,
       onQuoteMessage: handleQuoteMessage,
+      onRevertThread,
       onA2UISubmit,
       onWriteFile,
       onFileClick,

@@ -94,6 +94,7 @@ describe("useAgentSessionTokenUsage", () => {
 
   it("只有缺少 usage 的图片消息才请求 recent replay", () => {
     const imageMessage = assistant({
+      runtimeTurnId: "turn-1",
       imageWorkbenchPreview: {
         taskId: "task-1",
         prompt: "青柠插画",
@@ -101,11 +102,23 @@ describe("useAgentSessionTokenUsage", () => {
         status: "complete",
       },
     });
-    expect(shouldReplayRecentAssistantTurnUsage([imageMessage])).toBe(true);
     expect(
-      shouldReplayRecentAssistantTurnUsage([
-        { ...imageMessage, usage: { input_tokens: 1, output_tokens: 0 } },
-      ]),
+      shouldReplayRecentAssistantTurnUsage(
+        [imageMessage],
+        [{ id: "turn-1", status: "running" }],
+      ),
+    ).toBe(false);
+    expect(
+      shouldReplayRecentAssistantTurnUsage(
+        [imageMessage],
+        [{ id: "turn-1", status: "completed" }],
+      ),
+    ).toBe(true);
+    expect(
+      shouldReplayRecentAssistantTurnUsage(
+        [{ ...imageMessage, usage: { input_tokens: 1, output_tokens: 0 } }],
+        [{ id: "turn-1", status: "completed" }],
+      ),
     ).toBe(false);
   });
 

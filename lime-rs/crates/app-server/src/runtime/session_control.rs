@@ -385,6 +385,7 @@ impl RuntimeCore {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(in crate::runtime) async fn resume_next_queued_turn_if_idle(
         &self,
         session_id: &str,

@@ -2,6 +2,7 @@ import type React from "react";
 import type { Artifact } from "@/lib/artifact/types";
 import type { A2UIFormData } from "@/components/workspace/a2ui/types";
 import type { AgentRuntimeThreadReadModel } from "@/lib/api/agentRuntime/sessionTypes";
+import type { ThreadRevertRequest } from "@/lib/api/threadRevert";
 import type { CanonicalChildThreadSummary } from "../projection/canonicalChildThreadSummary";
 import type { ArtifactTimelineOpenTarget } from "../utils/artifactTimelineNavigation";
 import type { buildMessageRenderGroupsProjection } from "../projection/messageTimelineRenderProjection";
@@ -52,6 +53,7 @@ export interface MessageListProps {
   onDeleteMessage?: (id: string) => void;
   onEditMessage?: (id: string, content: string) => void;
   onQuoteMessage?: (content: string, id: string) => void;
+  onRevertThread?: (request: ThreadRevertRequest) => Promise<void>;
   /** A2UI 表单提交回调 */
   onA2UISubmit?: (formData: A2UIFormData, messageId: string) => void;
   /** 是否渲染消息内联 A2UI */

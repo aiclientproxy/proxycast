@@ -10,11 +10,13 @@ import type {
   AgentInitialKnowledgePackSelectionParams,
 } from "@/types/page";
 import { InputbarApprovalPrompt } from "../components/Inputbar/components/InputbarApprovalPrompt";
+import { StrictReviewStatus } from "../components/StrictReviewStatus";
 import {
   PendingInteractionLayer,
   selectActivePendingInteraction,
 } from "../components/PendingInteractionLayer";
 import { usePendingInteractions } from "../hooks/usePendingInteractions";
+import { useStrictReviewStatus } from "../hooks/useStrictReviewStatus";
 import { useWorkspaceNavigationActions } from "./useWorkspaceNavigationActions";
 import type { ConfirmResponse } from "../types";
 import {
@@ -225,6 +227,9 @@ export function useWorkspaceInputbarSceneRuntime({
       ),
     [pendingInteractionThreadId, pendingInteractions],
   );
+  const strictReviewStatus = useStrictReviewStatus({
+    threadId: pendingInteractionThreadId,
+  });
   const directInputBlocked = canAcceptDirectInput === false;
   const knowledgeRuntime = useWorkspaceKnowledgeRuntime({
     projectRootPath,
@@ -469,12 +474,19 @@ export function useWorkspaceInputbarSceneRuntime({
       onRespond={respondPendingInteraction}
     />
   ) : null;
+  const strictReviewStatusNode =
+    strictReviewStatus &&
+    !activePendingInteraction &&
+    !inputbarApprovalAction ? (
+      <StrictReviewStatus status={strictReviewStatus} />
+    ) : null;
+  const composerStatusNode = pendingInteractionLayer ?? strictReviewStatusNode;
 
   return {
     ...presentationRuntime,
-    inputbarNode: pendingInteractionLayer ? (
+    inputbarNode: composerStatusNode ? (
       <div className="w-full min-w-0 space-y-2">
-        {pendingInteractionLayer}
+        {composerStatusNode}
         {presentationRuntime.inputbarNode}
       </div>
     ) : (

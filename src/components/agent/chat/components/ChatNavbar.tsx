@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ProjectSelector } from "@/components/projects/ProjectSelector";
 import { cn } from "@/lib/utils";
+import { ThreadProjectSelector } from "./ThreadProjectSelector";
 import {
   buildFileNameTabTooltip,
   resolveFileNameTabLabel,
@@ -42,7 +43,9 @@ interface ChatNavbarProps {
   showCanvasToggle?: boolean;
   isCanvasOpen?: boolean;
   onToggleCanvas?: () => void;
+  threadId?: string | null;
   projectId?: string | null;
+  workspaceRootPath?: string | null;
   openedProjects?: ChatNavbarOpenedProject[];
   onProjectChange?: (projectId: string | null) => void;
   onCloseProject?: (projectId: string) => void;
@@ -147,7 +150,9 @@ export const ChatNavbar: React.FC<ChatNavbarProps> = ({
   showCanvasToggle = false,
   isCanvasOpen = false,
   onToggleCanvas,
+  threadId = null,
   projectId = null,
+  workspaceRootPath = null,
   openedProjects = [],
   onProjectChange,
   onCloseProject,
@@ -252,6 +257,10 @@ export const ChatNavbar: React.FC<ChatNavbarProps> = ({
   const canCloseProjectTabs = Boolean(
     onCloseProject && orderedOpenedProjectTabs.length > 1,
   );
+  const activeWorkspace = orderedOpenedProjectTabs.find(
+    (project) => normalizeProjectId(project.id) === normalizedProjectId,
+  );
+  const currentWorkspaceName = activeWorkspace?.name || null;
 
   if (isTaskCenterChrome) {
     return (
@@ -547,6 +556,13 @@ export const ChatNavbar: React.FC<ChatNavbarProps> = ({
         className="flex min-w-0 shrink-0 flex-nowrap items-center gap-2 overflow-hidden whitespace-nowrap"
         data-testid="chat-navbar-trailing-tools"
       >
+        {threadId ? (
+          <ThreadProjectSelector
+            threadId={threadId}
+            workspaceName={currentWorkspaceName}
+            workspaceRootPath={workspaceRootPath}
+          />
+        ) : null}
         {showProjectSelector ? (
           <div className={groupClassName}>
             <ProjectSelector

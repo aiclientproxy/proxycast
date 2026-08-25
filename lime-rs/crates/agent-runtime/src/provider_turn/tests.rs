@@ -33,6 +33,9 @@ use tool_runtime::tool_lifecycle::{
     ToolLifecyclePhase, ToolOutputDeltaEvent,
 };
 
+#[path = "tests/stream_producer.rs"]
+mod stream_producer;
+
 #[test]
 fn harness_generation_projects_provider_request_controls() {
     let mut turn_context = agent_protocol::turn_context::TurnContextOverride::default();

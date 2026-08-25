@@ -3,7 +3,7 @@
   "kind": "codex-app-server-method-product-scope",
   "upstream": {
     "repository": "/Users/coso/Documents/dev/rust/codex",
-    "revision": "c9c6c0daa994109cec50fddcb57d076fdf9e738c",
+    "revision": "99660ab3c7b861c916e467581fa9b8723504d66b",
     "source": "codex-rs/app-server-protocol/src/protocol/common.rs"
   },
   "lime": {
@@ -12,16 +12,16 @@
   },
   "allowedStatuses": ["implemented", "product-scope-excluded", "planned"],
   "inventory": {
-    "total": 221,
+    "total": 245,
     "byDirection": {
-      "clientRequest": 137,
+      "clientRequest": 155,
       "serverRequest": 11,
-      "serverNotification": 72,
+      "serverNotification": 78,
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 146,
-      "product-scope-excluded": 72,
+      "implemented": 168,
+      "product-scope-excluded": 74,
       "planned": 3
     }
   },
@@ -130,6 +130,70 @@
       ]
     },
     {
+      "id": "thread-queue-current",
+      "direction": "clientRequest",
+      "productArea": "thread",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server thread queue processor + RuntimeCore durable queue + Desktop queue projection",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/thread_queue.rs",
+        "lime-rs/crates/app-server/src/runtime/thread_queue.rs",
+        "lime-rs/crates/app-server/tests/thread_queue_jsonrpc.rs",
+        "scripts/electron/thread-queue-gate-b.mjs"
+      ],
+      "methods": [
+        "thread/queue/add",
+        "thread/queue/delete",
+        "thread/queue/list",
+        "thread/queue/reorder",
+        "thread/queue/start",
+        "thread/queue/update"
+      ]
+    },
+    {
+      "id": "thread-revert-current",
+      "direction": "clientRequest",
+      "productArea": "thread",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server thread processor + RuntimeCore effective history + Desktop Thread Revert action",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/runtime/thread_revert.rs",
+        "lime-rs/crates/app-server/tests/thread_revert_jsonrpc.rs",
+        "src/lib/api/threadRevert.ts",
+        "scripts/electron/thread-revert-gate-b.mjs"
+      ],
+      "methods": ["thread/revert"]
+    },
+    {
+      "id": "project-current",
+      "direction": "clientRequest",
+      "productArea": "project",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server Project repository + Thread assignment + Desktop Project selector",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/project.rs",
+        "lime-rs/crates/app-server/src/runtime/canonical_thread_store/projects.rs",
+        "lime-rs/crates/app-server/tests/project_jsonrpc.rs",
+        "src/lib/api/projectDirectory.ts",
+        "scripts/electron/project-directory-gate-b.mjs"
+      ],
+      "methods": [
+        "project/create",
+        "project/delete",
+        "project/import",
+        "project/list",
+        "project/move",
+        "project/read",
+        "project/update"
+      ]
+    },
+    {
       "id": "thread-sections-current",
       "direction": "clientRequest",
       "productArea": "thread",
@@ -182,6 +246,21 @@
         "lime-rs/crates/app-server/src/processor/tests/mcp.rs"
       ],
       "methods": ["mcpServer/oauth/login", "mcpServerStatus/list"]
+    },
+    {
+      "id": "mcp-event-stream-request-current",
+      "direction": "clientRequest",
+      "productArea": "mcp",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "app-server MCP event stream processor + session-owned McpThreadRuntime",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/mcp.rs",
+        "src/hooks/useMcpEvents.ts",
+        "scripts/electron/mcp-event-stream-gate-b.mjs"
+      ],
+      "methods": ["mcpServer/event/stream/start", "mcpServer/event/stream/stop"]
     },
     {
       "id": "model-list-current",
@@ -264,6 +343,51 @@
         "thread/tokenUsage/updated",
         "thread/unarchived"
       ]
+    },
+    {
+      "id": "thread-queue-notification-current",
+      "direction": "serverNotification",
+      "productArea": "thread",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server thread queue processor + Desktop queue projection",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/thread_queue.rs",
+        "lime-rs/crates/app-server/tests/thread_queue_jsonrpc.rs",
+        "scripts/electron/thread-queue-gate-b.mjs"
+      ],
+      "methods": ["thread/queue/changed"]
+    },
+    {
+      "id": "thread-revert-notification-current",
+      "direction": "serverNotification",
+      "productArea": "thread",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server thread processor + RuntimeCore effective history",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/runtime/thread_revert.rs",
+        "lime-rs/crates/app-server/tests/thread_revert_jsonrpc.rs",
+        "scripts/electron/thread-revert-gate-b.mjs"
+      ],
+      "methods": ["thread/reverted"]
+    },
+    {
+      "id": "project-notification-current",
+      "direction": "serverNotification",
+      "productArea": "project",
+      "status": "implemented",
+      "priority": "P0",
+      "owner": "app-server Project repository + Thread assignment + Desktop Project selector",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/project.rs",
+        "lime-rs/crates/app-server/tests/project_jsonrpc.rs",
+        "scripts/electron/project-directory-gate-b.mjs"
+      ],
+      "methods": ["project/changed", "thread/project/updated"]
     },
     {
       "id": "turn-notification-current",
@@ -418,9 +542,11 @@
       "priority": "none",
       "owner": "product-scope",
       "counterpartRule": "none",
-      "rationale": "Codex configRequirements/read exposes MDM and requirements/config.toml policy layers. Lime Desktop has no enterprise MDM or project requirements owner; introducing the method would create an unconsumed policy surface.",
+      "rationale": "Codex configRequirements/read exposes MDM and requirements/config.toml policy layers, including browser/computer-use allowlists and persistent approval controls. Lime Desktop has no enterprise MDM, arbitrary OS Computer Use, or project requirements owner. Browser task-intent metadata and ElectronBrowserTabHost turn-scoped approval are current product owners, not substitutes for that policy method; introducing it would create an unconsumed second policy surface.",
       "evidence": [
         "lime-rs/crates/app-server/src/processor/config.rs",
+        "electron/browserTabHost.ts",
+        "src/components/agent/chat/utils/browserTaskRequirement.ts",
         "internal/aiprompts/commands.md",
         "internal/aiprompts/architecture.md"
       ],
@@ -1102,6 +1228,21 @@
       ]
     },
     {
+      "id": "strict-review-notification-current",
+      "direction": "serverNotification",
+      "productArea": "item",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "agent-runtime Guardian reviewer + App Server strict review projector + Desktop approval surface",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/tests/strict_review_jsonrpc.rs",
+        "src/components/agent/chat/components/StrictReviewStatus.tsx",
+        "scripts/electron/strict-review-gate-b.mjs"
+      ],
+      "methods": ["autoApprovalReview/strictReviewRequired"]
+    },
+    {
       "id": "command-terminal-interaction-current",
       "direction": "serverNotification",
       "productArea": "item",
@@ -1139,6 +1280,21 @@
         "mcpServer/oauthLogin/completed",
         "mcpServer/startupStatus/updated"
       ]
+    },
+    {
+      "id": "mcp-event-stream-notification-current",
+      "direction": "serverNotification",
+      "productArea": "mcp",
+      "status": "implemented",
+      "priority": "P1",
+      "owner": "app-server MCP event stream processor + session-owned McpThreadRuntime + Desktop MCP runtime",
+      "counterpartRule": "same-name",
+      "evidence": [
+        "lime-rs/crates/app-server/src/processor/mcp.rs",
+        "src/hooks/useMcpEvents.ts",
+        "scripts/electron/mcp-event-stream-gate-b.mjs"
+      ],
+      "methods": ["mcpServer/event/stream/notification"]
     },
     {
       "id": "model-safety-buffering-notification-current",
@@ -1350,6 +1506,8 @@
       "evidence": ["internal/refactor/v1/README.md"],
       "methods": [
         "account/login/cancel",
+        "account/bedrock/discover",
+        "account/bedrock/setup",
         "account/login/start",
         "account/logout",
         "account/rateLimitResetCredit/consume",

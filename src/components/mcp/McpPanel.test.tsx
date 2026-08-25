@@ -97,6 +97,7 @@ function createMcpState(overrides: Partial<UseMcpReturn> = {}): UseMcpReturn {
     error: null,
     serverConnectionStates: {},
     oauthCompletion: null,
+    eventStreams: {},
     startServer: vi.fn(async () => undefined),
     stopServer: vi.fn(async () => undefined),
     reconnectServer: vi.fn(async () => undefined),
@@ -343,6 +344,40 @@ describe("McpPanel", () => {
     expect(toastMock.success).toHaveBeenCalledWith(
       "remote-docs 授权已完成，状态已刷新。",
     );
+  });
+
+  it("MCP event stream lifecycle 应在运行状态中保持稳定可见", async () => {
+    useMcpMock.mockReturnValue(
+      createMcpState({
+        eventStreams: {
+          "subscription-1": {
+            subscriptionId: "subscription-1",
+            phase: "active",
+            lastEventMethod: "notifications/events/event",
+            lastEventName: "issue.updated",
+            eventCount: 2,
+            activeCount: 2,
+            reconnectCount: 1,
+            updatedAt: 1,
+          },
+        },
+      }),
+    );
+
+    const container = await renderPanel({ hideHeader: true });
+
+    expect(
+      container.querySelector('[data-testid="mcp-event-stream-status"]'),
+    ).not.toBeNull();
+    expect(
+      container
+        .querySelector(
+          '[data-mcp-event-stream-subscription-id="subscription-1"]',
+        )
+        ?.getAttribute("data-mcp-event-stream-phase"),
+    ).toBe("active");
+    expect(container.textContent).toContain("已恢复连接");
+    expect(container.textContent).toContain("issue.updated");
   });
 
   it("显式 OAuth 配置未接入运行时登录时应只显示不可用状态", async () => {

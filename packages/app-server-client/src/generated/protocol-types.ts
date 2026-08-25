@@ -6472,9 +6472,9 @@ export interface LogStorageDiagnosticsResponse {
 }
 
 export type McpAuthStatus =
-  | "bearertoken"
-  | "notloggedin"
-  | "oauth"
+  | "bearerToken"
+  | "notLoggedIn"
+  | "oAuth"
   | "unknown"
   | "unsupported";
 

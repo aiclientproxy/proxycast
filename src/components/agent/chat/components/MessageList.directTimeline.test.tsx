@@ -49,6 +49,60 @@ function item(
 }
 
 describe("MessageList direct canonical timeline", () => {
+  it("已完成 canonical 用户回合应确认后按同一 Thread/Turn 恢复历史", async () => {
+    const completedTurn = turn("turn-revert-target");
+    const onRevertThread = vi.fn(async () => undefined);
+    const container = render([], {
+      currentTurnId: completedTurn.id,
+      turns: [completedTurn],
+      threadItems: [
+        item("revert-user", completedTurn.id, 1, {
+          type: "user_message",
+          content: "从这里重新开始",
+        }),
+        item("revert-agent", completedTurn.id, 2, {
+          type: "agent_message",
+          text: "旧答复",
+        }),
+      ],
+      threadRead: {
+        thread_id: "thread-direct",
+        can_accept_direct_input: true,
+      },
+      onRevertThread,
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="thread-revert-trigger"]',
+    );
+    expect(trigger?.dataset.threadId).toBe("thread-direct");
+    expect(trigger?.dataset.beforeTurnId).toBe("turn-revert-target");
+
+    act(() => trigger?.click());
+    expect(document.body.textContent).toContain(
+      "Local files are not rolled back",
+    );
+    expect(document.body.textContent).toContain("current thread stays");
+
+    const confirm = document.querySelector<HTMLButtonElement>(
+      '[data-testid="thread-revert-confirm"]',
+    );
+    await act(async () => {
+      confirm?.click();
+      await Promise.resolve();
+    });
+
+    expect(onRevertThread).toHaveBeenCalledWith({
+      threadId: "thread-direct",
+      beforeTurnId: "turn-revert-target",
+    });
+    expect(
+      document
+        .querySelector('[data-testid="thread-revert-status"]')
+        ?.getAttribute("data-state"),
+    ).toBe("success");
+  });
+
   it("messages 为空时仍按 User -> Agent -> Process -> Agent -> Process 顺序渲染", () => {
     const currentTurn = turn("turn-direct", "running");
     const container = render([], {

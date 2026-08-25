@@ -63,6 +63,10 @@ describe("AppServerEventBus", () => {
       limit: 7,
     });
 
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(drainEvents).toHaveBeenLastCalledWith(7);
+
     unsubscribe();
     await vi.runOnlyPendingTimersAsync();
   });
@@ -89,15 +93,69 @@ describe("AppServerEventBus", () => {
     });
 
     await Promise.resolve();
-    await vi.advanceTimersByTimeAsync(10);
+    await Promise.resolve();
 
-    expect(drainEvents).toHaveBeenLastCalledWith({
+    expect(drainEvents).toHaveBeenNthCalledWith(1, {
       includeRecent: true,
       limit: 7,
     });
 
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(drainEvents).toHaveBeenLastCalledWith(1);
+
     unsubscribeFastFirst();
     unsubscribeRecent();
+    await vi.runOnlyPendingTimersAsync();
+  });
+
+  it("共享 includeRecent 订阅只应启动回放一次，避免重复流式通知", async () => {
+    vi.useFakeTimers();
+    const delta = {
+      method: "item/agentMessage/delta",
+      params: {
+        delta: "唯一正文",
+        itemId: "item-1",
+        threadId: "thread-1",
+        turnId: "turn-1",
+      },
+    };
+    const drainEvents = vi.fn(
+      (request?: number | { includeRecent?: boolean }) =>
+        Promise.resolve(
+          typeof request === "object" && request.includeRecent === true
+            ? [delta]
+            : [],
+        ),
+    );
+    const eventBus = new AppServerEventBus({ drainEvents });
+    const onAgentNotifications = vi.fn();
+    const unsubscribeAgent = eventBus.subscribe({
+      getDrainOptions: () => ({ intervalMs: 10, limit: 50 }),
+      onNotifications: onAgentNotifications,
+    });
+    const unsubscribeRecent = eventBus.subscribe({
+      getDrainOptions: () => ({
+        includeRecent: true,
+        intervalMs: 10,
+        limit: 100,
+      }),
+      onNotifications: vi.fn(),
+    });
+
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(40);
+
+    const includeRecentCalls = drainEvents.mock.calls.filter(
+      ([request]) =>
+        typeof request === "object" && request.includeRecent === true,
+    );
+    expect(includeRecentCalls).toEqual([[{ includeRecent: true, limit: 100 }]]);
+    expect(onAgentNotifications).toHaveBeenCalledTimes(1);
+    expect(onAgentNotifications).toHaveBeenCalledWith([delta]);
+
+    unsubscribeRecent();
+    unsubscribeAgent();
     await vi.runOnlyPendingTimersAsync();
   });
 

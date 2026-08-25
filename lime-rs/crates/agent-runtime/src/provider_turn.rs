@@ -16,6 +16,7 @@ use crate::session_loop::RuntimeSessionInputHandle;
 use agent_protocol::provider_trace::{ProviderTraceEvent, ProviderTraceFailure};
 use agent_protocol::world_state::{RuntimeWorldState, WORLD_STATE_TURN_METADATA_KEY};
 use futures::future::join_all;
+use futures::FutureExt;
 use futures::StreamExt;
 use model_provider::current_client::{
     CanonicalLlmEvent, CurrentProvider, CurrentProviderContent, CurrentProviderCustomToolCall,
@@ -55,6 +56,7 @@ use tool_runtime::turn_snapshot::{RuntimeHookSnapshot, RuntimeToolIdentity, Runt
 mod code_mode;
 mod input;
 mod output_lifecycle;
+mod stream_producer;
 use code_mode::PendingProviderToolCall;
 #[cfg(test)]
 use input::runtime_inter_agent_text;
@@ -63,6 +65,7 @@ use output_lifecycle::{
     defer_text_output_item_end, end_reasoning_output_item, finish_active_output_items,
     provider_output_item_id, start_output_item, ProviderOutputFamily,
 };
+use stream_producer::{start_provider_stream, ProviderStreamStart};
 use tool_runtime::tool_result_projection::NormalizedToolOutput;
 
 const LOCAL_TOOL_ENVIRONMENT_ID: &str = "local";
@@ -1669,49 +1672,6 @@ fn insert_world_state_before_current_user(
     messages.insert(insertion_index, context);
 }
 
-enum ProviderStreamStart {
-    Started(CurrentProviderStream),
-    Cancelled,
-    FirstVisibleOutputDeadlineElapsed,
-    ProviderStepDeadlineElapsed,
-}
-
-async fn start_provider_stream(
-    provider: &Arc<dyn CurrentProvider>,
-    request: CurrentProviderRequest,
-    cancel_token: Option<&CancellationToken>,
-    first_visible_output_deadline: Instant,
-    provider_step_deadline: Instant,
-) -> Result<ProviderStreamStart, CurrentProviderError> {
-    match cancel_token {
-        Some(cancel_token) => {
-            tokio::select! {
-                biased;
-                _ = cancel_token.cancelled() => Ok(ProviderStreamStart::Cancelled),
-                _ = tokio::time::sleep_until(first_visible_output_deadline) => {
-                    Ok(ProviderStreamStart::FirstVisibleOutputDeadlineElapsed)
-                }
-                _ = tokio::time::sleep_until(provider_step_deadline) => {
-                    Ok(ProviderStreamStart::ProviderStepDeadlineElapsed)
-                }
-                result = provider.stream(request) => result.map(ProviderStreamStart::Started),
-            }
-        }
-        None => {
-            tokio::select! {
-                biased;
-                _ = tokio::time::sleep_until(first_visible_output_deadline) => {
-                    Ok(ProviderStreamStart::FirstVisibleOutputDeadlineElapsed)
-                }
-                _ = tokio::time::sleep_until(provider_step_deadline) => {
-                    Ok(ProviderStreamStart::ProviderStepDeadlineElapsed)
-                }
-                result = provider.stream(request) => result.map(ProviderStreamStart::Started),
-            }
-        }
-    }
-}
-
 async fn next_provider_event(
     stream: &mut CurrentProviderStream,
     cancel_token: Option<&CancellationToken>,
@@ -1726,7 +1686,7 @@ async fn next_provider_event(
         (Some(cancel_token), Some(first_deadline), Some(step_deadline)) => {
             tokio::select! {
                 biased;
-                _ = cancel_token.cancelled() => Ok(None),
+                _ = cancel_token.cancelled() => Ok(buffered_provider_event(stream)),
                 _ = tokio::time::sleep_until(first_deadline) => Err(DeadlineElapsed::FirstVisibleOutput),
                 _ = tokio::time::sleep_until(step_deadline) => Err(DeadlineElapsed::ProviderStep),
                 event = stream.next() => Ok(event),
@@ -1735,7 +1695,7 @@ async fn next_provider_event(
         (Some(cancel_token), None, Some(step_deadline)) => {
             tokio::select! {
                 biased;
-                _ = cancel_token.cancelled() => Ok(None),
+                _ = cancel_token.cancelled() => Ok(buffered_provider_event(stream)),
                 _ = tokio::time::sleep_until(step_deadline) => Err(DeadlineElapsed::ProviderStep),
                 event = stream.next() => Ok(event),
             }
@@ -1743,7 +1703,7 @@ async fn next_provider_event(
         (Some(cancel_token), Some(first_deadline), None) => {
             tokio::select! {
                 biased;
-                _ = cancel_token.cancelled() => Ok(None),
+                _ = cancel_token.cancelled() => Ok(buffered_provider_event(stream)),
                 _ = tokio::time::sleep_until(first_deadline) => Err(DeadlineElapsed::FirstVisibleOutput),
                 event = stream.next() => Ok(event),
             }
@@ -1773,12 +1733,19 @@ async fn next_provider_event(
         (Some(cancel_token), None, None) => {
             tokio::select! {
                 biased;
-                _ = cancel_token.cancelled() => Ok(None),
+                _ = cancel_token.cancelled() => Ok(buffered_provider_event(stream)),
                 event = stream.next() => Ok(event),
             }
         }
         (None, None, None) => Ok(stream.next().await),
     }
+}
+
+fn buffered_provider_event(
+    stream: &mut CurrentProviderStream,
+) -> Option<Result<CanonicalLlmEvent, CurrentProviderError>> {
+    // Preserve usage produced by the same raw stream poll that triggered cancellation.
+    stream.next().now_or_never().flatten()
 }
 
 enum DeadlineElapsed {

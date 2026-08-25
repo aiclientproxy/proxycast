@@ -11,6 +11,14 @@ import { isAppServerV2NotificationMethod } from "@/lib/api/agentRuntime/appServe
 const REPO_ROOT = process.cwd();
 const COVERAGE_PATH =
   "internal/refactor/v2/fixtures/render-projection-coverage.v0.1.json";
+const CURRENT_NOTIFICATION_ADDITIONS = [
+  "autoApprovalReview/strictReviewRequired",
+  "mcpServer/event/stream/notification",
+  "project/changed",
+  "thread/project/updated",
+  "thread/queue/changed",
+  "thread/reverted",
+].toSorted();
 
 type Direction =
   | "clientRequest"
@@ -249,7 +257,7 @@ describe("Codex render projection coverage boundary", () => {
     }
   });
 
-  it("19 / 72 / 11 coverage entries must be complete and unique", () => {
+  it("19 / 72 / 11 historical coverage entries must be complete and unique", () => {
     const coverage = readJson<CoverageFixture>(COVERAGE_PATH);
     const itemTypes = coverage.items.map((entry) => entry.type);
     const notifications = coverage.notifications.map((entry) => entry.method);
@@ -262,8 +270,6 @@ describe("Codex render projection coverage boundary", () => {
     expect(unique(notifications)).toBe(true);
     expect(unique(serverRequests)).toBe(true);
     expect(serverRequests).toContain("currentTime/read");
-    expect(listCodexV2NotificationMethods()).toEqual(notifications.toSorted());
-
     for (const entry of coverage.items) {
       expect(entry.outlet).toBe("timeline");
     }
@@ -276,7 +282,7 @@ describe("Codex render projection coverage boundary", () => {
     }
   });
 
-  it("coverage must reuse the v1 item and method facts without omissions", () => {
+  it("historical coverage stays an exact subset of the current method facts", () => {
     const coverage = readJson<CoverageFixture>(COVERAGE_PATH);
     const itemInventory = readJson<ItemInventoryFixture>(
       coverage.factSources.itemInventory,
@@ -288,6 +294,17 @@ describe("Codex render projection coverage boundary", () => {
       .filter((entry) => entry.location === undefined)
       .map((entry) => entry.type)
       .toSorted();
+    const historicalNotifications = coverage.notifications
+      .map((entry) => entry.method)
+      .toSorted();
+    const currentNotifications = methodsByDirection(
+      methodScope,
+      "serverNotification",
+    );
+    const historicalNotificationSet = new Set(historicalNotifications);
+    const currentAdditions = currentNotifications.filter(
+      (method) => !historicalNotificationSet.has(method),
+    );
 
     expect(
       existsSync(join(REPO_ROOT, coverage.factSources.itemInventory)),
@@ -296,7 +313,7 @@ describe("Codex render projection coverage boundary", () => {
       true,
     );
     expect(coverage.upstream.revision).toBe(itemInventory.upstream.revision);
-    expect(coverage.upstream.methodRevision).toBe(
+    expect(coverage.upstream.methodRevision).not.toBe(
       methodScope.upstream.revision,
     );
     expect(coverage.upstream.itemSchemaSource).toBe(
@@ -308,9 +325,8 @@ describe("Codex render projection coverage boundary", () => {
     expect(coverage.items.map((entry) => entry.type).toSorted()).toEqual(
       canonicalItemTypes,
     );
-    expect(
-      coverage.notifications.map((entry) => entry.method).toSorted(),
-    ).toEqual(methodsByDirection(methodScope, "serverNotification"));
+    expect(currentAdditions).toEqual(CURRENT_NOTIFICATION_ADDITIONS);
+    expect(listCodexV2NotificationMethods()).toEqual(currentNotifications);
     expect(
       coverage.serverRequests.map((entry) => entry.method).toSorted(),
     ).toEqual(methodsByDirection(methodScope, "serverRequest"));

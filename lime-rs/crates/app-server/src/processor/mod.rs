@@ -45,6 +45,7 @@ mod thread_queue;
 mod thread_resume_context;
 mod thread_sections;
 mod turn;
+mod turn_environment;
 pub(crate) mod v2_notifications;
 mod voice;
 mod wechat;
@@ -159,6 +160,7 @@ impl RequestProcessor {
         Self::new_with_thread_states(runtime, ThreadStateManager::new())
     }
 
+    #[cfg(test)]
     pub(crate) fn new_with_thread_states(
         runtime: RuntimeCore,
         thread_states: ThreadStateManager,

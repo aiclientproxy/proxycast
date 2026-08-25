@@ -10,6 +10,7 @@ export interface WorkspacePluginSurfaceDescriptor {
   title: string;
   entryUrl?: string;
   mcpApp?: {
+    connectorId?: string;
     resourceUri: string;
     serverName: string;
     toolItemId: string;
@@ -97,7 +98,11 @@ export function buildWorkspacePluginSurfacesFromThreadItems(
     const pluginId = firstString(metadata?.plugin_id);
     const resourceUri = firstString(metadata?.mcp_app_resource_uri);
     const serverName = firstString(metadata?.server);
-    if (!pluginId || !resourceUri || !serverName || !isMcpAppUri(resourceUri)) {
+    const appContext = asRecord(metadata?.app_context);
+    const connectorId = firstString(appContext?.connectorId);
+    const appName = firstString(appContext?.appName);
+    const appId = firstString(pluginId, connectorId);
+    if (!appId || !resourceUri || !serverName || !isMcpAppUri(resourceUri)) {
       continue;
     }
     const containerId = `mcp-app-${item.id}`;
@@ -105,12 +110,13 @@ export function buildWorkspacePluginSurfacesFromThreadItems(
       continue;
     }
     upsertWorkspacePluginSurfaceDescriptor(next, {
-      appId: pluginId,
-      title: pluginId,
+      appId,
+      title: firstString(pluginId, appName, connectorId) ?? appId,
       containerId,
       activeStrategy: "webContentsView",
       supportedStrategies: ["webContentsView"],
       mcpApp: {
+        ...(connectorId ? { connectorId } : {}),
         resourceUri,
         serverName,
         toolItemId: item.id,

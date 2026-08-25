@@ -2350,11 +2350,58 @@ mod tests {
     use app_server_protocol::InitializeParams;
     use app_server_protocol::RequestId;
     use app_server_protocol::METHOD_THREAD_LIST;
+    use async_trait::async_trait;
     use serde_json::json;
     use std::sync::Arc;
     use tokio::io::AsyncBufReadExt;
     use tokio::io::AsyncWriteExt;
     use tokio::io::BufReader;
+    use tokio::sync::Notify;
+    use tokio::time::{timeout, Duration};
+
+    #[derive(Default)]
+    struct ActiveTurnBackend {
+        started: Notify,
+        release: Notify,
+    }
+
+    impl ActiveTurnBackend {
+        async fn wait_until_started(&self) {
+            timeout(Duration::from_secs(2), self.started.notified())
+                .await
+                .expect("backend turn should start");
+        }
+    }
+
+    #[async_trait]
+    impl ExecutionBackend for ActiveTurnBackend {
+        async fn start_turn(
+            &self,
+            _request: ExecutionRequest,
+            sink: &mut dyn RuntimeEventSink,
+        ) -> Result<(), RuntimeCoreError> {
+            sink.emit(RuntimeEvent::new("turn.started", json!({})))?;
+            self.started.notify_one();
+            self.release.notified().await;
+            sink.emit(RuntimeEvent::new("turn.completed", json!({})))
+        }
+
+        async fn cancel_turn(
+            &self,
+            _request: CancelExecutionRequest,
+            _sink: &mut dyn RuntimeEventSink,
+        ) -> Result<(), RuntimeCoreError> {
+            Ok(())
+        }
+
+        async fn respond_action(
+            &self,
+            _request: ActionRespondRequest,
+            _sink: &mut dyn RuntimeEventSink,
+        ) -> Result<(), RuntimeCoreError> {
+            Ok(())
+        }
+    }
 
     fn server_with_projection_store() -> (tempfile::TempDir, AppServer) {
         let temp = tempfile::tempdir().expect("projection tempdir");
@@ -2742,8 +2789,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn turn_start_rejects_parallel_active_turn_without_queue_flag() {
-        let (_temp, server) = server_with_projection_store();
+    async fn turn_start_steers_parallel_input_into_active_turn() {
+        let backend = Arc::new(ActiveTurnBackend::default());
+        let temp = tempfile::tempdir().expect("projection tempdir");
+        let store = ProjectionStore::initialize(temp.path().join("projection.sqlite"))
+            .expect("projection store");
+        let runtime =
+            RuntimeCore::with_backend(backend.clone()).with_projection_store(Arc::new(store));
+        let server = AppServer::with_runtime(runtime);
         initialize(&server).await;
         let thread = request(
             &server,
@@ -2756,6 +2809,7 @@ mod tests {
         )
         .await;
         let thread_id = thread["thread"]["id"].as_str().expect("thread id");
+        let session_id = thread["thread"]["sessionId"].as_str().expect("session id");
         let first = request(
             &server,
             3,
@@ -2767,6 +2821,7 @@ mod tests {
         )
         .await;
         let active_turn_id = first["turn"]["id"].as_str().expect("active turn id");
+        backend.wait_until_started().await;
 
         let messages = server
             .handle_message(JsonRpcMessage::Request(JsonRpcRequest::new(
@@ -2774,22 +2829,36 @@ mod tests {
                 METHOD_TURN_START,
                 Some(json!({
                     "threadId": thread_id,
+                    "clientUserMessageId": "client-parallel-1",
                     "input": [{"type": "text", "text": "parallel"}]
                 })),
             )))
             .await
             .expect("parallel turn start");
 
-        match messages.first().expect("error response") {
-            JsonRpcMessage::Error(error) => {
-                assert_eq!(error.error.code, error_codes::TURN_ALREADY_ACTIVE);
-                assert_eq!(
-                    error.error.message,
-                    format!("turn already active: {active_turn_id}")
-                );
-            }
-            other => panic!("expected active turn error, got {other:?}"),
-        }
+        let response = messages
+            .iter()
+            .find_map(|message| match message {
+                JsonRpcMessage::Response(response) => Some(response),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("expected active turn response, got {messages:?}"));
+        assert_eq!(response.result["turn"]["id"], active_turn_id);
+
+        let events = server
+            .runtime()
+            .events_for_session(session_id)
+            .expect("stored events");
+        let steer_event = events
+            .iter()
+            .find(|event| {
+                event.event_type == "message.created" && event.payload["source"] == "session_steer"
+            })
+            .expect("session steer event");
+        assert_eq!(steer_event.event_type, "message.created");
+        assert_eq!(steer_event.payload["itemId"], "steer-client-parallel-1");
+        assert_eq!(steer_event.payload["clientId"], "client-parallel-1");
+        assert_eq!(steer_event.payload["content"]["text"], "parallel");
 
         let read = request(
             &server,
@@ -2801,6 +2870,7 @@ mod tests {
         let turns = read["thread"]["turns"].as_array().expect("turns");
         assert_eq!(turns.len(), 1);
         assert_eq!(turns[0]["id"], active_turn_id);
+        backend.release.notify_one();
     }
 
     #[tokio::test]

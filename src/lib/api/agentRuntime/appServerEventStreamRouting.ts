@@ -61,6 +61,7 @@ type AppServerRoutableNotification = {
 
 export class AppServerAgentSessionEventDrainRouter {
   readonly #closedRouteKeys = new Set<string>();
+  readonly #closedSessionTurnKeys = new Set<string>();
   readonly #eventBus: AppServerEventBusLike;
   readonly #routes = new Map<string, AppServerAgentSessionEventRoute>();
   #unsubscribeFromEventBus: (() => void) | null = null;
@@ -108,6 +109,36 @@ export class AppServerAgentSessionEventDrainRouter {
         this.routeNotifications(notifications, eventName, "response");
       },
     };
+  }
+
+  close(params: AppServerAgentSessionEventRouteParams): void {
+    const eventName = params.eventName?.trim();
+    const sessionId = params.sessionId?.trim();
+    const turnId = params.turnId?.trim() || undefined;
+    if (!eventName || !sessionId) {
+      return;
+    }
+
+    for (const [key, route] of this.#routes) {
+      if (route.eventName !== eventName || route.sessionId !== sessionId) {
+        continue;
+      }
+      if (
+        turnId &&
+        route.turnId &&
+        route.turnId !== turnId &&
+        route.requestedTurnId !== turnId
+      ) {
+        continue;
+      }
+      this.#rememberClosedRoute(route, turnId ?? route.turnId);
+      this.#routes.delete(key);
+    }
+
+    if (turnId) {
+      this.#closedSessionTurnKeys.add(sessionTurnKey(sessionId, turnId));
+    }
+    this.#stopEventBusSubscriptionIfIdle();
   }
 
   routeNotifications(
@@ -173,7 +204,8 @@ export class AppServerAgentSessionEventDrainRouter {
     if (
       matchedRoutes.length === 0 &&
       fallbackEventName &&
-      !this.#isClosedFallbackRoute(routable, fallbackEventName)
+      !this.#isClosedFallbackRoute(routable, fallbackEventName) &&
+      !this.#isClosedSessionTurn(routable)
     ) {
       publishAppServerAgentSessionNotifications(fallbackEventName, [
         notification,
@@ -204,16 +236,7 @@ export class AppServerAgentSessionEventDrainRouter {
         notification,
       ]);
       if (routable.terminal) {
-        this.#closedRouteKeys.add(routeKey(route));
-        if (route.requestedTurnId) {
-          this.#closedRouteKeys.add(
-            routeKey({
-              eventName: route.eventName,
-              sessionId: route.sessionId,
-              turnId: route.requestedTurnId,
-            }),
-          );
-        }
+        this.#rememberClosedRoute(route, routable.turnId);
         this.#routes.delete(route.registrationKey);
       }
     }
@@ -249,10 +272,22 @@ export class AppServerAgentSessionEventDrainRouter {
     );
   }
 
+  #isClosedSessionTurn(event: AppServerRoutableNotification): boolean {
+    return Boolean(
+      event.turnId &&
+      this.#closedSessionTurnKeys.has(
+        sessionTurnKey(event.sessionId, event.turnId),
+      ),
+    );
+  }
+
   #matchingRoutes(
     event: AppServerRoutableNotification,
   ): AppServerAgentSessionEventRoute[] {
     const routes: AppServerAgentSessionEventRoute[] = [];
+    if (this.#isClosedSessionTurn(event)) {
+      return routes;
+    }
     for (const route of this.#routes.values()) {
       if (route.sessionId !== event.sessionId) {
         continue;
@@ -272,6 +307,25 @@ export class AppServerAgentSessionEventDrainRouter {
       routes.push(route);
     }
     return routes;
+  }
+
+  #rememberClosedRoute(
+    route: AppServerAgentSessionEventRoute,
+    turnId?: string,
+  ): void {
+    this.#closedRouteKeys.add(routeKey(route));
+    if (route.requestedTurnId) {
+      this.#closedRouteKeys.add(
+        routeKey({
+          eventName: route.eventName,
+          sessionId: route.sessionId,
+          turnId: route.requestedTurnId,
+        }),
+      );
+    }
+    if (turnId) {
+      this.#closedSessionTurnKeys.add(sessionTurnKey(route.sessionId, turnId));
+    }
   }
 
   #isClosedRouteForEvent(
@@ -318,9 +372,35 @@ export class AppServerAgentSessionEventDrainRouter {
 function directNotificationMirrorKey(
   notification: AppServerJsonRpcNotification,
 ): string | null {
-  return readAppServerV2NotificationRoute(notification)
-    ? JSON.stringify(notification)
-    : null;
+  const route = readAppServerV2NotificationRoute(notification);
+  if (!route) {
+    return null;
+  }
+
+  // Response notifications and drained notifications can have different
+  // top-level envelopes or object insertion order. Mirror identity must use
+  // only the stable v2 wire payload, while source-local repeats remain valid.
+  return stableJsonStringify({
+    method: notification.method,
+    route,
+    params: notification.params,
+  });
+}
+
+function stableJsonStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJsonStringify).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(
+        ([key, entry]) =>
+          `${JSON.stringify(key)}:${stableJsonStringify(entry)}`,
+      )
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function hasNotificationFromOtherSource(
@@ -420,6 +500,10 @@ function readRoutableNotification(
 
 function routeKey(route: AppServerAgentSessionEventRouteParams): string {
   return `${route.sessionId}\u0000${route.turnId ?? ""}\u0000${route.eventName}`;
+}
+
+function sessionTurnKey(sessionId: string, turnId: string): string {
+  return `${sessionId}\u0000${turnId}`;
 }
 
 export function sortAppServerAgentSessionNotifications(

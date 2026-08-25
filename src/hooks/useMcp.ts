@@ -27,6 +27,8 @@ import {
 import {
   setupMcpEventListeners,
   type McpOAuthCompletionState,
+  type McpEventStreamState,
+  type McpEventStreamStateMap,
   type McpServerConnectionState,
 } from "./useMcpEvents";
 
@@ -34,7 +36,12 @@ import {
 // Hook 返回类型
 // ============================================================================
 
-export type { McpOAuthCompletionState, McpServerConnectionState };
+export type {
+  McpEventStreamState,
+  McpEventStreamStateMap,
+  McpOAuthCompletionState,
+  McpServerConnectionState,
+};
 
 export interface UseMcpReturn {
   // 状态
@@ -46,6 +53,7 @@ export interface UseMcpReturn {
   error: string | null;
   serverConnectionStates: Record<string, McpServerConnectionState>;
   oauthCompletion: McpOAuthCompletionState | null;
+  eventStreams: McpEventStreamStateMap;
 
   // 服务器操作
   startServer: (name: string) => Promise<void>;
@@ -92,6 +100,7 @@ export function useMcp(): UseMcpReturn {
   const [serverConnectionStates, setServerConnectionStates] = useState<
     Record<string, McpServerConnectionState>
   >({});
+  const [eventStreams, setEventStreams] = useState<McpEventStreamStateMap>({});
 
   const updateServerConnectionState = useCallback(
     (
@@ -356,6 +365,7 @@ export function useMcp(): UseMcpReturn {
           setError,
           setTools,
           setOAuthCompletion,
+          setEventStreams,
         });
         unlisteners.push(...registered);
       } catch (error) {
@@ -387,6 +397,7 @@ export function useMcp(): UseMcpReturn {
     error,
     serverConnectionStates,
     oauthCompletion,
+    eventStreams,
     startServer,
     stopServer,
     reconnectServer,

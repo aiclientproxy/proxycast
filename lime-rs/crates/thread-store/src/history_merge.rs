@@ -158,6 +158,7 @@ fn merge_payload(
                 call_id: old_call,
                 server_name: old_server,
                 tool_name: old_tool,
+                app_context: old_app_context,
                 mcp_app_resource_uri: old_mcp_app_resource_uri,
                 plugin_id: old_plugin_id,
                 arguments: old_args,
@@ -167,6 +168,7 @@ fn merge_payload(
                 call_id,
                 server_name,
                 tool_name,
+                app_context,
                 mcp_app_resource_uri,
                 plugin_id,
                 arguments,
@@ -176,6 +178,7 @@ fn merge_payload(
             call_id: prefer_string(old_call, call_id, ""),
             server_name: prefer_string(old_server, server_name, "unknown"),
             tool_name: prefer_string(old_tool, tool_name, "tool"),
+            app_context: app_context.or(old_app_context),
             mcp_app_resource_uri: mcp_app_resource_uri.or(old_mcp_app_resource_uri),
             plugin_id: plugin_id.or(old_plugin_id),
             arguments: if arguments.is_empty() {
@@ -407,5 +410,52 @@ impl ChangeAccumulator {
             changed_items: self.changed_items,
             ..Default::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mcp_snapshot_merge_preserves_canonical_app_context() {
+        let context = agent_protocol::McpToolCallAppContext {
+            connector_id: "calendar".to_string(),
+            link_id: Some("link-calendar".to_string()),
+            resource_uri: Some("ui://calendar/event".to_string()),
+            app_name: Some("Calendar".to_string()),
+            action_name: Some("search".to_string()),
+        };
+        let previous = ThreadItemPayload::McpToolCall {
+            call_id: "call-1".to_string(),
+            server_name: "codex_apps".to_string(),
+            tool_name: "calendar_search".to_string(),
+            app_context: Some(context.clone()),
+            mcp_app_resource_uri: Some("ui://calendar/event".to_string()),
+            plugin_id: None,
+            arguments: Vec::new(),
+            output: None,
+        };
+        let next = ThreadItemPayload::McpToolCall {
+            call_id: "call-1".to_string(),
+            server_name: "codex_apps".to_string(),
+            tool_name: "calendar_search".to_string(),
+            app_context: None,
+            mcp_app_resource_uri: None,
+            plugin_id: None,
+            arguments: Vec::new(),
+            output: None,
+        };
+
+        let ThreadItemPayload::McpToolCall {
+            app_context,
+            mcp_app_resource_uri,
+            ..
+        } = merge_payload(previous, next, None)
+        else {
+            panic!("MCP tool payload");
+        };
+        assert_eq!(app_context, Some(context));
+        assert_eq!(mcp_app_resource_uri.as_deref(), Some("ui://calendar/event"));
     }
 }

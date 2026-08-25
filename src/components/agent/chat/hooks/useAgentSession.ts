@@ -112,11 +112,14 @@ import {
   buildSessionPostFinalizePersistencePlan,
 } from "./sessionPostFinalizePersistenceController";
 import {
+  filterAgentSessionReadModelMessages,
+  filterAgentSessionReadModelTurns,
   refreshAgentSessionDetailState,
   refreshAgentSessionReadModelState,
   hydrateFreshAgentSessionReadModel,
   mergeAgentSessionReadModelThreadItems,
   type AgentSessionDetailRefreshRequest,
+  type AgentSessionReadModelRefreshRequest,
 } from "./agentSessionRefresh";
 import { reuseStableAgentSessionSnapshotReferences } from "./agentSessionSnapshotStability";
 import type { AgentAccessMode } from "./agentChatStorage";
@@ -769,7 +772,10 @@ export function useAgentSession(options: UseAgentSessionOptions) {
   );
 
   const applyReadModelSnapshot = useCallback(
-    (snapshot: { threadRead: AgentRuntimeThreadReadModel | null }) => {
+    (snapshot: {
+      threadRead: AgentRuntimeThreadReadModel | null;
+      timelineMode: "merge" | "replace";
+    }) => {
       if (!snapshot.threadRead) {
         return;
       }
@@ -777,13 +783,32 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         threadItemsRef.current,
         snapshot,
       );
-      setThreadItemsState(nextThreadItems);
-      setMessagesState((currentMessages) =>
-        mergeCanonicalAgentMessagesIntoMessages(
-          currentMessages,
-          nextThreadItems,
-        ),
+      const nextThreadTurns = filterAgentSessionReadModelTurns(
+        threadTurnsRef.current,
+        snapshot,
       );
+      setThreadItemsState(nextThreadItems);
+      setThreadTurnsState(nextThreadTurns);
+      setMessagesState((currentMessages) => {
+        const reconciledMessages = filterAgentSessionReadModelMessages(
+          currentMessages,
+          snapshot,
+        );
+        return mergeCanonicalAgentMessagesIntoMessages(
+          reconciledMessages,
+          nextThreadItems,
+        );
+      });
+      if (snapshot.timelineMode === "replace") {
+        const remainingTurnIds = new Set(
+          (snapshot.threadRead.turns ?? []).map((turn) => turn.turn_id),
+        );
+        setCurrentTurnId((current) =>
+          current && remainingTurnIds.has(current)
+            ? current
+            : (snapshot.threadRead?.turns?.at(-1)?.turn_id ?? null),
+        );
+      }
       threadReadRef.current = snapshot.threadRead;
       const currentSessionId = sessionIdRef.current?.trim();
       const canonicalThreadId = snapshot.threadRead.thread_id?.trim();
@@ -795,7 +820,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       }
       setThreadRead(snapshot.threadRead);
     },
-    [setMessagesState, setThreadItemsState, sessionIdRef],
+    [setMessagesState, setThreadItemsState, setThreadTurnsState, sessionIdRef],
   );
   const getThreadIdForSubmit = useCallback(
     (targetSessionId?: string) => {
@@ -2975,11 +3000,15 @@ export function useAgentSession(options: UseAgentSessionOptions) {
   );
 
   const refreshSessionReadModel = useCallback(
-    async (targetSessionId?: string) => {
+    async (
+      targetSessionId?: string,
+      request?: AgentSessionReadModelRefreshRequest,
+    ) => {
       return refreshAgentSessionReadModelState({
         runtime,
         sessionIdRef,
         targetSessionId,
+        request,
         applyReadModelSnapshot,
         onWarn: (error) => {
           console.warn("[AgentChat] 刷新运行态摘要失败:", error);

@@ -242,6 +242,15 @@ fn project_mcp_tool_item(
             call_id,
             server_name: route.server_name.clone(),
             tool_name: route.tool_name.clone(),
+            app_context: route.app_context.clone().map(|context| {
+                agent_protocol::McpToolCallAppContext {
+                    connector_id: context.connector_id,
+                    link_id: context.link_id,
+                    resource_uri: context.resource_uri,
+                    app_name: context.app_name,
+                    action_name: context.action_name,
+                }
+            }),
             mcp_app_resource_uri: route.mcp_app_resource_uri.clone(),
             plugin_id: route.plugin_id.clone(),
             arguments,
@@ -472,11 +481,18 @@ mod tests {
     fn exact_snapshot_route_projects_mcp_item() {
         let routes = McpToolRoutes::default();
         routes.replace_for_test([tool_runtime::mcp_connection::McpStepRouteIdentity {
-            server_name: "docs".to_string(),
+            server_name: "codex_apps".to_string(),
             tool_name: "search".to_string(),
-            runtime_tool_name: "docs__search".to_string(),
-            mcp_app_resource_uri: Some("ui://plugin/docs.html".to_string()),
-            plugin_id: Some("docs-plugin".to_string()),
+            runtime_tool_name: "codex_apps__search".to_string(),
+            app_context: Some(tool_runtime::mcp_connection::McpStepRouteAppContext {
+                connector_id: "calendar".to_string(),
+                link_id: Some("link-calendar".to_string()),
+                resource_uri: Some("ui://calendar/event".to_string()),
+                app_name: Some("Calendar".to_string()),
+                action_name: Some("search".to_string()),
+            }),
+            mcp_app_resource_uri: Some("ui://calendar/event".to_string()),
+            plugin_id: None,
         }]);
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
         let emitter = CurrentTurnToolLifecycleEmitter::with_tool_routes(
@@ -491,7 +507,7 @@ mod tests {
             .project(ToolLifecycleEvent {
                 turn_id: "turn-1".to_string(),
                 call_id: "mcp-call-1".to_string(),
-                tool_name: "docs__search".to_string(),
+                tool_name: "codex_apps__search".to_string(),
                 arguments: serde_json::json!({ "query": "lime" }),
                 provider_metadata: serde_json::Value::Null,
                 environments: vec![ToolEnvironment::new("local", PathBuf::from("/workspace"))],
@@ -509,13 +525,19 @@ mod tests {
             ThreadItemPayload::McpToolCall {
                 ref server_name,
                 ref tool_name,
+                ref app_context,
                 ref mcp_app_resource_uri,
                 ref plugin_id,
                 ..
-            } if server_name == "docs"
+            } if server_name == "codex_apps"
                 && tool_name == "search"
-                && mcp_app_resource_uri.as_deref() == Some("ui://plugin/docs.html")
-                && plugin_id.as_deref() == Some("docs-plugin")
+                && app_context.as_ref().is_some_and(|context|
+                    context.connector_id == "calendar"
+                        && context.link_id.as_deref() == Some("link-calendar")
+                        && context.resource_uri.as_deref() == Some("ui://calendar/event")
+                )
+                && mcp_app_resource_uri.as_deref() == Some("ui://calendar/event")
+                && plugin_id.is_none()
         ));
     }
 

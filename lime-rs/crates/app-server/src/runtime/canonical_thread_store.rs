@@ -20,11 +20,10 @@ use thread_store::{
     ListItemsParams, ListProjectsParams, ListThreadSectionsParams, ListThreadsParams,
     ListTurnsParams, MoveProjectParams, MoveThreadToSectionParams, ProjectMoveOutcome,
     ReadThreadParams, RenameThreadSectionParams, SearchThreadsParams, StoreCursor, StoredProject,
-    StoredProjectRoot, StoredProjectsPage, StoredThreadSection, ThreadMetadataPatch, ThreadPage,
-    ThreadSearchPage, ThreadSectionPage, ThreadSpawnEdgeStatus, ThreadStore, ThreadStoreError,
-    ThreadStoreFuture, ThreadStoreResult, TurnPage, UpdateProjectParams,
-    UpdateThreadMetadataParams, UpdatedProject, PINNED_THREAD_SECTION_ID,
-    PINNED_THREAD_SECTION_NAME,
+    StoredProjectsPage, StoredThreadSection, ThreadMetadataPatch, ThreadPage, ThreadSearchPage,
+    ThreadSectionPage, ThreadSpawnEdgeStatus, ThreadStore, ThreadStoreError, ThreadStoreFuture,
+    ThreadStoreResult, TurnPage, UpdateProjectParams, UpdateThreadMetadataParams, UpdatedProject,
+    PINNED_THREAD_SECTION_ID, PINNED_THREAD_SECTION_NAME,
 };
 
 use super::projection_rebuild::{projected_tables_are_empty, rebuild_projected_thread_snapshot};

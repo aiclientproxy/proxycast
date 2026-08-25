@@ -6,11 +6,15 @@ import { WorkspaceConversationScene } from "./WorkspaceConversationScene";
 import type { WorkspaceRightSurfaceLauncherProjection } from "./right-surface";
 
 const {
+  mockChatNavbar,
+  mockThreadProjectSelector,
   mockWorkspaceMainArea,
   mockWorkspacePendingA2UIPanel,
   mockMessageList,
   mockTaskCenterUtilityToolbar,
 } = vi.hoisted(() => ({
+  mockChatNavbar: vi.fn(),
+  mockThreadProjectSelector: vi.fn(),
   mockWorkspaceMainArea: vi.fn(),
   mockWorkspacePendingA2UIPanel: vi.fn(),
   mockMessageList: vi.fn(),
@@ -30,7 +34,19 @@ vi.mock("../components/CanvasWorkbenchLayout", () => ({
 }));
 
 vi.mock("../components/ChatNavbar", () => ({
-  ChatNavbar: () => <div data-testid="chat-navbar-stub" />,
+  ChatNavbar: (props: Record<string, unknown>) => {
+    mockChatNavbar(props);
+    return <div data-testid="chat-navbar-stub" />;
+  },
+}));
+
+vi.mock("../components/ThreadProjectSelector", () => ({
+  ThreadProjectSelector: (props: Record<string, unknown>) => {
+    mockThreadProjectSelector(props);
+    return props.threadId ? (
+      <div data-testid="thread-project-selector" />
+    ) : null;
+  },
 }));
 
 vi.mock("../components/TaskCenterUtilityToolbar", () => ({
@@ -480,6 +496,37 @@ afterEach(() => {
 });
 
 describe("WorkspaceConversationScene", () => {
+  it("空 Thread 应使用可见页头的 canonical identity 渲染 Project 入口", () => {
+    const container = renderScene({
+      navbarVisible: true,
+      navbarContextVariant: "task-center",
+      threadHeader: {
+        sessionId: "thread-empty",
+        title: "空对话",
+        status: "done",
+        workingDirectory: "/workspace/lime",
+      },
+      projectId: "workspace-1",
+      projectRootPath: "/workspace/lime",
+      openedProjects: [
+        {
+          id: "workspace-1",
+          name: "Lime",
+          rootPath: "/workspace/lime",
+        },
+      ],
+    });
+
+    expect(
+      container.querySelector(
+        '[data-testid="thread-workspace-header-actions"] [data-testid="thread-project-selector"]',
+      ),
+    ).not.toBeNull();
+    expect(mockThreadProjectSelector).toHaveBeenLastCalledWith(
+      expect.objectContaining({ threadId: "thread-empty" }),
+    );
+  });
+
   it("入口提示条应把长文案和关闭按钮分开渲染", () => {
     const onDismissEntryBanner = vi.fn();
     const container = renderScene({

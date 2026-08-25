@@ -44,6 +44,7 @@ import {
 import { ThreadWorkspaceHeader } from "./ThreadWorkspaceHeader";
 import type { ThreadWorkspaceHeaderViewModel } from "./threadWorkspaceHeaderViewModel";
 import { ThreadQueueStatus } from "../components/ThreadQueueStatus";
+import { ThreadProjectSelector } from "../components/ThreadProjectSelector";
 
 type WorkspaceMainAreaProps = Omit<
   ComponentProps<typeof WorkspaceMainArea>,
@@ -441,6 +442,14 @@ export function WorkspaceConversationScene({
   const agentT = t as unknown as AgentNamespaceTranslation;
   const text = (key: string) =>
     String(agentT(`agentChat.workspaceConversation.${key}`));
+  const currentThreadId =
+    messageListProps.threadRead?.thread_id?.trim() ||
+    threadHeader?.sessionId?.trim() ||
+    taskRail?.threadRead?.thread_id?.trim() ||
+    taskRail?.sessionId?.trim() ||
+    null;
+  const currentWorkspaceName =
+    openedProjects?.find((project) => project.id === projectId)?.name ?? null;
   const queueStatusNode = (
     <ThreadQueueStatus threadId={messageListProps.threadRead?.thread_id} />
   );
@@ -551,7 +560,18 @@ export function WorkspaceConversationScene({
     shouldRenderThreadHeader && threadHeader ? (
       <ThreadWorkspaceHeader
         {...threadHeader}
-        actions={taskCenterUtilityToolbarNode}
+        actions={
+          <>
+            <ThreadProjectSelector
+              threadId={currentThreadId}
+              workspaceName={currentWorkspaceName}
+              workspaceRootPath={projectRootPath}
+              compact
+              className="text-[color:var(--lime-chrome-muted)] hover:bg-[color:var(--lime-chrome-tab-hover)] hover:text-[color:var(--lime-chrome-text)]"
+            />
+            {taskCenterUtilityToolbarNode}
+          </>
+        }
       />
     ) : null;
   const chatNavbarProps = buildWorkspaceNavbarProps({
@@ -565,6 +585,8 @@ export function WorkspaceConversationScene({
     isCanvasOpen: layoutMode !== "chat",
     onToggleCanvas,
     projectId,
+    threadId: currentThreadId,
+    workspaceRootPath: projectRootPath,
     openedProjects,
     onProjectChange,
     onCloseProject,

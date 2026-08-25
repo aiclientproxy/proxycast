@@ -361,14 +361,21 @@ async fn exec_command_forwards_environment_identity_to_execution_gateway() {
     let params = json!({ "cmd": "short", "login": false, "yield_time_ms": 250 });
     let mut remote_request = request(EXEC_COMMAND_TOOL_NAME, &params, "call-remote");
     remote_request.environment_id = "remote-tools";
+    remote_request.working_directory = if cfg!(target_os = "windows") {
+        PathBuf::from(r"C:\lime-remote-workspace-does-not-exist")
+    } else {
+        PathBuf::from("/lime-remote-workspace-does-not-exist")
+    };
+    let expected_cwd = remote_request.working_directory.clone();
 
     execute_runtime_unified_exec_tool(gateway.clone(), remote_request)
         .await
-        .expect("remote Environment identity should reach the gateway");
+        .expect("remote Environment cwd must not be canonicalized on the local host");
 
     let starts = gateway.starts.lock().unwrap();
     assert_eq!(starts.len(), 1);
     assert_eq!(starts[0].environment_id, "remote-tools");
+    assert_eq!(starts[0].working_directory, expected_cwd);
 }
 
 #[tokio::test]

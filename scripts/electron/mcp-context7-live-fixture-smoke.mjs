@@ -194,10 +194,10 @@ async function waitForRunningContext7(call, options) {
   let latest = null;
   while (Date.now() - startedAt < Math.min(60_000, options.timeoutMs)) {
     latest = await call("mcpServerStatus/list", {});
-    const server = (latest.result?.servers ?? []).find(
+    const server = (latest.result?.data ?? []).find(
       (item) => item?.name === CONTEXT7_SERVER_NAME,
     );
-    if (server?.is_running === true || server?.isRunning === true) {
+    if (server?.runtimeStatus === "connected") {
       return { statusResult: latest, runtimeServer: server };
     }
     await sleep(options.intervalMs);
@@ -441,11 +441,8 @@ async function run() {
     );
     summary.runtimeServer = sanitizeJson({
       name: runtimeServer?.name ?? null,
-      is_running: runtimeServer?.is_running ?? runtimeServer?.isRunning ?? null,
-      authStatusMode:
-        runtimeServer?.runtime_status?.auth_status?.mode ??
-        runtimeServer?.runtimeStatus?.authStatus?.mode ??
-        null,
+      runtimeStatus: runtimeServer?.runtimeStatus ?? null,
+      authStatus: runtimeServer?.authStatus ?? null,
     });
     rawEvidence.status = sanitizeJson(statusResult);
 
@@ -509,7 +506,10 @@ async function run() {
     summary.queryDocsCall = {
       toolName: toolEvidence.queryDocsTool.name,
       libraryId: CONTEXT7_LIBRARY_ID,
-      ...assertToolResult("mcpServer/tool/call query-docs", queryDocsCall.result),
+      ...assertToolResult(
+        "mcpServer/tool/call query-docs",
+        queryDocsCall.result,
+      ),
     };
     rawEvidence.queryDocsCall = sanitizeJson(queryDocsCall);
 

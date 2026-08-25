@@ -50,6 +50,10 @@ import { buildHistoricalMessagePreview } from "./messageListHistoricalPreviewTex
 import { isTerminalThreadTurnStatus } from "./messageListItemProjectionHelpers";
 import { isActiveThreadTurnStatus } from "./messageListProjectionWebRetrieval";
 import { StreamingRenderer } from "./StreamingRenderer";
+import {
+  ThreadRevertTrigger,
+  type ThreadRevertTarget,
+} from "./ThreadRevertTrigger";
 
 interface ConversationTurnTimelineProps {
   entry: CanonicalTurnRenderEntry;
@@ -89,6 +93,7 @@ interface ConversationTurnTimelineProps {
   onOpenSubagentSession?: (sessionId: string) => void;
   onPermissionResponse?: (response: ConfirmResponse) => void;
   onQuoteMessage?: (content: string, id: string) => void;
+  onRequestThreadRevert?: (target: ThreadRevertTarget) => void;
   onSaveMessageAsSkill?: (source: {
     messageId: string;
     content: string;
@@ -238,6 +243,7 @@ export function ConversationTurnTimeline({
   onOpenSubagentSession,
   onPermissionResponse,
   onQuoteMessage,
+  onRequestThreadRevert,
   onSaveMessageAsSkill,
   onSaveMessageAsKnowledge,
   onCodeBlockClick,
@@ -260,6 +266,15 @@ export function ConversationTurnTimeline({
     entry.isActive &&
     isActiveThreadTurnStatus(entry.turn.status) &&
     !isTerminalThreadTurnStatus(entry.turn.status);
+  const revertThreadId = threadRead?.thread_id?.trim() || "";
+  const canRevertTurn = Boolean(
+    onRequestThreadRevert &&
+    revertThreadId &&
+    !isSending &&
+    !isActiveOperationalTurn &&
+    isTerminalThreadTurnStatus(entry.turn.status) &&
+    threadRead?.can_accept_direct_input !== false,
+  );
   const renderSegments = useMemo<CanonicalTurnRenderSegment[]>(() => {
     if (isActiveOperationalTurn) {
       return entry.segments;
@@ -301,8 +316,7 @@ export function ConversationTurnTimeline({
       entry.segments
         .filter(
           (segment): segment is CanonicalTurnMessageSegment =>
-            segment.kind === "message" &&
-            segment.item.type === "agent_message",
+            segment.kind === "message" && segment.item.type === "agent_message",
         )
         .at(-1)?.id ?? null,
     [entry.segments],
@@ -710,6 +724,16 @@ export function ConversationTurnTimeline({
                         <Copy size={13} />
                       )}
                     </button>
+                  ) : null}
+                  {canRevertTurn && onRequestThreadRevert ? (
+                    <ThreadRevertTrigger
+                      target={{
+                        messageId: userMessageId || segment.item.id,
+                        threadId: revertThreadId,
+                        beforeTurnId: entry.turn.id,
+                      }}
+                      onRequest={onRequestThreadRevert}
+                    />
                   ) : null}
                 </div>
               ) : null}

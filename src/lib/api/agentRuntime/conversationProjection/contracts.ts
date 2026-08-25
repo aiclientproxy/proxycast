@@ -35,9 +35,7 @@ export interface GuardianReviewProjection {
   rationale?: string | null;
 }
 
-export type GuardianReviewActionProjection = Readonly<
-  Record<string, unknown>
->;
+export type GuardianReviewActionProjection = Readonly<Record<string, unknown>>;
 
 export interface NoticeProjection {
   id: string;
@@ -46,6 +44,12 @@ export interface NoticeProjection {
   level: "info" | "warning" | "error";
   code: string;
   message: string;
+}
+
+export interface StrictReviewProjection {
+  thread_id: string;
+  turn_id: string;
+  started_at_ms: number;
 }
 
 export interface ConversationProjectionDiagnostic {
@@ -133,6 +137,12 @@ export type ConversationProjectionEvent =
       message: string;
     })
   | (ProjectionEventBase & {
+      type: "strict_review_required";
+      thread_id: string;
+      turn_id: string;
+      started_at_ms: number;
+    })
+  | (ProjectionEventBase & {
       type: "guardian_review_started";
       thread_id: string;
       turn_id: string;
@@ -183,6 +193,7 @@ export interface ConversationProjectionState {
   items: Readonly<Record<string, AgentThreadItem>>;
   item_order_by_turn: Readonly<Record<string, readonly string[]>>;
   pending_interactions: Readonly<Record<string, PendingInteractionProjection>>;
+  strict_reviews: Readonly<Record<string, StrictReviewProjection>>;
   notices: readonly NoticeProjection[];
   orphan_deltas: Readonly<
     Record<string, readonly ConversationProjectionEvent[]>
@@ -197,6 +208,7 @@ export interface ConversationProjection {
   turns: readonly TurnProjection[];
   items: readonly AgentThreadItem[];
   pending_interactions: readonly PendingInteractionProjection[];
+  strict_reviews: readonly StrictReviewProjection[];
   notices: readonly NoticeProjection[];
   diagnostics: readonly ConversationProjectionDiagnostic[];
 }

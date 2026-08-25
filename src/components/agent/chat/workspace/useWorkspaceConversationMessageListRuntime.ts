@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { WriteArtifactContext } from "../types";
+import type { AgentSessionReadModelRefreshRequest } from "../hooks/agentSessionRefresh";
 import type { WorkspaceConversationMessageListRuntime } from "./useWorkspaceConversationSceneRuntime";
 
 type WorkspaceConversationMessageListProvider =
@@ -90,7 +91,10 @@ interface UseWorkspaceConversationMessageListRuntimeParams {
   pendingPromotedA2UIActionRequest: WorkspaceConversationMessageListPendingA2UIAction;
   projection: WorkspaceConversationMessageListProjectionInput;
   provider: WorkspaceConversationMessageListProviderInput;
-  refreshSessionReadModel: (sessionId?: string) => unknown;
+  refreshSessionReadModel: (
+    sessionId?: string,
+    request?: AgentSessionReadModelRefreshRequest,
+  ) => void | Promise<unknown>;
   sceneSessionId?: string | null;
   shouldCollapseCodeBlock: WorkspaceConversationMessageListRuntime["shouldCollapseCodeBlock"];
 }
@@ -145,9 +149,8 @@ export function useWorkspaceConversationMessageListRuntime({
       onSaveMessageAsKnowledge: actions.onSaveMessageAsKnowledge,
       onOpenSubagentSession: actions.onOpenSubagentSession,
       onPermissionResponse: actions.onPermissionResponse,
-      onRefreshSessionReadModel: () => {
-        refreshSessionReadModel(sceneSessionId || undefined);
-      },
+      onRefreshSessionReadModel: (request) =>
+        refreshSessionReadModel(sceneSessionId || undefined, request),
       pendingPromotedA2UIActionRequest,
       collapseCodeBlocks,
       shouldCollapseCodeBlock,

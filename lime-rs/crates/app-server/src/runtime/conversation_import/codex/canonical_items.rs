@@ -458,6 +458,7 @@ fn canonical_tool_payload(
                 call_id: call_id.to_string(),
                 server_name,
                 tool_name: mcp_tool_name,
+                app_context: None,
                 mcp_app_resource_uri: None,
                 plugin_id: None,
                 arguments,

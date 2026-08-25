@@ -65,7 +65,13 @@ MCP 管理、发现和调用只允许走：
 
 `src/lib/api/mcp.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server JSON-RPC -> lime-rs/crates/mcp`
 
-current method 为 `mcpServer/list`、`mcpServerStatus/list`、`mcpServer/create`、`mcpServer/update`、`mcpServer/delete`、`mcpServer/enabled/set`、`mcpServer/importFromApp`、`mcpServer/syncAllToLive`、`mcpServer/oauth/login`、`mcpServer/oauthLogin/completed`、`mcpServer/startupStatus/updated`、`mcpServer/start`、`mcpServer/stop`、`mcpServer/resource/read`、`mcpServer/tool/call`、`mcpTool/list`、`mcpTool/listForContext`、`mcpTool/search`、`mcpPrompt/list`、`mcpPrompt/get`、`mcpResource/list`、`mcpResource/subscribe` 与 `mcpResource/unsubscribe`。`mcpServer/tool/call` 强制真实 `threadId` 并经 Session-owned `McpThreadRuntime` 执行；Settings 没有 Thread owner，只允许浏览工具。`mcpServer/resource/read` 可做 management read，也可携带真实 `threadId` 读取同一 runtime；`sessionId` 不进入 exact wire。旧 `mcpTool/call`、`mcpTool/callWithCaller` 与 `mcpResource/read` 已从 protocol catalog、schema、App Server、typed clients、Renderer、smoke 和正向测试物理删除，分类为 `dead / deleted / forbidden-to-restore`，只能出现在负向回流守卫或历史 evidence。OAuth 完成态只允许由 App Server v2 typed notification `mcpServer/oauthLogin/completed` 投影给 Renderer；MCP startup lifecycle 只允许由 `mcpServer/startupStatus/updated` 投影连接态并触发终态刷新。旧 `mcp:oauth_completed`、`mcp:server_started`、`mcp:server_stopped`、`mcp:server_error` 均为 `dead / deleted / forbidden-to-restore`。事件 `mcp:resources_updated` 和 `mcp:resource_updated` 必须经真实 MCP manager / Desktop Host event bridge 投影；浏览器模式不得静默回退 mock event fallback。
+current method 为 `mcpServer/list`、`mcpServerStatus/list`、`mcpServer/create`、`mcpServer/update`、`mcpServer/delete`、`mcpServer/enabled/set`、`mcpServer/importFromApp`、`mcpServer/syncAllToLive`、`mcpServer/oauth/login`、`mcpServer/oauthLogin/completed`、`mcpServer/startupStatus/updated`、`mcpServer/start`、`mcpServer/stop`、`mcpServer/resource/read`、`mcpServer/tool/call`、`mcpTool/list`、`mcpTool/listForContext`、`mcpTool/search`、`mcpPrompt/list`、`mcpPrompt/get`、`mcpResource/list`、`mcpResource/subscribe` 与 `mcpResource/unsubscribe`。`mcpServerStatus/list` 只接受 Codex v2 `{ data, nextCursor }` 分页响应；Renderer 和 current smoke 必须遍历 opaque cursor，旧 `{ servers }` status response 为 `dead / forbidden-to-restore`。`mcpServer/tool/call` 强制真实 `threadId` 并经 Session-owned `McpThreadRuntime` 执行；Settings 没有 Thread owner，只允许浏览工具。`mcpServer/resource/read` 可做 management read，也可携带真实 `threadId` 读取同一 runtime；MCP App 从 canonical tool Item 传 `originCallId`，从 `appContext.connectorId` 传 `connectorId`，`sessionId` 不进入 exact wire。旧 `mcpTool/call`、`mcpTool/callWithCaller` 与 `mcpResource/read` 已从 protocol catalog、schema、App Server、typed clients、Renderer、smoke 和正向测试物理删除，分类为 `dead / deleted / forbidden-to-restore`，只能出现在负向回流守卫或历史 evidence。OAuth 完成态只允许由 App Server v2 typed notification `mcpServer/oauthLogin/completed` 投影给 Renderer；MCP startup lifecycle 只允许由 `mcpServer/startupStatus/updated` 投影连接态并触发终态刷新。旧 `mcp:oauth_completed`、`mcp:server_started`、`mcp:server_stopped`、`mcp:server_error` 均为 `dead / deleted / forbidden-to-restore`。事件 `mcp:resources_updated` 和 `mcp:resource_updated` 必须经真实 MCP manager / Desktop Host event bridge 投影；浏览器模式不得静默回退 mock event fallback。
+
+Thread-owned `mcpServer/resource/read` 收到 `originCallId` 时必须先命中已加载 Thread；无 `threadId` 时 fail closed。只有 `server=codex_apps` 才消费该字段，并要求来源是已完成、resource URI 一致的 canonical MCP tool Item；其它 server 按 Codex 语义忽略 `originCallId`。MCP tool lifecycle 必须从同一次冻结的 step route 把 `connectorId/linkId/resourceUri/appName/actionName` 写入 canonical `appContext`；materializer、read model、history merge 与冷恢复继续消费同一 Item，不允许 Renderer 或 live catalog 补写 authority。
+
+`codex_apps` resource origin 从 canonical Thread 完整历史派生，最多保留最近 64 条、单条 authority 最多 1024 bytes。读取时必须重新核对当前 MCP tool metadata 的 connector/link authority；tool argument 与 canonical `linkId` 冲突、缺少明确要求的 account link、connector/link 漂移或 URI 不一致均 fail closed。通过校验后，真实 MCP `resources/read.params._meta` 同时携带 `threadId`、`selected_connector_ids` 与 canonical `link_id`；Renderer 传入的 `connectorId` 不能覆盖 origin authority。非 origin read 的 `connectorId` 仍 lowering 到 `x-codex-turn-metadata.mcp_request_meta.selected_connector_ids`，不得只在 App Server response 回填。
+
+`mcpServerStatus/list.data[].authStatus` 使用 Codex v2 exact camelCase wire：`unknown`、`unsupported`、`notLoggedIn`、`bearerToken`、`oAuth`。OAuth runtime `available=false` 必须投影 `notLoggedIn`，已具备凭证时投影 `oAuth`；静态 header 可用时投影 `bearerToken`，无认证配置投影 `unsupported`。不得恢复旧 `notloggedin`、`bearertoken`、`oauth` lowercase wire 或在 Renderer 猜测修复错误枚举。
 
 live evidence 仅通过 `smoke:mcp-current -- --allow-live-provider` 显式开启，且需要 `LIME_MCP_LIVE_SERVER_URL`。该 URL 不得包含 username、password、query 或 hash；认证只能引用环境变量名，不允许 inline secret。`network-invoke.json` 仅可记录脱敏的 host、环境变量名、header 名、范围和工具/资源摘要。
 
@@ -337,8 +343,17 @@ Rust `app-server-client`、`packages/app-server-client`、v2 method/envelope、s
 RuntimeCore 使用 append-only `history.rollback` replacement marker 重算 effective event stream，不截断旧 JSONL，
 不回滚本地 workspace 文件；provider history、cold hydration、read model 和 turns/items cursor 都从同一 effective
 stream 读取。响应保留原 Thread identity，`thread.turns` 返回空数组并携带分页回溯 cursor，成功后发送一次
-`thread/reverted`。`thread/rollback` 属于 Codex deprecated surface，不恢复为新 GUI 主操作；在本地文件不回滚和真实
-transport/Electron evidence 完成前不新增 GUI 入口。
+`thread/reverted`。`thread/rollback` 属于 Codex deprecated surface，不恢复为 GUI 主操作。
+
+Renderer current GUI 由用户消息旁的 `ThreadRevertTrigger` 和共享 `ThreadRevertDialog` 承接；canonical Turn 与 fallback
+消息投影必须复用同一入口。确认态明确说明只移除目标 Turn 及其后的对话、保留 Thread 且不回滚工作区文件。提交只通过
+typed `revertThread` gateway，成功后以 `timelineMode=replace` 刷新 canonical `thread/read`，使已从 read model 消失的
+Turn/Item 同步从 GUI 删除；普通 streaming/terminal refresh 继续使用 merge。Thread identity 漂移或调用失败时 fail
+closed，并保留现有历史。独立 Gate B 证据位于
+`.lime/qc/gui-evidence/thread-revert-electron-gate-b/thread-revert-electron-gate-b-summary.json`，证明真实 Electron GUI 点击、
+preload/IPC、`app_server_handle_json_lines -> thread/revert -> thread/read`、`app_server_drain_events`、Thread identity 保留、
+第一轮保留、第二轮移除和 workspace 文件不变，mock/invoke/console/page error 均为 0；该受控 external fixture 不证明 live
+provider、packaged app 或 Windows。
 
 该能力的定向证据必须覆盖 paginated replacement、metadata-only response、cursor、notification、missing-turn exact
 error、transport experimental gate、active-turn interrupt、cold resume、重复 revert、provider prefix 保留与 workspace
@@ -354,8 +369,13 @@ Desktop 配置只允许走单一全局用户层：
 `filePath` 均 fail closed。写入必须携带当前版本，未知 key、版本冲突和无效 schema 均拒绝。Electron 只转发
 `app_server_handle_json_lines`，不得恢复 `get_config` / `save_config` 或新增第二套配置业务后端。
 
-Codex `configRequirements/read` 暂不属于 Lime Desktop 产品范围：仓库没有 MDM 或 `requirements/config.toml`
-owner，不建立未消费的策略层。`config/mcpServer/reload` 同样 excluded，MCP 配置继续由
+Codex `configRequirements/read` 不属于 Lime Desktop 产品范围：仓库没有 MDM 或 `requirements/config.toml`
+owner，不建立未消费的策略层。该裁决也覆盖其 `allowBrowserAndComputerUse`、`browserUse`、`computerUse`
+与 `inAppBrowser` 字段：Lime 的 `browser_requirement` 只是 Turn 的任务意图，不是管理策略；
+`ElectronBrowserTabHost` 只拥有同一 Thread/Turn/WebContentsView 的逐次审批、站点权限、下载/上传和人工接管，
+不接受持久审批、origin allowlist、history/full-CDP policy 或任意 macOS/Windows App allowlist。以后若产品范围
+需要这些能力，必须先建立唯一 policy owner 和真实 consumer，再扩展 current App Server contract；不得直接恢复
+Codex requirements method 或把 Renderer metadata 当 policy。`config/mcpServer/reload` 同样 excluded，MCP 配置继续由
 `mcpServer/list|create|update|delete` 与 `mcpServer/start|stop` 负责。
 
 ## Permission Profile 主链

@@ -799,6 +799,7 @@ mod tests {
             server_name: "docs".to_string(),
             tool_name: "search".to_string(),
             runtime_tool_name: "mcp__docs__search".to_string(),
+            app_context: None,
             mcp_app_resource_uri: None,
             plugin_id: None,
         };

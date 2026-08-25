@@ -267,11 +267,7 @@ export async function invokeAppServerMethod(options, method, params, entries) {
 
 export function summarizeInvokeEntries(
   entries,
-  {
-    requiredReadMethods,
-    fixtureMethods,
-    oauthFixtureMethods,
-  },
+  { requiredReadMethods, fixtureMethods, oauthFixtureMethods },
 ) {
   const appServerRequests = entries.flatMap((entry) => entry.appServerRequests);
   const appServerMethodsSeen = Array.from(
@@ -319,9 +315,9 @@ export function summarizeInvokeEntries(
         ? responses.get("mcpServer/list").result.servers.length
         : null,
       statusServers: Array.isArray(
-        responses.get("mcpServerStatus/list")?.result?.servers,
+        responses.get("mcpServerStatus/list")?.result?.data,
       )
-        ? responses.get("mcpServerStatus/list").result.servers.length
+        ? responses.get("mcpServerStatus/list").result.data.length
         : null,
       tools: Array.isArray(responses.get("mcpTool/list")?.result?.tools)
         ? responses.get("mcpTool/list").result.tools.length

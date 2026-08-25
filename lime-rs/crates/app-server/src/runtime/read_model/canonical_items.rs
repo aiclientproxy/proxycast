@@ -252,6 +252,7 @@ fn canonical_payload_to_agent_detail(
             call_id,
             server_name,
             tool_name,
+            app_context,
             mcp_app_resource_uri,
             plugin_id,
             arguments,
@@ -261,6 +262,9 @@ fn canonical_payload_to_agent_detail(
             detail.insert("mcp_server".to_string(), json!(server_name));
             detail.insert("tool_name".to_string(), json!(tool_name));
             detail.insert("arguments".to_string(), json!(arguments));
+            if let Some(app_context) = app_context {
+                detail.insert("app_context".to_string(), json!(app_context));
+            }
             if let Some(resource_uri) = mcp_app_resource_uri {
                 detail.insert("mcp_app_resource_uri".to_string(), json!(resource_uri));
             }

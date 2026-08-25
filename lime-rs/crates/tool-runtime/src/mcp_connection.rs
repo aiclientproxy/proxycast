@@ -8,7 +8,7 @@ mod step_snapshot;
 
 pub use registry::{McpConnectionCall, McpConnectionHandle, McpConnectionRegistry};
 pub use scope::McpCallScope;
-pub use step_snapshot::{McpStepRouteIdentity, McpStepSnapshot};
+pub use step_snapshot::{McpStepRouteAppContext, McpStepRouteIdentity, McpStepSnapshot};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct McpConnectionProvenance {

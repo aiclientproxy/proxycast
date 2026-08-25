@@ -168,6 +168,20 @@ pub struct ToolOutput {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct McpToolCallAppContext {
+    pub connector_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_uri: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action_name: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -359,6 +373,8 @@ pub enum ThreadItemPayload {
         call_id: String,
         server_name: String,
         tool_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        app_context: Option<McpToolCallAppContext>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         mcp_app_resource_uri: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]

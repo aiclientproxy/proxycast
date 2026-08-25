@@ -190,7 +190,7 @@ export async function runReadChecks(options, entries) {
   assertArrayField(
     "mcpServerStatus/list",
     await invokeAppServerMethod(options, "mcpServerStatus/list", {}, entries),
-    "servers",
+    "data",
   );
   assertArrayField(
     "mcpTool/list",
@@ -295,7 +295,7 @@ async function runFailureIsolationChecks({
     const statusServers = assertArrayField(
       "mcpServerStatus/list",
       await invokeAppServerMethod(options, "mcpServerStatus/list", {}, entries),
-      "servers",
+      "data",
     );
     const healthyStatus = statusServers.find(
       (server) => server?.name === healthyServerName,
@@ -304,11 +304,11 @@ async function runFailureIsolationChecks({
       (server) => server?.name === failedServerName,
     );
     assert(
-      healthyStatus?.is_running === true,
+      healthyStatus?.runtimeStatus === "connected",
       "healthy MCP server stopped after another server failed",
     );
     assert(
-      failedStatus?.is_running === false,
+      failedStatus?.runtimeStatus !== "connected",
       "failed MCP server was reported as running",
     );
 
@@ -430,15 +430,16 @@ export async function runFixtureChecks(options, entries, fixture) {
     const statusServers = assertArrayField(
       "mcpServerStatus/list",
       await invokeAppServerMethod(options, "mcpServerStatus/list", {}, entries),
-      "servers",
+      "data",
     );
     assert(
       statusServers.some(
         (server) =>
           server?.name === serverName &&
-          server?.is_running === true &&
-          server?.server_info?.supports_tools === true &&
-          server?.server_info?.supports_resources === true,
+          server?.runtimeStatus === "connected" &&
+          Object.keys(server?.tools ?? {}).length > 0 &&
+          Array.isArray(server?.resources) &&
+          server.resources.length > 0,
       ),
       "mcpServerStatus/list did not report running fixture capabilities",
     );

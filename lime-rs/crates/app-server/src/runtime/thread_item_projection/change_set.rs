@@ -370,6 +370,7 @@ fn merge_payload(
                 call_id: previous_call_id,
                 server_name: previous_server_name,
                 tool_name: previous_tool_name,
+                app_context: previous_app_context,
                 mcp_app_resource_uri: previous_mcp_app_resource_uri,
                 plugin_id: previous_plugin_id,
                 arguments: previous_arguments,
@@ -379,6 +380,7 @@ fn merge_payload(
                 call_id,
                 server_name,
                 tool_name,
+                app_context,
                 mcp_app_resource_uri,
                 plugin_id,
                 arguments,
@@ -388,6 +390,7 @@ fn merge_payload(
             call_id: prefer_string(previous_call_id, call_id, ""),
             server_name: prefer_string(previous_server_name, server_name, "unknown"),
             tool_name: prefer_string(previous_tool_name, tool_name, "tool"),
+            app_context: app_context.or(previous_app_context),
             mcp_app_resource_uri: mcp_app_resource_uri.or(previous_mcp_app_resource_uri),
             plugin_id: plugin_id.or(previous_plugin_id),
             arguments: if arguments.is_empty() {

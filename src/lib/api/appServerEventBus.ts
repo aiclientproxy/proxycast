@@ -37,6 +37,7 @@ export interface AppServerEventBusSubscription {
 
 export class AppServerEventBus {
   readonly #appServerClient: AppServerEventDrainClient;
+  readonly #completedRecentReplays = new Set<AppServerEventBusSubscription>();
   readonly #pendingServerRequests = new Map<string, AppServerJsonRpcRequest>();
   readonly #resolvedServerRequestIds = new Set<string>();
   readonly #seenServerRequestIds = new Set<string>();
@@ -75,12 +76,14 @@ export class AppServerEventBus {
 
     return () => {
       this.#subscriptions.delete(id);
+      this.#completedRecentReplays.delete(subscription);
     };
   }
 
   reset(): void {
     this.#connectionGeneration += 1;
     this.#subscriptions.clear();
+    this.#completedRecentReplays.clear();
     this.#pendingServerRequests.clear();
     this.#resolvedServerRequestIds.clear();
     this.#seenServerRequestIds.clear();
@@ -103,7 +106,10 @@ export class AppServerEventBus {
         }
         this.#flushPendingServerRequests(activeSubscriptions);
 
-        const drainOptions = resolveDrainOptions(activeSubscriptions);
+        const drainOptions = resolveDrainOptions(
+          activeSubscriptions,
+          this.#completedRecentReplays,
+        );
         const connectionGeneration = this.#connectionGeneration;
         let hasDrainedMessages = false;
         try {
@@ -119,6 +125,9 @@ export class AppServerEventBus {
           );
           if (connectionGeneration !== this.#connectionGeneration) {
             continue;
+          }
+          for (const subscription of drainOptions.replayRecentSubscriptions) {
+            this.#completedRecentReplays.add(subscription);
           }
           const notifications = readNotifications(drainedMessages);
           const serverRequests = readServerRequests(drainedMessages);
@@ -229,7 +238,10 @@ export class AppServerEventBus {
     if (activeSubscriptions.length === 0) {
       return DEFAULT_APP_SERVER_EVENT_DRAIN_INTERVAL_MS;
     }
-    const options = resolveDrainOptions(activeSubscriptions);
+    const options = resolveDrainOptions(
+      activeSubscriptions,
+      this.#completedRecentReplays,
+    );
     return hasDrainedNotifications
       ? (options.activeIntervalMs ?? options.intervalMs)
       : options.intervalMs;
@@ -313,20 +325,27 @@ if (import.meta.hot) {
 
 function resolveDrainOptions(
   subscriptions: AppServerEventBusSubscription[],
+  completedRecentReplays: ReadonlySet<AppServerEventBusSubscription> = new Set(),
 ): AppServerEventBusDrainOptions & {
   includeRecent: boolean;
   intervalMs: number;
   limit: number;
+  replayRecentSubscriptions: AppServerEventBusSubscription[];
 } {
   let hasFastFirstLimit = false;
-  let includeRecent = false;
   let activeIntervalMs: number | undefined;
   let intervalMs = DEFAULT_APP_SERVER_EVENT_DRAIN_INTERVAL_MS;
   let limit: number | undefined;
+  const replayRecentSubscriptions: AppServerEventBusSubscription[] = [];
 
   for (const subscription of subscriptions) {
     const options = subscription.getDrainOptions?.();
-    includeRecent = includeRecent || options?.includeRecent === true;
+    if (
+      options?.includeRecent === true &&
+      !completedRecentReplays.has(subscription)
+    ) {
+      replayRecentSubscriptions.push(subscription);
+    }
     const nextLimit = normalizePositiveInteger(options?.limit);
     if (nextLimit !== undefined) {
       if (nextLimit <= 1) {
@@ -354,12 +373,13 @@ function resolveDrainOptions(
 
   return {
     activeIntervalMs,
-    includeRecent,
+    includeRecent: replayRecentSubscriptions.length > 0,
     intervalMs,
     limit:
-      hasFastFirstLimit && !includeRecent
+      hasFastFirstLimit && replayRecentSubscriptions.length === 0
         ? 1
         : (limit ?? DEFAULT_APP_SERVER_EVENT_DRAIN_LIMIT),
+    replayRecentSubscriptions,
   };
 }
 

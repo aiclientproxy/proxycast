@@ -184,6 +184,10 @@ fn turn_context_projects_selected_environments_into_typed_world_state() {
     let turn_context =
         turn_context_from_request(&request, Some(&host_request), &scope, &selection, None)
             .expect("turn context");
+    assert_eq!(
+        turn_context.cwd.as_deref(),
+        Some(std::path::Path::new("/remote/workspace"))
+    );
     let world_state = turn_context
         .metadata
         .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)

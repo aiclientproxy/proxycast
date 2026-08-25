@@ -7,6 +7,7 @@ import {
   isGuardianWarningNotification,
   isGuardianReviewCompletedNotification,
   isGuardianReviewStartedNotification,
+  isStrictReviewRequiredNotification,
   isTurnDiffUpdatedNotification,
   isTurnModerationMetadataNotification,
   isTurnPlanUpdatedNotification,
@@ -19,6 +20,7 @@ const DIRECT_V2_NOTIFICATION_METHODS = new Set([
   "error",
   "warning",
   "guardianWarning",
+  "autoApprovalReview/strictReviewRequired",
   "turn/diff/updated",
   "turn/moderationMetadata",
   "turn/plan/updated",
@@ -110,6 +112,14 @@ export function readAppServerV2NotificationRoute(
       const threadId = readString(params, "threadId");
       const message = readString(params, "message");
       return threadId && message ? { terminal: false, threadId } : null;
+    }
+    case "autoApprovalReview/strictReviewRequired": {
+      if (!isStrictReviewRequiredNotification(notification)) {
+        return null;
+      }
+      const threadId = readString(params, "threadId");
+      const turnId = readString(params, "turnId");
+      return threadId && turnId ? { terminal: false, threadId, turnId } : null;
     }
     case "turn/plan/updated": {
       if (!isTurnPlanUpdatedNotification(notification)) {
@@ -356,6 +366,12 @@ export function projectAppServerV2NotificationPayload(
           }
         : null;
     }
+    case "autoApprovalReview/strictReviewRequired":
+      return {
+        ...basePayload,
+        type: "strict_review_required",
+        started_at_ms: params.startedAtMs,
+      };
     case "turn/plan/updated": {
       const plan = readTurnPlan(params.plan);
       if (!plan) {
@@ -888,6 +904,9 @@ function notificationTimestampMs(
   }
   if (method === "item/completed") {
     return readFiniteNumber(params, "completedAtMs");
+  }
+  if (method === "autoApprovalReview/strictReviewRequired") {
+    return readFiniteNumber(params, "startedAtMs");
   }
   if (
     method === "item/autoApprovalReview/started" ||

@@ -7518,6 +7518,8 @@ const checks = [
       "Refresh sandboxed rusty_v8 artifacts",
       "node scripts/lib/rusty-v8-artifacts.mjs --github-env",
       "cargo clean --manifest-path lime-rs/Cargo.toml -p v8",
+      "Prepare sherpa-onnx runtime",
+      "node scripts/prepare-sherpa-onnx-runtime.mjs --target x86_64-pc-windows-msvc",
       "Build Windows app-server and code-mode-host sidecars",
       "cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host",
     ],
@@ -7799,10 +7801,12 @@ const checks = [
     ],
   },
   {
-    name: "RuntimeCore owns single active turn instead of relying on renderer queue flag",
+    name: "RuntimeCore keeps one active turn while App Server turn/start steers parallel input",
     files: [
       "lime-rs/crates/app-server-protocol/src/jsonrpc_lite.rs",
       "lime-rs/crates/app-server/src/runtime.rs",
+      "lime-rs/crates/app-server/src/runtime/error.rs",
+      "lime-rs/crates/app-server/src/runtime/turn_execution.rs",
       "lime-rs/crates/app-server/src/runtime/tests/queue.rs",
       "lime-rs/crates/app-server/src/runtime/tests/sessions.rs",
       "lime-rs/crates/app-server/src/lib.rs",
@@ -7812,7 +7816,9 @@ const checks = [
       "TurnAlreadyActive",
       "turn already active",
       "second_active_turn_without_queue_fails_closed",
-      "turn_start_rejects_parallel_active_turn_without_queue_flag",
+      "turn_start_steers_parallel_input_into_active_turn",
+      "steer_input_event_payload",
+      "steer-client-parallel-1",
     ],
   },
   {

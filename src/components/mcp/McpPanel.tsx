@@ -46,6 +46,7 @@ export function McpPanel({ hideHeader = false }: McpPanelProps) {
     error,
     serverConnectionStates,
     oauthCompletion,
+    eventStreams,
     startServer,
     stopServer,
     reconnectServer,
@@ -151,6 +152,7 @@ export function McpPanel({ hideHeader = false }: McpPanelProps) {
                 onReconnectServer={reconnectServer}
                 onLoginOAuthServer={handleLoginOAuthServer}
                 onRefresh={refreshServers}
+                eventStreams={eventStreams}
               />
             </div>
           )}

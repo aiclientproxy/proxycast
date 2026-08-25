@@ -387,6 +387,8 @@ interface BuildWorkspaceNavbarPropsParams {
   isCanvasOpen: boolean;
   onToggleCanvas?: ComponentProps<typeof ChatNavbar>["onToggleCanvas"];
   projectId: string | null;
+  threadId?: string | null;
+  workspaceRootPath?: string | null;
   openedProjects?: ComponentProps<typeof ChatNavbar>["openedProjects"];
   onProjectChange?: ComponentProps<typeof ChatNavbar>["onProjectChange"];
   onCloseProject?: ComponentProps<typeof ChatNavbar>["onCloseProject"];
@@ -428,6 +430,8 @@ export function buildWorkspaceNavbarProps({
   isCanvasOpen,
   onToggleCanvas,
   projectId,
+  threadId,
+  workspaceRootPath,
   openedProjects,
   onProjectChange,
   onCloseProject,
@@ -464,6 +468,8 @@ export function buildWorkspaceNavbarProps({
     isCanvasOpen,
     onToggleCanvas,
     projectId,
+    threadId,
+    workspaceRootPath,
     openedProjects,
     onProjectChange,
     onCloseProject,

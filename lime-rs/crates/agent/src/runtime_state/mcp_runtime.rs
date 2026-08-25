@@ -88,8 +88,29 @@ impl McpThreadRuntime {
         server_name: &str,
         uri: &str,
     ) -> Result<lime_mcp::McpResourceContent, String> {
+        self.read_resource_with_meta(server_name, uri, None).await
+    }
+
+    pub(crate) async fn read_resource_with_meta(
+        &self,
+        server_name: &str,
+        uri: &str,
+        meta: Option<serde_json::Value>,
+    ) -> Result<lime_mcp::McpResourceContent, String> {
         self.manager
-            .read_resource(server_name, uri)
+            .read_resource_with_meta(server_name, uri, meta)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) async fn read_resource_for_origin(
+        &self,
+        server_name: &str,
+        thread_id: &str,
+        origin: &lime_mcp::McpResourceOrigin,
+    ) -> Result<lime_mcp::McpResourceContent, String> {
+        self.manager
+            .read_resource_for_origin(server_name, thread_id, origin)
             .await
             .map_err(|error| error.to_string())
     }

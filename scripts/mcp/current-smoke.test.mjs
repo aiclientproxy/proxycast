@@ -251,19 +251,15 @@ describe("mcp current smoke guard", () => {
       }
       if (method === "mcpServerStatus/list") {
         return {
-          servers: [
+          data: [
             {
               name: createdServerName,
-              is_running: true,
-              runtime_status: {
-                transport: "streamable_http",
-                server_info: {
-                  supports_tools: true,
-                  supports_resources: false,
-                },
-              },
+              runtimeStatus: "connected",
+              tools: { echo: { name: "echo" } },
+              resources: [],
             },
           ],
+          nextCursor: null,
         };
       }
       if (

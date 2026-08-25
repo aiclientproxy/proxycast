@@ -47,19 +47,6 @@ pub(crate) struct RemoteFsReadFileResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RemoteFsOpenResponse {
-    pub(crate) handle_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct RemoteFsReadBlockResponse {
-    pub(crate) chunk: String,
-    pub(crate) eof: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct RemoteFsMetadataResponse {
     pub(crate) is_directory: bool,
     pub(crate) is_file: bool,
@@ -237,56 +224,6 @@ impl RemoteExecClient {
                     "sandbox": sandbox,
                 }),
             )
-            .await?;
-        Ok(())
-    }
-
-    pub(crate) async fn fs_open(
-        &self,
-        handle_id: &str,
-        path: &app_server_protocol::protocol::v2::PathUri,
-        sandbox: Option<Value>,
-    ) -> Result<String, String> {
-        let response: RemoteFsOpenResponse = self
-            .request(
-                "fs/open",
-                json!({
-                    "handleId": handle_id,
-                    "path": path,
-                    "sandbox": sandbox,
-                }),
-            )
-            .await?;
-        Ok(response.handle_id)
-    }
-
-    pub(crate) async fn fs_read_block(
-        &self,
-        handle_id: &str,
-        offset: u64,
-        len: usize,
-    ) -> Result<(Vec<u8>, bool), String> {
-        let response: RemoteFsReadBlockResponse = self
-            .request(
-                "fs/readBlock",
-                json!({
-                    "handleId": handle_id,
-                    "offset": offset,
-                    "len": len,
-                }),
-            )
-            .await?;
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(response.chunk)
-            .map_err(|error| {
-                format!("exec-server fs/readBlock returned invalid base64: {error}")
-            })?;
-        Ok((bytes, response.eof))
-    }
-
-    pub(crate) async fn fs_close(&self, handle_id: &str) -> Result<(), String> {
-        let _: Value = self
-            .request("fs/close", json!({ "handleId": handle_id }))
             .await?;
         Ok(())
     }

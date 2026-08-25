@@ -28,6 +28,7 @@ import {
   isTurnStartedNotification,
   modelListUpdatedServerNotification,
   mcpServerOauthLoginCompletedServerNotification,
+  mcpServerEventStreamServerNotification,
   mcpServerStatusUpdatedServerNotification,
   serverNotification,
   skillsChangedServerNotification,
@@ -347,6 +348,57 @@ test("recognizes strict mcpServer/startupStatus/updated notifications", () => {
       mcpServerStatusUpdatedServerNotification(malformed),
       undefined,
     );
+  }
+});
+
+test("recognizes strict mcpServer/event/stream/notification notifications", () => {
+  const active = {
+    method: "mcpServer/event/stream/notification",
+    params: {
+      subscriptionId: "subscription-1",
+      notification: {
+        method: "notifications/events/active",
+        params: { status: "active" },
+      },
+    },
+  };
+  const event = {
+    method: "mcpServer/event/stream/notification",
+    params: {
+      subscriptionId: "subscription-1",
+      notification: {
+        method: "notifications/events/event",
+        params: { name: "issue.updated", data: { issue: 42 } },
+      },
+    },
+  };
+
+  assert.deepEqual(mcpServerEventStreamServerNotification(active), active);
+  assert.deepEqual(mcpServerEventStreamServerNotification(event), event);
+
+  for (const malformed of [
+    { ...active, params: { ...active.params, subscriptionId: "" } },
+    { ...active, params: { ...active.params, notification: undefined } },
+    {
+      ...active,
+      params: {
+        ...active.params,
+        notification: { method: "", params: {} },
+      },
+    },
+    {
+      ...active,
+      params: {
+        ...active.params,
+        notification: { method: "notifications/events/active" },
+      },
+    },
+    {
+      ...active,
+      params: { ...active.params, legacySubscriptionId: "legacy" },
+    },
+  ]) {
+    assert.equal(mcpServerEventStreamServerNotification(malformed), undefined);
   }
 });
 

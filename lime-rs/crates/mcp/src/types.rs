@@ -697,6 +697,17 @@ pub struct McpResourceContent {
     pub meta: Option<serde_json::Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpResourceOrigin {
+    pub call_id: String,
+    pub turn_id: Option<String>,
+    pub tool: String,
+    pub connector_id: String,
+    pub link_id: Option<String>,
+    pub uri: String,
+    pub ambiguous_account: bool,
+}
+
 // ============================================================================
 // 错误类型
 // ============================================================================

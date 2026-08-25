@@ -83,6 +83,7 @@ export interface McpServerCapabilities {
 export interface McpServerInfo {
   id: string;
   name: string;
+  plugin_id?: string;
   description?: string;
   config: McpServerConfig;
   is_running: boolean;

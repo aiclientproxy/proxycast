@@ -241,6 +241,7 @@ pub(super) fn typed_payload(
             .unwrap_or_else(|| "unknown".to_string()),
             tool_name: map_string(payload, &["toolName", "tool_name", "name"])
                 .unwrap_or_else(|| "tool".to_string()),
+            app_context: mcp_app_context(payload),
             mcp_app_resource_uri: map_string(
                 payload,
                 &["mcpAppResourceUri", "mcp_app_resource_uri"],
@@ -581,6 +582,20 @@ fn tool_arguments(payload: &Map<String, Value>) -> Vec<agent_protocol::ToolArgum
             .collect(),
         _ => Vec::new(),
     }
+}
+
+fn mcp_app_context(payload: &Map<String, Value>) -> Option<agent_protocol::McpToolCallAppContext> {
+    let context = payload
+        .get("appContext")
+        .or_else(|| payload.get("app_context"))?
+        .as_object()?;
+    Some(agent_protocol::McpToolCallAppContext {
+        connector_id: map_string(context, &["connectorId", "connector_id"])?,
+        link_id: map_string(context, &["linkId", "link_id"]),
+        resource_uri: map_string(context, &["resourceUri", "resource_uri"]),
+        app_name: map_string(context, &["appName", "app_name"]),
+        action_name: map_string(context, &["actionName", "action_name"]),
+    })
 }
 
 fn call_id(payload: &Map<String, Value>, fallback: &str) -> String {

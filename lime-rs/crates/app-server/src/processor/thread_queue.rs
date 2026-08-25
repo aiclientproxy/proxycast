@@ -173,10 +173,6 @@ fn parse_cursor(cursor: Option<&str>) -> Result<usize, JsonRpcError> {
         .map(|cursor| cursor.unwrap_or_default())
 }
 
-fn invalid_params(message: impl Into<String>) -> JsonRpcError {
-    JsonRpcError::new(error_codes::INVALID_PARAMS, message)
-}
-
 fn invalid_request(message: impl Into<String>) -> JsonRpcError {
     JsonRpcError::new(error_codes::INVALID_REQUEST, message)
 }

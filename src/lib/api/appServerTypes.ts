@@ -120,6 +120,8 @@ export type AppServerAgentSessionReviewDecision =
 export type AppServerThreadStartParams = protocol.ThreadStartParams;
 export type AppServerThreadForkParams = protocol.ThreadForkParams;
 export type AppServerThreadForkResponse = protocol.ThreadForkResponse;
+export type AppServerThreadRevertParams = protocol.ThreadRevertParams;
+export type AppServerThreadRevertResponse = protocol.ThreadRevertResponse;
 export type AppServerAgentSessionListParams = protocol.AgentSessionListParams;
 export type AppServerAgentSessionListResponse =
   protocol.AgentSessionListResponse;
@@ -549,8 +551,7 @@ export type AppServerEnvironmentStatusResponse =
 export type AppServerThreadQueueAddParams = protocol.ThreadQueueAddParams;
 export type AppServerThreadQueueAddResponse = protocol.ThreadQueueAddResponse;
 export type AppServerThreadQueueListParams = protocol.ThreadQueueListParams;
-export type AppServerThreadQueueListResponse =
-  protocol.ThreadQueueListResponse;
+export type AppServerThreadQueueListResponse = protocol.ThreadQueueListResponse;
 export type AppServerThreadQueueUpdateParams = protocol.ThreadQueueUpdateParams;
 export type AppServerThreadQueueUpdateResponse =
   protocol.ThreadQueueUpdateResponse;

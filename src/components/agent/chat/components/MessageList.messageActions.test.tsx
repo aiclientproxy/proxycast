@@ -87,6 +87,93 @@ describe("MessageList message actions", () => {
     expect(container.querySelector('button[aria-label="编辑消息"]')).toBeNull();
   });
 
+  it("恢复失败时应保留原消息并显示可重试反馈", async () => {
+    const onRevertThread = vi.fn(async () => {
+      throw new Error("fixture failure");
+    });
+    const messages: Message[] = [
+      {
+        id: "msg-user-revert-failure",
+        role: "user",
+        content: "这条消息必须保留",
+        runtimeTurnId: "turn-revert-failure",
+        timestamp: new Date(),
+      },
+    ];
+    const container = render(messages, {
+      threadRead: {
+        thread_id: "thread-revert-failure",
+        can_accept_direct_input: true,
+      },
+      onRevertThread,
+    });
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="thread-revert-trigger"]',
+        )
+        ?.click();
+    });
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="thread-revert-confirm"]',
+        )
+        ?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("这条消息必须保留");
+    expect(
+      document
+        .querySelector('[data-testid="thread-revert-status"]')
+        ?.getAttribute("data-state"),
+    ).toBe("error");
+    expect(
+      document.querySelector('[data-testid="thread-revert-error"]'),
+    ).not.toBeNull();
+  });
+
+  it("无 canonical Turn 或正在运行时不应显示恢复入口", () => {
+    const container = render(
+      [
+        {
+          id: "msg-user-no-turn",
+          role: "user",
+          content: "没有 canonical turn",
+          timestamp: new Date(),
+        },
+        {
+          id: "msg-user-pending-turn",
+          role: "user",
+          content: "仍在提交",
+          runtimeTurnId: "pending-turn:local",
+          timestamp: new Date(),
+        },
+        {
+          id: "msg-user-running-turn",
+          role: "user",
+          content: "正在运行",
+          runtimeTurnId: "turn-running",
+          timestamp: new Date(),
+        },
+      ],
+      {
+        isSending: true,
+        threadRead: {
+          thread_id: "thread-running",
+          can_accept_direct_input: false,
+        },
+        onRevertThread: vi.fn(async () => undefined),
+      },
+    );
+
+    expect(
+      container.querySelector('[data-testid="thread-revert-trigger"]'),
+    ).toBeNull();
+  });
+
   it("助手正文应将区块级引用/复制能力透传给 StreamingRenderer", () => {
     const onQuoteMessage = vi.fn();
     const now = new Date();
@@ -559,7 +646,7 @@ describe("MessageList message actions", () => {
     expect(
       Boolean(
         artifactFrame!.compareDocumentPosition(messageActions!) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
+        Node.DOCUMENT_POSITION_FOLLOWING,
       ),
     ).toBe(true);
     expect(container.textContent).toContain("公众号文章草稿");

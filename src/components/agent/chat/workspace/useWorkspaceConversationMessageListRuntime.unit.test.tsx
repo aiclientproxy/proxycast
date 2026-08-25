@@ -158,8 +158,10 @@ describe("useWorkspaceConversationMessageListRuntime", () => {
       sceneSessionId: "scene-session-2",
     });
 
-    getValue().onRefreshSessionReadModel?.();
+    getValue().onRefreshSessionReadModel?.({ timelineMode: "replace" });
 
-    expect(refreshSessionReadModel).toHaveBeenCalledWith("scene-session-2");
+    expect(refreshSessionReadModel).toHaveBeenCalledWith("scene-session-2", {
+      timelineMode: "replace",
+    });
   });
 });

@@ -52,6 +52,11 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
+    name: "revertThread",
+    method: constants.APP_SERVER_METHOD_THREAD_REVERT,
+    params: "required",
+  },
+  {
     name: "addThreadQueue",
     method: constants.APP_SERVER_METHOD_THREAD_QUEUE_ADD,
     params: "required",

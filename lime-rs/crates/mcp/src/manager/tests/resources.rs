@@ -2,7 +2,7 @@ use crate::manager::McpClientManager;
 use crate::types::McpError;
 use rmcp::{
     model::{
-        AnnotateAble, ListResourcesResult, PaginatedRequestParam, RawResource,
+        AnnotateAble, ListResourcesResult, ListToolsResult, PaginatedRequestParam, RawResource,
         ReadResourceRequestParam, ReadResourceResult, ResourceContents, ServerCapabilities,
         ServerInfo, SubscribeRequestParam, UnsubscribeRequestParam,
     },
@@ -17,17 +17,43 @@ struct ExactTargetResourceServer {
     name: &'static str,
     subscriptions: Arc<Mutex<Vec<String>>>,
     unsubscriptions: Arc<Mutex<Vec<String>>>,
+    read_meta: Arc<Mutex<Vec<serde_json::Value>>>,
 }
 
 impl ServerHandler for ExactTargetResourceServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
             capabilities: ServerCapabilities::builder()
+                .enable_tools()
                 .enable_resources()
                 .enable_resources_subscribe()
                 .build(),
             ..Default::default()
         }
+    }
+
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParam>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, rmcp::ErrorData> {
+        let tool = serde_json::from_value(serde_json::json!({
+            "name": "calendar_search",
+            "description": "Search calendar events",
+            "inputSchema": {"type": "object"},
+            "_meta": {
+                "connector_id": "calendar",
+                "connector_name": "Calendar",
+                "link_id": "link-calendar",
+                "ui": {"resourceUri": "ui://calendar/event"},
+                "_codex_apps": {
+                    "resource_uri": "/calendar/link-calendar/calendar_search",
+                    "requires_explicit_link_id": true
+                }
+            }
+        }))
+        .map_err(|error| rmcp::ErrorData::internal_error(error.to_string(), None))?;
+        Ok(ListToolsResult::with_all_items(vec![tool]))
     }
 
     async fn list_resources(
@@ -55,8 +81,12 @@ impl ServerHandler for ExactTargetResourceServer {
     async fn read_resource(
         &self,
         request: ReadResourceRequestParam,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResult, rmcp::ErrorData> {
+        self.read_meta
+            .lock()
+            .await
+            .push(serde_json::Value::Object(context.meta.0));
         Ok(ReadResourceResult {
             contents: vec![ResourceContents::text(self.name, request.uri)],
         })
@@ -87,14 +117,30 @@ async fn add_exact_target_server(
 ) -> (
     Arc<Mutex<Vec<String>>>,
     Arc<Mutex<Vec<String>>>,
+    Arc<Mutex<Vec<serde_json::Value>>>,
+    tokio::task::JoinHandle<()>,
+) {
+    add_exact_target_server_with_disabled_tools(manager, name, Vec::new()).await
+}
+
+async fn add_exact_target_server_with_disabled_tools(
+    manager: &McpClientManager,
+    name: &'static str,
+    disabled_tools: Vec<String>,
+) -> (
+    Arc<Mutex<Vec<String>>>,
+    Arc<Mutex<Vec<String>>>,
+    Arc<Mutex<Vec<serde_json::Value>>>,
     tokio::task::JoinHandle<()>,
 ) {
     let subscriptions = Arc::new(Mutex::new(Vec::new()));
     let unsubscriptions = Arc::new(Mutex::new(Vec::new()));
+    let read_meta = Arc::new(Mutex::new(Vec::new()));
     let server = ExactTargetResourceServer {
         name,
         subscriptions: subscriptions.clone(),
         unsubscriptions: unsubscriptions.clone(),
+        read_meta: read_meta.clone(),
     };
     let (server_transport, client_transport) = tokio::io::duplex(4096);
     let server_handle = tokio::spawn(async move {
@@ -112,12 +158,13 @@ async fn add_exact_target_server(
         .await
         .expect("start exact target client");
     let mut wrapper = super::common::create_test_client(name);
+    wrapper.config.disabled_tools = disabled_tools;
     wrapper.set_running_service(client);
     manager
         .add_client(name.to_string(), wrapper)
         .await
         .expect("add exact target client");
-    (subscriptions, unsubscriptions, server_handle)
+    (subscriptions, unsubscriptions, read_meta, server_handle)
 }
 
 #[tokio::test]
@@ -141,7 +188,7 @@ async fn test_list_resource_templates_returns_empty_when_no_servers() {
 #[tokio::test]
 async fn list_resource_page_preserves_exact_server_cursor() {
     let manager = McpClientManager::new(None);
-    let (_, _, server) = add_exact_target_server(&manager, "server-a").await;
+    let (_, _, _, server) = add_exact_target_server(&manager, "server-a").await;
 
     let first = manager
         .list_resource_page("server-a", None)
@@ -226,9 +273,9 @@ async fn resource_operations_reject_empty_exact_target_before_dispatch() {
 #[tokio::test]
 async fn resource_operations_route_same_uri_to_exact_server() {
     let manager = McpClientManager::new(None);
-    let (subscriptions_a, unsubscriptions_a, server_a) =
+    let (subscriptions_a, unsubscriptions_a, _, server_a) =
         add_exact_target_server(&manager, "server-a").await;
-    let (subscriptions_b, unsubscriptions_b, server_b) =
+    let (subscriptions_b, unsubscriptions_b, _, server_b) =
         add_exact_target_server(&manager, "server-b").await;
     let uri = "docs://shared";
 
@@ -261,6 +308,137 @@ async fn resource_operations_route_same_uri_to_exact_server() {
         .expect("stop server-b");
     server_a.await.expect("join server-a");
     server_b.await.expect("join server-b");
+}
+
+#[tokio::test]
+async fn resource_read_preserves_request_meta_on_the_mcp_wire() {
+    let manager = McpClientManager::new(None);
+    let (_, _, read_meta, server) = add_exact_target_server(&manager, "server-a").await;
+    let expected = serde_json::json!({
+        "x-codex-turn-metadata": {
+            "mcp_request_meta": {
+                "selected_connector_ids": ["calendar"],
+            },
+        },
+    });
+
+    manager
+        .read_resource_with_meta("server-a", "ui://calendar/event", Some(expected.clone()))
+        .await
+        .expect("read resource with request metadata");
+
+    let read_meta = read_meta.lock().await;
+    assert_eq!(
+        read_meta[0].pointer("/x-codex-turn-metadata/mcp_request_meta/selected_connector_ids/0"),
+        expected.pointer("/x-codex-turn-metadata/mcp_request_meta/selected_connector_ids/0")
+    );
+    manager
+        .stop_server("server-a")
+        .await
+        .expect("stop server-a");
+    server.await.expect("join server-a");
+}
+
+#[tokio::test]
+async fn origin_resource_read_revalidates_current_tool_authority_and_scopes_wire_meta() {
+    let manager = McpClientManager::new(None);
+    let (_, _, read_meta, server) = add_exact_target_server(&manager, "codex_apps").await;
+    let origin = crate::types::McpResourceOrigin {
+        call_id: "item-calendar".to_string(),
+        turn_id: Some("turn-1".to_string()),
+        tool: "calendar_search".to_string(),
+        connector_id: "calendar".to_string(),
+        link_id: Some("link-calendar".to_string()),
+        uri: "ui://calendar/event".to_string(),
+        ambiguous_account: false,
+    };
+
+    manager
+        .read_resource_for_origin("codex_apps", "thread-1", &origin)
+        .await
+        .expect("origin-scoped resource read");
+    let observed = read_meta.lock().await;
+    assert_eq!(observed[0]["threadId"], "thread-1");
+    assert_eq!(
+        observed[0].pointer("/x-codex-turn-metadata/mcp_request_meta/selected_connector_ids/0"),
+        Some(&serde_json::json!("calendar"))
+    );
+    assert_eq!(
+        observed[0].pointer("/x-codex-turn-metadata/mcp_request_meta/link_id"),
+        Some(&serde_json::json!("link-calendar"))
+    );
+    drop(observed);
+
+    let mut stale = origin.clone();
+    stale.link_id = Some("link-other".to_string());
+    let error = manager
+        .read_resource_for_origin("codex_apps", "thread-1", &stale)
+        .await
+        .expect_err("stale account authority must fail closed");
+    assert!(error.to_string().contains("link does not match"));
+    assert_eq!(read_meta.lock().await.len(), 1);
+
+    let mut stale_connector = origin.clone();
+    stale_connector.connector_id = "mail".to_string();
+    let error = manager
+        .read_resource_for_origin("codex_apps", "thread-1", &stale_connector)
+        .await
+        .expect_err("stale connector authority must fail closed");
+    assert!(error.to_string().contains("connector does not match"));
+
+    let mut ambiguous = origin.clone();
+    ambiguous.ambiguous_account = true;
+    let error = manager
+        .read_resource_for_origin("codex_apps", "thread-1", &ambiguous)
+        .await
+        .expect_err("ambiguous account must fail closed");
+    assert!(error.to_string().contains("ambiguous account"));
+
+    let error = manager
+        .read_resource_for_origin("docs", "thread-1", &origin)
+        .await
+        .expect_err("non-app origin must fail closed");
+    assert!(error.to_string().contains("only valid for codex_apps"));
+    assert_eq!(read_meta.lock().await.len(), 1);
+
+    manager
+        .stop_server("codex_apps")
+        .await
+        .expect("stop codex_apps");
+    server.await.expect("join codex_apps");
+}
+
+#[tokio::test]
+async fn origin_resource_read_rejects_tools_disabled_in_current_catalog() {
+    let manager = McpClientManager::new(None);
+    let (_, _, read_meta, server) = add_exact_target_server_with_disabled_tools(
+        &manager,
+        "codex_apps",
+        vec!["calendar_search".to_string()],
+    )
+    .await;
+    let origin = crate::types::McpResourceOrigin {
+        call_id: "item-calendar".to_string(),
+        turn_id: Some("turn-1".to_string()),
+        tool: "calendar_search".to_string(),
+        connector_id: "calendar".to_string(),
+        link_id: Some("link-calendar".to_string()),
+        uri: "ui://calendar/event".to_string(),
+        ambiguous_account: false,
+    };
+
+    let error = manager
+        .read_resource_for_origin("codex_apps", "thread-1", &origin)
+        .await
+        .expect_err("disabled current tool must fail closed");
+    assert!(error.to_string().contains("calendar_search"));
+    assert!(read_meta.lock().await.is_empty());
+
+    manager
+        .stop_server("codex_apps")
+        .await
+        .expect("stop codex_apps");
+    server.await.expect("join codex_apps");
 }
 
 #[test]

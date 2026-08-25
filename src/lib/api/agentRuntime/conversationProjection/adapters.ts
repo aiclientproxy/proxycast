@@ -98,6 +98,29 @@ export function conversationProjectionEventFromPayload(
         ? { ...base, type, thread_id: threadId, message }
         : null;
     }
+    case "strict_review_required": {
+      const threadId = readString(
+        payload,
+        "thread_id",
+        "threadId",
+        "session_id",
+      );
+      const turnId = readString(payload, "turn_id", "turnId");
+      const startedAtMs = readFiniteNumber(
+        payload,
+        "started_at_ms",
+        "startedAtMs",
+      );
+      return threadId && turnId && startedAtMs !== undefined
+        ? {
+            ...base,
+            type,
+            thread_id: threadId,
+            turn_id: turnId,
+            started_at_ms: startedAtMs,
+          }
+        : null;
+    }
     case "guardian_review_started":
     case "guardian_review_completed": {
       const threadId = readString(

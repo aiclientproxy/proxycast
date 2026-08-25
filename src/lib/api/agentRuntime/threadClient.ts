@@ -205,9 +205,13 @@ export function createThreadClient(deps: AgentRuntimeThreadClientDeps = {}) {
     request: AgentRuntimeInterruptTurnRequest,
   ): Promise<boolean> {
     assertAppServerTurnLifecycleAvailable(isAppServerTurnLifecycleAvailable);
-    const result = await standardRuntimeClient.cancelTurn(
-      appServerTurnCancelParamsFromRequest(request),
-    );
+    const cancelParams = appServerTurnCancelParamsFromRequest(request);
+    appServerEventRouter?.close({
+      eventName: request.event_name,
+      sessionId: request.session_id,
+      turnId: cancelParams.turnId,
+    });
+    const result = await standardRuntimeClient.cancelTurn(cancelParams);
     publishAppServerAgentSessionNotifications(
       request.event_name,
       result.notifications,

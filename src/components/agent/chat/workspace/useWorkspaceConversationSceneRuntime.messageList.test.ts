@@ -1,5 +1,16 @@
 import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
+
+const threadRevertMocks = vi.hoisted(() => ({
+  revertThreadHistory: vi.fn(async () => ({
+    threadId: "thread-revert",
+    turnsBackwardsCursor: null,
+    itemsBackwardsCursor: null,
+  })),
+}));
+
+vi.mock("@/lib/api/threadRevert", () => threadRevertMocks);
+
 import {
   buildHeavySessionRuntimeFixture,
   createBaseParams,
@@ -8,6 +19,50 @@ import {
 } from "./useWorkspaceConversationSceneRuntime.testFixtures";
 
 describe("useWorkspaceConversationSceneRuntime message list projection", () => {
+  it("恢复历史后应等待同一 canonical Thread 的 read model 刷新", async () => {
+    const onRefreshSessionReadModel = vi.fn(async () => true);
+    const sceneProps = getRenderedSceneProps(
+      createBaseParams({
+        threadRead: {
+          thread_id: "thread-revert",
+          can_accept_direct_input: true,
+        },
+        onRefreshSessionReadModel,
+      }),
+    );
+
+    await sceneProps.messageListProps.onRevertThread?.({
+      threadId: "thread-revert",
+      beforeTurnId: "turn-revert",
+    });
+
+    expect(threadRevertMocks.revertThreadHistory).toHaveBeenCalledWith({
+      threadId: "thread-revert",
+      beforeTurnId: "turn-revert",
+    });
+    expect(onRefreshSessionReadModel).toHaveBeenCalledWith({
+      timelineMode: "replace",
+    });
+  });
+
+  it("会话切换后应拒绝旧 Thread 的恢复请求", async () => {
+    const sceneProps = getRenderedSceneProps(
+      createBaseParams({
+        threadRead: {
+          thread_id: "thread-current",
+          can_accept_direct_input: true,
+        },
+      }),
+    );
+
+    await expect(
+      sceneProps.messageListProps.onRevertThread?.({
+        threadId: "thread-stale",
+        beforeTurnId: "turn-stale",
+      }),
+    ).rejects.toThrow("no longer active");
+  });
+
   it("应将 canonical child roster 透传给消息列表", () => {
     const canonicalChildren = [
       {

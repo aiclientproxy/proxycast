@@ -81,6 +81,11 @@ export type McpServerStatusUpdatedServerNotification = Extract<
   { method: "mcpServer/startupStatus/updated" }
 >;
 
+export type McpServerEventStreamServerNotification = Extract<
+  ServerNotification,
+  { method: "mcpServer/event/stream/notification" }
+>;
+
 export type CommandExecOutputDeltaServerNotification = Extract<
   ServerNotification,
   { method: "command/exec/outputDelta" }
@@ -105,6 +110,37 @@ export type StrictReviewRequiredServerNotification = Extract<
   ServerNotification,
   { method: "autoApprovalReview/strictReviewRequired" }
 >;
+
+export function mcpServerEventStreamServerNotification(
+  message: JsonRpcMessage,
+): McpServerEventStreamServerNotification | undefined {
+  if (
+    !isJsonRpcNotification(message) ||
+    message.method !== "mcpServer/event/stream/notification"
+  ) {
+    return undefined;
+  }
+  const params = record(message.params);
+  const notification = record(params?.notification);
+  if (
+    !params ||
+    !hasOnlyKeys(params, ["notification", "subscriptionId"]) ||
+    !hasString(params, "subscriptionId") ||
+    !notification ||
+    !hasOnlyKeys(notification, ["method", "params"]) ||
+    !hasString(notification, "method") ||
+    !Object.prototype.hasOwnProperty.call(notification, "params")
+  ) {
+    return undefined;
+  }
+  return message as McpServerEventStreamServerNotification;
+}
+
+export function isMcpServerEventStreamNotification(
+  message: JsonRpcMessage,
+): message is McpServerEventStreamServerNotification {
+  return mcpServerEventStreamServerNotification(message) !== undefined;
+}
 
 export function commandExecOutputDeltaServerNotification(
   message: JsonRpcMessage,
@@ -177,7 +213,9 @@ export function serverNotification(
         : undefined;
     case "thread/reverted": {
       const params = record(message.params);
-      return params && typeof params.threadId === "string" && params.threadId.trim()
+      return params &&
+        typeof params.threadId === "string" &&
+        params.threadId.trim()
         ? (message as ServerNotificationFor<"thread/reverted">)
         : undefined;
     }

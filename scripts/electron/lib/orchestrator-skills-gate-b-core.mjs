@@ -15,6 +15,10 @@ export const APPS_SERVER_NAME = "codex_apps";
 export const ORDINARY_SERVER_NAME = "ordinary_fixture";
 export const APPS_TOOL_NAME = "mcp__codex_apps__apps_ping";
 export const ORDINARY_TOOL_NAME = "mcp__ordinary_fixture__ordinary_ping";
+export const APPS_CONNECTOR_ID = "calendar";
+export const APPS_LINK_ID = "link-calendar";
+export const APPS_RESOURCE_URI = "ui://calendar/event.html";
+export const APPS_RESOURCE_MARKER = "MCP_RESOURCE_ORIGIN_GATE_B_READY";
 export const SKILL_SEARCH_TOOL_NAME = "skill_search";
 export const SKILL_READ_TOOL_NAME = "read_mcp_resource";
 export const SKILL_PACKAGE_URI = "skill://delivery/release-notes";
@@ -109,7 +113,7 @@ export function parseOrchestratorGateArgs(
   return options;
 }
 
-function readJsonLines(filePath) {
+export function readJsonLines(filePath) {
   if (!fs.existsSync(filePath)) return [];
   return fs
     .readFileSync(filePath, "utf8")
@@ -139,6 +143,10 @@ const ledgerPath = process.argv[2];
 const role = process.argv[3];
 const packageUri = ${JSON.stringify(SKILL_PACKAGE_URI)};
 const resourceUri = ${JSON.stringify(SKILL_RESOURCE_URI)};
+const appResourceUri = ${JSON.stringify(APPS_RESOURCE_URI)};
+const appConnectorId = ${JSON.stringify(APPS_CONNECTOR_ID)};
+const appLinkId = ${JSON.stringify(APPS_LINK_ID)};
+const appResourceMarker = ${JSON.stringify(APPS_RESOURCE_MARKER)};
 const skillBody = ${JSON.stringify(`---\nname: release-notes\ndescription: Prepare deterministic release notes.\n---\n\n# Release notes\n\n${SKILL_BODY_MARKER}\n`)};
 const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
 
@@ -175,6 +183,18 @@ rl.on("line", (line) => {
       tools: [{
         name,
         description: "Deterministic " + role + " boundary probe",
+        ...(role === "apps" ? {
+          _meta: {
+            connector_id: appConnectorId,
+            connector_name: "Calendar",
+            link_id: appLinkId,
+            ui: { resourceUri: appResourceUri },
+            _codex_apps: {
+              resource_uri: "/calendar/" + appLinkId + "/apps_ping",
+              requires_explicit_link_id: true,
+            },
+          },
+        } : {}),
         inputSchema: {
           type: "object",
           "x-lime": {
@@ -182,8 +202,11 @@ rl.on("line", (line) => {
             always_visible: true,
             allowed_callers: ["assistant"],
           },
-          properties: { message: { type: "string" } },
-          required: ["message"],
+          properties: {
+            message: { type: "string" },
+            ...(role === "apps" ? { link_id: { type: "string" } } : {}),
+          },
+          required: role === "apps" ? ["message", "link_id"] : ["message"],
           additionalProperties: false,
         },
       }],
@@ -222,15 +245,38 @@ rl.on("line", (line) => {
     return;
   }
   if (method === "resources/read") {
-    record({ type: "resource_read", uri: params?.uri ?? null });
-    if (role !== "apps" || params?.uri !== resourceUri) {
+    record({
+      type: "resource_read",
+      uri: params?.uri ?? null,
+      threadId: params?._meta?.threadId ?? null,
+      selectedConnectorIds:
+        params?._meta?.["x-codex-turn-metadata"]?.mcp_request_meta
+          ?.selected_connector_ids ?? null,
+      linkId:
+        params?._meta?.["x-codex-turn-metadata"]?.mcp_request_meta?.link_id ??
+        null,
+    });
+    if (role === "apps" && params?.uri === resourceUri) {
+      result(id, {
+        contents: [{ uri: resourceUri, mimeType: "text/markdown", text: skillBody }],
+      });
+      return;
+    }
+    if (role === "apps" && params?.uri === appResourceUri) {
+      result(id, {
+        contents: [{
+          uri: appResourceUri,
+          mimeType: "text/html;profile=mcp-app",
+          text: "<!doctype html><main data-resource-origin=\"ready\">" +
+            appResourceMarker + "</main>",
+        }],
+      });
+      return;
+    }
+    {
       send({ jsonrpc: "2.0", id, error: { code: -32602, message: "unknown resource" } });
       return;
     }
-    result(id, {
-      contents: [{ uri: resourceUri, mimeType: "text/markdown", text: skillBody }],
-    });
-    return;
   }
   send({ jsonrpc: "2.0", id, error: { code: -32601, message: "unsupported method" } });
 });

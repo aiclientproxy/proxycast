@@ -186,6 +186,8 @@ function WorkspacePluginSurfaceFrame({
   const runtimeOwnerSessionId = runtimeOwner?.sessionId;
   const runtimeOwnerThreadId = runtimeOwner?.threadId;
   const hasMcpApp = Boolean(surface.mcpApp);
+  const installedPluginId =
+    surface.mcpApp?.serverName === "codex_apps" ? null : surface.appId;
   const mcpAppPluginUninstalled = mcpAppPluginAvailability === "uninstalled";
   const embeddedHostReady =
     hostAvailable &&
@@ -193,7 +195,7 @@ function WorkspacePluginSurfaceFrame({
     !mcpAppPluginUninstalled;
 
   useEffect(() => {
-    if (!hasMcpApp) {
+    if (!hasMcpApp || !installedPluginId) {
       setMcpAppPluginAvailability("not-applicable");
       return;
     }
@@ -204,7 +206,7 @@ function WorkspacePluginSurfaceFrame({
       .then(({ plugins }) => {
         if (!cancelled) {
           setMcpAppPluginAvailability(
-            plugins.some((plugin) => plugin.id === surface.appId)
+            plugins.some((plugin) => plugin.id === installedPluginId)
               ? "available"
               : "uninstalled",
           );
@@ -220,7 +222,7 @@ function WorkspacePluginSurfaceFrame({
     };
   }, [
     hasMcpApp,
-    surface.appId,
+    installedPluginId,
     surface.mcpApp?.resourceUri,
     surface.mcpApp?.serverName,
   ]);
@@ -347,6 +349,8 @@ function WorkspacePluginSurfaceFrame({
     }
     const resourceIdentity = [
       runtimeOwnerThreadId ?? "",
+      surface.mcpApp?.toolItemId ?? "",
+      surface.mcpApp?.connectorId ?? "",
       serverName,
       resourceUri,
     ].join("\u0000");
@@ -355,7 +359,13 @@ function WorkspacePluginSurfaceFrame({
     }
     let cancelled = false;
     const resourceOwner = runtimeOwnerThreadId
-      ? { threadId: runtimeOwnerThreadId }
+      ? {
+          threadId: runtimeOwnerThreadId,
+          originCallId: surface.mcpApp?.toolItemId,
+          ...(surface.mcpApp?.connectorId
+            ? { connectorId: surface.mcpApp.connectorId }
+            : {}),
+        }
       : undefined;
     void mcpApi
       .readResource(serverName, resourceUri, resourceOwner)
@@ -392,6 +402,8 @@ function WorkspacePluginSurfaceFrame({
     mounted,
     surface.mcpApp?.resourceUri,
     surface.mcpApp?.serverName,
+    surface.mcpApp?.toolItemId,
+    surface.mcpApp?.connectorId,
     runtimeOwnerThreadId,
     viewId,
   ]);

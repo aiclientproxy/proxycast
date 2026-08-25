@@ -38,7 +38,7 @@ impl RequestProcessor {
         let mut params: TurnStartParams = parse_params(params)?;
         self.ensure_direct_input_allowed(&params.thread_id).await?;
         params.environments = self
-            .normalize_environment_selections(params.environments.take())
+            .resolve_turn_environment_selections(&params.thread_id, params.environments.take())
             .await?;
         self.ensure_environment_execution_lowering(params.environments.as_deref())?;
         let session_id = self.resolve_loaded_v2_thread_session(&params.thread_id)?;

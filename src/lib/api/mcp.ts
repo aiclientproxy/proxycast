@@ -30,7 +30,6 @@ import {
   type McpServerLifecycleResponse as AppServerMcpServerLifecycleResponse,
   type McpServerListResponse as AppServerMcpServerListResponse,
   type McpServerOauthLoginResponse as AppServerMcpServerOauthLoginResponse,
-  type McpServerStatusListResponse as AppServerMcpServerStatusListResponse,
   type ListMcpServerStatusResponse as AppServerMcpServerStatusListV2Response,
   type McpServerToolCallResponse as AppServerMcpServerToolCallResponse,
   type McpToolListResponse as AppServerMcpToolListResponse,
@@ -47,6 +46,7 @@ import type {
   McpResourceListResult,
   McpServer,
   McpServerInfo,
+  McpServerRuntimeStatus,
   McpServerOAuthLoginOptions,
   McpServerOAuthLoginResponse,
   McpToolDefinition,
@@ -105,6 +105,7 @@ function lowerMcpServerStatus(
   config: McpServer,
 ): McpServerInfo {
   const isRunning = status.runtimeStatus === "connected";
+  const authStatus = lowerMcpServerAuthStatus(status.authStatus, config);
   const serverInfo = status.serverInfo
     ? {
         name: status.serverInfo.name,
@@ -117,6 +118,7 @@ function lowerMcpServerStatus(
   return {
     ...config,
     config: config.server_config,
+    plugin_id: status.pluginId ?? undefined,
     is_running: isRunning,
     server_info: serverInfo,
     runtime_status: {
@@ -145,12 +147,80 @@ function lowerMcpServerStatus(
         config.server_config.disabledTools ??
         [],
       server_info: serverInfo,
-      auth_status: {
-        mode: status.authStatus === "oauth" ? "oauth" : "none",
-        available: status.authStatus !== "notloggedin",
-      },
+      auth_status: authStatus,
     },
   };
+}
+
+function lowerMcpServerAuthStatus(
+  authStatus: AppServerMcpServerStatusListV2Response["data"][number]["authStatus"],
+  config: McpServer,
+): McpServerRuntimeStatus["auth_status"] {
+  switch (authStatus) {
+    case "oAuth":
+      return { mode: "oauth", available: true };
+    case "notLoggedIn":
+      return {
+        mode: "oauth",
+        available: false,
+        reason_code: "oauth_login_required",
+        action_plan: {
+          kind: "oauth_login",
+          state: "login_required",
+          required_runtime: "mcp_server_oauth_login",
+          ...("scopes" in config.server_config && config.server_config.scopes
+            ? { scopes: config.server_config.scopes }
+            : {}),
+        },
+      };
+    case "bearerToken":
+      return { mode: "static_headers", available: true };
+    case "unsupported":
+      return { mode: "none", available: true };
+    case "unknown":
+      return { mode: "none", available: false };
+  }
+}
+
+async function listAllMcpServerStatuses(): Promise<
+  AppServerMcpServerStatusListV2Response["data"]
+> {
+  const statuses: AppServerMcpServerStatusListV2Response["data"] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
+
+  do {
+    const response =
+      await requestMcpAppServer<AppServerMcpServerStatusListV2Response>(
+        METHOD_MCP_SERVER_STATUS_LIST,
+        cursor ? { cursor } : {},
+      );
+    statuses.push(
+      ...assertArrayField<
+        AppServerMcpServerStatusListV2Response["data"][number]
+      >(METHOD_MCP_SERVER_STATUS_LIST, response, "data"),
+    );
+
+    const nextCursor = response.nextCursor;
+    if (nextCursor === undefined || nextCursor === null) {
+      cursor = undefined;
+      continue;
+    }
+    if (typeof nextCursor !== "string" || nextCursor.trim().length === 0) {
+      throw new Error(
+        `${METHOD_MCP_SERVER_STATUS_LIST} returned an invalid nextCursor`,
+      );
+    }
+    if (seenCursors.has(nextCursor)) {
+      throw new Error(
+        `${METHOD_MCP_SERVER_STATUS_LIST} returned a repeated nextCursor`,
+      );
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  } while (cursor);
+
+  return statuses;
 }
 
 // ============================================================================
@@ -242,28 +312,15 @@ export const mcpApi = {
   // --------------------------------------------------------------------------
 
   /** 获取所有服务器及其运行状态 */
-  listServersWithStatus: (): Promise<McpServerInfo[]> =>
-    requestMcpAppServer<
-      | AppServerMcpServerStatusListV2Response
-      | AppServerMcpServerStatusListResponse
-    >(METHOD_MCP_SERVER_STATUS_LIST).then(async (response) => {
-      if (response && typeof response === "object" && "data" in response) {
-        const statuses = assertArrayField<
-          AppServerMcpServerStatusListV2Response["data"][number]
-        >(METHOD_MCP_SERVER_STATUS_LIST, response, "data");
-        const configs = await mcpApi.getServers();
-        const byName = new Map(configs.map((config) => [config.name, config]));
-        return statuses.flatMap((status) => {
-          const config = byName.get(status.name);
-          return config ? [lowerMcpServerStatus(status, config)] : [];
-        });
-      }
-      return assertArrayField<McpServerInfo>(
-        METHOD_MCP_SERVER_STATUS_LIST,
-        response,
-        "servers",
-      );
-    }),
+  listServersWithStatus: async (): Promise<McpServerInfo[]> => {
+    const statuses = await listAllMcpServerStatuses();
+    const configs = await mcpApi.getServers();
+    const byName = new Map(configs.map((config) => [config.name, config]));
+    return statuses.flatMap((status) => {
+      const config = byName.get(status.name);
+      return config ? [lowerMcpServerStatus(status, config)] : [];
+    });
+  },
 
   /** 启动 MCP 服务器 */
   startServer: (name: string): Promise<void> =>
@@ -446,12 +503,25 @@ export const mcpApi = {
   readResource: async (
     server: string,
     uri: string,
-    runtimeOwner?: { sessionId?: string; threadId: string },
+    runtimeOwner?: {
+      sessionId?: string;
+      threadId: string;
+      originCallId?: string;
+      connectorId?: string;
+    },
   ): Promise<McpResourceContent> => {
     const target = requireMcpResourceTarget(server, uri);
     const threadId = runtimeOwner?.threadId?.trim();
     if (runtimeOwner && !threadId) {
       throw new Error("MCP runtime threadId cannot be empty");
+    }
+    const originCallId = runtimeOwner?.originCallId?.trim();
+    if (runtimeOwner?.originCallId !== undefined && !originCallId) {
+      throw new Error("MCP runtime originCallId cannot be empty");
+    }
+    const connectorId = runtimeOwner?.connectorId?.trim();
+    if (runtimeOwner?.connectorId !== undefined && !connectorId) {
+      throw new Error("MCP runtime connectorId cannot be empty");
     }
     const response =
       await requestMcpAppServer<AppServerMcpServerResourceReadResponse>(
@@ -459,6 +529,8 @@ export const mcpApi = {
         {
           ...target,
           ...(threadId ? { threadId } : {}),
+          ...(originCallId ? { originCallId } : {}),
+          ...(connectorId ? { connectorId } : {}),
         },
       );
     return assertMcpServerResourceContent(

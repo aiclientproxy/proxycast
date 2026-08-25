@@ -11,7 +11,10 @@ use safe_display::{
     bounded_safe_json, bounded_safe_text, MAX_DISPLAY_JSON_BYTES, MAX_DISPLAY_STRING_BYTES,
 };
 
+mod mcp;
 mod safe_display;
+
+use mcp::{project_mcp_app_context, project_mcp_status, project_mcp_tool_result};
 
 pub(super) fn lower_thread_read_params(
     params: &v2::ThreadReadParams,
@@ -435,6 +438,7 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
         canonical::ThreadItemPayload::McpToolCall {
             server_name,
             tool_name,
+            app_context,
             mcp_app_resource_uri,
             plugin_id,
             arguments,
@@ -463,7 +467,7 @@ fn project_item(item: canonical::ThreadItem) -> Result<v2::ThreadItem, JsonRpcEr
                         .map_err(|error| projection_error(format!("MCP arguments: {error}")))?,
                 )
                 .0,
-                app_context: None,
+                app_context: app_context.map(project_mcp_app_context),
                 mcp_app_resource_uri,
                 plugin_id,
                 read_only_hint: metadata_bool(
@@ -1079,70 +1083,6 @@ fn canonical_image_generation_status(status: canonical::ItemStatus) -> &'static 
         | canonical::ItemStatus::Cancelled => "failed",
         canonical::ItemStatus::Pending | canonical::ItemStatus::InProgress => "in_progress",
     }
-}
-
-fn project_mcp_status(status: canonical::ItemStatus) -> v2::McpToolCallStatus {
-    match status {
-        canonical::ItemStatus::Pending | canonical::ItemStatus::InProgress => {
-            v2::McpToolCallStatus::InProgress
-        }
-        canonical::ItemStatus::Completed => v2::McpToolCallStatus::Completed,
-        canonical::ItemStatus::Failed
-        | canonical::ItemStatus::Interrupted
-        | canonical::ItemStatus::Cancelled => v2::McpToolCallStatus::Failed,
-    }
-}
-
-fn project_mcp_tool_result(output: &canonical::ToolOutput) -> v2::McpToolCallResult {
-    let mut truncated = output.truncated;
-    let content = output
-        .text
-        .as_ref()
-        .filter(|text| !text.is_empty())
-        .map(|text| {
-            let (text, text_truncated) = bounded_safe_text(text, MAX_DISPLAY_STRING_BYTES);
-            truncated |= text_truncated;
-            vec![serde_json::json!({ "type": "text", "text": text })]
-        })
-        .unwrap_or_default();
-    let structured_content = output.structured_content.clone().map(|value| {
-        let (value, value_truncated) = bounded_safe_json(value);
-        truncated |= value_truncated;
-        value
-    });
-
-    let mut metadata = serde_json::Map::new();
-    if truncated {
-        metadata.insert("truncated".to_string(), Value::Bool(true));
-    }
-    if output.output_ref.is_some() {
-        // The opaque sidecar id is not an action capability. Renderer receives
-        // only availability until Desktop Host provides a semantic resolver.
-        metadata.insert("outputAvailable".to_string(), Value::Bool(true));
-    }
-
-    let mut result = v2::McpToolCallResult {
-        content,
-        structured_content,
-        meta: (!metadata.is_empty()).then_some(Value::Object(metadata)),
-    };
-    if serde_json::to_vec(&result)
-        .map(|bytes| bytes.len() > MAX_DISPLAY_JSON_BYTES)
-        .unwrap_or(true)
-    {
-        result = v2::McpToolCallResult {
-            content: vec![serde_json::json!({
-                "type": "text",
-                "text": "[tool output exceeded display limit]"
-            })],
-            structured_content: None,
-            meta: Some(serde_json::json!({
-                "truncated": true,
-                "outputAvailable": output.output_ref.is_some()
-            })),
-        };
-    }
-    result
 }
 
 fn project_collab_status(status: canonical::ItemStatus) -> v2::CollabAgentToolCallStatus {

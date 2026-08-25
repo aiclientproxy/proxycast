@@ -175,10 +175,15 @@ function findServer(servers, serverName) {
 }
 
 function authStatusOf(server) {
-  return server?.runtime_status?.auth_status || server?.auth_status || null;
+  return server?.authStatus || null;
 }
 
-async function waitForAuthorizedStatus({ options, entries, invokeAppServerMethod, serverName }) {
+async function waitForAuthorizedStatus({
+  options,
+  entries,
+  invokeAppServerMethod,
+  serverName,
+}) {
   const startedAt = Date.now();
   let lastStatus = null;
 
@@ -189,14 +194,9 @@ async function waitForAuthorizedStatus({ options, entries, invokeAppServerMethod
       {},
       entries,
     );
-    const server = findServer(result?.servers, serverName);
+    const server = findServer(result?.data, serverName);
     lastStatus = authStatusOf(server);
-    if (
-      lastStatus?.mode === "oauth" &&
-      lastStatus?.available === true &&
-      !lastStatus?.reason_code &&
-      !lastStatus?.action_plan
-    ) {
+    if (lastStatus === "oauth") {
       return { server, authStatus: lastStatus };
     }
     await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
@@ -280,7 +280,10 @@ export async function runMcpOAuthFixtureSmoke({
       },
       entries,
     );
-    assert(Array.isArray(createResult?.servers), "mcpServer/create did not return servers");
+    assert(
+      Array.isArray(createResult?.servers),
+      "mcpServer/create did not return servers",
+    );
 
     const login = await invokeAppServerMethod(
       options,

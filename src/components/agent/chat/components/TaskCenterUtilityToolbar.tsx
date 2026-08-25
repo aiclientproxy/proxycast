@@ -46,6 +46,7 @@ import type { SidebarActivityLog } from "../hooks/useThemeContextWorkspace";
 import type { GeneralWorkbenchWorkflowStepInput } from "./generalWorkbenchWorkflowPanelViewModel";
 import type { GeneralWorkbenchCreationTaskEvent } from "./generalWorkbenchWorkflowData";
 import { TaskCenterEnvironmentPanel } from "./TaskCenterEnvironmentPanel";
+import { useThreadEnvironmentLifecycleStatus } from "../hooks/useThreadEnvironmentLifecycleStatus";
 import { TaskCenterLocationPanel } from "./TaskCenterLocationPanel";
 import { markProjectOpened } from "../hooks/agentProjectStorage";
 import { hydrateAgentPlanState } from "../utils/planState";
@@ -238,6 +239,10 @@ export function TaskCenterUtilityToolbar({
   const normalizedProjectRootPath = projectRootPath?.trim() || null;
   const [environmentVisited, setEnvironmentVisited] = React.useState(false);
   const [environmentOpen, setEnvironmentOpen] = React.useState(false);
+  const environmentLifecycle = useThreadEnvironmentLifecycleStatus({
+    threadId: taskRail?.threadRead?.thread_id ?? taskRail?.sessionId,
+    threadRead: taskRail?.threadRead,
+  });
   const autoRevealedPlanKeyRef = React.useRef<string | null>(null);
   const { status, changeSummary, loading, error, refresh } =
     useProjectGitStatus(environmentVisited ? normalizedProjectRootPath : null);
@@ -544,7 +549,7 @@ export function TaskCenterUtilityToolbar({
               type="button"
               variant="ghost"
               size="icon"
-              className={taskCenterIconOnlyButtonClassName}
+              className={cn(taskCenterIconOnlyButtonClassName, "relative")}
               aria-label={agentText(
                 "agentChat.navbar.environment.open",
                 "打开环境信息",
@@ -554,14 +559,45 @@ export function TaskCenterUtilityToolbar({
                 "打开环境信息",
               )}
               data-testid="task-center-environment-trigger"
+              data-environment-lifecycle={
+                environmentLifecycle.some(
+                  (environment) => environment.status === "disconnected",
+                )
+                  ? "disconnected"
+                  : environmentLifecycle.some(
+                        (environment) => environment.status === "pending",
+                      )
+                    ? "pending"
+                    : environmentLifecycle.length > 0
+                      ? "connected"
+                      : "local"
+              }
             >
               <SlidersHorizontal className="h-4 w-4" />
+              {environmentLifecycle.length > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-[color:var(--lime-surface)]",
+                    environmentLifecycle.some(
+                      (environment) => environment.status === "disconnected",
+                    )
+                      ? "bg-rose-500"
+                      : environmentLifecycle.some(
+                            (environment) => environment.status === "pending",
+                          )
+                        ? "bg-amber-500"
+                        : "bg-emerald-500",
+                  )}
+                />
+              ) : null}
             </Button>
           </PopoverTrigger>
           <TaskCenterEnvironmentPanel
             normalizedProjectRootPath={normalizedProjectRootPath}
             status={status}
             environmentStatusLabel={environmentStatusLabel}
+            lifecycleStatuses={environmentLifecycle}
             changeSummary={changeSummary}
             branchLabel={branchLabel}
             changeCount={changeCount}

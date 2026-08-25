@@ -44,7 +44,6 @@ describe("mcp", () => {
   it("列表命令应通过 App Server current 空态返回空数组", async () => {
     const cases: Array<[string, string, () => Promise<unknown>]> = [
       ["mcpServer/list", "servers", () => mcpApi.getServers()],
-      ["mcpServerStatus/list", "servers", () => mcpApi.listServersWithStatus()],
       ["mcpTool/list", "tools", () => mcpApi.listTools()],
       ["mcpPrompt/list", "prompts", () => mcpApi.listPrompts()],
       ["mcpResource/list", "resources", () => mcpApi.listResources()],
@@ -57,6 +56,23 @@ describe("mcp", () => {
       expect(appServerRequestMock).toHaveBeenLastCalledWith(method, {});
     }
     expect(safeInvoke).not.toHaveBeenCalled();
+  });
+
+  it("状态列表空态应只接受 current v2 data 分页响应", async () => {
+    mockAppServerResult({ data: [], nextCursor: null });
+    mockAppServerResult({ servers: [] });
+
+    await expect(mcpApi.listServersWithStatus()).resolves.toEqual([]);
+    expect(appServerRequestMock).toHaveBeenNthCalledWith(
+      1,
+      "mcpServerStatus/list",
+      {},
+    );
+    expect(appServerRequestMock).toHaveBeenNthCalledWith(
+      2,
+      "mcpServer/list",
+      {},
+    );
   });
 
   it("资源列表应保留 current resource templates 投影", async () => {
@@ -121,6 +137,18 @@ describe("mcp", () => {
         threadId: " ",
       }),
     ).rejects.toThrow("threadId cannot be empty");
+    await expect(
+      mcpApi.readResource("docs", "ui://demo/report.html", {
+        threadId: "thread-1",
+        originCallId: " ",
+      }),
+    ).rejects.toThrow("originCallId cannot be empty");
+    await expect(
+      mcpApi.readResource("docs", "ui://demo/report.html", {
+        threadId: "thread-1",
+        connectorId: " ",
+      }),
+    ).rejects.toThrow("connectorId cannot be empty");
 
     expect(appServerRequestMock).not.toHaveBeenCalled();
   });
@@ -136,123 +164,13 @@ describe("mcp", () => {
     expect(appServerRequestMock).not.toHaveBeenCalled();
   });
 
-  it("状态列表应保留 streamable HTTP 配置与 runtime status", async () => {
-    const server = {
-      id: "server-http",
-      name: "remote-docs",
-      description: "remote docs",
-      config: {
-        type: "streamable_http",
-        url: "https://example.com/mcp",
-        bearer_token_env_var: "MCP_TOKEN",
-        scopes: ["search.read"],
-        oauth: { client_id: "lime-client" },
-        oauth_resource: "https://example.com",
-        startup_timeout: 30,
-        tool_timeout: 15,
-        enabled_tools: ["search"],
-        disabled_tools: ["delete"],
-      },
-      is_running: true,
-      server_info: {
-        name: "remote-docs",
-        version: "1.0.0",
-        supports_tools: true,
-        supports_prompts: false,
-        supports_resources: true,
-      },
-      runtime_status: {
-        name: "remote-docs",
-        transport: "streamable_http",
-        enabled: true,
-        is_running: true,
-        required: false,
-        supports_parallel_tool_calls: true,
-        startup_timeout: 30,
-        tool_timeout: 15,
-        enabled_tools: ["search"],
-        disabled_tools: ["delete"],
-        auth_status: {
-          mode: "oauth",
-          available: false,
-          reason_code: "oauth_runtime_not_implemented",
-          action_plan: {
-            kind: "oauth_login",
-            state: "runtime_not_connected",
-            required_runtime: "mcp_server_oauth_login",
-            scopes: ["search.read"],
-            oauth_resource: "https://example.com",
-            client_id: "lime-client",
-          },
-        },
-        server_info: {
-          name: "remote-docs",
-          version: "1.0.0",
-          supports_tools: true,
-          supports_prompts: false,
-          supports_resources: true,
-        },
-      },
-      enabled_lime: true,
-      enabled_claude: false,
-      enabled_codex: true,
-      enabled_gemini: false,
-    };
-    mockAppServerResult({ servers: [server] });
+  it("旧 servers 状态响应应 fail closed", async () => {
+    mockAppServerResult({ servers: [] });
 
-    await expect(mcpApi.listServersWithStatus()).resolves.toEqual([server]);
-    expect(appServerRequestMock).toHaveBeenLastCalledWith(
-      "mcpServerStatus/list",
-      {},
+    await expect(mcpApi.listServersWithStatus()).rejects.toThrow(
+      "mcpServerStatus/list did not return data",
     );
-    expect(safeInvoke).not.toHaveBeenCalled();
-  });
-
-  it("动态 OAuth 状态应指向 current 登录 runtime", async () => {
-    const server = {
-      id: "server-http-dynamic-oauth",
-      name: "remote-docs",
-      config: {
-        type: "streamable_http",
-        url: "https://example.com/mcp",
-        scopes: ["search.read"],
-      },
-      is_running: false,
-      runtime_status: {
-        name: "remote-docs",
-        transport: "streamable_http",
-        enabled: true,
-        is_running: false,
-        required: false,
-        supports_parallel_tool_calls: false,
-        startup_timeout: 30,
-        tool_timeout: 30,
-        disabled_tools: [],
-        auth_status: {
-          mode: "oauth",
-          available: true,
-          reason_code: "oauth_login_required",
-          action_plan: {
-            kind: "oauth_login",
-            state: "login_required",
-            required_runtime: "mcp_server_oauth_login",
-            scopes: ["search.read"],
-          },
-        },
-      },
-      enabled_lime: true,
-      enabled_claude: false,
-      enabled_codex: true,
-      enabled_gemini: false,
-    };
-    mockAppServerResult({ servers: [server] });
-
-    await expect(mcpApi.listServersWithStatus()).resolves.toEqual([server]);
-    expect(appServerRequestMock).toHaveBeenLastCalledWith(
-      "mcpServerStatus/list",
-      {},
-    );
-    expect(safeInvoke).not.toHaveBeenCalled();
+    expect(appServerRequestMock).toHaveBeenCalledTimes(1);
   });
 
   it("current v2 状态分页应投影回配置页所需的 server identity", async () => {
@@ -274,7 +192,7 @@ describe("mcp", () => {
         {
           name: "remote-docs",
           runtimeStatus: "connected",
-          pluginId: null,
+          pluginId: "connector-docs",
           serverInfo: {
             name: "remote-docs",
             title: null,
@@ -303,6 +221,7 @@ describe("mcp", () => {
       {
         id: "server-v2",
         name: "remote-docs",
+        plugin_id: "connector-docs",
         is_running: true,
         config: config.server_config,
         runtime_status: {
@@ -320,6 +239,71 @@ describe("mcp", () => {
       2,
       "mcpServer/list",
       {},
+    );
+  });
+
+  it("状态列表应遍历 opaque cursor 并投影未登录 OAuth", async () => {
+    const config = {
+      id: "server-v2",
+      name: "remote-docs",
+      server_config: {
+        type: "streamable_http" as const,
+        url: "https://example.com/mcp",
+        scopes: ["search.read"],
+      },
+      enabled_lime: true,
+      enabled_claude: false,
+      enabled_codex: true,
+      enabled_gemini: false,
+    };
+    mockAppServerResult({ data: [], nextCursor: "page-2" });
+    mockAppServerResult({
+      data: [
+        {
+          name: "remote-docs",
+          runtimeStatus: "notStarted",
+          pluginId: null,
+          serverInfo: null,
+          tools: {},
+          resources: [],
+          resourceTemplates: [],
+          authStatus: "notLoggedIn",
+        },
+      ],
+      nextCursor: null,
+    });
+    mockAppServerResult({ servers: [config] });
+
+    await expect(mcpApi.listServersWithStatus()).resolves.toMatchObject([
+      {
+        name: "remote-docs",
+        runtime_status: {
+          auth_status: {
+            mode: "oauth",
+            available: false,
+            reason_code: "oauth_login_required",
+            action_plan: {
+              kind: "oauth_login",
+              state: "login_required",
+              scopes: ["search.read"],
+            },
+          },
+        },
+      },
+    ]);
+    expect(appServerRequestMock).toHaveBeenNthCalledWith(
+      2,
+      "mcpServerStatus/list",
+      { cursor: "page-2" },
+    );
+  });
+
+  it("状态列表应拒绝重复 cursor", async () => {
+    mockAppServerResult({ data: [], nextCursor: "same" });
+    mockAppServerResult({ data: [], nextCursor: "same" });
+
+    await expect(mcpApi.listServersWithStatus()).rejects.toThrow(
+      "mcpServerStatus/list returned a repeated nextCursor",
     );
   });
 
@@ -456,6 +440,8 @@ describe("mcp", () => {
     await expect(
       mcpApi.readResource("plugin__demo__server", "ui://demo/report.html", {
         threadId: "thread-1",
+        originCallId: "item-1",
+        connectorId: "connector-demo",
       }),
     ).resolves.toEqual(
       expect.objectContaining({
@@ -469,6 +455,8 @@ describe("mcp", () => {
         server: "plugin__demo__server",
         uri: "ui://demo/report.html",
         threadId: "thread-1",
+        originCallId: "item-1",
+        connectorId: "connector-demo",
       },
     );
 

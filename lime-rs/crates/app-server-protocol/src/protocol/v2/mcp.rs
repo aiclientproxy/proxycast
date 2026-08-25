@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 /// Authentication state reported by the current MCP inventory contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "camelCase")]
 pub enum McpAuthStatus {
     Unknown,
     Unsupported,

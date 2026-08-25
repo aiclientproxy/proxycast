@@ -71,7 +71,7 @@ function logStage(stage) {
   console.log(`${LOG_PREFIX} stage=${stage}`);
 }
 
-async function readElectronRuntime(app) {
+export async function readElectronRuntime(app) {
   return await app.evaluate(async ({ app: electronApp }) => ({
     appVersion: electronApp.getVersion(),
     electronVersion: process.versions.electron,
@@ -81,7 +81,7 @@ async function readElectronRuntime(app) {
   }));
 }
 
-async function createAndStartMcpServer(
+export async function createAndStartMcpServer(
   page,
   fixture,
   definition,
@@ -115,7 +115,12 @@ async function createAndStartMcpServer(
   return { id, name: definition.name };
 }
 
-async function waitForMcpTools(page, expectedNames, options, observedMethods) {
+export async function waitForMcpTools(
+  page,
+  expectedNames,
+  options,
+  observedMethods,
+) {
   const startedAt = Date.now();
   let latest = null;
   while (Date.now() - startedAt < options.timeoutMs) {
@@ -130,7 +135,7 @@ async function waitForMcpTools(page, expectedNames, options, observedMethods) {
   );
 }
 
-async function ensureWorkspace(page, observedMethods) {
+export async function ensureWorkspace(page, observedMethods) {
   const response = await appServerCallFromPage(
     page,
     "workspace/default/ensure",
@@ -147,7 +152,12 @@ async function ensureWorkspace(page, observedMethods) {
   return { rootPath, workspaceId };
 }
 
-async function createRepositoryProvider(page, fixture, label, observedMethods) {
+export async function createRepositoryProvider(
+  page,
+  fixture,
+  label,
+  observedMethods,
+) {
   const providerName = `${label} ${Date.now()}`;
   const created = await appServerCallFromPage(page, "modelProvider/create", {
     name: providerName,
@@ -196,7 +206,7 @@ async function createRepositoryProvider(page, fixture, label, observedMethods) {
   return { model: fixture.provider.modelPreference, providerId, providerName };
 }
 
-async function createRuntimeThread(
+export async function createRuntimeThread(
   page,
   workspace,
   route,
@@ -225,7 +235,7 @@ async function createRuntimeThread(
   return { route, sessionId, threadId };
 }
 
-async function openRuntimeThreadInGui(page, runtime, options) {
+export async function openRuntimeThreadInGui(page, runtime, options) {
   await page.evaluate(
     ({ navigationKey, sessionId }) => {
       sessionStorage.setItem(
@@ -255,7 +265,7 @@ async function openRuntimeThreadInGui(page, runtime, options) {
   );
 }
 
-async function startRuntimeTurn(
+export async function startRuntimeTurn(
   page,
   runtime,
   workspace,
@@ -288,7 +298,7 @@ async function startRuntimeTurn(
   return { ...runtime, prompt, turnId };
 }
 
-async function waitForTurnCompletion(
+export async function waitForTurnCompletion(
   page,
   runtime,
   finalText,
@@ -329,7 +339,7 @@ async function waitForTurnCompletion(
   return { ...latest, guiFinalVisible: true };
 }
 
-async function cleanupServer(page, server) {
+export async function cleanupServer(page, server) {
   if (!page || !server) return;
   await appServerCallFromPage(page, "mcpServer/stop", {
     name: server.name,

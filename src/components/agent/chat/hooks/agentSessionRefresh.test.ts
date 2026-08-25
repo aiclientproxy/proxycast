@@ -3,6 +3,8 @@ import type { MutableRefObject } from "react";
 import type { AgentSessionDetail } from "@/lib/api/agentRuntime/sessionTypes";
 import {
   createAgentSessionReadModelSnapshot,
+  filterAgentSessionReadModelMessages,
+  filterAgentSessionReadModelTurns,
   hydrateFreshAgentSessionReadModel,
   mergeAgentSessionReadModelThreadItems,
   refreshAgentSessionDetailState,
@@ -27,6 +29,57 @@ describe("agentSessionRefresh", () => {
       thread_id: "thread-1",
       status: "queued",
     });
+    expect(snapshot.timelineMode).toBe("merge");
+  });
+
+  it("history replacement 应删除 read model 已不存在的 Turn、Item 与消息", () => {
+    const snapshot = createAgentSessionReadModelSnapshot(
+      {
+        thread_id: "thread-1",
+        turns: [{ turn_id: "turn-keep", status: "completed" }],
+        thread_items: [
+          {
+            id: "item-keep",
+            thread_id: "thread-1",
+            turn_id: "turn-keep",
+            sequence: 1,
+            type: "user_message",
+            status: "completed",
+            started_at: "2026-08-25T00:00:00.000Z",
+            updated_at: "2026-08-25T00:00:00.000Z",
+            completed_at: "2026-08-25T00:00:00.000Z",
+            content: "keep",
+          },
+        ],
+      },
+      { timelineMode: "replace" },
+    );
+
+    expect(
+      mergeAgentSessionReadModelThreadItems(
+        [
+          snapshot.threadRead!.thread_items![0],
+          {
+            ...snapshot.threadRead!.thread_items![0],
+            id: "item-remove",
+            turn_id: "turn-remove",
+          },
+        ],
+        snapshot,
+      ).map((item) => item.id),
+    ).toEqual(["item-keep"]);
+    expect(
+      filterAgentSessionReadModelTurns(
+        [{ id: "turn-keep" }, { id: "turn-remove" }],
+        snapshot,
+      ),
+    ).toEqual([{ id: "turn-keep" }]);
+    expect(
+      filterAgentSessionReadModelMessages(
+        [{ runtimeTurnId: "turn-keep" }, { runtimeTurnId: "turn-remove" }, {}],
+        snapshot,
+      ),
+    ).toEqual([{ runtimeTurnId: "turn-keep" }, {}]);
   });
 
   it("read model 刷新应把 typed unknown item 合入当前时间线", () => {
@@ -66,7 +119,9 @@ describe("agentSessionRefresh", () => {
     );
 
     expect(result).toEqual([currentItem, unknownItem]);
-    expect(JSON.stringify(result)).not.toContain("opaque-value-must-not-render");
+    expect(JSON.stringify(result)).not.toContain(
+      "opaque-value-must-not-render",
+    );
   });
 
   it("新会话应在 submit 前 hydrate canonical threadId", async () => {
@@ -213,6 +268,31 @@ describe("agentSessionRefresh", () => {
         thread_id: "thread-1",
         status: "idle",
       }),
+      timelineMode: "merge",
+    });
+  });
+
+  it("刷新 read model 时应透传显式 history replacement mode", async () => {
+    const applyReadModelSnapshot = vi.fn();
+
+    await refreshAgentSessionReadModelState({
+      runtime: {
+        getSessionReadModel: vi.fn(async () => ({
+          thread_id: "thread-1",
+          turns: [],
+          thread_items: [],
+        })),
+      },
+      sessionIdRef: {
+        current: "session-1",
+      } as MutableRefObject<string | null>,
+      request: { timelineMode: "replace" },
+      applyReadModelSnapshot,
+    });
+
+    expect(applyReadModelSnapshot).toHaveBeenCalledWith({
+      threadRead: expect.objectContaining({ thread_id: "thread-1" }),
+      timelineMode: "replace",
     });
   });
 });

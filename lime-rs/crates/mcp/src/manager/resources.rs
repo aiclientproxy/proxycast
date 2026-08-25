@@ -1,5 +1,8 @@
 use super::McpClientManager;
 use crate::types::*;
+use rmcp::model::{
+    ClientRequest, Extensions, Meta, ReadResourceRequest, ReadResourceRequestParam, ServerResult,
+};
 use tracing::{debug, error, info, warn};
 
 impl McpClientManager {
@@ -223,6 +226,16 @@ impl McpClientManager {
         server_name: &str,
         uri: &str,
     ) -> Result<McpResourceContent, McpError> {
+        self.read_resource_with_meta(server_name, uri, None).await
+    }
+
+    /// Read one resource while preserving request-scoped MCP metadata on the wire.
+    pub async fn read_resource_with_meta(
+        &self,
+        server_name: &str,
+        uri: &str,
+        meta: Option<serde_json::Value>,
+    ) -> Result<McpResourceContent, McpError> {
         let (server_name, uri) = validate_resource_target(server_name, uri)?;
         info!(server_name = %server_name, uri = %uri, "读取 MCP 资源");
         let clients = self.clients.read().await;
@@ -234,19 +247,37 @@ impl McpClientManager {
             .running_service()
             .ok_or_else(|| McpError::ServerNotRunning(server_name.to_string()))?;
 
-        let read_param = rmcp::model::ReadResourceRequestParam {
+        let read_param = ReadResourceRequestParam {
             uri: uri.to_string(),
         };
-
-        let result = service.read_resource(read_param).await.map_err(|e| {
-            error!(
-                uri = %uri,
-                server_name = %server_name,
-                error = %e,
-                "读取资源失败"
-            );
-            McpError::ToolCallFailed(format!("读取资源失败: {e}"))
-        })?;
+        let mut request = ReadResourceRequest::new(read_param);
+        if let Some(meta) = meta {
+            let meta = meta.as_object().cloned().ok_or_else(|| {
+                McpError::ConfigError(
+                    "MCP resource request _meta must be a JSON object".to_string(),
+                )
+            })?;
+            let mut extensions = Extensions::new();
+            extensions.insert(Meta(meta));
+            request.extensions = extensions;
+        }
+        let result = service
+            .peer()
+            .send_request(ClientRequest::ReadResourceRequest(request))
+            .await
+            .and_then(|result| match result {
+                ServerResult::ReadResourceResult(result) => Ok(result),
+                _ => Err(rmcp::service::ServiceError::UnexpectedResponse),
+            })
+            .map_err(|e| {
+                error!(
+                    uri = %uri,
+                    server_name = %server_name,
+                    error = %e,
+                    "读取资源失败"
+                );
+                McpError::ToolCallFailed(format!("读取资源失败: {e}"))
+            })?;
 
         let mcp_result = Self::convert_read_resource_result(uri, result);
 
@@ -257,6 +288,67 @@ impl McpClientManager {
         );
 
         Ok(mcp_result)
+    }
+
+    pub async fn read_resource_for_origin(
+        &self,
+        server_name: &str,
+        thread_id: &str,
+        origin: &crate::types::McpResourceOrigin,
+    ) -> Result<McpResourceContent, McpError> {
+        if server_name != "codex_apps" {
+            return Err(McpError::ConfigError(
+                "MCP resource origins are only valid for codex_apps".to_string(),
+            ));
+        }
+        let thread_id = thread_id.trim();
+        if thread_id.is_empty() {
+            return Err(McpError::ConfigError(
+                "MCP resource origin requires thread identity".to_string(),
+            ));
+        }
+        if origin.uri != origin.uri.trim() || origin.uri.is_empty() {
+            return Err(McpError::ConfigError(
+                "MCP resource origin URI is invalid".to_string(),
+            ));
+        }
+        if origin.ambiguous_account {
+            return Err(McpError::ConfigError(
+                "originating MCP tool call has ambiguous account selection".to_string(),
+            ));
+        }
+
+        let authority = self.app_tool_authority(server_name, &origin.tool).await?;
+        if authority.connector_id.as_deref() != Some(origin.connector_id.as_str()) {
+            return Err(McpError::ConfigError(
+                "originating MCP tool connector does not match its app context".to_string(),
+            ));
+        }
+        if authority.link_id.as_deref() != origin.link_id.as_deref() {
+            return Err(McpError::ConfigError(
+                "originating MCP tool link does not match its app context".to_string(),
+            ));
+        }
+        if origin.link_id.is_none() && authority.requires_explicit_link_id {
+            return Err(McpError::ConfigError(
+                "originating MCP tool requires an explicit account link".to_string(),
+            ));
+        }
+
+        self.read_resource_with_meta(
+            server_name,
+            &origin.uri,
+            Some(serde_json::json!({
+                "threadId": thread_id,
+                "x-codex-turn-metadata": {
+                    "mcp_request_meta": {
+                        "selected_connector_ids": [&origin.connector_id],
+                        "link_id": &origin.link_id,
+                    },
+                },
+            })),
+        )
+        .await
     }
 
     /// 订阅资源更新。

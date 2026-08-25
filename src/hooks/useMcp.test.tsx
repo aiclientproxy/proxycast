@@ -274,6 +274,64 @@ describe("useMcp", () => {
     expect(mcpApiMocks.listTools).toHaveBeenCalledTimes(2);
   });
 
+  it("MCP event stream 通知应投影 active、event、reconnect 和 terminated 生命周期", async () => {
+    let onNotifications:
+      | ((notifications: Record<string, unknown>[]) => void)
+      | undefined;
+    appServerEventBusMocks.subscribeAppServerNotifications.mockImplementation(
+      (subscription: {
+        onNotifications: (notifications: Record<string, unknown>[]) => void;
+      }) => {
+        onNotifications = subscription.onNotifications;
+        return () => undefined;
+      },
+    );
+
+    await renderHook((value) => {
+      latestValue = value;
+    });
+    await flushEffects(4);
+
+    const send = async (method: string, params: unknown) => {
+      await act(async () => {
+        onNotifications?.([
+          {
+            method: "mcpServer/event/stream/notification",
+            params: {
+              subscriptionId: "subscription-1",
+              notification: { method, params },
+            },
+          },
+        ]);
+        await Promise.resolve();
+      });
+    };
+
+    await send("notifications/events/active", { status: "active" });
+    expect(getLatestValue().eventStreams["subscription-1"]).toMatchObject({
+      phase: "active",
+      activeCount: 1,
+      reconnectCount: 0,
+    });
+    await send("notifications/events/event", {
+      name: "issue.updated",
+      data: { issue: 42 },
+    });
+    await send("notifications/events/active", { status: "active" });
+    expect(getLatestValue().eventStreams["subscription-1"]).toMatchObject({
+      phase: "active",
+      eventCount: 1,
+      reconnectCount: 1,
+      lastEventMethod: "notifications/events/active",
+    });
+    await send("notifications/events/terminated", {});
+    expect(getLatestValue().eventStreams["subscription-1"]).toMatchObject({
+      phase: "terminated",
+      eventCount: 1,
+      reconnectCount: 1,
+    });
+  });
+
   it("OAuth 完成事件应刷新服务器状态和工具列表", async () => {
     let onNotifications:
       | ((notifications: Record<string, unknown>[]) => void)

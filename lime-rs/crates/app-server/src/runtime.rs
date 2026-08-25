@@ -168,6 +168,7 @@ pub use event_log::EventLogWriter;
 use event_sink::RuntimeEventCallback;
 pub use event_sink::{RuntimeEvent, RuntimeEventHub, RuntimeEventSink};
 pub use execution_request::ExecutionRequest;
+#[cfg(test)]
 pub(crate) use model_providers::configured_provider_base_url;
 pub use output_refs::FilesystemOutputSnapshotStore;
 pub use output_refs::NoopOutputSnapshotStore;

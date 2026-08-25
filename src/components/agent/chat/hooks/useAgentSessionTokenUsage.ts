@@ -27,12 +27,23 @@ type AssistantUsage = NonNullable<Message["usage"]>;
 
 export function shouldReplayRecentAssistantTurnUsage(
   messages: readonly Message[],
+  threadTurns: ReadonlyArray<Pick<AgentThreadTurn, "id" | "status">>,
 ): boolean {
+  const terminalTurnIds = new Set(
+    threadTurns
+      .filter((turn) => turn.status !== "running")
+      .map((turn) => turn.id.trim())
+      .filter(Boolean),
+  );
   return messages.some(
     (message) =>
       message.role === "assistant" &&
       Boolean(message.imageWorkbenchPreview) &&
-      !message.usage,
+      !message.usage &&
+      Boolean(
+        message.runtimeTurnId &&
+        terminalTurnIds.has(message.runtimeTurnId.trim()),
+      ),
   );
 }
 
@@ -120,6 +131,7 @@ export function useAgentSessionTokenUsage(params: {
         activeIntervalMs: APP_SERVER_EVENT_DRAIN_ACTIVE_INTERVAL_MS,
         includeRecent: shouldReplayRecentAssistantTurnUsage(
           messagesRef.current,
+          threadTurnsRef.current,
         ),
         intervalMs: APP_SERVER_EVENT_DRAIN_INTERVAL_MS,
         limit: APP_SERVER_EVENT_DRAIN_LIMIT,

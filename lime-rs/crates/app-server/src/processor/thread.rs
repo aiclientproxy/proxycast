@@ -535,7 +535,7 @@ impl RequestProcessor {
         let metadata = thread.extra.as_ref().unwrap_or(&serde_json::Value::Null);
         let model = required_metadata_string(metadata, &["modelName", "model"], "model")?;
         let model_provider = required_thread_resume_value(&thread.model_provider, "modelProvider")?;
-        let environments = persisted_environment_selections(metadata)?;
+        let environments = super::turn_environment::persisted_environment_selections(metadata)?;
         let environments = self.normalize_environment_selections(environments).await?;
         self.record_environment_selections(&thread.id, environments.as_deref());
         let environment_notifications = self
@@ -1022,24 +1022,6 @@ fn metadata_value(metadata: &serde_json::Value, key: &str) -> serde_json::Value 
         .unwrap_or(serde_json::Value::Null)
 }
 
-fn persisted_environment_selections(
-    metadata: &serde_json::Value,
-) -> Result<Option<Vec<app_server_protocol::protocol::v2::TurnEnvironmentParams>>, JsonRpcError> {
-    let Some(value) = metadata.get("environments") else {
-        return Ok(None);
-    };
-    if value.is_null() {
-        return Ok(None);
-    }
-    serde_json::from_value(value.clone())
-        .map(Some)
-        .map_err(|error| {
-            invalid_request(format!(
-                "thread/resume persisted environments are invalid: {error}"
-            ))
-        })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1145,22 +1127,25 @@ mod tests {
 
     #[test]
     fn resume_reads_typed_environment_selections_from_thread_metadata() {
-        let selections = persisted_environment_selections(&serde_json::json!({
-            "environments": [{
-                "environmentId": "local",
-                "cwd": "/workspace",
-                "runtimeWorkspaceRoots": ["/workspace"]
-            }]
-        }))
-        .expect("persisted selections should parse")
-        .expect("persisted selections should exist");
+        let selections =
+            super::super::turn_environment::persisted_environment_selections(&serde_json::json!({
+                "environments": [{
+                    "environmentId": "local",
+                    "cwd": "/workspace",
+                    "runtimeWorkspaceRoots": ["/workspace"]
+                }]
+            }))
+            .expect("persisted selections should parse")
+            .expect("persisted selections should exist");
 
         assert_eq!(selections[0].environment_id, "local");
         assert_eq!(selections[0].cwd, "/workspace");
-        assert!(persisted_environment_selections(&serde_json::json!({
-            "environments": "invalid"
-        }))
-        .is_err());
+        assert!(
+            super::super::turn_environment::persisted_environment_selections(&serde_json::json!({
+                "environments": "invalid"
+            }))
+            .is_err()
+        );
     }
 
     #[test]

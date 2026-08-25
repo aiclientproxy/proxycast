@@ -51,6 +51,11 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadForkResponse>
     >;
+    revertThread(
+      params: appServer.AppServerThreadRevertParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerThreadRevertResponse>
+    >;
     addThreadQueue(
       params: appServer.AppServerThreadQueueAddParams,
     ): Promise<

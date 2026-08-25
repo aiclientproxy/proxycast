@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 struct McpStepRoute {
     server_name: String,
     tool_name: String,
+    app_context: Option<McpStepRouteAppContext>,
     mcp_app_resource_uri: Option<String>,
     allowed_callers: Option<Vec<String>>,
     provenance: McpConnectionProvenance,
@@ -22,10 +23,20 @@ struct McpStepRoute {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct McpStepRouteAppContext {
+    pub connector_id: String,
+    pub link_id: Option<String>,
+    pub resource_uri: Option<String>,
+    pub app_name: Option<String>,
+    pub action_name: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct McpStepRouteIdentity {
     pub server_name: String,
     pub tool_name: String,
     pub runtime_tool_name: String,
+    pub app_context: Option<McpStepRouteAppContext>,
     pub mcp_app_resource_uri: Option<String>,
     pub plugin_id: Option<String>,
 }
@@ -79,6 +90,7 @@ impl McpStepSnapshot {
                 server_name: route.server_name.clone(),
                 tool_name: route.tool_name.clone(),
                 runtime_tool_name: runtime_tool_name.to_string(),
+                app_context: route.app_context.clone(),
                 mcp_app_resource_uri: route.mcp_app_resource_uri.clone(),
                 plugin_id: route.provenance.plugin_id().map(ToOwned::to_owned),
             })
@@ -235,6 +247,12 @@ async fn capture_connection(
             for tool in page.tools {
                 let tool_name = tool.name.to_string();
                 let mcp_app_resource_uri = mcp_app_resource_uri(&tool);
+                let server_name = provenance
+                    .server_name()
+                    .unwrap_or(&connection_name)
+                    .to_string();
+                let app_context =
+                    mcp_app_context(&server_name, &tool, mcp_app_resource_uri.clone());
                 let prefixed_name = format!("{connection_name}__{tool_name}");
                 let visible = config.is_tool_exposed_by_default(&tool.name)
                     || selected_deferred_tools.contains(&prefixed_name);
@@ -264,11 +282,9 @@ async fn capture_connection(
                         meta: tool.meta,
                     },
                     McpStepRoute {
-                        server_name: provenance
-                            .server_name()
-                            .unwrap_or(&connection_name)
-                            .to_string(),
+                        server_name,
                         tool_name,
+                        app_context,
                         mcp_app_resource_uri,
                         allowed_callers,
                         provenance: provenance.clone(),
@@ -305,6 +321,41 @@ fn mcp_app_resource_uri(tool: &Tool) -> Option<String> {
         .and_then(Value::as_str)
         .or_else(|| meta.get("ui/resourceUri").and_then(Value::as_str))
         .or_else(|| meta.get("openai/outputTemplate").and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn mcp_app_context(
+    server_name: &str,
+    tool: &Tool,
+    resource_uri: Option<String>,
+) -> Option<McpStepRouteAppContext> {
+    if server_name != "codex_apps" {
+        return None;
+    }
+    let meta = tool.meta.as_ref()?;
+    let connector_id = non_empty_meta_string(meta, "connector_id")?;
+    let codex_apps = meta.get("_codex_apps").and_then(Value::as_object);
+    let action_name = codex_apps
+        .and_then(|value| value.get("resource_uri"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .and_then(|value| value.trim_matches('/').rsplit('/').next())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+    Some(McpStepRouteAppContext {
+        connector_id,
+        link_id: non_empty_meta_string(meta, "link_id"),
+        resource_uri,
+        app_name: non_empty_meta_string(meta, "connector_name"),
+        action_name,
+    })
+}
+
+fn non_empty_meta_string(meta: &rmcp::model::Meta, key: &str) -> Option<String> {
+    meta.get(key)
+        .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
@@ -536,6 +587,7 @@ mod tests {
                 server_name: "docs".to_string(),
                 tool_name: "search".to_string(),
                 runtime_tool_name: "docs__search".to_string(),
+                app_context: None,
                 mcp_app_resource_uri: None,
                 plugin_id: None,
             })
@@ -593,6 +645,7 @@ mod tests {
                 server_name: "plugin__docs__demo".to_string(),
                 tool_name: "search".to_string(),
                 runtime_tool_name: "mcp__plugin__docs__demo__search".to_string(),
+                app_context: None,
                 mcp_app_resource_uri: Some("ui://plugin/docs.html".to_string()),
                 plugin_id: Some("docs-plugin".to_string()),
             })
@@ -839,6 +892,7 @@ mod tests {
         let denied_route = McpStepRoute {
             server_name: "mixed".to_string(),
             tool_name: "execute".to_string(),
+            app_context: None,
             mcp_app_resource_uri: None,
             allowed_callers: Some(vec!["code_execution".to_string()]),
             provenance: McpConnectionProvenance::default(),
@@ -890,6 +944,37 @@ mod tests {
             .expect("code execution result");
         assert!(result_text(&code_result).contains("mixed:execute"));
         assert_eq!(call_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn codex_apps_route_context_comes_from_trusted_tool_metadata() {
+        let mut tool = tool("calendar_search", None);
+        tool.meta = Some(Meta(
+            serde_json::json!({
+                "connector_id": "calendar",
+                "connector_name": "Calendar",
+                "link_id": "link-calendar",
+                "ui": { "resourceUri": "ui://calendar/event" },
+                "_codex_apps": {
+                    "resource_uri": "/calendar/link-calendar/calendar_search"
+                }
+            })
+            .as_object()
+            .expect("tool metadata")
+            .clone(),
+        ));
+
+        assert_eq!(
+            mcp_app_context("codex_apps", &tool, mcp_app_resource_uri(&tool),),
+            Some(McpStepRouteAppContext {
+                connector_id: "calendar".to_string(),
+                link_id: Some("link-calendar".to_string()),
+                resource_uri: Some("ui://calendar/event".to_string()),
+                app_name: Some("Calendar".to_string()),
+                action_name: Some("calendar_search".to_string()),
+            })
+        );
+        assert_eq!(mcp_app_context("docs", &tool, None), None);
     }
 
     #[tokio::test]

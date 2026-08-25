@@ -1,10 +1,11 @@
 use super::*;
 use agent_protocol::{
     ApprovalAction, ApprovalDecision, ApprovalScope, CollabAgentOperation, FileChange,
-    FileChangeKind, FileChangeStatus, ItemId, ItemStatus, MessageContentPart,
-    MessageContentReference, SessionId, SubAgentActivityKind, Thread, ThreadHistoryChangeSet,
-    ThreadId, ThreadItem, ThreadItemPayload, ThreadStatus, ThreadTurnsView, Turn,
-    TurnAdmissionState, TurnApprovalState, TurnId, TurnItemsView, TurnQueueState, TurnStatus,
+    FileChangeKind, FileChangeStatus, ItemId, ItemStatus, McpToolCallAppContext,
+    MessageContentPart, MessageContentReference, SessionId, SubAgentActivityKind, Thread,
+    ThreadHistoryChangeSet, ThreadId, ThreadItem, ThreadItemPayload, ThreadStatus, ThreadTurnsView,
+    ToolArgument, Turn, TurnAdmissionState, TurnApprovalState, TurnId, TurnItemsView,
+    TurnQueueState, TurnStatus,
 };
 use app_server_protocol::{AgentEvent, AgentSession, AgentTurn, AgentTurnStatus};
 use futures::executor::block_on;
@@ -457,6 +458,51 @@ fn canonical_wait_collab_tool_projects_as_completed_tool_call() {
     assert_eq!(detail["tool_name"], "wait_agent");
     assert_eq!(detail["arguments"], json!([]));
     assert!(detail.get("status_label").is_none());
+}
+
+#[test]
+fn canonical_mcp_detail_preserves_app_context_for_cold_materialization() {
+    let item = ThreadItem {
+        session_id: SessionId::new("session-mcp-read"),
+        thread_id: ThreadId::new("thread-mcp-read"),
+        turn_id: TurnId::new("turn-mcp-read"),
+        item_id: ItemId::new("mcp-read"),
+        sequence: 1,
+        ordinal: 0,
+        created_at_ms: 1,
+        updated_at_ms: 2,
+        completed_at_ms: Some(2),
+        kind: agent_protocol::ItemKind::McpToolCall,
+        status: ItemStatus::Completed,
+        payload: ThreadItemPayload::McpToolCall {
+            call_id: "mcp-read".to_string(),
+            server_name: "codex_apps".to_string(),
+            tool_name: "calendar_search".to_string(),
+            app_context: Some(McpToolCallAppContext {
+                connector_id: "calendar".to_string(),
+                link_id: Some("link-calendar".to_string()),
+                resource_uri: Some("ui://calendar/event".to_string()),
+                app_name: Some("Calendar".to_string()),
+                action_name: Some("search".to_string()),
+            }),
+            mcp_app_resource_uri: Some("ui://calendar/event".to_string()),
+            plugin_id: None,
+            arguments: vec![ToolArgument {
+                name: "link_id".to_string(),
+                value: "link-calendar".to_string(),
+            }],
+            output: None,
+        },
+        metadata: json!({}),
+    };
+
+    let detail = canonical_item_to_agent_detail(&item);
+
+    assert_eq!(detail["type"], "tool_call");
+    assert_eq!(detail["mcp_server"], "codex_apps");
+    assert_eq!(detail["app_context"]["connectorId"], "calendar");
+    assert_eq!(detail["app_context"]["linkId"], "link-calendar");
+    assert_eq!(detail["app_context"]["resourceUri"], "ui://calendar/event");
 }
 
 #[test]

@@ -5,7 +5,6 @@ use app_server_protocol::RuntimeOptions;
 use app_server_protocol::METHOD_TURN_START;
 use app_server_protocol::RUNTIME_CAPABILITY_MANIFEST_SCHEMA_VERSION;
 use app_server_protocol::*;
-use async_trait::async_trait;
 use serde_json::json;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;

@@ -261,7 +261,11 @@ async fn execute_command(
         })?;
     validate_exec_approval_fields(&input)?;
     let command = require_non_empty(input.cmd, "cmd")?;
-    let cwd = resolve_working_directory(&request.working_directory, input.workdir.as_deref())?;
+    let cwd = resolve_working_directory(
+        &request.working_directory,
+        input.workdir.as_deref(),
+        request.environment_id,
+    )?;
     let call_id = require_non_empty(request.tool_call_id, "tool call id")?;
     let session_id = next_session_id();
     let process_id = format!("unified-exec-{session_id}");
@@ -615,6 +619,7 @@ fn build_shell_command(command: &str, shell: Option<&str>, login: bool) -> Vec<S
 fn resolve_working_directory(
     turn_cwd: &Path,
     requested: Option<&str>,
+    environment_id: &str,
 ) -> Result<PathBuf, RuntimeToolExecutionError> {
     let requested = requested.map(str::trim).filter(|value| !value.is_empty());
     let candidate = match requested {
@@ -622,6 +627,14 @@ fn resolve_working_directory(
         Some(value) => turn_cwd.join(value),
         None => turn_cwd.to_path_buf(),
     };
+    if environment_id != "local" {
+        if candidate.as_os_str().is_empty() {
+            return Err(unified_exec_error(
+                "exec_command remote workdir must not be empty".to_string(),
+            ));
+        }
+        return Ok(candidate);
+    }
     let canonical = std::fs::canonicalize(&candidate).map_err(|error| {
         unified_exec_error(format!(
             "exec_command workdir '{}' is unavailable: {error}",

@@ -65,7 +65,7 @@ function manifestKind(direction: Direction) {
 }
 
 describe("Codex method product scope boundary", () => {
-  it("221 个上游方法必须且只能落入一个三态分类", () => {
+  it("245 个上游方法必须且只能落入一个三态分类", () => {
     const matrix = readJson<Matrix>(MATRIX_PATH);
     const entries = flatten(matrix);
     const identities = entries.map(
@@ -97,9 +97,13 @@ describe("Codex method product scope boundary", () => {
 
     expect(
       createHash("sha256")
-        .update(identities.toSorted().join("\n"))
+        .update(
+          [...identities]
+            .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+            .join("\n"),
+        )
         .digest("hex"),
-    ).toBe("a91f5bdaedc5382cd957b82b44824922c7594aa16b33293916b6f48af4d8f899");
+    ).toBe("cfebd0e98216f2a0f2e97d3999cf63457f8882c0d7f336336503f96caa0c4c95");
   });
 
   it("每组必须声明 owner、证据、优先级以及 planned/excluded 原因", () => {
@@ -198,6 +202,25 @@ describe("Codex method product scope boundary", () => {
     ).toBe(false);
   });
 
+  it("browser and computer-use requirements stay outside the Desktop config contract", () => {
+    const matrix = readJson<Matrix>(MATRIX_PATH);
+    const manifest = readJson<Manifest>(MANIFEST_PATH);
+    const entry = flatten(matrix).find(
+      ({ direction, method }) =>
+        direction === "clientRequest" && method === "configRequirements/read",
+    );
+
+    expect(entry?.status).toBe("product-scope-excluded");
+    expect(entry?.owner).toBe("product-scope");
+    expect(entry?.rationale).toContain("ElectronBrowserTabHost");
+    expect(
+      manifest.methods.some(
+        ({ kind, method }) =>
+          kind === "request" && method === "configRequirements/read",
+      ),
+    ).toBe(false);
+  });
+
   it("only the one-shot fuzzy file search belongs to the Desktop manifest", () => {
     const matrix = readJson<Matrix>(MATRIX_PATH);
     const manifest = readJson<Manifest>(MANIFEST_PATH);
@@ -286,6 +309,65 @@ describe("Codex method product scope boundary", () => {
         contracts.has(`${manifestKind(entry!.direction)}:${method}`),
         `${method} must be in the generated manifest`,
       ).toBe(true);
+    }
+  });
+
+  it("current Codex HEAD drift is classified without restoring Bedrock account APIs", () => {
+    const matrix = readJson<Matrix>(MATRIX_PATH);
+    const manifest = readJson<Manifest>(MANIFEST_PATH);
+    const entries = flatten(matrix);
+    const contracts = new Set(
+      manifest.methods.map(({ kind, method }) => `${kind}:${method}`),
+    );
+    const currentMethods = [
+      "autoApprovalReview/strictReviewRequired",
+      "mcpServer/event/stream/notification",
+      "mcpServer/event/stream/start",
+      "mcpServer/event/stream/stop",
+      "project/changed",
+      "project/create",
+      "project/delete",
+      "project/import",
+      "project/list",
+      "project/move",
+      "project/read",
+      "project/update",
+      "thread/project/updated",
+      "thread/queue/add",
+      "thread/queue/changed",
+      "thread/queue/delete",
+      "thread/queue/list",
+      "thread/queue/reorder",
+      "thread/queue/start",
+      "thread/queue/update",
+      "thread/revert",
+      "thread/reverted",
+    ];
+
+    for (const method of currentMethods) {
+      const entry = entries.find(
+        ({ method: candidate }) => candidate === method,
+      );
+      expect(entry?.status, `${method} must be current in the matrix`).toBe(
+        "implemented",
+      );
+      expect(
+        contracts.has(`${manifestKind(entry!.direction)}:${method}`),
+        `${method} must be in the generated manifest`,
+      ).toBe(true);
+    }
+
+    for (const method of [
+      "account/bedrock/discover",
+      "account/bedrock/setup",
+    ]) {
+      const entry = entries.find(
+        ({ method: candidate }) => candidate === method,
+      );
+      expect(entry?.status).toBe("product-scope-excluded");
+      expect(contracts.has(`${manifestKind(entry!.direction)}:${method}`)).toBe(
+        false,
+      );
     }
   });
 });

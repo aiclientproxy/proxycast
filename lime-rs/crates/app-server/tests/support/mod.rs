@@ -13,10 +13,21 @@ use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
 
+#[allow(dead_code)]
 pub fn runtime_core_with_chat_provider(
     temp: &TempDir,
     provider_id: &str,
     model: &str,
+) -> RuntimeCore {
+    runtime_core_with_chat_provider_at(temp, provider_id, model, "https://api.openai.com/v1")
+}
+
+#[allow(dead_code)]
+pub fn runtime_core_with_chat_provider_at(
+    temp: &TempDir,
+    provider_id: &str,
+    model: &str,
+    api_host: &str,
 ) -> RuntimeCore {
     let conn = Connection::open_in_memory().expect("open in-memory product db");
     create_tables(&conn).expect("create product schema");
@@ -26,7 +37,7 @@ pub fn runtime_core_with_chat_provider(
         id: provider_id.to_string(),
         name: provider_id.to_string(),
         provider_type: ApiProviderType::Openai,
-        api_host: "https://api.openai.com/v1".to_string(),
+        api_host: api_host.to_string(),
         is_system: false,
         group: ProviderGroup::Custom,
         enabled: true,

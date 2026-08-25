@@ -809,8 +809,16 @@ fn canonical_display_payloads_merge_create_update_and_terminal_fields() {
                     "id": "mcp-1",
                     "type": "mcp_tool_call",
                     "callId": "call-mcp",
-                    "serverName": "docs",
+                    "serverName": "codex_apps",
                     "toolName": "search",
+                    "appContext": {
+                        "connectorId": "calendar",
+                        "linkId": "link-calendar",
+                        "resourceUri": "ui://calendar/event",
+                        "appName": "Calendar",
+                        "actionName": "search"
+                    },
+                    "mcpAppResourceUri": "ui://calendar/event",
                     "arguments": {"query": "typed items"}
                 }}),
             ),
@@ -823,7 +831,7 @@ fn canonical_display_payloads_merge_create_update_and_terminal_fields() {
                     "id": "mcp-1",
                     "type": "mcp_tool_call",
                     "callId": "call-mcp",
-                    "serverName": "docs",
+                    "serverName": "codex_apps",
                     "toolName": "search",
                     "output": "done"
                 }}),
@@ -920,8 +928,15 @@ fn canonical_display_payloads_merge_create_update_and_terminal_fields() {
         ThreadItemPayload::McpToolCall {
             server_name,
             tool_name,
+            app_context: Some(app_context),
+            mcp_app_resource_uri: Some(resource_uri),
             ..
-        } if server_name == "docs" && tool_name == "search"
+        } if server_name == "codex_apps"
+            && tool_name == "search"
+            && app_context.connector_id == "calendar"
+            && app_context.link_id.as_deref() == Some("link-calendar")
+            && app_context.resource_uri.as_deref() == Some("ui://calendar/event")
+            && resource_uri == "ui://calendar/event"
     )));
     assert!(changes.changed_items.iter().any(|item| matches!(
         &item.payload,

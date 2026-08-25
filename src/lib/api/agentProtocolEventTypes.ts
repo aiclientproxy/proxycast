@@ -536,6 +536,28 @@ export interface AgentEventWarning {
   message: string;
 }
 
+export interface AgentEventStrictReviewRequired {
+  type: "strict_review_required";
+  started_at_ms: number;
+}
+
+export interface AgentEventGuardianReviewStarted {
+  type: "guardian_review_started";
+  review_id: string;
+  target_item_id?: string;
+  review: Record<string, unknown>;
+  action: Record<string, unknown>;
+}
+
+export interface AgentEventGuardianReviewCompleted {
+  type: "guardian_review_completed";
+  review_id: string;
+  target_item_id?: string;
+  decision_source: "agent";
+  review: Record<string, unknown>;
+  action: Record<string, unknown>;
+}
+
 export interface AgentEventError {
   type: "error";
   message: string;
@@ -615,6 +637,9 @@ export type AgentEvent = (
   | AgentEventQuotaBlocked
   | AgentEventMessage
   | AgentEventWarning
+  | AgentEventStrictReviewRequired
+  | AgentEventGuardianReviewStarted
+  | AgentEventGuardianReviewCompleted
   | AgentEventError
 ) &
   AgentEventEnvelope;

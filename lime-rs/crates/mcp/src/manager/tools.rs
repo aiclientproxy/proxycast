@@ -6,6 +6,12 @@ use lime_core::tool_calling::ToolSurfaceMetadata;
 use std::collections::HashMap;
 use tracing::{debug, error, info, warn};
 
+pub(super) struct McpAppToolAuthority {
+    pub(super) connector_id: Option<String>,
+    pub(super) link_id: Option<String>,
+    pub(super) requires_explicit_link_id: bool,
+}
+
 impl McpClientManager {
     // ========================================================================
     // 工具管理方法
@@ -124,6 +130,31 @@ impl McpClientManager {
 
         info!(tool_count = resolved_tools.len(), "工具列表已更新");
         Ok(resolved_tools)
+    }
+
+    pub(super) async fn app_tool_authority(
+        &self,
+        server_name: &str,
+        tool_name: &str,
+    ) -> Result<McpAppToolAuthority, McpError> {
+        let clients = self.clients.read().await;
+        let wrapper = clients
+            .get(server_name)
+            .ok_or_else(|| McpError::ServerNotRunning(server_name.to_string()))?;
+        if !wrapper.config.tool_is_enabled(tool_name) {
+            return Err(McpError::ToolNotFound(format!("{server_name}/{tool_name}")));
+        }
+        let service = wrapper
+            .running_service()
+            .ok_or_else(|| McpError::ServerNotRunning(server_name.to_string()))?;
+        let tools = service.list_all_tools().await.map_err(|error| {
+            McpError::ToolCallFailed(format!("读取 MCP 工具 authority 失败: {error}"))
+        })?;
+        let tool = tools
+            .iter()
+            .find(|tool| tool.name.as_ref() == tool_name)
+            .ok_or_else(|| McpError::ToolNotFound(format!("{server_name}/{tool_name}")))?;
+        Ok(app_tool_authority_from_meta(tool.meta.as_ref()))
     }
 
     /// 根据上下文过滤工具列表
@@ -440,6 +471,32 @@ impl McpClientManager {
             },
         }
     }
+}
+
+pub(super) fn app_tool_authority_from_meta(
+    meta: Option<&rmcp::model::Meta>,
+) -> McpAppToolAuthority {
+    let connector_id = meta.and_then(|meta| non_empty_meta_string(meta, "connector_id"));
+    let link_id = meta.and_then(|meta| non_empty_meta_string(meta, "link_id"));
+    let requires_explicit_link_id = meta
+        .and_then(|meta| meta.get("_codex_apps"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|meta| meta.get("requires_explicit_link_id"))
+        .and_then(serde_json::Value::as_bool)
+        == Some(true);
+    McpAppToolAuthority {
+        connector_id,
+        link_id,
+        requires_explicit_link_id,
+    }
+}
+
+fn non_empty_meta_string(meta: &rmcp::model::Meta, key: &str) -> Option<String> {
+    meta.get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 pub(crate) fn normalize_tool_input_schema(mut schema: serde_json::Value) -> serde_json::Value {

@@ -72,21 +72,29 @@ pub(in crate::runtime_backend) fn turn_context_from_request(
     if let Some(config_metadata) = config_metadata {
         metadata.insert("config".to_string(), config_metadata);
     }
-    if let Some(world_state) = world_state_from_request(
+    let world_state = world_state_from_request(
         request,
         host_request,
         scope,
         selection,
         workspace_scope.working_dir.as_deref(),
         workspace_scope.project_root.as_deref(),
-    ) {
+    );
+    let primary_environment_cwd = world_state.as_ref().and_then(|state| {
+        state
+            .environments
+            .iter()
+            .find(|environment| environment.primary)
+            .map(|environment| environment.cwd.clone().into())
+    });
+    if let Some(world_state) = world_state {
         metadata.insert(
             WORLD_STATE_TURN_METADATA_KEY.to_string(),
             serde_json::to_value(world_state).expect("world state must serialize"),
         );
     }
     build_agent_turn_context(AgentTurnContextConfigurationRequest {
-        cwd: workspace_scope.working_dir.clone(),
+        cwd: primary_environment_cwd.or_else(|| workspace_scope.working_dir.clone()),
         model: Some(selection.model.clone()),
         effort: selection.reasoning_effort.clone(),
         approval_policy: host_request.and_then(host_approval_policy),

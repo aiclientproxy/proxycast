@@ -1,4 +1,5 @@
 import {
+  mcpServerEventStreamServerNotification,
   mcpServerOauthLoginCompletedServerNotification,
   mcpServerStatusUpdatedServerNotification,
 } from "@limecloud/app-server-client";
@@ -6,6 +7,10 @@ import { safeListen } from "@/lib/api/bridgeEvents";
 import { subscribeAppServerNotifications } from "@/lib/api/appServerEventBus";
 import type { UnlistenFn } from "@/lib/desktop-host/event";
 import type { McpToolDefinition } from "@/lib/api/mcp";
+import {
+  reduceMcpEventStreamNotification,
+  type McpEventStreamStateMap,
+} from "@/lib/mcp/eventStreamProjection";
 
 interface McpToolsUpdatedPayload {
   tools: McpToolDefinition[];
@@ -31,6 +36,11 @@ export interface McpOAuthCompletionState {
   completedAt: number;
 }
 
+export type {
+  McpEventStreamState,
+  McpEventStreamStateMap,
+} from "@/lib/mcp/eventStreamProjection";
+
 export interface SetupMcpEventListenersOptions {
   isMounted: () => boolean;
   updateServerConnectionState: (
@@ -45,6 +55,11 @@ export interface SetupMcpEventListenersOptions {
   setError: (error: string) => void;
   setTools: (tools: McpToolDefinition[]) => void;
   setOAuthCompletion: (completion: McpOAuthCompletionState) => void;
+  setEventStreams: (
+    update:
+      | McpEventStreamStateMap
+      | ((current: McpEventStreamStateMap) => McpEventStreamStateMap),
+  ) => void;
 }
 
 export async function setupMcpEventListeners({
@@ -56,14 +71,27 @@ export async function setupMcpEventListeners({
   setError,
   setTools,
   setOAuthCompletion,
+  setEventStreams,
 }: SetupMcpEventListenersOptions): Promise<UnlistenFn[]> {
   const unlisteners: UnlistenFn[] = [];
 
   try {
     // 必须先同步订阅；否则快速 MCP 通知可能在 Desktop listener 就绪前被排空。
     const unlistenAppServerMcpNotifications = subscribeAppServerNotifications({
+      getDrainOptions: () => ({ includeRecent: true, limit: 100 }),
       onNotifications: (notifications) => {
         for (const message of notifications) {
+          const eventStreamNotification =
+            mcpServerEventStreamServerNotification(message);
+          if (eventStreamNotification) {
+            setEventStreams((current) =>
+              reduceMcpEventStreamNotification(
+                current,
+                eventStreamNotification.params,
+              ),
+            );
+            continue;
+          }
           const startupNotification =
             mcpServerStatusUpdatedServerNotification(message);
           if (startupNotification) {

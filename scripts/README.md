@@ -142,8 +142,14 @@ npm run smoke:mcp-current
 npm run smoke:mcp-current -- --allow-write-fixture
 npm run smoke:mcp-current -- --allow-oauth-fixture
 npm run smoke:mcp-config-electron-fixture
+npm run smoke:model-provider-capabilities-electron-gate-b
+npm run smoke:thread-queue-electron-gate-b
+npm run smoke:thread-revert-electron-gate-b
+npm run smoke:project-directory-electron-gate-b
 npm run smoke:mcp-oauth-notification-electron-fixture
 npm run smoke:mcp-startup-notification-electron-fixture
+npm run smoke:mcp-event-stream-electron-gate-b
+npm run smoke:mcp-resource-origin-electron-gate-b
 npm run smoke:settings-about-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-stats-electron-fixture -- --run-id <run-id>
 npm run smoke:settings-environment-electron-fixture -- --run-id <run-id>
@@ -167,8 +173,19 @@ npm run smoke:orchestrator-skills-gate-b
 `--allow-oauth-fixture` 会创建本地 OAuth provider，覆盖 `mcpServer/oauth/login`、Electron `open_external_url` 系统浏览器网关、callback token exchange 与 `runtime_status.auth_status` 授权回流，用于复验动态 OAuth current 链路；该模式不依赖真实外部账号或 live Provider。
 
 `npm run smoke:mcp-oauth-notification-electron-fixture` 验证 OAuth callback completion 的 App Server typed notification 与 GUI 自动刷新；`npm run smoke:mcp-startup-notification-electron-fixture` 验证 MCP startup 的 `starting -> ready`、`starting -> failed` typed notification、Settings 连接态与终态 status/tool 刷新。两者都启动隔离的真实 Electron Desktop Host、preload/IPC 与 App Server runtime，不调用正式模型或 live Provider，并要求旧 MCP lifecycle Desktop event、renderer mock fallback 与 App Server mock backend 命中为零。
+`npm run smoke:mcp-event-stream-electron-gate-b` 验证 Codex current MCP event stream 的 `active -> event -> reconnect -> terminated` lifecycle：临时 stdio MCP server 通过真实 Thread 和 `mcpServer/event/stream/start` 发出 typed stream notification，Settings 运行状态页通过 `app_server_drain_events` 展示订阅 ID、最近事件、重连次数和终态。证据要求命中 Electron preload/IPC、`app_server_handle_json_lines`、`app_server_drain_events` 与 exact current methods，且 mock fallback、旧 MCP facade、invoke/console/page error 全部为零；该 Gate B 不调用模型或 live Provider。
+
+`npm run smoke:mcp-resource-origin-electron-gate-b` 使用 localhost provider 与临时 `codex_apps` stdio fixture，从真实模型回合生成带 canonical `appContext` 的 completed MCP Item；Workspace 通过该 Item 的 `originCallId` 打开用户可见 HTML resource。Gate B 还会用伪造 Renderer `connectorId` 证明服务端只信任 canonical connector/link authority，并重启 Electron 与 App Server，验证同一 Thread/Turn/Item 冷恢复后再次打开 resource，且不重跑 provider turn 或 MCP tool。证据要求真实 preload/IPC、`app_server_handle_json_lines`、`mcpServer/resource/read`、WebContentsView HTML load、零 legacy/mock/error；不调用正式模型或远端 connector。
 
 `npm run smoke:mcp-config-electron-fixture -- --run-id <run-id>` 是真实 Electron 设置页配置闭环 fixture：从桌面壳侧栏进入设置页，切到 MCP 配置管理，选择 Context7 preset，编辑 streamable HTTP URL 与 `env_http_headers` 环境变量名并保存，再通过 preload `app_server_handle_json_lines -> mcpServer/create|list` 验证 App Server current read model。显式 run-id 时证据写入 `.lime/qc/project-gates/<run-id>/settings-mcp-create-list/`，只有 Electron、preload、`electron-ipc`、current methods、GUI readback、零 legacy/mock/error 与截图全部成立才输出 `settingsScenarioProof={scenarioId:mcp-create-list,complete:true}`。该入口不启动 Context7、不调用真实 provider、不读取或写入真实 key，不走 App Server mock backend、renderer mock fallback 或旧 `mcp_*` Desktop facade。
+
+`npm run smoke:model-provider-capabilities-electron-gate-b` 在隔离配置中固定 official OpenAI Responses route，从真实 Electron 首页打开 ModelSelector，断言 provider capability panel 显示 `namespaceTools=false`、`imageGeneration=true`、`webSearch=true`，并要求 trace 命中 `electron-ipc -> app_server_handle_json_lines -> modelProvider/capabilities/read`。证据默认写入 `.lime/qc/gui-evidence/model-provider-capabilities-electron-gate-b/`，只记录 capability 布尔、method、transport 和错误计数；不调用模型、不访问网络、不保存 Provider 配置、路径或凭证。
+
+`npm run smoke:thread-queue-electron-gate-b` 在隔离 userData 和 unavailable backend 中经真实 preload 创建 canonical Thread、添加一条 durable Queue submission，再从真实 Electron 侧栏打开同一 Thread，断言 `thread-queue-status`、marker 和 Thread header 可见。setup 阶段由 preload 调用结果证明 `thread/start|thread/queue/add`，GUI 阶段由 safeInvoke trace 证明 `thread/read|thread/queue/list`；四段均绑定同一 Thread，mock/error 为 0。证据默认写入 `.lime/qc/gui-evidence/thread-queue-electron-gate-b/`，不启动 Turn、不调用模型，也不保存 Thread/Queue identity 或本机路径。
+
+`npm run smoke:thread-revert-electron-gate-b` 在隔离 userData 和 workspace 中创建 paginated canonical Thread，并由本地 external backend 完成两个 Turn；随后从第二轮用户消息的真实 GUI 入口确认恢复历史。Gate B 要求同一 Thread 上的第一轮保留、第二轮移除、Thread header 不变、工作区文件内容不变，并证明 GUI action 经 `electron-ipc -> app_server_handle_json_lines -> thread/revert -> thread/read` 刷新 canonical read model，同时观察到 `app_server_drain_events`，mock/invoke/console/page error 为 0。证据默认写入 `.lime/qc/gui-evidence/thread-revert-electron-gate-b/`，包含确认态与成功态截图；不调用正式模型，也不保存 Thread/Turn identity 或本机路径。
+
+`npm run smoke:project-directory-electron-gate-b` 在隔离 userData 和 unavailable backend 中经真实 preload 创建两个 Project 与一个 canonical Thread，从真实 Electron 侧栏打开该 Thread，在顶栏 Project 目录切换归属，并用 `thread/read` 冷读回。证据要求命中 `electron-ipc -> app_server_handle_json_lines -> project/create|list + thread/start|read|metadata/update`、GUI 目录和选择状态、同一 Thread/Project identity，以及零 mock/console/page/invoke error。默认写入 `.lime/qc/gui-evidence/project-directory-electron-gate-b/`，不启动 Turn、不调用模型，也不保存 Thread/Project identity 或本机路径；该 Gate B 只证明 Project 目录与 Thread 归属产品链，不证明 live provider 或模型回合。
 
 `npm run smoke:settings-mcp-lifecycle-electron-fixture -- --run-id <run-id>` 在隔离 userData 中从真实 MCP Settings GUI 创建配置、修改描述与 Lime 启用状态、冷重启读回、从 GUI 删除并再次冷重启确认不存在；要求命中 `mcpServer/list|create|update|delete`，且 Electron、preload、`electron-ipc`、`app_server_handle_json_lines`、零 legacy/mock/error 与三张终态截图同时成立。该 Gate B-F claim 不启动 live MCP server、不调用工具、不访问配置 URL，也不在 JSON evidence 中保存 server 配置、名称、描述、ID、路径、凭证、prompt、resource 或 tool output。
 
