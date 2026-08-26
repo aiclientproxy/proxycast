@@ -290,13 +290,23 @@ mod platform {
         let normalize = |value: &str| {
             let mut values = value
                 .split(',')
-                .map(|part| part.trim().to_ascii_lowercase())
+                .map(|part| canonical_remote_address(part.trim()))
                 .filter(|part| !part.is_empty())
                 .collect::<Vec<_>>();
             values.sort();
             values
         };
         normalize(actual) == normalize(expected)
+    }
+
+    fn canonical_remote_address(value: &str) -> String {
+        let value = value.to_ascii_lowercase();
+        match value.as_str() {
+            // Windows Firewall COM read-back expands the IPv6 any-address
+            // into an explicit range while preserving the same address set.
+            "::-::" => "::".to_owned(),
+            _ => value,
+        }
     }
 
     fn windows_error(operation: &str, error: windows::core::Error) -> io::Error {
@@ -316,6 +326,14 @@ mod platform {
             assert!(same_csv_values(
                 " ::/127, 127.0.0.0/8 ",
                 "127.0.0.0/8,::/127"
+            ));
+        }
+
+        #[test]
+        fn csv_comparison_accepts_windows_ipv6_any_address_readback() {
+            assert!(same_csv_values(
+                "::-::, 0.0.0.0-126.255.255.255",
+                "::,0.0.0.0-126.255.255.255"
             ));
         }
 
