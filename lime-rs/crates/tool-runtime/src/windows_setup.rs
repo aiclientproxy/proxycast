@@ -9,6 +9,9 @@ use uuid::Uuid;
 #[cfg(windows)]
 #[path = "windows_setup/accounts.rs"]
 mod accounts;
+#[cfg(windows)]
+#[path = "windows_setup/read_access.rs"]
+mod read_access;
 
 #[cfg(windows)]
 use accounts::{
@@ -21,8 +24,10 @@ pub(crate) use accounts::{
     resolve_windows_account_sid, verify_windows_sandbox_group_membership,
     windows_sandbox_users_group_sid,
 };
+#[cfg(windows)]
+use read_access::{ensure_default_read_access, validate_default_read_access};
 
-pub const WINDOWS_SANDBOX_SETUP_VERSION: u32 = 1;
+pub const WINDOWS_SANDBOX_SETUP_VERSION: u32 = 2;
 pub const WINDOWS_SANDBOX_OFFLINE_USERNAME: &str = "LimeSandboxOffline";
 pub const WINDOWS_SANDBOX_ONLINE_USERNAME: &str = "LimeSandboxOnline";
 pub const WINDOWS_SANDBOX_USERS_GROUP: &str = "LimeSandboxUsers";
@@ -146,6 +151,7 @@ pub fn run_windows_sandbox_setup(
     ensure_local_group_member(WINDOWS_SANDBOX_USERS_GROUP, WINDOWS_SANDBOX_ONLINE_USERNAME)?;
     ensure_builtin_users_group_member(WINDOWS_SANDBOX_OFFLINE_USERNAME)?;
     ensure_builtin_users_group_member(WINDOWS_SANDBOX_ONLINE_USERNAME)?;
+    ensure_default_read_access()?;
     ensure_sandbox_accounts_null_device_access()?;
 
     let offline_blob = dpapi_protect(offline_password.as_bytes())?;
@@ -493,6 +499,7 @@ fn validate_protected_password(label: &str, value: &str) -> Result<(), String> {
 fn validate_windows_runtime_artifacts(artifacts: &ValidatedSetupArtifacts) -> Result<(), String> {
     validate_windows_sandbox_group_membership(WINDOWS_SANDBOX_OFFLINE_USERNAME)?;
     validate_windows_sandbox_group_membership(WINDOWS_SANDBOX_ONLINE_USERNAME)?;
+    validate_default_read_access()?;
     validate_sandbox_accounts_null_device_access()?;
     validate_windows_sandbox_user("offline", &artifacts.users.offline)?;
     validate_windows_sandbox_user("online", &artifacts.users.online)?;
@@ -746,7 +753,7 @@ mod tests {
         let marker_path = windows_sandbox_setup_marker_path(root.path());
         fs::write(
             marker_path,
-            r#"{"version":2,"offline_username":"Other","online_username":"LimeSandboxOnline"}"#,
+            r#"{"version":3,"offline_username":"Other","online_username":"LimeSandboxOnline"}"#,
         )
         .expect("rewrite marker");
 
@@ -765,7 +772,7 @@ mod tests {
         let marker_path = windows_sandbox_setup_marker_path(root.path());
         fs::write(
             marker_path,
-            r#"{"version":1,"offline_username":"Other","online_username":"LimeSandboxOnline"}"#,
+            r#"{"version":2,"offline_username":"Other","online_username":"LimeSandboxOnline"}"#,
         )
         .expect("rewrite marker");
 
@@ -784,7 +791,7 @@ mod tests {
         let marker_path = windows_sandbox_setup_marker_path(root.path());
         fs::write(
             marker_path,
-            r#"{"version":1,"offline_username":"LimeSandboxOffline","online_username":"LimeSandboxOnline","unexpected":true}"#,
+            r#"{"version":2,"offline_username":"LimeSandboxOffline","online_username":"LimeSandboxOnline","unexpected":true}"#,
         )
         .expect("rewrite marker");
 
