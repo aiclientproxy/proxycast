@@ -7,6 +7,7 @@ use app_server_protocol::protocol::v2::{
 use std::collections::HashMap;
 use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use windows_sys::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
 use windows_sys::Win32::Foundation::ERROR_SUCCESS;
 use windows_sys::Win32::Security::Authorization::{
@@ -202,7 +203,7 @@ fn reject_reparse_components(path: &Path) -> io::Result<()> {
 
 #[derive(Debug)]
 pub(super) struct AclLease {
-    snapshots: Vec<DaclSnapshot>,
+    paths: Vec<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -212,64 +213,101 @@ struct DaclSnapshot {
     protected: bool,
 }
 
+#[derive(Debug)]
+struct SharedAclState {
+    snapshot: DaclSnapshot,
+    leases: usize,
+}
+
+fn acl_registry() -> &'static Mutex<HashMap<PathBuf, SharedAclState>> {
+    static REGISTRY: OnceLock<Mutex<HashMap<PathBuf, SharedAclState>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 impl AclLease {
     pub(super) fn acquire(
         sandbox_group_sid: &str,
         capability_sid: &str,
         plan: AclPlan,
     ) -> io::Result<Self> {
-        let mut lease = Self {
-            snapshots: Vec::new(),
-        };
-        for path in plan
+        let mut paths = plan
             .read_grants
             .iter()
             .chain(&plan.write_grants)
             .chain(&plan.write_denies)
             .chain(&plan.access_denies)
-        {
-            if let Err(error) = lease.capture(path) {
-                return Err(lease.rollback_after(error));
-            }
+            .cloned()
+            .collect::<Vec<_>>();
+        paths.sort();
+        paths.dedup();
+        let mut lease = Self { paths: Vec::new() };
+        if let Err(error) = lease.reserve(&paths) {
+            return Err(lease.rollback_after(error));
         }
-        for path in plan.read_grants {
-            if let Err(error) = grant_access(
-                &path,
-                sandbox_group_sid,
-                capability_sid,
-                FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
-            ) {
-                return Err(lease.rollback_after(error));
-            }
-        }
-        for path in plan.write_grants {
-            if let Err(error) = grant_access(
-                &path,
-                sandbox_group_sid,
-                capability_sid,
-                FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE,
-            ) {
-                return Err(lease.rollback_after(error));
-            }
-        }
-        for path in plan.write_denies {
-            if let Err(error) = deny_write_access(&path, capability_sid) {
-                return Err(lease.rollback_after(error));
-            }
-        }
-        for path in plan.access_denies {
-            if let Err(error) = deny_access(&path, sandbox_group_sid, capability_sid) {
-                return Err(lease.rollback_after(error));
-            }
+        if let Err(error) = lease.apply(sandbox_group_sid, capability_sid, plan) {
+            return Err(lease.rollback_after(error));
         }
         Ok(lease)
     }
 
-    fn capture(&mut self, path: &Path) -> io::Result<()> {
-        if self.snapshots.iter().any(|snapshot| snapshot.path == path) {
-            return Ok(());
+    fn apply(
+        &self,
+        sandbox_group_sid: &str,
+        capability_sid: &str,
+        plan: AclPlan,
+    ) -> io::Result<()> {
+        // Serialize read-modify-write DACL updates with final snapshot restore.
+        let _registry = acl_registry()
+            .lock()
+            .map_err(|_| io::Error::other("Windows sandbox ACL registry lock is poisoned"))?;
+        for path in plan.read_grants {
+            grant_access(
+                &path,
+                sandbox_group_sid,
+                capability_sid,
+                FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
+            )?;
         }
-        self.snapshots.push(DaclSnapshot::capture(path)?);
+        for path in plan.write_grants {
+            grant_access(
+                &path,
+                sandbox_group_sid,
+                capability_sid,
+                FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE,
+            )?;
+        }
+        for path in plan.write_denies {
+            deny_write_access(&path, capability_sid)?;
+        }
+        for path in plan.access_denies {
+            deny_access(&path, sandbox_group_sid, capability_sid)?;
+        }
+        Ok(())
+    }
+
+    fn reserve(&mut self, paths: &[PathBuf]) -> io::Result<()> {
+        let mut registry = acl_registry()
+            .lock()
+            .map_err(|_| io::Error::other("Windows sandbox ACL registry lock is poisoned"))?;
+        for path in paths {
+            if let Some(state) = registry.get_mut(path) {
+                state.leases = state.leases.checked_add(1).ok_or_else(|| {
+                    io::Error::other(format!(
+                        "Windows sandbox ACL lease count overflow for {}",
+                        path.display()
+                    ))
+                })?;
+            } else {
+                registry.insert(
+                    path.clone(),
+                    SharedAclState {
+                        snapshot: DaclSnapshot::capture(path)?,
+                        leases: 1,
+                    },
+                );
+            }
+            self.paths.push(path.clone());
+        }
         Ok(())
     }
 
@@ -284,12 +322,46 @@ impl AclLease {
 
     fn rollback(&mut self) -> io::Result<()> {
         let mut failures = Vec::new();
-        for snapshot in self.snapshots.iter().rev() {
-            if let Err(error) = snapshot.restore() {
-                failures.push(format!("{}: {error}", snapshot.path.display()));
+        let mut registry = acl_registry()
+            .lock()
+            .map_err(|_| io::Error::other("Windows sandbox ACL registry lock is poisoned"))?;
+        for path in self.paths.iter().rev() {
+            let should_restore = match registry.get_mut(path) {
+                Some(state) if state.leases > 0 => {
+                    state.leases -= 1;
+                    state.leases == 0
+                }
+                Some(_) => {
+                    failures.push(format!(
+                        "{}: ACL lease count is already zero",
+                        path.display()
+                    ));
+                    false
+                }
+                None => {
+                    failures.push(format!(
+                        "{}: ACL lease registry entry is missing",
+                        path.display()
+                    ));
+                    false
+                }
+            };
+            if !should_restore {
+                continue;
+            }
+            let restore_result = registry
+                .get(path)
+                .expect("ACL registry entry checked above")
+                .snapshot
+                .restore();
+            match restore_result {
+                Ok(()) => {
+                    registry.remove(path);
+                }
+                Err(error) => failures.push(format!("{}: {error}", path.display())),
             }
         }
-        self.snapshots.clear();
+        self.paths.clear();
         if failures.is_empty() {
             Ok(())
         } else {

@@ -191,6 +191,33 @@ async fn workspace_write_allows_workspace_and_denies_metadata_and_external_paths
         (path, sddl)
     });
 
+    let native_probe = workspace.join("native-probe.txt");
+    let native_probe_snapshot = run_to_terminal(
+        start_local_execution_process(restricted_request(
+            &workspace,
+            vec![
+                "cmd.exe".to_string(),
+                "/D".to_string(),
+                "/S".to_string(),
+                "/C".to_string(),
+                "echo allowed>native-probe.txt".to_string(),
+            ],
+        ))
+        .expect("restricted native workspace probe should start"),
+    )
+    .await;
+    assert_eq!(
+        native_probe_snapshot.exit_code,
+        Some(0),
+        "restricted native workspace probe must exit successfully: {native_probe_snapshot:#?}"
+    );
+    assert!(
+        native_probe.is_file(),
+        "restricted native workspace probe must create {}",
+        native_probe.display()
+    );
+    std::fs::remove_file(&native_probe).expect("remove native workspace probe");
+
     let inside = workspace.join("inside.txt");
     let script = format!(
         "Write-Output ('identity=' + [Security.Principal.WindowsIdentity]::GetCurrent().Name); Set-Content -LiteralPath '{}' -Value allowed; [Console]::In.ReadLine() | Out-Null",
@@ -200,10 +227,9 @@ async fn workspace_write_allows_workspace_and_denies_metadata_and_external_paths
     request.stdin = true;
     let mut handle =
         start_local_execution_process(request).expect("restricted workspace process should start");
-    wait_for_path(&handle, &inside).await;
-
     let baseline_workspace_sddl = &acl_baselines[0].1;
     let active_workspace_sddl = acl_sddl(&workspace);
+    eprintln!("active restricted workspace SDDL: {active_workspace_sddl}");
     let group_sid = account_sid("LimeSandboxUsers");
     let added_sids = sddl_sids(&active_workspace_sddl)
         .difference(&sddl_sids(baseline_workspace_sddl))
@@ -217,6 +243,7 @@ async fn workspace_write_allows_workspace_and_denies_metadata_and_external_paths
         added_sids.iter().any(|sid| sid != &group_sid),
         "active workspace ACL must also grant a short-lived capability SID: {active_workspace_sddl}"
     );
+    wait_for_path(&handle, &inside).await;
 
     handle
         .close_stdin()
