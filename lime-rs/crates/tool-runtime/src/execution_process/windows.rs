@@ -26,10 +26,11 @@ use windows_sys::Win32::Security::{
 };
 use windows_sys::Win32::Storage::FileSystem::{ReadFile, WriteFile};
 use windows_sys::Win32::System::JobObjects::{
-    CreateJobObjectW, JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
-    QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
-    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-    JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicAccountingInformation,
+    JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
+    TerminateJobObject, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
@@ -606,8 +607,7 @@ fn spawn_restricted_pipe_process(
     let mut env_block = environment_block(&request.env)?;
     let cwd = to_wide(cwd.as_os_str());
     let mut desktop = to_wide("winsta0\\default");
-    let mut attributes = ProcessAttributeList::new(2)?;
-    attributes.set_job(job.raw())?;
+    let mut attributes = ProcessAttributeList::new(1)?;
     attributes.set_handle_list(&[stdin_read.raw(), stdout_write.raw(), stderr_write.raw()])?;
     let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
     startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
@@ -659,6 +659,9 @@ fn spawn_restricted_pipe_process(
     }
     let process = OwnedHandle::new(process_info.hProcess, "CreateProcessAsUserW process")?;
     let thread = OwnedHandle::new(process_info.hThread, "CreateProcessAsUserW thread")?;
+    if unsafe { AssignProcessToJobObject(job.raw(), process.raw()) } == 0 {
+        return Err(last_os_error("AssignProcessToJobObject"));
+    }
     if unsafe { ResumeThread(thread.raw()) } == u32::MAX {
         unsafe {
             TerminateJobObject(job.raw(), 1);
@@ -692,8 +695,7 @@ fn spawn_restricted_conpty_process(
     let mut env_block = environment_block(&request.env)?;
     let cwd = to_wide(cwd.as_os_str());
     let mut desktop = to_wide("winsta0\\default");
-    let mut attributes = ProcessAttributeList::new(2)?;
-    attributes.set_job(job.raw())?;
+    let mut attributes = ProcessAttributeList::new(1)?;
     attributes.set_pseudoconsole(pseudoconsole.raw())?;
     let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
     startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
@@ -739,6 +741,9 @@ fn spawn_restricted_conpty_process(
     }
     let process = OwnedHandle::new(process_info.hProcess, "CreateProcessAsUserW process")?;
     let thread = OwnedHandle::new(process_info.hThread, "CreateProcessAsUserW thread")?;
+    if unsafe { AssignProcessToJobObject(job.raw(), process.raw()) } == 0 {
+        return Err(last_os_error("AssignProcessToJobObject ConPTY"));
+    }
     if unsafe { ResumeThread(thread.raw()) } == u32::MAX {
         unsafe {
             TerminateJobObject(job.raw(), 1);
