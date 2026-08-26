@@ -15,7 +15,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use windows_sys::Win32::Foundation::{EqualSid, WAIT_OBJECT_0};
+use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
+use windows_sys::Win32::Security::EqualSid;
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, ReadFile, FILE_GENERIC_READ, FILE_GENERIC_WRITE, OPEN_EXISTING,
 };
