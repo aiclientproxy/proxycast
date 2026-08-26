@@ -13,6 +13,7 @@ mod accounts;
 #[cfg(windows)]
 use accounts::{
     ensure_local_account, ensure_local_group, ensure_local_group_member,
+    ensure_sandbox_accounts_null_device_access, validate_sandbox_accounts_null_device_access,
     validate_windows_sandbox_group_membership,
 };
 #[cfg(windows)]
@@ -143,6 +144,7 @@ pub fn run_windows_sandbox_setup(
         WINDOWS_SANDBOX_OFFLINE_USERNAME,
     )?;
     ensure_local_group_member(WINDOWS_SANDBOX_USERS_GROUP, WINDOWS_SANDBOX_ONLINE_USERNAME)?;
+    ensure_sandbox_accounts_null_device_access()?;
 
     let offline_blob = dpapi_protect(offline_password.as_bytes())?;
     let online_blob = dpapi_protect(online_password.as_bytes())?;
@@ -490,6 +492,7 @@ fn validate_protected_password(label: &str, value: &str) -> Result<(), String> {
 fn validate_windows_runtime_artifacts(artifacts: &ValidatedSetupArtifacts) -> Result<(), String> {
     validate_windows_sandbox_group_membership(WINDOWS_SANDBOX_OFFLINE_USERNAME)?;
     validate_windows_sandbox_group_membership(WINDOWS_SANDBOX_ONLINE_USERNAME)?;
+    validate_sandbox_accounts_null_device_access()?;
     validate_windows_sandbox_user("offline", &artifacts.users.offline)?;
     validate_windows_sandbox_user("online", &artifacts.users.online)?;
     crate::windows_firewall::verify_offline_rules(WINDOWS_SANDBOX_OFFLINE_USERNAME)

@@ -4,6 +4,218 @@ use super::{
 };
 use std::io;
 
+const READ_CONTROL: u32 = 0x0002_0000;
+const WRITE_DAC: u32 = 0x0004_0000;
+
+pub(super) fn ensure_sandbox_accounts_null_device_access() -> io::Result<()> {
+    use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HLOCAL};
+    use windows_sys::Win32::Security::Authorization::{
+        SetEntriesInAclW, SetSecurityInfo, EXPLICIT_ACCESS_W, SET_ACCESS, SE_KERNEL_OBJECT,
+        TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
+    };
+
+    let mut account_sids = [
+        resolve_windows_account_sid(WINDOWS_SANDBOX_OFFLINE_USERNAME).map_err(io::Error::other)?,
+        resolve_windows_account_sid(WINDOWS_SANDBOX_ONLINE_USERNAME).map_err(io::Error::other)?,
+    ];
+    let entries = account_sids
+        .iter_mut()
+        .map(|sid| EXPLICIT_ACCESS_W {
+            grfAccessPermissions: FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE,
+            grfAccessMode: SET_ACCESS,
+            grfInheritance: 0,
+            Trustee: TRUSTEE_W {
+                pMultipleTrustee: std::ptr::null_mut(),
+                MultipleTrusteeOperation: 0,
+                TrusteeForm: TRUSTEE_IS_SID,
+                TrusteeType: TRUSTEE_IS_UNKNOWN,
+                ptstrName: sid.as_mut_ptr() as *mut u16,
+            },
+        })
+        .collect::<Vec<_>>();
+
+    with_null_device_dacl(READ_CONTROL | WRITE_DAC, |handle, dacl| {
+        if dacl.is_null() {
+            return Err(io::Error::other(
+                "Windows sandbox NUL device has no editable DACL",
+            ));
+        }
+        let mut updated_dacl = std::ptr::null_mut();
+        let update = unsafe {
+            SetEntriesInAclW(
+                entries.len() as u32,
+                entries.as_ptr(),
+                dacl,
+                &mut updated_dacl,
+            )
+        };
+        if update != ERROR_SUCCESS {
+            return Err(win32_result_error(
+                "SetEntriesInAclW(Windows sandbox NUL)",
+                update,
+            ));
+        }
+        if updated_dacl.is_null() {
+            return Err(io::Error::other(
+                "SetEntriesInAclW(Windows sandbox NUL) returned a null DACL",
+            ));
+        }
+        let applied = unsafe {
+            SetSecurityInfo(
+                handle,
+                SE_KERNEL_OBJECT,
+                windows_sys::Win32::Security::DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                updated_dacl,
+                std::ptr::null_mut(),
+            )
+        };
+        unsafe {
+            LocalFree(updated_dacl as HLOCAL);
+        }
+        if applied == ERROR_SUCCESS {
+            Ok(())
+        } else {
+            Err(win32_result_error(
+                "SetSecurityInfo(Windows sandbox NUL)",
+                applied,
+            ))
+        }
+    })
+}
+
+pub(super) fn validate_sandbox_accounts_null_device_access() -> Result<(), String> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::Security::Authorization::{
+        GetEffectiveRightsFromAclW, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
+    };
+
+    let required = FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE;
+    let account_sids = [
+        (
+            WINDOWS_SANDBOX_OFFLINE_USERNAME,
+            resolve_windows_account_sid(WINDOWS_SANDBOX_OFFLINE_USERNAME)?,
+        ),
+        (
+            WINDOWS_SANDBOX_ONLINE_USERNAME,
+            resolve_windows_account_sid(WINDOWS_SANDBOX_ONLINE_USERNAME)?,
+        ),
+    ];
+    with_null_device_dacl(READ_CONTROL, |_handle, dacl| {
+        if dacl.is_null() {
+            return Err(io::Error::other(
+                "Windows sandbox NUL device has no readable DACL",
+            ));
+        }
+        for (account, sid) in &account_sids {
+            let trustee = TRUSTEE_W {
+                pMultipleTrustee: std::ptr::null_mut(),
+                MultipleTrusteeOperation: 0,
+                TrusteeForm: TRUSTEE_IS_SID,
+                TrusteeType: TRUSTEE_IS_UNKNOWN,
+                ptstrName: sid.as_ptr() as *mut u16,
+            };
+            let mut effective = 0;
+            let result = unsafe { GetEffectiveRightsFromAclW(dacl, &trustee, &mut effective) };
+            if result != ERROR_SUCCESS {
+                return Err(win32_result_error(
+                    "GetEffectiveRightsFromAclW(Windows sandbox NUL)",
+                    result,
+                ));
+            }
+            if effective & required != required {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!("Windows sandbox account {account} lacks required NUL device access"),
+                ));
+            }
+        }
+        Ok(())
+    })
+    .map_err(|error| error.to_string())
+}
+
+fn with_null_device_dacl<T>(
+    desired_access: u32,
+    operation: impl FnOnce(
+        windows_sys::Win32::Foundation::HANDLE,
+        *mut windows_sys::Win32::Security::ACL,
+    ) -> io::Result<T>,
+) -> io::Result<T> {
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, LocalFree, ERROR_SUCCESS, HLOCAL, INVALID_HANDLE_VALUE,
+    };
+    use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_KERNEL_OBJECT};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+
+    let path = to_wide(r"\\.\NUL");
+    let handle = unsafe {
+        CreateFileW(
+            path.as_ptr(),
+            desired_access,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            std::ptr::null_mut(),
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            0,
+        )
+    };
+    if handle == 0 || handle == INVALID_HANDLE_VALUE {
+        return Err(io::Error::last_os_error());
+    }
+    let mut descriptor = std::ptr::null_mut();
+    let mut dacl = std::ptr::null_mut();
+    let security = unsafe {
+        GetSecurityInfo(
+            handle,
+            SE_KERNEL_OBJECT,
+            windows_sys::Win32::Security::DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut dacl,
+            std::ptr::null_mut(),
+            &mut descriptor,
+        )
+    };
+    if security != ERROR_SUCCESS {
+        unsafe {
+            CloseHandle(handle);
+        }
+        return Err(win32_result_error(
+            "GetSecurityInfo(Windows sandbox NUL)",
+            security,
+        ));
+    }
+
+    let result = operation(handle, dacl);
+    unsafe {
+        if !descriptor.is_null() {
+            LocalFree(descriptor as HLOCAL);
+        }
+        CloseHandle(handle);
+    }
+    result
+}
+
+fn win32_result_error(context: &str, code: u32) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::Other,
+        format!(
+            "{context} failed: {}",
+            io::Error::from_raw_os_error(code as i32)
+        ),
+    )
+}
+
 pub(super) fn ensure_local_account(username: &str, password: &str) -> io::Result<()> {
     use windows_sys::Win32::NetworkManagement::NetManagement::{
         NERR_UserExists, NetUserAdd, NetUserSetInfo, UF_DONT_EXPIRE_PASSWD, UF_SCRIPT, USER_INFO_1,
