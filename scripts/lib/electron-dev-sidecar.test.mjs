@@ -8,6 +8,7 @@ import {
   isUsableAppServerBinary,
   localAppServerBinaryPath,
   localCodeModeHostBinaryPath,
+  localWindowsSandboxSetupBinaryPath,
   resolveDevAppServerBackendEnv,
   resolveDevAppServerBinary,
   resolveCargoTargetDirectory,
@@ -38,6 +39,15 @@ describe("electron dev sidecar", () => {
         targetDirectory: path.resolve("/repo/lime/lime-rs/target"),
       }),
     ).toBe(path.resolve("/repo/lime/lime-rs/target/debug/code-mode-host"));
+    expect(
+      localWindowsSandboxSetupBinaryPath({
+        repoRoot: "/repo/lime",
+        platform: "win32",
+        targetDirectory: path.resolve("/repo/lime/lime-rs/target"),
+      }),
+    ).toBe(
+      path.resolve("/repo/lime/lime-rs/target/debug/windows-sandbox-setup.exe"),
+    );
   });
 
   it("读取仓库 cargo target-dir 配置", () => {
@@ -169,6 +179,36 @@ describe("electron dev sidecar", () => {
     ).toThrow(/app-server sidecar binaries were not created/);
   });
 
+  it("Windows setup helper 缺失时触发成组重建", () => {
+    const builds = [];
+    const prepared = [];
+    let built = false;
+    const setupPath = path.resolve(
+      "/repo/lime/lime-rs/target/debug/windows-sandbox-setup.exe",
+    );
+
+    resolveDevAppServerBinary({
+      env: {},
+      repoRoot: "/repo/lime",
+      platform: "win32",
+      exists(pathValue) {
+        return pathValue !== setupPath || built;
+      },
+      build(call) {
+        builds.push(call);
+        built = true;
+      },
+      prepareBinary: (...args) => prepared.push(args),
+    });
+
+    expect(builds).toEqual([
+      { repoRoot: "/repo/lime", platform: "win32", env: {} },
+    ]);
+    expect(prepared.at(-1)).toEqual([
+      { binaryPath: setupPath, platform: "win32" },
+    ]);
+  });
+
   it("空 app-server 文件不算可用二进制", () => {
     expect(
       isUsableAppServerBinary("/repo/lime/lime-rs/target/debug/app-server", {
@@ -290,6 +330,8 @@ describe("electron dev sidecar", () => {
           "tool-runtime",
           "--bin",
           "code-mode-host",
+          "--bin",
+          "windows-sandbox-setup",
         ],
         options: {
           cwd: "/repo/lime",

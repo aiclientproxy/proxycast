@@ -83,5 +83,28 @@ describe("windowsSandbox", () => {
         params: { samplePaths: ["C:\\tmp"], extraCount: -1, failedScan: false },
       }),
     ).toBeNull();
+    expect(
+      readWindowsSandboxNotification({
+        method: "windows/worldWritableWarning",
+        params: {
+          samplePaths: Array.from(
+            { length: 6 },
+            (_, index) => `C:\\tmp\\${index}`,
+          ),
+          extraCount: 0,
+          failedScan: false,
+        },
+      }),
+    ).toBeNull();
+    expect(
+      readWindowsSandboxNotification({
+        method: "windows/worldWritableWarning",
+        params: {
+          samplePaths: ["x".repeat(32_768)],
+          extraCount: 0,
+          failedScan: false,
+        },
+      }),
+    ).toBeNull();
   });
 });

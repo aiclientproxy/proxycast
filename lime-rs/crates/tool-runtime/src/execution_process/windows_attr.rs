@@ -10,6 +10,7 @@ use windows_sys::Win32::System::Threading::{
 
 const PROC_THREAD_ATTRIBUTE_HANDLE_LIST: usize = 0x0002_0002;
 const PROC_THREAD_ATTRIBUTE_JOB_LIST: usize = 0x0002_000D;
+const PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE: usize = 0x0002_0016;
 
 /// Owns the native attribute buffer and the backing handle arrays referenced by it.
 pub(super) struct ProcessAttributeList {
@@ -66,6 +67,14 @@ impl ProcessAttributeList {
         let value = self.job_list.as_ptr() as *const c_void;
         let size = std::mem::size_of_val(self.job_list.as_slice());
         self.update(PROC_THREAD_ATTRIBUTE_JOB_LIST, value, size)
+    }
+
+    pub(super) fn set_pseudoconsole(&mut self, pseudoconsole: isize) -> io::Result<()> {
+        self.update(
+            PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
+            pseudoconsole as *const c_void,
+            std::mem::size_of::<HANDLE>(),
+        )
     }
 
     pub(super) fn as_mut_ptr(&mut self) -> LPPROC_THREAD_ATTRIBUTE_LIST {

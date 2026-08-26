@@ -2607,27 +2607,64 @@ Settings execution policy
 
 非 Windows 平台或未启用 workspace sandbox 返回 `notConfigured`；Windows 已启用但 backend 不是
 `Ready + enforced=true` 返回 `updateRequired`；只有真实 enforcement 才能返回 `ready`。`tool-runtime`
-当前拥有 target-gated restricted-token runner：受限 token、capability SID、workspace/explicit write-root
-ACL lease、`.git/.codex/.agents` 写入拒绝、Job Object 进程树、显式继承句柄列表、stdout/stderr reader
-和既有有界 retained output 均在同一 owner。Windows 环境块继承父环境并按大小写不敏感应用请求覆盖；正常根进程
+当前拥有 target-gated restricted-token runner：受限 token、sandbox account user SID、capability SID、workspace/explicit write-root
+双重访问检查、workspace/explicit read/write-root ACL lease、`.git/.codex/.agents` 写入拒绝、Job Object 进程树、显式继承句柄列表、stdout/stderr reader
+和既有有界 retained output 均在同一 owner；ACL audit、ConPTY 与 Job/supervisor 分别由
+`windows_audit`、`windows_conpty`、`windows_job` 子模块承接，主 runner 只保留 token/spawn 编排。TTY 请求由同一 restricted-token owner 创建 ConPTY，使用
+`PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE + PROC_THREAD_ATTRIBUTE_JOB_LIST` 原子附着，合并输出并承接 stdin/resize/terminate，
+不回退普通 `portable-pty` 非沙箱进程。Windows 环境块继承父环境并按大小写不敏感应用请求覆盖；正常根进程
 退出时遵循 Codex 语义关闭 `KILL_ON_JOB_CLOSE`，由 reaper 持有 Job 与 ACL lease 到 Job 为空，取消、超时、控制断开或
-等待失败则终止整棵进程树并立即 rollback；TTY/ConPTY、elevated setup、WFP/firewall 强网络隔离和
-Windows 真机证据尚未完成。命令 lowering 仍对 `RestrictedToken` fail closed，但执行入口会在 Windows
-直接进入 runner，不把 command wrapper 当作第二套 owner。因平台 evidence 尚未具备，当前
-`SandboxBackendStatus::Planned`、`enforced=false` 保持不变，不能由 runner 源码、Settings 或 setup 文案
-推断 ready。`windowsSandbox/setupStart`、`windows/worldWritableWarning` 与 `windowsSandbox/setupCompleted`
-保持 planned，后续必须在 Windows 平台完成 runner/ConPTY/网络能力裁决与 Gate B evidence 后再推进。
+等待失败则终止整棵进程树并立即 rollback；allowlisted stdin handle、bounded output、ACL lease rollback 和
+Job Object descendant cleanup 已进入 target-gated integration matrix。ConPTY 的 stdin/resize/combined-output
+也已进入同一矩阵，但仍待 Windows/MSVC 编译和真机执行。网络隔离 current owner 由三部分组成：
+`windows_setup` 编排 offline/online 本地账户与 machine-scope DPAPI artifacts，其中账户、组与 SID 操作集中在
+`windows_setup::accounts` 子模块；`windows_firewall` 使用 offline account SID
+安装覆盖非 loopback 与 loopback 的两条全协议出站 block rule，并拒绝 group-policy override、部分 profile 生效、active
+profile firewall disabled 或属性 read-back 漂移；`windows_wfp` 保留按同一账户匹配的 ICMP/DNS/SMB 补充过滤器。
+restricted runner 在 `network.enabled=true` 时使用 online account，否则使用 offline account；sandbox account user SID 进入
+restricted SID access check，但不进入默认 DACL 充当 capability。runner 不设置
+`SBX_NONET_ACTIVE` 或代理环境变量冒充 enforcement。命令 lowering 仍对
+`RestrictedToken` fail closed，但执行入口会在 Windows 直接进入 runner，不把 command wrapper 当作第二套 owner。
+setup 同时创建专用 `LimeSandboxUsers` 本地组并将 offline/online 两个账户加入该组；文件访问必须同时通过普通
+token 侧的 sandbox group ACE 与 restricted-token 侧的短生命周期 capability SID ACE。ACL lease 在第一次修改每个目标前
+保存原始 DACL security descriptor，进程树结束后逆序恢复，不能用删除稳定 group ACE 的方式破坏用户预先存在的 ACL。
+protected metadata 与显式 read-only carveout 的 deny-write 继续只绑定 capability SID；显式 `Deny` 则同时拒绝 sandbox
+group 与 capability SID 的全部访问，与 Codex restricted access check 和 permission profile 语义一致。
+因平台 evidence 尚未具备，当前 `SandboxBackendStatus::Planned`、`enforced=false` 保持不变，不能由 runner 源码、
+Settings 或 setup 文案推断 ready。
+
+setup artifact 的结构事实源同样归 `tool-runtime::windows_setup`：Lime AgentRoot 下的 `.sandbox/setup_marker.json`
+与 `.sandbox-secrets/sandbox_users.json` 使用单一版本号，固定 offline/online account identity，并只保存 DPAPI 密文的
+base64 表达。App Server 只能消费该 owner 的结构校验结果；文件缺失、未知字段、版本/账户漂移、空或异常大的密文均
+返回 `updateRequired`。默认 Windows probe 还必须以 machine-scope DPAPI 解密两份凭证，并通过
+`LookupAccountNameW` 解析两个本地账户 SID并实际验证 `LogonUserW`；任一失败继续 fail closed。默认 Windows probe 还会
+解析 `LimeSandboxUsers` SID，并通过 NetAPI 枚举确认 offline/online 两个账户均为直接成员；组缺失、成员漂移或枚举失败
+同样返回 `updateRequired`。默认 Windows probe 还会
+重新读取 Firewall policy/profile/rule direction/action/protocol/address/SID scope 与全部 WFP conditions；任何缺失或漂移返回
+`updateRequired`。源码与 read-back 仍不替代实际 enforcement，因此在 Windows evidence 完成前不得提升
+`Ready/enforced=true`。
+
+`windowsSandbox/setupStart`、`windows/worldWritableWarning` 与 `windowsSandbox/setupCompleted` 已是 current
+typed protocol/App Server/Renderer consumer；setup producer 已在 `tool-runtime::execution_process` 提供 bounded
+Everyone-write ACL audit，setup completion 只报告异步尝试结果，readiness 仍必须重新读取真实 backend 状态。Quality 通过
+`scripts/lib/windows-restricted-execution-evidence.mjs` 在真实 Windows runner 上逐项
+显式 `--provision` 后先在隔离 AgentRoot 执行 setup helper，再执行七个必需 case，并在 schema v3 中分别记录 setup/test
+summary/stdout/stderr artifact 以及缺失、失败、ignored 或 unexpected case；未显式 provision、非 Windows 主机和未完成矩阵
+均 fail closed。workspace case 还必须在进程运行期间证明 sandbox group 与 capability SID 两类 ACE 同时存在，并在终态后
+逐路径恢复为原始 SDDL。后续仍需在 Windows 平台完成 ACL audit/ConPTY/Firewall/WFP/NetAPI/DACL API 编译与实际执行证据、backend enforcement
+与 Gate B evidence，才能把 readiness 从 `updateRequired` 提升为 `ready`。
 
 Electron 只转发 App Server JSONL，不新增 Windows 业务 IPC 或第二套设置后端；Desktop Settings 只消费 readiness
-状态，不复制 Codex TUI 的 setup UI。Windows runner 的 token、ACL、进程生命周期和网络/读限制仍归
+状态和 typed setup lifecycle，不复制 Codex TUI 的 setup UI。Windows runner 的 token、ACL、进程生命周期和网络/读限制仍归
 `tool-runtime` sandbox owner；多模型、多模态 sampling/media lowering 与 provider readiness 仍归
 Grok-aligned `model-provider`，与此控制面无关。
 
-Architecture impact: major；本节固定 Windows readiness 与实际 enforcement 的 fail-closed 边界，并把
-Desktop Settings、App Server 与 tool-runtime 的唯一数据流写入架构事实源。Responsible developer confirmation:
-root, 2026-08-10。Confirmation content: 已核对 `SandboxBackendStatus::Planned`、`enforced=false`、
-`prepare_sandbox_command(RestrictedToken)` 拒绝路径、非 Windows/未配置状态，以及 Desktop/TUI、Codex runtime 和
-Grok model/multimodal owner 分界。
+Architecture impact: major；本节固定 Windows readiness、typed setup lifecycle 与实际 enforcement 的 fail-closed
+边界，并把 Desktop Settings、App Server 与 tool-runtime 的唯一数据流写入架构事实源。Responsible developer
+confirmation: root, 2026-08-26。Confirmation content: 已核对 `SandboxBackendStatus::Planned`、`enforced=false`、
+per-user Firewall/WFP read-back、offline/online account 选择、`windows_setup::accounts` 子 owner、sandbox group + capability SID 双重 ACL、原始 DACL rollback、
+七项 Windows evidence matrix、非 Windows/未配置状态，以及
+Desktop/TUI、Codex runtime 和 Grok model/multimodal owner 分界。
 
 ## 43. Desktop Composer Fuzzy File Search Owner
 

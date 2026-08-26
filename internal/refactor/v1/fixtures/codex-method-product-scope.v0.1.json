@@ -989,8 +989,14 @@
       "priority": "P1",
       "owner": "tool-runtime sandbox + Desktop Host",
       "counterpartRule": "none",
-      "gap": "Windows setup must be rebuilt in current owners and validated on a real Windows runner; readiness must not be upgraded before enforcement exists.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "gap": "Exact protocol, App Server handler, typed client and Settings consumer exist; Windows setup must still execute real backend enforcement and be validated on a Windows runner, including setup lifecycle and Gate B evidence. Readiness must not be upgraded before enforcement exists.",
+      "evidence": [
+        "internal/refactor/v1/08-third-audit-gap-register.md",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/windows_sandbox.rs",
+        "lime-rs/crates/app-server/src/processor/windows_sandbox.rs",
+        "src/lib/api/windowsSandbox.ts",
+        "src/components/settings-v2/system/execution-policy/WindowsSandboxReadinessStatus.tsx"
+      ],
       "methods": ["windowsSandbox/setupStart"]
     },
     {
@@ -1487,8 +1493,14 @@
       "priority": "P1",
       "owner": "tool-runtime sandbox + Desktop Host",
       "counterpartRule": "none",
-      "gap": "Windows warnings and setup completion require a current cross-platform contract and platform evidence.",
-      "evidence": ["internal/refactor/v1/08-third-audit-gap-register.md"],
+      "gap": "Exact cross-platform notification contract and typed Settings consumer exist; real world-writable scan, setup completion producer and Windows platform evidence remain required before these notifications can move to implemented.",
+      "evidence": [
+        "internal/refactor/v1/08-third-audit-gap-register.md",
+        "lime-rs/crates/app-server-protocol/src/protocol/v2/windows_sandbox.rs",
+        "src/lib/api/windowsSandbox.ts",
+        "src/components/settings-v2/system/execution-policy/WindowsSandboxReadinessStatus.tsx",
+        "scripts/lib/windows-restricted-execution-evidence.mjs"
+      ],
       "methods": [
         "windows/worldWritableWarning",
         "windowsSandbox/setupCompleted"

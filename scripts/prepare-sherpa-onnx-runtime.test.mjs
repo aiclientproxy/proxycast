@@ -1,3 +1,5 @@
+import fs from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -92,6 +94,50 @@ version = "1.13.0"
       ],
       cwd: "D:\\a\\lime\\lime\\lime-rs\\target\\sherpa-onnx-prebuilt",
     });
+  });
+
+  it("Windows Quality 为 sherpa 准备保留足够预算并记录清理/解压阶段", () => {
+    const workflow = fs.readFileSync(".github/workflows/quality.yml", "utf8");
+    const windowsJob = workflow
+      .split("\n  windows_shell_runtime:\n")[1]
+      ?.split("\n  quality_gate:\n")[0];
+    expect(windowsJob).toContain("timeout-minutes: 60");
+    const securityMatrixOffset = windowsJob.indexOf(
+      "Test Windows restricted execution security matrix",
+    );
+    const securityEvidenceUploadOffset = windowsJob.indexOf(
+      "Upload Windows restricted execution evidence",
+    );
+    const sherpaOffset = windowsJob.indexOf("Prepare sherpa-onnx runtime");
+    const sidecarBuildOffset = windowsJob.indexOf(
+      "Build Windows app-server, code-mode-host, and sandbox setup sidecars",
+    );
+    const timeoutContractOffset = windowsJob.indexOf(
+      "Test Windows command timeout contract",
+    );
+    expect(securityMatrixOffset).toBeGreaterThanOrEqual(0);
+    expect(securityEvidenceUploadOffset).toBeGreaterThan(securityMatrixOffset);
+    expect(sherpaOffset).toBeGreaterThan(securityEvidenceUploadOffset);
+    expect(sidecarBuildOffset).toBeGreaterThan(sherpaOffset);
+    expect(timeoutContractOffset).toBeGreaterThan(sidecarBuildOffset);
+
+    const source = fs.readFileSync(
+      "scripts/prepare-sherpa-onnx-runtime.mjs",
+      "utf8",
+    );
+    const stages = [
+      "Removing previous sherpa-onnx runtime:",
+      "Removed previous sherpa-onnx runtime:",
+      "Extracting sherpa-onnx archive:",
+      "Extracted sherpa-onnx archive:",
+    ];
+    const offsets = stages.map((stage) => source.indexOf(stage));
+    expect(offsets.every((offset) => offset >= 0)).toBe(true);
+    expect(offsets).toEqual([...offsets].sort((left, right) => left - right));
+    expect(windowsJob).toContain(
+      "scripts/lib/windows-restricted-execution-evidence.mjs",
+    );
+    expect(windowsJob).toContain("actions/upload-artifact@v4");
   });
 
   it("支持显式 Rust workspace 目录，不再暴露旧目录参数口径", () => {

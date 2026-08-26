@@ -315,8 +315,8 @@ jobs:
           test -n "$TARGET"
           node scripts/prepare-sherpa-onnx-runtime.mjs --target "$TARGET"
 
-      - name: Build standalone Code Mode host
-        run: cargo build --manifest-path lime-rs/Cargo.toml -p tool-runtime --bin code-mode-host
+      - name: Build standalone Code Mode host and Windows sandbox setup helper
+        run: cargo build --manifest-path lime-rs/Cargo.toml -p tool-runtime --bin code-mode-host --bin windows-sandbox-setup
 
       - name: Test Rust workspace
         env:
@@ -330,7 +330,7 @@ jobs:
   windows_shell_runtime:
     name: Windows Shell Runtime
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 60
     needs: changed
     if: ${{ needs.changed.outputs.rust == 'true' || needs.changed.outputs.fallback == 'true' || needs.changed.outputs.workflow == 'true' }}
     steps:
@@ -361,17 +361,28 @@ jobs:
           node scripts/lib/rusty-v8-artifacts.mjs --github-env
           cargo clean --manifest-path lime-rs/Cargo.toml -p v8
 
+      - name: Test Windows restricted execution security matrix
+        run: node scripts/lib/windows-restricted-execution-evidence.mjs --provision --output "${{ runner.temp }}/windows-restricted-execution/summary.json"
+
+      - name: Upload Windows restricted execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-restricted-execution-evidence
+          path: "${{ runner.temp }}/windows-restricted-execution"
+          if-no-files-found: error
+
       - name: Prepare sherpa-onnx runtime
         run: node scripts/prepare-sherpa-onnx-runtime.mjs --target x86_64-pc-windows-msvc
 
-      - name: Build Windows app-server and code-mode-host sidecars
-        run: cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host
+      - name: Build Windows app-server, code-mode-host, and sandbox setup sidecars
+        run: cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host --bin windows-sandbox-setup
 
       - name: Test Windows shell runtime fallback
         run: cargo test --manifest-path lime-rs/Cargo.toml -p lime-agent --test windows_shell_runtime -- --test-threads=1
 
-      - name: Test Windows restricted execution security matrix
-        run: cargo test --manifest-path lime-rs/Cargo.toml -p tool-runtime --test windows_restricted_execution -- --test-threads=1
+      - name: Test Windows command timeout contract
+        run: cargo test --manifest-path lime-rs/Cargo.toml -p app-server windows_timeout_returns_canonical_exit_code -- --test-threads=1
 
       - name: Test Windows file browser directory creation
         run: cargo test --manifest-path lime-rs/Cargo.toml -p lime-services create_directory_creates_nested_directory_from_platform_path -- --test-threads=1

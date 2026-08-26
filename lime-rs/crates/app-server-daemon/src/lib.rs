@@ -425,6 +425,8 @@ pub struct AppServerReleaseArtifact {
     pub platform: String,
     pub url: String,
     pub sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub windows_sandbox_setup_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1013,6 +1015,7 @@ mod tests {
                 platform: "darwin-arm64".to_string(),
                 url: "https://example/app-server-darwin-arm64.tar.gz".to_string(),
                 sha256: "abc".to_string(),
+                windows_sandbox_setup_sha256: None,
             }],
         };
         let options = SidecarBinaryPathOptions {
@@ -1077,6 +1080,7 @@ mod tests {
                 platform: "darwin-arm64".to_string(),
                 url: "https://example/app-server-darwin-arm64.tar.gz".to_string(),
                 sha256: "abc".to_string(),
+                windows_sandbox_setup_sha256: None,
             }],
         };
         let options = SidecarBinaryPathOptions {
@@ -1121,6 +1125,7 @@ mod tests {
                 platform: "darwin-arm64".to_string(),
                 url: "https://example/app-server-darwin-arm64.tar.gz".to_string(),
                 sha256: "abc".to_string(),
+                windows_sandbox_setup_sha256: None,
             }],
         };
         let settings = DaemonSettings {

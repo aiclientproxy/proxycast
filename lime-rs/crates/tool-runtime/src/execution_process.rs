@@ -18,6 +18,48 @@ mod pty;
 #[cfg(target_os = "windows")]
 mod windows;
 
+/// Bounded Windows ACL audit result used by the App Server setup warning.
+///
+/// The audit is intentionally a diagnostic only. It never changes ACLs and it
+/// must not be used as proof that the restricted-token backend is enforced.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowsWorldWritableAudit {
+    pub sample_paths: Vec<String>,
+    pub extra_count: usize,
+    pub failed_scan: bool,
+}
+
+impl WindowsWorldWritableAudit {
+    pub fn clean() -> Self {
+        Self {
+            sample_paths: Vec::new(),
+            extra_count: 0,
+            failed_scan: false,
+        }
+    }
+}
+
+/// Audits the current Windows workspace for paths with an Everyone write ACE.
+///
+/// Non-Windows builds return a clean result and do not execute any platform
+/// command. The Windows implementation is bounded and skips reparse points.
+#[cfg(target_os = "windows")]
+pub fn audit_windows_world_writable(
+    cwd: &std::path::Path,
+    environment: &std::collections::HashMap<String, String>,
+) -> WindowsWorldWritableAudit {
+    windows::audit_world_writable(cwd, environment)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn audit_windows_world_writable(
+    _cwd: &std::path::Path,
+    _environment: &std::collections::HashMap<String, String>,
+) -> WindowsWorldWritableAudit {
+    WindowsWorldWritableAudit::clean()
+}
+
 use environment::resolve_child_environment;
 
 const DEFAULT_OUTPUT_RETAIN_BYTES: usize = 128 * 1024;

@@ -1,5 +1,6 @@
 use super::*;
 use environment::{resolve_child_environment_with_semantics, EnvironmentKeySemantics};
+use std::path::Path;
 
 fn start_process() -> ExecutionProcess {
     ExecutionProcess::start(ExecutionProcessStart {
@@ -393,6 +394,14 @@ fn windows_job_preserves_only_after_normal_root_exit() {
         false,
         ExecutionProcessStatus::Terminated
     ));
+}
+
+#[cfg(not(target_os = "windows"))]
+#[test]
+fn windows_world_writable_audit_is_clean_without_platform_commands() {
+    let audit =
+        audit_windows_world_writable(Path::new("/definitely/missing/workspace"), &HashMap::new());
+    assert_eq!(audit, WindowsWorldWritableAudit::clean());
 }
 
 fn shell_command(script: &str) -> Vec<String> {

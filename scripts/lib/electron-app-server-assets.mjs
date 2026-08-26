@@ -41,6 +41,12 @@ export function codeModeHostResourceBinaryName(platform = process.platform) {
   return codeModeHostBinaryName(platform);
 }
 
+export function windowsSandboxSetupResourceBinaryName(
+  platform = process.platform,
+) {
+  return platform === "win32" ? "windows-sandbox-setup.exe" : null;
+}
+
 export function appServerResourcePlatformKey(
   platform = process.platform,
   arch = process.arch,
@@ -98,9 +104,23 @@ export function electronCodeModeHostBinaryDestination({
   );
 }
 
+export function electronWindowsSandboxSetupBinaryDestination({
+  outputRoot = electronAppServerResourcesRoot(),
+  platform = process.platform,
+  arch = process.arch,
+} = {}) {
+  const name = windowsSandboxSetupResourceBinaryName(platform);
+  if (!name) {
+    return null;
+  }
+  const platformKey = appServerResourcePlatformKey(platform, arch);
+  return path.resolve(outputRoot, "app-server", platformKey, name);
+}
+
 export async function buildElectronAppServerReleaseManifest({
   binaryPath,
   codeModeHostBinaryPath,
+  windowsSandboxSetupBinaryPath,
   version,
   platform = appServerResourcePlatformKey(),
   sha256File = hashFile,
@@ -111,21 +131,31 @@ export async function buildElectronAppServerReleaseManifest({
   const normalizedVersion = requiredValue(version, "version");
   const normalizedPlatform = requiredValue(platform, "platform");
 
+  const artifact = {
+    platform: normalizedPlatform,
+    url: `app-resource://app-server/${normalizedPlatform}/${path.basename(normalizedBinaryPath)}`,
+    sha256: await sha256File(normalizedBinaryPath),
+    codeModeHostSha256: await sha256File(
+      path.resolve(
+        requiredValue(codeModeHostBinaryPath, "codeModeHostBinaryPath"),
+      ),
+    ),
+  };
+  if (normalizedPlatform === "win32-x64") {
+    artifact.windowsSandboxSetupSha256 = await sha256File(
+      path.resolve(
+        requiredValue(
+          windowsSandboxSetupBinaryPath,
+          "windowsSandboxSetupBinaryPath",
+        ),
+      ),
+    );
+  }
+
   return {
     version: normalizedVersion,
     protocolVersion: APP_SERVER_PROTOCOL_VERSION,
-    artifacts: [
-      {
-        platform: normalizedPlatform,
-        url: `app-resource://app-server/${normalizedPlatform}/${path.basename(normalizedBinaryPath)}`,
-        sha256: await sha256File(normalizedBinaryPath),
-        codeModeHostSha256: await sha256File(
-          path.resolve(
-            requiredValue(codeModeHostBinaryPath, "codeModeHostBinaryPath"),
-          ),
-        ),
-      },
-    ],
+    artifacts: [artifact],
   };
 }
 
@@ -136,6 +166,7 @@ export async function prepareElectronAppServerAssets({
   arch = process.arch,
   sourceBinary,
   sourceCodeModeHostBinary,
+  sourceWindowsSandboxSetupBinary,
   resolveBinary = resolveDevAppServerBinary,
   env = process.env,
   readPackageJson = readJsonFile,
@@ -163,6 +194,12 @@ export async function prepareElectronAppServerAssets({
     platform,
     arch,
   });
+  const windowsSandboxSetupDestination =
+    electronWindowsSandboxSetupBinaryDestination({
+      outputRoot,
+      platform,
+      arch,
+    });
   const manifestPath = electronAppServerManifestPath({ outputRoot });
   const resolvedSourceBinary = path.resolve(
     sourceBinary ??
@@ -190,22 +227,63 @@ export async function prepareElectronAppServerAssets({
       `Electron code-mode-host asset source must not equal packaged destination: ${codeModeHostDestination}`,
     );
   }
+  const resolvedSourceWindowsSandboxSetupBinary = windowsSandboxSetupDestination
+    ? path.resolve(
+        sourceWindowsSandboxSetupBinary ??
+          path.join(
+            path.dirname(resolvedSourceBinary),
+            windowsSandboxSetupResourceBinaryName(platform),
+          ),
+      )
+    : null;
+  if (
+    windowsSandboxSetupDestination &&
+    resolvedSourceWindowsSandboxSetupBinary === windowsSandboxSetupDestination
+  ) {
+    throw new Error(
+      `Windows sandbox setup asset source must not equal packaged destination: ${windowsSandboxSetupDestination}`,
+    );
+  }
 
   await makeDir(path.dirname(destination), { recursive: true });
   await rm(destination, { force: true });
   await rm(codeModeHostDestination, { force: true });
+  if (windowsSandboxSetupDestination) {
+    await rm(windowsSandboxSetupDestination, { force: true });
+  }
   await copy(resolvedSourceBinary, destination);
   await copy(resolvedSourceCodeModeHostBinary, codeModeHostDestination);
+  if (windowsSandboxSetupDestination) {
+    await copy(
+      resolvedSourceWindowsSandboxSetupBinary,
+      windowsSandboxSetupDestination,
+    );
+  }
   await clearLaunchBlockingXattrs(destination, platform);
   await clearLaunchBlockingXattrs(codeModeHostDestination, platform);
   const sourceStat = await getStat(resolvedSourceBinary);
   const codeModeHostSourceStat = await getStat(
     resolvedSourceCodeModeHostBinary,
   );
+  const windowsSandboxSetupSourceStat = windowsSandboxSetupDestination
+    ? await getStat(resolvedSourceWindowsSandboxSetupBinary)
+    : null;
   await changeMode(destination, sourceStat.mode);
   await changeMode(codeModeHostDestination, codeModeHostSourceStat.mode);
+  if (windowsSandboxSetupDestination) {
+    await changeMode(
+      windowsSandboxSetupDestination,
+      windowsSandboxSetupSourceStat.mode,
+    );
+  }
   prepareRuntimeBinary({ binaryPath: destination, platform });
   prepareRuntimeBinary({ binaryPath: codeModeHostDestination, platform });
+  if (windowsSandboxSetupDestination) {
+    prepareRuntimeBinary({
+      binaryPath: windowsSandboxSetupDestination,
+      platform,
+    });
+  }
   const runtimeLibraries = await copyRuntimeLibraries({
     repoRoot,
     platform,
@@ -219,6 +297,7 @@ export async function prepareElectronAppServerAssets({
   const manifest = await buildElectronAppServerReleaseManifest({
     binaryPath: destination,
     codeModeHostBinaryPath: codeModeHostDestination,
+    windowsSandboxSetupBinaryPath: windowsSandboxSetupDestination,
     version,
     platform: appServerResourcePlatformKey(platform, arch),
     sha256File,
@@ -228,8 +307,10 @@ export async function prepareElectronAppServerAssets({
   return {
     sourceBinary: resolvedSourceBinary,
     sourceCodeModeHostBinary: resolvedSourceCodeModeHostBinary,
+    sourceWindowsSandboxSetupBinary: resolvedSourceWindowsSandboxSetupBinary,
     binaryPath: destination,
     codeModeHostBinaryPath: codeModeHostDestination,
+    windowsSandboxSetupBinaryPath: windowsSandboxSetupDestination,
     manifestPath,
     manifest,
     runtimeLibraries,

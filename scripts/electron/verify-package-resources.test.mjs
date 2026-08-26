@@ -55,8 +55,10 @@ function sha256(content) {
 function createResourceRoot({
   appServer = "signed app-server",
   codeModeHost = "signed code-mode-host",
+  windowsSandboxSetup = "signed windows-sandbox-setup",
   manifestAppServer = "unsigned app-server",
   manifestCodeModeHost = "unsigned code-mode-host",
+  manifestWindowsSandboxSetup = "unsigned windows-sandbox-setup",
   platformKey = "darwin-arm64",
 } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "lime-electron-resources-"));
@@ -74,6 +76,12 @@ function createResourceRoot({
     path.join(sidecarDir, `code-mode-host${executableSuffix}`),
     codeModeHost,
   );
+  if (platformKey.startsWith("win32-")) {
+    writeFileSync(
+      path.join(sidecarDir, "windows-sandbox-setup.exe"),
+      windowsSandboxSetup,
+    );
+  }
   for (const name of [
     "icon.png",
     "trayTemplate.png",
@@ -93,6 +101,9 @@ function createResourceRoot({
           platform: platformKey,
           sha256: sha256(manifestAppServer),
           codeModeHostSha256: sha256(manifestCodeModeHost),
+          ...(platformKey.startsWith("win32-")
+            ? { windowsSandboxSetupSha256: sha256(manifestWindowsSandboxSetup) }
+            : {}),
         },
       ],
     }),
@@ -225,6 +236,25 @@ describe("verify-electron-package-resources sidecar integrity", () => {
         { stdio: "ignore" },
       ],
     ]);
+  });
+
+  it("Windows 资源必须包含 sandbox setup helper 并校验哈希", () => {
+    const root = createResourceRoot({
+      platformKey: "win32-x64",
+      appServer: "app-server",
+      codeModeHost: "code-mode-host",
+      windowsSandboxSetup: "windows-sandbox-setup",
+      manifestAppServer: "app-server",
+      manifestCodeModeHost: "code-mode-host",
+      manifestWindowsSandboxSetup: "windows-sandbox-setup",
+    });
+
+    const result = verifyResourceRoot(root, {
+      platform: "win32",
+      arch: "x64",
+    });
+
+    expect(result.windowsSandboxSetupIntegrity.acceptedBecause).toBe("sha256");
   });
 
   it("拒绝哈希变化且严格 codesign 失败的 macOS code-mode host", () => {

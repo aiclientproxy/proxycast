@@ -59,4 +59,7 @@ pub mod update_plan;
 pub mod view_image;
 pub mod web_fetch;
 pub mod web_search;
+pub mod windows_firewall;
+pub mod windows_setup;
+pub mod windows_wfp;
 pub mod workspace_dispatch;

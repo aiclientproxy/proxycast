@@ -6,9 +6,10 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr;
 use std::thread;
+use std::time::Duration;
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_SUCCESS, HANDLE,
-    HANDLE_FLAG_INHERIT, HLOCAL, INVALID_HANDLE_VALUE, LUID, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    CloseHandle, GetLastError, LocalFree, SetHandleInformation, HANDLE, HANDLE_FLAG_INHERIT,
+    HLOCAL, INVALID_HANDLE_VALUE, LUID, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Security::Authorization::{
     ConvertStringSidToSidW, SetEntriesInAclW, EXPLICIT_ACCESS_W, GRANT_ACCESS, TRUSTEE_IS_SID,
@@ -16,9 +17,11 @@ use windows_sys::Win32::Security::Authorization::{
 };
 use windows_sys::Win32::Security::{
     AdjustTokenPrivileges, CopySid, CreateRestrictedToken, CreateWellKnownSid, GetLengthSid,
-    GetTokenInformation, LookupPrivilegeValueW, SetTokenInformation, TokenDefaultDacl, TokenGroups,
-    ACL, SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT, TOKEN_ADJUST_PRIVILEGES,
+    GetTokenInformation, LogonUserW, LookupPrivilegeValueW, SetTokenInformation, TokenDefaultDacl,
+    TokenGroups, TokenUser, ACL, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT,
+    SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT, TOKEN_ADJUST_PRIVILEGES,
     TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_PRIVILEGES, TOKEN_QUERY,
+    TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{ReadFile, WriteFile};
 use windows_sys::Win32::System::JobObjects::{
@@ -29,17 +32,33 @@ use windows_sys::Win32::System::JobObjects::{
 };
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
-    CreateProcessAsUserW, GetCurrentProcess, GetExitCodeProcess, OpenProcessToken, ResumeThread,
-    WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
-    EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    CreateProcessAsUserW, GetExitCodeProcess, ResumeThread, WaitForSingleObject, CREATE_NO_WINDOW,
+    CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT,
+    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
 };
 
 #[path = "windows_acl.rs"]
 mod windows_acl;
 #[path = "windows_attr.rs"]
 mod windows_attr;
+#[path = "windows_audit.rs"]
+mod windows_audit;
+#[path = "windows_conpty.rs"]
+mod windows_conpty;
+#[path = "windows_job.rs"]
+mod windows_job;
+use crate::windows_setup::{
+    read_windows_sandbox_password, verify_windows_sandbox_group_membership,
+    windows_sandbox_users_group_sid, WINDOWS_SANDBOX_OFFLINE_USERNAME,
+    WINDOWS_SANDBOX_ONLINE_USERNAME,
+};
 use windows_acl::{build_acl_plan, AclLease};
 use windows_attr::ProcessAttributeList;
+pub(super) use windows_audit::audit_world_writable;
+use windows_conpty::RestrictedConpty;
+#[cfg(test)]
+use windows_job::preserve_job_descendants;
+use windows_job::{create_kill_on_close_job, read_pipe_stream, supervise_restricted_process};
 
 const DISABLE_MAX_PRIVILEGE: u32 = 0x01;
 const LUA_TOKEN: u32 = 0x04;
@@ -49,17 +68,10 @@ const WIN_WORLD_SID: i32 = 1;
 const SE_GROUP_LOGON_ID: u32 = 0xC000_0000;
 const CONTROL_POLL_MILLIS: u32 = 25;
 const JOB_REAPER_POLL_MILLIS: u64 = 250;
-
 pub(super) fn start_windows_restricted_execution_process(
     mut request: LocalExecutionRequest,
     sandbox: LocalExecutionSandbox,
 ) -> io::Result<LocalExecutionProcessHandle> {
-    if request.tty {
-        return Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            "Windows restricted token sandbox does not support TTY sessions yet",
-        ));
-    }
     if request.command.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -81,11 +93,20 @@ pub(super) fn start_windows_restricted_execution_process(
         ));
     }
 
-    apply_offline_environment(&mut request.env, sandbox.granted_permissions.as_ref());
+    let sandbox_account = sandbox_account_for_permissions(sandbox.granted_permissions.as_ref());
+    verify_sandbox_account_network_policy(sandbox_account)?;
+    verify_windows_sandbox_group_membership(sandbox_account)?;
+    if request.tty {
+        request
+            .env
+            .entry("TERM".to_string())
+            .or_insert_with(|| "xterm-256color".to_string());
+    }
     let acl_plan = build_acl_plan(&cwd, policy, sandbox.granted_permissions.as_ref())?;
+    let sandbox_group_sid = windows_sandbox_users_group_sid()?;
     let capability_sid = capability_sid();
-    let acl_lease = AclLease::acquire(&capability_sid, acl_plan)?;
-    let token = create_restricted_token(&capability_sid)?;
+    let acl_lease = AclLease::acquire(&sandbox_group_sid, &capability_sid, acl_plan)?;
+    let token = create_restricted_token(&capability_sid, sandbox_account)?;
     let spawned = spawn_restricted_process(&request, &cwd, token.raw())?;
     drop(token);
 
@@ -104,35 +125,52 @@ pub(super) fn start_windows_restricted_execution_process(
     let (state_tx, state_rx) = watch::channel(initial_snapshot);
     let (final_tx, final_rx) = oneshot::channel();
 
+    let SpawnedRestrictedProcess {
+        process: spawned_process,
+        thread: spawned_thread,
+        job,
+        stdin_write,
+        stdout_read,
+        stderr_read,
+        pseudoconsole,
+    } = spawned;
+    let output_kind = if pseudoconsole.is_some() {
+        ExecutionOutputKind::Combined
+    } else {
+        ExecutionOutputKind::Stdout
+    };
     let stdout_process = Arc::clone(&process);
     let stdout_state = state_tx.clone();
     let stdout_output = output_tx.clone();
     let stdout_reader = thread::spawn(move || {
         read_pipe_stream(
-            spawned.stdout_read,
-            ExecutionOutputKind::Stdout,
+            stdout_read,
+            output_kind,
             stdout_process,
             stdout_output,
             stdout_state,
         )
     });
-    let stderr_process = Arc::clone(&process);
-    let stderr_state = state_tx.clone();
-    let stderr_reader = thread::spawn(move || {
-        read_pipe_stream(
-            spawned.stderr_read,
-            ExecutionOutputKind::Stderr,
-            stderr_process,
-            output_tx,
-            stderr_state,
-        )
+    let stderr_reader = stderr_read.map(|stderr_read| {
+        let stderr_process = Arc::clone(&process);
+        let stderr_state = state_tx.clone();
+        thread::spawn(move || {
+            read_pipe_stream(
+                stderr_read,
+                ExecutionOutputKind::Stderr,
+                stderr_process,
+                output_tx,
+                stderr_state,
+            )
+        })
     });
     thread::spawn(move || {
         supervise_restricted_process(
-            spawned.process,
-            spawned.thread,
-            spawned.job,
-            spawned.stdin_write,
+            spawned_process,
+            spawned_thread,
+            job,
+            stdin_write,
+            pseudoconsole,
             stdout_reader,
             stderr_reader,
             acl_lease,
@@ -153,41 +191,24 @@ pub(super) fn start_windows_restricted_execution_process(
     })
 }
 
-fn apply_offline_environment(
-    env: &mut HashMap<String, String>,
-    permissions: Option<&GrantedPermissionProfile>,
-) {
+fn sandbox_account_for_permissions(permissions: Option<&GrantedPermissionProfile>) -> &'static str {
     let network_enabled = permissions
         .and_then(|profile| profile.network.as_ref())
         .and_then(|network| network.enabled)
         .unwrap_or(false);
     if network_enabled {
-        return;
+        WINDOWS_SANDBOX_ONLINE_USERNAME
+    } else {
+        WINDOWS_SANDBOX_OFFLINE_USERNAME
     }
-    for key in [
-        "HTTP_PROXY",
-        "HTTPS_PROXY",
-        "ALL_PROXY",
-        "GIT_HTTP_PROXY",
-        "GIT_HTTPS_PROXY",
-    ] {
-        env.entry(key.to_string())
-            .or_insert_with(|| "http://127.0.0.1:9".to_string());
+}
+
+fn verify_sandbox_account_network_policy(account: &str) -> io::Result<()> {
+    if account != WINDOWS_SANDBOX_OFFLINE_USERNAME {
+        return Ok(());
     }
-    env.entry("NO_PROXY".to_string())
-        .or_insert_with(|| "localhost,127.0.0.1,::1".to_string());
-    env.insert("SBX_NONET_ACTIVE".to_string(), "1".to_string());
-    env.entry("PIP_NO_INDEX".to_string())
-        .or_insert_with(|| "1".to_string());
-    env.entry("PIP_DISABLE_PIP_VERSION_CHECK".to_string())
-        .or_insert_with(|| "1".to_string());
-    env.entry("NPM_CONFIG_OFFLINE".to_string())
-        .or_insert_with(|| "true".to_string());
-    env.entry("CARGO_NET_OFFLINE".to_string())
-        .or_insert_with(|| "true".to_string());
-    env.entry("GIT_SSH_COMMAND".to_string())
-        .or_insert_with(|| "cmd /c exit 1".to_string());
-    env.entry("GIT_ALLOW_PROTOCOLS".to_string()).or_default();
+    crate::windows_firewall::verify_offline_rules(account)?;
+    crate::windows_wfp::verify_filters(account)
 }
 
 fn capability_sid() -> String {
@@ -265,7 +286,7 @@ struct TokenDefaultDaclInfo {
     default_dacl: *mut ACL,
 }
 
-fn create_restricted_token(capability_sid: &str) -> io::Result<OwnedHandle> {
+fn create_restricted_token(capability_sid: &str, account: &str) -> io::Result<OwnedHandle> {
     unsafe {
         let desired = TOKEN_DUPLICATE
             | TOKEN_QUERY
@@ -273,17 +294,34 @@ fn create_restricted_token(capability_sid: &str) -> io::Result<OwnedHandle> {
             | TOKEN_ADJUST_DEFAULT
             | TOKEN_ADJUST_SESSIONID
             | TOKEN_ADJUST_PRIVILEGES;
+        let password = read_windows_sandbox_password(account)?;
+        let username = to_wide(account);
+        let domain = to_wide(".");
+        let password = to_wide(password);
         let mut base = 0;
-        if OpenProcessToken(GetCurrentProcess(), desired, &mut base) == 0 {
-            return Err(last_os_error("OpenProcessToken"));
+        if LogonUserW(
+            username.as_ptr(),
+            domain.as_ptr(),
+            password.as_ptr(),
+            LOGON32_LOGON_INTERACTIVE,
+            LOGON32_PROVIDER_DEFAULT,
+            &mut base,
+        ) == 0
+        {
+            return Err(last_os_error("LogonUserW"));
         }
-        let base = OwnedHandle::new(base, "OpenProcessToken")?;
+        let base = OwnedHandle::new(base, "LogonUserW")?;
         let capability = LocalSid::parse(capability_sid)?;
+        let mut user = token_user_sid(base.raw())?;
         let mut logon = logon_sid(base.raw())?;
         let mut everyone = world_sid()?;
         let mut entries = [
             SID_AND_ATTRIBUTES {
                 Sid: capability.raw(),
+                Attributes: 0,
+            },
+            SID_AND_ATTRIBUTES {
+                Sid: user.as_mut_ptr() as *mut c_void,
                 Attributes: 0,
             },
             SID_AND_ATTRIBUTES {
@@ -311,6 +349,8 @@ fn create_restricted_token(capability_sid: &str) -> io::Result<OwnedHandle> {
             return Err(last_os_error("CreateRestrictedToken"));
         }
         let restricted = OwnedHandle::new(restricted, "CreateRestrictedToken")?;
+        // The account SID constrains the restricted access check but is not a
+        // capability, so it must not grant access through the default DACL.
         set_default_dacl(
             restricted.raw(),
             &[
@@ -386,6 +426,35 @@ unsafe fn enable_privilege(token: HANDLE, name: &str) -> io::Result<()> {
         return Err(io::Error::from_raw_os_error(error as i32));
     }
     Ok(())
+}
+
+unsafe fn token_user_sid(token: HANDLE) -> io::Result<Vec<u8>> {
+    let mut needed = 0;
+    GetTokenInformation(token, TokenUser, ptr::null_mut(), 0, &mut needed);
+    if needed < std::mem::size_of::<TOKEN_USER>() as u32 {
+        return Err(last_os_error("GetTokenInformation(TokenUser) size"));
+    }
+    let mut buffer = vec![0u8; needed as usize];
+    if GetTokenInformation(
+        token,
+        TokenUser,
+        buffer.as_mut_ptr() as *mut c_void,
+        needed,
+        &mut needed,
+    ) == 0
+    {
+        return Err(last_os_error("GetTokenInformation(TokenUser)"));
+    }
+    let user = ptr::read_unaligned(buffer.as_ptr() as *const TOKEN_USER);
+    let length = GetLengthSid(user.User.Sid);
+    if length == 0 {
+        return Err(last_os_error("GetLengthSid(TokenUser)"));
+    }
+    let mut sid = vec![0u8; length as usize];
+    if CopySid(length, sid.as_mut_ptr() as *mut c_void, user.User.Sid) == 0 {
+        return Err(last_os_error("CopySid(TokenUser)"));
+    }
+    Ok(sid)
 }
 
 unsafe fn scan_logon_sid(token: HANDLE) -> Option<Vec<u8>> {
@@ -484,10 +553,22 @@ struct SpawnedRestrictedProcess {
     job: OwnedHandle,
     stdin_write: Option<OwnedHandle>,
     stdout_read: OwnedHandle,
-    stderr_read: OwnedHandle,
+    stderr_read: Option<OwnedHandle>,
+    pseudoconsole: Option<RestrictedConpty>,
 }
 
 fn spawn_restricted_process(
+    request: &LocalExecutionRequest,
+    cwd: &Path,
+    token: HANDLE,
+) -> io::Result<SpawnedRestrictedProcess> {
+    if request.tty {
+        return spawn_restricted_conpty_process(request, cwd, token);
+    }
+    spawn_restricted_pipe_process(request, cwd, token)
+}
+
+fn spawn_restricted_pipe_process(
     request: &LocalExecutionRequest,
     cwd: &Path,
     token: HANDLE,
@@ -551,7 +632,70 @@ fn spawn_restricted_process(
         job,
         stdin_write,
         stdout_read,
-        stderr_read,
+        stderr_read: Some(stderr_read),
+        pseudoconsole: None,
+    })
+}
+
+fn spawn_restricted_conpty_process(
+    request: &LocalExecutionRequest,
+    cwd: &Path,
+    token: HANDLE,
+) -> io::Result<SpawnedRestrictedProcess> {
+    let (rows, cols) = request.pty_size.unwrap_or((24, 120));
+    let (pseudoconsole, stdin_write, stdout_read) = RestrictedConpty::create(rows, cols)?;
+    let job = create_kill_on_close_job()?;
+    let mut command_line = to_wide(argv_to_command_line(&request.command));
+    let mut env_block = environment_block(&request.env)?;
+    let cwd = to_wide(cwd.as_os_str());
+    let mut desktop = to_wide("winsta0\\default");
+    let mut attributes = ProcessAttributeList::new(2)?;
+    attributes.set_job(job.raw())?;
+    attributes.set_pseudoconsole(pseudoconsole.raw())?;
+    let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
+    startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput = INVALID_HANDLE_VALUE;
+    startup.StartupInfo.hStdOutput = INVALID_HANDLE_VALUE;
+    startup.StartupInfo.hStdError = INVALID_HANDLE_VALUE;
+    startup.StartupInfo.lpDesktop = desktop.as_mut_ptr();
+    startup.lpAttributeList = attributes.as_mut_ptr();
+    let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    let created = unsafe {
+        CreateProcessAsUserW(
+            token,
+            ptr::null(),
+            command_line.as_mut_ptr(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            0,
+            CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT,
+            env_block.as_mut_ptr() as *mut c_void,
+            cwd.as_ptr(),
+            &startup.StartupInfo,
+            &mut process_info,
+        )
+    };
+    if created == 0 {
+        return Err(last_os_error("CreateProcessAsUserW ConPTY"));
+    }
+    let process = OwnedHandle::new(process_info.hProcess, "CreateProcessAsUserW process")?;
+    let thread = OwnedHandle::new(process_info.hThread, "CreateProcessAsUserW thread")?;
+    if unsafe { ResumeThread(thread.raw()) } == u32::MAX {
+        unsafe {
+            TerminateJobObject(job.raw(), 1);
+        }
+        return Err(last_os_error("ResumeThread ConPTY"));
+    }
+    let stdin_write = request.stdin.then_some(stdin_write);
+    Ok(SpawnedRestrictedProcess {
+        process,
+        thread,
+        job,
+        stdin_write,
+        stdout_read,
+        stderr_read: None,
+        pseudoconsole: Some(pseudoconsole),
     })
 }
 
@@ -577,259 +721,6 @@ fn create_pipe_pair(parent_writes: bool) -> io::Result<(OwnedHandle, OwnedHandle
         return Err(last_os_error("SetHandleInformation"));
     }
     Ok((read, write))
-}
-
-fn create_kill_on_close_job() -> io::Result<OwnedHandle> {
-    let job = OwnedHandle::new(
-        unsafe { CreateJobObjectW(ptr::null(), ptr::null()) },
-        "CreateJobObjectW",
-    )?;
-    set_job_limit_flags(
-        job.raw(),
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK,
-    )?;
-    Ok(job)
-}
-
-fn set_job_limit_flags(job: HANDLE, flags: u32) -> io::Result<()> {
-    let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
-    limits.BasicLimitInformation.LimitFlags = flags;
-    if unsafe {
-        SetInformationJobObject(
-            job,
-            JobObjectExtendedLimitInformation,
-            &limits as *const _ as *const c_void,
-            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-        )
-    } == 0
-    {
-        Err(last_os_error("SetInformationJobObject"))
-    } else {
-        Ok(())
-    }
-}
-
-fn preserve_job_descendants(job: &OwnedHandle) -> io::Result<()> {
-    set_job_limit_flags(job.raw(), JOB_OBJECT_LIMIT_BREAKAWAY_OK)
-}
-
-fn active_job_processes(job: &OwnedHandle) -> io::Result<u32> {
-    let mut accounting: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = unsafe { std::mem::zeroed() };
-    if unsafe {
-        QueryInformationJobObject(
-            job.raw(),
-            JobObjectBasicAccountingInformation,
-            &mut accounting as *mut _ as *mut c_void,
-            std::mem::size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
-            ptr::null_mut(),
-        )
-    } == 0
-    {
-        Err(last_os_error("QueryInformationJobObject"))
-    } else {
-        Ok(accounting.ActiveProcesses)
-    }
-}
-
-fn reap_preserved_job(job: OwnedHandle, acl_lease: AclLease) {
-    loop {
-        match active_job_processes(&job) {
-            Ok(0) => break,
-            Ok(_) => thread::sleep(Duration::from_millis(JOB_REAPER_POLL_MILLIS)),
-            Err(_) => {
-                unsafe {
-                    TerminateJobObject(job.raw(), 1);
-                }
-                break;
-            }
-        }
-    }
-    drop(acl_lease);
-}
-
-#[allow(clippy::too_many_arguments)]
-fn supervise_restricted_process(
-    process_handle: OwnedHandle,
-    thread_handle: OwnedHandle,
-    job: OwnedHandle,
-    mut stdin: Option<OwnedHandle>,
-    stdout_reader: thread::JoinHandle<()>,
-    stderr_reader: thread::JoinHandle<()>,
-    acl_lease: AclLease,
-    process: Arc<Mutex<ExecutionProcess>>,
-    state_tx: watch::Sender<ExecutionProcessSnapshot>,
-    final_tx: oneshot::Sender<ExecutionProcessSnapshot>,
-    control_rx: std::sync::mpsc::Receiver<LocalExecutionControl>,
-) {
-    let mut wait_error = None;
-    loop {
-        let wait = unsafe { WaitForSingleObject(process_handle.raw(), CONTROL_POLL_MILLIS) };
-        if wait == WAIT_OBJECT_0 {
-            break;
-        }
-        drain_controls(&job, &mut stdin, &process, &state_tx, &control_rx);
-        if wait != WAIT_TIMEOUT {
-            wait_error = Some(last_os_error("WaitForSingleObject").to_string());
-            unsafe {
-                TerminateJobObject(job.raw(), 1);
-            }
-            break;
-        }
-    }
-
-    stdin.take();
-    let preserve_descendants =
-        should_preserve_windows_job(wait_error.is_some(), process.blocking_lock().status());
-    if preserve_descendants && preserve_job_descendants(&job).is_ok() {
-        thread::spawn(move || reap_preserved_job(job, acl_lease));
-    } else {
-        unsafe {
-            TerminateJobObject(job.raw(), 1);
-        }
-        drop(job);
-        drop(acl_lease);
-    }
-    let _ = stdout_reader.join();
-    let _ = stderr_reader.join();
-    drop(thread_handle);
-
-    let mut exit_code = 1;
-    let exit_result = unsafe { GetExitCodeProcess(process_handle.raw(), &mut exit_code) };
-    let final_snapshot = {
-        let mut guard = process.blocking_lock();
-        if !guard.status().is_terminal() {
-            if let Some(error) = wait_error {
-                guard.fail(error);
-            } else if exit_result == 0 {
-                guard.fail(last_os_error("GetExitCodeProcess").to_string());
-            } else {
-                guard.exit(i32::try_from(exit_code).unwrap_or(-1));
-            }
-        }
-        guard.snapshot()
-    };
-    let _ = state_tx.send(final_snapshot.clone());
-    let _ = final_tx.send(final_snapshot);
-}
-
-fn drain_controls(
-    job: &OwnedHandle,
-    stdin: &mut Option<OwnedHandle>,
-    process: &Arc<Mutex<ExecutionProcess>>,
-    state_tx: &watch::Sender<ExecutionProcessSnapshot>,
-    control_rx: &std::sync::mpsc::Receiver<LocalExecutionControl>,
-) {
-    loop {
-        match control_rx.try_recv() {
-            Ok(LocalExecutionControl::WriteStdin(bytes)) => {
-                if let Some(stdin) = stdin.as_ref() {
-                    let _ = write_pipe(stdin.raw(), &bytes);
-                }
-            }
-            Ok(LocalExecutionControl::CloseStdin) => {
-                stdin.take();
-            }
-            Ok(LocalExecutionControl::Resize { .. }) => {}
-            Ok(LocalExecutionControl::Interrupt) => {
-                update_status_blocking(process, state_tx, ExecutionProcessStatus::Interrupted);
-                unsafe {
-                    TerminateJobObject(job.raw(), 1);
-                }
-            }
-            Ok(LocalExecutionControl::Terminate) => {
-                update_status_blocking(process, state_tx, ExecutionProcessStatus::Terminated);
-                unsafe {
-                    TerminateJobObject(job.raw(), 1);
-                }
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => break,
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                update_status_blocking(process, state_tx, ExecutionProcessStatus::Terminated);
-                unsafe {
-                    TerminateJobObject(job.raw(), 1);
-                }
-                break;
-            }
-        }
-    }
-}
-
-fn write_pipe(handle: HANDLE, mut bytes: &[u8]) -> io::Result<()> {
-    while !bytes.is_empty() {
-        let mut written = 0;
-        if unsafe {
-            WriteFile(
-                handle,
-                bytes.as_ptr(),
-                bytes.len().min(u32::MAX as usize) as u32,
-                &mut written,
-                ptr::null_mut(),
-            )
-        } == 0
-        {
-            return Err(last_os_error("WriteFile"));
-        }
-        if written == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::WriteZero,
-                "WriteFile wrote zero bytes",
-            ));
-        }
-        bytes = &bytes[written as usize..];
-    }
-    Ok(())
-}
-
-fn read_pipe_stream(
-    handle: OwnedHandle,
-    kind: ExecutionOutputKind,
-    process: Arc<Mutex<ExecutionProcess>>,
-    output_tx: mpsc::UnboundedSender<ExecutionOutputDelta>,
-    state_tx: watch::Sender<ExecutionProcessSnapshot>,
-) {
-    let mut buffer = vec![0u8; PROCESS_OUTPUT_CHUNK_BYTES];
-    loop {
-        let mut read = 0;
-        let ok = unsafe {
-            ReadFile(
-                handle.raw(),
-                buffer.as_mut_ptr(),
-                buffer.len() as u32,
-                &mut read,
-                ptr::null_mut(),
-            )
-        };
-        if ok == 0 || read == 0 {
-            break;
-        }
-        let (delta, snapshot) = {
-            let mut guard = process.blocking_lock();
-            let delta = guard.append_output(kind, &buffer[..read as usize]);
-            let snapshot = guard.snapshot();
-            (delta, snapshot)
-        };
-        let _ = output_tx.send(delta);
-        let _ = state_tx.send(snapshot);
-    }
-}
-
-fn update_status_blocking(
-    process: &Arc<Mutex<ExecutionProcess>>,
-    state_tx: &watch::Sender<ExecutionProcessSnapshot>,
-    status: ExecutionProcessStatus,
-) {
-    let snapshot = {
-        let mut guard = process.blocking_lock();
-        match status {
-            ExecutionProcessStatus::Interrupted => guard.interrupt(),
-            ExecutionProcessStatus::Terminated => guard.terminate(),
-            ExecutionProcessStatus::Failed => guard.fail("process failed"),
-            ExecutionProcessStatus::Exited => guard.exit(-1),
-            ExecutionProcessStatus::Starting | ExecutionProcessStatus::Running => {}
-        }
-        guard.snapshot()
-    };
-    let _ = state_tx.send(snapshot);
 }
 
 fn environment_block(env: &HashMap<String, String>) -> io::Result<Vec<u16>> {
@@ -919,6 +810,21 @@ fn last_os_error(context: &str) -> io::Error {
 mod tests {
     use super::*;
 
+    fn job_flags(job: &OwnedHandle) -> u32 {
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+        let result = unsafe {
+            QueryInformationJobObject(
+                job.raw(),
+                JobObjectExtendedLimitInformation,
+                &mut limits as *mut _ as *mut c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                ptr::null_mut(),
+            )
+        };
+        assert_ne!(result, 0, "job limit query should succeed");
+        limits.BasicLimitInformation.LimitFlags
+    }
+
     #[test]
     fn command_line_quoting_preserves_spaces_quotes_and_trailing_slashes() {
         assert_eq!(quote_windows_arg("plain"), "plain");
@@ -931,20 +837,34 @@ mod tests {
     }
 
     #[test]
-    fn offline_environment_does_not_override_explicit_proxy() {
-        let mut env = HashMap::from([("HTTP_PROXY".to_string(), "http://proxy:8080".to_string())]);
-        apply_offline_environment(&mut env, None);
+    fn network_permission_selects_sandbox_account() {
+        assert_eq!(
+            sandbox_account_for_permissions(None),
+            WINDOWS_SANDBOX_OFFLINE_USERNAME
+        );
+        let permissions = GrantedPermissionProfile {
+            network: Some(
+                app_server_protocol::protocol::v2::AdditionalNetworkPermissions {
+                    enabled: Some(true),
+                },
+            ),
+            file_system: None,
+        };
+        assert_eq!(
+            sandbox_account_for_permissions(Some(&permissions)),
+            WINDOWS_SANDBOX_ONLINE_USERNAME
+        );
+    }
 
-        assert_eq!(
-            env.get("HTTP_PROXY").map(String::as_str),
-            Some("http://proxy:8080")
-        );
-        assert_eq!(
-            env.get("HTTPS_PROXY").map(String::as_str),
-            Some("http://127.0.0.1:9")
-        );
-        assert_eq!(env.get("SBX_NONET_ACTIVE").map(String::as_str), Some("1"));
-        assert_eq!(env.get("GIT_ALLOW_PROTOCOLS").map(String::as_str), Some(""));
+    #[test]
+    fn restricted_job_disables_breakaway_until_descendant_preservation() {
+        let job = create_kill_on_close_job().expect("job should start without breakaway");
+        let initial_flags = job_flags(&job);
+        assert_ne!(initial_flags & JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, 0);
+        assert_eq!(initial_flags & JOB_OBJECT_LIMIT_BREAKAWAY_OK, 0);
+
+        preserve_job_descendants(&job).expect("preservation should enable breakaway");
+        assert_ne!(job_flags(&job) & JOB_OBJECT_LIMIT_BREAKAWAY_OK, 0);
     }
 
     #[test]

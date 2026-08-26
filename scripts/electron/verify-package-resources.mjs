@@ -115,6 +115,10 @@ function codeModeHostBinaryName(platform = process.platform) {
   return platform === "win32" ? "code-mode-host.exe" : "code-mode-host";
 }
 
+function windowsSandboxSetupBinaryName(platform = process.platform) {
+  return platform === "win32" ? "windows-sandbox-setup.exe" : null;
+}
+
 function sha256(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
@@ -198,6 +202,26 @@ export function verifyResourceRoot(
     label: "app-server sidecar",
     execFileSyncImpl,
   });
+  let windowsSandboxSetupPath = null;
+  let windowsSandboxSetupIntegrity = null;
+  if (platform === "win32") {
+    windowsSandboxSetupPath = path.join(
+      root,
+      "app-server",
+      key,
+      windowsSandboxSetupBinaryName(platform),
+    );
+    assertFile(windowsSandboxSetupPath, "Windows sandbox setup helper");
+    windowsSandboxSetupIntegrity = verifySidecarIntegrity(
+      windowsSandboxSetupPath,
+      artifact.windowsSandboxSetupSha256,
+      {
+        platform,
+        label: "Windows sandbox setup helper",
+        execFileSyncImpl,
+      },
+    );
+  }
 
   for (const name of [
     "icon.png",
@@ -221,6 +245,8 @@ export function verifyResourceRoot(
     codeModeHostPath,
     codeModeHostSha256: codeModeHost.packaged,
     codeModeHostIntegrity: codeModeHost,
+    windowsSandboxSetupPath,
+    windowsSandboxSetupIntegrity,
     sha256: appServer,
   };
 }

@@ -39,6 +39,32 @@ fn exec_params(process_id: Option<&str>, script: &str) -> CommandExecParams {
     }
 }
 
+#[cfg(windows)]
+fn windows_exec_params(script: &str) -> CommandExecParams {
+    CommandExecParams {
+        command: vec![
+            "powershell.exe".to_string(),
+            "-NoProfile".to_string(),
+            "-NonInteractive".to_string(),
+            "-Command".to_string(),
+            script.to_string(),
+        ],
+        process_id: None,
+        tty: false,
+        stream_stdin: false,
+        stream_stdout_stderr: false,
+        output_bytes_cap: Some(1024),
+        disable_output_cap: false,
+        disable_timeout: false,
+        timeout_ms: Some(20),
+        cwd: Some(std::env::current_dir().expect("current directory")),
+        env: None,
+        size: None,
+        sandbox_policy: None,
+        permission_profile: None,
+    }
+}
+
 #[cfg(unix)]
 async fn wait_for_session(
     server: &CommandExecServer,
@@ -276,5 +302,22 @@ async fn output_cap_and_timeout_apply_to_one_off_commands() {
     .await
     .expect("timeout enforcement")
     .expect("timeout response");
+    assert_eq!(response.exit_code, COMMAND_EXEC_TIMEOUT_EXIT_CODE);
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_timeout_returns_canonical_exit_code() {
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        CommandExecServer::default().exec(
+            ConnectionId(9),
+            windows_exec_params("Start-Sleep -Seconds 10"),
+        ),
+    )
+    .await
+    .expect("Windows timeout enforcement should finish")
+    .expect("Windows timeout response");
+
     assert_eq!(response.exit_code, COMMAND_EXEC_TIMEOUT_EXIT_CODE);
 }

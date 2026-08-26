@@ -14,6 +14,10 @@ doctest = false
 name = "code-mode-host"
 path = "src/bin/code-mode-host.rs"
 
+[[bin]]
+name = "windows-sandbox-setup"
+path = "src/bin/windows-sandbox-setup.rs"
+
 [dependencies]
 agent-protocol.workspace = true
 app-server-protocol.workspace = true
@@ -54,13 +58,20 @@ which = "8.0.0"
 tempfile.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+windows.workspace = true
 windows-sys = { version = "0.52", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
     "Win32_Storage_FileSystem",
+    "Win32_NetworkManagement_WindowsFilteringPlatform",
+    "Win32_NetworkManagement_NetManagement",
+    "Win32_Networking_WinSock",
+    "Win32_System_Console",
     "Win32_System_IO",
     "Win32_System_JobObjects",
     "Win32_System_Pipes",
+    "Win32_System_Rpc",
     "Win32_System_Threading",
 ] }

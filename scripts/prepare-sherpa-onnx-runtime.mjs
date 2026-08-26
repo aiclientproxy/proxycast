@@ -365,9 +365,13 @@ function downloadSherpaArchive(plan) {
 }
 
 function extractSherpaArchive(plan) {
+  console.log(`Removing previous sherpa-onnx runtime: ${plan.extractedDir}`);
   fs.rmSync(plan.extractedDir, { recursive: true, force: true });
+  console.log(`Removed previous sherpa-onnx runtime: ${plan.extractedDir}`);
   const extraction = buildSherpaArchiveExtractCommand(plan);
+  console.log(`Extracting sherpa-onnx archive: ${plan.archivePath}`);
   runCommand("tar", extraction.args, { cwd: extraction.cwd });
+  console.log(`Extracted sherpa-onnx archive: ${plan.extractedDir}`);
 }
 
 function ensureArchiveExtracted(plan) {

@@ -40,6 +40,8 @@ const WINDOWS_SANDBOX_READINESS_VALUES = new Set<WindowsSandboxReadiness>([
   "notConfigured",
   "updateRequired",
 ]);
+const MAX_WORLD_WRITABLE_SAMPLES = 5;
+const MAX_WORLD_WRITABLE_PATH_LENGTH = 32_767;
 
 export async function readWindowsSandboxReadiness(
   appServerClient: WindowsSandboxAppServerClient = new AppServerClient(),
@@ -149,7 +151,12 @@ function readWorldWritableWarningParams(
     return null;
   }
   if (
+    value.samplePaths.length > MAX_WORLD_WRITABLE_SAMPLES ||
     !value.samplePaths.every((path) => typeof path === "string") ||
+    !value.samplePaths.every(
+      (path) =>
+        path.length > 0 && path.length <= MAX_WORLD_WRITABLE_PATH_LENGTH,
+    ) ||
     typeof value.extraCount !== "number" ||
     !Number.isInteger(value.extraCount) ||
     value.extraCount < 0 ||
