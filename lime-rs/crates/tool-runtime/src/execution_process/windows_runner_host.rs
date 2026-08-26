@@ -28,8 +28,8 @@ use windows_sys::Win32::System::Threading::{
     CREATE_UNICODE_ENVIRONMENT, PROCESS_INFORMATION, STARTUPINFOW,
 };
 
-const PIPE_ACCESS_INBOUND: u32 = 0x0000_0001;
 const PIPE_ACCESS_OUTBOUND: u32 = 0x0000_0002;
+const PIPE_ACCESS_DUPLEX: u32 = 0x0000_0003;
 const RUNNER_START_TIMEOUT: Duration = Duration::from_secs(15);
 const RUNNER_POLL_INTERVAL: Duration = Duration::from_millis(5);
 const RUNNER_ERROR_MODE_FLAGS: u32 = 0x0001 | 0x0002;
@@ -52,7 +52,9 @@ pub(super) fn spawn_runner_transport(
     let pipe_in_name = format!(r"\\.\pipe\lime-sandbox-runner-{nonce}-in");
     let pipe_out_name = format!(r"\\.\pipe\lime-sandbox-runner-{nonce}-out");
     let pipe_in = create_named_pipe(&pipe_in_name, PIPE_ACCESS_OUTBOUND, &account_sid)?;
-    let pipe_out = create_named_pipe(&pipe_out_name, PIPE_ACCESS_INBOUND, &account_sid)?;
+    // The host reads this pipe, but needs GENERIC_WRITE to switch the bounded
+    // nonblocking connection handle back to PIPE_WAIT after the runner connects.
+    let pipe_out = create_named_pipe(&pipe_out_name, PIPE_ACCESS_DUPLEX, &account_sid)?;
 
     let runner = resolve_runner_executable()?;
     let runner_args = vec![
