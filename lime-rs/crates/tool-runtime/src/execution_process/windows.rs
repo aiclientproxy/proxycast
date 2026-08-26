@@ -25,6 +25,7 @@ use windows_sys::Win32::Security::{
     TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{ReadFile, WriteFile};
+use windows_sys::Win32::System::Diagnostics::Debug::SetErrorMode;
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicAccountingInformation,
     JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
@@ -71,6 +72,7 @@ const WIN_WORLD_SID: i32 = 1;
 const SE_GROUP_LOGON_ID: u32 = 0xC000_0000;
 const CONTROL_POLL_MILLIS: u32 = 25;
 const JOB_REAPER_POLL_MILLIS: u64 = 250;
+const CHILD_ERROR_MODE_FLAGS: u32 = 0x0001 | 0x0002;
 pub(super) fn start_windows_restricted_execution_process(
     mut request: LocalExecutionRequest,
     sandbox: LocalExecutionSandbox,
@@ -622,6 +624,9 @@ fn spawn_restricted_pipe_process(
     startup.StartupInfo.lpDesktop = desktop.as_mut_ptr();
     startup.lpAttributeList = attributes.as_mut_ptr();
     let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    // Prevent restricted child initialization failures from opening a hidden
+    // Windows error dialog and leaving the process alive indefinitely.
+    let previous_error_mode = unsafe { SetErrorMode(CHILD_ERROR_MODE_FLAGS) };
     let mut created = unsafe {
         CreateProcessAsUserW(
             token,
@@ -671,6 +676,9 @@ fn spawn_restricted_pipe_process(
             unsafe { GetLastError() },
             process_info.dwProcessId
         );
+    }
+    unsafe {
+        SetErrorMode(previous_error_mode);
     }
     if created == 0 {
         return Err(last_os_error("CreateProcessAsUserW"));
@@ -734,6 +742,9 @@ fn spawn_restricted_conpty_process(
     startup.StartupInfo.lpDesktop = desktop.as_mut_ptr();
     startup.lpAttributeList = attributes.as_mut_ptr();
     let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    // Keep restricted child initialization fail-visible instead of allowing a
+    // hidden Windows error dialog to hold the process open.
+    let previous_error_mode = unsafe { SetErrorMode(CHILD_ERROR_MODE_FLAGS) };
     let mut created = unsafe {
         CreateProcessAsUserW(
             token,
@@ -750,6 +761,10 @@ fn spawn_restricted_conpty_process(
         )
     };
     if created == 0 && unsafe { GetLastError() } == ERROR_PRIVILEGE_NOT_HELD {
+        // CreateProcessWithTokenW grants the token access to the inherited
+        // desktop only when lpDesktop is null. The AsUser path above retains
+        // the explicit desktop contract.
+        startup.StartupInfo.lpDesktop = ptr::null_mut();
         created = unsafe {
             CreateProcessWithTokenW(
                 token,
@@ -770,6 +785,9 @@ fn spawn_restricted_conpty_process(
             unsafe { GetLastError() },
             process_info.dwProcessId
         );
+    }
+    unsafe {
+        SetErrorMode(previous_error_mode);
     }
     if created == 0 {
         return Err(last_os_error("CreateProcessAsUserW ConPTY"));
