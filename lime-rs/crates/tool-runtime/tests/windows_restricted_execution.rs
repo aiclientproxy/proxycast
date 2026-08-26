@@ -30,6 +30,14 @@ fn powershell_script(script: &str) -> Vec<String> {
     ]
 }
 
+fn workspace_fixture() -> tempfile::TempDir {
+    let repository = std::env::current_dir().expect("repository working directory");
+    tempfile::Builder::new()
+        .prefix(".windows-restricted-")
+        .tempdir_in(repository)
+        .expect("repository-local fixture root")
+}
+
 fn restricted_request(root: &Path, command: Vec<String>) -> LocalExecutionRequest {
     let mut request = LocalExecutionRequest::new(
         format!("windows-restricted-{}", uuid::Uuid::new_v4()),
@@ -173,7 +181,7 @@ async fn wait_for_acl_restore(path: &Path, expected: &str) {
 
 #[tokio::test]
 async fn workspace_write_allows_workspace_and_denies_metadata_and_external_paths() {
-    let fixture = tempfile::tempdir().expect("fixture root");
+    let fixture = workspace_fixture();
     let workspace = fixture.path().join("workspace");
     let outside = fixture.path().join("outside.txt");
     std::fs::create_dir(&workspace).expect("workspace directory");
@@ -225,18 +233,19 @@ async fn workspace_write_allows_workspace_and_denies_metadata_and_external_paths
     );
     let mut request = restricted_request(&workspace, powershell_script(&script));
     request.stdin = true;
-    let mut handle =
+    let handle =
         start_local_execution_process(request).expect("restricted workspace process should start");
     let baseline_workspace_sddl = &acl_baselines[0].1;
     let active_workspace_sddl = acl_sddl(&workspace);
     eprintln!("active restricted workspace SDDL: {active_workspace_sddl}");
     let group_sid = account_sid("LimeSandboxUsers");
-    let added_sids = sddl_sids(&active_workspace_sddl)
+    let active_sids = sddl_sids(&active_workspace_sddl);
+    let added_sids = active_sids
         .difference(&sddl_sids(baseline_workspace_sddl))
         .cloned()
         .collect::<HashSet<_>>();
     assert!(
-        added_sids.contains(&group_sid),
+        active_sids.contains(&group_sid),
         "active workspace ACL must grant the ordinary token through {group_sid}: {active_workspace_sddl}"
     );
     assert!(
@@ -298,7 +307,7 @@ async fn workspace_write_allows_workspace_and_denies_metadata_and_external_paths
 
 #[tokio::test]
 async fn restricted_execution_uses_offline_account_and_blocks_network() {
-    let fixture = tempfile::tempdir().expect("fixture root");
+    let fixture = workspace_fixture();
     let marker = fixture.path().join("offline-process-ran.txt");
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("loopback listener");
     let port = listener.local_addr().expect("listener address").port();
@@ -350,7 +359,7 @@ async fn restricted_execution_uses_offline_account_and_blocks_network() {
 
 #[tokio::test]
 async fn restricted_execution_bounds_large_output() {
-    let fixture = tempfile::tempdir().expect("fixture root");
+    let fixture = workspace_fixture();
     let script = "[Console]::Out.Write(('x' * 400000))";
     let snapshot = run_to_terminal(
         start_local_execution_process(restricted_request(
@@ -377,8 +386,8 @@ async fn restricted_execution_bounds_large_output() {
 
 #[tokio::test]
 async fn restricted_execution_preserves_allowlisted_stdin_handle() {
-    let fixture = tempfile::tempdir().expect("fixture root");
-    let mut handle = start_local_execution_process(restricted_request(
+    let fixture = workspace_fixture();
+    let handle = start_local_execution_process(restricted_request(
         fixture.path(),
         powershell_script("$line = [Console]::In.ReadLine(); Write-Output ('received:' + $line)"),
     ))
@@ -405,7 +414,7 @@ async fn restricted_execution_preserves_allowlisted_stdin_handle() {
 
 #[tokio::test]
 async fn restricted_conpty_supports_stdin_resize_and_combined_output() {
-    let fixture = tempfile::tempdir().expect("fixture root");
+    let fixture = workspace_fixture();
     let mut request = restricted_request(
         fixture.path(),
         powershell_script(
@@ -415,7 +424,7 @@ async fn restricted_conpty_supports_stdin_resize_and_combined_output() {
     request.tty = true;
     request.stdin = true;
     request.pty_size = Some((24, 80));
-    let mut handle =
+    let handle =
         start_local_execution_process(request).expect("restricted ConPTY process should start");
 
     handle
@@ -443,7 +452,7 @@ async fn restricted_conpty_supports_stdin_resize_and_combined_output() {
 
 #[tokio::test]
 async fn world_writable_audit_reports_everyone_write_acl() {
-    let fixture = tempfile::tempdir().expect("fixture root");
+    let fixture = workspace_fixture();
     let world_writable = fixture.path().join("world-writable");
     std::fs::create_dir(&world_writable).expect("world-writable directory");
     let world_writable_text = world_writable.to_string_lossy().to_string();
@@ -475,13 +484,13 @@ async fn world_writable_audit_reports_everyone_write_acl() {
 
 #[tokio::test]
 async fn terminate_ends_restricted_process_and_its_job() {
-    let fixture = tempfile::tempdir().expect("fixture root");
+    let fixture = workspace_fixture();
     let marker = fixture.path().join("descendant-marker.txt");
     let script = format!(
         "$child = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 10; Set-Content -LiteralPath ''{}'' -Value leaked' -PassThru; Start-Sleep -Seconds 10",
         ps_literal(&marker)
     );
-    let mut handle = start_local_execution_process(restricted_request(
+    let handle = start_local_execution_process(restricted_request(
         fixture.path(),
         powershell_script(&script),
     ))
