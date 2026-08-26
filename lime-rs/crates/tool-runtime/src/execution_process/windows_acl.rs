@@ -74,11 +74,12 @@ pub(super) fn build_acl_plan(
     }
     read_grants.sort();
     read_grants.dedup();
-    write_grants = minimal_roots(write_grants);
+    write_grants.sort();
+    write_grants.dedup();
     access_denies.sort();
     access_denies.dedup();
     write_grants.retain(|path| access_denies.binary_search(path).is_err());
-    read_grants.retain(|path| !write_grants.iter().any(|root| path.starts_with(root)));
+    read_grants.retain(|path| write_grants.binary_search(path).is_err());
     read_grants.retain(|path| access_denies.binary_search(path).is_err());
     write_denies.sort();
     write_denies.dedup();
@@ -103,26 +104,6 @@ fn windows_temp_write_roots(environment: &HashMap<String, String>) -> io::Result
         .filter(|path| path.is_absolute())
         .map(|path| canonical_existing(&path))
         .collect()
-}
-
-fn minimal_roots(mut roots: Vec<PathBuf>) -> Vec<PathBuf> {
-    roots.sort_by(|left, right| {
-        left.components()
-            .count()
-            .cmp(&right.components().count())
-            .then_with(|| left.cmp(right))
-    });
-    let mut minimal = Vec::new();
-    for root in roots {
-        if !minimal
-            .iter()
-            .any(|parent: &PathBuf| root.starts_with(parent))
-        {
-            minimal.push(root);
-        }
-    }
-    minimal.sort();
-    minimal
 }
 
 fn resolve_permission_path(path: &FileSystemPath, cwd: &Path) -> io::Result<Option<PathBuf>> {
@@ -240,43 +221,44 @@ impl AclLease {
         let mut lease = Self {
             snapshots: Vec::new(),
         };
+        for path in plan
+            .read_grants
+            .iter()
+            .chain(&plan.write_grants)
+            .chain(&plan.write_denies)
+            .chain(&plan.access_denies)
+        {
+            if let Err(error) = lease.capture(path) {
+                return Err(lease.rollback_after(error));
+            }
+        }
         for path in plan.read_grants {
-            if let Err(error) = lease.capture(&path).and_then(|()| {
-                grant_access(
-                    &path,
-                    sandbox_group_sid,
-                    capability_sid,
-                    FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
-                )
-            }) {
+            if let Err(error) = grant_access(
+                &path,
+                sandbox_group_sid,
+                capability_sid,
+                FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
+            ) {
                 return Err(lease.rollback_after(error));
             }
         }
         for path in plan.write_grants {
-            if let Err(error) = lease.capture(&path).and_then(|()| {
-                grant_access(
-                    &path,
-                    sandbox_group_sid,
-                    capability_sid,
-                    FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE,
-                )
-            }) {
+            if let Err(error) = grant_access(
+                &path,
+                sandbox_group_sid,
+                capability_sid,
+                FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE,
+            ) {
                 return Err(lease.rollback_after(error));
             }
         }
         for path in plan.write_denies {
-            if let Err(error) = lease
-                .capture(&path)
-                .and_then(|()| deny_write_access(&path, capability_sid))
-            {
+            if let Err(error) = deny_write_access(&path, capability_sid) {
                 return Err(lease.rollback_after(error));
             }
         }
         for path in plan.access_denies {
-            if let Err(error) = lease
-                .capture(&path)
-                .and_then(|()| deny_access(&path, sandbox_group_sid, capability_sid))
-            {
+            if let Err(error) = deny_access(&path, sandbox_group_sid, capability_sid) {
                 return Err(lease.rollback_after(error));
             }
         }
@@ -620,7 +602,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_acl_plan_grants_windows_temp_roots() {
+    fn workspace_acl_plan_keeps_nested_workspace_and_windows_temp_roots() {
         let root = tempfile::tempdir().expect("fixture root");
         let workspace = root.path().join("workspace");
         std::fs::create_dir(&workspace).expect("workspace directory");
@@ -645,7 +627,10 @@ mod tests {
 
         assert_eq!(
             plan.write_grants,
-            vec![std::fs::canonicalize(root.path()).unwrap()]
+            vec![
+                std::fs::canonicalize(root.path()).unwrap(),
+                std::fs::canonicalize(&workspace).unwrap(),
+            ]
         );
     }
 }
