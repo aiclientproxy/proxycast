@@ -38,7 +38,7 @@ use windows_sys::Win32::System::Threading::{
     CreateProcessAsUserW, CreateProcessWithTokenW, GetCurrentProcess, GetExitCodeProcess,
     OpenProcessToken, ResumeThread, WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED,
     CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, LOGON_WITH_PROFILE,
-    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
+    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
 };
 
 #[path = "windows_acl.rs"]
@@ -646,26 +646,30 @@ fn spawn_restricted_pipe_process(
         )
     };
     if created == 0 && unsafe { GetLastError() } == ERROR_PRIVILEGE_NOT_HELD {
-        let mut fallback_startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
-        fallback_startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
-        fallback_startup.dwFlags = STARTF_USESTDHANDLES;
-        fallback_startup.hStdInput = stdin_read.raw();
-        fallback_startup.hStdOutput = stdout_write.raw();
-        fallback_startup.hStdError = stderr_write.raw();
+        let mut fallback_startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
+        fallback_startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+        fallback_startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        fallback_startup.StartupInfo.hStdInput = stdin_read.raw();
+        fallback_startup.StartupInfo.hStdOutput = stdout_write.raw();
+        fallback_startup.StartupInfo.hStdError = stderr_write.raw();
         // CreateProcessWithTokenW grants the token access to the inherited
         // window station/desktop only when lpDesktop is null. The explicit
         // CreateProcessAsUserW path keeps the current desktop contract.
-        fallback_startup.lpDesktop = ptr::null_mut();
+        fallback_startup.StartupInfo.lpDesktop = ptr::null_mut();
+        fallback_startup.lpAttributeList = attributes.as_mut_ptr();
         created = unsafe {
             CreateProcessWithTokenW(
                 token,
                 LOGON_WITH_PROFILE,
                 ptr::null(),
                 command_line.as_mut_ptr(),
-                CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | CREATE_NO_WINDOW,
+                CREATE_UNICODE_ENVIRONMENT
+                    | CREATE_SUSPENDED
+                    | CREATE_NO_WINDOW
+                    | EXTENDED_STARTUPINFO_PRESENT,
                 env_block.as_mut_ptr() as *mut c_void,
                 cwd.as_ptr(),
-                &fallback_startup,
+                &fallback_startup.StartupInfo,
                 &mut process_info,
             )
         };
