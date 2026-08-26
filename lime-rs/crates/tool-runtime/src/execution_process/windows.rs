@@ -660,6 +660,13 @@ fn spawn_restricted_pipe_process(
                 &mut process_info,
             )
         };
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "CreateProcessWithTokenW pipe result={} error={} pid={}",
+            created,
+            unsafe { GetLastError() },
+            process_info.dwProcessId
+        );
     }
     if created == 0 {
         return Err(last_os_error("CreateProcessAsUserW"));
@@ -669,7 +676,17 @@ fn spawn_restricted_pipe_process(
     if unsafe { AssignProcessToJobObject(job.raw(), process.raw()) } == 0 {
         return Err(last_os_error("AssignProcessToJobObject"));
     }
-    if unsafe { ResumeThread(thread.raw()) } == u32::MAX {
+    let resume_result = unsafe { ResumeThread(thread.raw()) };
+    #[cfg(debug_assertions)]
+    {
+        let mut exit_code = 0;
+        let exit_result = unsafe { GetExitCodeProcess(process.raw(), &mut exit_code) };
+        eprintln!(
+            "restricted pipe process pid={} resume={} exit_result={} exit_code={}",
+            process_info.dwProcessId, resume_result, exit_result, exit_code
+        );
+    }
+    if resume_result == u32::MAX {
         unsafe {
             TerminateJobObject(job.raw(), 1);
         }
@@ -742,6 +759,13 @@ fn spawn_restricted_conpty_process(
                 &mut process_info,
             )
         };
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "CreateProcessWithTokenW conpty result={} error={} pid={}",
+            created,
+            unsafe { GetLastError() },
+            process_info.dwProcessId
+        );
     }
     if created == 0 {
         return Err(last_os_error("CreateProcessAsUserW ConPTY"));
