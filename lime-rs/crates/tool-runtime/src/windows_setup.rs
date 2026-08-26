@@ -12,9 +12,9 @@ mod accounts;
 
 #[cfg(windows)]
 use accounts::{
-    ensure_local_account, ensure_local_group, ensure_local_group_member,
-    ensure_sandbox_accounts_null_device_access, validate_sandbox_accounts_null_device_access,
-    validate_windows_sandbox_group_membership,
+    ensure_builtin_users_group_member, ensure_local_account, ensure_local_group,
+    ensure_local_group_member, ensure_sandbox_accounts_null_device_access,
+    validate_sandbox_accounts_null_device_access, validate_windows_sandbox_group_membership,
 };
 #[cfg(windows)]
 pub(crate) use accounts::{
@@ -144,6 +144,8 @@ pub fn run_windows_sandbox_setup(
         WINDOWS_SANDBOX_OFFLINE_USERNAME,
     )?;
     ensure_local_group_member(WINDOWS_SANDBOX_USERS_GROUP, WINDOWS_SANDBOX_ONLINE_USERNAME)?;
+    ensure_builtin_users_group_member(WINDOWS_SANDBOX_OFFLINE_USERNAME)?;
+    ensure_builtin_users_group_member(WINDOWS_SANDBOX_ONLINE_USERNAME)?;
     ensure_sandbox_accounts_null_device_access()?;
 
     let offline_blob = dpapi_protect(offline_password.as_bytes())?;

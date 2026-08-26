@@ -331,6 +331,11 @@ pub(super) fn ensure_local_group_member(group: &str, account: &str) -> io::Resul
     }
 }
 
+pub(super) fn ensure_builtin_users_group_member(account: &str) -> io::Result<()> {
+    let group = builtin_users_group_name()?;
+    ensure_local_group_member(&group, account)
+}
+
 pub(crate) fn verify_windows_sandbox_group_membership(account: &str) -> io::Result<()> {
     if !matches!(
         account,
@@ -349,13 +354,92 @@ pub(super) fn validate_windows_sandbox_group_membership(account: &str) -> Result
         .map_err(|error| format!("sandbox account SID validation failed: {error}"))?;
     windows_sandbox_users_group_sid()
         .map_err(|error| format!("sandbox users group validation failed: {error}"))?;
-    if local_group_contains_sid(WINDOWS_SANDBOX_USERS_GROUP, &account_sid)? {
-        Ok(())
-    } else {
-        Err(format!(
+    if !local_group_contains_sid(WINDOWS_SANDBOX_USERS_GROUP, &account_sid)? {
+        return Err(format!(
             "Windows sandbox account {account} is not a member of {WINDOWS_SANDBOX_USERS_GROUP}"
-        ))
+        ));
     }
+    let builtin_users = builtin_users_group_name()
+        .map_err(|error| format!("Windows built-in Users group lookup failed: {error}"))?;
+    if !local_group_contains_sid(&builtin_users, &account_sid)? {
+        return Err(format!(
+            "Windows sandbox account {account} is not a member of {builtin_users}"
+        ));
+    }
+    Ok(())
+}
+
+fn builtin_users_group_name() -> io::Result<String> {
+    use std::ffi::c_void;
+    use windows_sys::Win32::Foundation::{GetLastError, ERROR_INSUFFICIENT_BUFFER};
+    use windows_sys::Win32::Security::{
+        CreateWellKnownSid, LookupAccountSidW, WinBuiltinUsersSid, SID_NAME_USE,
+    };
+
+    let mut sid_size = 0;
+    unsafe {
+        CreateWellKnownSid(
+            WinBuiltinUsersSid,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut sid_size,
+        );
+    }
+    if sid_size == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let mut sid = vec![0u8; sid_size as usize];
+    if unsafe {
+        CreateWellKnownSid(
+            WinBuiltinUsersSid,
+            std::ptr::null_mut(),
+            sid.as_mut_ptr() as *mut c_void,
+            &mut sid_size,
+        )
+    } == 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+
+    let mut name_len = 0;
+    let mut domain_len = 0;
+    let mut sid_type: SID_NAME_USE = 0;
+    unsafe {
+        LookupAccountSidW(
+            std::ptr::null(),
+            sid.as_ptr() as *mut c_void,
+            std::ptr::null_mut(),
+            &mut name_len,
+            std::ptr::null_mut(),
+            &mut domain_len,
+            &mut sid_type,
+        );
+    }
+    if unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER || name_len == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let mut name = vec![0u16; name_len as usize];
+    let mut domain = vec![0u16; domain_len as usize];
+    if unsafe {
+        LookupAccountSidW(
+            std::ptr::null(),
+            sid.as_ptr() as *mut c_void,
+            name.as_mut_ptr(),
+            &mut name_len,
+            domain.as_mut_ptr(),
+            &mut domain_len,
+            &mut sid_type,
+        )
+    } == 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    let length = name
+        .iter()
+        .position(|value| *value == 0)
+        .unwrap_or(name.len());
+    String::from_utf16(&name[..length])
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Users group name is not UTF-16"))
 }
 
 pub(crate) fn windows_sandbox_users_group_sid() -> io::Result<String> {
