@@ -180,8 +180,6 @@ pub(super) fn start_windows_restricted_execution_process(
             job,
             stdin_write,
             pseudoconsole,
-            stdout_reader,
-            stderr_reader,
             acl_lease,
             process,
             state_tx,
