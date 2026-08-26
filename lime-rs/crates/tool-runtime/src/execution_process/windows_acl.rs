@@ -6,19 +6,23 @@ use app_server_protocol::protocol::v2::{
 };
 use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
-use std::thread;
-use std::time::{Duration, Instant};
 use windows_sys::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
+use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+use windows_sys::Win32::Security::Authorization::{
+    GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW, DENY_ACCESS, EXPLICIT_ACCESS_W,
+    SET_ACCESS, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+};
 use windows_sys::Win32::Security::{
     GetFileSecurityW, GetSecurityDescriptorControl, SetFileSecurityW, DACL_SECURITY_INFORMATION,
     PROTECTED_DACL_SECURITY_INFORMATION, SE_DACL_PROTECTED, UNPROTECTED_DACL_SECURITY_INFORMATION,
 };
 use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+use windows_sys::Win32::Storage::FileSystem::{
+    DELETE, FILE_ALL_ACCESS, FILE_DELETE_CHILD, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ,
+    FILE_GENERIC_WRITE,
+};
 
 const PROTECTED_METADATA_NAMES: [&str; 3] = [".git", ".codex", ".agents"];
-const ICACLS_TIMEOUT: Duration = Duration::from_secs(15);
-
 #[derive(Debug)]
 pub(super) struct AclPlan {
     read_grants: Vec<PathBuf>,
@@ -202,23 +206,33 @@ impl AclLease {
         };
         for path in plan.read_grants {
             if let Err(error) = lease.capture(&path).and_then(|()| {
-                grant_access(&path, sandbox_group_sid, capability_sid, "(OI)(CI)(RX)")
+                grant_access(
+                    &path,
+                    sandbox_group_sid,
+                    capability_sid,
+                    FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
+                )
             }) {
                 return Err(lease.rollback_after(error));
             }
         }
         for path in plan.write_grants {
             if let Err(error) = lease.capture(&path).and_then(|()| {
-                grant_access(&path, sandbox_group_sid, capability_sid, "(OI)(CI)(RX,W,D)")
+                grant_access(
+                    &path,
+                    sandbox_group_sid,
+                    capability_sid,
+                    FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE,
+                )
             }) {
                 return Err(lease.rollback_after(error));
             }
         }
         for path in plan.write_denies {
-            if let Err(error) = lease.capture(&path).and_then(|()| {
-                let deny = format!("*{capability_sid}:(OI)(CI)(W,D,DC)");
-                run_icacls(&path, &["/deny", &deny, "/C", "/Q"])
-            }) {
+            if let Err(error) = lease
+                .capture(&path)
+                .and_then(|()| deny_write_access(&path, capability_sid))
+            {
                 return Err(lease.rollback_after(error));
             }
         }
@@ -349,81 +363,122 @@ fn grant_access(
     path: &Path,
     sandbox_group_sid: &str,
     capability_sid: &str,
-    permissions: &str,
+    permissions: u32,
 ) -> io::Result<()> {
-    let group_grant = format!("*{sandbox_group_sid}:{permissions}");
-    run_icacls(path, &["/grant:r", &group_grant, "/C", "/Q"])?;
-    let capability_grant = format!("*{capability_sid}:{permissions}");
-    run_icacls(path, &["/grant:r", &capability_grant, "/C", "/Q"])
+    let group_sid = LocalSid::parse(sandbox_group_sid)?;
+    let capability_sid = LocalSid::parse(capability_sid)?;
+    set_acl_entries(
+        path,
+        &[
+            explicit_access(group_sid.raw(), permissions, SET_ACCESS),
+            explicit_access(capability_sid.raw(), permissions, SET_ACCESS),
+        ],
+    )
 }
 
 fn deny_access(path: &Path, sandbox_group_sid: &str, capability_sid: &str) -> io::Result<()> {
-    let group_deny = format!("*{sandbox_group_sid}:(OI)(CI)(F)");
-    run_icacls(path, &["/deny", &group_deny, "/C", "/Q"])?;
-    let capability_deny = format!("*{capability_sid}:(OI)(CI)(F)");
-    run_icacls(path, &["/deny", &capability_deny, "/C", "/Q"])
+    let group_sid = LocalSid::parse(sandbox_group_sid)?;
+    let capability_sid = LocalSid::parse(capability_sid)?;
+    set_acl_entries(
+        path,
+        &[
+            explicit_access(group_sid.raw(), FILE_ALL_ACCESS, DENY_ACCESS),
+            explicit_access(capability_sid.raw(), FILE_ALL_ACCESS, DENY_ACCESS),
+        ],
+    )
 }
 
-fn run_icacls(path: &Path, args: &[&str]) -> io::Result<()> {
-    let mut child = Command::new(icacls_path()?)
-        .arg(path)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
-    let status = wait_for_icacls(&mut child, path, ICACLS_TIMEOUT)?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other(format!(
-            "icacls failed for {} with status {status}",
+fn deny_write_access(path: &Path, capability_sid: &str) -> io::Result<()> {
+    let capability_sid = LocalSid::parse(capability_sid)?;
+    set_acl_entries(
+        path,
+        &[explicit_access(
+            capability_sid.raw(),
+            FILE_GENERIC_WRITE | DELETE | FILE_DELETE_CHILD,
+            DENY_ACCESS,
+        )],
+    )
+}
+
+fn explicit_access(sid: *mut c_void, permissions: u32, mode: i32) -> EXPLICIT_ACCESS_W {
+    EXPLICIT_ACCESS_W {
+        grfAccessPermissions: permissions,
+        grfAccessMode: mode,
+        grfInheritance: 0x3, // CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE
+        Trustee: TRUSTEE_W {
+            pMultipleTrustee: std::ptr::null_mut(),
+            MultipleTrusteeOperation: 0,
+            TrusteeForm: TRUSTEE_IS_SID,
+            TrusteeType: TRUSTEE_IS_UNKNOWN,
+            ptstrName: sid as *mut u16,
+        },
+    }
+}
+
+fn set_acl_entries(path: &Path, entries: &[EXPLICIT_ACCESS_W]) -> io::Result<()> {
+    let path_w = to_wide(path.as_os_str());
+    let mut security_descriptor = ptr::null_mut();
+    let mut dacl = ptr::null_mut();
+    let result = unsafe {
+        GetNamedSecurityInfoW(
+            path_w.as_ptr(),
+            1, // SE_FILE_OBJECT
+            DACL_SECURITY_INFORMATION,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &mut dacl,
+            ptr::null_mut(),
+            &mut security_descriptor,
+        )
+    };
+    if result != ERROR_SUCCESS {
+        return Err(io::Error::other(format!(
+            "GetNamedSecurityInfoW failed for {}: {result}",
             path.display()
-        )))
+        )));
     }
-}
 
-fn icacls_path() -> io::Result<PathBuf> {
-    let system_root = std::env::var_os("SystemRoot")
-        .or_else(|| std::env::var_os("windir"))
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "Windows sandbox cannot locate SystemRoot for icacls.exe",
-            )
-        })?;
-    let path = PathBuf::from(system_root)
-        .join("System32")
-        .join("icacls.exe");
-    if !path.is_file() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("Windows sandbox cannot locate {}", path.display()),
-        ));
+    let mut new_dacl = ptr::null_mut();
+    let result =
+        unsafe { SetEntriesInAclW(entries.len() as u32, entries.as_ptr(), dacl, &mut new_dacl) };
+    if result != ERROR_SUCCESS {
+        unsafe {
+            if !security_descriptor.is_null() {
+                LocalFree(security_descriptor as HLOCAL);
+            }
+        }
+        return Err(io::Error::other(format!(
+            "SetEntriesInAclW failed for {}: {result}",
+            path.display()
+        )));
     }
-    Ok(path)
-}
 
-fn wait_for_icacls(child: &mut Child, path: &Path, timeout: Duration) -> io::Result<ExitStatus> {
-    let started = Instant::now();
-    loop {
-        if let Some(status) = child.try_wait()? {
-            return Ok(status);
+    let result = unsafe {
+        SetNamedSecurityInfoW(
+            path_w.as_ptr() as *mut u16,
+            1, // SE_FILE_OBJECT
+            DACL_SECURITY_INFORMATION,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            new_dacl,
+            ptr::null_mut(),
+        )
+    };
+    unsafe {
+        if !new_dacl.is_null() {
+            LocalFree(new_dacl as HLOCAL);
         }
-        if started.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                format!(
-                    "icacls timed out for {} after {:?}",
-                    path.display(),
-                    timeout
-                ),
-            ));
+        if !security_descriptor.is_null() {
+            LocalFree(security_descriptor as HLOCAL);
         }
-        thread::sleep(Duration::from_millis(25));
     }
+    if result != ERROR_SUCCESS {
+        return Err(io::Error::other(format!(
+            "SetNamedSecurityInfoW failed for {}: {result}",
+            path.display()
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -515,20 +570,5 @@ mod tests {
     fn ordinary_existing_paths_are_not_reparse_points() {
         let root = tempfile::tempdir().expect("workspace");
         reject_reparse_components(root.path()).expect("ordinary path should be accepted");
-    }
-
-    #[test]
-    fn icacls_wait_returns_completed_child_status() {
-        let mut child = Command::new("cmd.exe")
-            .args(["/C", "exit", "0"])
-            .spawn()
-            .expect("cmd should start");
-        let status = wait_for_icacls(
-            &mut child,
-            Path::new("C:\\workspace"),
-            Duration::from_secs(2),
-        )
-        .expect("completed child should return status");
-        assert!(status.success());
     }
 }
