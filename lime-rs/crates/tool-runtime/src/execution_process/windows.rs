@@ -42,6 +42,8 @@ mod windows_attr;
 mod windows_audit;
 #[path = "windows_conpty.rs"]
 mod windows_conpty;
+#[path = "windows_desktop.rs"]
+mod windows_desktop;
 #[path = "windows_job.rs"]
 mod windows_job;
 #[path = "windows_null.rs"]
@@ -62,6 +64,7 @@ use windows_acl::{build_acl_plan, AclLease};
 use windows_attr::ProcessAttributeList;
 pub(crate) use windows_audit::audit_world_writable;
 use windows_conpty::RestrictedConpty;
+use windows_desktop::LaunchDesktop;
 use windows_job::create_kill_on_close_job;
 #[cfg(test)]
 use windows_job::preserve_job_descendants;
@@ -528,6 +531,7 @@ struct SpawnedRestrictedProcess {
     stdout_read: OwnedHandle,
     stderr_read: Option<OwnedHandle>,
     pseudoconsole: Option<RestrictedConpty>,
+    desktop: LaunchDesktop,
 }
 
 fn spawn_restricted_process(
@@ -554,7 +558,7 @@ fn spawn_restricted_pipe_process(
     let mut command_line = to_wide(&command_line_text);
     let mut env_block = environment_block(&request.env)?;
     let cwd = to_wide(cwd.as_os_str());
-    let mut desktop = to_wide("winsta0\\default");
+    let mut desktop = LaunchDesktop::prepare()?;
     let mut attributes = ProcessAttributeList::new(2)?;
     attributes.set_handle_list(&[stdin_read.raw(), stdout_write.raw(), stderr_write.raw()])?;
     attributes.set_job(job.raw())?;
@@ -564,7 +568,7 @@ fn spawn_restricted_pipe_process(
     startup.StartupInfo.hStdInput = stdin_read.raw();
     startup.StartupInfo.hStdOutput = stdout_write.raw();
     startup.StartupInfo.hStdError = stderr_write.raw();
-    startup.StartupInfo.lpDesktop = desktop.as_mut_ptr();
+    startup.StartupInfo.lpDesktop = desktop.startup_name();
     startup.lpAttributeList = attributes.as_mut_ptr();
     let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     let created = unsafe {
@@ -599,6 +603,7 @@ fn spawn_restricted_pipe_process(
         stdout_read,
         stderr_read: Some(stderr_read),
         pseudoconsole: None,
+        desktop,
     })
 }
 
@@ -614,7 +619,7 @@ fn spawn_restricted_conpty_process(
     let mut command_line = to_wide(&command_line_text);
     let mut env_block = environment_block(&request.env)?;
     let cwd = to_wide(cwd.as_os_str());
-    let mut desktop = to_wide("winsta0\\default");
+    let mut desktop = LaunchDesktop::prepare()?;
     let mut attributes = ProcessAttributeList::new(2)?;
     attributes.set_pseudoconsole(pseudoconsole.raw())?;
     attributes.set_job(job.raw())?;
@@ -624,7 +629,7 @@ fn spawn_restricted_conpty_process(
     startup.StartupInfo.hStdInput = INVALID_HANDLE_VALUE;
     startup.StartupInfo.hStdOutput = INVALID_HANDLE_VALUE;
     startup.StartupInfo.hStdError = INVALID_HANDLE_VALUE;
-    startup.StartupInfo.lpDesktop = desktop.as_mut_ptr();
+    startup.StartupInfo.lpDesktop = desktop.startup_name();
     startup.lpAttributeList = attributes.as_mut_ptr();
     let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     let created = unsafe {
@@ -656,6 +661,7 @@ fn spawn_restricted_conpty_process(
         stdout_read,
         stderr_read: None,
         pseudoconsole: Some(pseudoconsole),
+        desktop,
     })
 }
 

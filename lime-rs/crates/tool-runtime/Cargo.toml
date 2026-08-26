@@ -65,6 +65,7 @@ tempfile.workspace = true
 windows.workspace = true
 windows-sys = { version = "0.52", features = [
     "Win32_Foundation",
+    "Win32_Graphics_Gdi",
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_Security_Cryptography",
@@ -78,5 +79,6 @@ windows-sys = { version = "0.52", features = [
     "Win32_System_JobObjects",
     "Win32_System_Pipes",
     "Win32_System_Rpc",
+    "Win32_System_StationsAndDesktops",
     "Win32_System_Threading",
 ] }

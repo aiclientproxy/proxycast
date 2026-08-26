@@ -101,6 +101,7 @@ fn run_spawned_process(
         stdout_read,
         stderr_read,
         pseudoconsole,
+        desktop,
     } = spawned;
     let process_id = unsafe { GetProcessId(process.raw()) };
     write_locked(&pipe_write, RunnerMessage::Ready { process_id })?;
@@ -167,6 +168,7 @@ fn run_spawned_process(
     }
     drop(process_thread);
     drop(process);
+    drop(desktop);
     write_locked(
         &pipe_write,
         RunnerMessage::Exit {
