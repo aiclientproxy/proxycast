@@ -92,6 +92,8 @@ npm run test:rust:integration -- -p <crate> --test <target>
 
 Agent/runtime 核心行为需要跨 owner 时，不把所有 case 堆进实现文件的 inline unit tests；使用专用测试模块或 integration target。`cargo nextest` 只在工具链、archive 和 CI shard 稳定后作为执行加速器，不改变本地 related-first 规则。
 
+Windows restricted execution 改动必须把 `windows-sandbox-runner.exe` 与 `app-server.exe`、`code-mode-host.exe`、`windows-sandbox-setup.exe` 成组构建。Electron Windows resources 和 `app-server.release.json` 必须包含 runner 及其 `windowsSandboxRunnerSha256`，`verify-package-resources` 对缺失或 digest 漂移 fail closed。源码/静态门禁不替代 `windows-restricted-execution-evidence-v3` 七项真实 Windows/MSVC 矩阵；矩阵通过前 readiness 保持 `Planned/enforced=false`。
+
 ## Gate A 与 Gate B
 
 Gate A 使用可控数据验证 Renderer projection、DOM、交互、错误文案和五语言资源。它可以使用显式 fixture，但证据必须标明 `test-only`。

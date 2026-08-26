@@ -18,6 +18,10 @@ path = "src/bin/code-mode-host.rs"
 name = "windows-sandbox-setup"
 path = "src/bin/windows-sandbox-setup.rs"
 
+[[bin]]
+name = "windows-sandbox-runner"
+path = "src/bin/windows-sandbox-runner.rs"
+
 [dependencies]
 agent-protocol.workspace = true
 app-server-protocol.workspace = true

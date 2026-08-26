@@ -8,9 +8,8 @@ use std::ptr;
 use std::thread;
 use std::time::Duration;
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_PRIVILEGE_NOT_HELD,
-    ERROR_SUCCESS, HANDLE, HANDLE_FLAG_INHERIT, HLOCAL, INVALID_HANDLE_VALUE, LUID, WAIT_OBJECT_0,
-    WAIT_TIMEOUT,
+    CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_SUCCESS, HANDLE,
+    HANDLE_FLAG_INHERIT, HLOCAL, INVALID_HANDLE_VALUE, LUID,
 };
 use windows_sys::Win32::Security::Authorization::{
     ConvertStringSidToSidW, SetEntriesInAclW, EXPLICIT_ACCESS_W, GRANT_ACCESS, TRUSTEE_IS_SID,
@@ -18,27 +17,23 @@ use windows_sys::Win32::Security::Authorization::{
 };
 use windows_sys::Win32::Security::{
     AdjustTokenPrivileges, CopySid, CreateRestrictedToken, CreateWellKnownSid, GetLengthSid,
-    GetTokenInformation, LogonUserW, LookupPrivilegeValueW, SetTokenInformation, TokenDefaultDacl,
-    TokenGroups, TokenUser, ACL, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT,
-    SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT, TOKEN_ADJUST_PRIVILEGES,
-    TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_PRIVILEGES, TOKEN_QUERY,
-    TOKEN_USER,
+    GetTokenInformation, LookupPrivilegeValueW, SetTokenInformation, TokenDefaultDacl, TokenGroups,
+    TokenUser, ACL, SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT,
+    TOKEN_ADJUST_PRIVILEGES, TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE,
+    TOKEN_PRIVILEGES, TOKEN_QUERY, TOKEN_USER,
 };
-use windows_sys::Win32::Storage::FileSystem::{ReadFile, WriteFile};
-use windows_sys::Win32::System::Diagnostics::Debug::SetErrorMode;
+use windows_sys::Win32::Storage::FileSystem::WriteFile;
 use windows_sys::Win32::System::JobObjects::{
-    AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicAccountingInformation,
-    JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
-    TerminateJobObject, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
-    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    CreateJobObjectW, JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
+    QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
+    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
-    CreateProcessAsUserW, CreateProcessWithTokenW, GetCurrentProcess, GetExitCodeProcess,
-    OpenProcessToken, ResumeThread, WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED,
-    CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, LOGON_WITH_PROFILE,
-    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
+    CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken, CREATE_NO_WINDOW,
+    CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION,
+    STARTF_USESTDHANDLES, STARTUPINFOEXW,
 };
 
 #[path = "windows_acl.rs"]
@@ -51,18 +46,25 @@ mod windows_audit;
 mod windows_conpty;
 #[path = "windows_job.rs"]
 mod windows_job;
+#[path = "windows_runner_child.rs"]
+mod windows_runner_child;
+#[path = "windows_runner_host.rs"]
+mod windows_runner_host;
+#[path = "windows_runner_protocol.rs"]
+mod windows_runner_protocol;
+#[path = "windows_runner_supervisor.rs"]
+mod windows_runner_supervisor;
 use crate::windows_setup::{
-    read_windows_sandbox_password, verify_windows_sandbox_group_membership,
-    windows_sandbox_users_group_sid, WINDOWS_SANDBOX_OFFLINE_USERNAME,
-    WINDOWS_SANDBOX_ONLINE_USERNAME,
+    verify_windows_sandbox_group_membership, windows_sandbox_users_group_sid,
+    WINDOWS_SANDBOX_OFFLINE_USERNAME, WINDOWS_SANDBOX_ONLINE_USERNAME,
 };
 use windows_acl::{build_acl_plan, AclLease};
 use windows_attr::ProcessAttributeList;
 pub(crate) use windows_audit::audit_world_writable;
 use windows_conpty::RestrictedConpty;
+use windows_job::create_kill_on_close_job;
 #[cfg(test)]
 use windows_job::preserve_job_descendants;
-use windows_job::{create_kill_on_close_job, read_pipe_stream, supervise_restricted_process};
 
 const DISABLE_MAX_PRIVILEGE: u32 = 0x01;
 const LUA_TOKEN: u32 = 0x04;
@@ -71,8 +73,10 @@ const GENERIC_ALL: u32 = 0x1000_0000;
 const WIN_WORLD_SID: i32 = 1;
 const SE_GROUP_LOGON_ID: u32 = 0xC000_0000;
 const CONTROL_POLL_MILLIS: u32 = 25;
-const JOB_REAPER_POLL_MILLIS: u64 = 250;
-const CHILD_ERROR_MODE_FLAGS: u32 = 0x0001 | 0x0002;
+
+pub(super) fn run_windows_sandbox_runner() -> io::Result<()> {
+    windows_runner_child::run()
+}
 pub(super) fn start_windows_restricted_execution_process(
     mut request: LocalExecutionRequest,
     sandbox: LocalExecutionSandbox,
@@ -111,10 +115,12 @@ pub(super) fn start_windows_restricted_execution_process(
     let sandbox_group_sid = windows_sandbox_users_group_sid()?;
     let capability_sid = capability_sid();
     let acl_lease = AclLease::acquire(&sandbox_group_sid, &capability_sid, acl_plan)?;
-    let token = create_restricted_token(&capability_sid, sandbox_account)?;
-    enable_process_creation_privileges();
-    let spawned = spawn_restricted_process(&request, &cwd, token.raw())?;
-    drop(token);
+    let transport = windows_runner_host::spawn_runner_transport(
+        &request,
+        &cwd,
+        sandbox_account,
+        capability_sid,
+    )?;
 
     let start = ExecutionProcessStart {
         process_id: request.process_id.clone(),
@@ -128,66 +134,11 @@ pub(super) fn start_windows_restricted_execution_process(
     let process = Arc::new(Mutex::new(process_state));
     let (output_tx, output_rx) = mpsc::unbounded_channel();
     let (control_tx, control_rx) = std::sync::mpsc::channel();
-    let (reader_done_tx, reader_done_rx) = std::sync::mpsc::channel();
     let (state_tx, state_rx) = watch::channel(initial_snapshot);
     let (final_tx, final_rx) = oneshot::channel();
-
-    let SpawnedRestrictedProcess {
-        process: spawned_process,
-        thread: spawned_thread,
-        job,
-        stdin_write,
-        stdout_read,
-        stderr_read,
-        pseudoconsole,
-    } = spawned;
-    let output_kind = if pseudoconsole.is_some() {
-        ExecutionOutputKind::Combined
-    } else {
-        ExecutionOutputKind::Stdout
-    };
-    let stdout_process = Arc::clone(&process);
-    let stdout_state = state_tx.clone();
-    let stdout_output = output_tx.clone();
-    let stdout_reader_done = reader_done_tx.clone();
-    let _stdout_reader = thread::spawn(move || {
-        read_pipe_stream(
-            stdout_read,
-            output_kind,
-            stdout_process,
-            stdout_output,
-            stdout_state,
-        );
-        let _ = stdout_reader_done.send(());
-    });
-    let _stderr_reader = stderr_read.map(|stderr_read| {
-        let stderr_process = Arc::clone(&process);
-        let stderr_state = state_tx.clone();
-        let stderr_reader_done = reader_done_tx.clone();
-        thread::spawn(move || {
-            read_pipe_stream(
-                stderr_read,
-                ExecutionOutputKind::Stderr,
-                stderr_process,
-                output_tx,
-                stderr_state,
-            );
-            let _ = stderr_reader_done.send(());
-        })
-    });
     thread::spawn(move || {
-        supervise_restricted_process(
-            spawned_process,
-            spawned_thread,
-            job,
-            stdin_write,
-            pseudoconsole,
-            acl_lease,
-            process,
-            state_tx,
-            final_tx,
-            control_rx,
-            reader_done_rx,
+        windows_runner_supervisor::supervise(
+            transport, acl_lease, process, output_tx, state_tx, final_tx, control_rx,
         )
     });
 
@@ -250,6 +201,12 @@ impl OwnedHandle {
     fn raw(&self) -> HANDLE {
         self.0
     }
+
+    fn into_raw(mut self) -> HANDLE {
+        let handle = self.0;
+        self.0 = 0;
+        handle
+    }
 }
 
 impl Drop for OwnedHandle {
@@ -296,31 +253,23 @@ struct TokenDefaultDaclInfo {
     default_dacl: *mut ACL,
 }
 
-fn create_restricted_token(capability_sid: &str, account: &str) -> io::Result<OwnedHandle> {
+fn current_process_token_for_restriction() -> io::Result<OwnedHandle> {
+    let desired = TOKEN_DUPLICATE
+        | TOKEN_QUERY
+        | TOKEN_ASSIGN_PRIMARY
+        | TOKEN_ADJUST_DEFAULT
+        | TOKEN_ADJUST_SESSIONID
+        | TOKEN_ADJUST_PRIVILEGES;
+    let mut token = 0;
+    if unsafe { OpenProcessToken(GetCurrentProcess(), desired, &mut token) } == 0 {
+        return Err(last_os_error("OpenProcessToken(runner)"));
+    }
+    OwnedHandle::new(token, "OpenProcessToken(runner)")
+}
+
+fn create_restricted_token(capability_sid: &str) -> io::Result<OwnedHandle> {
     unsafe {
-        let desired = TOKEN_DUPLICATE
-            | TOKEN_QUERY
-            | TOKEN_ASSIGN_PRIMARY
-            | TOKEN_ADJUST_DEFAULT
-            | TOKEN_ADJUST_SESSIONID
-            | TOKEN_ADJUST_PRIVILEGES;
-        let password = read_windows_sandbox_password(account)?;
-        let username = to_wide(account);
-        let domain = to_wide(".");
-        let password = to_wide(password);
-        let mut base = 0;
-        if LogonUserW(
-            username.as_ptr(),
-            domain.as_ptr(),
-            password.as_ptr(),
-            LOGON32_LOGON_INTERACTIVE,
-            LOGON32_PROVIDER_DEFAULT,
-            &mut base,
-        ) == 0
-        {
-            return Err(last_os_error("LogonUserW"));
-        }
-        let base = OwnedHandle::new(base, "LogonUserW")?;
+        let base = current_process_token_for_restriction()?;
         let capability = LocalSid::parse(capability_sid)?;
         let mut user = token_user_sid(base.raw())?;
         let mut logon = logon_sid(base.raw())?;
@@ -436,28 +385,6 @@ unsafe fn enable_privilege(token: HANDLE, name: &str) -> io::Result<()> {
         return Err(io::Error::from_raw_os_error(error as i32));
     }
     Ok(())
-}
-
-fn enable_process_creation_privileges() {
-    unsafe {
-        let mut token = 0;
-        if OpenProcessToken(
-            GetCurrentProcess(),
-            TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
-            &mut token,
-        ) == 0
-        {
-            return;
-        }
-        let Ok(token) = OwnedHandle::new(token, "OpenProcessToken") else {
-            return;
-        };
-        for privilege in ["SeIncreaseQuotaPrivilege", "SeAssignPrimaryTokenPrivilege"] {
-            if let Err(error) = enable_privilege(token.raw(), privilege) {
-                tracing::debug!(%error, privilege, "Windows process creation privilege unavailable");
-            }
-        }
-    }
 }
 
 unsafe fn token_user_sid(token: HANDLE) -> io::Result<Vec<u8>> {
@@ -614,8 +541,9 @@ fn spawn_restricted_pipe_process(
     let mut env_block = environment_block(&request.env)?;
     let cwd = to_wide(cwd.as_os_str());
     let mut desktop = to_wide("winsta0\\default");
-    let mut attributes = ProcessAttributeList::new(1)?;
+    let mut attributes = ProcessAttributeList::new(2)?;
     attributes.set_handle_list(&[stdin_read.raw(), stdout_write.raw(), stderr_write.raw()])?;
+    attributes.set_job(job.raw())?;
     let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
     startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
     startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
@@ -625,10 +553,7 @@ fn spawn_restricted_pipe_process(
     startup.StartupInfo.lpDesktop = desktop.as_mut_ptr();
     startup.lpAttributeList = attributes.as_mut_ptr();
     let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
-    // Prevent restricted child initialization failures from opening a hidden
-    // Windows error dialog and leaving the process alive indefinitely.
-    let previous_error_mode = unsafe { SetErrorMode(CHILD_ERROR_MODE_FLAGS) };
-    let mut created = unsafe {
+    let created = unsafe {
         CreateProcessAsUserW(
             token,
             ptr::null(),
@@ -636,78 +561,18 @@ fn spawn_restricted_pipe_process(
             ptr::null_mut(),
             ptr::null_mut(),
             1,
-            CREATE_UNICODE_ENVIRONMENT
-                | CREATE_SUSPENDED
-                | CREATE_NO_WINDOW
-                | EXTENDED_STARTUPINFO_PRESENT,
+            CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT,
             env_block.as_mut_ptr() as *mut c_void,
             cwd.as_ptr(),
             &startup.StartupInfo,
             &mut process_info,
         )
     };
-    if created == 0 && unsafe { GetLastError() } == ERROR_PRIVILEGE_NOT_HELD {
-        // Process creation may modify lpCommandLine even when it fails. Rebuild
-        // it before retrying or PowerShell can start without its arguments.
-        command_line = to_wide(&command_line_text);
-        let mut fallback_startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
-        fallback_startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
-        fallback_startup.dwFlags = STARTF_USESTDHANDLES;
-        fallback_startup.hStdInput = stdin_read.raw();
-        fallback_startup.hStdOutput = stdout_write.raw();
-        fallback_startup.hStdError = stderr_write.raw();
-        // CreateProcessWithTokenW grants the token access to the inherited
-        // window station/desktop only when lpDesktop is null. The explicit
-        // CreateProcessAsUserW path keeps the current desktop contract.
-        fallback_startup.lpDesktop = ptr::null_mut();
-        created = unsafe {
-            CreateProcessWithTokenW(
-                token,
-                LOGON_WITH_PROFILE,
-                ptr::null(),
-                command_line.as_mut_ptr(),
-                CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | CREATE_NO_WINDOW,
-                env_block.as_mut_ptr() as *mut c_void,
-                cwd.as_ptr(),
-                &fallback_startup,
-                &mut process_info,
-            )
-        };
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "CreateProcessWithTokenW pipe result={} error={} pid={}",
-            created,
-            unsafe { GetLastError() },
-            process_info.dwProcessId
-        );
-    }
-    unsafe {
-        SetErrorMode(previous_error_mode);
-    }
     if created == 0 {
         return Err(last_os_error("CreateProcessAsUserW"));
     }
     let process = OwnedHandle::new(process_info.hProcess, "CreateProcessAsUserW process")?;
     let thread = OwnedHandle::new(process_info.hThread, "CreateProcessAsUserW thread")?;
-    if unsafe { AssignProcessToJobObject(job.raw(), process.raw()) } == 0 {
-        return Err(last_os_error("AssignProcessToJobObject"));
-    }
-    let resume_result = unsafe { ResumeThread(thread.raw()) };
-    #[cfg(debug_assertions)]
-    {
-        let mut exit_code = 0;
-        let exit_result = unsafe { GetExitCodeProcess(process.raw(), &mut exit_code) };
-        eprintln!(
-            "restricted pipe process pid={} resume={} exit_result={} exit_code={}",
-            process_info.dwProcessId, resume_result, exit_result, exit_code
-        );
-    }
-    if resume_result == u32::MAX {
-        unsafe {
-            TerminateJobObject(job.raw(), 1);
-        }
-        return Err(last_os_error("ResumeThread"));
-    }
     drop(stdin_read);
     drop(stdout_write);
     drop(stderr_write);
@@ -736,8 +601,9 @@ fn spawn_restricted_conpty_process(
     let mut env_block = environment_block(&request.env)?;
     let cwd = to_wide(cwd.as_os_str());
     let mut desktop = to_wide("winsta0\\default");
-    let mut attributes = ProcessAttributeList::new(1)?;
+    let mut attributes = ProcessAttributeList::new(2)?;
     attributes.set_pseudoconsole(pseudoconsole.raw())?;
+    attributes.set_job(job.raw())?;
     let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
     startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
     startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
@@ -747,10 +613,7 @@ fn spawn_restricted_conpty_process(
     startup.StartupInfo.lpDesktop = desktop.as_mut_ptr();
     startup.lpAttributeList = attributes.as_mut_ptr();
     let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
-    // Keep restricted child initialization fail-visible instead of allowing a
-    // hidden Windows error dialog to hold the process open.
-    let previous_error_mode = unsafe { SetErrorMode(CHILD_ERROR_MODE_FLAGS) };
-    let mut created = unsafe {
+    let created = unsafe {
         CreateProcessAsUserW(
             token,
             ptr::null(),
@@ -758,58 +621,18 @@ fn spawn_restricted_conpty_process(
             ptr::null_mut(),
             ptr::null_mut(),
             0,
-            CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT,
+            CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT,
             env_block.as_mut_ptr() as *mut c_void,
             cwd.as_ptr(),
             &startup.StartupInfo,
             &mut process_info,
         )
     };
-    if created == 0 && unsafe { GetLastError() } == ERROR_PRIVILEGE_NOT_HELD {
-        // Process creation may modify lpCommandLine even when it fails.
-        command_line = to_wide(&command_line_text);
-        // CreateProcessWithTokenW grants the token access to the inherited
-        // desktop only when lpDesktop is null. The AsUser path above retains
-        // the explicit desktop contract.
-        startup.StartupInfo.lpDesktop = ptr::null_mut();
-        created = unsafe {
-            CreateProcessWithTokenW(
-                token,
-                LOGON_WITH_PROFILE,
-                ptr::null(),
-                command_line.as_mut_ptr(),
-                CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT,
-                env_block.as_mut_ptr() as *mut c_void,
-                cwd.as_ptr(),
-                &startup.StartupInfo,
-                &mut process_info,
-            )
-        };
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "CreateProcessWithTokenW conpty result={} error={} pid={}",
-            created,
-            unsafe { GetLastError() },
-            process_info.dwProcessId
-        );
-    }
-    unsafe {
-        SetErrorMode(previous_error_mode);
-    }
     if created == 0 {
         return Err(last_os_error("CreateProcessAsUserW ConPTY"));
     }
     let process = OwnedHandle::new(process_info.hProcess, "CreateProcessAsUserW process")?;
     let thread = OwnedHandle::new(process_info.hThread, "CreateProcessAsUserW thread")?;
-    if unsafe { AssignProcessToJobObject(job.raw(), process.raw()) } == 0 {
-        return Err(last_os_error("AssignProcessToJobObject ConPTY"));
-    }
-    if unsafe { ResumeThread(thread.raw()) } == u32::MAX {
-        unsafe {
-            TerminateJobObject(job.raw(), 1);
-        }
-        return Err(last_os_error("ResumeThread ConPTY"));
-    }
     let stdin_write = request.stdin.then_some(stdin_write);
     Ok(SpawnedRestrictedProcess {
         process,

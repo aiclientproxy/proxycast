@@ -24,6 +24,10 @@ export function windowsSandboxSetupBinaryName(platform = process.platform) {
   return platform === "win32" ? "windows-sandbox-setup.exe" : null;
 }
 
+export function windowsSandboxRunnerBinaryName(platform = process.platform) {
+  return platform === "win32" ? "windows-sandbox-runner.exe" : null;
+}
+
 export function localAppServerBinaryPath({
   repoRoot = process.cwd(),
   platform = process.platform,
@@ -50,6 +54,15 @@ export function localWindowsSandboxSetupBinaryPath({
   targetDirectory = resolveCargoTargetDirectory({ repoRoot, platform }),
 } = {}) {
   const binaryName = windowsSandboxSetupBinaryName(platform);
+  return binaryName ? path.resolve(targetDirectory, "debug", binaryName) : null;
+}
+
+export function localWindowsSandboxRunnerBinaryPath({
+  repoRoot = process.cwd(),
+  platform = process.platform,
+  targetDirectory = resolveCargoTargetDirectory({ repoRoot, platform }),
+} = {}) {
+  const binaryName = windowsSandboxRunnerBinaryName(platform);
   return binaryName ? path.resolve(targetDirectory, "debug", binaryName) : null;
 }
 
@@ -170,11 +183,18 @@ export function resolveDevAppServerBinary({
     platform,
     ...(targetDirectory ? { targetDirectory } : {}),
   });
+  const windowsSandboxRunnerPath = localWindowsSandboxRunnerBinaryPath({
+    repoRoot,
+    platform,
+    ...(targetDirectory ? { targetDirectory } : {}),
+  });
   const hasUsableBinaries = () =>
     isUsableBinary(binaryPath, { exists }) &&
     isUsableBinary(codeModeHostPath, { exists }) &&
     (!windowsSandboxSetupPath ||
-      isUsableBinary(windowsSandboxSetupPath, { exists }));
+      isUsableBinary(windowsSandboxSetupPath, { exists })) &&
+    (!windowsSandboxRunnerPath ||
+      isUsableBinary(windowsSandboxRunnerPath, { exists }));
   if (forceBuild || !hasUsableBinaries()) {
     build({ repoRoot, platform, env });
   }
@@ -185,6 +205,7 @@ export function resolveDevAppServerBinary({
         binaryPath,
         codeModeHostPath,
         windowsSandboxSetupPath,
+        windowsSandboxRunnerPath,
       ]
         .filter(Boolean)
         .join(", ")}`,
@@ -195,6 +216,9 @@ export function resolveDevAppServerBinary({
   prepareBinary({ binaryPath: codeModeHostPath, platform });
   if (windowsSandboxSetupPath) {
     prepareBinary({ binaryPath: windowsSandboxSetupPath, platform });
+  }
+  if (windowsSandboxRunnerPath) {
+    prepareBinary({ binaryPath: windowsSandboxRunnerPath, platform });
   }
   return binaryPath;
 }
@@ -280,6 +304,8 @@ export function cargoBuildAppServerArgs({ repoRoot = process.cwd() } = {}) {
     "code-mode-host",
     "--bin",
     "windows-sandbox-setup",
+    "--bin",
+    "windows-sandbox-runner",
   ];
 }
 
@@ -325,6 +351,13 @@ export function buildLocalAppServer({
   if (windowsSetupBinaryPath) {
     prepareBinary({ binaryPath: windowsSetupBinaryPath, platform });
   }
+  const windowsRunnerBinaryPath = localWindowsSandboxRunnerBinaryPath({
+    repoRoot,
+    platform,
+  });
+  if (windowsRunnerBinaryPath) {
+    prepareBinary({ binaryPath: windowsRunnerBinaryPath, platform });
+  }
 }
 
 export function buildLocalAppServerAsync({
@@ -366,6 +399,13 @@ export function buildLocalAppServerAsync({
           });
           if (windowsSetupBinaryPath) {
             prepareBinary({ binaryPath: windowsSetupBinaryPath, platform });
+          }
+          const windowsRunnerBinaryPath = localWindowsSandboxRunnerBinaryPath({
+            repoRoot,
+            platform,
+          });
+          if (windowsRunnerBinaryPath) {
+            prepareBinary({ binaryPath: windowsRunnerBinaryPath, platform });
           }
         } catch (error) {
           reject(error);

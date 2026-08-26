@@ -119,6 +119,10 @@ function windowsSandboxSetupBinaryName(platform = process.platform) {
   return platform === "win32" ? "windows-sandbox-setup.exe" : null;
 }
 
+function windowsSandboxRunnerBinaryName(platform = process.platform) {
+  return platform === "win32" ? "windows-sandbox-runner.exe" : null;
+}
+
 function sha256(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
@@ -204,6 +208,8 @@ export function verifyResourceRoot(
   });
   let windowsSandboxSetupPath = null;
   let windowsSandboxSetupIntegrity = null;
+  let windowsSandboxRunnerPath = null;
+  let windowsSandboxRunnerIntegrity = null;
   if (platform === "win32") {
     windowsSandboxSetupPath = path.join(
       root,
@@ -218,6 +224,22 @@ export function verifyResourceRoot(
       {
         platform,
         label: "Windows sandbox setup helper",
+        execFileSyncImpl,
+      },
+    );
+    windowsSandboxRunnerPath = path.join(
+      root,
+      "app-server",
+      key,
+      windowsSandboxRunnerBinaryName(platform),
+    );
+    assertFile(windowsSandboxRunnerPath, "Windows sandbox runner");
+    windowsSandboxRunnerIntegrity = verifySidecarIntegrity(
+      windowsSandboxRunnerPath,
+      artifact.windowsSandboxRunnerSha256,
+      {
+        platform,
+        label: "Windows sandbox runner",
         execFileSyncImpl,
       },
     );
@@ -247,6 +269,8 @@ export function verifyResourceRoot(
     codeModeHostIntegrity: codeModeHost,
     windowsSandboxSetupPath,
     windowsSandboxSetupIntegrity,
+    windowsSandboxRunnerPath,
+    windowsSandboxRunnerIntegrity,
     sha256: appServer,
   };
 }

@@ -407,9 +407,14 @@ async fn world_writable_audit_reports_everyone_write_acl() {
             "/grant",
             "Everyone:(OI)(CI)(M)",
         ])
-        .status()
+        .output()
         .expect("icacls should start");
-    assert!(grant.success(), "icacls grant should succeed");
+    assert!(
+        grant.status.success(),
+        "icacls grant should succeed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&grant.stdout),
+        String::from_utf8_lossy(&grant.stderr)
+    );
 
     let environment = env::vars().collect::<HashMap<_, _>>();
     let audit = audit_windows_world_writable(fixture.path(), &environment);

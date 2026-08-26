@@ -16,6 +16,7 @@ import {
   appServerBinaryName,
   codeModeHostBinaryName,
   resolveDevAppServerBinary,
+  windowsSandboxRunnerBinaryName,
 } from "./electron-dev-sidecar.mjs";
 import {
   ensureMacBinaryRpath,
@@ -45,6 +46,12 @@ export function windowsSandboxSetupResourceBinaryName(
   platform = process.platform,
 ) {
   return platform === "win32" ? "windows-sandbox-setup.exe" : null;
+}
+
+export function windowsSandboxRunnerResourceBinaryName(
+  platform = process.platform,
+) {
+  return windowsSandboxRunnerBinaryName(platform);
 }
 
 export function appServerResourcePlatformKey(
@@ -117,10 +124,24 @@ export function electronWindowsSandboxSetupBinaryDestination({
   return path.resolve(outputRoot, "app-server", platformKey, name);
 }
 
+export function electronWindowsSandboxRunnerBinaryDestination({
+  outputRoot = electronAppServerResourcesRoot(),
+  platform = process.platform,
+  arch = process.arch,
+} = {}) {
+  const name = windowsSandboxRunnerResourceBinaryName(platform);
+  if (!name) {
+    return null;
+  }
+  const platformKey = appServerResourcePlatformKey(platform, arch);
+  return path.resolve(outputRoot, "app-server", platformKey, name);
+}
+
 export async function buildElectronAppServerReleaseManifest({
   binaryPath,
   codeModeHostBinaryPath,
   windowsSandboxSetupBinaryPath,
+  windowsSandboxRunnerBinaryPath,
   version,
   platform = appServerResourcePlatformKey(),
   sha256File = hashFile,
@@ -150,6 +171,14 @@ export async function buildElectronAppServerReleaseManifest({
         ),
       ),
     );
+    artifact.windowsSandboxRunnerSha256 = await sha256File(
+      path.resolve(
+        requiredValue(
+          windowsSandboxRunnerBinaryPath,
+          "windowsSandboxRunnerBinaryPath",
+        ),
+      ),
+    );
   }
 
   return {
@@ -167,6 +196,7 @@ export async function prepareElectronAppServerAssets({
   sourceBinary,
   sourceCodeModeHostBinary,
   sourceWindowsSandboxSetupBinary,
+  sourceWindowsSandboxRunnerBinary,
   resolveBinary = resolveDevAppServerBinary,
   env = process.env,
   readPackageJson = readJsonFile,
@@ -196,6 +226,12 @@ export async function prepareElectronAppServerAssets({
   });
   const windowsSandboxSetupDestination =
     electronWindowsSandboxSetupBinaryDestination({
+      outputRoot,
+      platform,
+      arch,
+    });
+  const windowsSandboxRunnerDestination =
+    electronWindowsSandboxRunnerBinaryDestination({
       outputRoot,
       platform,
       arch,
@@ -236,12 +272,30 @@ export async function prepareElectronAppServerAssets({
           ),
       )
     : null;
+  const resolvedSourceWindowsSandboxRunnerBinary =
+    windowsSandboxRunnerDestination
+      ? path.resolve(
+          sourceWindowsSandboxRunnerBinary ??
+            path.join(
+              path.dirname(resolvedSourceBinary),
+              windowsSandboxRunnerResourceBinaryName(platform),
+            ),
+        )
+      : null;
   if (
     windowsSandboxSetupDestination &&
     resolvedSourceWindowsSandboxSetupBinary === windowsSandboxSetupDestination
   ) {
     throw new Error(
       `Windows sandbox setup asset source must not equal packaged destination: ${windowsSandboxSetupDestination}`,
+    );
+  }
+  if (
+    windowsSandboxRunnerDestination &&
+    resolvedSourceWindowsSandboxRunnerBinary === windowsSandboxRunnerDestination
+  ) {
+    throw new Error(
+      `Windows sandbox runner asset source must not equal packaged destination: ${windowsSandboxRunnerDestination}`,
     );
   }
 
@@ -251,12 +305,21 @@ export async function prepareElectronAppServerAssets({
   if (windowsSandboxSetupDestination) {
     await rm(windowsSandboxSetupDestination, { force: true });
   }
+  if (windowsSandboxRunnerDestination) {
+    await rm(windowsSandboxRunnerDestination, { force: true });
+  }
   await copy(resolvedSourceBinary, destination);
   await copy(resolvedSourceCodeModeHostBinary, codeModeHostDestination);
   if (windowsSandboxSetupDestination) {
     await copy(
       resolvedSourceWindowsSandboxSetupBinary,
       windowsSandboxSetupDestination,
+    );
+  }
+  if (windowsSandboxRunnerDestination) {
+    await copy(
+      resolvedSourceWindowsSandboxRunnerBinary,
+      windowsSandboxRunnerDestination,
     );
   }
   await clearLaunchBlockingXattrs(destination, platform);
@@ -268,6 +331,9 @@ export async function prepareElectronAppServerAssets({
   const windowsSandboxSetupSourceStat = windowsSandboxSetupDestination
     ? await getStat(resolvedSourceWindowsSandboxSetupBinary)
     : null;
+  const windowsSandboxRunnerSourceStat = windowsSandboxRunnerDestination
+    ? await getStat(resolvedSourceWindowsSandboxRunnerBinary)
+    : null;
   await changeMode(destination, sourceStat.mode);
   await changeMode(codeModeHostDestination, codeModeHostSourceStat.mode);
   if (windowsSandboxSetupDestination) {
@@ -276,11 +342,23 @@ export async function prepareElectronAppServerAssets({
       windowsSandboxSetupSourceStat.mode,
     );
   }
+  if (windowsSandboxRunnerDestination) {
+    await changeMode(
+      windowsSandboxRunnerDestination,
+      windowsSandboxRunnerSourceStat.mode,
+    );
+  }
   prepareRuntimeBinary({ binaryPath: destination, platform });
   prepareRuntimeBinary({ binaryPath: codeModeHostDestination, platform });
   if (windowsSandboxSetupDestination) {
     prepareRuntimeBinary({
       binaryPath: windowsSandboxSetupDestination,
+      platform,
+    });
+  }
+  if (windowsSandboxRunnerDestination) {
+    prepareRuntimeBinary({
+      binaryPath: windowsSandboxRunnerDestination,
       platform,
     });
   }
@@ -298,6 +376,7 @@ export async function prepareElectronAppServerAssets({
     binaryPath: destination,
     codeModeHostBinaryPath: codeModeHostDestination,
     windowsSandboxSetupBinaryPath: windowsSandboxSetupDestination,
+    windowsSandboxRunnerBinaryPath: windowsSandboxRunnerDestination,
     version,
     platform: appServerResourcePlatformKey(platform, arch),
     sha256File,
@@ -308,9 +387,11 @@ export async function prepareElectronAppServerAssets({
     sourceBinary: resolvedSourceBinary,
     sourceCodeModeHostBinary: resolvedSourceCodeModeHostBinary,
     sourceWindowsSandboxSetupBinary: resolvedSourceWindowsSandboxSetupBinary,
+    sourceWindowsSandboxRunnerBinary: resolvedSourceWindowsSandboxRunnerBinary,
     binaryPath: destination,
     codeModeHostBinaryPath: codeModeHostDestination,
     windowsSandboxSetupBinaryPath: windowsSandboxSetupDestination,
+    windowsSandboxRunnerBinaryPath: windowsSandboxRunnerDestination,
     manifestPath,
     manifest,
     runtimeLibraries,

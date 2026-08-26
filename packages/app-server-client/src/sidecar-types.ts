@@ -145,6 +145,7 @@ export type AppServerReleaseArtifact = {
   sha256: string;
   codeModeHostSha256?: string;
   windowsSandboxSetupSha256?: string;
+  windowsSandboxRunnerSha256?: string;
 };
 
 export type AppServerReleaseManifest = {

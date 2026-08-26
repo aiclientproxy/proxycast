@@ -110,7 +110,7 @@ version = "1.13.0"
     );
     const sherpaOffset = windowsJob.indexOf("Prepare sherpa-onnx runtime");
     const sidecarBuildOffset = windowsJob.indexOf(
-      "Build Windows app-server, code-mode-host, and sandbox setup sidecars",
+      "Build Windows app-server, code-mode-host, and sandbox sidecars",
     );
     const timeoutContractOffset = windowsJob.indexOf(
       "Test Windows command timeout contract",

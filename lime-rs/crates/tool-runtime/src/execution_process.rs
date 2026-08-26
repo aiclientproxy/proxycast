@@ -18,6 +18,23 @@ mod pty;
 #[cfg(target_os = "windows")]
 mod windows;
 
+/// Runs the Windows sandbox-account command runner sidecar.
+///
+/// The executable is packaged beside App Server, while all protocol and child
+/// execution semantics remain owned by this module.
+#[cfg(target_os = "windows")]
+pub fn run_windows_sandbox_runner() -> io::Result<()> {
+    windows::run_windows_sandbox_runner()
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn run_windows_sandbox_runner() -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Windows sandbox runner is only available on Windows",
+    ))
+}
+
 /// Bounded Windows ACL audit result used by the App Server setup warning.
 ///
 /// The audit is intentionally a diagnostic only. It never changes ACLs and it

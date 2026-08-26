@@ -56,9 +56,11 @@ function createResourceRoot({
   appServer = "signed app-server",
   codeModeHost = "signed code-mode-host",
   windowsSandboxSetup = "signed windows-sandbox-setup",
+  windowsSandboxRunner = "signed windows-sandbox-runner",
   manifestAppServer = "unsigned app-server",
   manifestCodeModeHost = "unsigned code-mode-host",
   manifestWindowsSandboxSetup = "unsigned windows-sandbox-setup",
+  manifestWindowsSandboxRunner = "unsigned windows-sandbox-runner",
   platformKey = "darwin-arm64",
 } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "lime-electron-resources-"));
@@ -81,6 +83,10 @@ function createResourceRoot({
       path.join(sidecarDir, "windows-sandbox-setup.exe"),
       windowsSandboxSetup,
     );
+    writeFileSync(
+      path.join(sidecarDir, "windows-sandbox-runner.exe"),
+      windowsSandboxRunner,
+    );
   }
   for (const name of [
     "icon.png",
@@ -102,7 +108,12 @@ function createResourceRoot({
           sha256: sha256(manifestAppServer),
           codeModeHostSha256: sha256(manifestCodeModeHost),
           ...(platformKey.startsWith("win32-")
-            ? { windowsSandboxSetupSha256: sha256(manifestWindowsSandboxSetup) }
+            ? {
+                windowsSandboxSetupSha256: sha256(manifestWindowsSandboxSetup),
+                windowsSandboxRunnerSha256: sha256(
+                  manifestWindowsSandboxRunner,
+                ),
+              }
             : {}),
         },
       ],
@@ -238,15 +249,17 @@ describe("verify-electron-package-resources sidecar integrity", () => {
     ]);
   });
 
-  it("Windows 资源必须包含 sandbox setup helper 并校验哈希", () => {
+  it("Windows 资源必须包含 sandbox setup helper 与 command runner 并校验哈希", () => {
     const root = createResourceRoot({
       platformKey: "win32-x64",
       appServer: "app-server",
       codeModeHost: "code-mode-host",
       windowsSandboxSetup: "windows-sandbox-setup",
+      windowsSandboxRunner: "windows-sandbox-runner",
       manifestAppServer: "app-server",
       manifestCodeModeHost: "code-mode-host",
       manifestWindowsSandboxSetup: "windows-sandbox-setup",
+      manifestWindowsSandboxRunner: "windows-sandbox-runner",
     });
 
     const result = verifyResourceRoot(root, {
@@ -255,6 +268,7 @@ describe("verify-electron-package-resources sidecar integrity", () => {
     });
 
     expect(result.windowsSandboxSetupIntegrity.acceptedBecause).toBe("sha256");
+    expect(result.windowsSandboxRunnerIntegrity.acceptedBecause).toBe("sha256");
   });
 
   it("拒绝哈希变化且严格 codesign 失败的 macOS code-mode host", () => {

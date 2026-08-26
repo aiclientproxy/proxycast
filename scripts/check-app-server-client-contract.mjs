@@ -7520,8 +7520,8 @@ const checks = [
       "cargo clean --manifest-path lime-rs/Cargo.toml -p v8",
       "Prepare sherpa-onnx runtime",
       "node scripts/prepare-sherpa-onnx-runtime.mjs --target x86_64-pc-windows-msvc",
-      "Build Windows app-server, code-mode-host, and sandbox setup sidecars",
-      "cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host --bin windows-sandbox-setup",
+      "Build Windows app-server, code-mode-host, and sandbox sidecars",
+      "cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host --bin windows-sandbox-setup --bin windows-sandbox-runner",
     ],
     absentSnippets: [
       "cargo check --manifest-path lime-rs/Cargo.toml -p app-server --bin app-server -p tool-runtime --bin code-mode-host",

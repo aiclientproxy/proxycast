@@ -9,6 +9,7 @@ import {
   localAppServerBinaryPath,
   localCodeModeHostBinaryPath,
   localWindowsSandboxSetupBinaryPath,
+  localWindowsSandboxRunnerBinaryPath,
   resolveDevAppServerBackendEnv,
   resolveDevAppServerBinary,
   resolveCargoTargetDirectory,
@@ -47,6 +48,17 @@ describe("electron dev sidecar", () => {
       }),
     ).toBe(
       path.resolve("/repo/lime/lime-rs/target/debug/windows-sandbox-setup.exe"),
+    );
+    expect(
+      localWindowsSandboxRunnerBinaryPath({
+        repoRoot: "/repo/lime",
+        platform: "win32",
+        targetDirectory: path.resolve("/repo/lime/lime-rs/target"),
+      }),
+    ).toBe(
+      path.resolve(
+        "/repo/lime/lime-rs/target/debug/windows-sandbox-runner.exe",
+      ),
     );
   });
 
@@ -204,8 +216,16 @@ describe("electron dev sidecar", () => {
     expect(builds).toEqual([
       { repoRoot: "/repo/lime", platform: "win32", env: {} },
     ]);
-    expect(prepared.at(-1)).toEqual([
+    expect(prepared).toContainEqual([
       { binaryPath: setupPath, platform: "win32" },
+    ]);
+    expect(prepared).toContainEqual([
+      {
+        binaryPath: path.resolve(
+          "/repo/lime/lime-rs/target/debug/windows-sandbox-runner.exe",
+        ),
+        platform: "win32",
+      },
     ]);
   });
 
@@ -332,6 +352,8 @@ describe("electron dev sidecar", () => {
           "code-mode-host",
           "--bin",
           "windows-sandbox-setup",
+          "--bin",
+          "windows-sandbox-runner",
         ],
         options: {
           cwd: "/repo/lime",

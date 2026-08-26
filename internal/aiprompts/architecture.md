@@ -2594,7 +2594,7 @@ Settings/Claw evidence。Responsible developer confirmation: root, 2026-08-10。
 ## 42. Windows Sandbox Readiness Owner
 
 Windows sandbox readiness 是 Desktop 控制面能力；Windows restricted-token runner 的当前基础也已归入
-`tool-runtime`，但 readiness 仍必须以真实平台 enforcement 证据为准。唯一数据流为：
+`tool-runtime`，但 readiness 仍必须以真实平台 enforcement 证据为准。控制面唯一数据流为：
 
 ```text
 Settings execution policy
@@ -2606,11 +2606,32 @@ Settings execution policy
 ```
 
 非 Windows 平台或未启用 workspace sandbox 返回 `notConfigured`；Windows 已启用但 backend 不是
-`Ready + enforced=true` 返回 `updateRequired`；只有真实 enforcement 才能返回 `ready`。`tool-runtime`
-当前拥有 target-gated restricted-token runner：受限 token、sandbox account user SID、capability SID、workspace/explicit write-root
+`Ready + enforced=true` 返回 `updateRequired`；只有真实 enforcement 才能返回 `ready`。Windows 执行面唯一数据流为：
+
+```text
+App Server -> tool-runtime::execution_process host
+  -> ACL lease + sandbox account/network policy selection
+  -> scoped named pipes + DPAPI credential
+  -> CreateProcessWithLogonW(windows-sandbox-runner.exe as sandbox account)
+  -> runner current primary token -> restricted token + TokenDefaultDacl
+  -> CreateProcessAsUserW + STARTUPINFOEX
+       -> job + handle list + pipe child
+       -> job + pseudoconsole + TTY child
+  -> framed output/exit/error -> existing bounded ExecutionProcess projection
+  <- framed stdin/close/resize/terminate
+```
+
+runner executable、宿主 transport、restricted token 和 child supervisor 都属于 `tool-runtime::execution_process` 同一
+current owner；它不是 Electron backend、App Server method 或平级 process supervisor。Electron 只将 runner 作为 App Server
+相邻的 Windows runtime resource 打包并校验 manifest digest。宿主创建的 named pipe DACL 只允许被选中的 sandbox account，
+连接后校验 client PID；framing、单帧大小、启动握手和 cleanup 必须有界。宿主直接用 sandbox-account token 调用
+`CreateProcessAsUserW` 以及 `CreateProcessWithTokenW` fallback 均为 `dead / forbidden-to-restore`：前者在普通宿主缺少
+`SeAssignPrimaryTokenPrivilege`，后者无法可靠承接 pipe child 且不支持当前 ConPTY attribute contract。
+
+`tool-runtime` 当前拥有 target-gated restricted-token runner：受限 token、sandbox account user SID、capability SID、workspace/explicit write-root
 双重访问检查、workspace/explicit read/write-root ACL lease、`.git/.codex/.agents` 写入拒绝、Job Object 进程树、显式继承句柄列表、stdout/stderr reader
 和既有有界 retained output 均在同一 owner；ACL audit、ConPTY 与 Job/supervisor 分别由
-`windows_audit`、`windows_conpty`、`windows_job` 子模块承接，主 runner 只保留 token/spawn 编排。TTY 请求由同一 restricted-token owner 创建 ConPTY，使用
+`windows_audit`、`windows_runner*`、`windows_conpty`、`windows_job` 子模块承接，主入口只保留 policy/ACL/account 编排。TTY 请求由同一 restricted-token owner 创建 ConPTY，使用
 `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE + PROC_THREAD_ATTRIBUTE_JOB_LIST` 原子附着，合并输出并承接 stdin/resize/terminate，
 不回退普通 `portable-pty` 非沙箱进程。Windows 环境块继承父环境并按大小写不敏感应用请求覆盖；正常根进程
 退出时遵循 Codex 语义关闭 `KILL_ON_JOB_CLOSE`，由 reaper 持有 Job 与 ACL lease 到 Job 为空，取消、超时、控制断开或
@@ -2632,6 +2653,10 @@ protected metadata 与显式 read-only carveout 的 deny-write 继续只绑定 c
 group 与 capability SID 的全部访问，与 Codex restricted access check 和 permission profile 语义一致。
 因平台 evidence 尚未具备，当前 `SandboxBackendStatus::Planned`、`enforced=false` 保持不变，不能由 runner 源码、
 Settings 或 setup 文案推断 ready。
+
+Architecture impact: major; Windows restricted execution now uses a sandbox-account runner sidecar inside the existing
+`tool-runtime` owner, and Windows packages must carry that runtime resource beside App Server. Responsible developer
+confirmation: coso, 2026-08-26.
 
 setup artifact 的结构事实源同样归 `tool-runtime::windows_setup`：Lime AgentRoot 下的 `.sandbox/setup_marker.json`
 与 `.sandbox-secrets/sandbox_users.json` 使用单一版本号，固定 offline/online account identity，并只保存 DPAPI 密文的
