@@ -87,7 +87,7 @@ mod platform {
         }
     }
 
-    pub(super) fn install_offline_rules(account: &str) -> io::Result<usize> {
+    pub fn install_offline_rules(account: &str) -> io::Result<usize> {
         let _apartment = ComApartment::initialize()?;
         let policy = open_policy()?;
         verify_policy_enforcement(&policy)?;
@@ -99,7 +99,7 @@ mod platform {
         Ok(RULES.len())
     }
 
-    pub(super) fn verify_offline_rules(account: &str) -> io::Result<()> {
+    pub fn verify_offline_rules(account: &str) -> io::Result<()> {
         let _apartment = ComApartment::initialize()?;
         let policy = open_policy()?;
         verify_policy_enforcement(&policy)?;

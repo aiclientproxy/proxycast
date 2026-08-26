@@ -44,8 +44,8 @@ mod platform {
     };
     use windows_sys::Win32::Security::Authorization::{
         BuildExplicitAccessWithNameW, BuildSecurityDescriptorW, EXPLICIT_ACCESS_W, GRANT_ACCESS,
-        PSECURITY_DESCRIPTOR,
     };
+    use windows_sys::Win32::Security::PSECURITY_DESCRIPTOR;
     use windows_sys::Win32::System::Rpc::RPC_C_AUTHN_DEFAULT;
     use windows_sys::Win32::System::Threading::INFINITE;
 
@@ -170,7 +170,7 @@ mod platform {
         },
     ];
 
-    pub(super) fn install_filters(account: &str) -> io::Result<usize> {
+    pub fn install_filters(account: &str) -> io::Result<usize> {
         let engine = Engine::open()?;
         let mut transaction = engine.begin_transaction()?;
         ensure_provider(engine.handle)?;
@@ -185,7 +185,7 @@ mod platform {
         Ok(FILTER_SPECS.len())
     }
 
-    pub(super) fn verify_filters(account: &str) -> io::Result<()> {
+    pub fn verify_filters(account: &str) -> io::Result<()> {
         let engine = Engine::open()?;
         let expected_user = UserMatchCondition::for_account(account)?;
         for spec in FILTER_SPECS {

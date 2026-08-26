@@ -8,8 +8,8 @@ use std::ptr;
 use std::thread;
 use std::time::Duration;
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, LocalFree, SetHandleInformation, HANDLE, HANDLE_FLAG_INHERIT,
-    HLOCAL, INVALID_HANDLE_VALUE, LUID, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_SUCCESS, HANDLE,
+    HANDLE_FLAG_INHERIT, HLOCAL, INVALID_HANDLE_VALUE, LUID, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Security::Authorization::{
     ConvertStringSidToSidW, SetEntriesInAclW, EXPLICIT_ACCESS_W, GRANT_ACCESS, TRUSTEE_IS_SID,
@@ -54,7 +54,7 @@ use crate::windows_setup::{
 };
 use windows_acl::{build_acl_plan, AclLease};
 use windows_attr::ProcessAttributeList;
-pub(super) use windows_audit::audit_world_writable;
+pub(crate) use windows_audit::audit_world_writable;
 use windows_conpty::RestrictedConpty;
 #[cfg(test)]
 use windows_job::preserve_job_descendants;

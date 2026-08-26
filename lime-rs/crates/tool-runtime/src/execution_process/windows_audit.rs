@@ -32,7 +32,7 @@ const AUDIT_SKIP_SUFFIXES: [&str; 3] = [
 ///
 /// This deliberately only observes ACLs. The restricted-token ACL lease remains
 /// the execution owner and is responsible for applying and rolling back grants.
-pub(super) fn audit_world_writable(
+pub(crate) fn audit_world_writable(
     cwd: &Path,
     environment: &HashMap<String, String>,
 ) -> WindowsWorldWritableAudit {
@@ -78,27 +78,6 @@ pub(super) fn audit_world_writable(
     let mut checked = 0usize;
     let mut failed_scan = false;
 
-    let mut check = |path: &Path| {
-        if started.elapsed() > AUDIT_MAX_DURATION || checked >= AUDIT_MAX_CHECKED_ITEMS {
-            return false;
-        }
-        checked += 1;
-        match path_is_world_writable(path) {
-            Ok(true) => {
-                let key = canonical_audit_key(path);
-                if seen_flagged.insert(key) {
-                    flagged.push(path.to_path_buf());
-                }
-                true
-            }
-            Ok(false) => false,
-            Err(_) => {
-                failed_scan = true;
-                false
-            }
-        }
-    };
-
     // Check immediate workspace children first so a local permission problem is
     // surfaced before the broader best-effort candidate sweep.
     match std::fs::read_dir(cwd) {
@@ -127,7 +106,14 @@ pub(super) fn audit_world_writable(
                 {
                     continue;
                 }
-                check(&entry.path());
+                check_audit_path(
+                    &entry.path(),
+                    started,
+                    &mut checked,
+                    &mut failed_scan,
+                    &mut flagged,
+                    &mut seen_flagged,
+                );
             }
         }
         Err(_) => failed_scan = true,
@@ -137,7 +123,14 @@ pub(super) fn audit_world_writable(
         if started.elapsed() > AUDIT_MAX_DURATION || checked >= AUDIT_MAX_CHECKED_ITEMS {
             break;
         }
-        check(&root);
+        check_audit_path(
+            &root,
+            started,
+            &mut checked,
+            &mut failed_scan,
+            &mut flagged,
+            &mut seen_flagged,
+        );
         let Ok(entries) = std::fs::read_dir(&root) else {
             failed_scan = true;
             continue;
@@ -172,7 +165,14 @@ pub(super) fn audit_world_writable(
             {
                 continue;
             }
-            check(&entry.path());
+            check_audit_path(
+                &entry.path(),
+                started,
+                &mut checked,
+                &mut failed_scan,
+                &mut flagged,
+                &mut seen_flagged,
+            );
         }
     }
 
@@ -188,6 +188,34 @@ pub(super) fn audit_world_writable(
         sample_paths,
         extra_count: flagged.len().saturating_sub(AUDIT_SAMPLE_LIMIT),
         failed_scan,
+    }
+}
+
+fn check_audit_path(
+    path: &Path,
+    started: Instant,
+    checked: &mut usize,
+    failed_scan: &mut bool,
+    flagged: &mut Vec<std::path::PathBuf>,
+    seen_flagged: &mut HashSet<String>,
+) -> bool {
+    if started.elapsed() > AUDIT_MAX_DURATION || *checked >= AUDIT_MAX_CHECKED_ITEMS {
+        return false;
+    }
+    *checked += 1;
+    match path_is_world_writable(path) {
+        Ok(true) => {
+            let key = canonical_audit_key(path);
+            if seen_flagged.insert(key) {
+                flagged.push(path.to_path_buf());
+            }
+            true
+        }
+        Ok(false) => false,
+        Err(_) => {
+            *failed_scan = true;
+            false
+        }
     }
 }
 
