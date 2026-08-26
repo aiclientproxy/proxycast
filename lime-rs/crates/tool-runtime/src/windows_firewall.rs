@@ -253,8 +253,8 @@ mod platform {
                 .contains(&account_sid.to_ascii_lowercase())
         {
             return Err(other(format!(
-                "Windows Firewall rule {} failed read-back validation",
-                spec.name
+                "Windows Firewall rule {} failed read-back validation: direction={direction:?}, action={action:?}, enabled={enabled:?}, profiles={profiles}, protocol={protocol}, remoteAddresses={remote_addresses:?}, localUserAuthorizedList={local_user:?}",
+                spec.name,
             )));
         }
         Ok(())
