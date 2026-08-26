@@ -1,6 +1,5 @@
 use super::windows_job::write_pipe;
 use super::windows_job::{active_job_processes, preserve_job_descendants};
-use super::windows_null::NullDeviceLease;
 use super::windows_runner_protocol::{
     decode_bytes, encode_bytes, read_frame, write_frame, RunnerMessage, RunnerSpawnRequest,
 };
@@ -78,7 +77,6 @@ fn run_spawned_process(
 ) -> io::Result<()> {
     verify_runner_identity(&request.expected_account_sid)?;
     let token = create_restricted_token(&request.capability_sid)?;
-    let mut null_device_lease = NullDeviceLease::acquire(&request.capability_sid)?;
     let local_request = LocalExecutionRequest {
         process_id: "windows-sandbox-runner-child".to_string(),
         tool_id: "windows-sandbox-runner-child".to_string(),
@@ -181,7 +179,6 @@ fn run_spawned_process(
             thread::sleep(JOB_REAPER_POLL);
         }
     }
-    let _ = null_device_lease.release();
     Ok(())
 }
 

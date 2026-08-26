@@ -65,6 +65,7 @@ use windows_conpty::RestrictedConpty;
 use windows_job::create_kill_on_close_job;
 #[cfg(test)]
 use windows_job::preserve_job_descendants;
+use windows_null::NullDeviceLease;
 
 const DISABLE_MAX_PRIVILEGE: u32 = 0x01;
 const LUA_TOKEN: u32 = 0x04;
@@ -115,6 +116,7 @@ pub(super) fn start_windows_restricted_execution_process(
     let sandbox_group_sid = windows_sandbox_users_group_sid()?;
     let capability_sid = capability_sid();
     let acl_lease = AclLease::acquire(&sandbox_group_sid, &capability_sid, acl_plan)?;
+    let null_device_lease = NullDeviceLease::acquire(&capability_sid)?;
     let transport = windows_runner_host::spawn_runner_transport(
         &request,
         &cwd,
@@ -138,7 +140,14 @@ pub(super) fn start_windows_restricted_execution_process(
     let (final_tx, final_rx) = oneshot::channel();
     thread::spawn(move || {
         windows_runner_supervisor::supervise(
-            transport, acl_lease, process, output_tx, state_tx, final_tx, control_rx,
+            transport,
+            acl_lease,
+            null_device_lease,
+            process,
+            output_tx,
+            state_tx,
+            final_tx,
+            control_rx,
         )
     });
 

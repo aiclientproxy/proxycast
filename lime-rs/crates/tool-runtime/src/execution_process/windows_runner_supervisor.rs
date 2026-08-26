@@ -1,4 +1,5 @@
 use super::windows_acl::AclLease;
+use super::windows_null::NullDeviceLease;
 use super::windows_runner_host::RunnerTransport;
 use super::windows_runner_protocol::{
     decode_bytes, encode_bytes, read_frame, write_frame, RunnerMessage,
@@ -21,6 +22,7 @@ use windows_sys::Win32::System::Threading::{TerminateProcess, WaitForSingleObjec
 pub(super) fn supervise(
     transport: RunnerTransport,
     acl_lease: AclLease,
+    null_device_lease: NullDeviceLease,
     process: Arc<Mutex<ExecutionProcess>>,
     output_tx: tokio_mpsc::UnboundedSender<ExecutionOutputDelta>,
     state_tx: watch::Sender<ExecutionProcessSnapshot>,
@@ -138,7 +140,7 @@ pub(super) fn supervise(
             TerminateProcess(runner_process.raw(), 1);
         }
     }
-    thread::spawn(move || reap_runner(runner_process, pipe_write, acl_lease));
+    thread::spawn(move || reap_runner(runner_process, pipe_write, acl_lease, null_device_lease));
 }
 
 fn forward_control(
@@ -200,6 +202,11 @@ fn update_status(
     let _ = state_tx.send(snapshot);
 }
 
-fn reap_runner(process: OwnedHandle, _pipe_write: File, _acl_lease: AclLease) {
+fn reap_runner(
+    process: OwnedHandle,
+    _pipe_write: File,
+    _acl_lease: AclLease,
+    _null_device_lease: NullDeviceLease,
+) {
     let _ = unsafe { WaitForSingleObject(process.raw(), u32::MAX) } == WAIT_OBJECT_0;
 }
