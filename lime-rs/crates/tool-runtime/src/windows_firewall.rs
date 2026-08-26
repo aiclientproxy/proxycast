@@ -305,6 +305,8 @@ mod platform {
             // Windows Firewall COM read-back expands the IPv6 any-address
             // into an explicit range while preserving the same address set.
             "::-::" => "::".to_owned(),
+            // The same API expands this IPv4 CIDR into its dotted netmask.
+            "127.0.0.0/255.0.0.0" => "127.0.0.0/8".to_owned(),
             _ => value,
         }
     }
@@ -334,6 +336,14 @@ mod platform {
             assert!(same_csv_values(
                 "::-::, 0.0.0.0-126.255.255.255",
                 "::,0.0.0.0-126.255.255.255"
+            ));
+        }
+
+        #[test]
+        fn csv_comparison_accepts_windows_ipv4_netmask_readback() {
+            assert!(same_csv_values(
+                "127.0.0.0/255.0.0.0, ::/127",
+                "127.0.0.0/8,::/127"
             ));
         }
 
