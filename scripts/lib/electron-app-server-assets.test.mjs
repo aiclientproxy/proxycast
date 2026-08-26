@@ -103,6 +103,31 @@ describe("electron app-server assets", () => {
     });
   });
 
+  it("Windows packaged manifest 包含 sandbox setup 与 runner 哈希", async () => {
+    const manifest = await buildElectronAppServerReleaseManifest({
+      binaryPath:
+        "/repo/lime/dist-electron/app-server/win32-x64/app-server.exe",
+      codeModeHostBinaryPath:
+        "/repo/lime/dist-electron/app-server/win32-x64/code-mode-host.exe",
+      windowsSandboxSetupBinaryPath:
+        "/repo/lime/dist-electron/app-server/win32-x64/windows-sandbox-setup.exe",
+      windowsSandboxRunnerBinaryPath:
+        "/repo/lime/dist-electron/app-server/win32-x64/windows-sandbox-runner.exe",
+      version: "1.59.0",
+      platform: "win32-x64",
+      sha256File: async (filePath) => `sha256:${path.basename(filePath)}`,
+    });
+
+    expect(manifest.artifacts[0]).toEqual({
+      platform: "win32-x64",
+      url: "app-resource://app-server/win32-x64/app-server.exe",
+      sha256: "sha256:app-server.exe",
+      codeModeHostSha256: "sha256:code-mode-host.exe",
+      windowsSandboxSetupSha256: "sha256:windows-sandbox-setup.exe",
+      windowsSandboxRunnerSha256: "sha256:windows-sandbox-runner.exe",
+    });
+  });
+
   it("准备 sidecar 二进制和 release manifest", async () => {
     const calls = [];
     const outputRoot = path.resolve("/repo/lime/dist-electron");

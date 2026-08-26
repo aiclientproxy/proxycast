@@ -65,17 +65,14 @@ fn test_sandbox_backend_plan_maps_supported_platforms() {
             assert_eq!(plan.status, SandboxBackendStatus::Ready);
             assert!(plan.enforced);
         } else {
-            assert!(matches!(
-                plan.status,
-                SandboxBackendStatus::Unavailable | SandboxBackendStatus::Planned
-            ));
+            assert_eq!(plan.status, SandboxBackendStatus::Unavailable);
             assert!(!plan.enforced);
         }
     }
 }
 
 #[test]
-fn test_windows_restricted_token_backend_is_planned_until_platform_evidence_exists() {
+fn test_windows_restricted_token_backend_is_ready_after_platform_evidence() {
     let metadata = json!({ "workspaceSandbox": { "enabled": true } });
     let plan = plan_sandbox_backend(SandboxBackendPlanInput {
         sandbox_profile: ToolExecutionSandboxProfile::WorkspaceCommand,
@@ -86,15 +83,12 @@ fn test_windows_restricted_token_backend_is_planned_until_platform_evidence_exis
     });
 
     assert_eq!(plan.backend, SandboxBackend::RestrictedToken);
-    assert_eq!(plan.status, SandboxBackendStatus::Planned);
-    assert!(!plan.enforced);
-    assert_eq!(
-        plan.reason_code,
-        "sandbox_backend_windows_runner_platform_evidence_pending"
-    );
+    assert_eq!(plan.status, SandboxBackendStatus::Ready);
+    assert!(plan.enforced);
+    assert_eq!(plan.reason_code, "sandbox_backend_ready");
     assert_eq!(
         plan.reason,
-        "Windows restricted token runner foundation 已接入 current execution process owner，但仍缺 Windows toolchain 与真机 enforcement 证据"
+        "Windows restricted token backend 可用于当前 shell 工具执行"
     );
 }
 

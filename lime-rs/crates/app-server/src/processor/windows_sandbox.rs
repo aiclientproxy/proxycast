@@ -434,31 +434,37 @@ mod tests {
     }
 
     #[test]
-    fn enabled_windows_sandbox_exposes_runner_gap_as_update_required() {
+    fn enabled_windows_sandbox_reports_ready_after_platform_evidence() {
         let mut config = Config::default();
         config.agent.workspace_sandbox.enabled = true;
 
         assert_eq!(
             windows_sandbox_readiness(&config, SandboxBackendPlatform::Windows),
-            WindowsSandboxReadiness::UpdateRequired
+            WindowsSandboxReadiness::Ready
         );
     }
 
+    #[cfg(not(windows))]
     #[test]
-    fn setup_remains_fail_closed_when_the_backend_is_not_enforced() {
+    fn setup_remains_fail_closed_off_windows() {
         let mut config = Config::default();
         config.agent.workspace_sandbox.enabled = true;
 
         let error = windows_sandbox_setup_error(&config, Some(&PathBuf::from("C:/workspace")))
             .expect("non-Windows setup must fail closed");
         assert!(error.contains("only available on Windows"));
+    }
 
-        let error = windows_sandbox_setup_error_for_platform(
+    #[test]
+    fn windows_setup_capability_is_ready_after_platform_evidence() {
+        let mut config = Config::default();
+        config.agent.workspace_sandbox.enabled = true;
+
+        assert!(windows_sandbox_setup_error_for_platform(
             &config,
             Some(&PathBuf::from("C:/workspace")),
             SandboxBackendPlatform::Windows,
         )
-        .expect("setup must not claim success before runner evidence");
-        assert!(error.contains("fail-closed"));
+        .is_none());
     }
 }

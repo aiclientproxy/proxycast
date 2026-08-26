@@ -271,6 +271,45 @@ describe("verify-electron-package-resources sidecar integrity", () => {
     expect(result.windowsSandboxRunnerIntegrity.acceptedBecause).toBe("sha256");
   });
 
+  it("Windows 资源缺少 sandbox runner 时 fail closed", () => {
+    const root = createResourceRoot({
+      platformKey: "win32-x64",
+      appServer: "app-server",
+      codeModeHost: "code-mode-host",
+      windowsSandboxSetup: "windows-sandbox-setup",
+      windowsSandboxRunner: "windows-sandbox-runner",
+      manifestAppServer: "app-server",
+      manifestCodeModeHost: "code-mode-host",
+      manifestWindowsSandboxSetup: "windows-sandbox-setup",
+      manifestWindowsSandboxRunner: "windows-sandbox-runner",
+    });
+    rmSync(
+      path.join(root, "app-server", "win32-x64", "windows-sandbox-runner.exe"),
+    );
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "win32", arch: "x64" }),
+    ).toThrow(/Windows sandbox runner is missing/u);
+  });
+
+  it("Windows sandbox runner digest 漂移时 fail closed", () => {
+    const root = createResourceRoot({
+      platformKey: "win32-x64",
+      appServer: "app-server",
+      codeModeHost: "code-mode-host",
+      windowsSandboxSetup: "windows-sandbox-setup",
+      windowsSandboxRunner: "modified-windows-sandbox-runner",
+      manifestAppServer: "app-server",
+      manifestCodeModeHost: "code-mode-host",
+      manifestWindowsSandboxSetup: "windows-sandbox-setup",
+      manifestWindowsSandboxRunner: "windows-sandbox-runner",
+    });
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "win32", arch: "x64" }),
+    ).toThrow(/Windows sandbox runner sha256 mismatch/u);
+  });
+
   it("拒绝哈希变化且严格 codesign 失败的 macOS code-mode host", () => {
     const root = createResourceRoot();
 

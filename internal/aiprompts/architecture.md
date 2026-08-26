@@ -2637,7 +2637,7 @@ current owner；它不是 Electron backend、App Server method 或平级 process
 退出时遵循 Codex 语义关闭 `KILL_ON_JOB_CLOSE`，由 reaper 持有 Job 与 ACL lease 到 Job 为空，取消、超时、控制断开或
 等待失败则终止整棵进程树并立即 rollback；allowlisted stdin handle、bounded output、ACL lease rollback 和
 Job Object descendant cleanup 已进入 target-gated integration matrix。ConPTY 的 stdin/resize/combined-output
-也已进入同一矩阵；最新 Windows/MSVC 真机证据为 `6/7`，剩余 offline loopback TCP 阻断尚未关闭。网络隔离 current owner 由三部分组成：
+也已进入同一矩阵；Windows Quality run `32975574520`（SHA `19e08daa2`）已取得 schema v3 `7/7` 真机证据。网络隔离 current owner 由三部分组成：
 `windows_setup` 编排 offline/online 本地账户与 machine-scope DPAPI artifacts，其中账户、组与 SID 操作集中在
 `windows_setup::accounts` 子模块；`windows_firewall` 使用 offline account SID
 安装一条非 loopback 全协议规则和两条 loopback TCP/UDP 出站 block rule，并拒绝 group-policy override、部分 profile 生效、active
@@ -2653,8 +2653,9 @@ token 侧的 sandbox group ACE 与 restricted-token 侧的短生命周期 capabi
 保存原始 DACL security descriptor，进程树结束后逆序恢复，不能用删除稳定 group ACE 的方式破坏用户预先存在的 ACL。
 protected metadata 与显式 read-only carveout 的 deny-write 继续只绑定 capability SID；显式 `Deny` 则同时拒绝 sandbox
 group 与 capability SID 的全部访问，与 Codex restricted access check 和 permission profile 语义一致。
-因平台 evidence 尚未完整，当前 `SandboxBackendStatus::Planned`、`enforced=false` 保持不变，不能由 runner 源码、
-Settings 或 setup 文案推断 ready。
+Windows backend capability 在上述真机矩阵与 packaged runner 守卫关闭后为 `SandboxBackendStatus::Ready`、`enforced=true`；
+App Server 仍先验证 setup marker、账户、凭证、Firewall/WFP read-back，未配置或属性漂移继续返回 `UpdateRequired`，
+不能由 Settings 或 setup 文案推断 ready。
 
 Architecture impact: major; Windows restricted execution now uses a sandbox-account runner sidecar inside the existing
 `tool-runtime` owner, and Windows packages must carry that runtime resource beside App Server. Responsible developer
@@ -2688,7 +2689,7 @@ Grok-aligned `model-provider`，与此控制面无关。
 
 Architecture impact: major；本节固定 Windows readiness、typed setup lifecycle 与实际 enforcement 的 fail-closed
 边界，并把 Desktop Settings、App Server 与 tool-runtime 的唯一数据流写入架构事实源。Responsible developer
-confirmation: root, 2026-08-26。Confirmation content: 已核对 `SandboxBackendStatus::Planned`、`enforced=false`、
+confirmation: root, 2026-08-26。Confirmation content: 已核对 `SandboxBackendStatus::Ready`、`enforced=true`、
 per-user Firewall/WFP read-back、offline/online account 选择、`windows_setup::accounts` 子 owner、sandbox group + capability SID 双重 ACL、原始 DACL rollback、
 七项 Windows evidence matrix、非 Windows/未配置状态，以及
 Desktop/TUI、Codex runtime 和 Grok model/multimodal owner 分界。

@@ -77,7 +77,6 @@ pub enum SandboxBackendStatus {
     NotRequired,
     Disabled,
     Ready,
-    Planned,
     Unavailable,
     Bypassed,
 }
@@ -88,7 +87,6 @@ impl SandboxBackendStatus {
             Self::NotRequired => "not_required",
             Self::Disabled => "disabled",
             Self::Ready => "ready",
-            Self::Planned => "planned",
             Self::Unavailable => "unavailable",
             Self::Bypassed => "bypassed",
         }
@@ -285,10 +283,10 @@ pub fn plan_sandbox_backend(input: SandboxBackendPlanInput<'_>) -> SandboxBacken
         ),
         SandboxBackendPlatform::Windows => (
             SandboxBackend::RestrictedToken,
-            SandboxBackendStatus::Planned,
-            false,
-            "sandbox_backend_windows_runner_platform_evidence_pending",
-            "Windows restricted token runner foundation 已接入 current execution process owner，但仍缺 Windows toolchain 与真机 enforcement 证据",
+            SandboxBackendStatus::Ready,
+            true,
+            "sandbox_backend_ready",
+            "Windows restricted token backend 可用于当前 shell 工具执行",
         ),
         SandboxBackendPlatform::Unsupported => (
             SandboxBackend::None,
