@@ -126,6 +126,7 @@ pub(super) fn start_windows_restricted_execution_process(
     let process = Arc::new(Mutex::new(process_state));
     let (output_tx, output_rx) = mpsc::unbounded_channel();
     let (control_tx, control_rx) = std::sync::mpsc::channel();
+    let (reader_done_tx, reader_done_rx) = std::sync::mpsc::channel();
     let (state_tx, state_rx) = watch::channel(initial_snapshot);
     let (final_tx, final_rx) = oneshot::channel();
 
@@ -146,18 +147,21 @@ pub(super) fn start_windows_restricted_execution_process(
     let stdout_process = Arc::clone(&process);
     let stdout_state = state_tx.clone();
     let stdout_output = output_tx.clone();
-    let stdout_reader = thread::spawn(move || {
+    let stdout_reader_done = reader_done_tx.clone();
+    let _stdout_reader = thread::spawn(move || {
         read_pipe_stream(
             stdout_read,
             output_kind,
             stdout_process,
             stdout_output,
             stdout_state,
-        )
+        );
+        let _ = stdout_reader_done.send(());
     });
-    let stderr_reader = stderr_read.map(|stderr_read| {
+    let _stderr_reader = stderr_read.map(|stderr_read| {
         let stderr_process = Arc::clone(&process);
         let stderr_state = state_tx.clone();
+        let stderr_reader_done = reader_done_tx.clone();
         thread::spawn(move || {
             read_pipe_stream(
                 stderr_read,
@@ -165,7 +169,8 @@ pub(super) fn start_windows_restricted_execution_process(
                 stderr_process,
                 output_tx,
                 stderr_state,
-            )
+            );
+            let _ = stderr_reader_done.send(());
         })
     });
     thread::spawn(move || {
@@ -182,6 +187,7 @@ pub(super) fn start_windows_restricted_execution_process(
             state_tx,
             final_tx,
             control_rx,
+            reader_done_rx,
         )
     });
 

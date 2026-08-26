@@ -75,13 +75,12 @@ pub(super) fn supervise_restricted_process(
     job: OwnedHandle,
     mut stdin: Option<OwnedHandle>,
     pseudoconsole: Option<RestrictedConpty>,
-    stdout_reader: thread::JoinHandle<()>,
-    stderr_reader: Option<thread::JoinHandle<()>>,
     acl_lease: AclLease,
     process: Arc<Mutex<ExecutionProcess>>,
     state_tx: watch::Sender<ExecutionProcessSnapshot>,
     final_tx: oneshot::Sender<ExecutionProcessSnapshot>,
     control_rx: std::sync::mpsc::Receiver<LocalExecutionControl>,
+    reader_done_rx: std::sync::mpsc::Receiver<()>,
 ) {
     let mut wait_error = None;
     loop {
@@ -118,10 +117,12 @@ pub(super) fn supervise_restricted_process(
         drop(job);
         drop(acl_lease);
     }
+    let reader_count = if pseudoconsole.is_some() { 1 } else { 2 };
     drop(pseudoconsole);
-    let _ = stdout_reader.join();
-    if let Some(stderr_reader) = stderr_reader {
-        let _ = stderr_reader.join();
+    // A descendant can retain an inherited pipe handle after the root exits.
+    // Bound the drain window so cleanup and the terminal snapshot cannot hang.
+    for _ in 0..reader_count {
+        let _ = reader_done_rx.recv_timeout(Duration::from_secs(5));
     }
     drop(thread_handle);
 
