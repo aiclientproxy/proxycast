@@ -4,6 +4,7 @@ use app_server_protocol::protocol::v2::{AdditionalFileSystemPermissions, FileSys
 use app_server_protocol::protocol::v2::{
     FileSystemAccessMode, FileSystemPath, FileSystemSpecialPath, GrantedPermissionProfile,
 };
+use std::collections::HashMap;
 use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use windows_sys::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
@@ -35,6 +36,7 @@ pub(super) fn build_acl_plan(
     cwd: &Path,
     policy: RequestedSandboxPolicy,
     permissions: Option<&GrantedPermissionProfile>,
+    environment: &HashMap<String, String>,
 ) -> io::Result<AclPlan> {
     let mut read_grants = vec![canonical_existing(cwd)?];
     let mut write_grants = Vec::new();
@@ -42,6 +44,7 @@ pub(super) fn build_acl_plan(
     let mut access_denies = Vec::new();
     if policy == RequestedSandboxPolicy::WorkspaceWrite {
         write_grants.push(canonical_existing(cwd)?);
+        write_grants.extend(windows_temp_write_roots(environment)?);
         for name in PROTECTED_METADATA_NAMES {
             let path = cwd.join(name);
             if path.exists() {
@@ -71,12 +74,11 @@ pub(super) fn build_acl_plan(
     }
     read_grants.sort();
     read_grants.dedup();
-    write_grants.sort();
-    write_grants.dedup();
+    write_grants = minimal_roots(write_grants);
     access_denies.sort();
     access_denies.dedup();
     write_grants.retain(|path| access_denies.binary_search(path).is_err());
-    read_grants.retain(|path| write_grants.binary_search(path).is_err());
+    read_grants.retain(|path| !write_grants.iter().any(|root| path.starts_with(root)));
     read_grants.retain(|path| access_denies.binary_search(path).is_err());
     write_denies.sort();
     write_denies.dedup();
@@ -87,6 +89,40 @@ pub(super) fn build_acl_plan(
         write_denies,
         access_denies,
     })
+}
+
+fn windows_temp_write_roots(environment: &HashMap<String, String>) -> io::Result<Vec<PathBuf>> {
+    ["TEMP", "TMP"]
+        .into_iter()
+        .filter_map(|key| {
+            environment
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(key))
+                .map(|(_, value)| PathBuf::from(value.as_str()))
+        })
+        .filter(|path| path.is_absolute())
+        .map(|path| canonical_existing(&path))
+        .collect()
+}
+
+fn minimal_roots(mut roots: Vec<PathBuf>) -> Vec<PathBuf> {
+    roots.sort_by(|left, right| {
+        left.components()
+            .count()
+            .cmp(&right.components().count())
+            .then_with(|| left.cmp(right))
+    });
+    let mut minimal = Vec::new();
+    for root in roots {
+        if !minimal
+            .iter()
+            .any(|parent: &PathBuf| root.starts_with(parent))
+        {
+            minimal.push(root);
+        }
+    }
+    minimal.sort();
+    minimal
 }
 
 fn resolve_permission_path(path: &FileSystemPath, cwd: &Path) -> io::Result<Option<PathBuf>> {
@@ -489,8 +525,13 @@ mod tests {
     fn workspace_acl_plan_grants_workspace_and_denies_metadata() {
         let root = tempfile::tempdir().expect("workspace");
         std::fs::create_dir(root.path().join(".git")).expect("git metadata");
-        let plan = build_acl_plan(root.path(), RequestedSandboxPolicy::WorkspaceWrite, None)
-            .expect("ACL plan");
+        let plan = build_acl_plan(
+            root.path(),
+            RequestedSandboxPolicy::WorkspaceWrite,
+            None,
+            &HashMap::new(),
+        )
+        .expect("ACL plan");
 
         assert_eq!(
             plan.write_grants,
@@ -507,8 +548,13 @@ mod tests {
     #[test]
     fn read_only_acl_plan_grants_workspace_read_access() {
         let root = tempfile::tempdir().expect("workspace");
-        let plan =
-            build_acl_plan(root.path(), RequestedSandboxPolicy::ReadOnly, None).expect("ACL plan");
+        let plan = build_acl_plan(
+            root.path(),
+            RequestedSandboxPolicy::ReadOnly,
+            None,
+            &HashMap::new(),
+        )
+        .expect("ACL plan");
 
         assert_eq!(
             plan.read_grants,
@@ -552,6 +598,7 @@ mod tests {
             root.path(),
             RequestedSandboxPolicy::WorkspaceWrite,
             Some(&permissions),
+            &HashMap::new(),
         )
         .expect("ACL plan");
 
@@ -570,5 +617,35 @@ mod tests {
     fn ordinary_existing_paths_are_not_reparse_points() {
         let root = tempfile::tempdir().expect("workspace");
         reject_reparse_components(root.path()).expect("ordinary path should be accepted");
+    }
+
+    #[test]
+    fn workspace_acl_plan_grants_windows_temp_roots() {
+        let root = tempfile::tempdir().expect("fixture root");
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir(&workspace).expect("workspace directory");
+        let environment = HashMap::from([
+            (
+                "Temp".to_string(),
+                root.path().to_string_lossy().into_owned(),
+            ),
+            (
+                "TMP".to_string(),
+                root.path().to_string_lossy().into_owned(),
+            ),
+        ]);
+
+        let plan = build_acl_plan(
+            &workspace,
+            RequestedSandboxPolicy::WorkspaceWrite,
+            None,
+            &environment,
+        )
+        .expect("ACL plan");
+
+        assert_eq!(
+            plan.write_grants,
+            vec![std::fs::canonicalize(root.path()).unwrap()]
+        );
     }
 }

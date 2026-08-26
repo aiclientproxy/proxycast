@@ -112,7 +112,12 @@ pub(super) fn start_windows_restricted_execution_process(
             .entry("TERM".to_string())
             .or_insert_with(|| "xterm-256color".to_string());
     }
-    let acl_plan = build_acl_plan(&cwd, policy, sandbox.granted_permissions.as_ref())?;
+    let acl_plan = build_acl_plan(
+        &cwd,
+        policy,
+        sandbox.granted_permissions.as_ref(),
+        &request.env,
+    )?;
     let sandbox_group_sid = windows_sandbox_users_group_sid()?;
     let capability_sid = capability_sid();
     let acl_lease = AclLease::acquire(&sandbox_group_sid, &capability_sid, acl_plan)?;
