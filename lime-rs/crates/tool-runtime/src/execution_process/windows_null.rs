@@ -27,7 +27,7 @@ const NULL_DEVICE_MUTEX: &str = "Local\\LimeSandboxNullDeviceAcl";
 /// PowerShell may open NUL while initializing redirected standard streams. The capability ACE
 /// is removed when this lease ends so per-execution SIDs do not accumulate in the device DACL.
 pub(super) struct NullDeviceLease {
-    capability: LocalSid,
+    capability_sid: String,
     released: bool,
 }
 
@@ -37,7 +37,7 @@ impl NullDeviceLease {
         let _guard = NullDeviceAclLock::acquire()?;
         update_null_device_acl(capability.raw(), SET_ACCESS)?;
         Ok(Self {
-            capability,
+            capability_sid: capability_sid.to_owned(),
             released: false,
         })
     }
@@ -46,8 +46,9 @@ impl NullDeviceLease {
         if self.released {
             return Ok(());
         }
+        let capability = LocalSid::parse(&self.capability_sid)?;
         let _guard = NullDeviceAclLock::acquire()?;
-        update_null_device_acl(self.capability.raw(), REVOKE_ACCESS)?;
+        update_null_device_acl(capability.raw(), REVOKE_ACCESS)?;
         self.released = true;
         Ok(())
     }

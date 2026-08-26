@@ -327,7 +327,6 @@ fn dpapi_protect(plaintext: &[u8]) -> io::Result<Vec<u8>> {
 
 #[cfg(windows)]
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
         MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
     };
