@@ -137,9 +137,15 @@ fn sddl_sids(sddl: &str) -> HashSet<String> {
         .collect()
 }
 
-async fn wait_for_path(path: &Path) {
+async fn wait_for_path(handle: &LocalExecutionProcessHandle, path: &Path) {
     tokio::time::timeout(Duration::from_secs(5), async {
         while !path.exists() {
+            let snapshot = handle.status();
+            assert!(
+                !snapshot.status.is_terminal(),
+                "restricted process exited before creating {}: {snapshot:#?}",
+                path.display()
+            );
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
     })
@@ -194,7 +200,7 @@ async fn workspace_write_allows_workspace_and_denies_metadata_and_external_paths
     request.stdin = true;
     let mut handle =
         start_local_execution_process(request).expect("restricted workspace process should start");
-    wait_for_path(&inside).await;
+    wait_for_path(&handle, &inside).await;
 
     let baseline_workspace_sddl = &acl_baselines[0].1;
     let active_workspace_sddl = acl_sddl(&workspace);
@@ -291,7 +297,11 @@ async fn restricted_execution_uses_offline_account_and_blocks_network() {
     )
     .await;
     assert_eq!(snapshot.status, ExecutionProcessStatus::Exited);
-    assert_eq!(snapshot.exit_code, Some(0));
+    assert_eq!(
+        snapshot.exit_code,
+        Some(0),
+        "offline restricted process must exit successfully: {snapshot:#?}"
+    );
     assert!(
         marker.is_file(),
         "offline process must execute inside the workspace"
@@ -325,6 +335,11 @@ async fn restricted_execution_bounds_large_output() {
     .await;
 
     assert_eq!(snapshot.status, ExecutionProcessStatus::Exited);
+    assert_eq!(
+        snapshot.exit_code,
+        Some(0),
+        "large-output restricted process must exit successfully: {snapshot:#?}"
+    );
     assert!(snapshot.output_truncated, "large output must be truncated");
     assert!(
         snapshot.output_omitted_bytes > 0,
@@ -349,7 +364,11 @@ async fn restricted_execution_preserves_allowlisted_stdin_handle() {
     let snapshot = run_to_terminal(handle).await;
 
     assert_eq!(snapshot.status, ExecutionProcessStatus::Exited);
-    assert_eq!(snapshot.exit_code, Some(0));
+    assert_eq!(
+        snapshot.exit_code,
+        Some(0),
+        "stdin restricted process must exit successfully: {snapshot:#?}"
+    );
     assert!(
         snapshot.retained_output.contains("received:sandbox-input"),
         "child output should contain the stdin payload: {:?}",
@@ -442,6 +461,11 @@ async fn terminate_ends_restricted_process_and_its_job() {
     .expect("long-running process should start");
 
     tokio::time::sleep(Duration::from_millis(250)).await;
+    let before_terminate = handle.status();
+    assert!(
+        !before_terminate.status.is_terminal(),
+        "terminate target exited before control could be sent: {before_terminate:#?}"
+    );
     handle
         .terminate()
         .expect("terminate should reach supervisor");
