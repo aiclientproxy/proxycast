@@ -490,7 +490,7 @@ async fn terminate_ends_restricted_process_and_its_job() {
         "$child = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 10; Set-Content -LiteralPath ''{}'' -Value leaked' -PassThru; Start-Sleep -Seconds 10",
         ps_literal(&marker)
     );
-    let handle = start_local_execution_process(restricted_request(
+    let mut handle = start_local_execution_process(restricted_request(
         fixture.path(),
         powershell_script(&script),
     ))
