@@ -2641,7 +2641,9 @@ Job Object descendant cleanup 已进入 target-gated integration matrix。ConPTY
 `windows_setup` 编排 offline/online 本地账户与 machine-scope DPAPI artifacts，其中账户、组与 SID 操作集中在
 `windows_setup::accounts` 子模块；`windows_firewall` 使用 offline account SID
 安装一条非 loopback 全协议规则和两条 loopback TCP/UDP 出站 block rule，并拒绝 group-policy override、部分 profile 生效、active
-profile firewall disabled 或属性 read-back 漂移；`windows_wfp` 保留按同一账户匹配的 ICMP/DNS/SMB 补充过滤器。
+profile firewall disabled 或属性 read-back 漂移；`windows_wfp` 以同一账户的 ALE user identity 安装 V4/V6 全 outbound-connect block，
+并保留 ICMP/DNS/SMB 专项过滤器作为 fail-closed defense in depth。Firewall/WFP 的属性 read-back 只能证明规则存在，仍须以
+真机连接矩阵证明 enforcement。
 restricted runner 在 `network.enabled=true` 时使用 online account，否则使用 offline account；sandbox account user SID 进入
 restricted SID access check，但不进入默认 DACL 充当 capability。runner 不设置
 `SBX_NONET_ACTIVE` 或代理环境变量冒充 enforcement。命令 lowering 仍对

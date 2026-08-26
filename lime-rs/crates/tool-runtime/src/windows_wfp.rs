@@ -78,12 +78,27 @@ mod platform {
 
     const USER_ICMP_V4: &[ConditionSpec] = &[ConditionSpec::User, ConditionSpec::Protocol(1)];
     const USER_ICMP_V6: &[ConditionSpec] = &[ConditionSpec::User, ConditionSpec::Protocol(58)];
+    const USER_ALL_CONNECT: &[ConditionSpec] = &[ConditionSpec::User];
     const USER_DNS: &[ConditionSpec] = &[ConditionSpec::User, ConditionSpec::RemotePort(53)];
     const USER_DNS_TLS: &[ConditionSpec] = &[ConditionSpec::User, ConditionSpec::RemotePort(853)];
     const USER_SMB: &[ConditionSpec] = &[ConditionSpec::User, ConditionSpec::RemotePort(445)];
     const USER_NETBIOS: &[ConditionSpec] = &[ConditionSpec::User, ConditionSpec::RemotePort(139)];
 
     const FILTER_SPECS: &[FilterSpec] = &[
+        FilterSpec {
+            key: GUID::from_u128(0xacd446ae_f297_407b_91a1_ede4be9277d9),
+            name: "lime_wfp_all_connect_v4",
+            description: "Block sandbox-account outbound connect v4",
+            layer_key: FWPM_LAYER_ALE_AUTH_CONNECT_V4,
+            conditions: USER_ALL_CONNECT,
+        },
+        FilterSpec {
+            key: GUID::from_u128(0xe7e6e402_e609_4ca9_a974_3e8ec51eda38),
+            name: "lime_wfp_all_connect_v6",
+            description: "Block sandbox-account outbound connect v6",
+            layer_key: FWPM_LAYER_ALE_AUTH_CONNECT_V6,
+            conditions: USER_ALL_CONNECT,
+        },
         FilterSpec {
             key: GUID::from_u128(0xd3792b9a_2f8d_4d54_a401_8d7b92589e02),
             name: "lime_wfp_icmp_connect_v4",
