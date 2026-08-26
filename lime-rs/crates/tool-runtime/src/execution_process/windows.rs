@@ -643,10 +643,7 @@ fn spawn_restricted_pipe_process(
                 0,
                 ptr::null(),
                 command_line.as_mut_ptr(),
-                CREATE_UNICODE_ENVIRONMENT
-                    | CREATE_SUSPENDED
-                    | CREATE_NO_WINDOW
-                    | EXTENDED_STARTUPINFO_PRESENT,
+                CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | CREATE_NO_WINDOW,
                 env_block.as_mut_ptr() as *mut c_void,
                 cwd.as_ptr(),
                 &startup.StartupInfo,
@@ -728,7 +725,7 @@ fn spawn_restricted_conpty_process(
                 0,
                 ptr::null(),
                 command_line.as_mut_ptr(),
-                CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT,
+                CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED,
                 env_block.as_mut_ptr() as *mut c_void,
                 cwd.as_ptr(),
                 &startup.StartupInfo,
