@@ -38,7 +38,7 @@ use windows_sys::Win32::System::Threading::{
     CreateProcessAsUserW, CreateProcessWithTokenW, GetCurrentProcess, GetExitCodeProcess,
     OpenProcessToken, ResumeThread, WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED,
     CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, LOGON_WITH_PROFILE,
-    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
 };
 
 #[path = "windows_acl.rs"]
@@ -609,7 +609,8 @@ fn spawn_restricted_pipe_process(
     let (stdout_read, stdout_write) = create_pipe_pair(false)?;
     let (stderr_read, stderr_write) = create_pipe_pair(false)?;
     let job = create_kill_on_close_job()?;
-    let mut command_line = to_wide(argv_to_command_line(&request.command));
+    let command_line_text = argv_to_command_line(&request.command);
+    let mut command_line = to_wide(&command_line_text);
     let mut env_block = environment_block(&request.env)?;
     let cwd = to_wide(cwd.as_os_str());
     let mut desktop = to_wide("winsta0\\default");
@@ -646,30 +647,29 @@ fn spawn_restricted_pipe_process(
         )
     };
     if created == 0 && unsafe { GetLastError() } == ERROR_PRIVILEGE_NOT_HELD {
-        let mut fallback_startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
-        fallback_startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
-        fallback_startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-        fallback_startup.StartupInfo.hStdInput = stdin_read.raw();
-        fallback_startup.StartupInfo.hStdOutput = stdout_write.raw();
-        fallback_startup.StartupInfo.hStdError = stderr_write.raw();
+        // Process creation may modify lpCommandLine even when it fails. Rebuild
+        // it before retrying or PowerShell can start without its arguments.
+        command_line = to_wide(&command_line_text);
+        let mut fallback_startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
+        fallback_startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
+        fallback_startup.dwFlags = STARTF_USESTDHANDLES;
+        fallback_startup.hStdInput = stdin_read.raw();
+        fallback_startup.hStdOutput = stdout_write.raw();
+        fallback_startup.hStdError = stderr_write.raw();
         // CreateProcessWithTokenW grants the token access to the inherited
         // window station/desktop only when lpDesktop is null. The explicit
         // CreateProcessAsUserW path keeps the current desktop contract.
-        fallback_startup.StartupInfo.lpDesktop = ptr::null_mut();
-        fallback_startup.lpAttributeList = attributes.as_mut_ptr();
+        fallback_startup.lpDesktop = ptr::null_mut();
         created = unsafe {
             CreateProcessWithTokenW(
                 token,
                 LOGON_WITH_PROFILE,
                 ptr::null(),
                 command_line.as_mut_ptr(),
-                CREATE_UNICODE_ENVIRONMENT
-                    | CREATE_SUSPENDED
-                    | CREATE_NO_WINDOW
-                    | EXTENDED_STARTUPINFO_PRESENT,
+                CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | CREATE_NO_WINDOW,
                 env_block.as_mut_ptr() as *mut c_void,
                 cwd.as_ptr(),
-                &fallback_startup.StartupInfo,
+                &fallback_startup,
                 &mut process_info,
             )
         };
@@ -731,7 +731,8 @@ fn spawn_restricted_conpty_process(
     let (rows, cols) = request.pty_size.unwrap_or((24, 120));
     let (pseudoconsole, stdin_write, stdout_read) = RestrictedConpty::create(rows, cols)?;
     let job = create_kill_on_close_job()?;
-    let mut command_line = to_wide(argv_to_command_line(&request.command));
+    let command_line_text = argv_to_command_line(&request.command);
+    let mut command_line = to_wide(&command_line_text);
     let mut env_block = environment_block(&request.env)?;
     let cwd = to_wide(cwd.as_os_str());
     let mut desktop = to_wide("winsta0\\default");
@@ -765,6 +766,8 @@ fn spawn_restricted_conpty_process(
         )
     };
     if created == 0 && unsafe { GetLastError() } == ERROR_PRIVILEGE_NOT_HELD {
+        // Process creation may modify lpCommandLine even when it fails.
+        command_line = to_wide(&command_line_text);
         // CreateProcessWithTokenW grants the token access to the inherited
         // desktop only when lpDesktop is null. The AsUser path above retains
         // the explicit desktop contract.
