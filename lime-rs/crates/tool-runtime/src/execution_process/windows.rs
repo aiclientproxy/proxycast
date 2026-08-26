@@ -30,9 +30,8 @@ use windows_sys::Win32::System::JobObjects::{
 };
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
-    CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken, CREATE_NO_WINDOW,
-    CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION,
-    STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken, CREATE_UNICODE_ENVIRONMENT,
+    EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
 };
 
 #[path = "windows_acl.rs"]
@@ -45,6 +44,8 @@ mod windows_audit;
 mod windows_conpty;
 #[path = "windows_job.rs"]
 mod windows_job;
+#[path = "windows_null.rs"]
+mod windows_null;
 #[path = "windows_runner_child.rs"]
 mod windows_runner_child;
 #[path = "windows_runner_host.rs"]
@@ -560,7 +561,7 @@ fn spawn_restricted_pipe_process(
             ptr::null_mut(),
             ptr::null_mut(),
             1,
-            CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT,
+            CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT,
             env_block.as_mut_ptr() as *mut c_void,
             cwd.as_ptr(),
             &startup.StartupInfo,
