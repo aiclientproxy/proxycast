@@ -18,11 +18,11 @@ use windows_sys::Win32::Security::Authorization::{
 };
 use windows_sys::Win32::Security::{
     AdjustTokenPrivileges, CopySid, CreateRestrictedToken, CreateWellKnownSid, GetLengthSid,
-    GetTokenInformation, LogonUserW, LookupPrivilegeValueW, OpenProcessToken, SetTokenInformation,
-    TokenDefaultDacl, TokenGroups, TokenUser, ACL, LOGON32_LOGON_INTERACTIVE,
-    LOGON32_PROVIDER_DEFAULT, SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT,
-    TOKEN_ADJUST_PRIVILEGES, TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE,
-    TOKEN_PRIVILEGES, TOKEN_QUERY, TOKEN_USER,
+    GetTokenInformation, LogonUserW, LookupPrivilegeValueW, SetTokenInformation, TokenDefaultDacl,
+    TokenGroups, TokenUser, ACL, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT,
+    SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT, TOKEN_ADJUST_PRIVILEGES,
+    TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_PRIVILEGES, TOKEN_QUERY,
+    TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{ReadFile, WriteFile};
 use windows_sys::Win32::System::JobObjects::{
@@ -34,7 +34,7 @@ use windows_sys::Win32::System::JobObjects::{
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
     CreateProcessAsUserW, CreateProcessWithTokenW, GetCurrentProcess, GetExitCodeProcess,
-    ResumeThread, WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED,
+    OpenProcessToken, ResumeThread, WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED,
     CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION,
     STARTF_USESTDHANDLES, STARTUPINFOEXW,
 };
