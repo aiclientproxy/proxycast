@@ -18,11 +18,11 @@ use windows_sys::Win32::Security::Authorization::{
 };
 use windows_sys::Win32::Security::{
     AdjustTokenPrivileges, CopySid, CreateRestrictedToken, CreateWellKnownSid, GetLengthSid,
-    GetTokenInformation, LogonUserW, LookupPrivilegeValueW, SetTokenInformation, TokenDefaultDacl,
-    TokenGroups, TokenUser, ACL, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT,
-    SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT, TOKEN_ADJUST_PRIVILEGES,
-    TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_PRIVILEGES, TOKEN_QUERY,
-    TOKEN_USER,
+    GetTokenInformation, LogonUserW, LookupPrivilegeValueW, OpenProcessToken, SetTokenInformation,
+    TokenDefaultDacl, TokenGroups, TokenUser, ACL, LOGON32_LOGON_INTERACTIVE,
+    LOGON32_PROVIDER_DEFAULT, SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT,
+    TOKEN_ADJUST_PRIVILEGES, TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE,
+    TOKEN_PRIVILEGES, TOKEN_QUERY, TOKEN_USER,
 };
 use windows_sys::Win32::Storage::FileSystem::{ReadFile, WriteFile};
 use windows_sys::Win32::System::JobObjects::{
@@ -33,9 +33,10 @@ use windows_sys::Win32::System::JobObjects::{
 };
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
-    CreateProcessAsUserW, CreateProcessWithTokenW, GetExitCodeProcess, ResumeThread,
-    WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
-    EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    CreateProcessAsUserW, CreateProcessWithTokenW, GetCurrentProcess, GetExitCodeProcess,
+    ResumeThread, WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED,
+    CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION,
+    STARTF_USESTDHANDLES, STARTUPINFOEXW,
 };
 
 #[path = "windows_acl.rs"]
@@ -108,6 +109,7 @@ pub(super) fn start_windows_restricted_execution_process(
     let capability_sid = capability_sid();
     let acl_lease = AclLease::acquire(&sandbox_group_sid, &capability_sid, acl_plan)?;
     let token = create_restricted_token(&capability_sid, sandbox_account)?;
+    enable_process_creation_privileges();
     let spawned = spawn_restricted_process(&request, &cwd, token.raw())?;
     drop(token);
 
@@ -427,6 +429,28 @@ unsafe fn enable_privilege(token: HANDLE, name: &str) -> io::Result<()> {
         return Err(io::Error::from_raw_os_error(error as i32));
     }
     Ok(())
+}
+
+fn enable_process_creation_privileges() {
+    unsafe {
+        let mut token = 0;
+        if OpenProcessToken(
+            GetCurrentProcess(),
+            TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
+            &mut token,
+        ) == 0
+        {
+            return;
+        }
+        let Ok(token) = OwnedHandle::new(token, "OpenProcessToken") else {
+            return;
+        };
+        for privilege in ["SeIncreaseQuotaPrivilege", "SeAssignPrimaryTokenPrivilege"] {
+            if let Err(error) = enable_privilege(token.raw(), privilege) {
+                tracing::debug!(%error, privilege, "Windows process creation privilege unavailable");
+            }
+        }
+    }
 }
 
 unsafe fn token_user_sid(token: HANDLE) -> io::Result<Vec<u8>> {

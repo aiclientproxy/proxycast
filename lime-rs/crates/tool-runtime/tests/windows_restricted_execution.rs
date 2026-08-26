@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use std::process::Command;
+use std::ptr;
 use std::time::Duration;
 use std::{collections::HashMap, collections::HashSet, env};
 
@@ -11,6 +12,13 @@ use tool_runtime::execution_process::{
     LocalExecutionProcessHandle, LocalExecutionRequest, LocalExecutionSandbox,
 };
 use tool_runtime::sandbox::SandboxBackend;
+use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HLOCAL};
+use windows_sys::Win32::Security::Authorization::{
+    ConvertSecurityDescriptorToStringSecurityDescriptorW, GetNamedSecurityInfoW,
+};
+use windows_sys::Win32::Security::{
+    DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
+};
 
 fn powershell_script(script: &str) -> Vec<String> {
     vec![
@@ -57,18 +65,51 @@ fn ps_literal(path: &Path) -> String {
 }
 
 fn acl_sddl(path: &Path) -> String {
-    let script = format!("(Get-Acl -LiteralPath '{}').Sddl", ps_literal(path));
-    let output = Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .output()
-        .expect("ACL SDDL query should start");
-    assert!(
-        output.status.success(),
-        "ACL SDDL query should succeed for {}: {}",
-        path.display(),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8_lossy(&output.stdout).trim().to_string()
+    let wide = path
+        .as_os_str()
+        .to_string_lossy()
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    unsafe {
+        let mut descriptor = ptr::null_mut();
+        let mut dacl = ptr::null_mut();
+        let result = GetNamedSecurityInfoW(
+            wide.as_ptr(),
+            1,
+            OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &mut dacl,
+            ptr::null_mut(),
+            &mut descriptor,
+        );
+        assert_eq!(
+            result,
+            ERROR_SUCCESS,
+            "ACL SDDL query should succeed for {}",
+            path.display()
+        );
+        let mut text = ptr::null_mut();
+        let mut length = 0;
+        let converted = ConvertSecurityDescriptorToStringSecurityDescriptorW(
+            descriptor,
+            1,
+            OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            &mut text,
+            &mut length,
+        );
+        assert_ne!(
+            converted,
+            0,
+            "ACL SDDL conversion should succeed for {}",
+            path.display()
+        );
+        let value = String::from_utf16_lossy(std::slice::from_raw_parts(text, length as usize));
+        LocalFree(text as HLOCAL);
+        LocalFree(descriptor as HLOCAL);
+        value
+    }
 }
 
 fn account_sid(account: &str) -> String {
