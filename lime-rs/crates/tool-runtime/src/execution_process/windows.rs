@@ -8,8 +8,9 @@ use std::ptr;
 use std::thread;
 use std::time::Duration;
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_SUCCESS, HANDLE,
-    HANDLE_FLAG_INHERIT, HLOCAL, INVALID_HANDLE_VALUE, LUID, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_PRIVILEGE_NOT_HELD,
+    ERROR_SUCCESS, HANDLE, HANDLE_FLAG_INHERIT, HLOCAL, INVALID_HANDLE_VALUE, LUID, WAIT_OBJECT_0,
+    WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Security::Authorization::{
     ConvertStringSidToSidW, SetEntriesInAclW, EXPLICIT_ACCESS_W, GRANT_ACCESS, TRUSTEE_IS_SID,
@@ -32,9 +33,9 @@ use windows_sys::Win32::System::JobObjects::{
 };
 use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
-    CreateProcessAsUserW, GetExitCodeProcess, ResumeThread, WaitForSingleObject, CREATE_NO_WINDOW,
-    CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT,
-    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    CreateProcessAsUserW, CreateProcessWithTokenW, GetExitCodeProcess, ResumeThread,
+    WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
+    EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW,
 };
 
 #[path = "windows_acl.rs"]
@@ -593,7 +594,7 @@ fn spawn_restricted_pipe_process(
     startup.StartupInfo.lpDesktop = desktop.as_mut_ptr();
     startup.lpAttributeList = attributes.as_mut_ptr();
     let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
-    let created = unsafe {
+    let mut created = unsafe {
         CreateProcessAsUserW(
             token,
             ptr::null(),
@@ -611,6 +612,24 @@ fn spawn_restricted_pipe_process(
             &mut process_info,
         )
     };
+    if created == 0 && unsafe { GetLastError() } == ERROR_PRIVILEGE_NOT_HELD {
+        created = unsafe {
+            CreateProcessWithTokenW(
+                token,
+                0,
+                ptr::null(),
+                command_line.as_mut_ptr(),
+                CREATE_UNICODE_ENVIRONMENT
+                    | CREATE_SUSPENDED
+                    | CREATE_NO_WINDOW
+                    | EXTENDED_STARTUPINFO_PRESENT,
+                env_block.as_mut_ptr() as *mut c_void,
+                cwd.as_ptr(),
+                &startup.StartupInfo,
+                &mut process_info,
+            )
+        };
+    }
     if created == 0 {
         return Err(last_os_error("CreateProcessAsUserW"));
     }
@@ -661,7 +680,7 @@ fn spawn_restricted_conpty_process(
     startup.StartupInfo.lpDesktop = desktop.as_mut_ptr();
     startup.lpAttributeList = attributes.as_mut_ptr();
     let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
-    let created = unsafe {
+    let mut created = unsafe {
         CreateProcessAsUserW(
             token,
             ptr::null(),
@@ -676,6 +695,21 @@ fn spawn_restricted_conpty_process(
             &mut process_info,
         )
     };
+    if created == 0 && unsafe { GetLastError() } == ERROR_PRIVILEGE_NOT_HELD {
+        created = unsafe {
+            CreateProcessWithTokenW(
+                token,
+                0,
+                ptr::null(),
+                command_line.as_mut_ptr(),
+                CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT,
+                env_block.as_mut_ptr() as *mut c_void,
+                cwd.as_ptr(),
+                &startup.StartupInfo,
+                &mut process_info,
+            )
+        };
+    }
     if created == 0 {
         return Err(last_os_error("CreateProcessAsUserW ConPTY"));
     }
