@@ -37,8 +37,8 @@ use windows_sys::Win32::System::Pipes::CreatePipe;
 use windows_sys::Win32::System::Threading::{
     CreateProcessAsUserW, CreateProcessWithTokenW, GetCurrentProcess, GetExitCodeProcess,
     OpenProcessToken, ResumeThread, WaitForSingleObject, CREATE_NO_WINDOW, CREATE_SUSPENDED,
-    CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, PROCESS_INFORMATION,
-    STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
+    CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, LOGON_WITH_PROFILE,
+    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW,
 };
 
 #[path = "windows_acl.rs"]
@@ -659,7 +659,7 @@ fn spawn_restricted_pipe_process(
         created = unsafe {
             CreateProcessWithTokenW(
                 token,
-                0,
+                LOGON_WITH_PROFILE,
                 ptr::null(),
                 command_line.as_mut_ptr(),
                 CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | CREATE_NO_WINDOW,
@@ -768,7 +768,7 @@ fn spawn_restricted_conpty_process(
         created = unsafe {
             CreateProcessWithTokenW(
                 token,
-                0,
+                LOGON_WITH_PROFILE,
                 ptr::null(),
                 command_line.as_mut_ptr(),
                 CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT,
