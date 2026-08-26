@@ -2637,10 +2637,10 @@ current owner；它不是 Electron backend、App Server method 或平级 process
 退出时遵循 Codex 语义关闭 `KILL_ON_JOB_CLOSE`，由 reaper 持有 Job 与 ACL lease 到 Job 为空，取消、超时、控制断开或
 等待失败则终止整棵进程树并立即 rollback；allowlisted stdin handle、bounded output、ACL lease rollback 和
 Job Object descendant cleanup 已进入 target-gated integration matrix。ConPTY 的 stdin/resize/combined-output
-也已进入同一矩阵，但仍待 Windows/MSVC 编译和真机执行。网络隔离 current owner 由三部分组成：
+也已进入同一矩阵；最新 Windows/MSVC 真机证据为 `6/7`，剩余 offline loopback TCP 阻断尚未关闭。网络隔离 current owner 由三部分组成：
 `windows_setup` 编排 offline/online 本地账户与 machine-scope DPAPI artifacts，其中账户、组与 SID 操作集中在
 `windows_setup::accounts` 子模块；`windows_firewall` 使用 offline account SID
-安装覆盖非 loopback 与 loopback 的两条全协议出站 block rule，并拒绝 group-policy override、部分 profile 生效、active
+安装一条非 loopback 全协议规则和两条 loopback TCP/UDP 出站 block rule，并拒绝 group-policy override、部分 profile 生效、active
 profile firewall disabled 或属性 read-back 漂移；`windows_wfp` 保留按同一账户匹配的 ICMP/DNS/SMB 补充过滤器。
 restricted runner 在 `network.enabled=true` 时使用 online account，否则使用 offline account；sandbox account user SID 进入
 restricted SID access check，但不进入默认 DACL 充当 capability。runner 不设置
@@ -2651,7 +2651,7 @@ token 侧的 sandbox group ACE 与 restricted-token 侧的短生命周期 capabi
 保存原始 DACL security descriptor，进程树结束后逆序恢复，不能用删除稳定 group ACE 的方式破坏用户预先存在的 ACL。
 protected metadata 与显式 read-only carveout 的 deny-write 继续只绑定 capability SID；显式 `Deny` 则同时拒绝 sandbox
 group 与 capability SID 的全部访问，与 Codex restricted access check 和 permission profile 语义一致。
-因平台 evidence 尚未具备，当前 `SandboxBackendStatus::Planned`、`enforced=false` 保持不变，不能由 runner 源码、
+因平台 evidence 尚未完整，当前 `SandboxBackendStatus::Planned`、`enforced=false` 保持不变，不能由 runner 源码、
 Settings 或 setup 文案推断 ready。
 
 Architecture impact: major; Windows restricted execution now uses a sandbox-account runner sidecar inside the existing

@@ -24,9 +24,9 @@ mod platform {
     use windows::Win32::Foundation::{RPC_E_CHANGED_MODE, S_OK, VARIANT_TRUE};
     use windows::Win32::NetworkManagement::WindowsFirewall::{
         INetFwPolicy2, INetFwRule3, INetFwRules, NetFwPolicy2, NetFwRule, NET_FW_ACTION_BLOCK,
-        NET_FW_IP_PROTOCOL_ANY, NET_FW_MODIFY_STATE_OK, NET_FW_PROFILE2_ALL,
-        NET_FW_PROFILE2_DOMAIN, NET_FW_PROFILE2_PRIVATE, NET_FW_PROFILE2_PUBLIC,
-        NET_FW_RULE_DIR_OUT,
+        NET_FW_IP_PROTOCOL_ANY, NET_FW_IP_PROTOCOL_TCP, NET_FW_IP_PROTOCOL_UDP,
+        NET_FW_MODIFY_STATE_OK, NET_FW_PROFILE2_ALL, NET_FW_PROFILE2_DOMAIN,
+        NET_FW_PROFILE2_PRIVATE, NET_FW_PROFILE2_PUBLIC, NET_FW_RULE_DIR_OUT,
     };
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
@@ -43,11 +43,19 @@ mod platform {
         FirewallRuleSpec {
             name: "lime_sandbox_offline_block_non_loopback_outbound",
             description: "Block non-loopback outbound traffic for the Lime offline sandbox account",
+            protocol: NET_FW_IP_PROTOCOL_ANY.0,
             remote_addresses: NON_LOOPBACK_REMOTE_ADDRESSES,
         },
         FirewallRuleSpec {
-            name: "lime_sandbox_offline_block_loopback_outbound",
-            description: "Block loopback outbound traffic for the Lime offline sandbox account",
+            name: "lime_sandbox_offline_block_loopback_tcp",
+            description: "Block loopback TCP traffic for the Lime offline sandbox account",
+            protocol: NET_FW_IP_PROTOCOL_TCP.0,
+            remote_addresses: LOOPBACK_REMOTE_ADDRESSES,
+        },
+        FirewallRuleSpec {
+            name: "lime_sandbox_offline_block_loopback_udp",
+            description: "Block loopback UDP traffic for the Lime offline sandbox account",
+            protocol: NET_FW_IP_PROTOCOL_UDP.0,
             remote_addresses: LOOPBACK_REMOTE_ADDRESSES,
         },
     ];
@@ -55,6 +63,7 @@ mod platform {
     struct FirewallRuleSpec {
         name: &'static str,
         description: &'static str,
+        protocol: i32,
         remote_addresses: &'static str,
     }
 
@@ -213,7 +222,7 @@ mod platform {
                 .map_err(|error| windows_error("SetProfiles", error))?;
             rule.SetGrouping(&BSTR::from(RULE_GROUP))
                 .map_err(|error| windows_error("SetGrouping", error))?;
-            rule.SetProtocol(NET_FW_IP_PROTOCOL_ANY.0)
+            rule.SetProtocol(spec.protocol)
                 .map_err(|error| windows_error("SetProtocol", error))?;
             rule.SetRemoteAddresses(&BSTR::from(spec.remote_addresses))
                 .map_err(|error| windows_error("SetRemoteAddresses", error))?;
@@ -246,7 +255,7 @@ mod platform {
             || action != NET_FW_ACTION_BLOCK
             || enabled != VARIANT_TRUE
             || profiles != NET_FW_PROFILE2_ALL.0
-            || protocol != NET_FW_IP_PROTOCOL_ANY.0
+            || protocol != spec.protocol
             || !same_csv_values(&remote_addresses, spec.remote_addresses)
             || !local_user
                 .to_ascii_lowercase()
@@ -349,13 +358,21 @@ mod platform {
 
         #[test]
         fn offline_rules_cover_loopback_and_non_loopback_ranges() {
-            assert_eq!(RULES.len(), 2);
-            assert!(RULES
+            assert_eq!(RULES.len(), 3);
+            let non_loopback = RULES
                 .iter()
-                .any(|rule| rule.remote_addresses == LOOPBACK_REMOTE_ADDRESSES));
-            assert!(RULES
+                .find(|rule| rule.remote_addresses == NON_LOOPBACK_REMOTE_ADDRESSES)
+                .expect("non-loopback rule");
+            assert_eq!(non_loopback.protocol, NET_FW_IP_PROTOCOL_ANY.0);
+            let loopback_protocols = RULES
                 .iter()
-                .any(|rule| rule.remote_addresses == NON_LOOPBACK_REMOTE_ADDRESSES));
+                .filter(|rule| rule.remote_addresses == LOOPBACK_REMOTE_ADDRESSES)
+                .map(|rule| rule.protocol)
+                .collect::<Vec<_>>();
+            assert_eq!(
+                loopback_protocols,
+                vec![NET_FW_IP_PROTOCOL_TCP.0, NET_FW_IP_PROTOCOL_UDP.0]
+            );
         }
     }
 }
