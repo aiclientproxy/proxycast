@@ -643,7 +643,10 @@ fn spawn_restricted_pipe_process(
         fallback_startup.hStdInput = stdin_read.raw();
         fallback_startup.hStdOutput = stdout_write.raw();
         fallback_startup.hStdError = stderr_write.raw();
-        fallback_startup.lpDesktop = desktop.as_mut_ptr();
+        // CreateProcessWithTokenW grants the token access to the inherited
+        // window station/desktop only when lpDesktop is null. The explicit
+        // CreateProcessAsUserW path keeps the current desktop contract.
+        fallback_startup.lpDesktop = ptr::null_mut();
         created = unsafe {
             CreateProcessWithTokenW(
                 token,
