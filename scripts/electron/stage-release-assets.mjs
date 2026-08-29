@@ -157,7 +157,40 @@ function describeCandidateFiles(files, spec) {
     .sort();
 }
 
-function selectAsset(files, spec, extensions, label) {
+function candidateSummary(files, spec) {
+  const candidates = describeCandidateFiles(files, spec);
+  return candidates.length > 0
+    ? ` Candidate files: ${candidates.join(", ")}`
+    : " No installer, archive, or updater metadata candidates were present.";
+}
+
+function selectAsset(
+  files,
+  spec,
+  extensions,
+  label,
+  { exactBasenames = [] } = {},
+) {
+  if (exactBasenames.length > 0) {
+    const exact = files.filter((filePath) =>
+      exactBasenames.some(
+        (expectedName) =>
+          path.basename(filePath).toLowerCase() === expectedName.toLowerCase(),
+      ),
+    );
+    if (exact.length === 1) {
+      return exact[0];
+    }
+    if (exact.length > 1) {
+      throw new Error(
+        `expected exactly one ${exactBasenames.join(" or ")} under Forge output; found ${exact.length}.${candidateSummary(files, spec)}`,
+      );
+    }
+    throw new Error(
+      `no ${label} asset found under Forge output. Expected exactly one ${exactBasenames.join(" or ")}.${candidateSummary(files, spec)}`,
+    );
+  }
+
   const selected = files
     .map((filePath) => ({
       filePath,
@@ -169,13 +202,8 @@ function selectAsset(files, spec, extensions, label) {
         right.score - left.score || left.filePath.localeCompare(right.filePath),
     )[0]?.filePath;
   if (!selected) {
-    const candidates = describeCandidateFiles(files, spec);
-    const candidateSummary =
-      candidates.length > 0
-        ? ` Candidate files: ${candidates.join(", ")}`
-        : " No installer, archive, or updater metadata candidates were present.";
     throw new Error(
-      `no ${label} asset found under Forge output.${candidateSummary}`,
+      `no ${label} asset found under Forge output.${candidateSummary(files, spec)}`,
     );
   }
   return selected;
@@ -228,7 +256,7 @@ function stageElectronReleaseAssets({
   const stagingDir = path.resolve(
     outDir || path.join("release-assets", targetTriple),
   );
-  normalizeVersion(version);
+  const normalizedVersion = normalizeVersion(version);
 
   const sourceStat = statSync(sourceDir, { throwIfNoEntry: false });
   if (!sourceStat?.isDirectory()) {
@@ -238,23 +266,38 @@ function stageElectronReleaseAssets({
   const allFiles = walkFiles(sourceDir);
   assertNoRetiredUpdaterAssets(allFiles);
 
+  const forgeMakeDir = path.join(sourceDir, "make");
+  const forgeMakeStat = statSync(forgeMakeDir, { throwIfNoEntry: false });
+  if (!forgeMakeStat?.isDirectory()) {
+    throw new Error(`Electron Forge make output is missing: ${forgeMakeDir}`);
+  }
+  const makeFiles = walkFiles(forgeMakeDir);
+
   const installer = selectAsset(
-    allFiles,
+    makeFiles,
     spec,
     spec.installerExtensions,
     `installer for ${targetTriple}`,
+    targetTriple === "x86_64-pc-windows-msvc"
+      ? {
+          exactBasenames: [
+            `Lime-${normalizedVersion} Setup.exe`,
+            `Lime-${normalizedVersion}.Setup.exe`,
+          ],
+        }
+      : undefined,
   );
   const archive =
     spec.archiveExtensions.length > 0
       ? selectAsset(
-          allFiles,
+          makeFiles,
           spec,
           spec.archiveExtensions,
           `updater archive for ${targetTriple}`,
         )
       : null;
 
-  const metadataAssets = allFiles.filter((filePath) =>
+  const metadataAssets = makeFiles.filter((filePath) =>
     isAllowedMetadataAsset(filePath, spec),
   );
   if (metadataAssets.length === 0) {

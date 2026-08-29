@@ -278,6 +278,69 @@ describe("Electron release asset staging", () => {
     );
   });
 
+  it("Windows staging 不应把 packaged windows-sandbox sidecar 当成 Squirrel 安装包", () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), "lime-electron-stage-forge-win-sidecar-"),
+    );
+    const forgeDir = path.join(root, "release-electron");
+    const outDir = path.join(root, "release-assets", "x86_64-pc-windows-msvc");
+
+    writeFile(
+      path.join(
+        forgeDir,
+        "Lime-win32-x64",
+        "resources",
+        "app-server",
+        "win32-x64",
+        "windows-sandbox-setup.exe",
+      ),
+      "sidecar",
+    );
+    writeFile(
+      path.join(
+        forgeDir,
+        "make",
+        "squirrel.windows",
+        "x64",
+        "Lime-1.20.0 Setup.exe",
+      ),
+      "installer",
+    );
+    writeFile(
+      path.join(
+        forgeDir,
+        "make",
+        "squirrel.windows",
+        "x64",
+        "lime-1.20.0-full.nupkg",
+      ),
+      "nupkg",
+    );
+    writeFile(
+      path.join(forgeDir, "make", "squirrel.windows", "x64", "RELEASES"),
+      "releases",
+    );
+
+    const copied = stageElectronReleaseAssets({
+      forgeDir,
+      outDir,
+      targetTriple: "x86_64-pc-windows-msvc",
+      version: "v1.20.0",
+    });
+
+    expect(
+      copied.map((item) => path.basename(item.destination)).sort(),
+    ).toEqual(
+      ["Lime-1.20.0 Setup.exe", "RELEASES", "lime-1.20.0-full.nupkg"].sort(),
+    );
+    expect(
+      fs.readFileSync(path.join(outDir, "Lime-1.20.0 Setup.exe"), "utf8"),
+    ).toBe("installer");
+    expect(fs.existsSync(path.join(outDir, "windows-sandbox-setup.exe"))).toBe(
+      false,
+    );
+  });
+
   it("Windows staging 缺少 Squirrel nupkg 时应输出 Forge 候选资产", () => {
     const root = fs.mkdtempSync(
       path.join(os.tmpdir(), "lime-electron-stage-forge-win-missing-nupkg-"),
