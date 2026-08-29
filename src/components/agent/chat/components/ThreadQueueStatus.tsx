@@ -1,24 +1,6 @@
 import { ListOrdered, Loader2, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { QueuedSubmission, UserInput } from "@limecloud/app-server-client";
 import { useAgentSessionThreadQueue } from "../hooks/useAgentSessionThreadQueue";
-
-const VISIBLE_SUBMISSION_LIMIT = 3;
-
-function submissionPreview(
-  submission: QueuedSubmission,
-  fallback: string,
-): string {
-  const text = submission.input
-    .filter(
-      (input): input is Extract<UserInput, { type: "text" }> =>
-        input.type === "text",
-    )
-    .map((input) => input.text.trim())
-    .filter(Boolean)
-    .join(" ");
-  return text || fallback;
-}
 
 export function ThreadQueueStatus({ threadId }: { threadId?: string | null }) {
   const { t } = useTranslation("agent");
@@ -32,9 +14,6 @@ export function ThreadQueueStatus({ threadId }: { threadId?: string | null }) {
   ) {
     return null;
   }
-
-  const visible = queue.submissions.slice(0, VISIBLE_SUBMISSION_LIMIT);
-  const hiddenCount = Math.max(0, queue.submissions.length - visible.length);
 
   return (
     <section
@@ -66,31 +45,6 @@ export function ThreadQueueStatus({ threadId }: { threadId?: string | null }) {
           </span>
         ) : null}
       </div>
-      {visible.length > 0 ? (
-        <ol className="mt-1 grid gap-1" data-testid="thread-queue-items">
-          {visible.map((submission, index) => (
-            <li
-              className="flex min-w-0 items-center gap-2 text-xs"
-              key={submission.id}
-            >
-              <span className="w-4 shrink-0 text-right tabular-nums text-slate-400">
-                {index + 1}
-              </span>
-              <span className="min-w-0 flex-1 truncate">
-                {submissionPreview(
-                  submission,
-                  text("agentChat.threadQueue.itemFallback"),
-                )}
-              </span>
-            </li>
-          ))}
-          {hiddenCount > 0 ? (
-            <li className="pl-6 text-xs text-slate-500 dark:text-slate-400">
-              {text("agentChat.threadQueue.more", { count: hiddenCount })}
-            </li>
-          ) : null}
-        </ol>
-      ) : null}
     </section>
   );
 }

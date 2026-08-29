@@ -11,17 +11,19 @@ import {
   collectPierEvidence,
   createTaskWorkspaceLocation,
   currentChainFromError,
+  DEFAULT_DEEPSWE_TASK,
   loadTaskDefinition,
   preflightSelectedTasks,
   preparePierReplayTask,
   prepareTaskWorkspace,
-  providerStepExhaustion,
-  providerStepsFromCurrentFacts,
   readJson,
   runContextBase,
   runCurrentChainTask,
+  runPierVerifier,
   runtimePrerequisites,
   terminalMessageFromCurrentFacts,
+  verifierCompletionStatus,
+  verifierTaskIdForRun,
 } from "./deepswe-adapter-core.mjs";
 
 const repoRoot = process.cwd();
@@ -57,9 +59,81 @@ afterEach(() => {
 });
 
 describe("DeepSWE current-chain adapter", () => {
+  it("binds verifier-only runs to the task recorded in run context", () => {
+    const runDir = temporaryRoot();
+    fs.writeFileSync(
+      path.join(runDir, "run-context.json"),
+      `${JSON.stringify({ task: { id: "oxvg-task" } })}\n`,
+    );
+
+    expect(verifierTaskIdForRun({ runDir })).toBe("oxvg-task");
+    expect(verifierTaskIdForRun({ runDir, requestedTaskId: "oxvg-task" })).toBe(
+      "oxvg-task",
+    );
+    expect(() =>
+      verifierTaskIdForRun({ runDir, requestedTaskId: "happy-dom-task" }),
+    ).toThrow(
+      "DeepSWE verifier task mismatch: expected=oxvg-task actual=happy-dom-task",
+    );
+  });
+
+  it("only marks completed current chains as verified", () => {
+    expect(verifierCompletionStatus("completed")).toBe("verified");
+    for (const status of [
+      "timeout",
+      "failed",
+      "interrupted",
+      "cancelled",
+      "canceled",
+      "aborted",
+      undefined,
+    ]) {
+      expect(verifierCompletionStatus(status)).toBe(
+        "verified_with_product_failure",
+      );
+    }
+  });
+
+  it("requires a non-exhausted chain, non-empty patch, and Pier reward one", () => {
+    const currentChain = { status: "completed", terminalMessage: "" };
+    const patch = { bytes: 42 };
+    expect(verifierCompletionStatus({ currentChain, patch, reward: 1 })).toBe(
+      "verified",
+    );
+    for (const input of [
+      {
+        currentChain: {
+          ...currentChain,
+          providerStepExhaustion: { reasons: ["provider_steps"] },
+        },
+        patch,
+        reward: 1,
+      },
+      {
+        currentChain: {
+          ...currentChain,
+          terminalMessage: "DeepSWE provider budget exhausted: steps=48",
+        },
+        patch,
+        reward: 1,
+      },
+      { currentChain, patch: { bytes: 0 }, reward: 1 },
+      { currentChain, patch, reward: 0 },
+      { currentChain, patch },
+    ]) {
+      expect(verifierCompletionStatus(input)).toBe(
+        "verified_with_product_failure",
+      );
+    }
+  });
+
   it("writes the current source and adapter identity into run context", () => {
     const context = runContextBase(
-      { allowLiveProvider: false, transport: "stdio" },
+      {
+        allowLiveProvider: false,
+        firstVisibleOutputTimeoutMs: 300_000,
+        transport: "stdio",
+      },
       "run-identity",
       {
         id: "task-identity",
@@ -76,9 +150,24 @@ describe("DeepSWE current-chain adapter", () => {
     expect(context).toMatchObject({
       sourceCommit: "435ee89ec2f2e2289f33b0da4f992f0b7b7266b9",
       executionContract: {
-        adapterVersion: "deepswe-current-chain-adapter-v6",
+        adapterVersion: "deepswe-current-chain-adapter-v7",
+        appServerMethods: [
+          "workspace/ensure",
+          "thread/start",
+          "turn/start",
+          "thread/read",
+          "turn/interrupt",
+        ],
+        generationControls: {
+          firstVisibleOutputTimeoutMs: 300_000,
+          projection:
+            "additionalContext.metadata -> RuntimeRequest.metadata.harness.generation",
+        },
       },
     });
+    expect(context.executionContract.appServerMethods).not.toContain(
+      "thread/settings/update",
+    );
   });
 
   it("validates all selected Release 20 tasks against the pinned source", () => {
@@ -243,16 +332,23 @@ describe("DeepSWE current-chain adapter", () => {
     const calls = [];
     let turnStartParams = null;
     const sessionRead = {
-      detail: {
-        turns: [{ id: "deepswe-turn-run-1", status: "completed" }],
-        items: [
+      thread: {
+        id: "deepswe-thread-run-1",
+        sessionId: "deepswe-session-run-1",
+        turns: [
           {
-            kind: "tool",
-            payload: { type: "tool", name: "Read" },
+            id: "deepswe-turn-run-1",
             status: "completed",
+            items: [
+              {
+                kind: "tool",
+                payload: { type: "tool", name: "Read" },
+                status: "completed",
+              },
+              { type: "command_execution", status: "completed" },
+              { type: "file_artifact", status: "completed" },
+            ],
           },
-          { type: "command_execution", status: "completed" },
-          { type: "file_artifact", status: "completed" },
         ],
       },
     };
@@ -264,10 +360,12 @@ describe("DeepSWE current-chain adapter", () => {
           return { workspace: { id: "workspace-1", rootPath: workspaceDir } };
         }
         if (method === "thread/start") {
-          return { session: { sessionId: "deepswe-run-1" } };
-        }
-        if (method === "thread/read") {
-          return sessionRead;
+          return {
+            thread: {
+              id: "deepswe-thread-run-1",
+              sessionId: "deepswe-session-run-1",
+            },
+          };
         }
         throw new Error(`unexpected method ${method}`);
       },
@@ -277,15 +375,17 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateThreadSettings: async () => {},
       startTurn: async (_options, params) => {
         turnStartParams = params;
+        return { turn: { id: "deepswe-turn-run-1" } };
       },
-      readThread: async () => ({
-        status: "completed",
-        active_turn_id: null,
-        turns: [{ id: "deepswe-turn-run-1", status: "completed" }],
-      }),
+      readThread: async (_options, threadId) => {
+        calls.push({
+          method: "thread/read",
+          params: { threadId, includeTurns: true },
+        });
+        return sessionRead;
+      },
       sleep: async () => {},
     };
     const result = await runCurrentChainTask({
@@ -296,6 +396,7 @@ describe("DeepSWE current-chain adapter", () => {
         timeoutMs: 30_000,
         maxProviderSteps: 2,
         tokenBudget: 1_000,
+        firstVisibleOutputTimeoutMs: 300_000,
         maxOutputTokens: 4_096,
         enableThinking: false,
       },
@@ -307,27 +408,65 @@ describe("DeepSWE current-chain adapter", () => {
     });
 
     expect(result.status).toBe("completed");
+    expect(result).toMatchObject({
+      sessionId: "deepswe-session-run-1",
+      threadId: "deepswe-thread-run-1",
+      turnId: "deepswe-turn-run-1",
+    });
     expect(calls.map((call) => call.method)).toEqual([
       "workspace/ensure",
       "thread/start",
       "thread/read",
     ]);
-    expect(
-      calls.find((call) => call.method === "thread/start")?.params,
-    ).toMatchObject({ workingDir: workspaceDir, workspaceId: "workspace-1" });
+    const threadStartParams = calls.find(
+      (call) => call.method === "thread/start",
+    )?.params;
+    expect(threadStartParams).toEqual({
+      model: "model-1",
+      modelProvider: "provider-1",
+      cwd: workspaceDir,
+      runtimeWorkspaceRoots: [workspaceDir],
+      approvalPolicy: "never",
+      sandbox: "workspace-write",
+      serviceName: "DeepSWE task-1",
+      historyMode: "paginated",
+      threadSource: "appServer",
+    });
+    for (const retiredField of [
+      "sessionId",
+      "threadId",
+      "appId",
+      "workspaceId",
+      "workingDir",
+      "businessObjectRef",
+    ]) {
+      expect(threadStartParams).not.toHaveProperty(retiredField);
+    }
     expect(turnStartParams).toMatchObject({
-      runtimeRequest: {
-        metadata: {
-          harness: {
-            provider_budget: {
-              max_provider_steps: 2,
-              token_budget: 1_000,
-            },
-            generation: {
-              max_output_tokens: 4_096,
-              enable_thinking: false,
-            },
-          },
+      threadId: "deepswe-thread-run-1",
+      input: [{ type: "text", text: "Fix the task" }],
+      cwd: workspaceDir,
+      runtimeWorkspaceRoots: [workspaceDir],
+      approvalPolicy: "never",
+      sandboxPolicy: "workspace-write",
+      model: "model-1",
+    });
+    expect(turnStartParams).not.toHaveProperty("runtimeRequest");
+    expect(
+      JSON.parse(turnStartParams.additionalContext.metadata.value),
+    ).toEqual({
+      harness: {
+        source: "harness:deepswe:run",
+        scenarioId: "DSW-01",
+        taskId: "task-1",
+        provider_budget: {
+          max_provider_steps: 2,
+          token_budget: 1_000,
+        },
+        generation: {
+          first_visible_output_timeout_ms: 300_000,
+          max_output_tokens: 4_096,
+          enable_thinking: false,
         },
       },
     });
@@ -336,80 +475,6 @@ describe("DeepSWE current-chain adapter", () => {
     expect(fs.existsSync(path.join(root, "provider-steps.json"))).toBe(true);
     expect(fs.existsSync(path.join(root, "tool-lifecycle.json"))).toBe(true);
     expect(readJson(path.join(root, "tool-lifecycle.json")).itemCount).toBe(3);
-  });
-
-  it("summarizes provider step output and enforces comparable token accounting", () => {
-    const summary = providerStepsFromCurrentFacts(
-      {
-        threadRead: {
-          providerSteps: [
-            {
-              sequence: 10,
-              timestamp: "2026-07-16T00:00:00Z",
-              attempt: 1,
-              completed: true,
-              finish_reason: "tool_call",
-              toolNames: ["Read", "apply_patch", "Read"],
-              text_output_chars: 7,
-              reasoning_output_chars: 40,
-              tool_call_count: 1,
-              usage: {
-                input_tokens: 100,
-                output_tokens: 20,
-                cached_input_tokens: 40,
-              },
-            },
-            {
-              sequence: 20,
-              attempt: 2,
-              completed: true,
-              finish_reason: "stop",
-              toolNames: ["exec_command", "apply_patch"],
-              text_output_chars: 12,
-              reasoning_output_chars: 60,
-              tool_call_count: 0,
-              usage: {
-                input_tokens: 200,
-                output_tokens: 30,
-                cached_input_tokens: 50,
-              },
-            },
-          ],
-        },
-      },
-      { maxProviderSteps: 2, tokenBudget: 250 },
-    );
-
-    expect(summary).toMatchObject({
-      stepCount: 2,
-      usageStatus: "complete",
-      usage: {
-        inputTokens: 300,
-        outputTokens: 50,
-        cachedInputTokens: 90,
-        budgetTokens: 260,
-      },
-      toolCatalog: {
-        status: "complete",
-        requestCount: 2,
-        requestsWithTools: 2,
-        uniqueToolNames: ["Read", "apply_patch", "exec_command"],
-        applyPatchAvailableOnEveryRequest: true,
-      },
-      budgets: {
-        exhausted: true,
-        reasons: ["provider_steps", "token_budget"],
-        remainingProviderSteps: 0,
-        remainingTokens: 0,
-      },
-    });
-    expect(summary.steps[0].output).toEqual({
-      textChars: 7,
-      reasoningChars: 40,
-      toolCalls: 1,
-    });
-    expect(summary.steps[0].toolNames).toEqual(["Read", "apply_patch"]);
-    expect(summary.steps[1].toolNames).toEqual(["apply_patch", "exec_command"]);
   });
 
   it("keeps the App Server terminal failure message for owner classification", () => {
@@ -448,11 +513,12 @@ describe("DeepSWE current-chain adapter", () => {
           return { workspace: { id: "workspace-1", rootPath: workspaceDir } };
         }
         if (method === "thread/start") {
-          return { session: { sessionId: "deepswe-run-failed" } };
-        }
-        if (method === "thread/read") {
-          readCount += 1;
-          return { detail: { turns: [], items: [] } };
+          return {
+            thread: {
+              id: "deepswe-thread-failed",
+              sessionId: "deepswe-session-failed",
+            },
+          };
         }
         throw new Error(`unexpected method ${method}`);
       },
@@ -462,12 +528,20 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateThreadSettings: async () => {},
       startTurn: async (_options, params) => {
         turnStartParams = params;
         throw new Error("Provider tool call omitted tool name");
       },
-      readThread: async () => ({ status: "in_progress", turns: [] }),
+      readThread: async () => {
+        readCount += 1;
+        return {
+          thread: {
+            id: "deepswe-thread-failed",
+            sessionId: "deepswe-session-failed",
+            turns: [],
+          },
+        };
+      },
       sleep: async () => {},
     };
 
@@ -483,12 +557,13 @@ describe("DeepSWE current-chain adapter", () => {
     expect(error).toBeInstanceOf(Error);
     expect(error.message).toBe("Provider tool call omitted tool name");
     expect(
-      turnStartParams?.runtimeRequest?.metadata?.harness,
+      JSON.parse(turnStartParams.additionalContext.metadata.value).harness,
     ).not.toHaveProperty("generation");
     expect(currentChainFromError(error)).toMatchObject({
       status: "failed",
-      sessionId: "deepswe-run-failed",
-      turnId: "deepswe-turn-run-failed",
+      sessionId: "deepswe-session-failed",
+      threadId: "deepswe-thread-failed",
+      turnId: "",
       provider: {
         providerPreference: "provider-1",
         modelPreference: "model-1",
@@ -531,19 +606,10 @@ describe("DeepSWE current-chain adapter", () => {
           return { workspace: { id: "workspace-1", rootPath: workspaceDir } };
         }
         if (method === "thread/start") {
-          return { session: { sessionId: "deepswe-run-step-cap" } };
-        }
-        if (method === "thread/read") {
-          readCount += 1;
           return {
-            detail: {
-              turns: [
-                {
-                  turnId: "deepswe-turn-run-step-cap",
-                  status: readCount >= 2 ? "completed" : "accepted",
-                },
-              ],
-              items: [],
+            thread: {
+              id: "deepswe-thread-step-cap",
+              sessionId: "deepswe-session-step-cap",
             },
           };
         }
@@ -555,16 +621,27 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateThreadSettings: async () => {},
-      startTurn: async () => {},
+      startTurn: async () => ({ turn: { id: "deepswe-turn-step-cap" } }),
       cancelTurn: async () => {
         canceled = true;
       },
-      readThread: async () => ({
-        status: readCount >= 2 ? "completed" : "running",
-        turns: [],
-        providerSteps,
-      }),
+      readThread: async () => {
+        readCount += 1;
+        return {
+          thread: {
+            id: "deepswe-thread-step-cap",
+            sessionId: "deepswe-session-step-cap",
+            turns: [
+              {
+                id: "deepswe-turn-step-cap",
+                status: readCount >= 2 ? "completed" : "inProgress",
+                items: [],
+              },
+            ],
+          },
+          providerSteps,
+        };
+      },
       sleep: async () => {},
     };
 
@@ -600,22 +677,12 @@ describe("DeepSWE current-chain adapter", () => {
     });
   });
 
-  it("does not classify a natural final answer at the step limit as exhausted", () => {
-    expect(
-      providerStepExhaustion({
-        stepCount: 2,
-        budgets: { reasons: ["provider_steps"] },
-        usage: { budgetTokens: 200 },
-        steps: [{ finishReason: "tool_call" }, { finishReason: "stop" }],
-      }),
-    ).toBeNull();
-  });
-
   it("cancels a wall-timeout turn and captures its real terminal state", async () => {
     const root = temporaryRoot();
     const workspaceDir = path.join(root, "workspace");
     fs.mkdirSync(workspaceDir);
     let canceled = false;
+    let cancelParams = null;
     const rpc = {
       waitForHealth: async () => ({ status: "ok" }),
       invoke: async (_options, method) => {
@@ -623,18 +690,10 @@ describe("DeepSWE current-chain adapter", () => {
           return { workspace: { id: "workspace-1", rootPath: workspaceDir } };
         }
         if (method === "thread/start") {
-          return { session: { sessionId: "deepswe-run-wall-timeout" } };
-        }
-        if (method === "thread/read") {
           return {
-            detail: {
-              turns: [
-                {
-                  turnId: "deepswe-turn-run-wall-timeout",
-                  status: canceled ? "canceled" : "accepted",
-                },
-              ],
-              items: [],
+            thread: {
+              id: "deepswe-thread-wall-timeout",
+              sessionId: "deepswe-session-wall-timeout",
             },
           };
         }
@@ -646,14 +705,23 @@ describe("DeepSWE current-chain adapter", () => {
         modelPreference: "model-1",
         source: "test",
       }),
-      updateThreadSettings: async () => {},
-      startTurn: async () => {},
-      cancelTurn: async () => {
+      startTurn: async () => ({ turn: { id: "deepswe-turn-wall-timeout" } }),
+      cancelTurn: async (_options, params) => {
+        cancelParams = params;
         canceled = true;
       },
       readThread: async () => ({
-        status: canceled ? "canceled" : "running",
-        turns: [],
+        thread: {
+          id: "deepswe-thread-wall-timeout",
+          sessionId: "deepswe-session-wall-timeout",
+          turns: [
+            {
+              id: "deepswe-turn-wall-timeout",
+              status: canceled ? "interrupted" : "inProgress",
+              items: [],
+            },
+          ],
+        },
       }),
       sleep: async () => {},
     };
@@ -668,15 +736,19 @@ describe("DeepSWE current-chain adapter", () => {
     }).catch((caught) => caught);
 
     expect(canceled).toBe(true);
+    expect(cancelParams).toEqual({
+      threadId: "deepswe-thread-wall-timeout",
+      turnId: "deepswe-turn-wall-timeout",
+    });
     expect(error).toBeInstanceOf(Error);
-    expect(error.message).toContain("cancelStatus=canceled");
+    expect(error.message).toContain("cancelStatus=interrupted");
     expect(currentChainFromError(error)).toMatchObject({
       status: "timeout",
-      terminalStatus: "canceled",
+      terminalStatus: "interrupted",
       factsCapture: "terminal",
       timeoutCancellation: {
         reason: "wall_timeout",
-        terminalStatus: "canceled",
+        terminalStatus: "interrupted",
         error: null,
       },
     });
@@ -729,9 +801,12 @@ describe("DeepSWE current-chain adapter", () => {
         "utf8",
       ),
     ).toContain("diff --git");
-    expect(fs.readFileSync(replay.solvePath, "utf8")).toContain(
-      "git apply --binary --index /solution/model.patch",
+    const solveScript = fs.readFileSync(replay.solvePath, "utf8");
+    expect(solveScript).toContain(
+      "git apply --binary --whitespace=nowarn /solution/model.patch",
     );
+    expect(solveScript).toContain("git add -A");
+    expect(solveScript).not.toContain("--index");
     expect(
       fs.readFileSync(path.join(replay.replayTaskDir, "task.toml"), "utf8"),
     ).toBe(fs.readFileSync(path.join(taskDir, "task.toml"), "utf8"));
@@ -758,6 +833,70 @@ describe("DeepSWE current-chain adapter", () => {
       "test-stdout.txt",
     ]);
     expect(fs.existsSync(path.join(runDir, "reward.json"))).toBe(true);
+  });
+
+  it("runs Pier with a Colima-visible temp directory inside the run", () => {
+    const root = temporaryRoot();
+    const runDir = path.join(root, "run");
+    const taskDir = path.join(root, "task");
+    const patchPath = path.join(root, "patch.diff");
+    const pierBin = path.join(root, "pier");
+    const containerBin = path.join(root, "docker");
+    fs.mkdirSync(taskDir, { recursive: true });
+    fs.mkdirSync(path.join(runDir, "pier-jobs", "verify-colima-temp"), {
+      recursive: true,
+    });
+    fs.writeFileSync(path.join(taskDir, "task.toml"), "version = 1\n", "utf8");
+    fs.writeFileSync(patchPath, "candidate patch\n", "utf8");
+    fs.writeFileSync(
+      pierBin,
+      `#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+if (process.argv[2] === "--version") {
+  process.stdout.write("0.3.1");
+  process.exit(0);
+}
+const valueAfter = (name) => process.argv[process.argv.indexOf(name) + 1];
+const jobsDir = valueAfter("--jobs-dir");
+const jobName = valueAfter("--job-name");
+const verifierDir = path.join(jobsDir, jobName, "verifier");
+fs.mkdirSync(verifierDir, { recursive: true });
+fs.writeFileSync(path.join(path.dirname(jobsDir), "pier-child-env.json"), JSON.stringify({
+  tmpdir: process.env.TMPDIR,
+  containerBin: process.env.PIER_CONTAINER_BIN,
+  args: process.argv.slice(2),
+}));
+fs.writeFileSync(path.join(verifierDir, "reward.json"), JSON.stringify({ reward: 1 }));
+fs.writeFileSync(path.join(verifierDir, "ctrf.json"), JSON.stringify({ results: {} }));
+fs.writeFileSync(path.join(verifierDir, "test-stdout.txt"), "passed");
+`,
+      { mode: 0o755 },
+    );
+    fs.writeFileSync(containerBin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+
+    const result = runPierVerifier({
+      task: { taskDir },
+      runDir,
+      runId: "colima-temp",
+      patchPath,
+      pierBin,
+      containerBin,
+    });
+
+    const childEnv = readJson(path.join(runDir, "pier-child-env.json"));
+    expect(childEnv).toMatchObject({
+      tmpdir: path.join(runDir, "pier-tmp"),
+      containerBin,
+    });
+    expect(childEnv.args).toEqual(
+      expect.arrayContaining(["--verifier-env", "NEXTEST_DOUBLE_SPAWN=0"]),
+    );
+    expect(fs.statSync(childEnv.tmpdir).isDirectory()).toBe(true);
+    expect(result.jobDir).toBe(
+      path.join(runDir, "pier-jobs", "verify-colima-temp-retry-1"),
+    );
+    expect(result.reward).toBe(1);
   });
 
   it("reports missing Pier and container prerequisites without pretending to run", () => {
@@ -900,10 +1039,27 @@ describe("DeepSWE current-chain adapter", () => {
         "4096",
         "--enable-thinking",
         "false",
+        "--first-visible-output-timeout-ms",
+        "300000",
       ],
       { cwd: repoRoot, encoding: "utf8" },
     );
     expect(valid.status).toBe(0);
+
+    const invalidTimeout = spawnSync(
+      process.execPath,
+      [
+        "scripts/harness/deepswe-adapter.mjs",
+        "--help",
+        "--first-visible-output-timeout-ms",
+        "0",
+      ],
+      { cwd: repoRoot, encoding: "utf8" },
+    );
+    expect(invalidTimeout.status).toBe(1);
+    expect(`${invalidTimeout.stdout}${invalidTimeout.stderr}`).toContain(
+      "--first-visible-output-timeout-ms must be a positive integer",
+    );
 
     const invalid = spawnSync(
       process.execPath,
@@ -937,6 +1093,11 @@ describe("DeepSWE current-chain adapter", () => {
         status: "product_failed",
         failure: { owner: "model", message: "provider stream failed" },
       }),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(runDir, "run-context.json"),
+      `${JSON.stringify({ task: { id: DEFAULT_DEEPSWE_TASK } })}\n`,
       "utf8",
     );
 

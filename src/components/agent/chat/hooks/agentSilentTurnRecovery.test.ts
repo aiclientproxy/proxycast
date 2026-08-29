@@ -175,4 +175,31 @@ describe("agentSilentTurnRecovery", () => {
       ),
     ).toBe(true);
   });
+
+  it("终态恢复应识别 Codex 的 interrupted turn", () => {
+    const requestStartedAt = Date.parse("2026-04-23T10:00:12.000Z");
+    const detail = createDetail({
+      turns: [
+        {
+          id: "turn-interrupted",
+          thread_id: "thread-1",
+          prompt_text: "被用户中断的任务",
+          status: "interrupted",
+          started_at: "2026-04-23T10:00:10.000Z",
+          completed_at: "2026-04-23T10:00:14.000Z",
+          created_at: "2026-04-23T10:00:10.000Z",
+          updated_at: "2026-04-23T10:00:14.000Z",
+        },
+      ],
+    });
+
+    expect(
+      hasRecoverableTerminalTurnActivity(
+        detail,
+        requestStartedAt,
+        "不同 prompt",
+        "turn-interrupted",
+      ),
+    ).toBe(true);
+  });
 });

@@ -48,6 +48,7 @@ const {
   agentSessionEventNotification,
   createAgentRuntimeClient,
   decodeModelRouteSelector,
+  encodeModelRouteSelector,
   getAppServerRequestSerializationScope,
   isAppServerServerRequestMethod,
   isAgentSessionEventNotification,
@@ -767,6 +768,22 @@ test("decodes opaque model route selectors without exposing provider fields in M
   );
   assert.equal(decodeModelRouteSelector("gpt-5.6-sol"), null);
   assert.equal(decodeModelRouteSelector("route:broken"), null);
+});
+
+test("round trips opaque model route selectors", () => {
+  const selector = encodeModelRouteSelector({
+    providerId: "custom-模型-provider",
+    modelId: "agnes-2.5-flash",
+  });
+
+  assert.deepEqual(decodeModelRouteSelector(selector), {
+    providerId: "custom-模型-provider",
+    modelId: "agnes-2.5-flash",
+  });
+  assert.throws(
+    () => encodeModelRouteSelector({ providerId: " ", modelId: "agnes" }),
+    /non-empty providerId and modelId/,
+  );
 });
 
 test("builds workspace and skill read requests with current methods", () => {

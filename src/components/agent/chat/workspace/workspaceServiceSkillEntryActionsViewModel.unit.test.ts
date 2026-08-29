@@ -292,6 +292,10 @@ describe("workspaceServiceSkillEntryActionsViewModel", () => {
         sessionId: "session-current",
         threadId: "thread-current",
       },
+      modelSelection: {
+        providerId: "custom-agnes",
+        modelId: "agnes-2.5-flash",
+      },
     });
 
     expect(state.pendingAutomation).toMatchObject({
@@ -312,6 +316,8 @@ describe("workspaceServiceSkillEntryActionsViewModel", () => {
       sourceThreadId: "thread-current",
       scheduleType: "daily",
       time: "09:00",
+      modelProviderId: "custom-agnes",
+      modelId: "agnes-2.5-flash",
     });
   });
 
@@ -345,6 +351,10 @@ describe("workspaceServiceSkillEntryActionsViewModel", () => {
         sessionId: "session-current",
         threadId: "thread-current",
       },
+      modelSelection: {
+        providerId: "custom-agnes",
+        modelId: "agnes-2.5-flash",
+      },
     });
     expect(
       shouldCreateServiceSkillAutomationContent({
@@ -368,6 +378,7 @@ describe("workspaceServiceSkillEntryActionsViewModel", () => {
     expect(request.execution).toMatchObject({
       threadMode: "continue_thread",
       sourceThreadId: "thread-current",
+      modelId: "route:Y3VzdG9tLWFnbmVz.YWduZXMtMi41LWZsYXNo",
       requestMetadata: {
         service_skill: expect.objectContaining({
           id: "daily-trend-briefing",

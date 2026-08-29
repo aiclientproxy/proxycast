@@ -64,6 +64,8 @@ interface UseWorkspaceServiceSkillEntryActionsParams {
   }) => Promise<string | null>;
   input: string;
   chatToolPreferences: ChatToolPreferences;
+  providerType?: string;
+  model?: string;
   creationReplay?: CreationReplayMetadata;
   onNavigate?: (page: Page, params?: PageParams) => void;
   recordServiceSkillUsage: (input: RecordServiceSkillUsageInput) => void;
@@ -79,6 +81,8 @@ export function useWorkspaceServiceSkillEntryActions({
   ensureSessionForThreadLineage,
   input,
   chatToolPreferences,
+  providerType,
+  model,
   creationReplay,
   onNavigate,
   recordServiceSkillUsage,
@@ -442,6 +446,10 @@ export function useWorkspaceServiceSkillEntryActions({
           input,
           workspaceId: currentProjectId,
           threadLineage: automationThreadLineage,
+          modelSelection: {
+            providerId: providerType ?? "",
+            modelId: model ?? "",
+          },
         });
 
         setAutomationDialogInitialValues(setupState.dialogInitialValues);
@@ -460,6 +468,8 @@ export function useWorkspaceServiceSkillEntryActions({
       currentProjectId,
       handleServiceSkillLaunch,
       input,
+      model,
+      providerType,
       resolveAutomationThreadLineage,
       setPendingServiceSkillLaunchInput,
       t,

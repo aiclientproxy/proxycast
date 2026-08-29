@@ -7,21 +7,46 @@ import { parse as parseToml } from "smol-toml";
 
 import {
   invokeAppServerMethod,
-  readAgentRuntimeThreadCurrent,
   resolveProviderPreference,
   sleep,
-  startAgentSessionTurnCurrent,
-  updateAgentThreadSettingsCurrent,
   waitForHealth,
 } from "../lib/agent-runtime-smoke-core.mjs";
+import {
+  currentItems,
+  currentTurns,
+  currentUsage,
+  providerStepExhaustion,
+  providerStepsFromCurrentFacts,
+  terminalMessageFromCurrentFacts,
+  toolLifecycleFromCurrentFacts,
+} from "./deepswe-provider-evidence.mjs";
+import {
+  classifyFailure,
+  currentChainFromError,
+  verifierCompletionStatus,
+} from "./deepswe-failure.mjs";
+import {
+  isRecord,
+  nonNegativeInteger,
+  normalizeString,
+  positiveInteger,
+} from "./deepswe-value-utils.mjs";
 
+export {
+  classifyFailure,
+  currentChainFromError,
+  providerStepExhaustion,
+  providerStepsFromCurrentFacts,
+  terminalMessageFromCurrentFacts,
+  verifierCompletionStatus,
+};
 export const DEEPSWE_MANIFEST_PATH =
   "internal/test/deepswe-coding-slice-v2.json";
 export const DEEPSWE_SOURCE_COMMIT = "435ee89ec2f2e2289f33b0da4f992f0b7b7266b9";
 export const DEEPSWE_TASK_SCHEMA_VERSION = "1.3";
 export const DEEPSWE_PIER_VERSION = "0.3.1";
 export const DEEPSWE_PIER_PACKAGE = `datacurve-pier==${DEEPSWE_PIER_VERSION}`;
-export const DEEPSWE_ADAPTER_VERSION = "deepswe-current-chain-adapter-v6";
+export const DEEPSWE_ADAPTER_VERSION = "deepswe-current-chain-adapter-v7";
 export const DEFAULT_DEEPSWE_TASK = "happy-dom-abort-pending-body-reads";
 export const REQUIRED_VERIFIER_FILES = [
   "reward.json",
@@ -38,35 +63,6 @@ const TERMINAL_TURN_STATUSES = new Set([
   "canceled",
   "aborted",
 ]);
-const TOOL_ITEM_TYPES = new Set([
-  "command",
-  "command_execution",
-  "file_artifact",
-  "mcpToolCall",
-  "mcp_tool_call",
-  "tool",
-  "toolCall",
-  "tool_call",
-]);
-
-function isRecord(value) {
-  return value != null && typeof value === "object" && !Array.isArray(value);
-}
-
-function normalizeString(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function nonNegativeInteger(value) {
-  const number = Number(value);
-  return Number.isSafeInteger(number) && number >= 0 ? number : null;
-}
-
-function positiveInteger(value) {
-  const number = nonNegativeInteger(value);
-  return number != null && number > 0 ? number : null;
-}
-
 function positiveNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
@@ -87,6 +83,24 @@ function runGit(cwd, args) {
 
 export function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+export function verifierTaskIdForRun({ runDir, requestedTaskId = "" }) {
+  const contextPath = path.join(path.resolve(runDir), "run-context.json");
+  if (!fs.existsSync(contextPath)) {
+    throw new Error(`DeepSWE verifier run context missing: ${contextPath}`);
+  }
+  const taskId = normalizeString(readJson(contextPath)?.task?.id);
+  if (!taskId) {
+    throw new Error(`DeepSWE verifier task id missing: ${contextPath}`);
+  }
+  const requested = normalizeString(requestedTaskId);
+  if (requested && requested !== taskId) {
+    throw new Error(
+      `DeepSWE verifier task mismatch: expected=${taskId} actual=${requested}`,
+    );
+  }
+  return taskId;
 }
 
 export function writeJson(filePath, value) {
@@ -412,6 +426,9 @@ function workspaceIdentity(response) {
 
 function turnFromSessionRead(sessionRead, turnId) {
   const turns = [
+    ...(Array.isArray(sessionRead?.thread?.turns)
+      ? sessionRead.thread.turns
+      : []),
     ...(Array.isArray(sessionRead?.detail?.turns)
       ? sessionRead.detail.turns
       : []),
@@ -432,344 +449,6 @@ function turnStatus(turn) {
 function isAppServerMessageTimeout(error) {
   const message = error instanceof Error ? error.message : String(error || "");
   return /timed out waiting for app-server message after \d+ms/i.test(message);
-}
-
-function normalizedStringArray(value) {
-  return Array.isArray(value)
-    ? [...new Set(value.map(normalizeString).filter(Boolean))].sort()
-    : [];
-}
-
-function providerStepUsage(payload) {
-  const runtimeEvent = isRecord(payload?.runtimeEvent)
-    ? payload.runtimeEvent
-    : payload;
-  const raw = isRecord(runtimeEvent?.usage)
-    ? runtimeEvent.usage
-    : isRecord(payload?.usage)
-      ? payload.usage
-      : null;
-  if (!raw) {
-    return null;
-  }
-  const inputTokens = nonNegativeInteger(
-    raw.input_tokens ??
-      raw.inputTokens ??
-      raw.prompt_tokens ??
-      raw.promptTokens,
-  );
-  const outputTokens = nonNegativeInteger(
-    raw.output_tokens ??
-      raw.outputTokens ??
-      raw.completion_tokens ??
-      raw.completionTokens,
-  );
-  if (inputTokens == null || outputTokens == null) {
-    return null;
-  }
-  const cachedInputTokens =
-    nonNegativeInteger(
-      raw.cached_input_tokens ??
-        raw.cachedInputTokens ??
-        raw.cache_read_input_tokens ??
-        raw.cacheReadInputTokens,
-    ) ?? 0;
-  const cacheCreationInputTokens =
-    nonNegativeInteger(
-      raw.cache_creation_input_tokens ??
-        raw.cacheCreationInputTokens ??
-        raw.cache_write_input_tokens ??
-        raw.cacheWriteInputTokens,
-    ) ?? 0;
-  return {
-    inputTokens,
-    outputTokens,
-    cachedInputTokens,
-    cacheCreationInputTokens,
-    budgetTokens: Math.max(0, inputTokens - cachedInputTokens) + outputTokens,
-  };
-}
-
-function currentTurns(currentFacts) {
-  const candidates = [
-    currentFacts?.threadRead?.turns,
-    currentFacts?.threadRead?.thread?.turns,
-    currentFacts?.sessionRead?.detail?.thread_read?.turns,
-    currentFacts?.sessionRead?.detail?.threadRead?.turns,
-    currentFacts?.sessionRead?.detail?.turns,
-    currentFacts?.sessionRead?.turns,
-  ];
-  return candidates.find(Array.isArray) || [];
-}
-
-function currentItems(currentFacts) {
-  const turns = currentTurns(currentFacts);
-  const turnItems = turns.flatMap((turn) =>
-    Array.isArray(turn?.items) ? turn.items : [],
-  );
-  const candidates = [
-    ...turnItems,
-    ...(Array.isArray(currentFacts?.threadRead?.thread_items)
-      ? currentFacts.threadRead.thread_items
-      : []),
-    ...(Array.isArray(currentFacts?.threadRead?.threadItems)
-      ? currentFacts.threadRead.threadItems
-      : []),
-    ...(Array.isArray(
-      currentFacts?.sessionRead?.detail?.thread_read?.thread_items,
-    )
-      ? currentFacts.sessionRead.detail.thread_read.thread_items
-      : []),
-    ...(Array.isArray(currentFacts?.sessionRead?.detail?.items)
-      ? currentFacts.sessionRead.detail.items
-      : []),
-    ...(Array.isArray(currentFacts?.sessionRead?.items)
-      ? currentFacts.sessionRead.items
-      : []),
-  ];
-  const seen = new Set();
-  return candidates.filter((item) => {
-    const id = normalizeString(item?.id || item?.item_id || item?.itemId);
-    if (!id) return true;
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-}
-
-function currentProviderStepRecords(currentFacts) {
-  const records = [];
-  const add = (value) => {
-    if (Array.isArray(value)) records.push(...value.filter(isRecord));
-    else if (isRecord(value)) records.push(value);
-  };
-  const threadRead = currentFacts?.threadRead;
-  const detail = currentFacts?.sessionRead?.detail;
-  const readModels = [
-    threadRead,
-    threadRead?.diagnostics,
-    threadRead?.runtime_summary,
-    threadRead?.runtimeSummary,
-    detail?.thread_read,
-    detail?.threadRead,
-    detail?.diagnostics,
-    detail?.runtime_summary,
-    detail?.runtimeSummary,
-  ];
-  for (const record of readModels) {
-    add(record?.provider_steps ?? record?.providerSteps);
-  }
-  for (const turn of currentTurns(currentFacts)) {
-    add(turn?.provider_steps ?? turn?.providerSteps);
-    add(turn?.metadata?.provider_steps ?? turn?.metadata?.providerSteps);
-  }
-  for (const item of currentItems(currentFacts)) {
-    const metadata = isRecord(item?.metadata) ? item.metadata : {};
-    add(metadata.provider_steps ?? metadata.providerSteps);
-    add(metadata.provider_step ?? metadata.providerStep);
-  }
-  return records;
-}
-
-function currentUsage(currentFacts) {
-  const detail = currentFacts?.sessionRead?.detail;
-  const threadRead = currentFacts?.threadRead;
-  const turn = currentTurns(currentFacts).find(
-    (candidate) =>
-      normalizeString(
-        candidate?.id || candidate?.turn_id || candidate?.turnId,
-      ) === normalizeString(currentFacts?.turnId),
-  );
-  return (
-    turn?.usage ||
-    threadRead?.diagnostics?.latest_turn_usage ||
-    threadRead?.diagnostics?.latestTurnUsage ||
-    threadRead?.runtime_summary?.latest_turn_usage ||
-    threadRead?.runtimeSummary?.latestTurnUsage ||
-    detail?.thread_read?.diagnostics?.latest_turn_usage ||
-    detail?.thread_read?.diagnostics?.latestTurnUsage ||
-    detail?.runtime_summary?.latest_turn_usage ||
-    detail?.runtime_summary?.latestTurnUsage ||
-    null
-  );
-}
-
-function providerStepRecord(record, index, toolNames) {
-  const runtimeEvent = isRecord(record?.runtimeEvent)
-    ? record.runtimeEvent
-    : record;
-  const usage = providerStepUsage(runtimeEvent);
-  return {
-    sequence: nonNegativeInteger(
-      runtimeEvent?.sequence ?? runtimeEvent?.ordinal,
-    ),
-    timestamp:
-      normalizeString(
-        runtimeEvent?.timestamp ??
-          runtimeEvent?.updatedAt ??
-          runtimeEvent?.updated_at,
-      ) || null,
-    attempt: positiveInteger(runtimeEvent?.attempt) ?? index + 1,
-    completed:
-      runtimeEvent?.completed === true ||
-      /^(completed|succeeded|success|stop)$/i.test(
-        normalizeString(runtimeEvent?.status ?? runtimeEvent?.finishReason),
-      ),
-    finishReason:
-      normalizeString(
-        runtimeEvent?.finish_reason ?? runtimeEvent?.finishReason,
-      ) || null,
-    output: {
-      textChars:
-        nonNegativeInteger(
-          runtimeEvent?.text_output_chars ?? runtimeEvent?.textOutputChars,
-        ) ?? 0,
-      reasoningChars:
-        nonNegativeInteger(
-          runtimeEvent?.reasoning_output_chars ??
-            runtimeEvent?.reasoningOutputChars,
-        ) ?? 0,
-      toolCalls:
-        nonNegativeInteger(
-          runtimeEvent?.tool_call_count ?? runtimeEvent?.toolCallCount,
-        ) ?? 0,
-    },
-    toolNames: normalizedStringArray(
-      runtimeEvent?.tool_names ??
-        runtimeEvent?.toolNames ??
-        runtimeEvent?.tools ??
-        toolNames,
-    ),
-    usage,
-  };
-}
-
-export function providerStepsFromCurrentFacts(
-  currentFacts,
-  { maxProviderSteps = null, tokenBudget = null } = {},
-) {
-  const stepLimit = positiveInteger(maxProviderSteps);
-  const tokenLimit = positiveInteger(tokenBudget);
-  const itemToolNames = currentItems(currentFacts)
-    .filter((item) => item?.kind === "tool" || TOOL_ITEM_TYPES.has(item?.type))
-    .map((item) => item?.name || item?.tool_name || item?.payload?.name)
-    .filter(Boolean);
-  const steps = currentProviderStepRecords(currentFacts).map((record, index) =>
-    providerStepRecord(record, index, itemToolNames),
-  );
-  const usage = steps.reduce(
-    (total, step) => {
-      if (!step.usage) {
-        return total;
-      }
-      total.stepsWithUsage += 1;
-      total.inputTokens += step.usage.inputTokens;
-      total.outputTokens += step.usage.outputTokens;
-      total.cachedInputTokens += step.usage.cachedInputTokens;
-      total.cacheCreationInputTokens += step.usage.cacheCreationInputTokens;
-      total.budgetTokens += step.usage.budgetTokens;
-      return total;
-    },
-    {
-      stepsWithUsage: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      cachedInputTokens: 0,
-      cacheCreationInputTokens: 0,
-      budgetTokens: 0,
-    },
-  );
-  const fallbackUsage = providerStepUsage({
-    usage: currentUsage(currentFacts),
-  });
-  if (steps.length === 0 && fallbackUsage) {
-    usage.stepsWithUsage = 0;
-    usage.inputTokens = fallbackUsage.inputTokens;
-    usage.outputTokens = fallbackUsage.outputTokens;
-    usage.cachedInputTokens = fallbackUsage.cachedInputTokens;
-    usage.cacheCreationInputTokens = fallbackUsage.cacheCreationInputTokens;
-    usage.budgetTokens = fallbackUsage.budgetTokens;
-  }
-  const reasons = [];
-  if (stepLimit != null && steps.length >= stepLimit) {
-    reasons.push("provider_steps");
-  }
-  if (tokenLimit != null && usage.budgetTokens >= tokenLimit) {
-    reasons.push("token_budget");
-  }
-  const toolSnapshots = steps.map((step) => ({
-    sequence: step.sequence,
-    timestamp: step.timestamp,
-    attempt: step.attempt,
-    toolNames: step.toolNames,
-  }));
-  const snapshotsWithTools = toolSnapshots.filter(
-    (snapshot) => snapshot.toolNames.length > 0,
-  );
-  const uniqueToolNames = [
-    ...new Set(snapshotsWithTools.flatMap((snapshot) => snapshot.toolNames)),
-  ].sort();
-  return {
-    schemaVersion: "deepswe-provider-steps-v1",
-    generatedAt: new Date().toISOString(),
-    budgets: {
-      maxProviderSteps: stepLimit,
-      tokenBudget: tokenLimit,
-      exhausted: reasons.length > 0,
-      reasons,
-      remainingProviderSteps:
-        stepLimit == null ? null : Math.max(0, stepLimit - steps.length),
-      remainingTokens:
-        tokenLimit == null
-          ? null
-          : Math.max(0, tokenLimit - usage.budgetTokens),
-    },
-    stepCount: steps.length,
-    usageStatus:
-      steps.length === 0
-        ? "missing"
-        : usage.stepsWithUsage === steps.length
-          ? "complete"
-          : "partial",
-    usage,
-    toolCatalog: {
-      status:
-        toolSnapshots.length === 0
-          ? "missing"
-          : snapshotsWithTools.length === toolSnapshots.length
-            ? "complete"
-            : "partial",
-      requestCount: toolSnapshots.length,
-      requestsWithTools: snapshotsWithTools.length,
-      uniqueToolNames,
-      applyPatchAvailableOnEveryRequest:
-        snapshotsWithTools.length === 0
-          ? null
-          : snapshotsWithTools.length === toolSnapshots.length &&
-            snapshotsWithTools.every((snapshot) =>
-              snapshot.toolNames.includes("apply_patch"),
-            ),
-      requests: toolSnapshots,
-    },
-    steps,
-  };
-}
-
-function toolLifecycleFromCurrentFacts(currentFacts) {
-  const toolItems = currentItems(currentFacts).filter((item) => {
-    const itemType = normalizeString(item?.type);
-    const payloadType = normalizeString(item?.payload?.type);
-    return (
-      item?.kind === "tool" ||
-      TOOL_ITEM_TYPES.has(itemType) ||
-      TOOL_ITEM_TYPES.has(payloadType)
-    );
-  });
-  return {
-    schemaVersion: "deepswe-tool-lifecycle-v1",
-    itemCount: toolItems.length,
-    items: toolItems,
-  };
 }
 
 function trajectoryFromCurrentFacts({
@@ -802,8 +481,15 @@ async function writeCurrentChainFacts({
   captureStatus,
   startTurnError,
   budgets,
+  runtimeEvents = [],
 }) {
-  const currentFacts = { sessionId, turnId, sessionRead, threadRead };
+  const currentFacts = {
+    sessionId,
+    turnId,
+    sessionRead,
+    threadRead,
+    runtimeEvents,
+  };
   const capture = {
     status: captureStatus,
     startTurnError:
@@ -844,65 +530,20 @@ async function writeCurrentChainFacts({
   return { currentFacts, providerSteps };
 }
 
-export function terminalMessageFromCurrentFacts(currentFacts, turnId) {
-  const turn = currentTurns(currentFacts).find(
-    (candidate) =>
-      normalizeString(
-        candidate?.id || candidate?.turn_id || candidate?.turnId,
-      ) === normalizeString(turnId),
-  );
-  const diagnostics =
-    currentFacts?.threadRead?.diagnostics ||
-    currentFacts?.sessionRead?.detail?.thread_read?.diagnostics ||
-    currentFacts?.sessionRead?.detail?.diagnostics ||
-    {};
-  return normalizeString(
-    turn?.error?.message ||
-      turn?.error ||
-      turn?.failure?.message ||
-      turn?.failure ||
-      diagnostics.latest_turn_error_message ||
-      diagnostics.latestTurnErrorMessage,
-  );
-}
-
-export function currentChainFromError(error) {
-  return error instanceof Error && error.currentChain
-    ? error.currentChain
-    : null;
-}
-
-export function providerStepExhaustion(providerSteps) {
-  const steps = Array.isArray(providerSteps?.steps) ? providerSteps.steps : [];
-  const lastStep = steps.at(-1);
-  if (
-    !providerSteps?.budgets?.reasons?.includes("provider_steps") ||
-    normalizeString(lastStep?.finishReason).toLowerCase() !== "tool_call"
-  ) {
-    return null;
-  }
-  return {
-    reasons: [...providerSteps.budgets.reasons],
-    stepCount: providerSteps.stepCount,
-    usage: providerSteps.usage,
-  };
-}
-
 export function createCurrentChainRpc({
   invoke = invokeAppServerMethod,
   waitForReady = waitForHealth,
+  readRuntimeEvents = async () => [],
 } = {}) {
   return {
     waitForHealth: waitForReady,
     invoke,
     resolveProvider: (options) => resolveProviderPreference(options, invoke),
-    readThread: (options, sessionId, readOptions) =>
-      readAgentRuntimeThreadCurrent(options, sessionId, readOptions, invoke),
-    startTurn: (options, params) =>
-      startAgentSessionTurnCurrent(options, params, invoke),
+    readThread: (options, threadId) =>
+      invoke(options, "thread/read", { threadId, includeTurns: true }),
+    startTurn: (options, params) => invoke(options, "turn/start", params),
     cancelTurn: (options, params) => invoke(options, "turn/interrupt", params),
-    updateThreadSettings: (options, params) =>
-      updateAgentThreadSettingsCurrent(options, params, invoke),
+    readRuntimeEvents,
     sleep,
   };
 }
@@ -920,6 +561,9 @@ export async function runCurrentChainTask({
     tokenBudget: positiveInteger(options.tokenBudget),
   };
   const generation = {
+    first_visible_output_timeout_ms: positiveInteger(
+      options.firstVisibleOutputTimeoutMs,
+    ),
     max_output_tokens: positiveInteger(options.maxOutputTokens),
     enable_thinking:
       typeof options.enableThinking === "boolean"
@@ -927,7 +571,9 @@ export async function runCurrentChainTask({
         : undefined,
   };
   const hasGenerationOverrides =
-    generation.max_output_tokens != null || generation.enable_thinking != null;
+    generation.first_visible_output_timeout_ms != null ||
+    generation.max_output_tokens != null ||
+    generation.enable_thinking != null;
   await rpc.waitForHealth(options);
   const workspaceResponse = await rpc.invoke(options, "workspace/ensure", {
     name: `DeepSWE ${task.id}`,
@@ -939,89 +585,71 @@ export async function runCurrentChainTask({
     throw new Error(`workspace/ensure root mismatch: ${workspace.rootPath}`);
   }
   const provider = await rpc.resolveProvider(options);
-  const sessionId = `deepswe-${runId}`;
-  const turnId = `deepswe-turn-${runId}`;
-  const sessionResponse = await rpc.invoke(options, "thread/start", {
-    sessionId,
-    threadId: sessionId,
-    appId: "desktop",
-    workspaceId: workspace.workspaceId,
-    workingDir: workspaceDir,
-    businessObjectRef: {
-      kind: "agent.session",
-      id: `agent-session:${workspace.workspaceId}:${sessionId}`,
-      title: `DeepSWE ${task.id}`,
-      metadata: {
-        title: `DeepSWE ${task.id}`,
-        workingDir: workspaceDir,
-        working_dir: workspaceDir,
-        executionStrategy: "react",
-        runStartHooks: false,
-        harness: {
-          hiddenFromUserRecents: true,
-          source: "harness:deepswe:run",
-          scenarioId: "DSW-01",
-          taskId: task.id,
-        },
-      },
-    },
+  const threadResponse = await rpc.invoke(options, "thread/start", {
+    model: provider.modelPreference,
+    modelProvider: provider.providerPreference,
+    cwd: workspaceDir,
+    runtimeWorkspaceRoots: [workspaceDir],
+    approvalPolicy: "never",
+    sandbox: "workspace-write",
+    serviceName: `DeepSWE ${task.id}`,
+    historyMode: "paginated",
+    threadSource: "appServer",
   });
-  const actualSessionId = normalizeString(sessionResponse?.session?.sessionId);
-  if (actualSessionId !== sessionId) {
-    throw new Error("thread/start did not return requested sessionId");
-  }
-  await rpc.updateThreadSettings(options, {
-    threadId: sessionId,
-    provider,
-  });
-  const startedAt = new Date().toISOString();
-  let startTurnSettled = false;
-  let startTurnError = null;
-  void rpc
-    .startTurn(options, {
-      sessionId,
-      workspaceId: workspace.workspaceId,
-      message: task.instruction,
-      eventName: `deepswe_${runId}`,
-      turnId,
-      queueIfBusy: false,
-      runtimeRequest: {
-        providerPreference: provider.providerPreference,
-        modelPreference: provider.modelPreference,
-        approvalPolicy: "never",
-        sandboxPolicy: "workspace-write",
-        executionStrategy: "react",
-        workingDir: workspaceDir,
-        workspaceRoot: workspaceDir,
-        projectRoot: workspaceDir,
-        webSearch: false,
-        searchMode: "disabled",
-        metadata: {
-          harness: {
-            source: "harness:deepswe:run",
-            scenarioId: "DSW-01",
-            taskId: task.id,
-            provider_budget:
-              budgets.maxProviderSteps == null && budgets.tokenBudget == null
-                ? undefined
-                : {
-                    max_provider_steps: budgets.maxProviderSteps,
-                    token_budget: budgets.tokenBudget,
-                  },
-            ...(hasGenerationOverrides ? { generation } : {}),
-          },
-        },
-      },
-    })
-    .then(
-      () => {
-        startTurnSettled = true;
-      },
-      (error) => {
-        startTurnSettled = true;
-        startTurnError = error;
-      },
+  const threadId = normalizeString(threadResponse?.thread?.id);
+  const sessionId = normalizeString(threadResponse?.thread?.sessionId);
+  if (!threadId || !sessionId) {
+    throw new Error(
+      "thread/start did not return canonical thread/session identity",
     );
+  }
+  const startedAt = new Date().toISOString();
+  let turnId = "";
+  let startTurnError = null;
+  const harnessMetadata = {
+    harness: {
+      source: "harness:deepswe:run",
+      scenarioId: "DSW-01",
+      taskId: task.id,
+      provider_budget:
+        budgets.maxProviderSteps == null && budgets.tokenBudget == null
+          ? undefined
+          : {
+              max_provider_steps: budgets.maxProviderSteps,
+              token_budget: budgets.tokenBudget,
+            },
+      ...(hasGenerationOverrides ? { generation } : {}),
+    },
+  };
+  try {
+    const turnResponse = await rpc.startTurn(options, {
+      threadId,
+      clientUserMessageId: `deepswe-user-${runId}`,
+      input: [{ type: "text", text: task.instruction }],
+      cwd: workspaceDir,
+      runtimeWorkspaceRoots: [workspaceDir],
+      approvalPolicy: "never",
+      sandboxPolicy: "workspace-write",
+      model: provider.modelPreference,
+      responsesapiClientMetadata: {
+        source: "harness:deepswe:run",
+        scenarioId: "DSW-01",
+        taskId: task.id,
+      },
+      additionalContext: {
+        metadata: {
+          kind: "application",
+          value: JSON.stringify(harnessMetadata),
+        },
+      },
+    });
+    turnId = normalizeString(turnResponse?.turn?.id);
+    if (!turnId) {
+      throw new Error("turn/start did not return canonical turn.id");
+    }
+  } catch (error) {
+    startTurnError = error;
+  }
 
   const pollStartedAt = Date.now();
   let sessionRead = null;
@@ -1029,18 +657,13 @@ export async function runCurrentChainTask({
   let turn = null;
   let budgetCancellation = null;
   while (Date.now() - pollStartedAt < options.timeoutMs) {
-    [sessionRead, threadRead] = await Promise.all([
-      rpc.invoke(options, "thread/read", {
-        sessionId,
-        historyLimit: 500,
-      }),
-      rpc.readThread(options, sessionId, { historyLimit: 500 }),
-    ]);
+    threadRead = await rpc.readThread(options, threadId);
+    sessionRead = threadRead;
     turn = turnFromSessionRead(sessionRead, turnId);
     if (turn && TERMINAL_TURN_STATUSES.has(turnStatus(turn))) {
       break;
     }
-    if (startTurnSettled && startTurnError) {
+    if (startTurnError) {
       break;
     }
     await rpc.sleep(options.intervalMs);
@@ -1061,16 +684,14 @@ export async function runCurrentChainTask({
     const requestedAt = new Date().toISOString();
     let cancellationError = null;
     try {
-      await rpc.cancelTurn(options, { sessionId, turnId });
+      if (!turnId) {
+        throw new Error("turn/start did not return a turn to interrupt");
+      }
+      await rpc.cancelTurn(options, { threadId, turnId });
       const cancelDeadline = Date.now() + 10_000;
       while (Date.now() < cancelDeadline) {
-        [sessionRead, threadRead] = await Promise.all([
-          rpc.invoke(options, "thread/read", {
-            sessionId,
-            historyLimit: 500,
-          }),
-          rpc.readThread(options, sessionId, { historyLimit: 500 }),
-        ]);
+        threadRead = await rpc.readThread(options, threadId);
+        sessionRead = threadRead;
         turn = turnFromSessionRead(sessionRead, turnId);
         status = turnStatus(turn);
         terminal = Boolean(turn && TERMINAL_TURN_STATUSES.has(status));
@@ -1098,6 +719,10 @@ export async function runCurrentChainTask({
     captureStatus: terminal ? "terminal" : "partial",
     startTurnError,
     budgets,
+    runtimeEvents:
+      typeof rpc.readRuntimeEvents === "function"
+        ? await rpc.readRuntimeEvents({ sessionId, threadId, turnId })
+        : [],
   });
   const stepExhaustion = providerStepExhaustion(factsCapture.providerSteps);
   const finishedAt = new Date().toISOString();
@@ -1128,6 +753,7 @@ export async function runCurrentChainTask({
           : "timeout",
       terminalStatus: terminal ? status : null,
       sessionId,
+      threadId,
       turnId,
       workspace,
       provider: {
@@ -1149,6 +775,7 @@ export async function runCurrentChainTask({
   return {
     status,
     sessionId,
+    threadId,
     turnId,
     workspace,
     provider: {
@@ -1223,7 +850,8 @@ export function preparePierReplayTask({ task, runDir, patchPath }) {
     "cd /app",
     "git config user.name 'DeepSWE patch replay'",
     "git config user.email 'deepswe@localhost'",
-    "git apply --binary --index /solution/model.patch",
+    "git apply --binary --whitespace=nowarn /solution/model.patch",
+    "git add -A",
     "git commit -m 'Apply Lime App Server candidate patch'",
     "",
   ].join("\n");
@@ -1265,6 +893,26 @@ export function collectPierEvidence({ jobDir, runDir }) {
   return collected;
 }
 
+function pierRewardValue(reward) {
+  if (typeof reward === "number") return reward;
+  if (typeof reward?.reward === "number") return reward.reward;
+  if (typeof reward?.score === "number") return reward.score;
+  if (typeof reward?.passed === "boolean") return reward.passed ? 1 : 0;
+  return null;
+}
+
+function availablePierJobName(jobsDir, runId) {
+  const baseName = `verify-${runId}`;
+  if (!fs.existsSync(path.join(jobsDir, baseName))) {
+    return baseName;
+  }
+  let retry = 1;
+  while (fs.existsSync(path.join(jobsDir, `${baseName}-retry-${retry}`))) {
+    retry += 1;
+  }
+  return `${baseName}-retry-${retry}`;
+}
+
 export function runPierVerifier({
   task,
   runDir,
@@ -1282,7 +930,9 @@ export function runPierVerifier({
   }
   const { replayTaskDir } = preparePierReplayTask({ task, runDir, patchPath });
   const jobsDir = path.join(runDir, "pier-jobs");
-  const jobName = `verify-${runId}`;
+  const pierTempDir = path.join(runDir, "pier-tmp");
+  fs.mkdirSync(pierTempDir, { recursive: true });
+  const jobName = availablePierJobName(jobsDir, runId);
   const result = spawnSync(
     pierBin,
     [
@@ -1293,6 +943,8 @@ export function runPierVerifier({
       "oracle",
       "--env",
       "docker",
+      "--verifier-env",
+      "NEXTEST_DOUBLE_SPAWN=0",
       "--job-name",
       jobName,
       "--jobs-dir",
@@ -1308,7 +960,11 @@ export function runPierVerifier({
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       timeout: timeoutMs,
-      env: { ...process.env, PIER_CONTAINER_BIN: containerBin },
+      env: {
+        ...process.env,
+        TMPDIR: pierTempDir,
+        PIER_CONTAINER_BIN: containerBin,
+      },
     },
   );
   fs.writeFileSync(
@@ -1322,59 +978,12 @@ export function runPierVerifier({
     );
   }
   const jobDir = path.join(jobsDir, jobName);
+  const evidence = collectPierEvidence({ jobDir, runDir });
+  const reward = pierRewardValue(readJson(path.join(runDir, "reward.json")));
   return {
     jobDir,
-    evidence: collectPierEvidence({ jobDir, runDir }),
-  };
-}
-
-export function classifyFailure(stage, error) {
-  const message = error instanceof Error ? error.message : String(error);
-  let owner = "environment";
-  if (
-    /unsupported workspace_type|spawnSync git ENOBUFS|workspace HEAD contains non-candidate commits/i.test(
-      message,
-    )
-  ) {
-    owner = "harness";
-  } else if (
-    /fetch failed|ECONNRESET|ECONNREFUSED|DevBridge health/i.test(message)
-  ) {
-    owner = "transport";
-  } else if (
-    /budget|token|cost|DeepSWE turn timeout|timed out waiting for app-server message/i.test(
-      message,
-    )
-  ) {
-    owner = "budget";
-  } else if (
-    /provider|model|api key|authentication|rate.limit/i.test(message)
-  ) {
-    owner = "model";
-  } else if (/empty patch|produced no candidate|\bno[- ]op\b/i.test(message)) {
-    owner = "model";
-  } else if (/tool|sandbox|approval/i.test(message)) {
-    owner = "tool-runtime";
-  } else if (
-    /app server|agentSession|thread\/(?:start|read)|turn\/(?:start|interrupt)|workspace\/ensure|evidence\/export|DevBridge/i.test(
-      message,
-    )
-  ) {
-    owner = "app-server";
-  } else if (/Pier|verifier|reward\.json|ctrf\.json/i.test(message)) {
-    owner = "verifier";
-  } else if (stage === "transport") {
-    owner = "transport";
-  } else if (stage.startsWith("agent") || /terminal status/i.test(message)) {
-    owner = "agent-runtime";
-  }
-  return {
-    schemaVersion: "deepswe-failure-classification-v1",
-    generatedAt: new Date().toISOString(),
-    status: "failed",
-    stage,
-    owner,
-    message,
+    evidence,
+    reward,
   };
 }
 
@@ -1407,9 +1016,9 @@ export function runContextBase(options, runId, task) {
       appServerMethods: [
         "workspace/ensure",
         "thread/start",
-        "thread/settings/update",
         "turn/start",
         "thread/read",
+        "turn/interrupt",
       ],
       verifier: "Pier separate verifier with patch replay",
       transport: options.transport,
@@ -1425,9 +1034,11 @@ export function runContextBase(options, runId, task) {
           "agent-runtime reply loop before tool execution and next sampling",
       },
       generationControls: {
+        firstVisibleOutputTimeoutMs: options.firstVisibleOutputTimeoutMs,
         maxOutputTokens: options.maxOutputTokens,
         enableThinking: options.enableThinking,
-        projection: "runtimeRequest.metadata.harness.generation",
+        projection:
+          "additionalContext.metadata -> RuntimeRequest.metadata.harness.generation",
       },
     },
   };

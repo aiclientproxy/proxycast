@@ -54,6 +54,7 @@ type MessageParts = NonNullable<Message["contentParts"]>;
 const STREAM_FIRST_EVENT_TIMEOUT_MS = 12_000;
 const STREAM_INACTIVITY_TIMEOUT_MS = 120_000; // 2 分钟，兼容推理模型长时间思考
 const STREAM_DEFERRED_RECOVERY_POLL_MS = 5_000;
+const STREAM_DEFERRED_RECOVERY_MAX_DURATION_MS = 120_000;
 
 function normalizeEventNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -264,6 +265,10 @@ export async function registerAgentStreamTurnEventBinding(
   const warnedUnknownEventTypes = new Set<string>();
   const surfaceThinkingDeltas = false;
   let terminalRecoveryPollStarted = false;
+  let terminalRecoveryPollStartedAt: number | null = null;
+  let terminalRecoveryPollAttempts = 0;
+  let recoveryPollGeneration = 0;
+  let disposed = false;
   const markFirstEventReceived = (params: {
     eventReceivedAt: number;
     eventType: string;
@@ -305,14 +310,20 @@ export async function registerAgentStreamTurnEventBinding(
       clearTimeout(deferredRecoveryPollId);
       deferredRecoveryPollId = null;
     }
+    recoveryPollGeneration += 1;
   };
   const readRecoveryTurnId = () =>
     requestState.activeTextSegmentTurnId ?? requestState.currentTurnId ?? null;
   function scheduleDeferredRecoveryPoll() {
     clearDeferredRecoveryPoll();
-    if (requestState.requestFinished) {
+    if (
+      disposed ||
+      requestState.requestFinished ||
+      !terminalRecoveryPollStarted
+    ) {
       return;
     }
+    const generation = recoveryPollGeneration;
     logAgentDebug(
       "AgentStream",
       "terminalRecoveryPoll.scheduled",
@@ -329,9 +340,14 @@ export async function registerAgentStreamTurnEventBinding(
     );
     deferredRecoveryPollId = globalThis.setTimeout(() => {
       deferredRecoveryPollId = null;
-      if (requestState.requestFinished) {
+      if (
+        disposed ||
+        requestState.requestFinished ||
+        generation !== recoveryPollGeneration
+      ) {
         return;
       }
+      terminalRecoveryPollAttempts += 1;
       void (async () => {
         logAgentDebug(
           "AgentStream",
@@ -350,6 +366,13 @@ export async function registerAgentStreamTurnEventBinding(
         const recovered = await tryRecoverSilentTurn({
           requireTerminal: terminalRecoveryPollStarted,
         });
+        if (
+          disposed ||
+          requestState.requestFinished ||
+          generation !== recoveryPollGeneration
+        ) {
+          return;
+        }
         if (recovered) {
           logAgentDebug("AgentStream", "terminalRecoveryPoll.recovered", {
             eventName,
@@ -362,15 +385,32 @@ export async function registerAgentStreamTurnEventBinding(
           finalizeSilentTurnRecovery();
           return;
         }
+        const startedAt = terminalRecoveryPollStartedAt ?? Date.now();
+        if (
+          Date.now() - startedAt >=
+          STREAM_DEFERRED_RECOVERY_MAX_DURATION_MS
+        ) {
+          logAgentDebug("AgentStream", "terminalRecoveryPoll.exhausted", {
+            attempts: terminalRecoveryPollAttempts,
+            eventName,
+            sessionId: activeSessionId,
+            turnId: readRecoveryTurnId(),
+          });
+          return;
+        }
         scheduleDeferredRecoveryPoll();
       })();
     }, STREAM_DEFERRED_RECOVERY_POLL_MS);
   }
   const startTerminalRecoveryPoll = () => {
-    if (requestState.requestFinished) {
+    if (disposed || requestState.requestFinished) {
       return;
     }
-    terminalRecoveryPollStarted = true;
+    if (!terminalRecoveryPollStarted) {
+      terminalRecoveryPollStarted = true;
+      terminalRecoveryPollStartedAt = Date.now();
+      terminalRecoveryPollAttempts = 0;
+    }
     scheduleDeferredRecoveryPoll();
   };
   function deferFirstEventTimeoutAfterSubmission() {
@@ -454,6 +494,7 @@ export async function registerAgentStreamTurnEventBinding(
     }
   };
   const disposeListenerWithWatchdogs = () => {
+    disposed = true;
     clearFirstEventWatchdog();
     clearInactivityWatchdog();
     clearDeferredRecoveryPoll();
@@ -461,9 +502,12 @@ export async function registerAgentStreamTurnEventBinding(
   };
   const finalizeSilentTurnRecovery = () => {
     firstEventReceived = true;
-    callbacks.clearActiveStreamIfMatch(eventName);
+    const activeStreamCleared =
+      callbacks.clearActiveStreamIfMatch(eventName);
     disposeListenerWithWatchdogs();
-    setIsSending(false);
+    if (activeStreamCleared) {
+      setIsSending(false);
+    }
   };
   const tryRecoverSilentTurn = async (recoveryOptions?: {
     requireTerminal?: boolean;
@@ -831,6 +875,7 @@ export async function registerAgentStreamTurnEventBinding(
   logAgentDebug("AgentStream", "listenerBound", listenerBoundContext);
 
   return () => {
+    disposed = true;
     clearFirstEventWatchdog();
     clearInactivityWatchdog();
     clearDeferredRecoveryPoll();

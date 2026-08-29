@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ScheduledTask, ScheduledTaskRunSummary } from "@/lib/api/scheduledTasks";
+import { scheduledTaskModelLabel } from "./scheduledTaskViewModel";
 import { describeScheduledTaskSchedule, formatScheduledTaskTime, scheduledTaskPresentationCopy, scheduledTaskStatusLabel } from "./scheduledTaskPresentation";
 import { ScheduledTaskRunHistory } from "./ScheduledTaskRunHistory";
 
@@ -68,7 +69,7 @@ export function ScheduledTaskDetails({ task, runs, loadingRuns, busyAction, loca
           <DetailSection title={t("scheduledTasks.details.execution")}>
             <DetailRow label={t("scheduledTasks.details.threadMode")} value={t(task.execution.threadMode === "new_thread" ? "scheduledTasks.editor.threadMode.new" : "scheduledTasks.editor.threadMode.continue")} />
             <DetailRow label={t("scheduledTasks.details.project")} value={task.execution.projectId || t("scheduledTasks.value.notSet")} />
-            <DetailRow label={t("scheduledTasks.details.model")} value={task.execution.modelId || t("scheduledTasks.editor.value.inherit")} />
+            <DetailRow label={t("scheduledTasks.details.model")} value={scheduledTaskModelLabel(task.execution.modelId) || t("scheduledTasks.editor.value.inherit")} />
             <DetailRow label={t("scheduledTasks.details.reasoning")} value={task.execution.reasoningEffort || t("scheduledTasks.editor.value.inherit")} />
           </DetailSection>
           <DetailSection title={t("scheduledTasks.details.schedule")}>

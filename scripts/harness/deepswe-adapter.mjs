@@ -20,10 +20,17 @@ import {
   runPierVerifier,
   runtimePrerequisites,
   timestampId,
+  verifierCompletionStatus,
+  verifierTaskIdForRun,
   writeJson,
   writeRunContext,
 } from "./deepswe-adapter-core.mjs";
 import { createAppServerStdioTransport } from "./app-server-stdio-transport.mjs";
+import {
+  applyCandidateContinuation,
+  candidateContinuationInstruction,
+  loadCandidateContinuation,
+} from "./deepswe-candidate-continuation.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +48,7 @@ function parseArgs(argv) {
     healthUrl: "http://127.0.0.1:3030/health",
     intervalMs: 2_000,
     invokeUrl: "http://127.0.0.1:3030/invoke",
+    firstVisibleOutputTimeoutMs: null,
     logPrefix: "[harness:deepswe]",
     manifestPath: "internal/test/deepswe-coding-slice-v2.json",
     maxOutputTokens: null,
@@ -49,11 +57,12 @@ function parseArgs(argv) {
     pierBin: fs.existsSync(localPierBin) ? localPierBin : "pier",
     preflight: false,
     providerPreference: "",
+    candidateRunDir: "",
     runDir: "",
     runsRoot: path.join(repoRoot, ".lime/benchmark/v2/runs"),
     sliceName: "release-20",
     sourceRoot: path.join(repoRoot, ".lime/benchmark/sources/deep-swe"),
-    taskId: DEFAULT_DEEPSWE_TASK,
+    taskId: "",
     tokenBudget: 500_000,
     timeoutMs: 5_400_000,
     transport: process.env.LIME_DEEPSWE_TRANSPORT || "dev-bridge",
@@ -91,6 +100,7 @@ function parseArgs(argv) {
       ["--max-provider-steps", "maxProviderSteps"],
       ["--pier-bin", "pierBin"],
       ["--provider", "providerPreference"],
+      ["--resume-candidate-run", "candidateRunDir"],
       ["--run-dir", "runDir"],
       ["--runs-root", "runsRoot"],
       ["--slice", "sliceName"],
@@ -100,6 +110,7 @@ function parseArgs(argv) {
       ["--token-budget", "tokenBudget"],
       ["--transport", "transport"],
       ["--enable-thinking", "enableThinking"],
+      ["--first-visible-output-timeout-ms", "firstVisibleOutputTimeoutMs"],
     ]);
     const key = valueOptions.get(arg);
     if (key && argv[index + 1]) {
@@ -110,6 +121,10 @@ function parseArgs(argv) {
     throw new Error(`unknown argument: ${arg}`);
   }
   options.intervalMs = Number(options.intervalMs);
+  options.firstVisibleOutputTimeoutMs =
+    options.firstVisibleOutputTimeoutMs == null
+      ? null
+      : Number(options.firstVisibleOutputTimeoutMs);
   options.maxOutputTokens =
     options.maxOutputTokens == null ? null : Number(options.maxOutputTokens);
   options.maxProviderSteps = Number(options.maxProviderSteps);
@@ -118,6 +133,9 @@ function parseArgs(argv) {
   options.sourceRoot = path.resolve(repoRoot, options.sourceRoot);
   options.runsRoot = path.resolve(repoRoot, options.runsRoot);
   options.runDir = options.runDir ? path.resolve(repoRoot, options.runDir) : "";
+  options.candidateRunDir = options.candidateRunDir
+    ? path.resolve(repoRoot, options.candidateRunDir)
+    : "";
   options.appServerBin = path.resolve(repoRoot, options.appServerBin);
   options.appServerDataDir = options.appServerDataDir
     ? path.resolve(repoRoot, options.appServerDataDir)
@@ -133,6 +151,15 @@ function parseArgs(argv) {
   }
   if (!Number.isFinite(options.intervalMs) || options.intervalMs < 100) {
     throw new Error("--interval-ms must be >= 100");
+  }
+  if (
+    options.firstVisibleOutputTimeoutMs != null &&
+    (!Number.isSafeInteger(options.firstVisibleOutputTimeoutMs) ||
+      options.firstVisibleOutputTimeoutMs < 1)
+  ) {
+    throw new Error(
+      "--first-visible-output-timeout-ms must be a positive integer",
+    );
   }
   if (
     !Number.isSafeInteger(options.maxProviderSteps) ||
@@ -172,6 +199,8 @@ Options:
   --model MODEL             Select a configured model
   --max-output-tokens N     Override provider output limit for this diagnostic run
   --enable-thinking BOOL    Override thinking for this run: true or false
+  --first-visible-output-timeout-ms N
+                            Override the first visible output deadline for this run
   --max-provider-steps N    Stop after N completed provider steps, default: 32
   --token-budget N          Non-cached input plus output token budget, default: 500000
   --allow-live-provider    Required before a real model turn
@@ -182,6 +211,7 @@ Options:
   --run-dir PATH            Existing run directory for --verifier-only
   --pier-bin PATH           Pier executable, default: isolated local install or PATH
   --container-bin PATH      Container executable, default: docker
+  --resume-candidate-run P  Continue the same task from a prior live candidate patch
   --timeout-ms N            Agent turn timeout, default: 5400000
 `);
 }
@@ -206,16 +236,29 @@ async function main() {
     return;
   }
 
-  const task = loadTaskDefinition({
-    repoRoot,
-    sourceRoot: options.sourceRoot,
-    taskId: options.taskId,
-    manifestPath: options.manifestPath,
-  });
+  if (options.verifierOnly && options.candidateRunDir) {
+    throw new Error(
+      "--resume-candidate-run cannot be combined with --verifier-only",
+    );
+  }
   if (options.verifierOnly) {
     if (!options.runDir) {
       throw new Error("--verifier-only requires --run-dir");
     }
+  }
+  const taskId = options.verifierOnly
+    ? verifierTaskIdForRun({
+        runDir: options.runDir,
+        requestedTaskId: options.taskId,
+      })
+    : options.taskId || DEFAULT_DEEPSWE_TASK;
+  const task = loadTaskDefinition({
+    repoRoot,
+    sourceRoot: options.sourceRoot,
+    taskId,
+    manifestPath: options.manifestPath,
+  });
+  if (options.verifierOnly) {
     const patchPath = path.join(options.runDir, "patch.diff");
     if (!fs.existsSync(patchPath)) {
       throw new Error(`patch.diff missing: ${patchPath}`);
@@ -268,10 +311,14 @@ async function main() {
     });
     writeJson(resultPath, {
       ...existingResult,
-      status:
-        existingResult.currentChain?.status === "failed"
-          ? "verified_with_product_failure"
-          : "verified",
+      status: verifierCompletionStatus({
+        currentChain: existingResult.currentChain,
+        patch: existingResult.patch || {
+          path: patchPath,
+          bytes: fs.statSync(patchPath).size,
+        },
+        verification,
+      }),
       patch: existingResult.patch || {
         path: patchPath,
         bytes: fs.statSync(patchPath).size,
@@ -300,11 +347,28 @@ async function main() {
   let patch = null;
   let verifierPrerequisites = null;
   let appServerTransport = null;
+  const candidateContinuation = options.candidateRunDir
+    ? loadCandidateContinuation({
+        runDir: options.candidateRunDir,
+        task,
+        providerPreference: options.providerPreference,
+        modelPreference: options.modelPreference,
+      })
+    : null;
   const context = runContextBase(options, runId, task);
+  if (candidateContinuation) {
+    context.continuation = candidateContinuation.evidence;
+  }
   writeRunContext(runDir, context);
   try {
     stage = "prepare";
     workspace = prepareTaskWorkspace({ task, workspaceDir, runId });
+    if (candidateContinuation) {
+      workspace.continuation = applyCandidateContinuation({
+        workspaceDir,
+        continuation: candidateContinuation,
+      });
+    }
     let rpc;
     if (options.transport === "stdio") {
       if (!options.appServerDataDir) {
@@ -323,12 +387,22 @@ async function main() {
       rpc = createCurrentChainRpc({
         invoke: appServerTransport.invoke,
         waitForReady: appServerTransport.waitForReady,
+        readRuntimeEvents: appServerTransport.readRuntimeEvents,
       });
     }
     stage = "agent";
+    const currentTask = candidateContinuation
+      ? {
+          ...task,
+          instruction: candidateContinuationInstruction(
+            task.instruction,
+            candidateContinuation.evidence,
+          ),
+        }
+      : task;
     currentChain = await runCurrentChainTask({
       options,
-      task,
+      task: currentTask,
       workspaceDir,
       runDir,
       runId,
@@ -386,13 +460,18 @@ async function main() {
     });
     const result = {
       schemaVersion: "deepswe-adapter-result-v1",
-      status: "verified",
+      status: verifierCompletionStatus({
+        currentChain,
+        patch,
+        verification,
+      }),
       runId,
       runDir,
       workspace,
       currentChain,
       patch,
       verification,
+      continuation: candidateContinuation?.evidence || null,
     };
     writeJson(path.join(runDir, "adapter-result.json"), result);
     writeJson(path.join(runDir, "failure-classification.json"), {
@@ -444,6 +523,7 @@ async function main() {
       patch,
       failure,
       verifierPrerequisites,
+      continuation: candidateContinuation?.evidence || null,
     });
     throw error;
   } finally {

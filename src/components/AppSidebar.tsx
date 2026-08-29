@@ -28,6 +28,7 @@ import {
   Page,
   PageParams,
   PluginsPageParams,
+  ScheduledTasksPageParams,
 } from "@/types/page";
 import { SettingsTabs } from "@/types/settings";
 import {
@@ -858,7 +859,19 @@ export function AppSidebar({
     }
 
     const scopedTarget =
-      item.id === "plugins" && projectScopedNavigationProjectId
+      item.id === "scheduled-tasks" && projectScopedNavigationProjectId
+        ? (() => {
+            const rawParams = {
+              ...(target.rawParams as ScheduledTasksPageParams | undefined),
+              projectId: projectScopedNavigationProjectId,
+            } satisfies ScheduledTasksPageParams;
+            return {
+              ...target,
+              rawParams,
+              paramsKey: serializeNavigationParams(rawParams),
+            } satisfies SidebarNavigationTarget;
+          })()
+        : item.id === "plugins" && projectScopedNavigationProjectId
         ? (() => {
             const rawParams = {
               ...(target.rawParams as PluginsPageParams | undefined),

@@ -491,6 +491,8 @@ export function useAgentChatWorkspaceSetupRuntime({
       ensureSessionForThreadLineage: ensureSession,
       input,
       chatToolPreferences: effectiveChatToolPreferences,
+      providerType,
+      model,
       creationReplay: initialCreationReplay,
       onNavigate: _onNavigate,
       recordServiceSkillUsage,

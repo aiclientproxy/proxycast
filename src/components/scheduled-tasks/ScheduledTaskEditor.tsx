@@ -54,6 +54,12 @@ export function ScheduledTaskEditor({
     value: ScheduledTaskFormState[K],
   ) => onChange({ ...form, [field]: value });
   const showDays = form.scheduleType === "weekly" || form.scheduleType === "hourly";
+  const modelSelectionLabel = [
+    form.modelProviderId?.trim(),
+    form.modelId.trim(),
+  ]
+    .filter(Boolean)
+    .join(" / ");
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
@@ -138,7 +144,10 @@ export function ScheduledTaskEditor({
                 placeholder={t("scheduledTasks.editor.placeholder.project")}
               />
             </Field>
-            <details className="group border-t border-slate-200 pt-4">
+            <details
+              className="group border-t border-slate-200 pt-4"
+              open={Boolean(errors.modelId)}
+            >
               <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-slate-700">
                 {t("scheduledTasks.editor.moreRuntime")}
                 <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
@@ -147,8 +156,19 @@ export function ScheduledTaskEditor({
                 <Field label={t("scheduledTasks.editor.field.cwd")}>
                   <Input value={form.cwd} disabled={saving} onChange={(event) => update("cwd", event.target.value)} placeholder={t("scheduledTasks.editor.placeholder.cwd")} />
                 </Field>
-                <Field label={t("scheduledTasks.editor.field.model")}>
-                  <Input value={form.modelId} disabled={saving} onChange={(event) => update("modelId", event.target.value)} placeholder={t("scheduledTasks.editor.placeholder.inherit")} />
+                <Field
+                  label={t("scheduledTasks.editor.field.model")}
+                  error={errors.modelId ? t("scheduledTasks.editor.validation.model") : undefined}
+                >
+                  <Input
+                    value={modelSelectionLabel}
+                    disabled={saving}
+                    readOnly
+                    placeholder={t("scheduledTasks.editor.placeholder.inherit")}
+                    aria-invalid={Boolean(errors.modelId)}
+                    aria-readonly="true"
+                    className="bg-slate-50 text-slate-700"
+                  />
                 </Field>
                 <Field label={t("scheduledTasks.editor.field.reasoning")}>
                   <select value={form.reasoningEffort} disabled={saving} onChange={(event) => update("reasoningEffort", event.target.value)} className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-300">

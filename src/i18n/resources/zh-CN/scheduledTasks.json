@@ -71,6 +71,7 @@
   "scheduledTasks.editor.validation.days": "至少选择一天",
   "scheduledTasks.editor.validation.fix": "请先修正表单中的问题",
   "scheduledTasks.editor.validation.interval": "间隔必须是 1 到 24 小时",
+  "scheduledTasks.editor.validation.model": "请先在输入框选择 Provider 和模型",
   "scheduledTasks.editor.validation.prompt": "请输入任务说明",
   "scheduledTasks.editor.validation.sourceThread": "继续对话时必须填写来源对话 ID",
   "scheduledTasks.editor.validation.threadLineageRequired": "请先从当前项目对话中创建已安排任务",

@@ -225,6 +225,8 @@ function renderHook(props?: Partial<HookProps>) {
     ensureSessionForThreadLineage: mockEnsureSessionForThreadLineage,
     input: "请结合当前上下文继续",
     chatToolPreferences: DEFAULT_CHAT_TOOL_PREFERENCES,
+    providerType: "custom-agnes",
+    model: "agnes-2.5-flash",
     onNavigate: vi.fn(),
     recordServiceSkillUsage: vi.fn(),
   };
@@ -745,6 +747,7 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
           threadMode: "continue_thread",
           sourceThreadId: "thread-current",
           projectId: "project-1",
+          modelId: "route:Y3VzdG9tLWFnbmVz.YWduZXMtMi41LWZsYXNo",
           requestMetadata: expect.objectContaining({
             service_skill: expect.objectContaining({
               id: "daily-trend-briefing",

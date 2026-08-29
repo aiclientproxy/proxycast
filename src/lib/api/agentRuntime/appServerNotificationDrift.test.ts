@@ -116,6 +116,22 @@ describe("App Server notification drift", () => {
     }
   });
 
+  it("keeps model catalog refresh notifications diagnostic-only", () => {
+    const source = notification("model/list/updated", {
+      generation: 12,
+      providerId: "provider-private",
+    });
+
+    const diagnostic = readAppServerNotificationDrift(source);
+    expect(diagnostic).toMatchObject({
+      disposition: "known_diagnostic_only",
+      field_names: ["generation", "providerId"],
+      method: "model/list/updated",
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain("provider-private");
+    expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
+  });
+
   it("keeps excluded environment and external-agent notifications diagnostic-only", () => {
     for (const method of [
       "thread/environment/connected",

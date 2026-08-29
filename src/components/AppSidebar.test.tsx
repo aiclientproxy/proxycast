@@ -199,6 +199,31 @@ describe("AppSidebar navigation", () => {
     expect(onNavigate).toHaveBeenCalledWith("scheduled-tasks", undefined);
   });
 
+  it("从项目工作区进入已安排任务时应保留项目作用域", async () => {
+    const onNavigate = vi.fn();
+    const container = mountSidebarContainer({
+      currentPage: "agent",
+      currentPageParams: {
+        agentEntry: "new-task",
+        projectId: "project-current",
+      } as AgentPageParams,
+      onNavigate,
+    });
+    await flushEffects(2);
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="app-sidebar-nav-scheduled-tasks"]',
+        )
+        ?.click();
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith("scheduled-tasks", {
+      projectId: "project-current",
+    });
+  });
+
   it("Lime 首页入口应保持在左侧栏顶部，并在 macOS 预留系统按钮安全区", async () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",

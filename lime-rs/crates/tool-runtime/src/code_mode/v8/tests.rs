@@ -154,6 +154,46 @@ async fn routes_nested_tools_and_notifications_through_the_delegate() {
 }
 
 #[tokio::test]
+async fn routes_sequential_nested_tools_in_the_same_cell() {
+    let delegate = Arc::new(RecordingDelegate::default());
+    let session = session(delegate.clone()).await;
+    let mut request = request(
+        "const first = await tools.lookup({ value: 1 }); const second = await tools.lookup({ value: 2 }); text(first.answer + second.answer);",
+    );
+    request.enabled_tools.push(RuntimeCodeModeTool {
+        identity: RuntimeToolIdentity::plain("lookup"),
+        definition: RuntimeToolDefinition::new(
+            "lookup",
+            "Returns an answer.",
+            json!({ "type": "object" }),
+        ),
+        code_name: "lookup".to_string(),
+        global_name: "lookup".to_string(),
+    });
+
+    let response = tokio::time::timeout(
+        Duration::from_secs(1),
+        session
+            .execute(request)
+            .await
+            .expect("execute")
+            .initial_response(),
+    )
+    .await
+    .expect("sequential nested tools must not block")
+    .expect("response");
+
+    assert!(matches!(
+        response,
+        RuntimeCodeModeResponse::Result { output, error_text: None, .. } if output == "84"
+    ));
+    let calls = delegate.calls.lock().expect("calls");
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0].input, Some(json!({ "value": 1 })));
+    assert_eq!(calls[1].input, Some(json!({ "value": 2 })));
+}
+
+#[tokio::test]
 async fn yields_waits_and_terminates_cells() {
     let session = session(Arc::new(RecordingDelegate::default())).await;
     let mut delayed =

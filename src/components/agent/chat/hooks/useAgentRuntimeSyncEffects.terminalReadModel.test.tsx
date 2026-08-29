@@ -138,6 +138,116 @@ describe("useAgentRuntimeSyncEffects terminal read model", () => {
     }
   });
 
+  it("本地 running turn 尚未绑定 stream turnId 时 idle 历史终态不应收起当前 stream", async () => {
+    const settleActiveRuntimeStream = vi.fn();
+    const harness = await mountHook({
+      isSending: true,
+      currentStreamTurnId: null,
+      threadReadStatus: "idle",
+      threadRead: {
+        thread_id: "thread-1",
+        status: "idle",
+        turns: [
+          {
+            turn_id: "turn-previous",
+            status: "completed",
+          },
+        ],
+      },
+      threadTurns: [
+        createThreadTurn({
+          id: "turn-previous",
+          status: "completed",
+        }),
+        createThreadTurn({
+          id: "pending-turn-current",
+          status: "running",
+        }),
+      ],
+      settleActiveRuntimeStream,
+    });
+
+    try {
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(settleActiveRuntimeStream).not.toHaveBeenCalled();
+    } finally {
+      harness.unmount();
+    }
+  });
+
+  it("listener 已绑定但 runtime turnId 尚未到达时不应消费历史终态", async () => {
+    const settleActiveRuntimeStream = vi.fn();
+    const harness = await mountHook({
+      isSending: true,
+      currentTurnEventName: "agent_stream-current",
+      currentStreamTurnId: null,
+      threadReadStatus: "completed",
+      threadRead: {
+        thread_id: "thread-1",
+        status: "completed",
+        active_turn_id: "turn-previous",
+        turns: [
+          {
+            turn_id: "turn-previous",
+            status: "completed",
+          },
+        ],
+      },
+      threadTurns: [
+        createThreadTurn({
+          id: "turn-previous",
+          status: "completed",
+        }),
+      ],
+      settleActiveRuntimeStream,
+    });
+
+    try {
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(settleActiveRuntimeStream).not.toHaveBeenCalled();
+    } finally {
+      harness.unmount();
+    }
+  });
+
+  it("active listener ref 已写入时应屏蔽旧 effect 闭包中的历史终态", async () => {
+    const settleActiveRuntimeStream = vi.fn();
+    const currentTurnEventNameRef = { current: "agent_stream-current" };
+    const harness = await mountHook({
+      isSending: true,
+      currentTurnEventName: null,
+      currentTurnEventNameRef,
+      currentStreamTurnId: null,
+      threadReadStatus: "completed",
+      threadRead: {
+        thread_id: "thread-1",
+        status: "completed",
+        active_turn_id: "turn-previous",
+        turns: [{ turn_id: "turn-previous", status: "completed" }],
+      },
+      threadTurns: [
+        createThreadTurn({ id: "turn-previous", status: "completed" }),
+      ],
+      settleActiveRuntimeStream,
+    });
+
+    try {
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(settleActiveRuntimeStream).not.toHaveBeenCalled();
+    } finally {
+      harness.unmount();
+    }
+  });
+
   it("旧 done thread read 不应误收起新发起的当前 stream", async () => {
     const settleActiveRuntimeStream = vi.fn();
     const harness = await mountHook({

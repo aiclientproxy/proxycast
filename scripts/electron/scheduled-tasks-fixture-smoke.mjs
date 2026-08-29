@@ -93,6 +93,7 @@ const PROMPT_LABELS = [
   "タスクの指示",
   "작업 지침",
 ];
+const MODEL_LABELS = ["模型", "Model", "モデル", "모델"];
 
 const DEFAULTS = {
   evidenceDir: path.join(
@@ -113,7 +114,7 @@ function printHelp() {
 Scheduled Tasks Electron Gate B Fixture
 
 用途:
-  从真实 Electron 一级导航创建 modelId=null 的已安排任务，点击立即运行，
+  在真实 Electron 输入框选择 fixture Provider/模型，从一级导航创建已安排任务并立即运行，
   验证 Runtime provider、canonical Thread/Turn/read model、运行历史与对话恢复。
 
 边界:
@@ -265,7 +266,6 @@ async function createFixtureProvider(page, fixture) {
   await appServerCallFromPage(page, "modelProvider/update", {
     providerId,
     enabled: true,
-    sortOrder: -1,
     models: [
       {
         id: fixture.provider.modelPreference,
@@ -290,15 +290,42 @@ async function createFixtureProvider(page, fixture) {
       candidate?.model === fixture.provider.modelPreference,
   );
   assert(selected, "fixture provider route is absent from model/list");
-  assert(
-    selected.isDefault === true,
-    "fixture provider route is not the model/list default",
-  );
   return {
-    isDefault: true,
     providerId,
     model: fixture.provider.modelPreference,
   };
+}
+
+function encodeModelRouteSelector(providerId, model) {
+  return `route:${Buffer.from(providerId, "utf8").toString("base64url")}.${Buffer.from(model, "utf8").toString("base64url")}`;
+}
+
+async function selectFixtureRouteForWorkspace(page, route) {
+  const ensured = await appServerCallFromPage(
+    page,
+    "workspace/default/ensure",
+    {},
+  );
+  const workspaceId = String(ensured.result?.workspace?.id || "").trim();
+  assert(workspaceId, "workspace/default/ensure did not return workspace.id");
+  await page.evaluate(
+    ({ model, providerId, workspaceId: selectedWorkspaceId }) => {
+      window.localStorage.setItem(
+        "agent_last_project_id",
+        JSON.stringify(selectedWorkspaceId),
+      );
+      window.localStorage.setItem(
+        `agent_pref_provider_${selectedWorkspaceId}`,
+        JSON.stringify(providerId),
+      );
+      window.localStorage.setItem(
+        `agent_pref_model_${selectedWorkspaceId}`,
+        JSON.stringify(model),
+      );
+    },
+    { model: route.model, providerId: route.providerId, workspaceId },
+  );
+  return workspaceId;
 }
 
 async function clearInvokeBuffers(page) {
@@ -308,7 +335,7 @@ async function clearInvokeBuffers(page) {
   });
 }
 
-async function createTaskFromGui(page) {
+async function createTaskFromGui(page, route) {
   await page
     .locator('[data-testid="app-sidebar-nav-scheduled-tasks"]')
     .click();
@@ -329,6 +356,15 @@ async function createTaskFromGui(page) {
   }
   await (await labelLocator(page, TITLE_LABELS)).fill(TASK_TITLE);
   await (await labelLocator(page, PROMPT_LABELS)).fill(TASK_PROMPT);
+  const modelField = await labelLocator(page, MODEL_LABELS);
+  assert(
+    (await modelField.inputValue()) === `${route.providerId} / ${route.model}`,
+    "Scheduled Task editor did not inherit the Composer provider/model selection",
+  );
+  assert(
+    (await modelField.getAttribute("readonly")) !== null,
+    "Scheduled Task editor model selection is not read-only",
+  );
 
   const createActions = await Promise.all(
     CREATE_LABELS.map(async (label) => {
@@ -342,6 +378,18 @@ async function createTaskFromGui(page) {
   await page.getByText(TASK_TITLE, { exact: true }).last().waitFor({
     state: "visible",
   });
+
+  const listed = await appServerCallFromPage(page, "scheduledTask/list", {
+    limit: 200,
+  });
+  const task = (listed.result?.items ?? []).find(
+    (candidate) => candidate?.title === TASK_TITLE,
+  );
+  assert(task?.id, "created Scheduled Task is absent from scheduledTask/list");
+  const read = await appServerCallFromPage(page, "scheduledTask/read", {
+    id: task.id,
+  });
+  return read.result?.task ?? read.result;
 }
 
 async function runTaskFromGui(page) {
@@ -443,7 +491,7 @@ export async function run() {
     scenarioId: "SCHEDULED-TASKS-01-run-and-open-canonical-thread",
     proofLevel: "Gate B",
     claimBoundary:
-      "Real Electron/preload/IPC/App Server RuntimeCore provider turn proves the top-level Scheduled Tasks GUI can create an inherited-model task, run it immediately, project canonical Agent Run and Thread/Turn identities, and open the completed conversation. Localhost provider and isolated user data do not claim live-provider or Windows behavior.",
+      "Real Electron/preload/IPC/App Server RuntimeCore provider turn proves the top-level Scheduled Tasks GUI can create a task with the Composer-selected provider/model route, run it immediately, project canonical Agent Run and Thread/Turn identities, and open the completed conversation. Localhost provider and isolated user data do not claim live-provider or Windows behavior.",
     testOnly: true,
     startedAt: new Date().toISOString(),
     completedAt: null,
@@ -489,17 +537,29 @@ export async function run() {
 
     console.log(`${LOG_PREFIX} stage=configure-provider`);
     const route = await createFixtureProvider(page, providerFixture);
+    const workspaceId = await selectFixtureRouteForWorkspace(page, route);
+    const expectedModelRoute = encodeModelRouteSelector(
+      route.providerId,
+      route.model,
+    );
     summary.route = {
+      providerId: route.providerId,
       model: route.model,
+      workspaceId,
       providerConfigured: true,
       providerRequestCount: providerFixture.requests.length,
       providerAuthorizationMatched: null,
-      selectedAsDefault: route.isDefault,
+      selectedInComposer: true,
+      persistedTaskRouteMatched: null,
     };
     await clearInvokeBuffers(page);
 
     console.log(`${LOG_PREFIX} stage=create-task-through-gui`);
-    await createTaskFromGui(page);
+    const createdTask = await createTaskFromGui(page, route);
+    assert(
+      createdTask?.execution?.modelId === expectedModelRoute,
+      "Scheduled Task did not persist the selected opaque provider/model route",
+    );
     console.log(`${LOG_PREFIX} stage=run-task-through-gui`);
     await runTaskFromGui(page);
     const completed = await waitForCompletedRun(page, options);
@@ -545,11 +605,14 @@ export async function run() {
     assert(pageErrors.length === 0, `page error: ${pageErrors.join(" | ")}`);
 
     summary.route = {
+      providerId: route.providerId,
       model: route.model,
+      workspaceId,
       providerConfigured: true,
       providerRequestCount: providerFixture.requests.length,
       providerAuthorizationMatched: true,
-      selectedAsDefault: route.isDefault,
+      selectedInComposer: true,
+      persistedTaskRouteMatched: true,
     };
     summary.task = {
       taskId: completed.task.id,
@@ -558,7 +621,7 @@ export async function run() {
       threadId: completed.run.threadId,
       turnId: completed.run.turnId,
       status: completed.run.status,
-      inheritedModel: true,
+      composerSelectedProviderModel: true,
     };
     summary.gui = {
       topLevelNavigationUsed: true,

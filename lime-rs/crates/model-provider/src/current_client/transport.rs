@@ -75,11 +75,17 @@ pub(super) fn observed_retry_delay(
     delay.duration
 }
 
-pub(super) fn request_failure(error: reqwest::Error) -> CurrentProviderError {
-    CurrentProviderError::transport(format!(
-        "Provider 请求失败 ({})",
-        request_retry_reason(&error)
-    ))
+pub(super) fn request_failure(error: reqwest::Error, attempts: u8) -> CurrentProviderError {
+    let reason = request_retry_reason(&error);
+    let sanitized = error.without_url();
+    let detail = error_chain(&sanitized);
+    let summary = format!("{reason}, {attempts} 次尝试");
+    let message = if detail.trim().is_empty() || detail == reason {
+        format!("Provider 请求失败 ({summary})")
+    } else {
+        format!("Provider 请求失败 ({summary}): {detail}")
+    };
+    CurrentProviderError::transport(message)
 }
 
 pub(super) fn error_chain(error: &(dyn Error + 'static)) -> String {
@@ -278,9 +284,12 @@ mod tests {
             "fixture must prove the source error contains the sensitive URL"
         );
 
-        let failure = request_failure(error);
+        let failure = request_failure(error, 1);
 
-        assert_eq!(failure.message, "Provider 请求失败 (timeout)");
+        assert!(failure
+            .message
+            .starts_with("Provider 请求失败 (timeout, 1 次尝试):"));
+        assert!(failure.message.to_ascii_lowercase().contains("timed out"));
         assert!(!failure.message.contains("private-provider-path"));
         assert!(!failure.message.contains("secret-ref"));
     }

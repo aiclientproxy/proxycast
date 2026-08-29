@@ -10,6 +10,11 @@ import {
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import {
+  LAST_PROJECT_ID_KEY,
+  loadPersistedProjectId,
+} from "@/components/agent/chat/hooks/agentProjectStorage";
+import { resolveWorkspaceAgentPreferences } from "@/components/agent/chat/hooks/agentChatStorage";
 import { Button } from "@/components/ui/button";
 import { isAppServerBridgeAvailable } from "@/lib/api/appServerBridgeAvailability";
 import {
@@ -35,6 +40,7 @@ import {
   buildScheduledTaskUpdateRequest,
   defaultScheduledTaskForm,
   filterScheduledTasks,
+  isScheduledTaskModelRoute,
   scheduledTaskToForm,
   validateScheduledTaskForm,
   type ScheduledTaskFilter,
@@ -75,6 +81,10 @@ export function ScheduledTasksPage({
   const [formErrors, setFormErrors] = useState<ScheduledTaskFormErrors>({});
   const [preview, setPreview] = useState<string[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const currentProjectId =
+    pageParams?.projectId?.trim() ||
+    loadPersistedProjectId(LAST_PROJECT_ID_KEY) ||
+    "";
 
   const filteredTasks = useMemo(
     () => filterScheduledTasks(tasks, query, filter),
@@ -205,6 +215,11 @@ export function ScheduledTasksPage({
   const startCreate = useCallback(
     (preset?: "daily" | "weekly" | "monitor") => {
       const next = defaultScheduledTaskForm();
+      const currentModel = resolveWorkspaceAgentPreferences(currentProjectId);
+      if (currentModel.providerType.trim() && currentModel.model.trim()) {
+        next.modelProviderId = currentModel.providerType.trim();
+        next.modelId = currentModel.model.trim();
+      }
       if (preset === "daily") {
         next.title = t("scheduledTasks.template.daily.title");
         next.prompt = t("scheduledTasks.template.daily.prompt");
@@ -223,23 +238,23 @@ export function ScheduledTasksPage({
         next.intervalHours = 4;
         next.time = "00:00";
       }
-      next.projectId = pageParams?.projectId ?? "";
+      next.projectId = currentProjectId;
       next.sourceThreadId = pageParams?.threadId ?? "";
       setForm(next);
       setFormErrors({});
       setPreview([]);
       setEditorMode("create");
     },
-    [pageParams?.projectId, pageParams?.threadId, t],
+    [currentProjectId, pageParams?.threadId, t],
   );
 
   const startEdit = useCallback(() => {
     if (!selectedTask) return;
-    setForm(scheduledTaskToForm(selectedTask));
+    setForm(scheduledTaskFormWithCurrentModel(selectedTask, currentProjectId));
     setFormErrors({});
     setPreview([]);
     setEditorMode("edit");
-  }, [selectedTask]);
+  }, [currentProjectId, selectedTask]);
 
   const createWithLime = useCallback(() => {
     onNavigate?.("agent", {
@@ -332,6 +347,22 @@ export function ScheduledTasksPage({
     const taskId = selectedTask.id;
     setBusyAction("run");
     try {
+      if (!isScheduledTaskModelRoute(selectedTask.execution.modelId)) {
+        const migratedForm = scheduledTaskFormWithCurrentModel(
+          selectedTask,
+          currentProjectId,
+        );
+        if (migratedForm.modelId && migratedForm.modelProviderId) {
+          const migratedTask = await scheduledTasksApi.update(
+            taskId,
+            buildScheduledTaskUpdateRequest(
+              migratedForm,
+              selectedTask.updatedAt,
+            ),
+          );
+          setSelectedTask(migratedTask);
+        }
+      }
       await scheduledTasksApi.startRun(taskId);
       toast.success(t("scheduledTasks.toast.runStarted"));
     } catch (error) {
@@ -342,7 +373,7 @@ export function ScheduledTasksPage({
       await Promise.all([loadTask(taskId), loadTasks()]);
       setBusyAction(null);
     }
-  }, [loadTask, loadTasks, selectedTask, t]);
+  }, [currentProjectId, loadTask, loadTasks, selectedTask, t]);
 
   const removeTask = useCallback(async () => {
     const confirmationKey = hasActiveRun(selectedTask, runs)
@@ -501,6 +532,23 @@ export function ScheduledTasksPage({
       )}
     </div>
   );
+}
+
+function scheduledTaskFormWithCurrentModel(
+  task: ScheduledTask,
+  fallbackProjectId: string,
+): ScheduledTaskFormState {
+  const form = scheduledTaskToForm(task);
+  if (isScheduledTaskModelRoute(task.execution.modelId)) {
+    return form;
+  }
+  const projectId = task.execution.projectId?.trim() || fallbackProjectId;
+  const currentModel = resolveWorkspaceAgentPreferences(projectId);
+  if (currentModel.providerType.trim() && currentModel.model.trim()) {
+    form.modelProviderId = currentModel.providerType.trim();
+    form.modelId = currentModel.model.trim();
+  }
+  return form;
 }
 
 function EmptyWorkbench({

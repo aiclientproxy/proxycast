@@ -69,7 +69,10 @@ function parsePipeTableCells(row: string): string[] {
   return withoutEdgePipes.split("|").map((cell) => cell.trim());
 }
 
-function isPipeTableDelimiterLine(line: string, expectedWidth: number): boolean {
+function isPipeTableDelimiterLine(
+  line: string,
+  expectedWidth: number,
+): boolean {
   const cells = parsePipeTableCells(line);
   return (
     expectedWidth >= 2 &&
@@ -107,7 +110,10 @@ function normalizePipeTableSpacing(text: string): string {
     outputLines.push(line, nextLine);
     index += 1;
 
-    while (index + 1 < lines.length && isPipeTableRowLine(lines[index + 1] || "")) {
+    while (
+      index + 1 < lines.length &&
+      isPipeTableRowLine(lines[index + 1] || "")
+    ) {
       index += 1;
       outputLines.push(lines[index] || "");
     }
@@ -152,7 +158,7 @@ function normalizeHeadingMarkers(text: string): string {
 }
 
 function normalizeStrongMarkerSpacing(text: string): string {
-  return text.replace(/\*\*\s*([^*\n]*?\S)\s+\*\*/g, "**$1**");
+  return text.replace(/\*\*[ \t]*([^*\n]*?\S)[ \t]+\*\*/g, "**$1**");
 }
 
 function normalizeLooseMarkdownText(text: string): string {

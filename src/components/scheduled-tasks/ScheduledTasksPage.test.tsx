@@ -8,7 +8,7 @@ import type {
   ScheduledTaskNotificationSubscription,
   ScheduledTaskSummary,
 } from "@/lib/api/scheduledTasks";
-import type { Page, PageParams } from "@/types/page";
+import type { Page, PageParams, ScheduledTasksPageParams } from "@/types/page";
 import { ScheduledTasksPage } from "./ScheduledTasksPage";
 
 const {
@@ -134,13 +134,19 @@ function sampleRun(
 
 function renderPage(options?: {
   onNavigate?: (page: Page, params?: PageParams) => void;
+  pageParams?: ScheduledTasksPageParams;
 }): HTMLDivElement {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
 
   act(() => {
-    root.render(<ScheduledTasksPage onNavigate={options?.onNavigate} />);
+    root.render(
+      <ScheduledTasksPage
+        onNavigate={options?.onNavigate}
+        pageParams={options?.pageParams}
+      />,
+    );
   });
   mountedPages.push({ container, root });
   return container;
@@ -180,6 +186,7 @@ describe("ScheduledTasksPage", () => {
     ).IS_REACT_ACT_ENVIRONMENT = true;
     await changeLimeLocale("zh-CN");
     vi.clearAllMocks();
+    localStorage.clear();
     notificationSubscription = undefined;
     mockSubscribeNotifications.mockImplementation((subscription) => {
       notificationSubscription = subscription;
@@ -245,6 +252,36 @@ describe("ScheduledTasksPage", () => {
     ).toBeTruthy();
   });
 
+  it("手动创建任务时应预填当前项目选择的模型", async () => {
+    mockList.mockResolvedValue({ items: [], nextCursor: null });
+    localStorage.setItem(
+      "agent_pref_provider_project-current",
+      JSON.stringify("custom-agnes"),
+    );
+    localStorage.setItem(
+      "agent_pref_model_project-current",
+      JSON.stringify("agnes-2.5-flash"),
+    );
+    const container = renderPage({
+      pageParams: { projectId: "project-current" },
+    });
+    await flushEffects();
+
+    await click(findButton(container, "创建任务"));
+    const manualItem = Array.from(
+      document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    ).find((item) => item.textContent?.includes("手动设置"));
+    await click(manualItem as HTMLElement);
+
+    const modelInput = Array.from(
+      container.querySelectorAll<HTMLInputElement>("input"),
+    ).find(
+      (input) => input.value === "custom-agnes / agnes-2.5-flash",
+    );
+    expect(modelInput).toBeTruthy();
+    expect(modelInput?.readOnly).toBe(true);
+  });
+
   it("选择任务后加载详情并通过 typed gateway 暂停", async () => {
     const container = renderPage();
     await flushEffects();
@@ -260,6 +297,46 @@ describe("ScheduledTasksPage", () => {
     await click(findButton(container, "暂停"));
     expect(mockSetEnabled).toHaveBeenCalledWith("task-daily", false);
     expect(container.textContent).toContain("恢复");
+  });
+
+  it("立即运行旧任务前应冻结该项目当前选择的模型路由", async () => {
+    localStorage.setItem(
+      "agent_pref_provider_project-alpha",
+      JSON.stringify("custom-agnes"),
+    );
+    localStorage.setItem(
+      "agent_pref_model_project-alpha",
+      JSON.stringify("agnes-2.5-flash"),
+    );
+    mockUpdate.mockImplementation(async (_id, request) =>
+      sampleTask({ execution: request.execution }),
+    );
+    const container = renderPage();
+    await flushEffects();
+    await click(findButton(container, "每日项目简报"));
+
+    const more = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="更多操作"]',
+    );
+    await click(more as HTMLButtonElement);
+    const runNow = Array.from(
+      document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    ).find((item) => item.textContent?.includes("立即运行"));
+    await click(runNow as HTMLElement);
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      "task-daily",
+      expect.objectContaining({
+        execution: expect.objectContaining({
+          modelId: "route:Y3VzdG9tLWFnbmVz.YWduZXMtMi41LWZsYXNo",
+        }),
+        revision: "2026-08-13T01:00:00Z",
+      }),
+    );
+    expect(mockUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      mockStartRun.mock.invocationCallOrder[0],
+    );
+    expect(mockStartRun).toHaveBeenCalledWith("task-daily");
   });
 
   it("仅用运行返回的 sessionId 恢复 Agent 对话", async () => {

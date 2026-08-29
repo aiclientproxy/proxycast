@@ -46,9 +46,9 @@ describe("MarkdownRenderer normalization", () => {
       container.querySelector('h3[data-markdown-heading-level="3"]')
         ?.textContent,
     ).toBe("五年级选购指南");
-    expect(
-      container.querySelector("h4")?.textContent,
-    ).toBe("如果孩子基础一般，优先选护眼和内容稳定的机型");
+    expect(container.querySelector("h4")?.textContent).toBe(
+      "如果孩子基础一般，优先选护眼和内容稳定的机型",
+    );
     expect(
       Array.from(container.querySelectorAll("strong")).map(
         (node) => node.textContent,
@@ -61,6 +61,114 @@ describe("MarkdownRenderer normalization", () => {
     expect(container.textContent).not.toContain("####如果孩子");
     expect(container.textContent).not.toContain("**推荐 型号 **");
     expect(container.textContent).not.toContain("| 品牌 | 型号 |");
+  });
+
+  it("压缩回答中标题紧跟粗体正文时应恢复为独立标题和段落", () => {
+    const content =
+      '---###项目定位**"Agents remember. Humans innovate."** ——解决 Agent 重复劳动的问题。';
+
+    const container = render(content);
+
+    expect(container.querySelector("h3")?.textContent).toBe("项目定位");
+    expect(container.querySelector("strong")?.textContent).toBe(
+      '"Agents remember. Humans innovate."',
+    );
+    expect(container.querySelectorAll("h3")).toHaveLength(1);
+    expect(container.textContent).not.toContain("项目定位**");
+  });
+
+  it("压缩回答中标题紧跟紧凑表格时应恢复为独立标题和 GFM 表格", () => {
+    const content =
+      "---###四大核心模块|模块 |角色 |技术栈 ||------|--------|------------|| **MemoryCore** |记忆引擎 | TypeScript, SQLite || **MemoryKnowledge** |知识库服务 | Hono.js";
+
+    const container = render(content);
+
+    expect(container.querySelector("h3")?.textContent).toBe("四大核心模块");
+    const table = container.querySelector(
+      '[data-testid="markdown-table-scroll"] table',
+    );
+    expect(table).not.toBeNull();
+    expect(table?.querySelectorAll("th")).toHaveLength(3);
+    expect(table?.querySelectorAll("tbody tr")).toHaveLength(2);
+    expect(container.textContent).not.toContain("四大核心模块|模块");
+  });
+
+  it("压缩回答中的编号粗体和表格换行不应破坏列表与单元格", () => {
+    const content =
+      "---###核心设计理念**1.四层记忆分层**-**L0 Conversation** —原始对话。**2.四类 Memory Asset**-**Chat Memory** —对话记忆\n| 模块 | 技术栈 ||------|| MemoryCore | TypeScript，SQLite + vector search |";
+
+    const container = render(content);
+
+    expect(container.textContent).toContain("1.四层记忆分层");
+    expect(container.textContent).toContain("L0 Conversation");
+    expect(container.textContent).toContain("2.四类 Memory Asset");
+    expect(container.querySelectorAll("li").length).toBeGreaterThanOrEqual(2);
+    expect(
+      container.querySelector('[data-testid="markdown-table-scroll"] table'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("SQLite + vector search");
+  });
+
+  it("压缩的目录树代码块应恢复分支换行并按纯文本代码显示", () => {
+    const content =
+      "---###部署架构```MemoryHub (整体)├── MemoryCore ←记忆引擎└── MemoryProxy ←代理```";
+
+    const container = render(content);
+    const codeBlock = container.querySelector(
+      '[data-testid="markdown-plain-code-block"]',
+    );
+
+    expect(codeBlock).not.toBeNull();
+    expect(codeBlock?.textContent).toContain("MemoryHub");
+    expect(codeBlock?.textContent).toContain("\n├── MemoryCore");
+    expect(codeBlock?.textContent).toContain("\n└── MemoryProxy");
+  });
+
+  it("真实 MemoryHub 回答应按 Codex 块级语义完整渲染", () => {
+    const content =
+      '好，这个项目的分析来了。整体是个挺完整的 **Agent记忆系统**，腾讯出品的。---##🧠 TencentDB-Agent-Memory项目分析###项目定位**"Agents remember. Humans innovate."** ——解决的核心问题是：Agent每次会话都从零开始，重复劳动。这个系统让 Agent的经验可以沉淀、共享、复用，而不是每次都要"重新学习"你的项目。---###四大核心模块|模块 |角色 |技术栈 ||------|------|--------|| **MemoryCore** |记忆引擎 | TypeScript，SQLite + vector search，支持 OpenClaw/Hermes插件 || **MemoryKnowledge** |知识库服务 | Hono.js + SQLite + Drizzle ORM，提供 CodeGraph + Wiki || **MemoryPanel** |管控面板（前后端） |后端 Hono.js，前端 React，管理 team/user/agent/asset || **MemoryProxy** | LLM请求代理 | Hono.js + Redis会话，JSONL日志 + Opik/Langfuse追踪 |---###核心设计理念**1.四层记忆分层（L0→L1→L2→L3）**- **L0 Conversation** —原始对话，完整上下文，用于追溯原文- **L1 Atom** —从对话中提取的事实、偏好、约束（精确检索）- **L2 Scenario** —按项目/场景组织的知识块（快速恢复上下文）- **L3 Core/Persona** —长期用户画像和团队认知（冷启动必备）检索时用 BM25 +向量 + RRF混合召回，同时用 item count、字符预算、超时限制防止记忆撑爆 context window。**2.四类 Memory Asset**- **Chat Memory** —对话中的偏好、决策、历史- **Skill** —可复用的工作流程（版本管理、触发边界、执行步骤、验证规则）- **Wiki** —文档的结构化知识图谱（受 Karpathy LLM Wiki启发）- **CodeGraph** —代码符号、文件、调用关系、影响路径（借用 codegraph开源项目）**3.权限模型**`private` → `team` → `restricted` → `agent`四级可见性，配合 User/Role/Agent ACL，实现"经验共享但不暴露隐私"。---###技术亮点- **向量检索**：用 `sqlite-vec`做本地向量搜索，不依赖外部向量数据库- **中文分词**：集成 `@node-rs/jieba`做中文 NLP- **可插拔适配器**：同时支持 OpenClaw和 Hermes两大 Agent框架- **异步 Pipeline**：Wiki和 CodeGraph构建是异步的，状态可监控- **MCP协议支持**：MemoryKnowledge同时暴露 MCP接口，方便其他工具调用- **Telemetry**：全链路 OpenTelemetry + Langfuse/Opik追踪---###部署架构```MemoryHub (整体)├── MemoryCore ←记忆引擎（本地 SQLite）├── MemoryKnowledge ←知识库服务（CodeGraph + Wiki）├── MemoryPanel ← Web管控面板（port8125）└── MemoryProxy ← LLM请求代理（转发 +注入记忆）```一键部署通过 `deploy/global-images/start-all.sh`启动全部服务，支持 Docker。---###整体评价这个项目做得挺扎实的——不是玩具级 demo，有完整的分层架构、权限模型、部署方案。L0→L3的分层设计是核心创新点，把"记忆"从简单的 RAG向量检索提升到了可管理的资产体系。支持 OpenClaw/Hermes/Claude Code/CodeBuddy多框架适配也是加分项。技术上主要是 TypeScript + Hono + SQLite的组合，不算复杂但够用。';
+
+    const container = render(content);
+    const headings = Array.from(
+      container.querySelectorAll("[data-markdown-heading-level]"),
+    ).map((heading) => heading.textContent);
+    const listItems = Array.from(container.querySelectorAll("li")).map(
+      (item) => item.textContent || "",
+    );
+    const table = container.querySelector(
+      '[data-testid="markdown-table-scroll"] table',
+    );
+    const codeBlock = container.querySelector(
+      '[data-testid="markdown-plain-code-block"]',
+    );
+
+    expect(headings).toEqual([
+      "🧠 TencentDB-Agent-Memory项目分析",
+      "项目定位",
+      "四大核心模块",
+      "核心设计理念",
+      "技术亮点",
+      "部署架构",
+      "整体评价",
+    ]);
+    expect(table?.querySelectorAll("tbody tr")).toHaveLength(4);
+    expect(listItems).toHaveLength(14);
+    expect(listItems).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("BM25 +向量 + RRF混合召回"),
+        expect.stringContaining("OpenTelemetry + Langfuse/Opik追踪"),
+      ]),
+    );
+    expect(
+      Array.from(container.querySelectorAll("li code")).some(
+        (code) => code.textContent === "sqlite-vec",
+      ),
+    ).toBe(true);
+    expect(codeBlock?.textContent).toContain("\n├── MemoryCore");
+    expect(codeBlock?.textContent).toContain("\n└── MemoryProxy");
+    expect(container.textContent).toContain("TypeScript + Hono + SQLite");
+    expect(container.textContent).not.toContain("核心设计理念**");
+    expect(container.textContent).not.toContain("四大核心模块|模块");
   });
 
   it("markdown 围栏里确实是表格时应拆掉围栏并渲染为表格", () => {

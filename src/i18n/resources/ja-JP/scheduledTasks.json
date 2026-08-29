@@ -71,6 +71,7 @@
   "scheduledTasks.editor.validation.days": "1 日以上選択してください",
   "scheduledTasks.editor.validation.fix": "フォームの問題を修正してください",
   "scheduledTasks.editor.validation.interval": "間隔は 1～24 時間で指定してください",
+  "scheduledTasks.editor.validation.model": "先に入力欄で Provider とモデルを選択してください",
   "scheduledTasks.editor.validation.prompt": "タスクの指示を入力してください",
   "scheduledTasks.editor.validation.sourceThread": "会話を継続する場合は元の会話 ID が必要です",
   "scheduledTasks.editor.validation.threadLineageRequired": "まず現在のプロジェクトスレッドからスケジュール済みタスクを作成してください。",

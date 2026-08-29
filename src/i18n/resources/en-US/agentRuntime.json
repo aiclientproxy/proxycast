@@ -809,8 +809,6 @@
   "agentChat.threadQueue.title": "Queued work",
   "agentChat.threadQueue.loading": "Reading queue",
   "agentChat.threadQueue.pendingCount": "{{count}} pending",
-  "agentChat.threadQueue.itemFallback": "Image or other input",
-  "agentChat.threadQueue.more": "{{count}} more",
   "agentChat.threadQueue.refreshFailed": "Queue refresh failed",
   "agentChat.inputIntent.imageGeneration.rules.includeAny": "image | illustration | poster | cover | key visual | visual | draw | generate an image | create an image | make an image | design an image",
   "agentChat.inputIntent.imageGeneration.rules.requireAny": "draw | generate an image | create an image | make an image | design an image | portrait | landscape | square | ratio | size | canvas | composition | palette | color tone | style | watercolor | photography | cinematic | background | subject | typography | headline area | negative space | brand visual | 1:1 | 3:4 | 4:5 | 9:16 | 16:9 | 4:3 | 3:2 | 2:3 | 21:9 | 5:4",

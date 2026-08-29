@@ -2,9 +2,16 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import readline from "node:readline";
 import { pathToFileURL } from "node:url";
 
 import { ensureElectronAppServerRuntimeBinary } from "../lib/electron-app-server-assets.mjs";
+
+const DEEPSWE_RUNTIME_EVENT_TYPES = new Set([
+  "provider.request.started",
+  "provider.step",
+  "provider.usage",
+]);
 
 export async function createAppServerStdioTransport({
   repoRoot,
@@ -93,6 +100,8 @@ export async function createAppServerStdioTransport({
       );
       return response.result;
     },
+    readRuntimeEvents: (identity) =>
+      readAppServerRuntimeEvents(isolatedDataDir, identity),
     async close() {
       try {
         await connected.sidecar.close();
@@ -101,6 +110,51 @@ export async function createAppServerStdioTransport({
       }
     },
   };
+}
+
+export async function readAppServerRuntimeEvents(
+  dataDir,
+  { sessionId, threadId, turnId },
+) {
+  const eventsDir = path.join(dataDir, "runtime/events/sessions");
+  if (!fs.existsSync(eventsDir)) {
+    return [];
+  }
+  const events = [];
+  const files = fs
+    .readdirSync(eventsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
+    .map((entry) => path.join(eventsDir, entry.name))
+    .sort();
+  for (const file of files) {
+    const lines = readline.createInterface({
+      input: fs.createReadStream(file, { encoding: "utf8" }),
+      crlfDelay: Infinity,
+    });
+    let lineNumber = 0;
+    for await (const line of lines) {
+      lineNumber += 1;
+      if (!line.trim()) continue;
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch (error) {
+        throw new Error(
+          `invalid App Server runtime event JSON at ${path.basename(file)}:${lineNumber}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      if (
+        !DEEPSWE_RUNTIME_EVENT_TYPES.has(event?.type) ||
+        (sessionId && event.sessionId !== sessionId) ||
+        (threadId && event.threadId !== threadId) ||
+        (turnId && event.turnId !== turnId)
+      ) {
+        continue;
+      }
+      events.push(event);
+    }
+  }
+  return events;
 }
 
 function createIsolatedAppServerDataDir(sourceDataDir) {

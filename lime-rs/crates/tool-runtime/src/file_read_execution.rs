@@ -208,7 +208,41 @@ pub async fn execute_runtime_file_read_tool(
             .await,
         );
     }
-    Some(execute_read(request.params, &request.working_directory))
+    let params = request.params.clone();
+    let working_directory = request.working_directory;
+    let cancel_token = request.cancel_token;
+    Some(execute_local_read(params, working_directory, cancel_token).await)
+}
+
+async fn execute_local_read(
+    params: Value,
+    working_directory: PathBuf,
+    cancel_token: Option<CancellationToken>,
+) -> Result<CallToolResult, ErrorData> {
+    let read = tokio::task::spawn_blocking(move || execute_read(&params, &working_directory));
+    match cancel_token {
+        Some(cancel_token) => {
+            tokio::select! {
+                result = read => join_local_read(result),
+                _ = cancel_token.cancelled() => Err(runtime_read_error(
+                    ErrorCode::INTERNAL_ERROR,
+                    "Tool execution cancelled",
+                )),
+            }
+        }
+        None => join_local_read(read.await),
+    }
+}
+
+fn join_local_read(
+    result: Result<Result<CallToolResult, ErrorData>, tokio::task::JoinError>,
+) -> Result<CallToolResult, ErrorData> {
+    result.map_err(|error| {
+        runtime_read_error(
+            ErrorCode::INTERNAL_ERROR,
+            format!("Read worker failed: {error}"),
+        )
+    })?
 }
 
 async fn execute_remote_read(

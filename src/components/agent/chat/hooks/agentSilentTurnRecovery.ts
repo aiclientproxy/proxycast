@@ -11,6 +11,7 @@ const TERMINAL_TURN_STATUSES = new Set([
   "completed",
   "done",
   "failed",
+  "interrupted",
 ]);
 
 function normalizeTimestampMs(

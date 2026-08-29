@@ -21,7 +21,7 @@ function reasoningItem(
 }
 
 describe("resolveReasoningDisplayText", () => {
-  it("timeline reasoning 应保留来源文本，不再按内部短语猜测过滤", () => {
+  it("timeline reasoning 应显示 provider summary 而不显示 raw text", () => {
     const text = resolveThinkingDisplayText(
       reasoningItem({
         summary: ["Finding latest news.", "正在核对来源可信度。"],
@@ -31,11 +31,11 @@ describe("resolveReasoningDisplayText", () => {
 
     expect(text).toContain("Finding latest news");
     expect(text).toContain("正在核对来源可信度。");
-    expect(text).toContain("Investigating tool calls");
-    expect(text).toContain("已整理可用来源。");
+    expect(text).not.toContain("Investigating tool calls");
+    expect(text).not.toContain("已整理可用来源。");
   });
 
-  it("英文诊断也应作为 reasoning 来源文本保留", () => {
+  it("英文 summary 应保留，但不应追加 raw text", () => {
     const text = resolveThinkingDisplayText(
       reasoningItem({
         summary: ["Finding latest news."],
@@ -44,10 +44,10 @@ describe("resolveReasoningDisplayText", () => {
     );
 
     expect(text).toContain("Finding latest news.");
-    expect(text).toContain("I'm thinking about available tools.");
+    expect(text).not.toContain("I'm thinking about available tools.");
   });
 
-  it("canonical reasoning content 应作为展开正文，summary 镜像不应遮掉 raw content", () => {
+  it("canonical reasoning 只显示 summary，不显示 raw content", () => {
     const text = resolveThinkingDisplayText(
       reasoningItem({
         summary: ["先确认用户意图。"],
@@ -56,18 +56,17 @@ describe("resolveReasoningDisplayText", () => {
       }),
     );
 
-    expect(text).toBe(
-      "先确认用户意图。\n\n完整推理第一段。\n\n完整推理第二段。",
-    );
+    expect(text).toBe("先确认用户意图。");
   });
 
-  it("没有 summary 的 canonical reasoning 也应能在展开后显示 content", () => {
+  it("没有 summary 的 canonical reasoning 不应回退显示 raw content", () => {
     expect(
       resolveThinkingDisplayText(
         reasoningItem({
+          text: "模型返回的完整思考。",
           content: ["模型返回的完整思考。"],
         }),
       ),
-    ).toBe("模型返回的完整思考。");
+    ).toBe("");
   });
 });

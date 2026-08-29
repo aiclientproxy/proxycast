@@ -19,6 +19,28 @@ function decodeBase64Url(value: string): string | null {
   }
 }
 
+function encodeBase64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return globalThis
+    .btoa(binary)
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
+export function encodeModelRouteSelector(route: ModelRoute): string {
+  const providerId = route.providerId.trim();
+  const modelId = route.modelId.trim();
+  if (!providerId || !modelId) {
+    throw new TypeError("model route requires non-empty providerId and modelId");
+  }
+  return `${MODEL_ROUTE_PREFIX}${encodeBase64Url(providerId)}.${encodeBase64Url(modelId)}`;
+}
+
 export function decodeModelRouteSelector(selector: string): ModelRoute | null {
   if (!selector.startsWith(MODEL_ROUTE_PREFIX)) {
     return null;

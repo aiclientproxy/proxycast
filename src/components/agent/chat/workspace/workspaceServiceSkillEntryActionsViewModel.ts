@@ -82,6 +82,10 @@ export interface BuildServiceSkillAutomationSetupStateInput {
   input: string;
   workspaceId: string;
   threadLineage: ServiceSkillAutomationThreadLineage;
+  modelSelection?: {
+    providerId: string;
+    modelId: string;
+  };
 }
 
 export interface ShouldCreateServiceSkillAutomationContentInput {
@@ -198,6 +202,7 @@ export function buildServiceSkillAutomationSetupState({
   input,
   workspaceId,
   threadLineage,
+  modelSelection,
 }: BuildServiceSkillAutomationSetupStateInput): ServiceSkillAutomationSetupState {
   const userInput = normalizeWorkspaceServiceSkillOptionalText(input);
   const prompt = composeServiceSkillPrompt({
@@ -215,6 +220,8 @@ export function buildServiceSkillAutomationSetupState({
         workspaceId,
       }),
       sourceThreadId: threadLineage.threadId,
+      modelProviderId: modelSelection?.providerId.trim() || "",
+      modelId: modelSelection?.modelId.trim() || "",
     },
     pendingAutomation: {
       skill,

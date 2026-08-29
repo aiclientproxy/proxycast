@@ -6,6 +6,10 @@ import type {
   ScheduledTaskUpdateRequest,
   ScheduledTaskWeekday,
 } from "@/lib/api/scheduledTasks";
+import {
+  decodeModelRouteSelector,
+  encodeModelRouteSelector,
+} from "@limecloud/app-server-client/browser";
 
 export type ScheduledTaskFilter = "all" | "enabled" | "paused";
 
@@ -23,6 +27,7 @@ export interface ScheduledTaskFormState {
   projectId: string;
   cwd: string;
   modelId: string;
+  modelProviderId?: string;
   reasoningEffort: string;
   notificationPolicy: ScheduledTask["notificationPolicy"];
 }
@@ -30,6 +35,7 @@ export interface ScheduledTaskFormState {
 export interface ScheduledTaskFormErrors {
   title?: string;
   prompt?: string;
+  modelId?: string;
   time?: string;
   days?: string;
   intervalHours?: string;
@@ -54,6 +60,7 @@ export function defaultScheduledTaskForm(
     projectId: "",
     cwd: "",
     modelId: "",
+    modelProviderId: "",
     reasoningEffort: "",
     notificationPolicy: "failures",
   };
@@ -61,6 +68,9 @@ export function defaultScheduledTaskForm(
 
 export function scheduledTaskToForm(task: ScheduledTask): ScheduledTaskFormState {
   const schedule = task.schedule;
+  const modelRoute = task.execution.modelId
+    ? decodeModelRouteSelector(task.execution.modelId)
+    : null;
   return {
     title: task.title,
     prompt: task.prompt,
@@ -82,10 +92,22 @@ export function scheduledTaskToForm(task: ScheduledTask): ScheduledTaskFormState
     sourceThreadId: task.execution.sourceThreadId ?? "",
     projectId: task.execution.projectId ?? "",
     cwd: task.execution.cwd ?? "",
-    modelId: task.execution.modelId ?? "",
+    modelId: modelRoute?.modelId ?? task.execution.modelId ?? "",
+    modelProviderId: modelRoute?.providerId ?? "",
     reasoningEffort: task.execution.reasoningEffort ?? "",
     notificationPolicy: task.notificationPolicy,
   };
+}
+
+export function isScheduledTaskModelRoute(modelId?: string | null): boolean {
+  return Boolean(modelId && decodeModelRouteSelector(modelId));
+}
+
+export function scheduledTaskModelLabel(modelId?: string | null): string | null {
+  if (!modelId) {
+    return null;
+  }
+  return decodeModelRouteSelector(modelId)?.modelId ?? optionalText(modelId);
 }
 
 export function validateScheduledTaskForm(
@@ -111,6 +133,12 @@ export function validateScheduledTaskForm(
   }
   if (form.threadMode === "continue_thread" && !form.sourceThreadId.trim()) {
     errors.sourceThreadId = "sourceThreadId";
+  }
+  if (
+    form.threadMode === "new_thread" &&
+    (!form.modelId.trim() || !form.modelProviderId?.trim())
+  ) {
+    errors.modelId = "modelId";
   }
   return errors;
 }
@@ -155,12 +183,21 @@ export function buildScheduledTaskCreateRequest(
       sourceThreadId: optionalText(form.sourceThreadId),
       projectId: optionalText(form.projectId),
       cwd: optionalText(form.cwd),
-      modelId: optionalText(form.modelId),
+      modelId: scheduledTaskModelId(form),
       reasoningEffort: optionalText(form.reasoningEffort),
     },
     notificationPolicy: form.notificationPolicy,
     overlapPolicy: "skip_if_running",
   };
+}
+
+function scheduledTaskModelId(form: ScheduledTaskFormState): string | null {
+  const modelId = optionalText(form.modelId);
+  const providerId = optionalText(form.modelProviderId ?? "");
+  if (!modelId || !providerId) {
+    return null;
+  }
+  return encodeModelRouteSelector({ providerId, modelId });
 }
 
 export function buildScheduledTaskUpdateRequest(

@@ -54,7 +54,7 @@ describe("ThreadQueueStatus", () => {
     expect(renderQueue().textContent).toBe("");
   });
 
-  it("展示前三条 durable submission 和剩余数量", () => {
+  it("只展示 durable submission 数量，不重复 canonical 时间线正文", () => {
     queueHook.useAgentSessionThreadQueue.mockReturnValue({
       error: null,
       loading: false,
@@ -83,17 +83,18 @@ describe("ThreadQueueStatus", () => {
     });
 
     const container = renderQueue();
-    expect(
-      container.querySelector("[data-testid=thread-queue-items]")?.children,
-    ).toHaveLength(4);
-    expect(container.textContent).toContain("修复测试");
+    expect(container.textContent).toContain("agentChat.threadQueue.title");
     expect(container.textContent).toContain(
-      "agentChat.threadQueue.itemFallback",
+      "agentChat.threadQueue.pendingCount:4",
     );
-    expect(container.textContent).toContain("agentChat.threadQueue.more:1");
+    expect(container.textContent).not.toContain("修复测试");
+    expect(container.textContent).not.toContain("更新文档");
+    expect(
+      container.querySelector("[data-testid=thread-queue-items]"),
+    ).toBeNull();
   });
 
-  it("读取失败时保留已有 Queue 并显示收敛状态", () => {
+  it("读取失败时保留数量并显示收敛状态，不重复已有正文", () => {
     queueHook.useAgentSessionThreadQueue.mockReturnValue({
       error: new Error("offline"),
       loading: false,
@@ -107,9 +108,35 @@ describe("ThreadQueueStatus", () => {
     });
 
     const container = renderQueue();
-    expect(container.textContent).toContain("保留中的消息");
+    expect(container.textContent).toContain(
+      "agentChat.threadQueue.pendingCount:1",
+    );
+    expect(container.textContent).not.toContain("保留中的消息");
     expect(container.textContent).toContain(
       "agentChat.threadQueue.refreshFailed",
     );
+  });
+
+  it("读取中只显示稳定状态，不提前显示数量或正文", () => {
+    queueHook.useAgentSessionThreadQueue.mockReturnValue({
+      error: null,
+      loading: true,
+      submissions: [
+        {
+          clientUserMessageId: "client-1",
+          id: "queued-1",
+          input: [{ type: "text", text: "读取中的消息" }],
+        },
+      ],
+    });
+
+    const container = renderQueue();
+    expect(
+      container.querySelector('[aria-label="agentChat.threadQueue.loading"]'),
+    ).not.toBeNull();
+    expect(container.textContent).not.toContain(
+      "agentChat.threadQueue.pendingCount",
+    );
+    expect(container.textContent).not.toContain("读取中的消息");
   });
 });

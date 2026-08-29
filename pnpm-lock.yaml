@@ -369,6 +369,9 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.3)(jsdom@22.1.0(canvas@2.11.2(encoding@0.1.13)))(terser@5.48.0)
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
 
   packages/agent-app-runtime: {}
 

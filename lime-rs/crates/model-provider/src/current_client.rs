@@ -9,6 +9,10 @@ use crate::provider_stream::{
     RuntimeProviderBackend, RuntimeReplyModelRequestPolicy, RuntimeReplyProviderCapabilities,
     RuntimeReplyProviderHandle, RuntimeReplyProviderRequestWireShape,
 };
+use crate::provider_url::{
+    lime_tenant_id_from_base_url, parse_provider_base_url, strip_provider_routing_metadata,
+    LIME_TENANT_HEADER,
+};
 use crate::runtime_provider::{
     RuntimeProviderAuth, RuntimeProviderConfig, RuntimeProviderProtocol,
 };
@@ -1064,6 +1068,27 @@ impl CurrentProviderClient {
                 "OpenAI-Beta",
                 HeaderValue::from_static("responses_websockets=2026-02-06"),
             );
+            if !wire_shape
+                .headers
+                .iter()
+                .any(|header| header.name.eq_ignore_ascii_case(LIME_TENANT_HEADER))
+            {
+                if let Some(tenant_id) = self
+                    .config
+                    .base_url
+                    .as_deref()
+                    .and_then(lime_tenant_id_from_base_url)
+                {
+                    request.headers_mut().insert(
+                        LIME_TENANT_HEADER,
+                        HeaderValue::from_str(&tenant_id).map_err(|error| {
+                            CurrentProviderError::invalid_request(format!(
+                                "Lime tenant header 无效: {error}"
+                            ))
+                        })?,
+                    );
+                }
+            }
             for header in &wire_shape.headers {
                 let name = header.name.parse::<HeaderName>().map_err(|error| {
                     CurrentProviderError::invalid_request(format!(
@@ -1191,6 +1216,20 @@ impl CurrentProviderClient {
                         _ => request.header("Authorization", format!("Bearer {api_key}")),
                     };
                 }
+                if !wire_shape
+                    .headers
+                    .iter()
+                    .any(|header| header.name.eq_ignore_ascii_case(LIME_TENANT_HEADER))
+                {
+                    if let Some(tenant_id) = self
+                        .config
+                        .base_url
+                        .as_deref()
+                        .and_then(lime_tenant_id_from_base_url)
+                    {
+                        request = request.header(LIME_TENANT_HEADER, tenant_id);
+                    }
+                }
                 for header in &wire_shape.headers {
                     request = request.header(&header.name, &header.value);
                 }
@@ -1209,7 +1248,7 @@ impl CurrentProviderClient {
                         tokio::time::sleep(delay).await;
                         continue;
                     }
-                    Err(error) => return Err(request_failure(error)),
+                    Err(error) => return Err(request_failure(error, attempts)),
                 };
                 if response.status() == StatusCode::NOT_FOUND {
                     last_response = Some(response);
@@ -1496,7 +1535,7 @@ fn responses_websocket_url(base_url: Option<&str>) -> Result<url::Url, CurrentPr
         other => {
             return Err(CurrentProviderError::invalid_request(format!(
                 "Responses WebSocket 不支持 URL scheme: {other}"
-            )))
+            )));
         }
     };
     url.set_scheme(scheme).map_err(|_| {
@@ -1601,7 +1640,7 @@ pub fn azure_responses_endpoint(
             "Azure OpenAI resource base URL requires a host",
         ));
     }
-    url.set_fragment(None);
+    strip_provider_routing_metadata(&mut url);
 
     let path = match url.path().trim_end_matches('/') {
         "" => "/openai/v1/responses",
@@ -1611,7 +1650,7 @@ pub fn azure_responses_endpoint(
         path => {
             return Err(CurrentProviderError::invalid_request(format!(
                 "Azure OpenAI resource base URL has unsupported path `{path}`; expected resource root or /openai/v1"
-            )))
+            )));
         }
     };
     url.set_path(path);
@@ -1728,33 +1767,57 @@ pub fn responses_endpoint(base_url: &str) -> String {
 }
 
 fn endpoint_urls(base_url: &str, endpoint: &str) -> Vec<String> {
-    let base = base_url.trim_end_matches('/');
-    if base.ends_with(endpoint) {
-        return vec![base.to_string()];
+    let trimmed = base_url.trim();
+    let Some(mut url) = parse_provider_base_url(trimmed) else {
+        let base = trimmed
+            .trim_end_matches('/')
+            .split('#')
+            .next()
+            .unwrap_or(trimmed);
+        return endpoint_urls_fallback(base, endpoint);
+    };
+    strip_provider_routing_metadata(&mut url);
+    let path = url.path().trim_end_matches('/');
+    if path.ends_with(endpoint) {
+        return vec![url.to_string()];
     }
-    let ends_with_version = base.rsplit('/').next().is_some_and(|segment| {
+    let ends_with_version = path.rsplit('/').next().is_some_and(|segment| {
         segment.starts_with('v')
             && segment.len() > 1
             && segment[1..]
                 .chars()
                 .all(|character| character.is_ascii_digit())
     });
-    let primary = if ends_with_version {
-        format!("{base}/{endpoint}")
-    } else if url::Url::parse(base)
-        .ok()
-        .is_some_and(|url| url.path().trim_matches('/').is_empty())
-    {
-        format!("{base}/v1/{endpoint}")
+    let primary_path = if ends_with_version {
+        format!("{path}/{endpoint}")
+    } else if path.trim_matches('/').is_empty() {
+        format!("/v1/{endpoint}")
     } else {
-        format!("{base}/{endpoint}")
+        format!("{path}/{endpoint}")
     };
+    url.set_path(&primary_path);
+    let primary = url.to_string();
+    let mut urls = vec![primary.clone()];
+    if let Some(path_without_v1) = primary_path.strip_prefix("/v1/") {
+        let mut fallback = url.clone();
+        fallback.set_path(&format!("/{path_without_v1}"));
+        let fallback = fallback.to_string();
+        if fallback != primary {
+            urls.push(fallback);
+        }
+    }
+    urls
+}
+
+fn endpoint_urls_fallback(base: &str, endpoint: &str) -> Vec<String> {
+    let base = base.trim_end_matches('/');
+    if base.ends_with(endpoint) {
+        return vec![base.to_string()];
+    }
+    let primary = format!("{base}/{endpoint}");
     let mut urls = vec![primary.clone()];
     if primary.contains("/v1/") {
-        let without_v1 = primary.replacen("/v1/", "/", 1);
-        if without_v1 != primary {
-            urls.push(without_v1);
-        }
+        urls.push(primary.replacen("/v1/", "/", 1));
     }
     urls
 }
@@ -1958,6 +2021,40 @@ mod tests {
                 "chat/completions"
             ),
             vec!["https://gateway.example.com/compatible-mode/v2/chat/completions".to_string()]
+        );
+    }
+
+    #[test]
+    fn endpoint_urls_strip_tenant_metadata_and_keep_gateway_query() {
+        assert_eq!(
+            endpoint_urls(
+                "https://llm.limeai.run#lime_tenant_id=tenant-0001",
+                "chat/completions"
+            ),
+            vec![
+                "https://llm.limeai.run/v1/chat/completions".to_string(),
+                "https://llm.limeai.run/chat/completions".to_string(),
+            ]
+        );
+        assert_eq!(
+            endpoint_urls(
+                "https://llm.limeai.run/v1#lime_tenant_id=tenant-0001",
+                "chat/completions"
+            ),
+            vec![
+                "https://llm.limeai.run/v1/chat/completions".to_string(),
+                "https://llm.limeai.run/chat/completions".to_string(),
+            ]
+        );
+        assert_eq!(
+            endpoint_urls(
+                "https://gateway.example/v1?region=cn&lime_tenant_id=tenant-0001#local",
+                "chat/completions"
+            ),
+            vec![
+                "https://gateway.example/v1/chat/completions?region=cn".to_string(),
+                "https://gateway.example/chat/completions?region=cn".to_string(),
+            ]
         );
     }
 

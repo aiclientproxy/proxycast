@@ -71,6 +71,7 @@
   "scheduledTasks.editor.validation.days": "Select at least one day",
   "scheduledTasks.editor.validation.fix": "Fix the issues in the form first",
   "scheduledTasks.editor.validation.interval": "The interval must be between 1 and 24 hours",
+  "scheduledTasks.editor.validation.model": "Select a provider and model in the composer first",
   "scheduledTasks.editor.validation.prompt": "Enter task instructions",
   "scheduledTasks.editor.validation.sourceThread": "A source conversation ID is required when continuing a conversation",
   "scheduledTasks.editor.validation.threadLineageRequired": "Create scheduled tasks from a current project thread first.",

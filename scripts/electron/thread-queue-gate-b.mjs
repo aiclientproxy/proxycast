@@ -207,8 +207,9 @@ export function summarizeThreadQueueEvidence({
       queueStatusVisible: dom?.queueStatusVisible === true,
       queueStatusText:
         typeof dom?.queueStatusText === "string" ? dom.queueStatusText : "",
-      queueItemCount: Number(dom?.queueItemCount ?? 0),
-      markerVisible: dom?.markerVisible === true,
+      queueItemsPresent: dom?.queueItemsPresent === true,
+      queueStatusContainsMarker: dom?.queueStatusContainsMarker === true,
+      timelineMarkerCount: Number(dom?.timelineMarkerCount ?? 0),
     },
     errors: {
       invokeErrorCount: parseInvokeTraceRaw(errorRaw).length,
@@ -250,10 +251,17 @@ export function assertThreadQueueEvidence(evidence) {
     `Thread header 标题不正确: ${evidence.gui.headerTitle}`,
   );
   assert(evidence.gui.queueStatusVisible, "thread-queue-status 不可见");
-  assert(evidence.gui.markerVisible, "Queue marker 未在 GUI 中可见");
   assert(
-    evidence.gui.queueItemCount === 1,
-    `Queue GUI 条目数量不正确: ${evidence.gui.queueItemCount}`,
+    evidence.gui.timelineMarkerCount === 1,
+    `Queue marker 必须在 canonical 时间线中唯一可见，实际数量: ${evidence.gui.timelineMarkerCount}`,
+  );
+  assert(
+    !evidence.gui.queueStatusContainsMarker,
+    "thread-queue-status 不得重复 canonical submission 正文",
+  );
+  assert(
+    !evidence.gui.queueItemsPresent,
+    "thread-queue-items 已退役，不得恢复 Queue 正文列表",
   );
   assert(
     evidence.errors.invokeErrorCount === 0,
@@ -325,9 +333,10 @@ async function readGuiAndTrace(page) {
       const status = document.querySelector(
         '[data-testid="thread-queue-status"]',
       );
-      const items = Array.from(
-        status?.querySelectorAll('[data-testid="thread-queue-items"] > li') ??
-          [],
+      const timelineUserMessages = Array.from(
+        document.querySelectorAll(
+          '[data-testid="message-list-column"] [data-message-role="user"]',
+        ),
       );
       const isVisible = (element) => {
         if (!(element instanceof HTMLElement)) return false;
@@ -340,16 +349,27 @@ async function readGuiAndTrace(page) {
           bounds.height > 0
         );
       };
+      const markerOccurrences = (value) =>
+        String(value || "").split(marker).length - 1;
       return {
         dom: {
           conversationButtonVisible: isVisible(conversationButton),
           headerTitle: header?.textContent?.trim() || "",
           queueStatusVisible: isVisible(status),
           queueStatusText: status?.textContent?.trim() || "",
-          queueItemCount: items.length,
-          markerVisible: Boolean(
-            items.some((item) => item.textContent?.includes(marker)),
+          queueItemsPresent: Boolean(
+            status?.querySelector('[data-testid="thread-queue-items"]'),
           ),
+          queueStatusContainsMarker: Boolean(
+            status?.textContent?.includes(marker),
+          ),
+          timelineMarkerCount: timelineUserMessages
+            .filter(isVisible)
+            .reduce(
+              (count, message) =>
+                count + markerOccurrences(message.textContent),
+              0,
+            ),
         },
         traceRaw: window.localStorage.getItem("lime_invoke_trace_buffer_v1"),
         errorRaw: window.localStorage.getItem("lime_invoke_error_buffer_v1"),
@@ -494,8 +514,8 @@ async function run() {
       .locator('[data-testid="thread-queue-status"]')
       .waitFor({ state: "visible", timeout: options.timeoutMs });
     await handle.page
-      .locator('[data-testid="thread-queue-items"]')
-      .getByText(THREAD_QUEUE_MARKER, { exact: true })
+      .locator('[data-testid="message-list-column"] [data-message-role="user"]')
+      .filter({ hasText: THREAD_QUEUE_MARKER })
       .waitFor({ state: "visible", timeout: options.timeoutMs });
 
     const observed = await readGuiAndTrace(handle.page);
@@ -521,7 +541,7 @@ async function run() {
       queueRequestsMatchThread: evidence.identity.queueRequestsMatchThread,
       canonicalThreadOpenHitCount:
         evidence.identity.canonicalThreadOpenHitCount,
-      queuedSubmissionVisible: evidence.gui.markerVisible,
+      queuedSubmissionVisible: evidence.gui.timelineMarkerCount === 1,
     };
     summary.bridge = evidence.bridge;
     summary.gui = evidence.gui;

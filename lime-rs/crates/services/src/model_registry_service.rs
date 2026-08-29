@@ -21,13 +21,13 @@ use lime_core::models::model_registry::{
     UserModelPreference,
 };
 use model_provider::canonical::{maybe_get_canonical_model, CanonicalModel};
+use model_provider::provider_url::{lime_tenant_id_from_base_url, LIME_TENANT_HEADER};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use url::form_urlencoded;
 
 mod managed_model_fetch_access;
 mod runtime_metadata;
@@ -35,8 +35,6 @@ pub use runtime_metadata::{
     ProviderModelCacheAccess, ProviderModelRegistryMetadata, ProviderModelRegistryMetadataSource,
 };
 
-const LIME_TENANT_HEADER: &str = "X-Lime-Tenant-ID";
-const LIME_TENANT_PARAM: &str = "lime_tenant_id";
 const PROVIDER_MODELS_CACHE_KEY_PREFIX: &str = "provider_models_fetch_cache:";
 const PROVIDER_MODELS_CACHE_TTL_SECONDS: i64 = 10 * 24 * 60 * 60;
 const PROVIDER_MODELS_CACHE_TAXONOMY_VERSION: u32 = 3;
@@ -1843,7 +1841,7 @@ impl ModelRegistryService {
         }
 
         if managed_model_fetch_access::is_lime_managed_api_host(api_host)
-            && Self::lime_tenant_id_from_api_host(api_host).is_some()
+            && lime_tenant_id_from_base_url(api_host).is_some()
         {
             return false;
         }
@@ -2489,7 +2487,7 @@ impl ModelRegistryService {
         }
 
         if managed_model_fetch_access::is_lime_managed_api_host(api_host)
-            && Self::lime_tenant_id_from_api_host(api_host).is_some()
+            && lime_tenant_id_from_base_url(api_host).is_some()
         {
             return true;
         }
@@ -2634,37 +2632,6 @@ impl ModelRegistryService {
             .unwrap_or(trimmed)
             .trim_end_matches('/')
             .to_string()
-    }
-
-    fn normalize_lime_tenant_id(value: &str) -> Option<String> {
-        let tenant_id = value.trim();
-        if tenant_id.is_empty() {
-            return None;
-        }
-
-        tenant_id
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
-            .then(|| tenant_id.to_string())
-    }
-
-    fn parse_lime_tenant_id_from_pairs(value: &str) -> Option<String> {
-        form_urlencoded::parse(value.as_bytes()).find_map(|(key, value)| {
-            (key == LIME_TENANT_PARAM)
-                .then(|| Self::normalize_lime_tenant_id(&value))
-                .flatten()
-        })
-    }
-
-    fn lime_tenant_id_from_api_host(api_host: &str) -> Option<String> {
-        let url = Self::parse_api_host_url(api_host)?;
-
-        url.query()
-            .and_then(Self::parse_lime_tenant_id_from_pairs)
-            .or_else(|| {
-                url.fragment()
-                    .and_then(Self::parse_lime_tenant_id_from_pairs)
-            })
     }
 
     fn build_gemini_models_api_url(api_host: &str) -> String {
@@ -2893,7 +2860,7 @@ impl ModelRegistryService {
         for (name, value) in runtime_spec.extra_headers {
             headers.push(((*name).to_string(), (*value).to_string()));
         }
-        if let Some(tenant_id) = Self::lime_tenant_id_from_api_host(normalized_host) {
+        if let Some(tenant_id) = lime_tenant_id_from_base_url(normalized_host) {
             headers.push((LIME_TENANT_HEADER.to_string(), tenant_id));
         }
 
@@ -3884,8 +3851,7 @@ mod tests {
         infer_model_capabilities, infer_model_taxonomy, infer_runtime_features,
         infer_vision_capability, normalize_model_tool_mode, ModelFetchErrorKind,
         ModelFetchProtocol, ModelFetchSource, ModelRegistryService, ModelTaxonomyInput,
-        LIME_TENANT_HEADER, PROVIDER_MODELS_CACHE_TAXONOMY_VERSION,
-        PROVIDER_MODELS_CACHE_TTL_SECONDS,
+        PROVIDER_MODELS_CACHE_TAXONOMY_VERSION, PROVIDER_MODELS_CACHE_TTL_SECONDS,
     };
     use lime_core::database::dao::api_key_provider::ApiProviderType;
     use lime_core::database::dao::route_state::RouteStateDao;
@@ -3895,6 +3861,7 @@ mod tests {
         ModelReasoningEffortSource, ModelRuntimeFeature, ModelSource, ModelTaskFamily,
         ModelVisibility, ProviderModelConfig,
     };
+    use model_provider::provider_url::LIME_TENANT_HEADER;
     use rusqlite::{params, Connection};
     use std::sync::{Arc, Mutex};
 

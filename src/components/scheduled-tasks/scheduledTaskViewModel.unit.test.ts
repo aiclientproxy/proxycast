@@ -3,6 +3,8 @@ import {
   buildScheduledTaskCreateRequest,
   defaultScheduledTaskForm,
   filterScheduledTasks,
+  isScheduledTaskModelRoute,
+  scheduledTaskModelLabel,
   toggleScheduledTaskWeekday,
   validateScheduledTaskForm,
 } from "./scheduledTaskViewModel";
@@ -38,6 +40,39 @@ describe("scheduledTaskViewModel", () => {
         }),
       }),
     );
+  });
+
+  it("把当前 provider 和 model 编码成唯一 Scheduled Task route", () => {
+    const request = buildScheduledTaskCreateRequest({
+      ...defaultScheduledTaskForm("Asia/Shanghai"),
+      title: "每日简报",
+      prompt: "整理今天的重要进展",
+      modelProviderId: "custom-agnes",
+      modelId: "agnes-2.5-flash",
+    });
+
+    expect(request.execution.modelId).toBe(
+      "route:Y3VzdG9tLWFnbmVz.YWduZXMtMi41LWZsYXNo",
+    );
+    expect(isScheduledTaskModelRoute(request.execution.modelId)).toBe(true);
+    expect(scheduledTaskModelLabel(request.execution.modelId)).toBe(
+      "agnes-2.5-flash",
+    );
+    expect(isScheduledTaskModelRoute("agnes-2.5-flash")).toBe(false);
+  });
+
+  it("new thread 缺少输入框当前 Provider/模型时应阻止保存", () => {
+    const form = {
+      ...defaultScheduledTaskForm(),
+      title: "每日简报",
+      prompt: "整理今天的重要进展",
+      modelId: "agnes-2.5-flash",
+      modelProviderId: "",
+    };
+    const errors = validateScheduledTaskForm(form);
+
+    expect(errors.modelId).toBe("modelId");
+    expect(buildScheduledTaskCreateRequest(form).execution.modelId).toBeNull();
   });
 
   it("continue thread 必须提供来源 Thread", () => {

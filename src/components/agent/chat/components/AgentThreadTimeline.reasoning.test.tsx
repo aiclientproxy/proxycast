@@ -269,7 +269,7 @@ describe("AgentThreadTimeline", () => {
     expect(container.textContent).toContain("先判断任务类型");
     expect(container.textContent).toContain("再决定是否联网");
   });
-  it("reasoning 同时存在 summary 与正文时应优先用 summary 做摘要", () => {
+  it("reasoning 同时存在 summary 与 raw text 时只应显示 summary", () => {
     const items: AgentThreadItem[] = [
       {
         ...createBaseItem("reasoning-1", 1),
@@ -294,9 +294,9 @@ describe("AgentThreadTimeline", () => {
       summary?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.textContent).toContain("这里是更完整的正文。");
+    expect(container.textContent).not.toContain("这里是更完整的正文。");
   });
-  it("clawstream reasoning-first-visible hydrate 后默认只显示 summary，展开才显示 raw reasoning", () => {
+  it("clawstream reasoning-first-visible hydrate 展开后也不应显示 raw reasoning", () => {
     const summaryText = "摘要：先确认用户只需要一个标记。";
     const rawReasoningText =
       "完整推理：用户只要求输出一个标记，因此不需要启动额外工具，也不应把 raw reasoning 拼进最终正文。";
@@ -331,19 +331,19 @@ describe("AgentThreadTimeline", () => {
     });
 
     expect(block?.open).toBe(true);
-    expect(container.textContent).toContain(rawReasoningText);
+    expect(container.textContent).not.toContain(rawReasoningText);
     expect((container.textContent?.split(summaryText).length ?? 1) - 1).toBe(1);
     expect(
       (container.textContent?.split(rawReasoningText).length ?? 1) - 1,
-    ).toBe(1);
+    ).toBe(0);
   });
-  it("canonical reasoning 只有 raw content 时展开后不应只剩图标", () => {
+  it("canonical reasoning 只有 raw content 时展开后也不应泄漏", () => {
     const rawReasoningText = "完整思考：先理解问候，再直接给出简短回应。";
     const items: AgentThreadItem[] = [
       {
         ...createBaseItem("reasoning-content-only", 1),
         type: "reasoning",
-        text: "",
+        text: rawReasoningText,
         summary: [],
         content: [rawReasoningText],
       },
@@ -367,7 +367,7 @@ describe("AgentThreadTimeline", () => {
     });
 
     expect(block?.open).toBe(true);
-    expect(container.textContent).toContain(rawReasoningText);
+    expect(container.textContent).not.toContain(rawReasoningText);
   });
   it("reasoning 的 summary 与正文相同时不应重复渲染", () => {
     const repeatedText = "先判断任务类型\n\n再决定是否联网";

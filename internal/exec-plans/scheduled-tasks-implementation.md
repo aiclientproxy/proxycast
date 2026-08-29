@@ -1,8 +1,8 @@
 # 已安排任务实现计划
 
-状态：`implementation-complete / local-validation-complete / platform-evidence-pending`
+状态：`implementation-complete / route-selection-repair-complete / local-validation-complete / platform-evidence-pending`
 
-更新时间：2026-08-18
+更新时间：2026-08-28
 
 ## 主目标
 
@@ -13,9 +13,66 @@
 - 2026-08-17 实现收口：9 个 `scheduledTask/*` method、唯一 `automation_jobs` 内部存储映射、RuntimeCore/Thread/Turn/Item/Agent Run、typed notification、软删除、一级 Scheduled Tasks 工作台、五语言资源和真实 Electron Gate B 已建立。`continue_thread` 复用 canonical Thread identity；`new_thread` 复用 canonical model catalog、route metadata 与 preflight。
 - 公开 Automation 双轨已物理删除：旧 App Server method/schema/client、旧页面和 Settings 工作台、旧 renderer projection/smoke、旧 i18n namespace consumer 均归类为 `dead / deleted / forbidden-to-restore`。最后残留的 `Page = "automation"`、`AutomationPageParams`、侧栏 `id = "automation"` 与 `SettingsTabs.Automation` 已迁为唯一 `scheduled-tasks` 一级路由，Settings 不再重复挂载 Scheduled Tasks 页面。
 - 2026-08-18 本地收尾已完成：Rust related、Scheduled Tasks Gate B、Agent current fixture、GUI smoke、contracts、governance、`verify:local`、fmt 与 diff check 全部通过；磁盘空间不再构成阻塞。
+- 2026-08-28 输入框 Provider/模型路由修复已完成：Scheduled Tasks 创建、服务技能自动化、历史任务显式迁移和 RuntimeCore 执行统一使用 Composer 当前选择的 opaque route；专项 Gate B 已证明实际 Provider 请求、Authorization、canonical Thread/Turn/Run 与 GUI 闭环一致。
 - 当前下一刀只剩平台证据：真实 Windows Notification Center、Windows Gate B，以及 macOS/Windows 真实 sleep-resume。不得以当前 macOS arm64 fixture 替代这些结论。
 
 完成度：实现 `100%`；本地门禁 `100%`；平台证据 `pending`。
+
+## 2026-08-28 输入框模型选择与 Provider transport 修复
+
+- 主目标：已安排任务必须使用创建入口当前选中的完整 `provider + model` 路由；不得在 `modelId` 缺失时因 Provider 排序变化静默切到另一模型。
+- 根因：侧栏进入 Scheduled Tasks 时没有透传当前项目；手动创建与服务技能创建都把 `execution.modelId` 留空。后台 `new_thread` 只能从模型目录选择第一项，实际任务因此从用户选中的 `agnes-2.5-flash` 漂移到 `lime-hub / gpt-5.2-pro`。
+- 路由修复：复用现有 `route:<base64-provider>.<base64-model>` opaque selector，在创建任务时冻结当前项目输入框选中的 provider/model；编辑器只读展示同一 `provider / model`，不再提供第二个手工模型入口。历史 `modelId=null` 任务在用户点击“立即运行”时先用该任务项目的当前选择重存为显式 route，再启动；进入编辑器也预填同一路由。后台执行仍未迁移的历史任务时 fail closed，不再按 catalog 第一项猜测。
+- Provider 基建：Provider base URL 统一按结构化 URL 处理；endpoint 只修改 path，保留非租户 query、移除 fragment，并把合法 `lime_tenant_id` 投影为 `X-Lime-Tenant-ID`。HTTP 与 Responses WebSocket 复用同一规则。
+- 诊断修复：参考 Codex `http-client` 的 `reqwest::Error::without_url()` 边界，持久化错误保留 transport source chain 与最终尝试次数，同时不暴露 URL path/query/credential。
+- 窄写集：`packages/app-server-client/src/model-route.ts`、`src/components/{AppSidebar.tsx,scheduled-tasks/**}`、`src/components/agent/chat/workspace/{useAgentChatWorkspaceSetupRuntime.ts,useWorkspaceServiceSkillEntryActions*,workspaceServiceSkillEntryActionsViewModel*}`、五语言 `scheduledTasks.json`、`lime-rs/crates/app-server/{src/runtime/model_providers/selection.rs,src/scheduled_task_worker/tests.rs,tests/scheduled_tasks_jsonrpc.rs}`、`lime-rs/crates/model-provider/src/{lib.rs,provider_url.rs,current_client.rs,current_client/transport.rs}`、复用 tenant 解析的 `agent` / `services` current consumers、Scheduled Tasks Electron fixture 与本计划。
+- 避让：未修改当前脏热区 `tool-runtime/**`、`agent/current_provider_turn/tool_executor.rs`、`app-server/execution_process/tests.rs`、`agentRuntime` i18n、无关 Electron/harness/release 脚本；不修改用户数据库，不提交、不推送。
+- 预算标签：`budget:normal`；风险等级：`P1`。
+- Current 主链：`Composer model selection -> workspace preference -> ScheduledTaskCreateRequest.execution.modelId -> scheduledTask/create -> automation_jobs -> scheduledTask run -> RuntimeCore route selection -> model-provider HTTP/WebSocket -> canonical Thread/Turn/Run -> GUI`。
+- Happy Path：用户在当前项目选中 `agnes-2.5-flash`，从侧栏或服务技能创建任务；持久化 payload 含唯一 route selector；手动/后台运行均请求同一 provider/model；Lime Hub fragment tenant host 能正确请求 endpoint；失败历史展示脱敏根因而不是裸 `connect_error`。
+- Evidence Layers：deterministic-smoke=`passed`，runtime/provider capture=`passed`，真实 Electron Gate B=`passed`，release-artifact=`not required`。
+- 已跑：前端定向 Vitest、fixture 守卫、`npm run typecheck`、`npm run test:rust:related -- <paths>`、`npm run test:contracts`、`npm run governance:legacy-report`、Scheduled Tasks Electron Gate B、`npm run verify:gui-smoke`、`cargo fmt --check` 与 `git diff --check`。
+- 架构影响：非重大架构变更；未新增协议 method、crate、跨层 owner 或第二套状态源，只补全现有 opaque route 与 Provider 网络 owner。
+
+### 完成证据
+
+- `current`：Composer 项目偏好是 Provider/模型选择的唯一 UI 事实源；任务只持久化完整 opaque route，编辑器只读展示该选择。`continue_thread` 继续使用 canonical Thread route。
+- `dead / forbidden-to-restore`：`modelId=null -> catalog 第一项`、裸 model 反推 Provider、Scheduled Tasks 自建模型选择器，以及 fixture 依赖 `sortOrder/isDefault`。
+- 历史 `null`、裸 model 或损坏 route 不在页面加载时静默写库；用户点击“立即运行”时按任务项目当前选择显式迁移，后台未迁移任务保持 fail closed。
+- Provider URL 的唯一 owner 为 `lime-rs/crates/model-provider/src/provider_url.rs`；HTTP 与 Responses WebSocket 统一处理 path/query/fragment tenant，并注入 `X-Lime-Tenant-ID`。
+- 参考 Codex `reqwest::Error::without_url()` 后，transport 错误保留脱敏 source chain 与尝试次数，不暴露 URL path/query 或凭证。
+
+```text
+npx vitest run <6 个相关前端与 app-server-client 测试文件>
+  6 files / 143 tests passed
+
+npx vitest run scripts/electron/scheduled-tasks-fixture-smoke.test.mjs
+  4 tests passed
+
+npm run typecheck
+  passed
+
+npm run test:rust:related -- <10 个相关 Rust 路径>
+  passed（14 个 owner/反向依赖，退出码 0）
+
+npm run test:contracts
+  passed（protocol 1029 types no drift；app-server-client 299 checks）
+
+npm run governance:legacy-report
+  passed（zero-reference candidates=0 / classification drift=0 / boundary violations=0）
+
+npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000 --keep-temp
+  Gate B passed（provider request=1；Authorization matched；Composer selection 与 persisted route matched；Electron IPC=56；legacy/mock/invoke/console/page errors=0）
+  evidence: .lime/qc/gui-evidence/scheduled-tasks-electron-fixture/scheduled-tasks-electron-fixture-summary.json
+
+ELECTRON_E2E_USER_DATA_DIR=/tmp/lime-gui-smoke-userdata.IMJV87 npm run verify:gui-smoke
+  passed（真实 Electron startup/reload、preload/IPC、App Server sidecar、Claw workbench、memory settings；21/21 assertions）
+  evidence: .lime/qc/project-gates/standalone-shell-01-20260828045400-27737/shell-01-electron-smoke/summary.json
+
+cargo fmt --manifest-path "lime-rs/Cargo.toml" --all -- --check
+git diff --check
+  passed
+```
 
 ## 2026-08-17 Terminal Notification 与软删除完成
 
@@ -114,7 +171,7 @@ git diff --check
 ## 2026-08-17 Scheduled Tasks Gate B 与失败历史修复
 
 - Gate B 首次失败的实际根因不是 provider endpoint：保留的真实 Electron rollout 显示 `modelId=null` 继承了隔离环境中排序更靠前的 `lime-hub / gpt-5.2-pro`，请求未到 localhost fixture，最终返回 404。专项 fixture 原先只确认 provider 出现在 `model/list`，没有确认它是默认模型。
-- fixture 修复：创建 provider 后使用 `sortOrder: -1`，并强制断言匹配项 `model/list.isDefault === true`；因此核心场景仍是 `modelId=null`，但继承的 route 确定为本地 OpenAI-compatible fixture，不会因宿主默认 catalog 漂移而误测。
+- 当时的 fixture 修复：创建 provider 后使用 `sortOrder: -1`，并断言匹配项 `model/list.isDefault === true`。该 `modelId=null` 继承行为已在 2026-08-28 归类为 `dead`；current fixture 必须显式冻结 opaque route，不能再依赖 catalog 排序。
 - GUI 修复：`ScheduledTasksPage.runNow` 在 `startRun` 成功或失败后统一重新加载任务详情、任务列表和运行历史。Runtime 已落盘失败 Run 时，启动请求即使返回错误，页面也会立即显示失败状态、错误文案和运行记录，不再停留在“0 次运行 / 还没有运行记录”。
 - 回归写集：`scripts/electron/scheduled-tasks-fixture-smoke.mjs`、对应 fixture 单测、`src/components/scheduled-tasks/ScheduledTasksPage.tsx`、对应组件单测、`package.json` smoke 入口。
 - 真实证据：`.lime/qc/gui-evidence/scheduled-tasks-electron-fixture/scheduled-tasks-electron-fixture-summary.json` 与同目录 raw/screenshot。
@@ -149,22 +206,22 @@ git diff --check
   passed
 ```
 
-本轮 Gate B 证明的主线是：一级导航创建继承模型任务 -> `scheduledTask/run/start` -> Runtime provider 实际请求 -> canonical Thread/Turn/read model -> 运行历史打开同一对话；没有依赖 App Server mock 或 renderer fallback。`--keep-temp` 仅用于保留隔离诊断目录，未删除用户数据。
+本轮 Gate B 证明的主线是：一级导航创建使用输入框已选 Provider/模型的任务 -> `scheduledTask/run/start` -> Runtime provider 实际请求 -> canonical Thread/Turn/read model -> 运行历史打开同一对话；没有依赖 App Server mock 或 renderer fallback。`--keep-temp` 仅用于保留隔离诊断目录，未删除用户数据。
 
 ## 2026-08-17 故障修复写集与退出条件
 
 - 窄写集：`lime-rs/crates/app-server/src/automation_execution.rs`、`lime-rs/crates/app-server/src/runtime/model_providers/selection.rs`、`lime-rs/crates/app-server/src/scheduled_task_worker/tests.rs`、`lime-rs/crates/app-server/tests/scheduled_tasks_jsonrpc.rs`、`scripts/electron/scheduled-tasks-fixture-smoke.mjs`、`scripts/electron/scheduled-tasks-fixture-smoke.test.mjs`、`src/components/scheduled-tasks/ScheduledTasksPage.tsx`、`src/components/scheduled-tasks/ScheduledTasksPage.test.tsx`、`package.json`、本计划文件。
-- `new_thread + modelId=null`：继承 `model/list` 的默认可执行模型，创建 session 前写入 `providerSelector/providerName/modelName` 并执行 `preflight_thread_start`。
-- `new_thread + explicit modelId`：opaque route selector 或 catalog stable id/alias 必须解析为唯一 provider/model；无匹配、非法 selector 或跨 provider 歧义时 fail closed。
+- 历史行为（现 `dead`）：`new_thread + modelId=null` 曾继承 `model/list` 第一项；该路径会因 catalog 排序漂移，已禁止恢复。
+- `new_thread + explicit modelId`：只接受 opaque route selector 并解析为唯一 provider/model；缺失、裸 model、无匹配或非法 selector 均 fail closed。
 - `continue_thread`：继续复用 durable canonical session route，不创建替代 session，不用 Scheduled Task 的空 route 覆盖 source thread。
-- 回归：public `scheduledTask/run/start` 使用要求 provider selection 的 route-aware backend 与真实 model catalog fixture，断言 inherit/explicit selection、preflight、canonical Thread/Turn/Run lineage；保留无 route catalog 时的 fail-closed 证据。
+- 回归：public `scheduledTask/run/start` 使用要求 provider selection 的 route-aware backend 与真实 model catalog fixture，断言 explicit selection、preflight、canonical Thread/Turn/Run lineage；即使 catalog 存在，缺失 route 也必须 fail closed。
 - 验证：Rust 定向/related、contracts、Agent current fixture、GUI smoke、`verify:local`、fmt 和 diff check 全部通过；真实 Electron 复走“已安排任务 -> 每日项目简报 -> 更多 -> 立即运行”，确认错误消失、canonical Thread/Turn 已创建且运行历史可见。
 
 ### 2026-08-17 故障修复完成
 
-- `new_thread` 已在创建 session 前复用 canonical model catalog 解析：`modelId=null` 继承默认可执行模型，显式 stable id/alias 与 `route:<base64-provider>.<base64-model>` selector 均要求唯一 provider/model；无模型、非法 selector 和跨 provider 歧义均 fail closed。
+- 该阶段曾允许 `modelId=null` 继承默认模型和裸 stable id/alias 反推 provider；这两条兼容路径已在 2026-08-28 删除。current `new_thread` 只接受 `route:<base64-provider>.<base64-model>` 并要求唯一 provider/model。
 - session metadata 写入 `providerSelector/providerName/modelName/serviceTier`，并在真实 Runtime backend 下执行 `preflight_thread_start`；turn runtime options 使用同一路由。`continue_thread` 保留 canonical session identity 和原有 route。
-- route-aware public JSON-RPC 回归覆盖继承、显式 opaque selector、preflight 次数、Thread/Turn route lineage 和无可执行模型错误；worker fixture 已补齐真实 chat provider/model/key，避免测试绕过 route 合同。
+- route-aware public JSON-RPC 回归覆盖显式 opaque selector、preflight 次数、Thread/Turn route lineage，以及缺失 route 在 catalog 存在时仍 fail closed；worker fixture 已补齐真实 chat provider/model/key，避免测试绕过 route 合同。
 - 真实链路与质量门禁结果：
 
 ```text

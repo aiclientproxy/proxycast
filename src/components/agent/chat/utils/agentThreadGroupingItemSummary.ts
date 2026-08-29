@@ -8,6 +8,7 @@ import type { AgentThreadItem } from "../types";
 import type { AgentThreadGroupKind } from "./agentThreadGroupingTypes";
 import { resolveAgentRuntimeErrorPresentation } from "./agentRuntimeErrorPresentation";
 import { normalizeProcessDisplayText } from "./processDisplayText";
+import { resolveVisibleReasoningSourceText } from "./reasoningDisplayText";
 import { resolveRuntimeAttachmentTaskDisplayName } from "./runtimeAttachmentPlaceholder";
 import { resolveUserFacingToolDisplayLabel } from "./toolDisplayInfo";
 import { resolveAgentThreadToolProcessPreview } from "./toolProcessSummary";
@@ -706,7 +707,7 @@ export function summarizeThinkingItem(item: AgentThreadItem): string | null {
 
   if (item.type === "reasoning") {
     return (
-      extractThinkingPreviewLine(item.summary?.join("；") || item.text, {
+      extractThinkingPreviewLine(resolveVisibleReasoningSourceText(item), {
         flattenFragments: true,
       }) || (item.status === "in_progress" ? "思考中" : "已完成思考")
     );

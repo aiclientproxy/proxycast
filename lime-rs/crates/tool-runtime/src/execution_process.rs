@@ -81,6 +81,7 @@ use environment::resolve_child_environment;
 
 const DEFAULT_OUTPUT_RETAIN_BYTES: usize = 128 * 1024;
 const PROCESS_OUTPUT_CHUNK_BYTES: usize = 8 * 1024;
+pub(crate) const TRAILING_OUTPUT_GRACE: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -846,10 +847,7 @@ async fn supervise_local_process(
         }
     };
 
-    join_output_task(stdout_task).await;
-    join_output_task(stderr_task).await;
-
-    let final_snapshot = {
+    let terminal_snapshot = {
         let mut guard = process.lock().await;
         if !guard.status().is_terminal() {
             match wait_result {
@@ -859,11 +857,42 @@ async fn supervise_local_process(
         }
         guard.snapshot()
     };
+    let _ = state_tx.send(terminal_snapshot);
+
+    join_output_tasks_with_grace(stdout_task, stderr_task).await;
+
+    let final_snapshot = process.lock().await.snapshot();
     let _ = state_tx.send(final_snapshot.clone());
     let _ = final_tx.send(final_snapshot);
 }
 
-async fn join_output_task(task: Option<JoinHandle<()>>) {
+async fn join_output_tasks_with_grace(
+    mut stdout_task: Option<JoinHandle<()>>,
+    mut stderr_task: Option<JoinHandle<()>>,
+) {
+    let join_tasks = async {
+        tokio::join!(
+            join_output_task(stdout_task.as_mut()),
+            join_output_task(stderr_task.as_mut())
+        );
+    };
+    if tokio::time::timeout(TRAILING_OUTPUT_GRACE, join_tasks)
+        .await
+        .is_ok()
+    {
+        return;
+    }
+    if let Some(task) = stdout_task.as_ref() {
+        task.abort();
+    }
+    if let Some(task) = stderr_task.as_ref() {
+        task.abort();
+    }
+    join_output_task(stdout_task.as_mut()).await;
+    join_output_task(stderr_task.as_mut()).await;
+}
+
+async fn join_output_task(task: Option<&mut JoinHandle<()>>) {
     if let Some(task) = task {
         let _ = task.await;
     }

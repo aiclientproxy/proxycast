@@ -65,9 +65,10 @@ function visibleDom() {
     conversationButtonVisible: true,
     headerTitle: THREAD_QUEUE_TITLE,
     queueStatusVisible: true,
-    queueStatusText: `待处理 1 ${THREAD_QUEUE_MARKER}`,
-    queueItemCount: 1,
-    markerVisible: true,
+    queueStatusText: "待处理 1",
+    queueItemsPresent: false,
+    queueStatusContainsMarker: false,
+    timelineMarkerCount: 1,
   };
 }
 
@@ -123,6 +124,34 @@ describe("Thread Queue Electron Gate B", () => {
     );
   });
 
+  it("fails closed when Queue status repeats canonical text or timeline is not unique", () => {
+    const repeatedInStatus = summarizeThreadQueueEvidence({
+      traceRaw: traceRaw(),
+      errorRaw: "[]",
+      dom: {
+        ...visibleDom(),
+        queueStatusContainsMarker: true,
+        queueStatusText: `待处理 1 ${THREAD_QUEUE_MARKER}`,
+      },
+      threadId: THREAD_ID,
+      queuedSubmissionId: "queued-1",
+    });
+    expect(() => assertThreadQueueEvidence(repeatedInStatus)).toThrow(
+      /不得重复 canonical submission 正文/,
+    );
+
+    const duplicatedTimeline = summarizeThreadQueueEvidence({
+      traceRaw: traceRaw(),
+      errorRaw: "[]",
+      dom: { ...visibleDom(), timelineMarkerCount: 2 },
+      threadId: THREAD_ID,
+      queuedSubmissionId: "queued-1",
+    });
+    expect(() => assertThreadQueueEvidence(duplicatedTimeline)).toThrow(
+      /canonical 时间线中唯一可见/,
+    );
+  });
+
   it("validates CLI bounds and keeps retired queue paths absent", () => {
     expect(
       parseThreadQueueGateArgs(["--timeout-ms", "60000"], {
@@ -147,12 +176,18 @@ describe("Thread Queue Electron Gate B", () => {
       "scripts/electron/thread-queue-gate-b.mjs",
       "utf8",
     );
+    const queueComponent = fs.readFileSync(
+      "src/components/agent/chat/components/ThreadQueueStatus.tsx",
+      "utf8",
+    );
     for (const method of THREAD_QUEUE_REQUIRED_METHODS) {
       expect(content).toContain(method);
     }
     expect(content).toContain("ensureElectronFixtureBuild");
     expect(content).toContain('backendMode: "unavailable"');
     expect(content).toContain('data-testid="thread-queue-status"');
+    expect(content).toContain('data-testid="thread-queue-items"');
+    expect(queueComponent).not.toContain('data-testid="thread-queue-items"');
     expect(content).not.toContain('APP_SERVER_BACKEND_MODE: "mock"');
     expect(content).not.toContain("queuedTurnSnapshot");
     expect(content).not.toContain("mockPriorityCommands");

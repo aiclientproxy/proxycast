@@ -396,6 +396,7 @@ interface UseAgentRuntimeSyncEffectsOptions {
   sessionIdRef: MutableRefObject<string | null>;
   sessionId: string | null;
   currentTurnEventName?: string | null;
+  currentTurnEventNameRef?: MutableRefObject<string | null>;
   currentStreamTurnId?: string | null;
   isSending: boolean;
   threadRead?: unknown;
@@ -418,6 +419,7 @@ export function useAgentRuntimeSyncEffects(
     sessionIdRef,
     sessionId,
     currentTurnEventName,
+    currentTurnEventNameRef,
     currentStreamTurnId,
     isSending,
     threadRead,
@@ -553,10 +555,21 @@ export function useAgentRuntimeSyncEffects(
     if (!sessionId || !isSending || !settleActiveRuntimeStream) {
       return;
     }
-    const hasTerminalTurnInReadModel = hasTerminalTurn(
-      threadTurns,
-      normalizedCurrentStreamTurnId,
-    );
+    const latestCurrentTurnEventName =
+      currentTurnEventNameRef?.current?.trim() || null;
+    // A bound listener without a runtime turn id is still in the start/accept
+    // window. The read model may only contain the previous completed turn.
+    if (
+      (normalizedCurrentTurnEventName || latestCurrentTurnEventName) &&
+      !normalizedCurrentStreamTurnId
+    ) {
+      return;
+    }
+    const hasRunningLocalTurn = hasRunningTurn(threadTurns);
+    const hasTerminalTurnInReadModel =
+      hasRunningLocalTurn && !normalizedCurrentStreamTurnId
+        ? false
+        : hasTerminalTurn(threadTurns, normalizedCurrentStreamTurnId);
     const threadReadTerminalInfo = readThreadReadTerminalInfo(
       threadRead,
       normalizedCurrentStreamTurnId,
@@ -578,7 +591,6 @@ export function useAgentRuntimeSyncEffects(
     if (!observedActiveRuntimeWorkRef.current && !hasTerminalReadModel) {
       return;
     }
-    const hasRunningLocalTurn = hasRunningTurn(threadTurns);
     const normalizedThreadReadStatus = normalizeRuntimeStatus(threadReadStatus);
     if (
       hasRunningLocalTurn &&
@@ -628,6 +640,7 @@ export function useAgentRuntimeSyncEffects(
     threadReadStatus,
     threadTurns,
     normalizedCurrentStreamTurnId,
+    currentTurnEventNameRef,
   ]);
 
   useEffect(() => {

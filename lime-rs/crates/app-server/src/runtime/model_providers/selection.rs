@@ -66,26 +66,12 @@ impl RuntimeCore {
         &self,
         model_id: Option<&str>,
     ) -> Result<ThreadStartModelSelection, RuntimeCoreError> {
-        let Some(model_id) = model_id else {
-            return self
-                .resolve_thread_start_model_selection(None, None, None)
-                .await;
-        };
-        let model_id = non_empty(model_id).ok_or_else(|| {
-            RuntimeCoreError::InvalidRequest(
-                "scheduled task modelId must be a non-empty string".to_string(),
-            )
-        })?;
-        let route = decode_model_route_selector(model_id)?;
+        let model_id = explicit_scheduled_task_model_id(model_id)?;
+        let (provider, model) = decode_model_route_selector(model_id)?;
         let catalogs = self.model_catalog(None).await?;
         let mut candidates = selectable_chat_models(&catalogs)
             .into_iter()
-            .filter(|candidate| match route.as_ref() {
-                Some((provider, model)) => {
-                    candidate.provider == *provider && candidate.matches_model(model)
-                }
-                None => candidate.matches_model(model_id),
-            })
+            .filter(|candidate| candidate.provider == provider && candidate.matches_model(&model))
             .collect::<Vec<_>>();
 
         match candidates.len() {
@@ -99,19 +85,14 @@ impl RuntimeCore {
             }
             0 => Err(RuntimeCoreError::RouteRejected {
                 session_id: "scheduledTask/run/start".to_string(),
-                provider: route.as_ref().map(|(provider, _)| provider.clone()),
-                model: Some(
-                    route
-                        .as_ref()
-                        .map(|(_, model)| model.clone())
-                        .unwrap_or_else(|| model_id.to_string()),
-                ),
+                provider: Some(provider),
+                model: Some(model),
                 category: RouteFailureCategory::ModelUnavailable,
                 reason_code: "scheduled_task_model_unavailable".to_string(),
             }),
-            _ => Err(RuntimeCoreError::InvalidRequest(format!(
-                "scheduled task modelId is ambiguous across providers: {model_id}"
-            ))),
+            _ => Err(RuntimeCoreError::InvalidRequest(
+                "已安排任务绑定的 Provider/模型路由不唯一，请重新选择并保存后再运行".to_string(),
+            )),
         }
     }
 
@@ -650,17 +631,15 @@ fn encode_model_route_selector(provider_id: &str, model_id: &str) -> String {
     )
 }
 
-fn decode_model_route_selector(
-    selector: &str,
-) -> Result<Option<(String, String)>, RuntimeCoreError> {
+fn decode_model_route_selector(selector: &str) -> Result<(String, String), RuntimeCoreError> {
     let Some(encoded) = selector.strip_prefix("route:") else {
-        return Ok(None);
+        return Err(invalid_model_route_selector());
     };
     let mut parts = encoded.split('.');
     let provider = parts.next();
     let model = parts.next();
     if provider.is_none() || model.is_none() || parts.next().is_some() {
-        return Err(invalid_model_route_selector(selector));
+        return Err(invalid_model_route_selector());
     }
     let decode = |value: &str| {
         URL_SAFE_NO_PAD
@@ -670,15 +649,25 @@ fn decode_model_route_selector(
             .and_then(|value| non_empty(&value).map(str::to_string))
     };
     match (decode(provider.unwrap()), decode(model.unwrap())) {
-        (Some(provider), Some(model)) => Ok(Some((provider, model))),
-        _ => Err(invalid_model_route_selector(selector)),
+        (Some(provider), Some(model)) => Ok((provider, model)),
+        _ => Err(invalid_model_route_selector()),
     }
 }
 
-fn invalid_model_route_selector(selector: &str) -> RuntimeCoreError {
-    RuntimeCoreError::InvalidRequest(format!(
-        "scheduled task modelId is not a valid model route selector: {selector}"
-    ))
+fn invalid_model_route_selector() -> RuntimeCoreError {
+    RuntimeCoreError::InvalidRequest(
+        "已安排任务未绑定有效的 Provider/模型路由，请按当前 Provider/模型选择编辑并保存后再运行"
+            .to_string(),
+    )
+}
+
+fn explicit_scheduled_task_model_id(model_id: Option<&str>) -> Result<&str, RuntimeCoreError> {
+    model_id.and_then(non_empty).ok_or_else(|| {
+        RuntimeCoreError::InvalidRequest(
+            "已安排任务未绑定明确的 Provider/模型路由，请按当前 Provider/模型选择编辑并保存后再运行"
+                .to_string(),
+        )
+    })
 }
 
 fn non_empty(value: &str) -> Option<&str> {
@@ -745,6 +734,17 @@ mod tests {
             vec!["visible"]
         );
         assert!(!response.data[0].hidden);
+    }
+
+    #[test]
+    fn scheduled_task_requires_an_explicit_model_route() {
+        let missing = explicit_scheduled_task_model_id(None).expect_err("missing model route");
+        let blank = explicit_scheduled_task_model_id(Some("  ")).expect_err("blank model route");
+        let bare = decode_model_route_selector("gpt-5.2-pro").expect_err("bare model id");
+
+        assert!(missing.to_string().contains("未绑定明确"));
+        assert!(blank.to_string().contains("未绑定明确"));
+        assert!(bare.to_string().contains("未绑定有效"));
     }
 
     #[test]

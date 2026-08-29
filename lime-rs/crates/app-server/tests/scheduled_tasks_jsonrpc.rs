@@ -6,12 +6,12 @@ use app_server::{
     RuntimeEventSink,
 };
 use app_server_protocol::{
-    protocol::v2::ThreadSettings, AgentSessionReadParams, AgentSessionStartParams, JsonRpcMessage,
-    METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_SCHEDULED_TASK_CHANGED,
-    METHOD_SCHEDULED_TASK_CREATE, METHOD_SCHEDULED_TASK_DELETE, METHOD_SCHEDULED_TASK_ENABLED_SET,
-    METHOD_SCHEDULED_TASK_LIST, METHOD_SCHEDULED_TASK_READ, METHOD_SCHEDULED_TASK_RUN_LIST,
-    METHOD_SCHEDULED_TASK_RUN_START, METHOD_SCHEDULED_TASK_RUN_UPDATED,
-    METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW, METHOD_SCHEDULED_TASK_UPDATE, PROTOCOL_VERSION,
+    protocol::v2::ThreadSettings, AgentSessionStartParams, JsonRpcMessage, METHOD_INITIALIZE,
+    METHOD_INITIALIZED, METHOD_SCHEDULED_TASK_CHANGED, METHOD_SCHEDULED_TASK_CREATE,
+    METHOD_SCHEDULED_TASK_DELETE, METHOD_SCHEDULED_TASK_ENABLED_SET, METHOD_SCHEDULED_TASK_LIST,
+    METHOD_SCHEDULED_TASK_READ, METHOD_SCHEDULED_TASK_RUN_LIST, METHOD_SCHEDULED_TASK_RUN_START,
+    METHOD_SCHEDULED_TASK_RUN_UPDATED, METHOD_SCHEDULED_TASK_SCHEDULE_PREVIEW,
+    METHOD_SCHEDULED_TASK_UPDATE, PROTOCOL_VERSION,
 };
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -487,7 +487,7 @@ async fn scheduled_task_mutations_and_terminal_run_publish_typed_notifications()
 }
 
 #[tokio::test]
-async fn scheduled_task_new_thread_resolves_inherited_and_explicit_model_routes() {
+async fn scheduled_task_new_thread_resolves_explicit_model_route() {
     let backend = Arc::new(RouteAwareBackend::default());
     let app = scheduled_task_app_server_with_backend(
         backend.clone(),
@@ -496,84 +496,39 @@ async fn scheduled_task_new_thread_resolves_inherited_and_explicit_model_routes(
     .await;
     initialize(&app.server).await;
 
-    let inherited = create_task_with_model(&app.server, 2, "继承默认模型", None).await;
-    let inherited_task_id = inherited["result"]["task"]["id"]
-        .as_str()
-        .expect("inherited task id");
-    let inherited_run = request_ok(
-        &app.server,
-        3,
-        METHOD_SCHEDULED_TASK_RUN_START,
-        json!({"id": inherited_task_id}),
-    )
-    .await;
-    let inherited_session_id = inherited_run["result"]["run"]["sessionId"]
-        .as_str()
-        .expect("inherited run session id");
-    let inherited_session = app
-        .runtime
-        .read_session(AgentSessionReadParams {
-            session_id: inherited_session_id.to_string(),
-            history_limit: None,
-            history_offset: None,
-            history_before_message_id: None,
-        })
-        .expect("read inherited scheduled task session");
-    let inherited_metadata = inherited_session
-        .session
-        .business_object_ref
-        .as_ref()
-        .and_then(|reference| reference.metadata.as_ref())
-        .expect("inherited scheduled task route metadata");
-    assert_eq!(
-        inherited_metadata["providerSelector"],
-        "scheduled-route-provider"
-    );
-    assert_eq!(
-        inherited_metadata["providerName"],
-        "scheduled-route-provider"
-    );
-    assert_eq!(inherited_metadata["modelName"], "scheduled-route-model");
-
-    let route_selector = format!(
-        "route:{}.{}",
-        URL_SAFE_NO_PAD.encode("scheduled-route-provider"),
-        URL_SAFE_NO_PAD.encode("scheduled-route-model")
-    );
-    let explicit = create_task_with_model(&app.server, 4, "显式模型", Some(&route_selector)).await;
+    let route_selector = model_route_selector("scheduled-route-provider", "scheduled-route-model");
+    let explicit = create_task_with_model(&app.server, 2, "显式模型", Some(&route_selector)).await;
     let explicit_task_id = explicit["result"]["task"]["id"]
         .as_str()
         .expect("explicit task id");
     request_ok(
         &app.server,
-        5,
+        3,
         METHOD_SCHEDULED_TASK_RUN_START,
         json!({"id": explicit_task_id}),
     )
     .await;
 
-    let expected_routes = vec![
-        (
-            "scheduled-route-provider".to_string(),
-            "scheduled-route-model".to_string(),
-        ),
-        (
-            "scheduled-route-provider".to_string(),
-            "scheduled-route-model".to_string(),
-        ),
-    ];
+    let expected_route = (
+        "scheduled-route-provider".to_string(),
+        "scheduled-route-model".to_string(),
+    );
     let preflight_routes = backend.preflight_routes();
-    assert_eq!(preflight_routes.len(), 4);
+    assert_eq!(preflight_routes.len(), 2);
     assert!(preflight_routes
         .iter()
-        .all(|route| route == &expected_routes[0]));
-    assert_eq!(backend.turn_routes(), expected_routes);
+        .all(|route| route == &expected_route));
+    assert_eq!(backend.turn_routes(), vec![expected_route]);
 }
 
 #[tokio::test]
-async fn scheduled_task_new_thread_fails_closed_without_an_executable_model_route() {
+async fn scheduled_task_new_thread_fails_closed_without_an_explicit_model_route() {
     let backend = Arc::new(RouteAwareBackend::default());
-    let app = scheduled_task_app_server_with_backend(backend.clone(), &[]).await;
+    let app = scheduled_task_app_server_with_backend(
+        backend.clone(),
+        &[("scheduled-route-provider", "scheduled-route-model")],
+    )
+    .await;
     initialize(&app.server).await;
     let created = create_task_with_model(&app.server, 2, "缺少模型路由", None).await;
     let task_id = created["result"]["task"]["id"]
@@ -588,10 +543,10 @@ async fn scheduled_task_new_thread_fails_closed_without_an_executable_model_rout
         json!({"id": task_id}),
     )
     .await;
-    assert_eq!(
-        failed.pointer("/error/data/reasonCode"),
-        Some(&json!("model_catalog_has_no_executable_selection"))
-    );
+    assert!(failed["error"]["message"]
+        .as_str()
+        .expect("missing route error message")
+        .contains("未绑定明确的 Provider/模型路由"));
     assert!(backend.preflight_routes().is_empty());
     assert!(backend.turn_routes().is_empty());
 
@@ -750,7 +705,16 @@ async fn paused_manual_run_is_allowed_and_does_not_shift_schedule_anchor() {
 }
 
 async fn create_task(server: &AppServer, id: u64, title: &str) -> Value {
-    create_task_with_model(server, id, title, Some("gpt-5")).await
+    let route = model_route_selector("scheduled-test-provider", "gpt-5");
+    create_task_with_model(server, id, title, Some(&route)).await
+}
+
+fn model_route_selector(provider_id: &str, model_id: &str) -> String {
+    format!(
+        "route:{}.{}",
+        URL_SAFE_NO_PAD.encode(provider_id),
+        URL_SAFE_NO_PAD.encode(model_id)
+    )
 }
 
 async fn create_task_with_model(

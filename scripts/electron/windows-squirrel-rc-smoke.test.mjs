@@ -281,6 +281,24 @@ describe("Windows Squirrel RC smoke", () => {
     expect(summary.remainingClaims.longDurationSoak).toBe("not-exercised");
   });
 
+  it("非 Windows runner 明确标记 platform evidence pending，不伪造 fail 或 pass", () => {
+    const summary = buildWindowsRcSummary({
+      assertions: { windowsRunner: false },
+      completedAt: "2026-07-17T02:00:00.000Z",
+      error: "PLT-02-windows-squirrel-rc requires a real Windows runner",
+      evidence: {},
+      runId: "windows-rc-macos-blocked",
+      startedAt: "2026-07-17T01:00:00.000Z",
+      version: "1.2.3",
+    });
+
+    expect(summary.result).toBe("evidence-pending");
+    expect(summary.failedStage).toBe("windows-runner");
+    expect(summary.blockers).toEqual([
+      "PLT-02 requires a real Windows runner; no platform evidence was collected",
+    ]);
+  });
+
   it("安装后 Gate B 必须直启 packaged executable 并禁用源码 sidecar override", () => {
     const smoke = fs.readFileSync("scripts/electron/smoke.mjs", "utf8");
 

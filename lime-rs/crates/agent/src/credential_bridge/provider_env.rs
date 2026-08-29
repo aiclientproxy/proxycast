@@ -1,4 +1,5 @@
 use lime_core::database::dao::api_key_provider::{infer_managed_runtime_spec, ApiProviderType};
+use model_provider::provider_url::{lime_tenant_id_from_base_url, LIME_TENANT_HEADER};
 use model_provider::runtime_provider::{RuntimeProviderConfig, RuntimeProviderProtocol};
 use model_provider::safety::should_disable_provider_default_fast_model as should_disable_default_fast_model_policy;
 
@@ -63,46 +64,9 @@ fn resolve_anthropic_env_key(config: &RuntimeProviderConfig) -> &'static str {
     }
 }
 
-const LIME_TENANT_HEADER: &str = "X-Lime-Tenant-ID";
-const LIME_TENANT_PARAM: &str = "lime_tenant_id";
 #[cfg_attr(not(test), allow(dead_code))]
 pub(super) const OPENAI_CUSTOM_HEADERS_ENV: &str = "OPENAI_CUSTOM_HEADERS";
 const OPENAI_ALLOW_NO_AUTH_ENV: &str = "OPENAI_ALLOW_NO_AUTH";
-
-fn normalize_lime_tenant_id(value: &str) -> Option<String> {
-    let tenant_id = value.trim();
-    if tenant_id.is_empty() {
-        return None;
-    }
-
-    tenant_id
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
-        .then(|| tenant_id.to_string())
-}
-
-fn parse_lime_tenant_id_from_pairs(value: &str) -> Option<String> {
-    value.split('&').find_map(|pair| {
-        let mut parts = pair.splitn(2, '=');
-        let key = parts.next()?.trim();
-        let value = parts.next().unwrap_or_default();
-        (key == LIME_TENANT_PARAM)
-            .then(|| normalize_lime_tenant_id(value))
-            .flatten()
-    })
-}
-
-fn lime_tenant_id_from_api_host(api_host: &str) -> Option<String> {
-    let trimmed = api_host.trim();
-    let query = trimmed
-        .find('?')
-        .map(|pos| trimmed[pos + 1..].split('#').next().unwrap_or_default());
-    let fragment = trimmed.find('#').map(|pos| &trimmed[pos + 1..]);
-
-    query
-        .and_then(parse_lime_tenant_id_from_pairs)
-        .or_else(|| fragment.and_then(parse_lime_tenant_id_from_pairs))
-}
 
 fn strip_url_query_fragment(value: &str) -> String {
     let trimmed = value.trim();
@@ -137,7 +101,7 @@ fn update_openai_lime_tenant_custom_header(tenant_id: Option<&str>) {
         .filter(|(key, _)| !key.eq_ignore_ascii_case(LIME_TENANT_HEADER))
         .collect::<Vec<_>>();
 
-    if let Some(tenant_id) = tenant_id.and_then(normalize_lime_tenant_id) {
+    if let Some(tenant_id) = tenant_id {
         headers.push((LIME_TENANT_HEADER.to_string(), tenant_id));
     }
 
@@ -216,7 +180,7 @@ pub(super) fn set_provider_env_vars(config: &RuntimeProviderConfig) {
     if let Some(base_url) = &config.base_url {
         match config.provider_name.as_str() {
             "openai" => {
-                let tenant_id = lime_tenant_id_from_api_host(base_url);
+                let tenant_id = lime_tenant_id_from_base_url(base_url);
                 update_openai_lime_tenant_custom_header(tenant_id.as_deref());
 
                 let sanitized_base_url = strip_url_query_fragment(base_url);

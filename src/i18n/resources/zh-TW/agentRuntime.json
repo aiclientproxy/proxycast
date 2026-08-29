@@ -809,8 +809,6 @@
   "agentChat.threadQueue.title": "待處理佇列",
   "agentChat.threadQueue.loading": "正在讀取佇列",
   "agentChat.threadQueue.pendingCount": "{{count}} 筆待處理",
-  "agentChat.threadQueue.itemFallback": "包含圖片或其他輸入",
-  "agentChat.threadQueue.more": "還有 {{count}} 筆",
   "agentChat.threadQueue.refreshFailed": "佇列更新失敗",
   "agentChat.inputIntent.imageGeneration.rules.includeAny": "配圖 | 圖片 | 圖像 | 插畫 | 海報 | 封面 | 主視覺 | 視覺 | 畫面 | 畫一張 | 畫個 | 生成一張 | 出一張 | 做一張 | 設計一張 | image | poster | cover",
   "agentChat.inputIntent.imageGeneration.rules.requireAny": "畫一張 | 畫個 | 生成一張 | 出一張 | 做一張 | 設計一張 | 直式 | 橫版 | 方圖 | 比例 | 尺寸 | 留白 | 標題區 | 構圖 | 色調 | 配色 | 風格 | 水彩 | 插畫 | 攝影 | 電影感 | 海報 | 封面 | 主視覺 | 品牌視覺 | 背景 | 主體 | 字體 | 1:1 | 3:4 | 4:5 | 9:16 | 16:9 | 4:3 | 3:2 | 2:3 | 21:9 | 5:4",

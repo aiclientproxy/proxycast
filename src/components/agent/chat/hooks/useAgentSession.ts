@@ -721,6 +721,17 @@ export function useAgentSession(options: UseAgentSessionOptions) {
 
   const applySessionSnapshot = useCallback(
     (snapshot: AgentSessionSnapshot) => {
+      logAgentDebug("useAgentSession", "applySessionSnapshot", {
+        sessionId: snapshot.sessionId,
+        currentSessionId: sessionIdRef.current,
+        currentTurnId: snapshot.currentTurnId,
+        messagesCount: snapshot.messages.length,
+        threadTurnsCount: snapshot.threadTurns.length,
+        threadItemsCount: snapshot.threadItems.length,
+        latestTurnId: snapshot.threadTurns.at(-1)?.id ?? null,
+        latestItemId: snapshot.threadItems.at(-1)?.id ?? null,
+        threadReadStatus: snapshot.threadRead?.status ?? null,
+      });
       const stableSnapshot = reuseStableAgentSessionSnapshotReferences(
         snapshot,
         {
@@ -1712,6 +1723,35 @@ export function useAgentSession(options: UseAgentSessionOptions) {
           preserveExecutionStrategyOnMissingDetail:
             options?.preserveExecutionStrategyOnMissingDetail,
         });
+      logAgentDebug("useAgentSession", "applySessionDetail.snapshotBuilt", {
+        topicId,
+        detailMergeMode: options?.detailMergeMode ?? "history_hydrate",
+        detailMessagesCount: detail.messages.length,
+        detailTurnsCount: detail.turns?.length ?? 0,
+        detailItemsCount: detail.items?.length ?? 0,
+        detailThreadReadItemsCount: detail.thread_read?.thread_items?.length ?? 0,
+        snapshotMessagesCount: snapshot.messages.length,
+        snapshotThreadTurnsCount: snapshot.threadTurns.length,
+        snapshotThreadItemsCount: snapshot.threadItems.length,
+        snapshotCurrentTurnId: snapshot.currentTurnId,
+        snapshotLatestTurnId: snapshot.threadTurns.at(-1)?.id ?? null,
+        snapshotLatestItemId: snapshot.threadItems.at(-1)?.id ?? null,
+      });
+      logAgentDebug(
+        "useAgentSession",
+        "applySessionDetail.snapshotBuilt.probe",
+        {
+          topicId,
+          detailMergeMode: options?.detailMergeMode ?? "history_hydrate",
+          detailTurnsCount: detail.turns?.length ?? 0,
+          detailItemsCount: detail.items?.length ?? 0,
+          snapshotThreadTurnsCount: snapshot.threadTurns.length,
+          snapshotThreadItemsCount: snapshot.threadItems.length,
+          snapshotCurrentTurnId: snapshot.currentTurnId,
+          snapshotLatestTurnId: snapshot.threadTurns.at(-1)?.id ?? null,
+          snapshotLatestItemId: snapshot.threadItems.at(-1)?.id ?? null,
+        },
+      );
       applySessionSnapshot(snapshot);
       setExecutionStrategyState(nextExecutionStrategy);
     },
@@ -3038,28 +3078,60 @@ export function useAgentSession(options: UseAgentSessionOptions) {
           resolvedSessionId,
           buildSessionDetailHydrationOptions({ source: "silentTurnRecovery" }),
         );
+        logAgentDebug(
+          "useAgentSession",
+          "silentTurnRecovery.detail.probe",
+          {
+            sessionId: resolvedSessionId,
+            currentSessionId: sessionIdRef.current,
+            requireTerminal: options?.requireTerminal === true,
+            requestedTurnId: options?.turnId ?? null,
+            detailTurnsCount: detail.turns?.length ?? 0,
+            detailItemsCount: detail.items?.length ?? 0,
+            latestTurnId: detail.turns?.at(-1)?.id ?? null,
+            latestTurnStatus: detail.turns?.at(-1)?.status ?? null,
+          },
+        );
         if (
           !isCurrentSessionHydrationRequest({
             currentSessionId: sessionIdRef.current,
             targetSessionId: resolvedSessionId,
           })
         ) {
+          logAgentDebug(
+            "useAgentSession",
+            "silentTurnRecovery.notCurrent.probe",
+            {
+              sessionId: resolvedSessionId,
+              currentSessionId: sessionIdRef.current,
+            },
+          );
           return false;
         }
-        if (
-          options?.requireTerminal
-            ? !hasRecoverableTerminalTurnActivity(
-                detail,
-                requestStartedAt,
-                promptText,
-                options.turnId,
-              )
-            : !hasRecoverableSilentTurnActivity(
-                detail,
-                requestStartedAt,
-                promptText,
-              )
-        ) {
+        const hasRecoverableActivity = options?.requireTerminal
+          ? hasRecoverableTerminalTurnActivity(
+              detail,
+              requestStartedAt,
+              promptText,
+              options.turnId,
+            )
+          : hasRecoverableSilentTurnActivity(
+              detail,
+              requestStartedAt,
+              promptText,
+            );
+        if (!hasRecoverableActivity) {
+          logAgentDebug(
+            "useAgentSession",
+            "silentTurnRecovery.noActivity.probe",
+            {
+              sessionId: resolvedSessionId,
+              requireTerminal: options?.requireTerminal === true,
+              requestedTurnId: options?.turnId ?? null,
+              latestTurnId: detail.turns?.at(-1)?.id ?? null,
+              latestTurnStatus: detail.turns?.at(-1)?.status ?? null,
+            },
+          );
           return false;
         }
 

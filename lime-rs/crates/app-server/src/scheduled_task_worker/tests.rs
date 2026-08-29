@@ -5,6 +5,8 @@ use crate::{
     LocalAppDataSource, ProjectionStore, RuntimeEvent, RuntimeEventSink,
 };
 use app_server_protocol::AgentSessionStartParams;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
 use lime_core::config::{AutomationExecutionMode, DeliveryConfig, TaskSchedule};
 use lime_core::database::dao::api_key_provider::{
     ApiKeyEntry, ApiKeyProvider, ApiKeyProviderDao, ApiProviderType, ProviderGroup,
@@ -173,6 +175,13 @@ fn insert_job(
             "time": "08:30",
             "timezone": "Asia/Shanghai"
         });
+        if thread_mode == "new_thread" {
+            payload["model"] = json!(format!(
+                "route:{}.{}",
+                URL_SAFE_NO_PAD.encode("scheduled-worker-provider"),
+                URL_SAFE_NO_PAD.encode("scheduled-worker-model")
+            ));
+        }
     }
     if let Some(source_thread_id) = source_thread_id {
         payload["source_thread_id"] = json!(source_thread_id);

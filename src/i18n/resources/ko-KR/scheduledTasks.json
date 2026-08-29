@@ -71,6 +71,7 @@
   "scheduledTasks.editor.validation.days": "하루 이상 선택하세요",
   "scheduledTasks.editor.validation.fix": "먼저 양식의 문제를 수정하세요",
   "scheduledTasks.editor.validation.interval": "간격은 1~24시간이어야 합니다",
+  "scheduledTasks.editor.validation.model": "먼저 입력창에서 Provider와 모델을 선택하세요",
   "scheduledTasks.editor.validation.prompt": "작업 지침을 입력하세요",
   "scheduledTasks.editor.validation.sourceThread": "대화를 계속하려면 원본 대화 ID가 필요합니다",
   "scheduledTasks.editor.validation.threadLineageRequired": "먼저 현재 프로젝트 스레드에서 예약된 작업을 만들어 주세요.",

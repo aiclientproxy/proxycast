@@ -2,7 +2,7 @@ use crate::execution_orchestrator::RuntimeToolExecutionAttempt;
 use crate::execution_process::live::{
     LiveExecutionOutputQuery, LiveExecutionRequest, RuntimeLiveExecutionGateway,
 };
-use crate::execution_process::ExecutionProcessStatus;
+use crate::execution_process::{ExecutionProcessStatus, TRAILING_OUTPUT_GRACE};
 use crate::tool_definition::RuntimeToolDefinition;
 use crate::tool_executor::{
     RuntimeToolExecutionError, RuntimeToolExecutionResult, RuntimeToolPolicyErrorKind,
@@ -424,6 +424,7 @@ async fn collect_process_output(
 
         let snapshot = gateway.status(&process_id)?;
         if process_status_is_terminal(snapshot.status) {
+            tokio::time::sleep(TRAILING_OUTPUT_GRACE).await;
             let final_drain = gateway.drain_output(LiveExecutionOutputQuery {
                 process_id: Some(snapshot.process_id.clone()),
                 after_sequence: session.lock().await.after_sequence,

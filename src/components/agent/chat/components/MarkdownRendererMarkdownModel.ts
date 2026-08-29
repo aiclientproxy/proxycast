@@ -48,7 +48,6 @@ const COLLAPSED_HEADING_TITLE_FORBIDDEN_PATTERN =
 const COLLAPSED_HEADING_BODY_LEADING_FORBIDDEN_PATTERN =
   /^[#>*`_[\]()|：:。！？.!?,，；;]/u;
 
-
 export function normalizeCodeLanguage(language: string): string {
   const normalized = language.trim().toLowerCase();
   if (!normalized) {
@@ -323,6 +322,7 @@ function normalizeCollapsedFenceBody(body: string): string {
 
   return trimmed
     .replace(/(\/(?:Users|home|var|tmp|opt|Applications)\b)/g, "\n$1")
+    .replace(/([├└]──)/gu, "\n$1")
     .replace(/^\n/, "");
 }
 
@@ -330,9 +330,14 @@ function normalizeInlineCollapsedCodeFences(markdown: string): string {
   return markdown.replace(
     INLINE_COLLAPSED_FENCE_PATTERN,
     (_match, language: string, body: string) => {
-      const normalizedLanguage = language.trim() || "text";
+      const rawLanguage = language.trim();
       const normalizedBody = normalizeCollapsedFenceBody(body);
-      return `\n\n\`\`\`${normalizedLanguage}\n${normalizedBody}\n\`\`\`\n\n`;
+      const isTreeCode = /[├└]──/u.test(normalizedBody);
+      const normalizedLanguage = isTreeCode ? "text" : rawLanguage || "text";
+      const codeBody = isTreeCode
+        ? `${rawLanguage}${normalizedBody}`
+        : normalizedBody;
+      return `\n\n\`\`\`${normalizedLanguage}\n${codeBody}\n\`\`\`\n\n`;
     },
   );
 }
@@ -389,6 +394,68 @@ function transformOutsideMarkdownFences(
   return outputLines.join("\n");
 }
 
+function normalizeUnclosedStrongLabels(markdown: string): string {
+  return markdown
+    .split("\n")
+    .map((line) => {
+      let output = "";
+      let cursor = 0;
+      let strongIsOpen = false;
+
+      while (cursor < line.length) {
+        if (!line.startsWith("**", cursor)) {
+          output += line[cursor] || "";
+          cursor += 1;
+          continue;
+        }
+
+        output += "**";
+        cursor += 2;
+        if (strongIsOpen) {
+          strongIsOpen = false;
+          continue;
+        }
+
+        const labelMatch = /^([^*]{1,32}[：:])/u.exec(line.slice(cursor));
+        const nextMarkerIndex = line.indexOf("**", cursor);
+        const hasNearbyClosingMarker =
+          nextMarkerIndex >= cursor && nextMarkerIndex - cursor <= 120;
+        if (labelMatch && !hasNearbyClosingMarker) {
+          output += `${labelMatch[1]}**`;
+          cursor += labelMatch[1].length;
+          if (line[cursor] === "*" && line[cursor + 1] !== "*") {
+            cursor += 1;
+          }
+          continue;
+        }
+
+        strongIsOpen = true;
+      }
+
+      return output;
+    })
+    .join("\n");
+}
+
+function protectInlineCodeSpans(markdown: string): {
+  markdown: string;
+  restore: (value: string) => string;
+} {
+  const inlineCodeSpans: string[] = [];
+  const protectedMarkdown = markdown.replace(/(`+)([^`\n]*?)\1/g, (match) => {
+    const index = inlineCodeSpans.push(match) - 1;
+    return `\uE000${index}\uE001`;
+  });
+
+  return {
+    markdown: protectedMarkdown,
+    restore: (value) =>
+      value.replace(/\uE000(\d+)\uE001/g, (_match, index: string) => {
+        return inlineCodeSpans[Number(index)] || _match;
+      }),
+  };
+}
+
 function normalizeCollapsedMarkdownTextBlocks(markdown: string): string {
   const withBlockBoundaries = markdown
     .replace(/---(?=#{1,6}(?!#)\s*\S)/g, "\n\n---\n\n")
@@ -402,7 +469,7 @@ function normalizeCollapsedMarkdownTextBlocks(markdown: string): string {
     )
     .replace(/(^|\n)(#{1,6}\s+[^\n#>]{2,90}?)(?=>\s*\S)/gu, "$1$2\n\n")
     .replace(
-      /(^|\n)(#{1,6}\s+[^\n`#]{2,64}?)(?=`[^`\n])/gu,
+      /(^|\n)(#{1,6}\s+[^\n`#*]{2,64}?)(?=`[^`\n])/gu,
       (_match, prefix: string, heading: string) => {
         const headingText = heading.replace(/^#{1,6}\s+/, "").trim();
         if (/^[1-9]\d{0,1}\.$/.test(headingText)) {
@@ -411,11 +478,17 @@ function normalizeCollapsedMarkdownTextBlocks(markdown: string): string {
         return `${prefix}${heading}\n\n`;
       },
     )
+    .replace(
+      /(^|\n)(#{1,6}\s+[^\n|*#]{2,90}?)(?=\|[^\n]*\|\|[ \t:|-]{3,}\|\|)/gu,
+      "$1$2\n\n",
+    )
     .replace(/([：:])(\|[^\n]*?\|\|[ \t:|-]{3,}\|\|)/g, "$1\n\n$2")
     .replace(COLLAPSED_MARKDOWN_TRAILING_TABLE_TEXT_PATTERN, "|\n\n");
 
-  const normalized = normalizeCompactPipeTables(withBlockBoundaries)
-    .replace(/\*\*([^*\n]{1,32}[：:])(?!\*)(?![^\n]{0,120}\*\*)/gu, "**$1**")
+  const protectedInlineCode = protectInlineCodeSpans(
+    normalizeCompactPipeTables(withBlockBoundaries),
+  );
+  const normalized = normalizeUnclosedStrongLabels(protectedInlineCode.markdown)
     .replace(
       /(?<=[\u3400-\u9fffA-Za-z0-9。！？.!?])(\*\*[^*\n]{1,32}[：:]\*\*)/gu,
       "\n\n$1",
@@ -444,15 +517,15 @@ function normalizeCollapsedMarkdownTextBlocks(markdown: string): string {
     .replace(/([：:])\s*([-+])\s*/g, "$1\n$2 ")
     .replace(/([：:])\s*(\*)(?!\*)\s*/g, "$1\n$2 ")
     .replace(
-      /(?<=[\u3400-\u9fffA-Za-z0-9。！？.!?)）】》”’\]])([-+]|(?<!\*)\*(?!\*))\s+(?=(?:\*\*)?[\u3400-\u9fffA-Za-z][^\n]{2,})/gu,
+      /(?<=[\u3400-\u9fffA-Za-z0-9。！？.!?)）】》”’\]])(-|(?<!\*)\*(?!\*))\s+(?=(?:\*\*)?[\u3400-\u9fffA-Za-z][^\n]{2,})/gu,
       "\n$1 ",
     )
     .replace(
-      /(?<=[\u3400-\u9fffA-Za-z0-9)）】》”’\]])([-+]|(?<!\*)\*(?!\*))(?=[\u3400-\u9fffA-Za-z][^，。！？；：,.!?;:\n]{0,24}[：:])/gu,
+      /(?<=[\u3400-\u9fffA-Za-z0-9)）】》”’\]])(-|(?<!\*)\*(?!\*))(?=[\u3400-\u9fffA-Za-z][^，。！？；：,.!?;:\n]{0,24}[：:])/gu,
       "\n$1 ",
     )
     .replace(
-      /(?<=[\u3400-\u9fffA-Za-z0-9。！？.!?)）】》”’\]])([-+])(?=[\u3400-\u9fff])/gu,
+      /(?<=[\u3400-\u9fffA-Za-z0-9。！？.!?)）】》”’\]])(-)(?=[\u3400-\u9fff])/gu,
       "\n$1 ",
     )
     .replace(
@@ -460,18 +533,68 @@ function normalizeCollapsedMarkdownTextBlocks(markdown: string): string {
       "$1$2$3 ",
     )
     .replace(
-      /(?<=[\u3400-\u9fffA-Za-z0-9)）】》”’\]])\s+((?:[-+]|(?<!\*)\*(?!\*))\s+\S)/gu,
+      /(?<=[\u3400-\u9fffA-Za-z0-9)）】》”’\]])\s+((?:-|(?<!\*)\*(?!\*))\s+\S)/gu,
       "\n$1",
-    )
+    );
+  const normalizedWithInlineCode = protectedInlineCode
+    .restore(normalized)
     .replace(/`-\s*/g, "`\n- ")
     .replace(/([：:])```/g, "$1\n\n```");
 
-  const withHeadingProseBoundaries =
-    normalizeCollapsedHeadingProseBoundaries(normalized);
+  const withHeadingProseBoundaries = normalizeCollapsedHeadingProseBoundaries(
+    normalizedWithInlineCode.replace(
+      /(^|\n)(#{1,6}\s+[^\n*#]{2,90}?)(?=\*\*(?:[1-9]\d{0,1}\.)[^*\n])/gu,
+      "$1$2\n\n",
+    ),
+  );
 
-  return normalizeRecoveredListNesting(
-    withHeadingProseBoundaries.replace(/\n{3,}/g, "\n\n"),
+  const recoveredBlocks = normalizeRecoveredListNesting(
+    withHeadingProseBoundaries
+      .replace(/(^|\n)(#{1,6}\s+[^\n*#]{2,90}?)(?=\*\*(?!\*))/gu, "$1$2\n\n")
+      .replace(
+        /(^|\n)([^*\n]{1,24})(\*\*(?:[1-9]\d{0,1}\.)[^*\n]{1,120}\*\*)/gu,
+        "$1$2\n\n$3",
+      )
+      .replace(
+        /(?<=[\u3400-\u9fffA-Za-z0-9。！？；;）】》”’])\s*(\*\*(?:[1-9]\d{0,1}\.)[^*\n]{1,120}\*\*)/gu,
+        "\n\n$1",
+      )
+      .replace(/(\*\*[^*\n]{2,120}\*\*)\s*([-+])(?=\s*\*\*)/gu, "$1\n\n$2 ")
+      .replace(/\n{3,}/g, "\n\n"),
   ).trim();
+
+  return normalizeBrokenPipeTableRows(recoveredBlocks).trim();
+}
+
+function normalizeBrokenPipeTableRows(markdown: string): string {
+  const outputLines: string[] = [];
+
+  for (const line of markdown.split("\n")) {
+    const previousLine = outputLines[outputLines.length - 1];
+    const isPlusWrappedTableCell = Boolean(
+      previousLine &&
+      /^\s*\|/.test(previousLine) &&
+      !previousLine.trimEnd().endsWith("|") &&
+      /^\s*\+\s+\S/.test(line),
+    );
+    const isWrappedTableRow = Boolean(
+      previousLine &&
+      /^\s*\|/.test(previousLine) &&
+      !previousLine.trimEnd().endsWith("|") &&
+      line.trimEnd().endsWith("|") &&
+      !/^\s*(?:\||#{1,6}\s|[-*]\s|\d+\.\s|```|~~~)/.test(line),
+    );
+
+    if (isPlusWrappedTableCell || isWrappedTableRow) {
+      outputLines[outputLines.length - 1] =
+        `${previousLine.trimEnd()} ${line.trim()}`;
+      continue;
+    }
+
+    outputLines.push(line);
+  }
+
+  return outputLines.join("\n");
 }
 
 type WordSegment = {

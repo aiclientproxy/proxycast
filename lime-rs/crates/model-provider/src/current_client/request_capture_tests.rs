@@ -211,6 +211,46 @@ async fn openai_chat_capture_proves_native_request_and_terminal_stream() {
 }
 
 #[tokio::test]
+async fn lime_tenant_fragment_becomes_header_without_changing_request_target() {
+    let response_body = concat!(
+        "data: {\"id\":\"chatcmpl-tenant\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"agnes-2.5-flash\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"done\"},\"finish_reason\":\"stop\"}]}\n\n",
+        "data: [DONE]\n\n"
+    );
+    let (base_url, capture, server) = spawn_http_capture_fixture(response_body).await;
+    let client = CurrentProviderClient::with_client(
+        provider_config(
+            format!("{base_url}#lime_tenant_id=tenant-0001"),
+            "lime-hub",
+            "agnes-2.5-flash",
+            RuntimeProviderProtocol::ChatCompletions,
+        ),
+        Client::builder()
+            .no_proxy()
+            .build()
+            .expect("tenant capture HTTP client"),
+    );
+
+    let events = client
+        .stream(CurrentProviderRequest::new(vec![
+            CurrentProviderMessage::user(vec![CurrentProviderContent::Text("hello".to_string())]),
+        ]))
+        .await
+        .expect("open tenant provider stream")
+        .collect::<Vec<_>>()
+        .await;
+    assert!(events.into_iter().all(|event| event.is_ok()));
+    let capture = capture.await.expect("capture tenant provider request");
+    server.await.expect("join tenant provider fixture");
+
+    assert_eq!(capture.path, "/v1/chat/completions");
+    assert!(capture
+        .headers
+        .to_ascii_lowercase()
+        .contains("\r\nx-lime-tenant-id: tenant-0001\r\n"));
+    assert!(!capture.path.contains("lime_tenant_id"));
+}
+
+#[tokio::test]
 async fn openai_responses_http_capture_proves_native_request_and_terminal_stream() {
     let response_body = concat!(
         "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"message-1\",\"delta\":\"done\"}\n\n",

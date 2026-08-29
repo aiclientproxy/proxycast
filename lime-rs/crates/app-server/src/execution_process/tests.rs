@@ -22,6 +22,10 @@ use tool_runtime::execution_process::{
     ExecutionProcessStatus,
 };
 use tool_runtime::tool_executor::{RuntimeToolExecutionIdentity, RuntimeToolExecutionResult};
+use tool_runtime::unified_exec::{
+    execute_runtime_unified_exec_tool, RuntimeUnifiedExecToolRequest, EXEC_COMMAND_TOOL_NAME,
+    WRITE_STDIN_TOOL_NAME,
+};
 
 #[derive(Default)]
 struct RecordingProcessApprovals {
@@ -202,6 +206,195 @@ async fn execution_process_server_streams_output_and_status() {
         .any(|delta| delta.delta.contains("hello")));
     let snapshot = wait_for_terminal_snapshot(&server, "process-test").await;
     assert_eq!(snapshot.status, ExecutionProcessStatus::Exited);
+}
+
+#[tokio::test]
+async fn unified_exec_yields_active_session_then_poll_observes_terminal_process() {
+    let server = Arc::new(ExecutionProcessServer::default());
+    let command = if cfg!(target_os = "windows") {
+        "Start-Sleep -Milliseconds 750; Write-Output done"
+    } else {
+        "sleep 1; printf done"
+    };
+    let exec_params = json!({
+        "cmd": command,
+        "login": false,
+        "yield_time_ms": 250,
+        "sandbox_permissions": "require_escalated",
+        "justification": "exercise the local execution process lifecycle"
+    });
+    let running = execute_runtime_unified_exec_tool(
+        server.clone(),
+        RuntimeUnifiedExecToolRequest {
+            tool_name: EXEC_COMMAND_TOOL_NAME,
+            params: &exec_params,
+            thread_id: "unified-exec-thread",
+            environment_id: "local",
+            working_directory: current_directory(),
+            environment: HashMap::new(),
+            tool_call_id: "unified-exec-call".to_string(),
+            cancel_token: None,
+            turn_context: None,
+            attempt: None,
+        },
+    )
+    .await
+    .expect("long command should yield an active session");
+    let running = running
+        .structured_content
+        .as_ref()
+        .expect("active command structured output");
+    let session_id = running["session_id"].as_i64().expect("active session id");
+    assert_eq!(running["observation"]["process_active"], json!(true));
+    assert_eq!(running["observation"]["kind"], json!("waiting"));
+
+    let poll_params = json!({
+        "session_id": session_id,
+        "chars": "",
+        "yield_time_ms": 2_000
+    });
+    let terminal = execute_runtime_unified_exec_tool(
+        server,
+        RuntimeUnifiedExecToolRequest {
+            tool_name: WRITE_STDIN_TOOL_NAME,
+            params: &poll_params,
+            thread_id: "unified-exec-thread",
+            environment_id: "local",
+            working_directory: current_directory(),
+            environment: HashMap::new(),
+            tool_call_id: "unified-exec-poll".to_string(),
+            cancel_token: None,
+            turn_context: None,
+            attempt: None,
+        },
+    )
+    .await
+    .expect("poll should observe terminal process state");
+    let structured = terminal
+        .structured_content
+        .as_ref()
+        .expect("terminal command structured output");
+    assert_eq!(structured["observation"]["process_active"], json!(false));
+    assert_eq!(structured["observation"]["kind"], json!("terminal"));
+    assert_eq!(structured["exit_code"], json!(0));
+    assert!(structured["output"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("done"));
+    assert_eq!(
+        terminal.metadata.get("exec_command_call_id"),
+        Some(&json!("unified-exec-call"))
+    );
+}
+
+#[tokio::test]
+async fn unified_exec_reports_silent_non_zero_exit_as_terminal() {
+    let server = Arc::new(ExecutionProcessServer::default());
+    let params = json!({
+        "cmd": "exit 7",
+        "login": false,
+        "yield_time_ms": 1_000,
+        "sandbox_permissions": "require_escalated",
+        "justification": "exercise silent non-zero command termination"
+    });
+
+    let result = execute_runtime_unified_exec_tool(
+        server,
+        RuntimeUnifiedExecToolRequest {
+            tool_name: EXEC_COMMAND_TOOL_NAME,
+            params: &params,
+            thread_id: "unified-exec-silent-failure-thread",
+            environment_id: "local",
+            working_directory: current_directory(),
+            environment: HashMap::new(),
+            tool_call_id: "unified-exec-silent-failure-call".to_string(),
+            cancel_token: None,
+            turn_context: None,
+            attempt: None,
+        },
+    )
+    .await
+    .expect("silent non-zero command should produce a terminal result");
+    let structured = result
+        .structured_content
+        .as_ref()
+        .expect("terminal command structured output");
+
+    assert!(!result.success);
+    assert_eq!(structured["observation"]["kind"], json!("terminal"));
+    assert_eq!(structured["observation"]["process_active"], json!(false));
+    assert_eq!(structured["exit_code"], json!(7));
+    assert_eq!(structured["output"], json!(""));
+}
+
+#[tokio::test]
+async fn unified_exec_starts_short_command_after_repeated_terminal_commands() {
+    let server = Arc::new(ExecutionProcessServer::default());
+    let directory = tempfile::tempdir().expect("temp directory");
+    let file_path = directory.path().join("structural_selector.rs");
+    std::fs::write(&file_path, "selector fixture\n").expect("write selector fixture");
+
+    for index in 0..8 {
+        let params = json!({
+            "cmd": format!("printf terminal-{index}"),
+            "login": false,
+            "yield_time_ms": 1_000,
+            "sandbox_permissions": "require_escalated",
+            "justification": "exercise repeated terminal command lifecycle"
+        });
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            execute_runtime_unified_exec_tool(
+                server.clone(),
+                RuntimeUnifiedExecToolRequest {
+                    tool_name: EXEC_COMMAND_TOOL_NAME,
+                    params: &params,
+                    thread_id: "unified-exec-sequence-thread",
+                    environment_id: "local",
+                    working_directory: current_directory(),
+                    environment: HashMap::new(),
+                    tool_call_id: format!("unified-exec-sequence-{index}"),
+                    cancel_token: None,
+                    turn_context: None,
+                    attempt: None,
+                },
+            ),
+        )
+        .await
+        .expect("terminal command must not block")
+        .expect("terminal command should succeed");
+        assert_eq!(result.structured_content.as_ref().unwrap()["exit_code"], 0);
+    }
+
+    let params = json!({
+        "cmd": format!("cat {}", file_path.to_string_lossy()),
+        "login": false,
+        "yield_time_ms": 1_000,
+        "sandbox_permissions": "require_escalated",
+        "justification": "exercise command start after repeated terminal commands"
+    });
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        execute_runtime_unified_exec_tool(
+            server,
+            RuntimeUnifiedExecToolRequest {
+                tool_name: EXEC_COMMAND_TOOL_NAME,
+                params: &params,
+                thread_id: "unified-exec-sequence-thread",
+                environment_id: "local",
+                working_directory: current_directory(),
+                environment: HashMap::new(),
+                tool_call_id: "unified-exec-sequence-read".to_string(),
+                cancel_token: None,
+                turn_context: None,
+                attempt: None,
+            },
+        ),
+    )
+    .await
+    .expect("short command must start after repeated terminal commands")
+    .expect("short command should succeed");
+    assert!(result.output.contains("selector fixture"));
 }
 
 #[tokio::test]

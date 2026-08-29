@@ -112,6 +112,58 @@ async fn local_process_emits_stdout_stderr_and_exit_snapshot() {
         .any(|delta| delta.kind == ExecutionOutputKind::Stderr && delta.delta == "stderr"));
 }
 
+#[tokio::test]
+async fn local_process_reports_direct_child_exit_when_output_pipes_stay_open() {
+    let mut command = if cfg!(windows) {
+        let mut command = Command::new("cmd.exe");
+        command.args(["/D", "/S", "/C", "exit 7"]);
+        command
+    } else {
+        let mut command = Command::new("sh");
+        command.args(["-c", "exit 7"]);
+        command
+    };
+    let child = command.spawn().expect("direct child should start");
+    let (_stdout_writer, stdout_reader) = tokio::io::duplex(64);
+    let (_stderr_writer, stderr_reader) = tokio::io::duplex(64);
+    let process = Arc::new(Mutex::new(start_process()));
+    let (output_tx, _output_rx) = mpsc::unbounded_channel();
+    let (control_tx, control_rx) = mpsc::unbounded_channel();
+    let (state_tx, mut state_rx) = watch::channel(process.lock().await.snapshot());
+    let (final_tx, _final_rx) = oneshot::channel();
+
+    tokio::spawn(supervise_local_process(
+        child,
+        None,
+        Some(stdout_reader),
+        Some(stderr_reader),
+        process,
+        output_tx,
+        state_tx,
+        final_tx,
+        control_rx,
+    ));
+
+    let terminal_snapshot = tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            state_rx
+                .changed()
+                .await
+                .expect("process state channel should remain open");
+            let snapshot = state_rx.borrow_and_update().clone();
+            if snapshot.status.is_terminal() {
+                break snapshot;
+            }
+        }
+    })
+    .await
+    .expect("direct child exit should not wait for inherited output pipes");
+
+    assert_eq!(terminal_snapshot.status, ExecutionProcessStatus::Exited);
+    assert_eq!(terminal_snapshot.exit_code, Some(7));
+    drop(control_tx);
+}
+
 #[cfg(not(target_os = "windows"))]
 #[tokio::test]
 async fn local_process_does_not_inherit_sensitive_parent_environment() {

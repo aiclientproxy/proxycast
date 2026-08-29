@@ -87,7 +87,14 @@ export function buildWindowsRcSummary({
   const failed = Object.entries(assertions)
     .filter(([, passed]) => passed !== true)
     .map(([name]) => name);
-  const result = failed.length === 0 && !error ? "pass" : "fail";
+  const runnerUnavailable =
+    assertions.windowsRunner === false &&
+    error === `${SCENARIO_ID} requires a real Windows runner`;
+  const result = runnerUnavailable
+    ? "evidence-pending"
+    : failed.length === 0 && !error
+      ? "pass"
+      : "fail";
   const nMinusOneAssertions = [
     "nMinusOneVersionOlder",
     "nMinusOneInstalled",
@@ -111,8 +118,16 @@ export function buildWindowsRcSummary({
     startedAt,
     completedAt,
     result,
-    failedStage: result === "fail" ? failedStage || "assertions" : null,
+    failedStage:
+      result === "fail"
+        ? failedStage || "assertions"
+        : runnerUnavailable
+          ? "windows-runner"
+          : null,
     error,
+    blockers: runnerUnavailable
+      ? ["PLT-02 requires a real Windows runner; no platform evidence was collected"]
+      : [],
     assertions: {
       total: Object.keys(assertions).length,
       passed: Object.keys(assertions).length - failed.length,
