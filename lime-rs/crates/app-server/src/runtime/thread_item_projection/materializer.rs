@@ -371,6 +371,7 @@ fn canonical_item_from_event(
         "item.started"
             | "item.updated"
             | "item.completed"
+            | "tool.progress"
             | super::super::thread_fork::FORK_CANONICAL_ITEM_EVENT_TYPE
     ) {
         return None;

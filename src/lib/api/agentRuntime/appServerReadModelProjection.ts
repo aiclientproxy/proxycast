@@ -10,6 +10,7 @@ import type {
   AgentRuntimeThreadReadModel,
   AgentRuntimeThreadTurnProfileView,
 } from "./sessionTypes";
+import { readCanonicalThreadEnvironmentSelections } from "./appServerCanonicalThreadProjection";
 
 export type AppServerAgentSessionReadProjectionInput =
   AppServerAgentSessionReadResponse & {
@@ -46,6 +47,14 @@ export function projectAppServerSessionReadToThreadReadModel(
     incidents: detailThreadRead?.incidents ?? [],
     updated_at: response.session.updatedAt,
   };
+  const environmentSelections =
+    detailThreadRead?.environment_selections ??
+    readCanonicalThreadEnvironmentSelections(
+      sessionBusinessObjectRefMetadata ?? undefined,
+    );
+  if (environmentSelections.length > 0) {
+    projected.environment_selections = environmentSelections;
+  }
   const projectedSessionBusinessObjectRefMetadata =
     hasDetailSessionBusinessObjectRefMetadata
       ? (detailThreadRead?.session_business_object_ref_metadata ?? null)

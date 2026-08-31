@@ -49,6 +49,7 @@ export function PendingInteractionLayer({
     <div
       className="w-full min-w-0"
       data-testid="pending-interaction-layer"
+      data-action-owner="composer"
       data-interaction-id={interaction.id}
       data-interaction-kind={interaction.kind}
     >

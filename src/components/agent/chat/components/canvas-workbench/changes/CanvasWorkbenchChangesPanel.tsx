@@ -12,6 +12,7 @@ import {
   findChangeItemForSelection,
   flattenCanvasWorkbenchChangeFileTree,
   resolveCanvasWorkbenchSelectedChangeItem,
+  summarizeCanvasWorkbenchChanges,
 } from "./CanvasWorkbenchChangesPanelViewModel";
 import type {
   CanvasWorkbenchChangeItem,
@@ -75,7 +76,11 @@ export function CanvasWorkbenchChangesPanel({
   const {
     backendHasGitRepository,
     backendPatch,
+    backendRepositoryRoot,
     branchCompareLabel,
+    gitCurrentRef,
+    gitComparisonBaseRef,
+    gitUncommittedFileCount,
     changeItems,
     commitOptions,
     commitsLoading,
@@ -139,18 +144,17 @@ export function CanvasWorkbenchChangesPanel({
       : reviewStartState === "failed"
         ? "failed"
         : latestReviewBoundary?.status || "idle";
-  const reviewStatusLabelKey =
-    reviewBlocked
-      ? "agentChat.harness.codeReview.status.blocked"
-      : reviewRunStatus === "starting"
-        ? "agentChat.harness.codeReview.status.starting"
-          : reviewRunStatus === "inProgress"
-            ? "agentChat.harness.codeReview.status.inProgress"
-          : reviewRunStatus === "completed"
-            ? "agentChat.harness.codeReview.status.completed"
-            : reviewRunStatus === "failed"
-              ? "agentChat.harness.codeReview.status.failed"
-              : "agentChat.harness.codeReview.action.start";
+  const reviewStatusLabelKey = reviewBlocked
+    ? "agentChat.harness.codeReview.status.blocked"
+    : reviewRunStatus === "starting"
+      ? "agentChat.harness.codeReview.status.starting"
+      : reviewRunStatus === "inProgress"
+        ? "agentChat.harness.codeReview.status.inProgress"
+        : reviewRunStatus === "completed"
+          ? "agentChat.harness.codeReview.status.completed"
+          : reviewRunStatus === "failed"
+            ? "agentChat.harness.codeReview.status.failed"
+            : "agentChat.harness.codeReview.action.start";
   const reviewStartDisabled =
     reviewBlocked ||
     !changeView?.onStartReview ||
@@ -214,6 +218,7 @@ export function CanvasWorkbenchChangesPanel({
     props: Pick<
       CanvasWorkbenchChangesToolbarProps,
       | "diffStats"
+      | "changeFileCount"
       | "checkpointCount"
       | "copyGitApplyDisabled"
       | "diffViewToggleDisabled"
@@ -229,6 +234,17 @@ export function CanvasWorkbenchChangesPanel({
     baseMenuOpen,
     selectedBase,
     branchCompareLabel,
+    gitSummary: {
+      ...(selectedBaseUsesGit
+        ? {
+            currentRef: gitCurrentRef,
+            comparisonBaseRef: gitComparisonBaseRef,
+            repositoryRoot: backendRepositoryRoot,
+            uncommittedFileCount: gitUncommittedFileCount,
+          }
+        : {}),
+    },
+    changeFileCount: props.changeFileCount,
     filesPanelOpen,
     reviewActionBusy,
     autoExecuteEnabled,
@@ -296,6 +312,7 @@ export function CanvasWorkbenchChangesPanel({
     );
     const filteredChangeItems =
       flattenCanvasWorkbenchChangeFileTree(filteredFileTree);
+    const changeSummary = summarizeCanvasWorkbenchChanges(filteredChangeItems);
     const selectedItemStats = selectedChangeItem
       ? countCanvasWorkbenchChangeItemsStats([selectedChangeItem])
       : { additions: 0, removals: 0 };
@@ -316,6 +333,7 @@ export function CanvasWorkbenchChangesPanel({
       <CanvasWorkbenchReviewSurface
         toolbar={buildToolbarProps({
           diffStats,
+          changeFileCount: changeSummary.fileCount,
           checkpointCount: changeView?.checkpointCount,
           copyGitApplyDisabled: !backendPatch?.trim() && !fallbackPatch.trim(),
           loadFullFileDisabled: !loadFilePreview || !selectedChangeItem,
@@ -376,6 +394,7 @@ export function CanvasWorkbenchChangesPanel({
       <CanvasWorkbenchReviewSurface
         toolbar={buildToolbarProps({
           diffStats: { additions: 0, removals: 0 },
+          changeFileCount: 0,
           copyGitApplyDisabled: !backendPatch?.trim(),
           diffViewToggleDisabled: true,
           loadFullFileDisabled: true,
@@ -449,6 +468,7 @@ export function CanvasWorkbenchChangesPanel({
     <CanvasWorkbenchReviewSurface
       toolbar={buildToolbarProps({
         diffStats: documentDiffStats,
+        changeFileCount: 1,
         copyGitApplyDisabled: true,
         loadFullFileDisabled: true,
         loadFullFile: false,

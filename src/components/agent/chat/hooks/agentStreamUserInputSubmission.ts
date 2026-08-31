@@ -88,6 +88,7 @@ export async function submitAgentStreamUserInput(
       getSyncedSessionExecutionStrategy: env.getSyncedSessionExecutionStrategy,
       getSyncedSessionRecentPreferences: env.getSyncedSessionRecentPreferences,
       effectiveAccessMode: env.accessMode,
+      workingDir: env.workingDir,
       content,
       images,
       inputMentions,

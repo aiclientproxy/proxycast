@@ -189,6 +189,16 @@ impl LimeMcpClient {
             }
         }
     }
+
+    fn emit_runtime_notification(&self, method: &str, params: serde_json::Value) {
+        if let Some(sender) = &self.notification_sender {
+            let _ = sender.send(McpServerNotification {
+                server_name: self.server_name.clone(),
+                method: method.to_string(),
+                params,
+            });
+        }
+    }
 }
 
 impl ClientHandler for LimeMcpClient {
@@ -306,6 +316,28 @@ impl ClientHandler for LimeMcpClient {
                 server_name: self.server_name.clone(),
             },
         );
+        self.emit_runtime_notification(
+            "notifications/resources/list_changed",
+            serde_json::Value::Object(Default::default()),
+        );
+    }
+
+    async fn on_tool_list_changed(&self, _context: NotificationContext<RoleClient>) {
+        debug!(server_name = %self.server_name, "收到 MCP 工具列表更新通知");
+
+        self.emit_runtime_notification(
+            "notifications/tools/list_changed",
+            serde_json::Value::Object(Default::default()),
+        );
+    }
+
+    async fn on_prompt_list_changed(&self, _context: NotificationContext<RoleClient>) {
+        debug!(server_name = %self.server_name, "收到 MCP 提示词列表更新通知");
+
+        self.emit_runtime_notification(
+            "notifications/prompts/list_changed",
+            serde_json::Value::Object(Default::default()),
+        );
     }
 
     async fn on_custom_notification(
@@ -316,13 +348,7 @@ impl ClientHandler for LimeMcpClient {
         let params = notification
             .params
             .unwrap_or(serde_json::Value::Object(Default::default()));
-        if let Some(sender) = &self.notification_sender {
-            let _ = sender.send(McpServerNotification {
-                server_name: self.server_name.clone(),
-                method: notification.method,
-                params,
-            });
-        }
+        self.emit_runtime_notification(&notification.method, params);
     }
 }
 

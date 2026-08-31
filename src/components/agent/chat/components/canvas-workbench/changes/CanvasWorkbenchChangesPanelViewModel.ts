@@ -55,6 +55,18 @@ export interface CanvasWorkbenchChangeDiffStats {
   removals: number;
 }
 
+export interface CanvasWorkbenchGitSummary {
+  currentRef?: string | null;
+  comparisonBaseRef?: string | null;
+  repositoryRoot?: string | null;
+  uncommittedFileCount?: number;
+}
+
+export interface CanvasWorkbenchChangeSummary {
+  fileCount: number;
+  diffStats: CanvasWorkbenchChangeDiffStats;
+}
+
 export interface CanvasWorkbenchChangeDisplayMeta {
   kind: CanvasWorkbenchChangeKind;
   shortLabelKey: string;
@@ -395,6 +407,15 @@ export function countCanvasWorkbenchChangeItemsStats(
     },
     { additions: 0, removals: 0 },
   );
+}
+
+export function summarizeCanvasWorkbenchChanges(
+  items: readonly CanvasWorkbenchChangeItem[],
+): CanvasWorkbenchChangeSummary {
+  return {
+    fileCount: items.length,
+    diffStats: countCanvasWorkbenchChangeItemsStats(items),
+  };
 }
 
 export function buildCanvasWorkbenchChangeDiffLines(

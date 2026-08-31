@@ -1,4 +1,8 @@
 use super::{RuntimeCore, RuntimeCoreError, RuntimeCoreState};
+use crate::permission_profile::{
+    apply_permission_profile_to_metadata, permission_profile_policy,
+    resolve_allowed_permission_profile, PermissionProfilePolicy, ResolvedPermissionProfile,
+};
 use agent_protocol::{CollaborationMode, CollaborationModeSettings, ModeKind};
 use agent_runtime::session_loop::{
     RuntimeSessionHandler, RuntimeSessionOperation, RuntimeSessionOperationResult,
@@ -8,9 +12,11 @@ use app_server_protocol::protocol::v2::{
     ThreadMemoryMode, ThreadMemoryModeSetParams, ThreadMemoryModeSetResponse, ThreadSettings,
     ThreadSettingsUpdateParams,
 };
+use lime_core::config::ConfigManager;
 use serde_json::{Map, Value};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use tool_runtime::sandbox::SandboxBackendPlatform;
 
 mod model_defaults;
 
@@ -26,6 +32,28 @@ enum SessionMetadataMutationResult {
 }
 
 impl RuntimeCore {
+    pub(crate) fn current_permission_profile_policy(
+        &self,
+        cwd: Option<&str>,
+    ) -> Result<PermissionProfilePolicy, RuntimeCoreError> {
+        let manager = ConfigManager::load(&self.app_config_path).map_err(|error| {
+            RuntimeCoreError::Backend(format!(
+                "failed to load permission profile policy config: {error}"
+            ))
+        })?;
+        permission_profile_policy(manager.config(), cwd, SandboxBackendPlatform::current())
+            .map_err(RuntimeCoreError::InvalidRequest)
+    }
+
+    pub(crate) fn resolve_allowed_permission_profile(
+        &self,
+        id: &str,
+        cwd: Option<&str>,
+    ) -> Result<ResolvedPermissionProfile, RuntimeCoreError> {
+        let policy = self.current_permission_profile_policy(cwd)?;
+        resolve_allowed_permission_profile(&policy, id).map_err(RuntimeCoreError::InvalidRequest)
+    }
+
     pub(crate) async fn preflight_thread_start(
         &self,
         params: &app_server_protocol::AgentSessionStartParams,
@@ -126,6 +154,9 @@ impl RuntimeCore {
         mut params: ThreadSettingsUpdateParams,
     ) -> Result<ThreadSettings, RuntimeCoreError> {
         validate_thread_settings(&params)?;
+        if let Some(profile_id) = params.permissions.as_deref() {
+            self.resolve_allowed_permission_profile(profile_id, params.cwd.as_deref())?;
+        }
         self.apply_target_model_defaults(&mut params).await?;
         let thread_id = params.thread_id.clone();
         let result = self
@@ -459,12 +490,6 @@ fn validate_thread_settings(params: &ThreadSettingsUpdateParams) -> Result<(), R
             "permissions cannot be combined with sandboxPolicy".to_string(),
         ));
     }
-    if params.permissions.is_some() {
-        return Err(RuntimeCoreError::InvalidRequest(
-            "permissions profile resolution is unavailable at the current runtime boundary"
-                .to_string(),
-        ));
-    }
     if let Some(cwd) = params.cwd.as_deref() {
         let cwd = normalized_value(cwd, "cwd")?;
         if !Path::new(cwd).is_absolute() {
@@ -543,10 +568,19 @@ fn apply_thread_settings_patch(
     let reset_effort_for_model =
         model_identity_changed && effort_update.is_none() && !collaboration_model_update;
     let reset_service_tier_for_model = model_identity_changed && params.service_tier.is_none();
+    let clears_permission_profile = params.sandbox_policy.is_some();
+    let permission_profile = params.permissions.clone();
     insert_string(metadata, "workingDir", params.cwd);
     insert_value(metadata, "approvalPolicy", params.approval_policy);
     insert_value(metadata, "approvalsReviewer", params.approvals_reviewer);
     insert_value(metadata, "sandboxPolicy", params.sandbox_policy);
+    if clears_permission_profile {
+        metadata.remove("permissions");
+        metadata.remove("activePermissionProfile");
+    }
+    if let Some(profile_id) = permission_profile {
+        apply_permission_profile_to_metadata(metadata, &profile_id)?;
+    }
     insert_string(metadata, "modelName", params.model);
     if let Some(model_provider) = params.model_provider {
         metadata.insert(

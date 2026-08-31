@@ -429,7 +429,11 @@ export function useWorkspaceInputbarSceneRuntime({
       onContinueGeneralWorkbenchEntryPrompt:
         handleContinueGeneralWorkbenchEntryPrompt,
       approvalAccessory,
-      planDecisionAccessory,
+      // Reverse requests are the canonical action slot owner. A plan decision
+      // must not remain mounted underneath an active request form.
+      planDecisionAccessory: activePendingInteraction
+        ? undefined
+        : planDecisionAccessory,
       soulArtifactVoiceGenerationBrief,
       soulArtifactVoiceEnabledForTurn,
       onSoulArtifactVoiceEnabledForTurnChange,

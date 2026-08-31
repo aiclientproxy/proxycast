@@ -1,6 +1,6 @@
 use super::tool_process_metadata::{
     build_tool_process_metadata, merge_result_tool_process_metadata, merge_tool_process_metadata,
-    SoulStyleMetadata, ToolProcessMetadataInput, ToolProcessStatus,
+    promote_mcp_route_metadata, SoulStyleMetadata, ToolProcessMetadataInput, ToolProcessStatus,
 };
 use app_server_protocol::AgentEvent;
 use lime_agent::AgentToolResult;
@@ -13,6 +13,7 @@ pub(crate) fn enrich_external_tool_process_payload(
     payload_object: &mut Map<String, Value>,
     fallback_soul_style: Option<&SoulStyleMetadata>,
 ) {
+    promote_mcp_route_metadata(payload_object);
     let Some(status) = tool_process_status_from_event_type(event_type) else {
         return;
     };

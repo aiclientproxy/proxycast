@@ -34,6 +34,7 @@ import type { ConversationProjectionReducer } from "@/lib/api/agentRuntime/conve
 import { createThreadResumeConversationProjection } from "@/lib/api/agentRuntime/conversationProjection/replay";
 import type { AgentAccessMode } from "./agentChatStorage";
 import type { ActionRequiredScope, ApprovalDecision } from "../types";
+import { permissionProfileIdFromAccessMode } from "../utils/accessModeRuntime";
 import {
   projectChatRuntimeQueueControl,
   type ChatRuntimeQueueControlProjection,
@@ -283,20 +284,23 @@ export function createAgentRuntimeAdapter({
     accessMode: AgentAccessMode,
   ): Pick<
     AppServerThreadSettingsUpdateParams,
-    "approvalPolicy" | "sandboxPolicy"
+    "approvalPolicy" | "permissions"
   > {
     switch (accessMode) {
       case "read-only":
-        return { approvalPolicy: "on-request", sandboxPolicy: "read-only" };
+        return {
+          approvalPolicy: "on-request",
+          permissions: permissionProfileIdFromAccessMode(accessMode),
+        };
       case "current":
         return {
           approvalPolicy: "on-request",
-          sandboxPolicy: "workspace-write",
+          permissions: permissionProfileIdFromAccessMode(accessMode),
         };
       case "full-access":
         return {
           approvalPolicy: "never",
-          sandboxPolicy: "danger-full-access",
+          permissions: permissionProfileIdFromAccessMode(accessMode),
         };
     }
   }
@@ -455,10 +459,12 @@ export function createAgentRuntimeAdapter({
         return false;
       }
       const replay = createThreadResumeConversationProjection(response.result);
-      if (!replay) {
+      if (!replay && consumeReplay) {
         return false;
       }
-      consumeReplay?.(replay);
+      if (replay) {
+        consumeReplay?.(replay);
+      }
       return true;
     },
     async runUserShellCommand(threadId, command, eventName) {

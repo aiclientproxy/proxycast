@@ -15,6 +15,7 @@ import {
   resolveChangeItemDisplayName,
   resolveChangeStatusClassName,
   resolveChangeStatusCopyKey,
+  summarizeCanvasWorkbenchChanges,
 } from "./CanvasWorkbenchChangesPanelViewModel";
 import { resolveCanvasWorkbenchChangeTreeNodeMeta } from "./CanvasWorkbenchChangeTreeMeta";
 
@@ -267,14 +268,37 @@ describe("CanvasWorkbenchChangesPanelViewModel", () => {
       oldLineNumber: null,
       newLineNumber: 1,
     });
-    expect(
-      countCanvasWorkbenchChangeItemsStats(items),
-    ).toEqual({ additions: 3, removals: 1 });
+    expect(countCanvasWorkbenchChangeItemsStats(items)).toEqual({
+      additions: 3,
+      removals: 1,
+    });
     expect(
       flattenCanvasWorkbenchChangeFileTree(
         buildCanvasWorkbenchChangeFileTree(items),
       ),
     ).toHaveLength(2);
+  });
+
+  it("应把 changes workbench 的文件数与增删行汇总到同一摘要", () => {
+    expect(
+      summarizeCanvasWorkbenchChanges([
+        {
+          id: "a",
+          path: "src/a.ts",
+          previousContent: "old\n",
+          currentContent: "new\nextra\n",
+        },
+        {
+          id: "b",
+          path: "src/b.ts",
+          previousContent: null,
+          currentContent: "added\n",
+        },
+      ]),
+    ).toEqual({
+      fileCount: 2,
+      diffStats: { additions: 4, removals: 1 },
+    });
   });
 
   it("应为文件树目录聚合子级变更标识", () => {

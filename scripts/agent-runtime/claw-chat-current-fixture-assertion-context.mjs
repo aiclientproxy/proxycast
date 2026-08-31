@@ -30,6 +30,7 @@ import {
   REASONING_FIRST_VISIBLE_PROMPT,
   REASONING_FIRST_VISIBLE_SCENARIO,
   RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO,
+  THREAD_ACTIVITY_PANEL_SCENARIO,
   SOUL_STYLE_SCENARIO,
   SKILLS_RUNTIME_EXPLICIT_PROMPT,
   SKILLS_RUNTIME_MANUAL_ENABLE_PROMPT,
@@ -76,7 +77,8 @@ export function resolveGateBExpectedIdentity({
 }) {
   if (
     options?.scenario === CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO ||
-    options?.scenario === CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO
+    options?.scenario ===
+      CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO
   ) {
     const identity =
       summary?.contentFactoryArticleWorkspaceSessionCreation?.identity;
@@ -87,6 +89,32 @@ export function resolveGateBExpectedIdentity({
     if (!sessionId || !threadId) {
       throw new Error(
         "Gate B Content Factory identity requires the scenario-created sessionId and threadId",
+      );
+    }
+    return { sessionId, threadId };
+  }
+  if (options?.scenario === RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO) {
+    const identity = summary?.rightSurfaceVisualMatrixSessionCreation;
+    const sessionId =
+      typeof identity?.sessionId === "string" ? identity.sessionId.trim() : "";
+    const threadId =
+      typeof identity?.threadId === "string" ? identity.threadId.trim() : "";
+    if (!sessionId || !threadId) {
+      throw new Error(
+        "Gate B Right Surface identity requires the scenario-created sessionId and threadId",
+      );
+    }
+    return { sessionId, threadId };
+  }
+  if (options?.scenario === THREAD_ACTIVITY_PANEL_SCENARIO) {
+    const identity = summary?.rightSurfaceVisualMatrixSessionCreation;
+    const sessionId =
+      typeof identity?.sessionId === "string" ? identity.sessionId.trim() : "";
+    const threadId =
+      typeof identity?.threadId === "string" ? identity.threadId.trim() : "";
+    if (!sessionId || !threadId) {
+      throw new Error(
+        "Gate B Thread Activity identity requires the scenario-created sessionId and threadId",
       );
     }
     return { sessionId, threadId };
@@ -488,6 +516,8 @@ export function buildAssertionContext({
     options.scenario === "expert-panel-skills-runtime";
   const isRightSurfaceVisualMatrixScenario =
     options.scenario === RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO;
+  const isThreadActivityPanelScenario =
+    options.scenario === THREAD_ACTIVITY_PANEL_SCENARIO;
   const isContentFactoryInlineImageArticleWorkspaceScenario =
     options.scenario ===
     CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO;
@@ -730,6 +760,7 @@ export function buildAssertionContext({
     isExpertPlazaSkillsRuntimeScenario,
     isExpertPanelSkillsRuntimeScenario,
     isRightSurfaceVisualMatrixScenario,
+    isThreadActivityPanelScenario,
     isContentFactoryArticleWorkspaceScenario,
     isContentFactoryInlineImageArticleWorkspaceScenario,
     isAnyExpertSkillsRuntimeScenario,

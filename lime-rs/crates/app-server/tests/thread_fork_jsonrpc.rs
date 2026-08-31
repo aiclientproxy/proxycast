@@ -13,18 +13,18 @@ use app_server::{
 };
 use app_server_protocol::protocol::v2::{
     METHOD_THREAD_DELETE, METHOD_THREAD_FORK, METHOD_THREAD_GOAL_GET, METHOD_THREAD_GOAL_SET,
-    METHOD_THREAD_LIST,
+    METHOD_THREAD_LIST, METHOD_THREAD_TURNS_LIST,
 };
 use app_server_protocol::{
-    error_codes, METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_RESUME,
-    METHOD_THREAD_START, METHOD_TURN_START,
+    METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_RESUME,
+    METHOD_THREAD_START, METHOD_TURN_START, error_codes,
 };
 use async_trait::async_trait;
 use model_provider::current_client::{
     CurrentProviderContent, CurrentProviderMessage, CurrentProviderRole,
 };
-use rusqlite::{params, Connection};
-use serde_json::{json, Value};
+use rusqlite::{Connection, params};
+use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::sync::Notify;
 use tokio::time::timeout;
@@ -228,14 +228,17 @@ fn canonical_tool_payload(
 }
 
 #[tokio::test]
-async fn thread_fork_rejects_paginated_source_before_creating_target() {
+async fn thread_fork_preserves_paginated_history_boundary_across_restart() {
+    const SOURCE_TITLE: &str = "Paginated fork source";
+
     let temp = TempDir::new().expect("paginated fork temp dir");
     let projection_path = temp.path().join("projection.sqlite");
-    let server = AppServer::with_runtime(
+    let runtime = || {
         RuntimeCore::with_backend(Arc::new(ImmediateBackend)).with_projection_store(Arc::new(
             ProjectionStore::initialize(&projection_path).expect("paginated fork store"),
-        )),
-    );
+        ))
+    };
+    let server = AppServer::with_runtime(runtime());
     initialize(&server, 1).await;
 
     let started = request(
@@ -246,33 +249,181 @@ async fn thread_fork_rejects_paginated_source_before_creating_target() {
             "model": "fixture-model",
             "modelProvider": "fixture-provider",
             "cwd": temp.path(),
-            "historyMode": "paginated"
+            "historyMode": "paginated",
+            "serviceName": SOURCE_TITLE
         }),
     )
     .await;
     let source_thread_id = required_string(&started, "/result/thread/id");
-    let before = request(&server, 3, METHOD_THREAD_LIST, json!({"archived": false})).await;
-
-    let error = request_error(
+    let source_session_id = required_string(&started, "/result/thread/sessionId");
+    assert_eq!(
+        started.pointer("/result/thread/name"),
+        Some(&json!(SOURCE_TITLE))
+    );
+    for (id, text, expected_turns) in [
+        (3, "first paginated turn", 1),
+        (4, "second paginated turn", 2),
+    ] {
+        request(
+            &server,
+            id,
+            METHOD_TURN_START,
+            json!({
+                "threadId": source_thread_id,
+                "input": [{"type": "text", "text": text}],
+                "model": "fixture-model",
+                "approvalPolicy": "never",
+                "sandboxPolicy": "workspace-write"
+            }),
+        )
+        .await;
+        wait_for_completed_turn_count(&server, &source_thread_id, expected_turns).await;
+    }
+    let source_turns = request(
         &server,
-        4,
+        5,
+        METHOD_THREAD_TURNS_LIST,
+        json!({"threadId": source_thread_id, "sortDirection": "asc"}),
+    )
+    .await;
+    let first_turn_id = required_string(&source_turns, "/result/data/0/id");
+
+    let forked = request(
+        &server,
+        6,
         METHOD_THREAD_FORK,
-        json!({"threadId": source_thread_id}),
+        json!({"threadId": source_thread_id, "lastTurnId": first_turn_id}),
+    )
+    .await;
+    let target_thread_id = required_string(&forked, "/result/thread/id");
+    let target_session_id = required_string(&forked, "/result/thread/sessionId");
+    assert_ne!(target_thread_id, source_thread_id);
+    assert_ne!(target_session_id, source_session_id);
+    assert_eq!(
+        forked.pointer("/result/thread/historyMode"),
+        Some(&json!("paginated"))
+    );
+    assert_eq!(
+        forked.pointer("/result/thread/forkedFromId"),
+        Some(&json!(source_thread_id))
+    );
+    assert_eq!(
+        forked.pointer("/result/thread/name"),
+        Some(&json!(SOURCE_TITLE))
+    );
+    assert_eq!(turn_count(&forked), 1);
+
+    let target_read = request(
+        &server,
+        7,
+        METHOD_THREAD_READ,
+        json!({"threadId": target_thread_id, "includeTurns": false}),
     )
     .await;
     assert_eq!(
-        error.pointer("/error/code"),
-        Some(&json!(error_codes::METHOD_NOT_FOUND))
+        target_read.pointer("/result/thread/name"),
+        Some(&json!(SOURCE_TITLE))
     );
+    let listed = request(
+        &server,
+        8,
+        METHOD_THREAD_LIST,
+        json!({"archived": false}),
+    )
+    .await;
+    let listed_threads = listed["result"]["data"]
+        .as_array()
+        .expect("thread/list data");
     assert_eq!(
-        error.pointer("/error/message"),
-        Some(&json!("paginated_threads is not supported yet"))
+        listed_threads
+            .iter()
+            .filter(|thread| {
+                thread["id"] == source_thread_id || thread["id"] == target_thread_id
+            })
+            .filter(|thread| thread["name"] == SOURCE_TITLE)
+            .count(),
+        2
     );
 
-    let after = request(&server, 5, METHOD_THREAD_LIST, json!({"archived": false})).await;
+    let target_turns = request(
+        &server,
+        9,
+        METHOD_THREAD_TURNS_LIST,
+        json!({"threadId": target_thread_id, "sortDirection": "asc"}),
+    )
+    .await;
     assert_eq!(
-        after.pointer("/result/data"),
-        before.pointer("/result/data")
+        target_turns["result"]["data"].as_array().map(Vec::len),
+        Some(1)
+    );
+    assert_eq!(
+        target_turns.pointer("/result/data/0/id"),
+        Some(&json!(first_turn_id))
+    );
+    drop(server);
+
+    let restarted = AppServer::with_runtime(runtime());
+    initialize(&restarted, 10).await;
+    let resumed = request(
+        &restarted,
+        11,
+        METHOD_THREAD_RESUME,
+        json!({"threadId": target_thread_id, "excludeTurns": true}),
+    )
+    .await;
+    assert_eq!(
+        resumed.pointer("/result/thread/id"),
+        Some(&json!(target_thread_id))
+    );
+    assert_eq!(
+        resumed.pointer("/result/thread/forkedFromId"),
+        Some(&json!(source_thread_id))
+    );
+    assert_eq!(
+        resumed.pointer("/result/thread/name"),
+        Some(&json!(SOURCE_TITLE))
+    );
+    let cold_turns = request(
+        &restarted,
+        12,
+        METHOD_THREAD_TURNS_LIST,
+        json!({"threadId": target_thread_id, "sortDirection": "asc"}),
+    )
+    .await;
+    assert_eq!(
+        cold_turns["result"]["data"].as_array().map(Vec::len),
+        Some(1)
+    );
+    assert_eq!(
+        cold_turns.pointer("/result/data/0/id"),
+        Some(&json!(first_turn_id))
+    );
+    let cold_read = request(
+        &restarted,
+        13,
+        METHOD_THREAD_READ,
+        json!({"threadId": target_thread_id, "includeTurns": false}),
+    )
+    .await;
+    assert_eq!(
+        cold_read.pointer("/result/thread/name"),
+        Some(&json!(SOURCE_TITLE))
+    );
+    let cold_listed = request(
+        &restarted,
+        14,
+        METHOD_THREAD_LIST,
+        json!({"archived": false}),
+    )
+    .await;
+    assert_eq!(
+        cold_listed["result"]["data"]
+            .as_array()
+            .expect("cold thread/list data")
+            .iter()
+            .filter(|thread| thread["name"] == SOURCE_TITLE)
+            .count(),
+        2
     );
 }
 
@@ -708,12 +859,14 @@ async fn thread_fork_rebuilds_provider_history_across_restarts_without_duplicate
         .as_str()
         .and_then(|uri| uri.strip_prefix("sidecar://media/"))
         .expect("canonical input media URI");
-    assert!(sidecar_root
-        .join("sessions")
-        .join(&target_thread_id)
-        .join("media")
-        .join(canonical_file_name)
-        .is_file());
+    assert!(
+        sidecar_root
+            .join("sessions")
+            .join(&target_thread_id)
+            .join("media")
+            .join(canonical_file_name)
+            .is_file()
+    );
     drop(server);
 
     let restarted = AppServer::with_runtime(runtime());
@@ -820,9 +973,11 @@ fn assert_canonical_multimodal_input(content: &Value) {
     assert_eq!(parts[1]["type"], "image");
     assert_eq!(parts[1]["url"], "https://example.com/remote.png");
     assert_eq!(parts[2]["type"], "image");
-    assert!(parts[2]["url"]
-        .as_str()
-        .is_some_and(|url| url.starts_with("sidecar://media/input-") && url.ends_with(".png")));
+    assert!(
+        parts[2]["url"]
+            .as_str()
+            .is_some_and(|url| url.starts_with("sidecar://media/input-") && url.ends_with(".png"))
+    );
     assert!(parts[2].get("path").is_none());
     assert_eq!(parts[3]["type"], "skill");
     assert_eq!(parts[4]["type"], "mention");

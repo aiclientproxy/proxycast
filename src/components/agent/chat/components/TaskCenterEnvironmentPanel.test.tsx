@@ -50,7 +50,11 @@ describe("TaskCenterEnvironmentPanel", () => {
             environmentStatusLabel="非 Git 项目"
             lifecycleStatuses={[
               { environmentId: "local", status: "connected" },
-              { environmentId: "remote-build", status: "disconnected" },
+              {
+                environmentId: "remote-build",
+                status: "disconnected",
+                error: "exec-server unavailable",
+              },
             ]}
             branchLabel="无分支"
             changeCount={0}
@@ -67,6 +71,10 @@ describe("TaskCenterEnvironmentPanel", () => {
       expect(remote?.getAttribute("data-environment-status")).toBe(
         "disconnected",
       );
+      expect(remote?.getAttribute("data-environment-error")).toBe(
+        "exec-server unavailable",
+      );
+      expect(remote?.textContent).toContain("exec-server unavailable");
       expect(remote?.getAttribute("data-protocol-method")).toBe(
         "thread/environment/disconnected",
       );

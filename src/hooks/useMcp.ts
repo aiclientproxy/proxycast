@@ -361,6 +361,7 @@ export function useMcp(): UseMcpReturn {
           updateServerConnectionState,
           refreshServers,
           refreshTools,
+          refreshPrompts,
           refreshResources,
           setError,
           setTools,

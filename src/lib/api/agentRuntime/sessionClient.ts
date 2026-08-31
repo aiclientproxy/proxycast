@@ -77,7 +77,10 @@ export interface AgentRuntimeSessionsChangedDetail {
     | "deleted"
     | "external";
   sessionId?: string;
+  threadId?: string;
+  name?: string;
   workspaceId?: string;
+  workingDir?: string;
 }
 
 export function notifyAgentRuntimeSessionsChanged(
@@ -387,13 +390,16 @@ export function createSessionClient(deps: AgentRuntimeSessionClientDeps = {}) {
   }
 
   async function forkAgentRuntimeSession(sessionId: string): Promise<string> {
-    const forkedSessionId =
+    const forked =
       await appServerSessionClient.forkAgentRuntimeSession(sessionId);
     notifyAgentRuntimeSessionsChanged({
       reason: "created",
-      sessionId: forkedSessionId,
+      sessionId: forked.sessionId,
+      threadId: forked.threadId,
+      name: forked.name,
+      workingDir: forked.workingDir,
     });
-    return forkedSessionId;
+    return forked.sessionId;
   }
 
   async function unarchiveAgentRuntimeSession(

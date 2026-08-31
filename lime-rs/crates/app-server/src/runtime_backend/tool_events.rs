@@ -686,6 +686,38 @@ mod tests {
     }
 
     #[test]
+    fn mcp_list_changed_progress_promotes_route_metadata_for_canonical_projection() {
+        for notification_kind in [
+            "mcp_resources_changed",
+            "mcp_tools_changed",
+            "mcp_prompts_changed",
+        ] {
+            let event = RuntimeAgentEvent::ToolProgress {
+                tool_id: "call-list-changed".to_string(),
+                progress: lime_agent::AgentToolProgressPayload {
+                    message: Some("工具服务列表已更新".to_string()),
+                    progress: None,
+                    total: None,
+                    metadata: Some(HashMap::from([
+                        ("notification_kind".to_string(), json!(notification_kind)),
+                        ("server_name".to_string(), json!("docs")),
+                        ("tool_name".to_string(), json!("search")),
+                        ("runtime_tool_name".to_string(), json!("mcp__docs__search")),
+                    ])),
+                },
+            };
+
+            let events = runtime_events_from_agent_event(&event)
+                .expect("MCP list-change progress should emit");
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].event_type, "tool.progress");
+            assert_eq!(events[0].payload["serverName"], "docs");
+            assert_eq!(events[0].payload["toolName"], "search");
+            assert_eq!(events[0].payload["runtimeToolName"], "mcp__docs__search");
+        }
+    }
+
+    #[test]
     fn canonical_tool_process_metadata_is_nested_on_item() {
         let soul_style = SoulStyleMetadata {
             profile_id: Some("cool_confident_operator".to_string()),

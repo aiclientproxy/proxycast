@@ -176,6 +176,18 @@ impl McpClientManager {
         Ok(filtered)
     }
 
+    pub async fn list_tools_for_context_fresh(
+        &self,
+        caller: Option<&str>,
+        include_deferred: bool,
+    ) -> Result<Vec<McpToolDefinition>, McpError> {
+        let tools = self.list_tools_fresh().await?;
+        Ok(tools
+            .into_iter()
+            .filter(|tool| tool_policy::tool_visible_for_context(tool, caller, include_deferred))
+            .collect())
+    }
+
     /// 搜索工具
     ///
     /// 搜索默认包含 deferred 工具，便于模型通过 tool_search 检索按需加载。

@@ -3,6 +3,49 @@ use super::tool_process_risk_metadata::{classify_tool_process_risk, ToolProcessR
 use lime_agent::AgentToolResult;
 use serde_json::{json, Map, Value};
 
+pub(crate) fn promote_mcp_route_metadata(payload_object: &mut Map<String, Value>) {
+    let Some(metadata) = payload_object
+        .get("progress")
+        .and_then(Value::as_object)
+        .and_then(|progress| progress.get("metadata"))
+        .and_then(Value::as_object)
+    else {
+        return;
+    };
+    let Some(_notification_kind) = metadata
+        .get("notification_kind")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|kind| {
+            matches!(
+                *kind,
+                "mcp_progress"
+                    | "mcp_resources_changed"
+                    | "mcp_tools_changed"
+                    | "mcp_prompts_changed"
+            )
+        })
+    else {
+        return;
+    };
+    let promoted = [
+        ("server_name", "serverName"),
+        ("tool_name", "toolName"),
+        ("runtime_tool_name", "runtimeToolName"),
+    ]
+    .into_iter()
+    .filter_map(|(source, target)| {
+        metadata
+            .get(source)
+            .cloned()
+            .map(|value| (target.to_string(), value))
+    })
+    .collect::<Vec<_>>();
+    for (target, value) in promoted {
+        payload_object.insert(target, value);
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum ToolProcessStatus {
     Started,

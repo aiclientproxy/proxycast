@@ -6779,6 +6779,7 @@ export interface McpToolCallError {
 export interface McpToolCallProgressNotification {
   itemId: string;
   message: string;
+  notificationKind?: null | string;
   threadId: string;
   turnId: string;
 }

@@ -292,7 +292,7 @@ pub(crate) async fn list_mcp_tools(
 ) -> Result<McpToolListResponse, RuntimeCoreError> {
     let manager = manager.lock().await;
     Ok(McpToolListResponse {
-        tools: values_from_serializable_vec(manager.list_tools().await.map_err(mcp_error)?)?,
+        tools: values_from_serializable_vec(manager.list_tools_fresh().await.map_err(mcp_error)?)?,
     })
 }
 
@@ -346,7 +346,7 @@ pub(crate) async fn list_mcp_tools_for_context(
     Ok(McpToolListResponse {
         tools: values_from_serializable_vec(
             manager
-                .list_tools_for_context(params.caller.as_deref(), params.include_deferred)
+                .list_tools_for_context_fresh(params.caller.as_deref(), params.include_deferred)
                 .await
                 .map_err(mcp_error)?,
         )?,

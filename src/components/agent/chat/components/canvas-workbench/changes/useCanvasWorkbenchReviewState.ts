@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   listProjectGitCommits,
   readProjectGitDiff,
+  readProjectGitStatus,
   type ProjectGitCommitList,
 } from "@/lib/api/projectGit";
 import { resolveAbsoluteWorkspacePath } from "../../../workspace/workspacePath";
@@ -73,6 +74,11 @@ export function useCanvasWorkbenchReviewState({
   const [backendRepositoryRoot, setBackendRepositoryRoot] = useState<
     string | null
   >(null);
+  const [gitCurrentRef, setGitCurrentRef] = useState<string | null>(null);
+  const [gitComparisonBaseRef, setGitComparisonBaseRef] = useState<
+    string | null
+  >(null);
+  const [gitUncommittedFileCount, setGitUncommittedFileCount] = useState(0);
   const [branchCompareLabel, setBranchCompareLabel] = useState<string | null>(
     null,
   );
@@ -89,6 +95,47 @@ export function useCanvasWorkbenchReviewState({
   const [loadFullFile, setLoadFullFile] = useState(false);
 
   const selectedBaseUsesGit = selectedBase !== "previousConversation";
+
+  const resetGitProjection = useCallback(() => {
+    setBackendPatch(null);
+    setBackendChangeItems([]);
+    setBackendHasGitRepository(null);
+    setBackendRepositoryRoot(null);
+    setGitCurrentRef(null);
+    setGitComparisonBaseRef(null);
+    setGitUncommittedFileCount(0);
+    setBranchCompareLabel(null);
+  }, []);
+
+  const applyGitDiffProjection = useCallback(
+    (
+      diff: Awaited<ReturnType<typeof readProjectGitDiff>>,
+      status: Awaited<ReturnType<typeof readProjectGitStatus>>,
+      base?: CanvasWorkbenchReviewBase,
+    ) => {
+      setBackendPatch(diff.patch);
+      setBackendHasGitRepository(
+        diff.hasGitRepository && status.hasGitRepository,
+      );
+      setBackendRepositoryRoot(
+        status.repositoryRoot ?? diff.repositoryRoot ?? null,
+      );
+      setGitCurrentRef(diff.currentRef ?? status.currentBranch ?? null);
+      setGitComparisonBaseRef(diff.comparisonBaseRef ?? null);
+      setGitUncommittedFileCount(
+        status.uncommittedFileCount ?? diff.uncommittedFileCount ?? 0,
+      );
+      setBranchCompareLabel(
+        base === "branch" && diff.currentRef && diff.comparisonBaseRef
+          ? `${diff.currentRef} -> ${diff.comparisonBaseRef}`
+          : null,
+      );
+      setBackendChangeItems(
+        parseCanvasWorkbenchGitPatchToChangeItems(diff.patch),
+      );
+    },
+    [],
+  );
   const changeItems = useMemo(
     () =>
       selectedBaseUsesGit ? backendChangeItems : (changeView?.items ?? []),
@@ -105,11 +152,7 @@ export function useCanvasWorkbenchReviewState({
   const loadGitDiffBase = useCallback(
     async (base: CanvasWorkbenchReviewBase, commitSha?: string) => {
       if (base === "previousConversation") {
-        setBackendPatch(null);
-        setBackendChangeItems([]);
-        setBackendHasGitRepository(null);
-        setBackendRepositoryRoot(null);
-        setBranchCompareLabel(null);
+        resetGitProjection();
         setSelectedBase(base);
         setSelectedCommitSha(null);
         return true;
@@ -125,23 +168,11 @@ export function useCanvasWorkbenchReviewState({
 
       setReviewActionBusy(true);
       try {
-        const diff = await readProjectGitDiff(
-          workspaceRoot,
-          3,
-          base,
-          commitSha,
-        );
-        setBackendPatch(diff.patch);
-        setBackendHasGitRepository(diff.hasGitRepository);
-        setBackendRepositoryRoot(diff.repositoryRoot ?? null);
-        setBranchCompareLabel(
-          base === "branch" && diff.currentRef && diff.comparisonBaseRef
-            ? `${diff.currentRef} -> ${diff.comparisonBaseRef}`
-            : null,
-        );
-        setBackendChangeItems(
-          parseCanvasWorkbenchGitPatchToChangeItems(diff.patch),
-        );
+        const [diff, status] = await Promise.all([
+          readProjectGitDiff(workspaceRoot, 3, base, commitSha),
+          readProjectGitStatus(workspaceRoot),
+        ]);
+        applyGitDiffProjection(diff, status, base);
         setSelectedBase(base);
         if (base !== "commit") {
           setSelectedCommitSha(null);
@@ -153,11 +184,7 @@ export function useCanvasWorkbenchReviewState({
         );
         return true;
       } catch (error) {
-        setBackendPatch(null);
-        setBackendChangeItems([]);
-        setBackendHasGitRepository(null);
-        setBackendRepositoryRoot(null);
-        setBranchCompareLabel(null);
+        resetGitProjection();
         toast.error(
           error instanceof Error
             ? error.message
@@ -170,7 +197,12 @@ export function useCanvasWorkbenchReviewState({
         setReviewActionBusy(false);
       }
     },
-    [translateWorkbench, workspaceRoot],
+    [
+      applyGitDiffProjection,
+      resetGitProjection,
+      translateWorkbench,
+      workspaceRoot,
+    ],
   );
 
   const loadGitCommits = useCallback(async () => {
@@ -250,10 +282,11 @@ export function useCanvasWorkbenchReviewState({
 
     setReviewActionBusy(true);
     try {
-      const diff = await readProjectGitDiff(workspaceRoot, 3);
-      setBackendPatch(diff.patch);
-      setBackendHasGitRepository(diff.hasGitRepository);
-      setBackendRepositoryRoot(diff.repositoryRoot ?? null);
+      const [diff, status] = await Promise.all([
+        readProjectGitDiff(workspaceRoot, 3),
+        readProjectGitStatus(workspaceRoot),
+      ]);
+      applyGitDiffProjection(diff, status, selectedBase);
       toast.success(
         translateWorkbench(
           "agentChat.canvasWorkbench.coding.changes.toast.refreshed",
@@ -272,6 +305,7 @@ export function useCanvasWorkbenchReviewState({
     }
   }, [
     loadGitDiffBase,
+    applyGitDiffProjection,
     loadGitCommits,
     selectedBase,
     selectedBaseUsesGit,
@@ -404,6 +438,9 @@ export function useCanvasWorkbenchReviewState({
     backendPatch,
     backendRepositoryRoot,
     branchCompareLabel,
+    gitCurrentRef,
+    gitComparisonBaseRef,
+    gitUncommittedFileCount,
     changeItems,
     commitOptions,
     commitsLoading,

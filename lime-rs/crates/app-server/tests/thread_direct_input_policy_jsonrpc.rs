@@ -7,8 +7,8 @@ use app_server_protocol::protocol::v2::{
     METHOD_THREAD_SHELL_COMMAND,
 };
 use app_server_protocol::{
-    error_codes, METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_START,
-    METHOD_TURN_START, METHOD_TURN_STEER, PROTOCOL_VERSION,
+    error_codes, METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_RESUME,
+    METHOD_THREAD_START, METHOD_TURN_START, METHOD_TURN_STEER, PROTOCOL_VERSION,
 };
 use serde_json::{json, Value};
 use thread_store::{AgentGraphStore, ThreadSpawnEdgeStatus};
@@ -63,10 +63,25 @@ async fn parent_owned_thread_projects_policy_and_rejects_direct_turn_input() {
         child_read.pointer("/result/thread/canAcceptDirectInput"),
         Some(&json!(false))
     );
+    let child_resume = request(
+        &server,
+        6,
+        METHOD_THREAD_RESUME,
+        json!({"threadId": child_thread_id, "excludeTurns": true}),
+    )
+    .await;
+    assert_eq!(
+        child_resume.pointer("/result/thread/id"),
+        Some(&json!(child_thread_id))
+    );
+    assert_eq!(
+        child_resume.pointer("/result/thread/canAcceptDirectInput"),
+        Some(&json!(false))
+    );
 
     for (id, method, params) in [
         (
-            6,
+            7,
             METHOD_TURN_START,
             json!({
                 "threadId": child_thread_id,
@@ -74,7 +89,7 @@ async fn parent_owned_thread_projects_policy_and_rejects_direct_turn_input() {
             }),
         ),
         (
-            7,
+            8,
             METHOD_TURN_STEER,
             json!({
                 "threadId": child_thread_id,
@@ -83,22 +98,22 @@ async fn parent_owned_thread_projects_policy_and_rejects_direct_turn_input() {
             }),
         ),
         (
-            8,
+            9,
             METHOD_THREAD_COMPACT_START,
             json!({"threadId": child_thread_id}),
         ),
         (
-            9,
+            10,
             METHOD_THREAD_SETTINGS_UPDATE,
             json!({"threadId": child_thread_id, "model": "other-model"}),
         ),
         (
-            10,
+            11,
             METHOD_THREAD_MEMORY_MODE_SET,
             json!({"threadId": child_thread_id, "mode": "enabled"}),
         ),
         (
-            11,
+            12,
             METHOD_THREAD_SHELL_COMMAND,
             json!({"threadId": child_thread_id, "command": "pwd"}),
         ),
@@ -123,7 +138,7 @@ async fn parent_owned_thread_projects_policy_and_rejects_direct_turn_input() {
     initialize_server(&restarted_server).await;
     let restarted_response = request_raw(
         &restarted_server,
-        12,
+        13,
         METHOD_TURN_START,
         json!({
             "threadId": child_thread_id,

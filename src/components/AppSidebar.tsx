@@ -247,6 +247,11 @@ export function AppSidebar({
     rawParams: activePageParams,
     paramsKey: serializeNavigationParams(activePageParams),
   } satisfies SidebarNavigationTarget;
+  const requestedNavigationPending =
+    requestedPage !== undefined &&
+    (requestedPage !== currentPage ||
+      serializeNavigationParams(requestedPageParams) !==
+        serializeNavigationParams(currentPageParams));
   const requestedNavigationTargetRef = useRef<SidebarNavigationTarget>({
     ...activeNavigationTarget,
   });
@@ -320,7 +325,7 @@ export function AppSidebar({
   const requireConversationProjectCwd =
     Boolean(activeAgentProjectId) && conversationProjectCwds.length > 0;
   const requestedAgentSessionId =
-    requestedPage === "agent"
+    requestedNavigationPending && requestedPage === "agent"
       ? ((
           requestedPageParams as AgentPageParams | undefined
         )?.initialSessionId?.trim() ?? null)
@@ -872,18 +877,18 @@ export function AppSidebar({
             } satisfies SidebarNavigationTarget;
           })()
         : item.id === "plugins" && projectScopedNavigationProjectId
-        ? (() => {
-            const rawParams = {
-              ...(target.rawParams as PluginsPageParams | undefined),
-              currentProjectId: projectScopedNavigationProjectId,
-            } satisfies PluginsPageParams;
-            return {
-              ...target,
-              rawParams,
-              paramsKey: serializeNavigationParams(rawParams),
-            } satisfies SidebarNavigationTarget;
-          })()
-        : target;
+          ? (() => {
+              const rawParams = {
+                ...(target.rawParams as PluginsPageParams | undefined),
+                currentProjectId: projectScopedNavigationProjectId,
+              } satisfies PluginsPageParams;
+              return {
+                ...target,
+                rawParams,
+                paramsKey: serializeNavigationParams(rawParams),
+              } satisfies SidebarNavigationTarget;
+            })()
+          : target;
 
     if (
       isSameSidebarNavigationTarget(

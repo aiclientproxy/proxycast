@@ -407,6 +407,7 @@ export function useAgentChat(options: UseAgentChatRuntimeOptions) {
     sessionId: session.sessionId,
     executionStrategy: context.executionStrategy,
     accessMode: context.accessMode,
+    workingDir: session.sessionWorkingDir,
     providerTypeRef: context.providerTypeRef,
     modelRef: context.modelRef,
     reasoningEffortRef: context.reasoningEffortRef,

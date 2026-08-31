@@ -3,6 +3,7 @@ import {
   decodeMessage,
   encodeMessage,
   type JsonRpcMessage,
+  type JsonRpcNotification,
   type JsonRpcRequest,
 } from "@limecloud/app-server-client";
 
@@ -14,6 +15,7 @@ const {
   lifecycleInitializeParams,
   lifecycleOptions,
   enqueueFakeNotifications,
+  emitFakeNotification,
   recordedRequests,
   releaseDelayedStaleError,
   resetFakeConnection,
@@ -40,6 +42,9 @@ const {
     onRestarted?: (connected: unknown) => void;
   }> = [];
   const mirroredNotifications: JsonRpcMessage[] = [];
+  let notificationObserver:
+    | ((message: JsonRpcNotification) => void)
+    | null = null;
   const delayedStaleErrorReadyResolvers: Array<() => void> = [];
   let systemProxyRules = "DIRECT";
   const resolveProxyMock = vi.fn(async () => systemProxyRules);
@@ -156,8 +161,24 @@ const {
       if (!message) {
         throw new Error("no server message");
       }
+      if (
+        "method" in message &&
+        !("id" in message) &&
+        notificationObserver
+      ) {
+        notificationObserver(message as JsonRpcNotification);
+      }
       return message;
     }),
+    setNotificationObserver: vi.fn(
+      (
+        observer:
+          | ((message: JsonRpcNotification) => void)
+          | null,
+      ) => {
+        notificationObserver = observer;
+      },
+    ),
   };
   const fakeSidecarChild = {
     exitCode: null,
@@ -184,6 +205,16 @@ const {
 
   function enqueueFakeNotifications(notifications: JsonRpcMessage[]): void {
     mirroredNotifications.push(...notifications);
+  }
+
+  function emitFakeNotification(message: JsonRpcMessage): void {
+    if (
+      "method" in message &&
+      !("id" in message) &&
+      notificationObserver
+    ) {
+      notificationObserver(message as JsonRpcNotification);
+    }
   }
 
   class FakeAppServerSidecarLifecycle {
@@ -238,6 +269,7 @@ const {
     lifecycleInitializeParams,
     lifecycleOptions,
     enqueueFakeNotifications,
+    emitFakeNotification,
     recordedRequests,
     resetFakeConnection: () => {
       recordedRequests.length = 0;
@@ -256,6 +288,8 @@ const {
       fakeConnection.rejectServerRequest.mockClear();
       fakeConnection.nextNotification.mockClear();
       fakeConnection.nextServerMessage.mockClear();
+      fakeConnection.setNotificationObserver.mockClear();
+      notificationObserver = null;
       fakeSidecarChild.kill.mockClear();
     },
     setSystemProxyRules: (rules: string) => {
@@ -423,6 +457,7 @@ describe("ElectronAppServerHost", () => {
           "turn/completed",
           "item/started",
           "item/completed",
+          "item/mcpToolCall/progress",
           "item/agentMessage/delta",
           "model/list/updated",
           "thread/tokenUsage/updated",
@@ -1087,6 +1122,42 @@ describe("ElectronAppServerHost", () => {
         },
       }),
     ]);
+  });
+
+  it("连接层提前消费 notification 后，includeRecent 仍应可回放 typed notification", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    await host.warmup();
+
+    emitFakeNotification({
+      method: "item/mcpToolCall/progress",
+      params: {
+        threadId: "thread-mcp",
+        turnId: "turn-mcp",
+        itemId: "item-mcp",
+        message: "工具服务列表已更新",
+        notificationKind: "mcp_tools_changed",
+      },
+    });
+
+    const replayed = await host.drainEvents({
+      includeRecent: true,
+      limit: 5,
+    });
+
+    expect(replayed.lines.map(decodeMessage)).toEqual([
+      {
+        method: "item/mcpToolCall/progress",
+        params: {
+          threadId: "thread-mcp",
+          turnId: "turn-mcp",
+          itemId: "item-mcp",
+          message: "工具服务列表已更新",
+          notificationKind: "mcp_tools_changed",
+        },
+      },
+    ]);
+    expect(fakeConnection.nextServerMessage).toHaveBeenCalled();
   });
 
   it("drainEvents includeRecent 应按 eventId 去重并保留工具生命周期终态", async () => {

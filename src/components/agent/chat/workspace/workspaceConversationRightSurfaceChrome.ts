@@ -19,6 +19,8 @@ export interface WorkspaceConversationRightSurfaceChromeRuntime {
   onToggleFiles?: () => void;
   traceOpen?: boolean;
   onToggleTrace?: () => void;
+  activityOpen?: boolean;
+  onToggleActivity?: () => void;
   shellOpen?: boolean;
   onToggleShell?: () => void;
   showHarnessToggle: boolean;
@@ -41,6 +43,8 @@ export interface WorkspaceConversationRightSurfaceSceneProps {
   onToggleRightSurfaceFiles?: () => void;
   rightSurfaceTraceOpen?: boolean;
   onToggleRightSurfaceTrace?: () => void;
+  rightSurfaceActivityOpen?: boolean;
+  onToggleRightSurfaceActivity?: () => void;
   rightSurfaceShellOpen?: boolean;
   onToggleRightSurfaceShell?: () => void;
   showHarnessToggle: boolean;
@@ -61,6 +65,7 @@ type WorkspaceConversationRightSurfaceChromeRuntimeInput = Pick<
   | "handleToggleRightSurfaceBrowser"
   | "handleToggleRightSurfaceFiles"
   | "handleToggleRightSurfaceTrace"
+  | "handleToggleRightSurfaceActivity"
   | "handleToggleRightSurfaceShell"
   | "handleToggleRightSurfaceHarness"
   | "handleToggleExpertInfoPanel"
@@ -116,6 +121,11 @@ export function buildWorkspaceConversationRightSurfaceChrome({
       "trace",
     ),
     onToggleTrace: rightSurfaceRuntime.handleToggleRightSurfaceTrace,
+    activityOpen: isWorkspaceRightSurfaceActive(
+      rightSurfaceRuntime.rightSurfaceState,
+      "activity",
+    ),
+    onToggleActivity: rightSurfaceRuntime.handleToggleRightSurfaceActivity,
     shellOpen: isWorkspaceRightSurfaceActive(
       rightSurfaceRuntime.rightSurfaceState,
       "shell",
@@ -160,6 +170,8 @@ export function buildWorkspaceConversationRightSurfaceSceneProps({
     onToggleRightSurfaceFiles: action(rightSurfaceChrome.onToggleFiles),
     rightSurfaceTraceOpen: open(rightSurfaceChrome.traceOpen),
     onToggleRightSurfaceTrace: action(rightSurfaceChrome.onToggleTrace),
+    rightSurfaceActivityOpen: open(rightSurfaceChrome.activityOpen),
+    onToggleRightSurfaceActivity: action(rightSurfaceChrome.onToggleActivity),
     rightSurfaceShellOpen: open(rightSurfaceChrome.shellOpen),
     onToggleRightSurfaceShell: action(rightSurfaceChrome.onToggleShell),
     showHarnessToggle: visible && rightSurfaceChrome.showHarnessToggle,

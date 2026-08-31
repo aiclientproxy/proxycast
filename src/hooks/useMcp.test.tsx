@@ -332,6 +332,57 @@ describe("useMcp", () => {
     });
   });
 
+  it("MCP list_changed 进度通知应刷新对应的 current catalog", async () => {
+    let onNotifications:
+      | ((notifications: Record<string, unknown>[]) => void)
+      | undefined;
+    appServerEventBusMocks.subscribeAppServerNotifications.mockImplementation(
+      (subscription: {
+        onNotifications: (notifications: Record<string, unknown>[]) => void;
+      }) => {
+        onNotifications = subscription.onNotifications;
+        return () => undefined;
+      },
+    );
+
+    await renderHook((value) => {
+      latestValue = value;
+    });
+    await flushEffects(4);
+    mcpApiMocks.listTools.mockClear();
+    mcpApiMocks.listPrompts.mockClear();
+    mcpApiMocks.listResources.mockClear();
+
+    const send = async (notificationKind: string) => {
+      await act(async () => {
+        onNotifications?.([
+          {
+            method: "item/mcpToolCall/progress",
+            params: {
+              itemId: "item_mcp-call-1",
+              message: "工具服务列表已更新",
+              notificationKind,
+              threadId: "thread-1",
+              turnId: "turn-1",
+            },
+          },
+        ]);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await flushEffects(2);
+    };
+
+    await send("mcp_tools_changed");
+    await send("mcp_prompts_changed");
+    await send("mcp_resources_changed");
+    await send("mcp_unknown_changed");
+
+    expect(mcpApiMocks.listTools).toHaveBeenCalledTimes(1);
+    expect(mcpApiMocks.listPrompts).toHaveBeenCalledTimes(1);
+    expect(mcpApiMocks.listResources).toHaveBeenCalledTimes(1);
+  });
+
   it("OAuth 完成事件应刷新服务器状态和工具列表", async () => {
     let onNotifications:
       | ((notifications: Record<string, unknown>[]) => void)

@@ -31,14 +31,23 @@ pub(super) fn project_progress(
     else {
         return EventProjection::Reject(projection_error(event));
     };
-    if event
+    let Some(notification_kind) = event
         .payload
         .pointer("/progress/metadata/notification_kind")
         .and_then(serde_json::Value::as_str)
-        != Some("mcp_progress")
-    {
+        .map(str::trim)
+        .filter(|kind| {
+            matches!(
+                *kind,
+                "mcp_progress"
+                    | "mcp_resources_changed"
+                    | "mcp_tools_changed"
+                    | "mcp_prompts_changed"
+            )
+        })
+    else {
         return EventProjection::Reject(projection_error(event));
-    }
+    };
     let Some(ProjectedEvent::Item(v2::ThreadItem::McpToolCall {
         id: projected_item_id,
         ..
@@ -59,6 +68,8 @@ pub(super) fn project_progress(
             turn_id,
             item_id,
             message,
+            notification_kind: (notification_kind != "mcp_progress")
+                .then(|| notification_kind.to_string()),
         },
     )
     .into()])
@@ -151,6 +162,30 @@ mod tests {
         );
         assert_eq!(notification["params"]["itemId"], json!("item_mcp-call-1"));
         assert_eq!(notification["params"]["message"], json!("正在检索文档"));
+        assert!(notification["params"].get("notificationKind").is_none());
+    }
+
+    #[test]
+    fn projects_supported_mcp_list_changed_notifications() {
+        let started = HashSet::from(["item_mcp-call-1".to_string()]);
+        for kind in [
+            "mcp_resources_changed",
+            "mcp_tools_changed",
+            "mcp_prompts_changed",
+        ] {
+            let EventProjection::Direct(notifications) = project_progress(
+                &started,
+                &HashSet::new(),
+                &progress_event("mcpToolCall", "工具服务列表已更新", Some(kind)),
+            ) else {
+                panic!("expected MCP list_changed notification for {kind}");
+            };
+            let notification = serde_json::to_value(&notifications[0]).expect("notification JSON");
+            assert_eq!(
+                notification["params"]["notificationKind"],
+                Value::String(kind.to_string())
+            );
+        }
     }
 
     #[test]

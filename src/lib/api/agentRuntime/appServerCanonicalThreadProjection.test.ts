@@ -3,11 +3,71 @@ import { describe, expect, it } from "vitest";
 import {
   readCanonicalThreadDetail,
   readCanonicalThreadListResponse,
+  readCanonicalThreadEnvironmentSelections,
 } from "./appServerCanonicalThreadProjection";
 
 const CREATED_AT_SECONDS = 1_780_704_000;
 
 describe("appServerCanonicalThreadProjection", () => {
+  it("把 Thread metadata 的环境选择和 world-state status 投影到 canonical read model", () => {
+    expect(
+      readCanonicalThreadEnvironmentSelections({
+        environments: [
+          {
+            environmentId: "remote-b",
+            cwd: "/remote/b",
+            runtimeWorkspaceRoots: ["/remote/b"],
+          },
+          { environmentId: "local", cwd: "/workspace" },
+        ],
+        environmentWorldState: {
+          environments: {
+            "remote-b": {
+              cwd: "/remote/b",
+              status: "ready",
+              shell: "bash",
+            },
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        environment_id: "local",
+        cwd: "/workspace",
+      },
+      {
+        environment_id: "remote-b",
+        cwd: "/remote/b",
+        runtime_workspace_roots: ["/remote/b"],
+        status: "connected",
+        shell: "bash",
+      },
+    ]);
+
+    expect(
+      readCanonicalThreadEnvironmentSelections({
+        environmentWorldState: {
+          environments: {
+            "remote-a": {
+              cwd: "/remote/a",
+              status: "disconnected",
+              shell: "bash",
+              error: "exec-server unavailable",
+            },
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        environment_id: "remote-a",
+        cwd: "/remote/a",
+        status: "disconnected",
+        shell: "bash",
+        error: "exec-server unavailable",
+      },
+    ]);
+  });
+
   it("从 current Thread route 投影 execution runtime，并优先顶层 provider", () => {
     const detail = readCanonicalThreadDetail({
       thread: {

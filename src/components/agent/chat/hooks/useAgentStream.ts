@@ -128,6 +128,7 @@ interface UseAgentStreamOptions {
   sessionId?: string | null;
   executionStrategy: AgentExecutionStrategy;
   accessMode: AgentAccessMode;
+  workingDir?: string | null;
   providerTypeRef: MutableRefObject<string>;
   modelRef: MutableRefObject<string>;
   reasoningEffortRef: MutableRefObject<string>;
@@ -145,9 +146,7 @@ interface UseAgentStreamOptions {
   currentStreamingEventNameRef: MutableRefObject<string | null>;
   warnedKeysRef: MutableRefObject<Set<string>>;
   getWorkspaceIdForSubmit: () => string | undefined;
-  waitForSessionProviderSelectionSync: (
-    sessionId: string,
-  ) => Promise<void>;
+  waitForSessionProviderSelectionSync: (sessionId: string) => Promise<void>;
   getThreadIdForSubmit: (targetSessionId?: string) => string | undefined;
   setWorkspacePathMissing: Dispatch<
     SetStateAction<WorkspacePathMissingState | null>
@@ -186,6 +185,7 @@ export function useAgentStream(options: UseAgentStreamOptions) {
     sessionId,
     executionStrategy,
     accessMode,
+    workingDir,
     providerTypeRef,
     modelRef,
     reasoningEffortRef,
@@ -256,6 +256,7 @@ export function useAgentStream(options: UseAgentStreamOptions) {
         refreshSessionReadModel,
         executionStrategy,
         accessMode,
+        workingDir,
         providerTypeRef,
         modelRef,
         reasoningEffortRef,
@@ -324,6 +325,7 @@ export function useAgentStream(options: UseAgentStreamOptions) {
       setThreadTurns,
       setWorkspacePathMissing,
       warnedKeysRef,
+      workingDir,
     ],
   );
 

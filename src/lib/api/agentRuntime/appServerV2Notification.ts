@@ -606,6 +606,10 @@ export function projectAppServerV2NotificationPayload(
       if (!route.itemId || !message) {
         return null;
       }
+      const notificationKind = readMcpProgressNotificationKind(params);
+      if (!notificationKind) {
+        return null;
+      }
       return {
         ...basePayload,
         type: "tool_progress",
@@ -613,7 +617,7 @@ export function projectAppServerV2NotificationPayload(
         progress: {
           message,
           metadata: {
-            notification_kind: "mcp_progress",
+            notification_kind: notificationKind,
             source: "app_server_v2",
             source_item_id: route.itemId,
           },
@@ -713,6 +717,25 @@ function readTerminalInteractionSummary(
     summary === "(interrupt)" ||
     (summary !== undefined && /^sent [0-9]+ chars$/u.test(summary))
     ? summary
+    : undefined;
+}
+
+function readMcpProgressNotificationKind(
+  params: Record<string, unknown>,
+):
+  | "mcp_progress"
+  | "mcp_resources_changed"
+  | "mcp_tools_changed"
+  | "mcp_prompts_changed"
+  | undefined {
+  const notificationKind = readString(params, "notificationKind");
+  if (notificationKind === undefined || notificationKind === "mcp_progress") {
+    return "mcp_progress";
+  }
+  return notificationKind === "mcp_resources_changed" ||
+    notificationKind === "mcp_tools_changed" ||
+    notificationKind === "mcp_prompts_changed"
+    ? notificationKind
     : undefined;
 }
 

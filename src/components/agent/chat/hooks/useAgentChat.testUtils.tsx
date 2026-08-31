@@ -580,6 +580,10 @@ beforeEach(async () => {
     thread_id: sessionId,
     messages: [],
   }));
+  mockResumeAgentRuntimeThread.mockImplementation(async (threadId: string) => ({
+    result: { thread: { id: threadId } },
+    notifications: [],
+  }));
   mockGetAgentRuntimeThreadRead.mockImplementation(async (threadId: string) => {
     const threadRead =
       mockAgentSessionDetailByThreadId.get(threadId)?.thread_read;

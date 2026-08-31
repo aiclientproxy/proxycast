@@ -38,6 +38,7 @@ import {
   REASONING_FIRST_VISIBLE_PROMPT,
   REASONING_FIRST_VISIBLE_SCENARIO,
   RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO,
+  THREAD_ACTIVITY_PANEL_SCENARIO,
   SOUL_STYLE_SCENARIO,
   TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO,
   TERMINAL_FAILED_AFTER_ANSWER_SCENARIO,
@@ -147,7 +148,7 @@ Claw Chat Current Electron Fixture Smoke
   --evidence-dir <path>  证据目录
   --prefix <name>        证据文件前缀
   --run-id <id>          Gate 项目 run-id；也可通过 LIME_GATE_RUN_ID 注入
-  --scenario <name>      complete | unknown-item | home-hotpath | home-hotpath-greeting | cancel | cancel-then-continue | inputbar-rich-restore | inputbar-active-steer | plan | turn-plan-update | goal | soul-style | image-command | plain-image-intent | media-reference | reasoning-first-visible | live-tail-commit | electron-resize-reflow | approval-request-resume | approval-request-decline | approval-request-cancel | approval-request-host-interrupt | approval-request-full-access | terminal-failed-after-answer | terminal-canceled-after-answer | terminal-stale-guard | typed-error-retry-success | typed-error-retry-failure | web-tools-rendering | mcp-structured-content | skills-runtime | expert-plaza-skills-runtime | expert-panel-skills-runtime | right-surface-visual-matrix | content-factory-article-workspace | content-factory-inline-image-article-workspace，默认 complete
+  --scenario <name>      complete | unknown-item | home-hotpath | home-hotpath-greeting | cancel | cancel-then-continue | inputbar-rich-restore | inputbar-active-steer | plan | turn-plan-update | goal | soul-style | image-command | plain-image-intent | media-reference | reasoning-first-visible | live-tail-commit | electron-resize-reflow | approval-request-resume | approval-request-decline | approval-request-cancel | approval-request-host-interrupt | approval-request-full-access | terminal-failed-after-answer | terminal-canceled-after-answer | terminal-stale-guard | typed-error-retry-success | typed-error-retry-failure | web-tools-rendering | mcp-structured-content | skills-runtime | expert-plaza-skills-runtime | expert-panel-skills-runtime | right-surface-visual-matrix | thread-activity-panel | content-factory-article-workspace | content-factory-inline-image-article-workspace，默认 complete
   --hook-fixture         仅用于 turn-plan-update：启用受信 command Hook Gate B
   --prompt <text>        仅 home-hotpath 场景可用，覆盖默认新闻输入
   --soul-style-profile <id>   soul-style 场景使用的 profile，默认 ${DEFAULT_SOUL_STYLE_FIXTURE_PROFILE_ID}
@@ -298,6 +299,7 @@ function parseArgs(argv) {
     "expert-plaza-skills-runtime",
     "expert-panel-skills-runtime",
     RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO,
+    THREAD_ACTIVITY_PANEL_SCENARIO,
     CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO,
     CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO,
   ];

@@ -1,40 +1,40 @@
-## Lime v1.136.0
+## Lime v1.137.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- Added the Windows restricted-execution chain: sandbox accounts, restricted tokens, ACL leases, Job Objects, ConPTY, bounded stdin/output, and Firewall/WFP network isolation.
-- Added Windows sandbox setup/runner sidecars, resource digest verification, readiness read-back, and a seven-case real execution evidence matrix.
-- Scheduled Tasks now freeze the Composer's selected Provider/model as an opaque route for creation, service skills, and migrated history.
+- Added a thread activity panel for subagents, MCP tools, and skills, with workspace navigation entry points.
+- Added a real Electron Gate B thread-fork scenario and environment-selection projection that preserves Thread/Turn/Item identity and environment world state.
+- Added MCP tools, prompts, and resources list-changed notifications with automatic GUI refresh for the affected data.
 
 ### Fixes
 
-- Fixed the Agent Runtime second-turn start/accept race where a historical completed read model could close the active stream before the real `turnId` arrived.
-- Fixed Agent reasoning and Markdown block projection so summaries remain visible while headings, tables, lists, fenced code, and inline semantics render correctly.
-- Fixed false protocol-drift warnings for `model/list/updated`, Provider URL tenant/path/query handling, and redacted transport error reporting.
-- Fixed restricted Windows child startup, handle inheritance, account permissions, desktop/pipe lifecycle, output draining, and firewall read-back boundaries.
+- Fixed recent notification replay after the Electron App Server connection consumed a notification early, and completed typed MCP progress projection.
+- Fixed permission-profile catalog and runtime policy drift so thread start, resume, and fork share the same allow-list checks.
+- Fixed canonical Agent Runtime thread projection for environments, Provider routes, and session metadata instead of exposing raw business metadata to the GUI.
+- Fixed Workspace, Canvas Workbench change summaries, thread navigation, and session lifecycle behavior across state transitions.
 
 ### Improvements and Refactoring
 
-- Converged the Windows execution surface on the single `tool-runtime` current owner; Electron only packages and verifies sidecar resources.
-- Refactored Scheduled Tasks, Provider selection, Agent session projection, Markdown normalization, and App Server stdio transport while keeping the real Electron/App Server JSON-RPC path.
-- Expanded DeepSWE provider evidence, candidate continuation, failure artifacts, and resumable isolated harness flows.
+- Converged permission profiles, environment selections, and thread-fork state on App Server/RuntimeCore current owners while preserving the real Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> GUI path.
+- Refactored MCP event bridging, the App Server session client, thread activity, and Right Surface projection to reduce duplicate state reads and keep five-locale UI copy aligned.
+- Expanded Agent Runtime, MCP, Session History, and Workspace observability plus Gate B smoke scripts for real notification replay and terminal assertions.
 
 ### Testing and Quality
 
-- Added restricted-execution coverage for workspace ACLs, network blocking, output limits, allowlisted stdin, ConPTY, world-writable audits, and process-tree termination.
-- Expanded Agent Runtime, Scheduled Tasks, Provider transport, Markdown/streaming, notification catalog, Electron resource verifier, and five-locale GUI regressions.
-- Passed TypeScript, protocol contracts, Agent current fixture, real Electron GUI smoke, related Rust tests, and formatting checks.
+- Added regressions for the thread activity panel, thread fork, MCP list-changed events, permission profiles, environment lifecycle, and Canvas Workbench.
+- Expanded App Server protocol/client contracts, MCP notification projection, Agent current fixture, Electron Gate B, and five-locale resource checks.
+- Release validation covers version consistency, TypeScript, protocol contracts, affected Rust/frontend tests, and real Electron GUI smoke; results are recorded in the release plan.
 
 ### Documentation
 
-- Updated architecture and Codex-alignment plans with the Windows sandbox data flow, fail-closed readiness boundaries, Provider route rules, and current/compat/deprecated/dead classifications.
-- Added the reasoning-projection and notification-drift execution record and this release candidate's scope and validation evidence.
+- Updated command boundaries, the Codex App GUI alignment plan, and script documentation with current owners for MCP notifications, permission profiles, environment projection, and thread activity.
+- Added the v1.137.0 release execution plan with candidate scope, the excluded build-reference artifact, validation evidence, and release closeout steps.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.136.0`.
-- Windows official signing/notarization, cross-platform installer/release assets, and live-provider/verifier evidence still require the corresponding platform or CI runner and are not claimed locally.
+- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.137.0`.
+- Windows official signing/notarization, cross-platform installer/release assets, and live-provider evidence still require the corresponding platform or CI runner and are not claimed locally.
 
-**Full changes**: `v1.135.0` -> `v1.136.0`
+**Full changes**: `v1.136.0` -> `v1.137.0`

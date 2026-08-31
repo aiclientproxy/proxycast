@@ -35,8 +35,16 @@ describe("permissionProfiles", () => {
       })),
     };
     await expect(
-      resolveAllowedPermissionProfile(":workspace", allowedClient),
+      resolveAllowedPermissionProfile(
+        ":workspace",
+        " /workspace/project ",
+        allowedClient,
+      ),
     ).resolves.toMatchObject({ id: ":workspace", allowed: true });
+    expect(allowedClient.request).toHaveBeenCalledWith(
+      "permissionProfile/list",
+      { cwd: "/workspace/project" },
+    );
 
     const deniedClient = {
       request: vi.fn(async () => ({
@@ -48,7 +56,7 @@ describe("permissionProfiles", () => {
       })),
     };
     await expect(
-      resolveAllowedPermissionProfile(":workspace", deniedClient),
+      resolveAllowedPermissionProfile(":workspace", undefined, deniedClient),
     ).rejects.toThrow("is not allowed");
   });
 });

@@ -37,6 +37,7 @@ import {
   REASONING_FIRST_VISIBLE_SCENARIO,
   REASONING_FIRST_VISIBLE_TEXT,
   RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO,
+  THREAD_ACTIVITY_PANEL_SCENARIO,
   SESSION_ID,
   SOUL_STYLE_SCENARIO,
   TERMINAL_CANCELED_AFTER_ANSWER_SCENARIO,
@@ -105,7 +106,10 @@ import {
   runSkillsRuntimeScenario,
 } from "./claw-chat-current-fixture-skills-runtime-flow.mjs";
 import { verifyPlanHistoryHydrate } from "./claw-chat-current-fixture-plan-history.mjs";
-import { runRightSurfaceVisualMatrix } from "./claw-chat-current-fixture-right-surface-visual.mjs";
+import {
+  runRightSurfaceVisualMatrix,
+  runThreadActivityPanelSmoke,
+} from "./claw-chat-current-fixture-right-surface-visual.mjs";
 import { runWebToolsRenderingScenario } from "./claw-chat-current-fixture-web-tools-rendering.mjs";
 import { runUserShellGateScenario } from "./claw-chat-current-fixture-user-shell.mjs";
 import {
@@ -339,7 +343,10 @@ export async function executeScenarioFlow({
         appServerRequests,
       }),
     );
-  } else if (options.scenario === RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO) {
+  } else if (
+    options.scenario === RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO ||
+    options.scenario === THREAD_ACTIVITY_PANEL_SCENARIO
+  ) {
     logStage("create-right-surface-visual-expert-session");
     const expertSessionCreation = await createExpertSkillsRuntimeSession(
       page,
@@ -369,16 +376,27 @@ export async function executeScenarioFlow({
       }),
     );
 
-    logStage("run-right-surface-visual-matrix");
-    summary.rightSurfaceVisualMatrix = sanitizeJson(
-      await runRightSurfaceVisualMatrix({
-        page,
-        options,
-        workspace,
-        appServerRequests,
-        sessionId: expertSessionCreation.identity.sessionId,
-      }),
-    );
+    if (options.scenario === THREAD_ACTIVITY_PANEL_SCENARIO) {
+      logStage("run-thread-activity-panel");
+      summary.rightSurfaceVisualMatrix = sanitizeJson(
+        await runThreadActivityPanelSmoke({
+          page,
+          options,
+          sessionId: expertSessionCreation.identity.sessionId,
+        }),
+      );
+    } else {
+      logStage("run-right-surface-visual-matrix");
+      summary.rightSurfaceVisualMatrix = sanitizeJson(
+        await runRightSurfaceVisualMatrix({
+          page,
+          options,
+          workspace,
+          appServerRequests,
+          sessionId: expertSessionCreation.identity.sessionId,
+        }),
+      );
+    }
   } else if (options.scenario === APPROVAL_REQUEST_RESUME_SCENARIO) {
     Object.assign(
       summary,
@@ -924,6 +942,7 @@ export async function executeScenarioFlow({
     options.scenario !== "expert-plaza-skills-runtime" &&
     options.scenario !== "expert-panel-skills-runtime" &&
     options.scenario !== RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO &&
+    options.scenario !== THREAD_ACTIVITY_PANEL_SCENARIO &&
     options.scenario !== INPUTBAR_RICH_RESTORE_SCENARIO &&
     options.scenario !== ACTIVE_STEER_SCENARIO &&
     options.scenario !== CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO &&

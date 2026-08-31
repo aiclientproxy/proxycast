@@ -63,6 +63,13 @@ export type AppServerAgentSessionOverview = {
   sectionEnteredAt?: number;
 };
 
+export type AppServerForkedSession = {
+  sessionId: string;
+  threadId: string;
+  name?: string;
+  workingDir?: string;
+};
+
 export interface AppServerSessionClientDeps {
   appServerClient?: AppServerSessionRpcClient;
 }
@@ -92,11 +99,13 @@ export function createAppServerSessionClient({
     const sessionScope = normalizeCreateSessionScope(workspaceId, options);
     const normalizedName = name?.trim() || "新对话";
     const route = readThreadStartRoute(options?.metadata);
+    const permissions = readThreadStartPermissionProfile(options?.metadata);
     const response = await appServerClient.startSession({
       cwd: sessionScope.workingDir,
       ...(route
         ? { model: route.model, modelProvider: route.modelProvider }
         : {}),
+      ...(permissions ? { permissions } : {}),
       serviceName: normalizedName,
       threadSource: "appServer",
       historyMode: "paginated",
@@ -225,7 +234,9 @@ export function createAppServerSessionClient({
     await appServerClient.archiveThread({ threadId });
   }
 
-  async function forkAgentRuntimeSession(sessionId: string): Promise<string> {
+  async function forkAgentRuntimeSession(
+    sessionId: string,
+  ): Promise<AppServerForkedSession> {
     const threadId = await resolveCanonicalThreadId(
       appServerClient,
       sessionId,
@@ -242,7 +253,14 @@ export function createAppServerSessionClient({
       throw new Error("thread/fork returned an incomplete canonical Thread");
     }
     rememberSessionThreadId(forkedSessionId, forkedThreadId);
-    return forkedSessionId;
+    return omitUndefined({
+      sessionId: forkedSessionId,
+      threadId: forkedThreadId,
+      name:
+        readOptionalStringField(thread, "name") ||
+        readOptionalStringField(thread, "preview"),
+      workingDir: readOptionalStringField(thread, "cwd"),
+    });
   }
 
   async function unarchiveAgentRuntimeSession(
@@ -363,6 +381,13 @@ function readThreadStartRoute(
   const modelProvider = readOptionalStringField(source, "providerSelector");
   const model = readOptionalStringField(source, "modelName");
   return modelProvider && model ? { model, modelProvider } : null;
+}
+
+function readThreadStartPermissionProfile(
+  metadata: Record<string, unknown> | undefined,
+): string | null {
+  const value = readOptionalStringField(metadata ?? {}, "permissions");
+  return value?.trim() || null;
 }
 
 async function listCanonicalSessionOverviews(

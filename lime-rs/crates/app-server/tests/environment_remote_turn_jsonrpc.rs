@@ -81,6 +81,14 @@ async fn remote_environment_executes_provider_tool_and_survives_cold_resume() {
             json!({"threadId": thread_id, "includeTurns": true}),
         )
         .await;
+    assert_eq!(
+        first_read.pointer("/result/thread/extra/environmentWorldState/0/environmentId"),
+        Some(&json!(ENVIRONMENT_ID))
+    );
+    assert_eq!(
+        first_read.pointer("/result/thread/extra/environmentWorldState/0/status"),
+        Some(&json!("ready"))
+    );
     assert_remote_command_item(&first_read, 1, &provider.requests(), &remote.requests());
     first.shutdown().await;
 

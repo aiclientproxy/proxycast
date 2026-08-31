@@ -28,6 +28,9 @@ impl RequestProcessor {
         .thread;
         let thread_id = thread.id.clone();
         let metadata = thread.extra.clone().unwrap_or(Value::Null);
+        let environments = super::turn_environment::persisted_environment_selections(&metadata)?;
+        let environments = self.normalize_environment_selections(environments).await?;
+        self.record_environment_selections(&thread_id, environments.as_deref());
         let token_usage = include_turns
             .then(|| self.runtime.thread_token_usage_snapshot(&thread_id))
             .flatten();
@@ -64,11 +67,15 @@ impl RequestProcessor {
             multi_agent_mode: agent_protocol::MultiAgentMode::default(),
             thread,
         };
-        let mut notifications = Vec::with_capacity(3);
+        let mut notifications = Vec::with_capacity(3 + environments.as_ref().map_or(0, Vec::len));
         if let Some(snapshot) = token_usage {
             notifications.push(crate::thread_token_usage_notification(&thread_id, snapshot));
         }
         notifications.push(notification);
+        notifications.extend(
+            self.environment_selection_notifications(&thread_id, environments.as_deref())
+                .await,
+        );
         if let Some(goal) = inherited_goal {
             notifications.push(goal_updated_notification(&goal));
         }

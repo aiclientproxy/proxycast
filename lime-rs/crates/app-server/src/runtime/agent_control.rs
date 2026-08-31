@@ -52,20 +52,8 @@ impl RuntimeCore {
         session_id: &str,
         runtime_options: Option<&RuntimeOptions>,
     ) -> Result<AgentSession, RuntimeCoreError> {
-        let defaults = agent_control_session_defaults(runtime_options);
-        let route_snapshot = agent_control_route_snapshot(runtime_options);
-        let service_tier = runtime_options
-            .and_then(RuntimeOptions::runtime_request)
-            .and_then(|request| trimmed_option(request.service_tier.as_deref()))
-            .or_else(|| {
-                route_snapshot.as_ref().and_then(|snapshot| {
-                    snapshot
-                        .get("serviceTier")
-                        .and_then(serde_json::Value::as_str)
-                        .and_then(|value| trimmed_option(Some(value)))
-                })
-            });
-        if defaults.is_none() && route_snapshot.is_none() && service_tier.is_none() {
+        let default_metadata = agent_control_session_default_metadata(runtime_options);
+        if default_metadata.is_empty() {
             return self
                 .session_snapshot(session_id)
                 .map(|(session, _)| session);
@@ -101,29 +89,7 @@ impl RuntimeCore {
                 }
                 None => serde_json::Map::new(),
             };
-            if let Some((provider_selector, provider_name, model_name)) = defaults {
-                metadata.insert(
-                    "providerSelector".to_string(),
-                    serde_json::Value::String(provider_selector),
-                );
-                metadata.insert(
-                    "providerName".to_string(),
-                    serde_json::Value::String(provider_name),
-                );
-                metadata.insert(
-                    "modelName".to_string(),
-                    serde_json::Value::String(model_name),
-                );
-            }
-            if let Some(route_snapshot) = route_snapshot {
-                metadata.insert(AGENT_CONTROL_ROUTE_KEY.to_string(), route_snapshot);
-            }
-            if let Some(service_tier) = service_tier {
-                metadata.insert(
-                    "serviceTier".to_string(),
-                    serde_json::Value::String(service_tier),
-                );
-            }
+            metadata.extend(default_metadata);
             reference.metadata = Some(serde_json::Value::Object(metadata));
             stored.session.updated_at = timestamp();
             stored.session.clone()
@@ -259,12 +225,22 @@ impl RuntimeCore {
                 ))
             })?;
 
+        let child_business_object_ref = {
+            let metadata = agent_control_session_default_metadata(runtime_options.as_ref());
+            (!metadata.is_empty()).then(|| BusinessObjectRef {
+                kind: "agent.session".to_string(),
+                id: child_session_id.clone(),
+                title: None,
+                uri: None,
+                metadata: Some(serde_json::Value::Object(metadata)),
+            })
+        };
         let mut response = match self.start_session(AgentSessionStartParams {
             session_id: Some(child_session_id.clone()),
             thread_id: Some(child_thread_id.clone()),
             app_id: parent.app_id,
             workspace_id: parent.workspace_id,
-            business_object_ref: None,
+            business_object_ref: child_business_object_ref,
             locale: None,
         }) {
             Ok(response) => response,
@@ -589,6 +565,38 @@ fn agent_control_session_defaults(
         provider_config.and_then(|config| trimmed_option(config.model_name.as_deref()))
     })?;
     Some((provider_selector, provider_name, model_name))
+}
+
+fn agent_control_session_default_metadata(
+    runtime_options: Option<&RuntimeOptions>,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut metadata = serde_json::Map::new();
+    if let Some((provider_selector, provider_name, model_name)) =
+        agent_control_session_defaults(runtime_options)
+    {
+        metadata.insert("providerSelector".to_string(), json!(provider_selector));
+        metadata.insert("providerName".to_string(), json!(provider_name));
+        metadata.insert("modelName".to_string(), json!(model_name));
+    }
+    let route_snapshot = agent_control_route_snapshot(runtime_options);
+    let service_tier = runtime_options
+        .and_then(RuntimeOptions::runtime_request)
+        .and_then(|request| trimmed_option(request.service_tier.as_deref()))
+        .or_else(|| {
+            route_snapshot.as_ref().and_then(|snapshot| {
+                snapshot
+                    .get("serviceTier")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(|value| trimmed_option(Some(value)))
+            })
+        });
+    if let Some(route_snapshot) = route_snapshot {
+        metadata.insert(AGENT_CONTROL_ROUTE_KEY.to_string(), route_snapshot);
+    }
+    if let Some(service_tier) = service_tier {
+        metadata.insert("serviceTier".to_string(), json!(service_tier));
+    }
+    metadata
 }
 
 pub(in crate::runtime) fn runtime_options_with_agent_control_session_defaults(

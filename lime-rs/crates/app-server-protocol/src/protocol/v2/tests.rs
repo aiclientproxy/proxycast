@@ -2299,6 +2299,28 @@ fn mcp_tool_call_progress_notification_round_trips_codex_shape() {
 }
 
 #[test]
+fn mcp_tool_call_progress_notification_round_trips_list_changed_kind() {
+    let expected = json!({
+        "method": "item/mcpToolCall/progress",
+        "params": {
+            "threadId": "thread_1",
+            "turnId": "turn_2",
+            "itemId": "item_mcp-call-3",
+            "message": "工具服务能力列表已更新",
+            "notificationKind": "mcp_tools_changed"
+        }
+    });
+
+    let notification: ServerNotification =
+        serde_json::from_value(expected.clone()).expect("decode MCP list_changed progress");
+    assert_eq!(notification.method(), METHOD_MCP_TOOL_CALL_PROGRESS);
+    assert_eq!(
+        serde_json::to_value(notification).expect("encode MCP list_changed progress"),
+        expected
+    );
+}
+
+#[test]
 fn server_request_resolved_notification_round_trips_codex_shape() {
     let notification =
         ServerNotification::ServerRequestResolved(ServerRequestResolvedNotification {

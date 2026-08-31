@@ -46,6 +46,7 @@ interface UseWorkspaceRightSurfaceCoordinatorRuntimeParams {
   sceneThreadId?: string | null;
   sessionId?: string | null;
   shellRightSurfaceAvailable: boolean;
+  activityAvailable?: boolean;
   showHarnessToggle: boolean;
   suppressHomeNavbarUtilityActions: boolean;
   taskCenterHomeHotpathActive: boolean;
@@ -76,6 +77,7 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
   sceneThreadId,
   sessionId,
   shellRightSurfaceAvailable,
+  activityAvailable = false,
   showHarnessToggle,
   suppressHomeNavbarUtilityActions,
   taskCenterHomeHotpathActive,
@@ -189,6 +191,7 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
       showHarnessToggle,
       suppressHomeNavbarUtilityActions,
       traceAvailable: rightSurfaceTraceAvailable,
+      activityAvailable,
     });
   const actionRuntime = useWorkspaceRightSurfaceActionRuntime({
     activeBrowserRightSurfaceIntent: localState.activeBrowserRightSurfaceIntent,
@@ -216,6 +219,7 @@ export function useWorkspaceRightSurfaceCoordinatorRuntime({
     rightSurfaceActiveSurface: rightSurfaceState.activeSurface,
     rightSurfaceHarnessEnabled,
     rightSurfaceTraceAvailable,
+    rightSurfaceActivityAvailable: activityAvailable,
     sceneLayoutMode,
     setActiveArticleWorkspace: localState.setActiveArticleWorkspace,
     setActiveBrowserRightSurfaceIntent:

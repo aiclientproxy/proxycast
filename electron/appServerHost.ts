@@ -13,6 +13,7 @@ import {
   METHOD_INITIALIZED,
   METHOD_ITEM_COMPLETED,
   METHOD_ITEM_STARTED,
+  METHOD_MCP_TOOL_CALL_PROGRESS,
   METHOD_MODEL_LIST_UPDATED,
   METHOD_THREAD_STARTED,
   METHOD_THREAD_TOKEN_USAGE_UPDATED,
@@ -34,7 +35,7 @@ import {
 } from "@limecloud/app-server-client";
 import { app, session } from "./electronRuntime";
 import { resolveCurrentDesktopStorageRoots } from "./appDataPaths";
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { tryHandleCurrentTimeRead } from "./appServerCurrentTimeHost";
@@ -235,6 +236,11 @@ export class ElectronAppServerHost {
         ? APP_SERVER_RECENT_NOTIFICATION_LIMIT
         : 100,
     );
+    if (process.env.LIME_DEBUG_MCP_NOTIFICATIONS === "1") {
+      appendDebugMcpNotification(
+        `drain start includeRecent=${request.includeRecent === true} limit=${limit} recent=${this.#recentNotifications.length}`,
+      );
+    }
     const drained: JsonRpcMessage[] = [];
 
     while (drained.length < limit) {
@@ -272,6 +278,12 @@ export class ElectronAppServerHost {
             ...rendererMessages,
           ]).slice(-limit)
         : rendererMessages;
+
+    if (process.env.LIME_DEBUG_MCP_NOTIFICATIONS === "1") {
+      appendDebugMcpNotification(
+        `drain end includeRecent=${request.includeRecent === true} drained=${rendererMessages.length} recent=${this.#recentNotifications.length} returned=${messages.length}`,
+      );
+    }
 
     return {
       lines: messages.map(encodeMessage),
@@ -454,6 +466,7 @@ export class ElectronAppServerHost {
           METHOD_TURN_COMPLETED,
           METHOD_ITEM_STARTED,
           METHOD_ITEM_COMPLETED,
+          METHOD_MCP_TOOL_CALL_PROGRESS,
           METHOD_AGENT_MESSAGE_DELTA,
           METHOD_MODEL_LIST_UPDATED,
           METHOD_THREAD_TOKEN_USAGE_UPDATED,
@@ -559,6 +572,21 @@ export class ElectronAppServerHost {
   }
 
   #installServerRequestHandler(connected: ConnectedAppServerSidecar): void {
+    connected.connection.setNotificationObserver((message) => {
+      if (process.env.LIME_DEBUG_MCP_NOTIFICATIONS === "1") {
+        appendDebugMcpNotification(
+          `observed notification method=${message.method}`,
+        );
+        console.warn(
+          "[electron-host] observed app-server notification",
+          message.method,
+        );
+      }
+      const projected = this.#projectServerMessageForRenderer(message);
+      if (projected) {
+        this.#rememberRecentNotifications([projected]);
+      }
+    });
     if (typeof connected.connection.setServerRequestHandler !== "function") {
       return;
     }
@@ -666,6 +694,18 @@ export class ElectronAppServerHost {
         error,
       );
     }
+  }
+}
+
+function appendDebugMcpNotification(message: string): void {
+  const filePath = process.env.LIME_DEBUG_MCP_NOTIFICATIONS_FILE?.trim();
+  if (!filePath) {
+    return;
+  }
+  try {
+    appendFileSync(filePath, `${message}\n`, "utf8");
+  } catch {
+    // Diagnostics must never affect the App Server bridge.
   }
 }
 

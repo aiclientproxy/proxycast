@@ -267,6 +267,8 @@ pub struct McpToolCallProgressNotification {
     pub turn_id: String,
     pub item_id: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notification_kind: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

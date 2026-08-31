@@ -46,7 +46,7 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
       expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
         threadId: topicId,
         approvalPolicy: "on-request",
-        sandboxPolicy: "read-only",
+        permissions: ":read-only",
         modelProvider: "gemini",
         model: "gemini-2.5-pro",
       });

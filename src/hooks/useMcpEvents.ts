@@ -1,4 +1,5 @@
 import {
+  isMcpToolCallProgressNotification,
   mcpServerEventStreamServerNotification,
   mcpServerOauthLoginCompletedServerNotification,
   mcpServerStatusUpdatedServerNotification,
@@ -51,6 +52,7 @@ export interface SetupMcpEventListenersOptions {
   ) => void;
   refreshServers: () => void | Promise<void>;
   refreshTools: () => void | Promise<void>;
+  refreshPrompts: () => void | Promise<void>;
   refreshResources: () => void | Promise<void>;
   setError: (error: string) => void;
   setTools: (tools: McpToolDefinition[]) => void;
@@ -67,6 +69,7 @@ export async function setupMcpEventListeners({
   updateServerConnectionState,
   refreshServers,
   refreshTools,
+  refreshPrompts,
   refreshResources,
   setError,
   setTools,
@@ -81,6 +84,21 @@ export async function setupMcpEventListeners({
       getDrainOptions: () => ({ includeRecent: true, limit: 100 }),
       onNotifications: (notifications) => {
         for (const message of notifications) {
+          if (isMcpToolCallProgressNotification(message)) {
+            switch (message.params.notificationKind) {
+              case "mcp_tools_changed":
+                void refreshTools();
+                break;
+              case "mcp_prompts_changed":
+                void refreshPrompts();
+                break;
+              case "mcp_resources_changed":
+                void refreshResources();
+                break;
+            }
+            continue;
+          }
+
           const eventStreamNotification =
             mcpServerEventStreamServerNotification(message);
           if (eventStreamNotification) {

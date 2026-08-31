@@ -523,6 +523,7 @@ async fn restart_preserves_agent_control_provider_defaults() {
         .await
         .expect("read canonical child route")
         .expect("canonical child route");
+    assert_eq!(canonical_child.model_provider, "fixture-provider");
     assert_eq!(canonical_child.metadata["providerName"], "fixture-provider");
     assert_eq!(canonical_child.metadata["modelName"], "fixture-model");
     assert_eq!(

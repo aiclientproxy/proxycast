@@ -117,6 +117,18 @@ impl AppServerEventBridge {
                 .listener_command_tx()
                 .is_none()
                 .then(|| state.set_listener());
+            if thread_subscription_debug_enabled() {
+                thread_subscription_debug_event(format!(
+                    "thread resume barrier prepared thread_id={thread_id} barrier={barrier:?} listener_registered={}",
+                    registration.is_some()
+                ));
+                tracing::warn!(
+                    %thread_id,
+                    ?barrier,
+                    listener_registered = registration.is_some(),
+                    "thread resume barrier prepared"
+                );
+            }
             registration
         };
 
@@ -152,11 +164,30 @@ impl AppServerEventBridge {
             .thread_states
             .subscribed_connection_ids(thread_id)
             .await;
+        if thread_subscription_debug_enabled() {
+            thread_subscription_debug_event(format!(
+                "publishing thread runtime event to subscribers thread_id={thread_id} connection_ids={connection_ids:?} message_count={}",
+                messages.len()
+            ));
+            tracing::warn!(
+                %thread_id,
+                ?connection_ids,
+                message_count = messages.len(),
+                "publishing thread runtime event to subscribers"
+            );
+        }
         for connection_id in connection_ids {
-            if let Err(error) = self
+            let send_result = self
                 .send_messages_to_connection(connection_id, &messages)
-                .await
-            {
+                .await;
+            if thread_subscription_debug_enabled() {
+                thread_subscription_debug_event(format!(
+                    "thread runtime event transport send thread_id={thread_id} connection_id={connection_id} methods={:?} result={:?}",
+                    messages.iter().map(message_method).collect::<Vec<_>>(),
+                    send_result.as_ref().err()
+                ));
+            }
+            if let Err(error) = send_result {
                 tracing::warn!(
                     %thread_id,
                     %connection_id,
@@ -213,11 +244,24 @@ impl AppServerEventBridge {
         connection_id: ConnectionId,
         messages: &[JsonRpcMessage],
     ) -> Result<(), String> {
-        if !self
+        let subscribed = self
             .thread_states
             .subscribe_connection(thread_id.clone(), connection_id)
-            .await
-        {
+            .await;
+        if thread_subscription_debug_enabled() {
+            thread_subscription_debug_event(format!(
+                "thread connection subscription attempted thread_id={thread_id} connection_id={connection_id} subscribed={subscribed} message_count={}",
+                messages.len()
+            ));
+            tracing::warn!(
+                %thread_id,
+                %connection_id,
+                subscribed,
+                message_count = messages.len(),
+                "thread connection subscription attempted"
+            );
+        }
+        if !subscribed {
             return Err(format!(
                 "connection {connection_id} is not live for thread {thread_id}"
             ));
@@ -311,6 +355,20 @@ async fn run_thread_listener(
                         subscribe,
                         completion_tx,
                     } => {
+                        if thread_subscription_debug_enabled() {
+                            thread_subscription_debug_event(format!(
+                                "completing thread resume thread_id={thread_id} connection_id={connection_id} barrier={barrier:?} subscribe={subscribe} message_count={}",
+                                messages.len()
+                            ));
+                            tracing::warn!(
+                                %thread_id,
+                                %connection_id,
+                                ?barrier,
+                                subscribe,
+                                message_count = messages.len(),
+                                "completing thread resume"
+                            );
+                        }
                         let mut result = if subscribe {
                             bridge
                                 .subscribe_and_send(&thread_id, connection_id, &messages)
@@ -321,6 +379,19 @@ async fn run_thread_listener(
                                 .await
                         };
                         let finish = thread_state.lock().await.finish_resume(&barrier);
+                        if thread_subscription_debug_enabled() {
+                            thread_subscription_debug_event(format!(
+                                "thread resume barrier finished thread_id={thread_id} barrier={barrier:?} finish={finish:?} result_ok={}",
+                                result.is_ok()
+                            ));
+                            tracing::warn!(
+                                %thread_id,
+                                ?barrier,
+                                finish = ?finish,
+                                result_ok = result.is_ok(),
+                                "thread resume barrier finished"
+                            );
+                        }
                         match finish {
                             Some(true) => {
                                 for publish in deferred_publishes.drain(..) {
@@ -358,6 +429,33 @@ async fn run_thread_listener(
         .lock()
         .await
         .clear_listener_if_generation(registration.generation);
+}
+
+fn thread_subscription_debug_enabled() -> bool {
+    std::env::var_os("LIME_DEBUG_THREAD_SUBSCRIPTIONS").is_some()
+}
+
+fn thread_subscription_debug_event(message: impl std::fmt::Display) {
+    let Some(path) = std::env::var_os("LIME_DEBUG_THREAD_SUBSCRIPTIONS_FILE") else {
+        return;
+    };
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    else {
+        return;
+    };
+    use std::io::Write;
+    let _ = writeln!(file, "{message}");
+}
+
+fn message_method(message: &JsonRpcMessage) -> &str {
+    match message {
+        JsonRpcMessage::Request(request) => request.method.as_str(),
+        JsonRpcMessage::Notification(notification) => notification.method.as_str(),
+        JsonRpcMessage::Response(_) | JsonRpcMessage::Error(_) => "response",
+    }
 }
 
 enum DeferredThreadPublish {

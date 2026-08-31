@@ -146,8 +146,13 @@ describe("agent session history Electron fixture smoke guard", () => {
     expect(smoke).toContain("seedThreadReadLongListCanonicalThread");
     expect(smoke).toContain("runThreadReadLongListDomOracle");
     expect(smoke).toContain("assertThreadReadLongListDomOracle");
+    expect(smoke).toContain("runThreadReadLongListColdRestartOracle");
+    expect(smoke).toContain("assertThreadReadLongListColdRestartOracle");
     expect(smoke).toContain("threadReadLongListSummary");
+    expect(smoke).toContain("threadReadLongListColdRestartSummary");
     expect(smoke).toContain("longListScreenshot");
+    expect(smoke).toContain("longListColdRestartScreenshot");
+    expect(smoke).toContain("clearBuffersAfterReady: false");
     expect(fixture).toContain("THREAD_READ_LONG_LIST_TURN_COUNT = 240");
     expect(fixture).toContain("THREAD_READ_LONG_LIST_ITEM_COUNT");
     expect(fixture).toContain("LONG_HISTORY_TERMINAL_MARKER");
@@ -160,6 +165,10 @@ describe("agent session history Electron fixture smoke guard", () => {
     expect(oracle).toContain('"thread/read"');
     expect(oracle).toContain('"thread/turns/list"');
     expect(oracle).toContain('"thread/items/list"');
+    expect(oracle).toContain('"thread/resume"');
+    expect(oracle).toContain("COLD_RESTART_REQUIRED_METHODS");
+    expect(oracle).toContain('navigation: "sidebar"');
+    expect(oracle).toContain("processRestart: true");
     expect(oracle).toContain('"canonical_turn"');
     expect(oracle).toContain('"message_group"');
     expect(oracle).not.toContain("agent_runtime_");

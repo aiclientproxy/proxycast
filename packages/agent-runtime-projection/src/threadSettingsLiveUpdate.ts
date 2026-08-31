@@ -195,6 +195,7 @@ function normalizeSandboxPolicy(value: unknown): string | undefined {
 
 function readSettingsSnapshot(value: unknown): AgentUiThreadSettingsSnapshot {
   const record = unwrapSettingsRecord(value);
+  const activePermissionProfile = readRecord(record?.activePermissionProfile);
   return compactProjectionFields({
     model: readStringField(record, ["model", "modelId", "model_id"]),
     serviceTier: readOptionalStringField(record, [
@@ -215,7 +216,9 @@ function readSettingsSnapshot(value: unknown): AgentUiThreadSettingsSnapshot {
       "approvalsReviewer",
       "approvals_reviewer",
     ]),
-    permissions: readStringField(record, ["permissions", "permissionProfile"]),
+    permissions:
+      readStringField(record, ["permissions", "permissionProfile"]) ??
+      readStringField(activePermissionProfile, ["id"]),
     sandboxPolicy: normalizeSandboxPolicy(
       record?.sandboxPolicy ?? record?.sandbox_policy,
     ),

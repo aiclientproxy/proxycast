@@ -37,15 +37,14 @@ export interface AgentStreamPreparedSendEnv {
   refreshSessionReadModel: (targetSessionId?: string) => Promise<boolean>;
   executionStrategy: AgentExecutionStrategy;
   accessMode: AgentAccessMode;
+  workingDir?: string | null;
   providerTypeRef: MutableRefObject<string>;
   modelRef: MutableRefObject<string>;
   reasoningEffortRef: MutableRefObject<string>;
   sessionIdRef: MutableRefObject<string | null>;
   runPreparedSubmit: <T>(task: () => Promise<T>) => Promise<T>;
   getWorkspaceIdForSubmit: () => string | undefined;
-  waitForSessionProviderSelectionSync?: (
-    sessionId: string,
-  ) => Promise<void>;
+  waitForSessionProviderSelectionSync?: (sessionId: string) => Promise<void>;
   getThreadIdForSubmit: (targetSessionId?: string) => string | undefined;
   getSyncedSessionModelPreference: (
     sessionId: string,

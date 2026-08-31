@@ -314,6 +314,11 @@ export interface AgentRuntimeThreadReadModel {
   thread_id: string;
   can_accept_direct_input?: boolean | null;
   session_business_object_ref_metadata?: Record<string, unknown> | null;
+  /**
+   * Thread-bound environment selections projected from the canonical Thread
+   * metadata. UI consumers must use this field instead of parsing metadata.
+   */
+  environment_selections?: AgentRuntimeThreadEnvironment[] | null;
   status?: string;
   profile_status?: AgentRuntimeProfileStatus;
   active_turn_id?: string;
@@ -361,6 +366,21 @@ export interface AgentRuntimeThreadReadModel {
   cost_state?: AgentSessionExecutionRuntimeCostState | null;
   permission_state?: AgentSessionExecutionRuntimePermissionState | null;
   limit_event?: AgentSessionExecutionRuntimeLimitEvent | null;
+}
+
+export type AgentRuntimeThreadEnvironmentStatus =
+  | "connected"
+  | "disconnected"
+  | "pending";
+
+export interface AgentRuntimeThreadEnvironment {
+  environment_id: string;
+  cwd?: string;
+  runtime_workspace_roots?: string[];
+  primary?: boolean;
+  status?: AgentRuntimeThreadEnvironmentStatus;
+  shell?: string;
+  error?: string;
 }
 
 export type AgentRuntimeProfileStatus =

@@ -8,6 +8,8 @@ import {
   HOME_HOTPATH_GREETING_SCENARIO,
   HOME_HOTPATH_SCENARIO,
   IMAGE_FIXTURE_MODEL,
+  RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO,
+  THREAD_ACTIVITY_PANEL_SCENARIO,
   TEXT_PROVIDER_FIXTURE_API_KEY,
   TURN_PLAN_UPDATE_DONE_TEXT,
   TURN_PLAN_UPDATE_PROMPT,
@@ -22,9 +24,7 @@ import {
   runtimeInputText,
   summarizeRequestInput,
 } from "./claw-chat-current-fixture-backend-script.mjs";
-import {
-  summarizeApprovalDecisionReadModel,
-} from "./claw-chat-current-fixture-approval-read-model.mjs";
+import { summarizeApprovalDecisionReadModel } from "./claw-chat-current-fixture-approval-read-model.mjs";
 import { summarizeHostInterruptCanonicalEventSequence } from "./claw-chat-current-fixture-approval-resume.mjs";
 import {
   buildApprovalRequestDecisionScenarioAssertions,
@@ -377,6 +377,36 @@ describe("claw chat current Electron fixture smoke guard", () => {
       sessionId: "content-factory-session",
       threadId: "content-factory-thread",
     });
+  });
+
+  it("binds right-surface visual matrix Gate B identity to its scenario-created session", () => {
+    expect(
+      resolveGateBExpectedIdentity({
+        summary: {
+          sessionId: "precreated-session",
+          threadId: "precreated-thread",
+          rightSurfaceVisualMatrixSessionCreation: {
+            sessionId: "right-surface-session",
+            threadId: "right-surface-thread",
+          },
+        },
+        options: { scenario: RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO },
+        appServerRequests: [],
+        backendLedger: [],
+      }),
+    ).toEqual({
+      sessionId: "right-surface-session",
+      threadId: "right-surface-thread",
+    });
+  });
+
+  it("registers the Thread Activity panel as a current Electron scenario", () => {
+    const content = readSmokeScript();
+    expect(content).toContain("THREAD_ACTIVITY_PANEL_SCENARIO");
+    expect(content).toContain(
+      "options.scenario === THREAD_ACTIVITY_PANEL_SCENARIO",
+    );
+    expect(content).toContain("runThreadActivityPanelSmoke");
   });
 
   it("binds skills runtime Gate B identity to the final manual-enable turn", () => {
@@ -1188,9 +1218,7 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain('decision === "cancel"');
     expect(content).toContain('decision === "decline"');
     expect(content).toContain("waitForApprovalServerRequestResponse");
-    expect(content).toContain(
-      "approvalRequestDecisionNoRendererActionRespond",
-    );
+    expect(content).toContain("approvalRequestDecisionNoRendererActionRespond");
     const approvalBackendEvents = fs.readFileSync(
       "scripts/agent-runtime/claw-chat-current-fixture-approval-backend-events.mjs",
       "utf8",
@@ -2185,8 +2213,8 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain(
       "summary.guiPlanCompleted?.hasPlanSection === true",
     );
-    expect(content).toContain(
-      "summary.guiPlanCompleted?.planOwnerHasAllSteps === true",
+    expect(content).toMatch(
+      /summary\.guiPlanCompleted\?\.planOwnerHasAllSteps\s*===\s*true/,
     );
     expect(content).toContain("planOwnerKindsWithAllSteps");
     expect(content).toContain("planDecisionRevisionBound");
@@ -2806,6 +2834,7 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain("task-center-object-canvas-toggle");
     expect(content).toContain("task-center-browser-toggle");
     expect(content).toContain("task-center-expert-info-toggle");
+    expect(content).toContain("task-center-activity-toggle");
     expect(content).toContain("workspace-right-surface-tab-appSurface");
     expect(content).toContain("right-surface-browser.png");
     expect(content).toContain("workspace-right-surface-host");
@@ -2821,6 +2850,7 @@ describe("claw chat current Electron fixture smoke guard", () => {
     expect(content).toContain("workspace-plugin-surface-tabs");
     expect(content).toContain("workspace-plugin-surface-frame");
     expect(content).toContain("workspace-plugin-surface-viewport");
+    expect(content).toContain("thread-activity-panel");
     expect(content).toContain("plugin-shell-content-factory-app-main");
     expect(content).toContain("plugin-shell-prompt-lab-app");
     expect(content).toContain("webContentsView");
@@ -2832,6 +2862,7 @@ describe("claw chat current Electron fixture smoke guard", () => {
     );
     expect(content).toContain("rightSurfaceVisualMatrixBrowserSurfaceVisible");
     expect(content).toContain("rightSurfaceVisualMatrixAppSurfaceVisible");
+    expect(content).toContain("rightSurfaceVisualMatrixActivitySurfaceVisible");
     expect(content).toContain(
       "rightSurfaceVisualMatrixAppSurfaceMultiInstanceTabs",
     );
@@ -2869,11 +2900,12 @@ describe("claw chat current Electron fixture smoke guard", () => {
           geometry: {
             hostFillsCanvasPanel: false,
             rootFillsSurfaceViewport: true,
+            rootFillsActivePane: true,
           },
         },
         "files",
       ),
-    ).toBe(false);
+    ).toBe(true);
 
     expect(
       isRightSurfaceSnapshotReady(

@@ -194,6 +194,7 @@ export function TaskCenterEnvironmentPanel({
                 }
                 data-environment-id={environment.environmentId}
                 data-environment-status={environment.status}
+                data-environment-error={environment.error ?? undefined}
                 data-protocol-method={
                   lifecycleStatuses.length === 0
                     ? undefined
@@ -238,6 +239,14 @@ export function TaskCenterEnvironmentPanel({
                   />
                   {statusLabel}
                 </span>
+                {environment.error ? (
+                  <span
+                    className="max-w-[9rem] truncate text-[11px] text-rose-600 dark:text-rose-400"
+                    title={environment.error}
+                  >
+                    {environment.error}
+                  </span>
+                ) : null}
               </div>
             );
           })}

@@ -132,6 +132,7 @@ export const APP_SERVER_METHOD_WORKSPACE_RIGHT_SURFACE_PENDING_LIST =
   "workspaceRightSurface/pending/list";
 export const RIGHT_SURFACE_VISUAL_MATRIX_SCENARIO =
   "right-surface-visual-matrix";
+export const THREAD_ACTIVITY_PANEL_SCENARIO = "thread-activity-panel";
 export const CONTENT_FACTORY_ARTICLE_WORKSPACE_SCENARIO =
   "content-factory-article-workspace";
 export const CONTENT_FACTORY_INLINE_IMAGE_ARTICLE_WORKSPACE_SCENARIO =

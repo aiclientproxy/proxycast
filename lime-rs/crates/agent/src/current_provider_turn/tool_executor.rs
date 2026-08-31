@@ -659,9 +659,6 @@ fn emit_mcp_progress(
     route: &tool_runtime::mcp_connection::McpStepRouteIdentity,
     notification: ServerNotification,
 ) {
-    if !matches!(notification, ServerNotification::ProgressNotification(_)) {
-        return;
-    }
     for projection in
         tool_runtime::mcp_notification::project_mcp_notification(tool_id, notification)
     {
@@ -871,7 +868,8 @@ mod tests {
     use app_server_protocol::protocol::v2::GrantedPermissionProfile;
     use rmcp::model::{
         Content, NumberOrString, ProgressNotification, ProgressNotificationMethod,
-        ProgressNotificationParam, ProgressToken,
+        ProgressNotificationParam, ProgressToken, PromptListChangedNotification,
+        ResourceListChangedNotification, ToolListChangedNotification,
     };
 
     #[test]
@@ -1036,6 +1034,66 @@ mod tests {
             Some("search")
         );
         assert!(event_receiver.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn mcp_call_emits_supported_list_changed_notifications() {
+        let call = tool_runtime::mcp_connection::McpConnectionCall {
+            response: Box::pin(async {
+                tokio::task::yield_now().await;
+                Ok(CallToolResult::success(vec![Content::text("done")]))
+            }),
+            notifications: Box::pin(futures::stream::iter([
+                ServerNotification::ToolListChangedNotification(ToolListChangedNotification {
+                    method: Default::default(),
+                    extensions: Default::default(),
+                }),
+                ServerNotification::PromptListChangedNotification(PromptListChangedNotification {
+                    method: Default::default(),
+                    extensions: Default::default(),
+                }),
+                ServerNotification::ResourceListChangedNotification(
+                    ResourceListChangedNotification {
+                        method: Default::default(),
+                        extensions: Default::default(),
+                    },
+                ),
+            ])),
+        };
+        let (event_sender, mut event_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let route = tool_runtime::mcp_connection::McpStepRouteIdentity {
+            server_name: "docs".to_string(),
+            tool_name: "search".to_string(),
+            runtime_tool_name: "mcp__docs__search".to_string(),
+            app_context: None,
+            mcp_app_resource_uri: None,
+            plugin_id: None,
+        };
+
+        await_mcp_call(&event_sender, "mcp-call-1", &route, call)
+            .await
+            .expect("MCP result");
+
+        let mut kinds = Vec::new();
+        while let Ok(AgentEvent::ToolProgress { progress, .. }) = event_receiver.try_recv() {
+            kinds.push(
+                progress
+                    .metadata
+                    .as_ref()
+                    .and_then(|metadata| metadata.get("notification_kind"))
+                    .and_then(Value::as_str)
+                    .expect("notification kind")
+                    .to_string(),
+            );
+        }
+        assert_eq!(
+            kinds,
+            vec![
+                "mcp_tools_changed".to_string(),
+                "mcp_prompts_changed".to_string(),
+                "mcp_resources_changed".to_string(),
+            ]
+        );
     }
 
     fn progress_notification(message: Option<&str>) -> ServerNotification {

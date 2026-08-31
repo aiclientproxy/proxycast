@@ -618,6 +618,15 @@ impl McpClientManager {
         *cache = Some(tools);
     }
 
+    /// 强制重新读取当前运行中的 MCP 工具目录。
+    ///
+    /// GUI 收到 MCP `list_changed` 通知后必须绕过旧缓存，确保显式刷新
+    /// 看到服务端已经发布的新工具集合。
+    pub async fn list_tools_fresh(&self) -> Result<Vec<McpToolDefinition>, McpError> {
+        self.invalidate_tool_cache().await;
+        self.list_tools().await
+    }
+
     // ========================================================================
     // 事件发送方法
     // ========================================================================

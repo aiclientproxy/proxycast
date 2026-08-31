@@ -8,6 +8,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   PanelRight,
+  Activity,
   SlidersHorizontal,
   SquareTerminal,
   UserRound,
@@ -96,6 +97,7 @@ interface TaskCenterUtilityToolbarProps {
   onToggleBrowserPanel?: () => void;
   onToggleFilesPanel?: () => void;
   onToggleTracePanel?: () => void;
+  onToggleActivityPanel?: () => void;
   rightSurfaceLaunchers?: readonly WorkspaceRightSurfaceLauncherProjection[];
 }
 
@@ -233,6 +235,7 @@ export function TaskCenterUtilityToolbar({
   onToggleBrowserPanel,
   onToggleFilesPanel,
   onToggleTracePanel,
+  onToggleActivityPanel,
   rightSurfaceLaunchers,
 }: TaskCenterUtilityToolbarProps) {
   const { t } = useTranslation("agent");
@@ -266,6 +269,7 @@ export function TaskCenterUtilityToolbar({
   const filesLauncher = rightSurfaceLauncherByKind.get("files");
   const browserLauncher = rightSurfaceLauncherByKind.get("browser");
   const traceLauncher = rightSurfaceLauncherByKind.get("trace");
+  const activityLauncher = rightSurfaceLauncherByKind.get("activity");
   const shouldRenderFilesToggle =
     Boolean(onToggleFilesPanel) &&
     Boolean(filesLauncher) &&
@@ -278,6 +282,12 @@ export function TaskCenterUtilityToolbar({
     (!traceLauncher?.disabled ||
       Boolean(traceLauncher?.active) ||
       (traceLauncher?.pendingCount ?? 0) > 0);
+  const shouldRenderActivityToggle =
+    Boolean(onToggleActivityPanel) &&
+    Boolean(activityLauncher) &&
+    (!activityLauncher?.disabled ||
+      Boolean(activityLauncher?.active) ||
+      (activityLauncher?.pendingCount ?? 0) > 0);
   const shouldRenderBrowserToggle =
     Boolean(onToggleBrowserPanel) &&
     Boolean(browserLauncher) &&
@@ -289,6 +299,7 @@ export function TaskCenterUtilityToolbar({
     showExpertInfoToggle ||
     showCanvasToggle ||
     shouldRenderTraceToggle ||
+    shouldRenderActivityToggle ||
     shouldRenderBrowserToggle ||
     shouldRenderFilesToggle;
   const effectiveCanvasOpen = workbenchLauncher?.active ?? isCanvasOpen;
@@ -301,6 +312,8 @@ export function TaskCenterUtilityToolbar({
   const browserPendingCount = browserLauncher?.pendingCount ?? 0;
   const effectiveTracePanelOpen = traceLauncher?.active ?? false;
   const tracePendingCount = traceLauncher?.pendingCount ?? 0;
+  const effectiveActivityPanelOpen = Boolean(activityLauncher?.active);
+  const activityPendingCount = activityLauncher?.pendingCount ?? 0;
   const effectiveExpertInfoPanelVisible =
     expertInfoLauncher?.active ?? expertInfoPanelVisible;
   const expertInfoPendingCount = expertInfoLauncher?.pendingCount ?? 0;
@@ -652,6 +665,38 @@ export function TaskCenterUtilityToolbar({
                   {effectiveHarnessPendingCount > 99
                     ? "99+"
                     : effectiveHarnessPendingCount}
+                </span>
+              ) : null}
+            </Button>
+          ) : null}
+
+          {shouldRenderActivityToggle ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                taskCenterIconOnlyButtonClassName,
+                "relative",
+                effectiveActivityPanelOpen &&
+                  "bg-[color:var(--lime-chrome-tab-active-surface)] text-[color:var(--lime-text)]",
+              )}
+              disabled={activityLauncher?.disabled}
+              onClick={onToggleActivityPanel}
+              aria-label={agentText(
+                effectiveActivityPanelOpen
+                  ? "agentChat.navbar.closeActivity"
+                  : "agentChat.navbar.openActivity",
+                effectiveActivityPanelOpen ? "关闭活动" : "打开活动",
+              )}
+              aria-expanded={effectiveActivityPanelOpen}
+              title={agentText("agentChat.navbar.activity", "活动")}
+              data-testid="task-center-activity-toggle"
+            >
+              <Activity className="h-4 w-4" />
+              {activityPendingCount > 0 ? (
+                <span className="absolute -right-1 -top-1 rounded-full border border-[color:var(--lime-surface-border-strong)] bg-[color:var(--lime-surface)] px-1 text-[9px] font-medium leading-4 text-[color:var(--lime-brand-strong)]">
+                  {activityPendingCount > 99 ? "99+" : activityPendingCount}
                 </span>
               ) : null}
             </Button>

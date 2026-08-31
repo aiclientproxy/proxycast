@@ -24,15 +24,20 @@ export async function listPermissionProfiles(
 
 export async function resolveAllowedPermissionProfile(
   id: string,
+  cwd?: string,
   appServerClient?: PermissionProfileAppServerClient,
 ): Promise<PermissionProfileSummary> {
   const normalizedId = id.trim();
   if (!normalizedId) {
     throw new Error("permission profile id must not be empty");
   }
-  const matches = (await listPermissionProfiles({}, appServerClient)).filter(
-    (profile) => profile.id === normalizedId,
-  );
+  const normalizedCwd = cwd?.trim();
+  const matches = (
+    await listPermissionProfiles(
+      normalizedCwd ? { cwd: normalizedCwd } : {},
+      appServerClient,
+    )
+  ).filter((profile) => profile.id === normalizedId);
   if (matches.length !== 1) {
     throw new Error(
       `App Server permissionProfile/list must return exactly one ${normalizedId} profile`,

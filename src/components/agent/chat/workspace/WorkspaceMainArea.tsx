@@ -320,6 +320,7 @@ export function WorkspaceMainArea({
         <GeneralWorkbenchInputOverlay
           $bottomInset={shellBottomInset}
           data-testid="general-workbench-input-overlay"
+          data-action-owner="composer"
           data-bottom-inset={shellBottomInset}
         >
           {inputbarNode}

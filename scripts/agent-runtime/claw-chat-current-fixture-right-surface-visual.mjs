@@ -18,6 +18,7 @@ const RIGHT_SURFACE_ROOTS = {
   files: "workspace-files-surface",
   objectCanvas: "workspace-object-canvas-surface",
   articleWorkspace: "workspace-article-editor-surface",
+  activity: "thread-activity-panel",
 };
 
 export async function runRightSurfaceVisualMatrix({
@@ -173,6 +174,12 @@ export async function runRightSurfaceVisualMatrix({
         toggleTestId: "workspace-right-surface-tab-appSurface",
         rootTestId: RIGHT_SURFACE_ROOTS.appSurface,
       }),
+      activity: await clickAndAssertRightSurface(page, options, {
+        surfaceKind: "activity",
+        toggleTestId: "task-center-activity-toggle",
+        rootTestId: RIGHT_SURFACE_ROOTS.activity,
+        requireCanvasPanelFill: false,
+      }),
     };
   } catch (error) {
     const toolbarAfterFailure = await captureRightSurfaceToolbarDiagnostics(
@@ -214,6 +221,37 @@ export async function runRightSurfaceVisualMatrix({
     toolbarBeforeClicks,
     captures,
     pendingAfterClicks: summarizePendingList(pendingAfterClicks.result),
+  });
+}
+
+export async function runThreadActivityPanelSmoke({
+  page,
+  options,
+  sessionId,
+}) {
+  const toggle = await waitForRightSurfaceToggle(
+    page,
+    options,
+    "task-center-activity-toggle",
+  );
+  await clickRightSurfaceToggle(page, "task-center-activity-toggle");
+  const opened = await waitForRightSurfaceSnapshot(page, options, {
+    activeSurfaceKind: "activity",
+    requireCanvasPanelFill: false,
+    surfaceKind: "activity",
+    rootTestId: RIGHT_SURFACE_ROOTS.activity,
+  });
+  await sleep(1_000);
+  const stable = await captureRightSurfaceSnapshot(page, {
+    activeSurfaceKind: "activity",
+    surfaceKind: "activity",
+    rootTestId: RIGHT_SURFACE_ROOTS.activity,
+  });
+  assertRightSurfaceSnapshot(stable, "activity", "activity", false);
+  return sanitizeJson({
+    activityOnly: true,
+    sessionId,
+    captures: { activity: { toggle, opened, stable } },
   });
 }
 
@@ -762,7 +800,8 @@ export function isRightSurfaceSnapshotReady(
     snapshot?.geometry?.rootFillsSurfaceViewport === true &&
     (surfaceKind === "articleWorkspace" ||
       requireCanvasPanelFill === false ||
-      snapshot?.geometry?.hostFillsCanvasPanel === true);
+      snapshot?.geometry?.hostFillsCanvasPanel === true ||
+      snapshot?.geometry?.rootFillsActivePane === true);
 
   return (
     snapshot?.activeSurface === activeSurfaceKind &&

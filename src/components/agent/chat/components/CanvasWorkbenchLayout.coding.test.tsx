@@ -250,6 +250,11 @@ describe("CanvasWorkbenchLayout coding mode", () => {
     );
     expect(
       container.querySelector(
+        '[data-testid="canvas-workbench-changes-current-ref"]',
+      )?.textContent,
+    ).toContain("main");
+    expect(
+      container.querySelector(
         '[data-testid="canvas-workbench-changes-base-menu"]',
       ),
     ).toBeNull();
@@ -896,6 +901,28 @@ describe("CanvasWorkbenchLayout coding mode", () => {
         '[data-testid="canvas-workbench-changes-branch-compare"]',
       )?.textContent,
     ).toContain("main -> origin/main");
+    expect(
+      container.querySelector(
+        '[data-testid="canvas-workbench-changes-current-ref"]',
+      )?.textContent,
+    ).toContain("main");
+    expect(
+      container.querySelector(
+        '[data-testid="canvas-workbench-changes-comparison-base"]',
+      )?.textContent,
+    ).toContain("origin/main");
+    expect(
+      container
+        .querySelector('[data-testid="canvas-workbench-changes-file-count"]')
+        ?.getAttribute("data-count"),
+    ).toBe("1");
+    expect(
+      container
+        .querySelector(
+          '[data-testid="canvas-workbench-changes-uncommitted-count"]',
+        )
+        ?.getAttribute("data-count"),
+    ).toBe("1");
     expect(
       container.querySelectorAll(
         '[data-testid="canvas-workbench-change-diff-file"]',

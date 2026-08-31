@@ -61,7 +61,8 @@ function baseInput(overrides = {}) {
     futureTurnRequest: {
       model: "gpt-5.4",
       service_tier: "fast",
-      environment_context: "<environment_context><cwd>/repo/next</cwd></environment_context>",
+      environment_context:
+        "<environment_context><cwd>/repo/next</cwd></environment_context>",
     },
     transcriptItems: [],
     readModelItems: [],
@@ -85,15 +86,12 @@ function baseInput(overrides = {}) {
 }
 
 test("thread settings live update uses notification facts and future turns without transcript pollution", () => {
-  const event = buildThreadSettingsLiveUpdateProjectionEvent(
-    baseInput(),
-    {
-      sequence: 211,
-      sessionId: "session-thread",
-      turnId: "turn-settings",
-      timestamp: "2026-07-09T00:00:00.000Z",
-    },
-  );
+  const event = buildThreadSettingsLiveUpdateProjectionEvent(baseInput(), {
+    sequence: 211,
+    sessionId: "session-thread",
+    turnId: "turn-settings",
+    timestamp: "2026-07-09T00:00:00.000Z",
+  });
 
   assert.deepEqual(
     {
@@ -182,7 +180,8 @@ test("thread settings live update keeps active turn settings stable and applies 
       futureTurnRequest: {
         model: "mock-model",
         service_tier: "standard",
-        environment_context: "<environment_context><cwd>/repo/current</cwd></environment_context>",
+        environment_context:
+          "<environment_context><cwd>/repo/current</cwd></environment_context>",
       },
     }),
   );
@@ -256,6 +255,29 @@ test("thread settings live update handles service tier clear as future request o
   assert.deepEqual(snapshot.validationIssues, []);
 });
 
+test("thread settings live update reads permission provenance from the active profile", () => {
+  const snapshot = extractThreadSettingsLiveUpdateSnapshot(
+    baseInput({
+      settingsUpdateRequest: {
+        threadId: "thread-settings",
+        permissions: ":workspace",
+      },
+      settingsNotification: [
+        settingsNotification("thread-settings", {
+          activePermissionProfile: { id: ":workspace" },
+          sandboxPolicy: "workspace-write",
+        }),
+      ],
+      expectedSettings: {
+        permissions: ":workspace",
+      },
+    }),
+  );
+
+  assert.equal(snapshot.notificationMatchesExpected, true);
+  assert.deepEqual(snapshot.validationIssues, []);
+});
+
 test("thread settings live update rejects sandboxPolicy combined with permissions without current error", () => {
   const snapshot = extractThreadSettingsLiveUpdateSnapshot(
     baseInput({
@@ -293,7 +315,9 @@ test("thread settings live update rejects sandboxPolicy combined with permission
 test("thread settings live update requires scoped settings notification", () => {
   const snapshot = extractThreadSettingsLiveUpdateSnapshot(
     baseInput({
-      settingsNotification: [settingsNotification("other-thread", { model: "gpt-5.4" })],
+      settingsNotification: [
+        settingsNotification("other-thread", { model: "gpt-5.4" }),
+      ],
     }),
   );
 

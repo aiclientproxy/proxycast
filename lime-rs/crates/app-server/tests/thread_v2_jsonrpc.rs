@@ -615,6 +615,126 @@ async fn mcp_progress_uses_one_typed_item_lifecycle_in_public_jsonrpc_messages()
 }
 
 #[tokio::test]
+async fn mcp_list_changed_progress_preserves_refresh_kind_in_public_jsonrpc() {
+    let (_temp, server) = test_server();
+    initialize_server(&server).await;
+    let (session_id, _thread_id, turn_id) =
+        start_thread_turn(&server, "refresh MCP catalogs").await;
+
+    let messages = server
+        .append_external_runtime_events(
+            &session_id,
+            Some(&turn_id),
+            vec![
+                RuntimeEvent::new(
+                    "item.started",
+                    canonical_mcp_item("mcp-call-1", "inProgress"),
+                ),
+                RuntimeEvent::new(
+                    "tool.progress",
+                    mcp_progress_payload(
+                        "mcp-call-1",
+                        "工具服务列表已更新",
+                        Some("mcp_tools_changed"),
+                    ),
+                ),
+                RuntimeEvent::new(
+                    "item.completed",
+                    canonical_mcp_item("mcp-call-1", "completed"),
+                ),
+            ],
+        )
+        .await
+        .expect("MCP list_changed notification");
+    let notifications = messages
+        .into_iter()
+        .map(|message| serde_json::to_value(message).expect("serialize JSON-RPC message"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        notifications
+            .iter()
+            .map(|message| message["method"].as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            Some("item/started"),
+            Some("item/mcpToolCall/progress"),
+            Some("item/completed")
+        ]
+    );
+    assert_eq!(
+        notifications[1].pointer("/params/notificationKind"),
+        Some(&json!("mcp_tools_changed"))
+    );
+}
+
+#[tokio::test]
+async fn mcp_list_changed_progress_materializes_route_from_progress_metadata() {
+    let (_temp, server) = test_server();
+    initialize_server(&server).await;
+    let (session_id, _thread_id, turn_id) =
+        start_thread_turn(&server, "refresh MCP catalogs from metadata").await;
+
+    let mut runtime_events = vec![RuntimeEvent::new(
+        "item.started",
+        canonical_mcp_item("mcp-call-metadata", "inProgress"),
+    )];
+    runtime_events.extend(
+        [
+            "mcp_tools_changed",
+            "mcp_prompts_changed",
+            "mcp_resources_changed",
+        ]
+        .into_iter()
+        .map(|notification_kind| {
+            RuntimeEvent::new(
+                "tool.progress",
+                json!({
+                    "tool_id": "mcp-call-metadata",
+                    "progress": {
+                        "message": "工具服务能力列表已更新",
+                        "metadata": {
+                            "notification_kind": notification_kind,
+                            "server_name": "docs",
+                            "tool_name": "search",
+                            "runtime_tool_name": "mcp__docs__search"
+                        }
+                    }
+                }),
+            )
+        }),
+    );
+    let messages = server
+        .append_external_runtime_events(&session_id, Some(&turn_id), runtime_events)
+        .await
+        .expect("MCP metadata list_changed notification");
+    let notifications = messages
+        .into_iter()
+        .map(|message| serde_json::to_value(message).expect("serialize JSON-RPC message"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(notifications.len(), 4);
+    assert_eq!(notifications[0]["method"], "item/started");
+    assert!(notifications[1..]
+        .iter()
+        .all(|notification| notification["method"] == "item/mcpToolCall/progress"));
+    assert!(notifications[1..]
+        .iter()
+        .all(|notification| { notification["params"]["itemId"] == "item_mcp-call-metadata" }));
+    assert_eq!(
+        notifications[1..]
+            .iter()
+            .map(|notification| notification["params"]["notificationKind"].clone())
+            .collect::<Vec<_>>(),
+        vec![
+            json!("mcp_tools_changed"),
+            json!("mcp_prompts_changed"),
+            json!("mcp_resources_changed"),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn mcp_progress_fails_closed_outside_its_typed_lifecycle() {
     for (scenario, events) in [
         (
@@ -1172,7 +1292,11 @@ async fn thread_archive_moves_the_dated_rollout_and_unarchive_restores_it() {
         json!({
             "model": "gpt-5.4",
             "modelProvider": "openai",
-            "historyMode": "paginated"
+            "historyMode": "paginated",
+            "environments": [{
+                "environmentId": "local",
+                "cwd": "/tmp/lime-thread-environment"
+            }]
         }),
     )
     .await;
@@ -1253,6 +1377,20 @@ async fn thread_archive_moves_the_dated_rollout_and_unarchive_restores_it() {
             .find(|line| line.get("id") == Some(&json!(7)))
             .and_then(|line| line.pointer("/result/thread/id")),
         Some(&json!(thread_id))
+    );
+    assert_eq!(
+        unarchive_lines
+            .iter()
+            .find(|line| line.get("method") == Some(&json!("thread/environment/connected")))
+            .and_then(|line| line.pointer("/params/threadId")),
+        Some(&json!(thread_id))
+    );
+    assert_eq!(
+        unarchive_lines
+            .iter()
+            .find(|line| line.get("method") == Some(&json!("thread/environment/connected")))
+            .and_then(|line| line.pointer("/params/environmentId")),
+        Some(&json!("local"))
     );
     assert_eq!(
         unarchive_lines

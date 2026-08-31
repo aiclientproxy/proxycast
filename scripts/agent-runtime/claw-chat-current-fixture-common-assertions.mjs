@@ -101,6 +101,7 @@ export function buildCommonAssertions(context) {
     isSkillsRuntimeScenario,
     isSoulStyleScenario,
     isRightSurfaceVisualMatrixScenario,
+    isThreadActivityPanelScenario,
     isContentFactoryArticleWorkspaceScenario,
     isAnyExpertSkillsRuntimeScenario,
     isApprovalRequestResumeScenario,
@@ -118,6 +119,7 @@ export function buildCommonAssertions(context) {
   } = context;
   const shouldRequireAgentUiTraceEvidence =
     !isRightSurfaceVisualMatrixScenario &&
+    !isThreadActivityPanelScenario &&
     !isContentFactoryArticleWorkspaceScenario &&
     !isExpertPlazaSkillsRuntimeScenario;
   const isLiveTailLayoutScenario =
@@ -195,6 +197,8 @@ export function buildCommonAssertions(context) {
         appServerRequestMethods.includes(
           APP_SERVER_METHOD_WORKSPACE_RIGHT_SURFACE_REQUEST,
         )) ||
+      (isThreadActivityPanelScenario &&
+        appServerRequestMethods.includes(APP_SERVER_METHOD_SESSION_READ)) ||
       (isContentFactoryArticleWorkspaceScenario &&
         appServerRequestMethods.includes(APP_SERVER_METHOD_ARTIFACT_WRITE)),
     usedCurrentSessionStart: appServerRequestMethods.includes(
@@ -212,6 +216,7 @@ export function buildCommonAssertions(context) {
       : isImageCommandScenario
         ? summary.imageCommandWorkflowUsed === true
         : isRightSurfaceVisualMatrixScenario ||
+            isThreadActivityPanelScenario ||
             isContentFactoryArticleWorkspaceScenario
           ? true
           : isSoulStyleScenario
@@ -221,6 +226,7 @@ export function buildCommonAssertions(context) {
       ? summary.activeSteer?.provider?.initialRequestObserved === true &&
         summary.activeSteer?.provider?.steerRequestObserved === true
       : isRightSurfaceVisualMatrixScenario ||
+          isThreadActivityPanelScenario ||
           isContentFactoryArticleWorkspaceScenario
         ? true
         : isInputbarRichRestoreScenario
@@ -258,6 +264,9 @@ export function buildCommonAssertions(context) {
           summary.guiContinueCompleted?.bodyText?.includes(NEWS_PROMPT) === true
         : isInputbarRichRestoreScenario
           ? summary.inputbarRichRestoreGuiCanceled?.hasPrompt === true
+          : isThreadActivityPanelScenario
+            ? summary.rightSurfaceVisualMatrix?.captures?.activity?.stable
+                ?.rootVisible === true
           : isRightSurfaceVisualMatrixScenario
             ? summary.rightSurfaceVisualMatrix?.captures?.expertInfo?.stable
                 ?.rootVisible === true
@@ -291,7 +300,8 @@ export function buildCommonAssertions(context) {
                               ? summary.guiApprovalRequestResumeCompleted
                                   ?.hasPrompt === true
                               : isApprovalRequestFullAccessScenario
-                                ? summary.guiApprovalRequestFullAccessCompleted
+                                  ? summary
+                                      .guiApprovalRequestFullAccessCompleted
                                     ?.hasPrompt === true
                                 : isApprovalRequestDecisionScenario
                                   ? approvalRequestDecisionCompleted?.hasPrompt ===
@@ -350,16 +360,21 @@ export function buildCommonAssertions(context) {
         : isInputbarRichRestoreScenario
           ? summary.inputbarRichRestoreGuiCanceled?.noVisibleAssistantOutput ===
             true
+          : isThreadActivityPanelScenario
+            ? summary.rightSurfaceVisualMatrix?.captures?.activity?.stable
+                ?.rootVisible === true
           : isRightSurfaceVisualMatrixScenario
             ? summary.rightSurfaceVisualMatrix?.captures?.files?.stable
                 ?.rootVisible === true &&
               summary.rightSurfaceVisualMatrix?.captures?.objectCanvas?.stable
                 ?.rootVisible === true &&
               summary.rightSurfaceVisualMatrix?.captures?.browser?.stable
+                  ?.rootVisible === true &&
+                summary.rightSurfaceVisualMatrix?.captures?.activity?.stable
                 ?.rootVisible === true
             : isContentFactoryArticleWorkspaceScenario
-              ? summary.contentFactoryArticleWorkspaceArtifactFrame?.visible ===
-                  true &&
+                ? summary.contentFactoryArticleWorkspaceArtifactFrame
+                    ?.visible === true &&
                 summary.contentFactoryArticleWorkspaceArtifactFrame
                   ?.hasArticlePreviewContent === true &&
                 summary.contentFactoryArticleWorkspaceGui
@@ -386,8 +401,8 @@ export function buildCommonAssertions(context) {
                       : isWebToolsRenderingScenario
                         ? summary.guiWebToolsRenderingCompleted
                             ?.hasAssistantSummary === true ||
-                          summary.guiWebToolsRenderingCompleted?.hasDoneText ===
-                            true
+                            summary.guiWebToolsRenderingCompleted
+                              ?.hasDoneText === true
                         : isReasoningFirstVisibleScenario
                           ? summary.guiReasoningFirstVisibleBeforeAnswer
                               ?.hasReasoningText === true &&
@@ -406,9 +421,11 @@ export function buildCommonAssertions(context) {
                                 summary.guiApprovalRequestResumeCompleted
                                   ?.hasDoneText === true
                               : isApprovalRequestFullAccessScenario
-                                ? summary.guiApprovalRequestFullAccessCompleted
+                                  ? summary
+                                      .guiApprovalRequestFullAccessCompleted
                                     ?.hasAssistantSummary === true ||
-                                  summary.guiApprovalRequestFullAccessCompleted
+                                    summary
+                                      .guiApprovalRequestFullAccessCompleted
                                     ?.hasDoneText === true
                                 : isApprovalRequestDecisionScenario
                                   ? isApprovalRequestDeclineScenario
@@ -436,7 +453,8 @@ export function buildCommonAssertions(context) {
                                             ?.hasDoneText === true
                                         : isTypedErrorRetryScenario
                                           ? summary.guiTypedErrorTerminal
-                                              ?.hasAssistantSummary === true ||
+                                                ?.hasAssistantSummary ===
+                                                true ||
                                             summary.guiTypedErrorTerminal
                                               ?.hasDoneText === true
                                           : isMcpStructuredContentScenario
@@ -446,7 +464,8 @@ export function buildCommonAssertions(context) {
                                                 true &&
                                                 summary
                                                   .guiMcpStructuredContentCompleted
-                                                  ?.hasReferenceId === true) ||
+                                                    ?.hasReferenceId ===
+                                                    true) ||
                                               summary
                                                 .guiMcpStructuredContentCompleted
                                                 ?.hasDoneText === true ||
@@ -516,6 +535,9 @@ export function buildCommonAssertions(context) {
               false &&
             summary.inputbarRichRestoreGuiCanceled?.textareaValue ===
               INPUTBAR_RICH_RESTORE_PROMPT
+          : isThreadActivityPanelScenario
+            ? summary.guiRightSurfaceVisualMatrixSessionOpened?.inputReady
+                ?.textareaDisabled === false
           : isRightSurfaceVisualMatrixScenario
             ? summary.guiRightSurfaceVisualMatrixSessionOpened?.inputReady
                 ?.textareaDisabled === false
@@ -547,8 +569,8 @@ export function buildCommonAssertions(context) {
                             summary.guiReasoningFirstVisibleCompleted
                               ?.textareaDisabled === false
                           : isLiveTailLayoutScenario
-                            ? summary.guiLiveTailCompleted?.textareaVisible ===
-                                true ||
+                              ? summary.guiLiveTailCompleted
+                                  ?.textareaVisible === true ||
                               (summary.guiElectronResizeReflowCompleted
                                 ?.textareaVisible === true &&
                                 summary.guiElectronResizeReflowCompleted
@@ -559,9 +581,11 @@ export function buildCommonAssertions(context) {
                                 summary.guiApprovalRequestResumeCompleted
                                   ?.textareaDisabled === false
                               : isApprovalRequestFullAccessScenario
-                                ? summary.guiApprovalRequestFullAccessCompleted
+                                  ? summary
+                                      .guiApprovalRequestFullAccessCompleted
                                     ?.textareaVisible === true &&
-                                  summary.guiApprovalRequestFullAccessCompleted
+                                    summary
+                                      .guiApprovalRequestFullAccessCompleted
                                     ?.textareaDisabled === false
                                 : isApprovalRequestDecisionScenario
                                   ? approvalRequestDecisionCompleted?.textareaVisible ===
@@ -604,7 +628,8 @@ export function buildCommonAssertions(context) {
                                             : isMediaReferenceScenario
                                               ? summary
                                                   .guiMediaReferenceCompleted
-                                                  ?.textareaVisible === true &&
+                                                    ?.textareaVisible ===
+                                                    true &&
                                                 summary
                                                   .guiMediaReferenceCompleted
                                                   ?.textareaDisabled === false
@@ -631,7 +656,8 @@ export function buildCommonAssertions(context) {
                                                     true &&
                                                   summary
                                                     .guiManualEnableSkillsRuntimeCompleted
-                                                    ?.textareaDisabled === false
+                                                      ?.textareaDisabled ===
+                                                      false
                                                 : isAnyExpertSkillsRuntimeScenario
                                                   ? isExpertPanelSkillsRuntimeScenario
                                                     ? summary
@@ -662,6 +688,8 @@ export function buildCommonAssertions(context) {
         ? summary.guiContinueCompleted?.stopButtonVisible === false
         : isInputbarRichRestoreScenario
           ? summary.inputbarRichRestoreGuiCanceled?.stopButtonVisible === false
+          : isThreadActivityPanelScenario
+            ? true
           : isRightSurfaceVisualMatrixScenario
             ? true
             : isContentFactoryArticleWorkspaceScenario
@@ -673,8 +701,8 @@ export function buildCommonAssertions(context) {
                   : isHomeHotpathScenario
                     ? homeHotpathGuiCompleted.stopButtonVisible === false
                     : isImageCommandScenario
-                      ? summary.guiImageCommandCompleted?.stopButtonVisible ===
-                        false
+                        ? summary.guiImageCommandCompleted
+                            ?.stopButtonVisible === false
                       : isWebToolsRenderingScenario
                         ? summary.guiWebToolsRenderingCompleted
                             ?.stopButtonVisible === false
@@ -690,7 +718,8 @@ export function buildCommonAssertions(context) {
                               ? summary.guiApprovalRequestResumeCompleted
                                   ?.stopButtonVisible === false
                               : isApprovalRequestFullAccessScenario
-                                ? summary.guiApprovalRequestFullAccessCompleted
+                                  ? summary
+                                      .guiApprovalRequestFullAccessCompleted
                                     ?.stopButtonVisible === false
                                 : isApprovalRequestDecisionScenario
                                   ? approvalRequestDecisionCompleted?.stopButtonVisible ===
@@ -717,7 +746,8 @@ export function buildCommonAssertions(context) {
                                             : isMediaReferenceScenario
                                               ? summary
                                                   .guiMediaReferenceCompleted
-                                                  ?.stopButtonVisible === false
+                                                    ?.stopButtonVisible ===
+                                                  false
                                               : isSkillsRuntimeScenario
                                                 ? summary
                                                     .guiSkillsRuntimeCompleted
@@ -770,17 +800,22 @@ export function buildCommonAssertions(context) {
             ? pageText.includes(INPUTBAR_RICH_RESTORE_PROMPT) &&
               summary.inputbarRichRestoreGuiCanceled
                 ?.noVisibleAssistantOutput === true
+            : isThreadActivityPanelScenario
+              ? summary.rightSurfaceVisualMatrix?.captures?.activity?.stable
+                  ?.activeSurface === "activity"
             : isRightSurfaceVisualMatrixScenario
               ? summary.rightSurfaceVisualMatrix?.captures?.files?.stable
                   ?.activeSurface === "files" &&
-                summary.rightSurfaceVisualMatrix?.captures?.objectCanvas?.stable
-                  ?.activeSurface === "objectCanvas" &&
+                  summary.rightSurfaceVisualMatrix?.captures?.objectCanvas
+                    ?.stable?.activeSurface === "objectCanvas" &&
                 summary.rightSurfaceVisualMatrix?.captures?.expertInfo?.stable
                   ?.activeSurface === "expertInfo" &&
                 summary.rightSurfaceVisualMatrix?.captures?.browser?.stable
                   ?.activeSurface === "browser" &&
                 summary.rightSurfaceVisualMatrix?.captures?.appSurface?.stable
-                  ?.activeSurface === "appSurface"
+                    ?.activeSurface === "appSurface" &&
+                  summary.rightSurfaceVisualMatrix?.captures?.activity?.stable
+                    ?.activeSurface === "activity"
               : isContentFactoryArticleWorkspaceScenario
                 ? summary.contentFactoryArticleWorkspaceGui?.activeSurface ===
                     "articleWorkspace" &&
@@ -826,8 +861,8 @@ export function buildCommonAssertions(context) {
                             summary.guiImageCommandCompleted
                               ?.hasCreateTaskTool === true)
                         : isWebToolsRenderingScenario
-                          ? summary.guiWebToolsRenderingCompleted?.hasPrompt ===
-                              true &&
+                            ? summary.guiWebToolsRenderingCompleted
+                                ?.hasPrompt === true &&
                             summary.guiWebToolsRenderingCompleted
                               ?.historicalTimelinePreviewVisible === true &&
                             summary.guiWebToolsRenderingCompleted
@@ -836,7 +871,9 @@ export function buildCommonAssertions(context) {
                             ? pageText.includes(
                                 REASONING_FIRST_VISIBLE_PROMPT,
                               ) &&
-                              pageText.includes(REASONING_FIRST_VISIBLE_TEXT) &&
+                                pageText.includes(
+                                  REASONING_FIRST_VISIBLE_TEXT,
+                                ) &&
                               (pageText.includes(
                                 REASONING_FIRST_VISIBLE_FINAL_TEXT,
                               ) ||
@@ -845,8 +882,8 @@ export function buildCommonAssertions(context) {
                                 ))
                             : isLiveTailLayoutScenario
                               ? isLiveTailCommitScenario
-                                ? summary.guiLiveTailVisualOracle?.hasPrompt ===
-                                    true &&
+                                  ? summary.guiLiveTailVisualOracle
+                                      ?.hasPrompt === true &&
                                   summary.guiLiveTailVisualOracle
                                     ?.hasFirstText === true &&
                                   summary.guiLiveTailVisualOracle
@@ -857,8 +894,9 @@ export function buildCommonAssertions(context) {
                                     ?.hasDoneText === true
                                 : summary.guiElectronResizeReflowCompleted
                                     ?.hasPrompt === true &&
-                                  summary.electronResizeReflowLayout?.snapshots
-                                    ?.restored?.hasTableTail === true
+                                    summary.electronResizeReflowLayout
+                                      ?.snapshots?.restored?.hasTableTail ===
+                                      true
                               : isApprovalRequestResumeScenario
                                 ? pageText.includes(
                                     APPROVAL_REQUEST_RESUME_PROMPT,
@@ -1017,7 +1055,8 @@ export function buildCommonAssertions(context) {
                                                       true ||
                                                       summary
                                                         .guiManualEnableSkillsRuntimeCompleted
-                                                        ?.hasDoneText === true)
+                                                          ?.hasDoneText ===
+                                                          true)
                                                   : isAnyExpertSkillsRuntimeScenario
                                                     ? isExpertPanelSkillsRuntimeScenario
                                                       ? summary

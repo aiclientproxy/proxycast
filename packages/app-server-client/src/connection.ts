@@ -15,6 +15,10 @@ export type AppServerServerRequestHandler = (
   message: protocol.JsonRpcRequest,
 ) => Promise<boolean> | boolean;
 
+export type AppServerNotificationObserver = (
+  message: protocol.JsonRpcNotification,
+) => void;
+
 export type AppServerRequestOptions = {
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -114,6 +118,7 @@ export class AppServerConnection {
   #bufferedMessages: protocol.JsonRpcMessage[] = [];
   #detachedRequestIds = new Set<protocol.RequestId>();
   #messageReads: PendingMessageRead[] = [];
+  #notificationObserver: AppServerNotificationObserver | null = null;
   #pendingRequests = new Map<protocol.RequestId, PendingRequestRead>();
   #pendingServerRequestIds = new Set<protocol.RequestId>();
   #readPump: Promise<void> | null = null;
@@ -220,6 +225,15 @@ export class AppServerConnection {
     if (handler) {
       this.#ensureReadPump();
     }
+  }
+
+  /**
+   * Observes notifications as soon as the shared read pump receives them.
+   * The observer never consumes the message; normal request and drain waiters
+   * continue to receive it.
+   */
+  setNotificationObserver(observer: AppServerNotificationObserver | null): void {
+    this.#notificationObserver = observer;
   }
 
   /** Sends a JSON-RPC error for an App Server initiated request. */
@@ -409,6 +423,9 @@ export class AppServerConnection {
 
   #dispatchIncomingMessage(message: protocol.JsonRpcMessage): void {
     this.#observeServerMessage(message);
+    if (protocol.isJsonRpcNotification(message)) {
+      this.#notificationObserver?.(message);
+    }
     if (this.#consumeDetachedRequestMessage(message)) {
       return;
     }

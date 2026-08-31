@@ -631,7 +631,7 @@ describe("defaultAgentRuntimeAdapter", () => {
     expect(client.updateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
       threadId: "thread-9",
       approvalPolicy: "never",
-      sandboxPolicy: "danger-full-access",
+      permissions: ":danger-full-access",
       modelProvider: "openai",
       model: "gpt-5.4-mini",
     });

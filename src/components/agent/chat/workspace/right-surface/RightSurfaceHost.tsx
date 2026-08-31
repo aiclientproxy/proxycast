@@ -54,6 +54,10 @@ const RIGHT_SURFACE_TAB_LABELS: Record<
     key: "agentChat.rightSurface.tabs.trace",
     fallback: "Trace",
   },
+  activity: {
+    key: "agentChat.rightSurface.tabs.activity",
+    fallback: "活动",
+  },
 };
 
 export function RightSurfaceHost({

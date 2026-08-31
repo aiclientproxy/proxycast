@@ -152,6 +152,12 @@ impl ThreadStateManager {
             .await
             .live_connections
             .insert(connection_id);
+        if thread_subscription_debug_enabled() {
+            thread_subscription_debug_event(format!(
+                "thread transport connection initialized connection_id={connection_id}"
+            ));
+            tracing::warn!(%connection_id, "thread transport connection initialized");
+        }
     }
 
     #[cfg(test)]
@@ -179,7 +185,7 @@ impl ThreadStateManager {
         if inner.listeners_shutting_down {
             return None;
         }
-        let entry = inner.threads.entry(thread_id).or_default();
+        let entry = inner.threads.entry(thread_id.clone()).or_default();
         (!entry.unloading).then(|| entry.state.clone())
     }
 
@@ -190,6 +196,12 @@ impl ThreadStateManager {
     ) -> bool {
         let mut inner = self.inner.lock().await;
         if !inner.live_connections.contains(&connection_id) {
+            if thread_subscription_debug_enabled() {
+                thread_subscription_debug_event(format!(
+                    "thread subscription rejected: connection is not live thread_id={thread_id} connection_id={connection_id}"
+                ));
+                tracing::warn!(%thread_id, %connection_id, "thread subscription rejected: connection is not live");
+            }
             return false;
         }
         inner
@@ -197,8 +209,14 @@ impl ThreadStateManager {
             .entry(connection_id)
             .or_default()
             .insert(thread_id.clone());
-        let entry = inner.threads.entry(thread_id).or_default();
+        let entry = inner.threads.entry(thread_id.clone()).or_default();
         if entry.unloading {
+            if thread_subscription_debug_enabled() {
+                thread_subscription_debug_event(format!(
+                    "thread subscription rejected: thread is unloading thread_id={thread_id} connection_id={connection_id}"
+                ));
+                tracing::warn!(%thread_id, %connection_id, "thread subscription rejected: thread is unloading");
+            }
             return false;
         }
         entry.unload_generation = entry
@@ -207,6 +225,12 @@ impl ThreadStateManager {
             .expect("thread unload generation exhausted");
         entry.connection_ids.insert(connection_id);
         self.subscriber_changed.notify_waiters();
+        if thread_subscription_debug_enabled() {
+            thread_subscription_debug_event(format!(
+                "thread subscription registered thread_id={thread_id} connection_id={connection_id}"
+            ));
+            tracing::warn!(%thread_id, %connection_id, "thread subscription registered");
+        }
         true
     }
 
@@ -251,6 +275,12 @@ impl ThreadStateManager {
             }
         }
 
+        if thread_subscription_debug_enabled() {
+            thread_subscription_debug_event(format!(
+                "thread transport connection disconnected connection_id={connection_id} thread_ids={thread_ids:?}"
+            ));
+            tracing::warn!(%connection_id, ?thread_ids, "thread transport connection disconnected");
+        }
         thread_ids
             .into_iter()
             .filter(|thread_id| {
@@ -379,6 +409,25 @@ impl ThreadStateManager {
             thread_state.lock().await.clear_listener();
         }
     }
+}
+
+fn thread_subscription_debug_enabled() -> bool {
+    std::env::var_os("LIME_DEBUG_THREAD_SUBSCRIPTIONS").is_some()
+}
+
+fn thread_subscription_debug_event(message: impl std::fmt::Display) {
+    let Some(path) = std::env::var_os("LIME_DEBUG_THREAD_SUBSCRIPTIONS_FILE") else {
+        return;
+    };
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    else {
+        return;
+    };
+    use std::io::Write;
+    let _ = writeln!(file, "{message}");
 }
 
 #[cfg(test)]

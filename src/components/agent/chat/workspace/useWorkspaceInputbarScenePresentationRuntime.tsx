@@ -14,9 +14,7 @@ import type { Character } from "@/lib/api/projectMemory";
 import { Inputbar } from "../components/Inputbar";
 import type { TaskFile } from "../components/TaskFiles";
 import { CONVERSATION_CONTENT_MAX_WIDTH } from "../styles/conversationLayoutTokens";
-import {
-  type RuntimeToolAvailability,
-} from "../utils/runtimeToolAvailability";
+import { type RuntimeToolAvailability } from "../utils/runtimeToolAvailability";
 import { resolveCanvasTaskFileTarget } from "../utils/taskFileCanvasSync";
 import { GeneralWorkbenchDialogSection } from "./WorkspaceHarnessDialogs";
 import { isRenderableTaskFile } from "./generalWorkbenchHelpers";
@@ -410,11 +408,17 @@ export function useWorkspaceInputbarScenePresentationRuntime({
   // Runtime permission gates are stricter than plan confirmation: if both
   // exist, approval owns the input area until the current request is submitted.
   const inputbarNode = inputbarPresentation.approvalAccessory ? (
-    <InputbarControlReplacement data-testid="inputbar-approval-replacement">
+    <InputbarControlReplacement
+      data-testid="inputbar-approval-replacement"
+      data-action-owner="composer"
+    >
       {inputbarPresentation.approvalAccessory}
     </InputbarControlReplacement>
   ) : inputbarPresentation.planDecisionAccessory ? (
-    <InputbarControlReplacement data-testid="plan-decision-inputbar-replacement">
+    <InputbarControlReplacement
+      data-testid="plan-decision-inputbar-replacement"
+      data-action-owner="composer"
+    >
       {inputbarPresentation.planDecisionAccessory}
     </InputbarControlReplacement>
   ) : (

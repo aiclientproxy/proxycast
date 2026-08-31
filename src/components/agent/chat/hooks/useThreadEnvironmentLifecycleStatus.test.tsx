@@ -141,4 +141,54 @@ describe("useThreadEnvironmentLifecycleStatus", () => {
       expect(unsubscribe).toHaveBeenCalledTimes(1);
     }
   });
+
+  it("优先使用 canonical Thread environment snapshot 作为首帧状态", async () => {
+    const readStatuses = vi.fn(async () => [
+      {
+        environmentId: "remote-a",
+        status: "disconnected" as const,
+        error: "exec-server unavailable",
+      },
+    ]);
+    let current: ReturnType<typeof useThreadEnvironmentLifecycleStatus> = [];
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const canonicalThreadRead: AgentRuntimeThreadReadModel = {
+      thread_id: "thread-1",
+      environment_selections: [
+        {
+          environment_id: "remote-a",
+          cwd: "/remote/workspace",
+          status: "disconnected",
+          error: "exec-server unavailable",
+        },
+      ],
+    };
+
+    function Harness() {
+      current = useThreadEnvironmentLifecycleStatus({
+        readStatuses,
+        threadId: "thread-1",
+        threadRead: canonicalThreadRead,
+      });
+      return null;
+    }
+
+    try {
+      await act(async () => {
+        root.render(<Harness />);
+        await Promise.resolve();
+      });
+      expect(current).toEqual([
+        {
+          environmentId: "remote-a",
+          status: "disconnected",
+          error: "exec-server unavailable",
+        },
+      ]);
+      expect(readStatuses).toHaveBeenCalledWith(["remote-a"]);
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
 });

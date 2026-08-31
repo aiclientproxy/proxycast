@@ -2,14 +2,15 @@
 //!
 //! 将 Agent reply-loop 的 MCP 调用绑定到其 Session-owned connection generation。
 
-use futures::StreamExt;
+use futures::{stream, StreamExt};
 use lime_mcp::{
     build_runtime_extension_surface, runtime_extension_name,
-    McpBridgeClient as RuntimeMcpBridgeClient, McpBridgeSnapshot,
+    McpBridgeClient as RuntimeMcpBridgeClient, McpBridgeSnapshot, McpServerNotification,
 };
 use rmcp::model::{
     ErrorCode, ErrorData, Extensions, JsonObject, ListToolsResult, ProgressNotification,
-    ProgressNotificationMethod, ServerNotification,
+    ProgressNotificationMethod, PromptListChangedNotification, ResourceListChangedNotification,
+    ServerNotification, ToolListChangedNotification,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -71,6 +72,7 @@ impl McpBridgeRuntimeRegistry {
                 Arc::new(Mutex::new(Box::new(McpBridgeClient::new(
                     Arc::clone(&snapshot.manager),
                     Arc::clone(&snapshot.running_service),
+                    snapshot.server_name.clone(),
                     snapshot.tool_timeout,
                 ))));
             let surface = registration.config.clone();
@@ -107,8 +109,9 @@ impl McpBridgeRuntimeRegistry {
 }
 
 struct McpBridgeClient {
-    _manager: Arc<lime_mcp::McpClientManager>,
+    manager: Arc<lime_mcp::McpClientManager>,
     inner: RuntimeMcpBridgeClient,
+    server_name: String,
 }
 
 impl McpBridgeClient {
@@ -117,11 +120,13 @@ impl McpBridgeClient {
         service: Arc<
             rmcp::service::RunningService<rmcp::RoleClient, lime_mcp::LimeMcpClientService>,
         >,
+        server_name: String,
         tool_timeout: std::time::Duration,
     ) -> Self {
         Self {
-            _manager: manager,
+            manager,
             inner: RuntimeMcpBridgeClient::new(service, tool_timeout),
+            server_name,
         }
     }
 
@@ -164,6 +169,7 @@ impl McpConnection for McpBridgeClient {
         scope: &McpCallScope,
         cancel_token: CancellationToken,
     ) -> Result<McpConnectionCall, McpConnectionError> {
+        let runtime_notifications = self.manager.subscribe_server_notifications();
         let call = self
             .inner
             .start_tool_call(
@@ -182,9 +188,54 @@ impl McpConnection for McpBridgeClient {
                 extensions: Default::default(),
             })
         });
+        let server_name = self.server_name.clone();
+        let list_changed_notifications =
+            stream::unfold(runtime_notifications, |mut receiver| async move {
+                loop {
+                    match receiver.recv().await {
+                        Ok(notification) => return Some((notification, receiver)),
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
+                    }
+                }
+            })
+            .filter_map(move |notification| {
+                let server_name = server_name.clone();
+                async move {
+                    (notification.server_name == server_name)
+                        .then(|| map_runtime_mcp_notification(&notification))
+                        .flatten()
+                }
+            });
         Ok(McpConnectionCall {
             response: Box::pin(async move { response.await.map_err(service_error_data) }),
-            notifications: Box::pin(notifications),
+            notifications: Box::pin(stream::select(notifications, list_changed_notifications)),
         })
+    }
+}
+
+fn map_runtime_mcp_notification(
+    notification: &McpServerNotification,
+) -> Option<ServerNotification> {
+    match notification.method.as_str() {
+        "notifications/resources/list_changed" => Some(
+            ServerNotification::ResourceListChangedNotification(ResourceListChangedNotification {
+                method: Default::default(),
+                extensions: Default::default(),
+            }),
+        ),
+        "notifications/tools/list_changed" => Some(
+            ServerNotification::ToolListChangedNotification(ToolListChangedNotification {
+                method: Default::default(),
+                extensions: Default::default(),
+            }),
+        ),
+        "notifications/prompts/list_changed" => Some(
+            ServerNotification::PromptListChangedNotification(PromptListChangedNotification {
+                method: Default::default(),
+                extensions: Default::default(),
+            }),
+        ),
+        _ => None,
     }
 }

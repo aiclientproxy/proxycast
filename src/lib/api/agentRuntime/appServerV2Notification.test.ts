@@ -808,6 +808,29 @@ describe("App Server v2 direct notifications", () => {
     });
   });
 
+  it("projects MCP list_changed progress with its refresh kind", () => {
+    const notification = directNotification("item/mcpToolCall/progress", {
+      itemId: "item_mcp-call-1",
+      message: "工具服务能力列表已更新",
+      notificationKind: "mcp_tools_changed",
+      threadId,
+      turnId,
+    });
+
+    expect(projectAppServerV2NotificationPayload(notification)).toMatchObject({
+      type: "tool_progress",
+      tool_id: "item_mcp-call-1",
+      progress: {
+        message: "工具服务能力列表已更新",
+        metadata: {
+          notification_kind: "mcp_tools_changed",
+          source: "app_server_v2",
+          source_item_id: "item_mcp-call-1",
+        },
+      },
+    });
+  });
+
   it.each([
     [
       "item/reasoning/summaryTextDelta",

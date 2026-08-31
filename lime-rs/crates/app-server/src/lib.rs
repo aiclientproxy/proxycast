@@ -29,6 +29,7 @@ mod model_route_assembly;
 mod model_route_execution;
 mod model_task_contract;
 mod otel_trace;
+mod permission_profile;
 mod permission_server_request;
 mod process;
 mod processor;

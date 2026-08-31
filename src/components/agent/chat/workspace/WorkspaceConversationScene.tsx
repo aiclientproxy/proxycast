@@ -256,7 +256,10 @@ function renderWorkspaceChatContent({
               ) : null}
               {queueStatusNode}
               {showInlineInputbar ? (
-                <ChatInputSlot data-testid="workspace-inline-input-slot">
+                <ChatInputSlot
+                  data-testid="workspace-inline-input-slot"
+                  data-action-owner="composer"
+                >
                   {inputbarNode}
                 </ChatInputSlot>
               ) : null}
@@ -358,6 +361,8 @@ interface WorkspaceConversationSceneProps extends WorkspaceMainAreaProps {
   onToggleRightSurfaceFiles?: () => void;
   rightSurfaceTraceOpen?: boolean;
   onToggleRightSurfaceTrace?: () => void;
+  rightSurfaceActivityOpen?: boolean;
+  onToggleRightSurfaceActivity?: () => void;
   rightSurfaceShellOpen?: boolean;
   onToggleRightSurfaceShell?: () => void;
   currentImageWorkbenchActive: boolean;
@@ -426,6 +431,8 @@ export function WorkspaceConversationScene({
   onToggleRightSurfaceFiles,
   rightSurfaceTraceOpen,
   onToggleRightSurfaceTrace,
+  rightSurfaceActivityOpen,
+  onToggleRightSurfaceActivity,
   rightSurfaceShellOpen,
   onToggleRightSurfaceShell,
   currentImageWorkbenchActive,
@@ -486,8 +493,10 @@ export function WorkspaceConversationScene({
     TASK_CENTER_SHELL_PANEL_DEFAULT_HEIGHT_PX,
   );
   const [shellPanelMaximized, setShellPanelMaximized] = useState(false);
+  // The active Thread header owns the task actions even when the workspace
+  // tab strip is absent (for example after restoring a deep-linked thread).
   const shouldUseTaskCenterUtilityToolbar =
-    navbarContextVariant === "task-center" && Boolean(taskCenterTabsNode);
+    navbarContextVariant === "task-center";
   const shellManagedByRightSurface = Boolean(onToggleRightSurfaceShell);
   const shellPanelOpen = shellManagedByRightSurface
     ? Boolean(rightSurfaceShellOpen)
@@ -543,6 +552,11 @@ export function WorkspaceConversationScene({
           ? onToggleRightSurfaceTrace
           : undefined
       }
+      onToggleActivityPanel={
+        rightSurfaceActivityOpen || onToggleRightSurfaceActivity
+          ? onToggleRightSurfaceActivity
+          : undefined
+      }
       rightSurfaceLaunchers={rightSurfaceLaunchers}
       onToggleShellPanel={() => {
         if (onToggleRightSurfaceShell) {
@@ -553,13 +567,18 @@ export function WorkspaceConversationScene({
       }}
     />
   ) : null;
-  const shouldRenderThreadHeader = Boolean(
-    threadHeader && navbarContextVariant === "task-center" && showChatLayout,
-  );
+  const shouldRenderThreadHeader = Boolean(threadHeader && showChatLayout);
   const threadHeaderNode =
     shouldRenderThreadHeader && threadHeader ? (
       <ThreadWorkspaceHeader
         {...threadHeader}
+        onBackHome={onBackHome}
+        onBackToResources={onBackToResources}
+        onBackToProjectManagement={onBackToProjectManagement}
+        showCanvasToggle={!isThemeWorkbench}
+        isCanvasOpen={layoutMode !== "chat"}
+        onToggleCanvas={onToggleCanvas}
+        onOpenSettings={onOpenSettings}
         actions={
           <>
             <ThreadProjectSelector

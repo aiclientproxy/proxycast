@@ -321,6 +321,7 @@ export function buildScenarioAssertions(context) {
     isTypedErrorRetryScenario,
     isUnknownItemScenario,
     isRightSurfaceVisualMatrixScenario,
+    isThreadActivityPanelScenario,
     isSkillsRuntimeScenario,
     isSoulStyleScenario,
     isTerminalStaleGuardScenario,
@@ -435,6 +436,22 @@ export function buildScenarioAssertions(context) {
                     }
                   : {}),
               }
+            : isThreadActivityPanelScenario
+              ? {
+                  threadActivityPanelVisible:
+                    rightSurfaceVisualCaptures.activity?.stable
+                      ?.activeSurface === "activity" &&
+                    rightSurfaceVisualCaptures.activity?.stable?.rootVisible ===
+                      true &&
+                    rightSurfaceVisualCaptures.activity?.stable
+                      ?.visibleRootKinds?.[0] === "activity",
+                  threadActivityPanelFillsActivePane:
+                    rightSurfaceVisualCaptures.activity?.stable?.geometry
+                      ?.rootFillsActivePane === true,
+                  threadActivityPanelDoesNotUseModelTurn: backendLedger.every(
+                    (entry) => entry.kind !== "turnStart",
+                  ),
+                }
             : isRightSurfaceVisualMatrixScenario
               ? {
                   rightSurfaceVisualMatrixRequestedThroughAppServer:
@@ -463,8 +480,8 @@ export function buildScenarioAssertions(context) {
                         ?.requestId,
                     ),
                   rightSurfaceVisualMatrixFilesSurfaceVisible:
-                    rightSurfaceVisualCaptures.files?.stable?.activeSurface ===
-                      "files" &&
+                      rightSurfaceVisualCaptures.files?.stable
+                        ?.activeSurface === "files" &&
                     rightSurfaceVisualCaptures.files?.stable?.rootVisible ===
                       true,
                   rightSurfaceVisualMatrixObjectCanvasSurfaceVisible:
@@ -484,8 +501,8 @@ export function buildScenarioAssertions(context) {
                   rightSurfaceVisualMatrixBrowserSurfaceVisible:
                     rightSurfaceVisualCaptures.browser?.stable
                       ?.activeSurface === "browser" &&
-                    rightSurfaceVisualCaptures.browser?.stable?.rootVisible ===
-                      true &&
+                      rightSurfaceVisualCaptures.browser?.stable
+                        ?.rootVisible === true &&
                     typeof rightSurfaceVisualCaptures.browser?.screenshot ===
                       "string" &&
                     rightSurfaceVisualCaptures.browser.screenshot.endsWith(
@@ -504,6 +521,10 @@ export function buildScenarioAssertions(context) {
                     rightSurfaceVisualCaptures.appSurface?.stable
                       ?.activeSurface === "appSurface" &&
                     rightSurfaceVisualCaptures.appSurface?.stable
+                        ?.rootVisible === true &&
+                      rightSurfaceVisualCaptures.activity?.opened
+                        ?.rootVisible === true &&
+                      rightSurfaceVisualCaptures.activity?.stable
                       ?.rootVisible === true,
                   rightSurfaceVisualMatrixAppSurfaceMultiInstanceTabs:
                     rightSurfaceVisualAppSurface.tabs?.visible === true &&
@@ -516,12 +537,20 @@ export function buildScenarioAssertions(context) {
                     rightSurfaceVisualAppSurface.tabLabels?.includes(
                       "Prompt Lab",
                     ) === true,
+                    rightSurfaceVisualMatrixActivitySurfaceVisible:
+                      rightSurfaceVisualCaptures.activity?.stable
+                        ?.activeSurface === "activity" &&
+                      rightSurfaceVisualCaptures.activity?.stable
+                        ?.rootVisible === true &&
+                      rightSurfaceVisualCaptures.activity?.stable
+                        ?.visibleRootKinds?.[0] === "activity",
                   rightSurfaceVisualMatrixSurfacesMutuallyExclusive: [
                     rightSurfaceVisualCaptures.files?.stable,
                     rightSurfaceVisualCaptures.objectCanvas?.stable,
                     rightSurfaceVisualCaptures.expertInfo?.stable,
                     rightSurfaceVisualCaptures.browser?.stable,
                     rightSurfaceVisualCaptures.appSurface?.stable,
+                      rightSurfaceVisualCaptures.activity?.stable,
                   ].every(
                     (capture) =>
                       Array.isArray(capture?.visibleRootKinds) &&
@@ -535,9 +564,11 @@ export function buildScenarioAssertions(context) {
                     rightSurfaceVisualCaptures.expertInfo?.stable,
                     rightSurfaceVisualCaptures.browser?.stable,
                     rightSurfaceVisualCaptures.appSurface?.stable,
+                      rightSurfaceVisualCaptures.activity?.stable,
                   ].every(
                     (capture) =>
-                      capture?.geometry?.hostFillsCanvasPanel === true &&
+                        (capture?.geometry?.hostFillsCanvasPanel === true ||
+                          capture?.geometry?.rootFillsActivePane === true) &&
                       capture?.geometry?.rootFillsSurfaceViewport === true,
                   ),
                   rightSurfaceVisualMatrixObjectCanvasRailVisible:
@@ -554,16 +585,22 @@ export function buildScenarioAssertions(context) {
                       ?.rootVisible === true &&
                     rightSurfaceVisualCaptures.objectCanvas?.stable
                       ?.rootVisible === true &&
-                    rightSurfaceVisualCaptures.browser?.opened?.rootVisible ===
-                      true &&
-                    rightSurfaceVisualCaptures.browser?.stable?.rootVisible ===
-                      true &&
+                      rightSurfaceVisualCaptures.browser?.opened
+                        ?.rootVisible === true &&
+                      rightSurfaceVisualCaptures.browser?.stable
+                        ?.rootVisible === true &&
                     rightSurfaceVisualCaptures.appSurface?.opened
                       ?.rootVisible === true &&
                     rightSurfaceVisualCaptures.appSurface?.stable
+                        ?.rootVisible === true &&
+                      rightSurfaceVisualCaptures.activity?.opened
+                        ?.rootVisible === true &&
+                      rightSurfaceVisualCaptures.activity?.stable
                       ?.rootVisible === true,
                   rightSurfaceVisualMatrixDoesNotUseModelTurn:
-                    backendLedger.every((entry) => entry.kind !== "turnStart"),
+                      backendLedger.every(
+                        (entry) => entry.kind !== "turnStart",
+                      ),
                 }
               : isPlanScenario
                 ? {
@@ -585,7 +622,8 @@ export function buildScenarioAssertions(context) {
                         ?.settings?.reasoning_effort === "medium" &&
                       planCollaborationModeGateB?.wire?.effort === "medium" &&
                       planCollaborationModeGateB?.wire?.collaborationMode
-                        ?.settings?.model === planTurnStart?.modelPreference &&
+                          ?.settings?.model ===
+                          planTurnStart?.modelPreference &&
                       planCollaborationModeGateB?.wire?.collaborationMode
                         ?.settings?.developer_instructions === null,
                     planPresetReachedRuntime:
@@ -604,14 +642,16 @@ export function buildScenarioAssertions(context) {
                       true,
                     guiPlanRailVisible:
                       summary.guiPlanCompleted?.hasPlanSection === true &&
-                      summary.guiPlanCompleted?.planOwnerHasAllSteps === true &&
+                        summary.guiPlanCompleted?.planOwnerHasAllSteps ===
+                          true &&
                       Array.isArray(
                         summary.guiPlanCompleted?.planOwnerKindsWithAllSteps,
                       ) &&
                       summary.guiPlanCompleted.planOwnerKindsWithAllSteps
                         .length > 0,
                     guiPlanStepsVisible:
-                      summary.guiPlanCompleted?.planOwnerHasAllSteps === true &&
+                        summary.guiPlanCompleted?.planOwnerHasAllSteps ===
+                          true &&
                       (summary.guiPlanCompleted?.planStepHits ?? []).every(
                         (hit) =>
                           hit.visible === true &&
@@ -619,17 +659,20 @@ export function buildScenarioAssertions(context) {
                           hit.owners.length > 0,
                       ),
                     guiPlanDecisionDrawerVisible:
-                      summary.guiPlanCompleted?.planDecisionVisible === true &&
-                      summary.guiPlanCompleted?.planDecisionHasTitle === true &&
-                      summary.guiPlanCompleted?.planDecisionHasAcceptOption ===
+                        summary.guiPlanCompleted?.planDecisionVisible ===
+                          true &&
+                        summary.guiPlanCompleted?.planDecisionHasTitle ===
                         true &&
+                        summary.guiPlanCompleted
+                          ?.planDecisionHasAcceptOption === true &&
                       summary.guiPlanCompleted?.planDecisionHasAdjustInput ===
                         true &&
                       summary.guiPlanCompleted?.planDecisionRevisionBound ===
                         true,
                     guiPlanDidNotAutoImplement: !planImplementationTurnStart,
                     readModelPlanCompleted:
-                      summary.readModelPlanCompleted?.includesPrompt === true &&
+                        summary.readModelPlanCompleted?.includesPrompt ===
+                          true &&
                       summary.readModelPlanCompleted
                         ?.includesProposedPlanBlock === true &&
                       summary.readModelPlanCompleted?.includesPlanItem ===
@@ -641,11 +684,12 @@ export function buildScenarioAssertions(context) {
                     readModelPlanThreadItemRevisioned:
                       summary.readModelPlanThreadItem
                         ?.hasCompletedPlanThreadItem === true &&
-                      summary.readModelPlanThreadItem?.hasRevisionId === true &&
+                        summary.readModelPlanThreadItem?.hasRevisionId ===
+                          true &&
                       summary.readModelPlanThreadItem?.source ===
                         "proposed_plan" &&
-                      summary.readModelPlanThreadItem?.includesAllPlanSteps ===
-                        true,
+                        summary.readModelPlanThreadItem
+                          ?.includesAllPlanSteps === true,
                     guiPlanHistoryHydrateCompleted:
                       summary.guiPlanHistoryHydrateCompleted?.hasPrompt ===
                         true &&
@@ -674,7 +718,8 @@ export function buildScenarioAssertions(context) {
                       summary.readModelPlanThreadItem
                         ?.legacyUpdatePlanToolItemCount === 0,
                     proposedPlanVisible:
-                      summary.guiPlanCompleted?.planOwnerHasAllSteps === true &&
+                        summary.guiPlanCompleted?.planOwnerHasAllSteps ===
+                          true &&
                       summary.guiPlanHistoryHydrateCompleted
                         ?.planOwnerHasAllSteps === true,
                   }
@@ -695,7 +740,8 @@ export function buildScenarioAssertions(context) {
                           true ||
                           summary.guiGoalCompleted?.hasDoneText === true) &&
                         summary.guiGoalCompleted?.textareaVisible === true &&
-                        summary.guiGoalCompleted?.textareaDisabled === false &&
+                          summary.guiGoalCompleted?.textareaDisabled ===
+                            false &&
                         summary.guiGoalCompleted?.stopButtonVisible === false,
                       readModelGoalCompleted:
                         summary.readModelGoalCompleted?.includesPrompt ===
@@ -737,8 +783,8 @@ export function buildScenarioAssertions(context) {
                             true &&
                           summary.imageCommandTaskArtifact?.listReturned ===
                             true &&
-                          summary.imageCommandTaskArtifact?.listContainsTask ===
-                            true &&
+                            summary.imageCommandTaskArtifact
+                              ?.listContainsTask === true &&
                           summary.imageCommandTaskArtifact
                             ?.listContainsImageGenerate === true,
                         imageCommandTaskArtifactTerminal:
@@ -790,7 +836,8 @@ export function buildScenarioAssertions(context) {
                             "task_succeeded" &&
                           summary.imageCommandTaskAuditLog
                             ?.allEventTaskIdsMatch === true &&
-                          summary.imageCommandTaskAuditLog?.parseError == null,
+                            summary.imageCommandTaskAuditLog?.parseError ==
+                              null,
                         imageCommandTaskAuditLogNoSensitiveTokens:
                           summary.imageCommandTaskAuditLog
                             ?.hasNoSensitiveTokenMarkers === true &&
@@ -815,8 +862,8 @@ export function buildScenarioAssertions(context) {
                           summary.imageCommandWorkflowRead
                             ?.activeWorkflowRunId === "",
                         imageCommandWorkflowAuditStepsProjected:
-                          summary.imageCommandWorkflowRead?.hasExpectedSteps ===
-                            true &&
+                            summary.imageCommandWorkflowRead
+                              ?.hasExpectedSteps === true &&
                           summary.imageCommandWorkflowRead?.matchedStepIds?.includes(
                             "intent",
                           ) === true &&
@@ -834,10 +881,11 @@ export function buildScenarioAssertions(context) {
                         imageCommandWorkflowAuditSummaryRedacted:
                           summary.imageCommandWorkflowRead?.containsPrompt ===
                             false &&
-                          summary.imageCommandWorkflowRead?.containsTaskPath ===
-                            false,
+                            summary.imageCommandWorkflowRead
+                              ?.containsTaskPath === false,
                         imageCommandWorkerUsedFixtureProviderAndModel:
-                          (summary.imageCommandTaskCreateRequest?.provider_id ??
+                            (summary.imageCommandTaskCreateRequest
+                              ?.provider_id ??
                             summary.imageCommandTaskCreateRequest
                               ?.providerId) ===
                             summary.imageFixtureProvider?.providerId &&
@@ -896,8 +944,8 @@ export function buildScenarioAssertions(context) {
                             ?.hasPresentationIntro === true &&
                           summary.guiImageCommandTerminal
                             ?.hasPresentationIntroInAssistantText === true &&
-                          summary.guiImageCommandTerminal?.hasToolStripLabel ===
-                            true &&
+                            summary.guiImageCommandTerminal
+                              ?.hasToolStripLabel === true &&
                           summary.guiImageCommandTerminal
                             ?.hasImageModelLabel === true &&
                           summary.guiImageCommandTerminal?.hasTokenUsage ===
@@ -921,8 +969,8 @@ export function buildScenarioAssertions(context) {
                           summary.guiImageCommandRestoredAfterReload
                             ?.cardCount === 1,
                         guiImageCommandRestoredAfterReload:
-                          summary.guiImageCommandReload?.renderer?.electron ===
-                            true &&
+                            summary.guiImageCommandReload?.renderer
+                              ?.electron === true &&
                           summary.guiImageCommandReload?.session?.inputReady
                             ?.hasMessageList === true &&
                           summary.guiImageCommandRestoredAfterReload
@@ -956,8 +1004,8 @@ export function buildScenarioAssertions(context) {
                         guiImageCommandNoDraftCard:
                           summary.guiImageCommandCompleted
                             ?.draftImageVisible === false &&
-                          summary.guiImageCommandTerminal?.draftImageVisible ===
-                            false &&
+                            summary.guiImageCommandTerminal
+                              ?.draftImageVisible === false &&
                           summary.guiImageCommandRestoredAfterReload
                             ?.draftImageVisible === false &&
                           summary.readModelImageCommandCompleted
@@ -1125,8 +1173,8 @@ export function buildScenarioAssertions(context) {
                                                           .length > 0,
                                                       guiStopClicked:
                                                         summary.stopClick
-                                                          ?.clicked?.clicked ===
-                                                        true,
+                                                            ?.clicked
+                                                            ?.clicked === true,
                                                       readModelCanceled:
                                                         summary
                                                           .readModelCanceled
@@ -1238,7 +1286,8 @@ export function buildScenarioAssertions(context) {
                                                           summary
                                                             .inputbarRichRestoreInputSend
                                                             ?.clicked
-                                                            ?.clicked === true,
+                                                              ?.clicked ===
+                                                              true,
                                                         inputbarRichRestoreBackendInputSummaryReached:
                                                           summary
                                                             .inputbarRichRestoreBackendTurnStart
@@ -1333,59 +1382,72 @@ export function buildScenarioAssertions(context) {
                                                               ?.includesAssistantSummary ===
                                                               true),
                                                         eventReadProbeObserved:
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.events
                                                             ?.hasTextDelta ===
                                                             true &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.events
                                                             ?.hasToolStarted ===
                                                             true &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.events
                                                             ?.hasToolResult ===
                                                             true &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.events
                                                             ?.hasTerminal ===
                                                             true &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.events
                                                             ?.eventTurnIds
                                                             ?.length === 1 &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.events
                                                             ?.eventTurnIds?.[0] ===
                                                             summary
                                                               .eventReadProbe
                                                               ?.turnId,
                                                         readModelEventReadAligned:
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.readModel
                                                             ?.containsTurnId ===
                                                             true &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.readModel
                                                             ?.containsReadText ===
                                                             true,
                                                         readModelToolCallAligned:
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.readModel
                                                             ?.containsToolCall ===
                                                             true &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.readModel
                                                             ?.toolName ===
                                                             EVENT_READ_PROBE_TOOL_NAME &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.readModel
                                                             ?.toolStatus ===
                                                             "completed" &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.readModel
                                                             ?.containsToolOutput ===
                                                             true &&
-                                                          summary.eventReadProbe
+                                                            summary
+                                                              .eventReadProbe
                                                             ?.readModel
                                                             ?.toolTurnId ===
                                                             summary
@@ -1403,7 +1465,8 @@ export function buildScenarioAssertions(context) {
                                                             ?.planUiAbsence
                                                             ?.planDecisionVisible ===
                                                             false &&
-                                                          (summary.guiCompleted
+                                                            (summary
+                                                              .guiCompleted
                                                             ?.planUiAbsence
                                                             ?.legacyUpdatePlanVisibleHits
                                                             ?.length ?? 0) ===
@@ -1417,7 +1480,8 @@ export function buildScenarioAssertions(context) {
                                                             ?.assistantScopeSummaryOccurrences ===
                                                             1 &&
                                                           (
-                                                            summary.guiCompleted
+                                                              summary
+                                                                .guiCompleted
                                                               ?.assistantScopeDedupeGuardHits ??
                                                             []
                                                           ).every(

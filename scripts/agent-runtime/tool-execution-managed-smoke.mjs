@@ -275,6 +275,7 @@ async function readInvokeDiagnostics(page) {
               ),
               transport: String(entry?.transport || ""),
               status: String(entry?.status || ""),
+              error: String(entry?.error || "").slice(0, 800),
             });
           } catch {
             // Ignore malformed diagnostic previews; the product request already failed elsewhere.
@@ -283,6 +284,13 @@ async function readInvokeDiagnostics(page) {
       }
       return {
         appServerCalls: calls,
+        invokeErrors: readArray(errorKey)
+          .slice(-10)
+          .map((entry) => ({
+            command: String(entry?.command || ""),
+            transport: String(entry?.transport || ""),
+            error: String(entry?.error || "").slice(0, 800),
+          })),
         invokeErrorCount: readArray(errorKey).length,
       };
     },
@@ -652,6 +660,15 @@ async function collectParentOwnedChildGateB({
     );
   } catch (error) {
     const diagnostics = await readInvokeDiagnostics(page);
+    const resumeProbe = await invokeAppServerJsonRpcRaw(page, "thread/resume", {
+      threadId: childThreadId,
+      excludeTurns: true,
+    });
+    const resumeProbeResult = {
+      code: resumeProbe?.error?.code ?? null,
+      message: resumeProbe?.error?.message ?? null,
+      threadId: resumeProbe?.result?.thread?.id ?? null,
+    };
     const navigationState = await page.evaluate(() => ({
       bodyText: (document.body.textContent || "").trim().slice(-1_000),
       textareas: Array.from(
@@ -677,7 +694,9 @@ async function collectParentOwnedChildGateB({
         threadId: canonicalThread.id ?? null,
       })} dom=${JSON.stringify(navigationState)} calls=${JSON.stringify(
         diagnostics.appServerCalls.slice(-12),
-      )}; ${error instanceof Error ? error.message : String(error)}`,
+      )} invokeErrors=${JSON.stringify(diagnostics.invokeErrors)}; ${`resumeProbe=${JSON.stringify(resumeProbeResult)}; ${
+        error instanceof Error ? error.message : String(error)
+      }`}`,
     );
   }
 

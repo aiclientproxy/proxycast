@@ -10,6 +10,7 @@ import {
   mockGetRuntimeProviderSelection,
   mockListAgentRuntimeSessions,
   mockResolveClawWorkspaceProviderSelection,
+  mockResumeAgentRuntimeThread,
   mockScheduleMinimumDelayIdleTask,
   mockSubmitAgentRuntimeTurn,
   mockUpdateAgentRuntimeThreadSettings,
@@ -98,6 +99,10 @@ describe("useAgentChat 首页新会话", () => {
         turns: [{ turn_id: turnId, status: "running" }],
       },
     });
+    mockResumeAgentRuntimeThread.mockResolvedValue({
+      result: { thread: { id: threadId } },
+      notifications: [],
+    });
 
     const harness = mountHook("");
 
@@ -115,6 +120,9 @@ describe("useAgentChat 首页新会话", () => {
           source: "switchTopic.direct",
         }),
       );
+      expect(mockResumeAgentRuntimeThread).toHaveBeenCalledWith({
+        threadId,
+      });
       expect(harness.getValue().sessionId).toBe(sessionId);
       expect(harness.getValue().currentTurnId).toBe(turnId);
       expect(harness.getValue().threadRead).toMatchObject({

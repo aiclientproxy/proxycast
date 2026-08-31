@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use agent_protocol::{
@@ -174,4 +175,124 @@ fn append_history_rejects_a_corrupted_latest_history() {
     let error = append(&store, &relative_path, &source, 2, &fingerprint('b'))
         .expect_err("corrupted latest history must fail closed");
     assert!(error.contains("invalid rollout history record"));
+}
+
+#[test]
+fn append_history_preserves_a_valid_unterminated_record() {
+    let (_temp, store, source, relative_path, absolute_path) = setup("valid-crash-tail");
+    append(&store, &relative_path, &source, 1, &fingerprint('a')).expect("append sequence 1");
+    append(&store, &relative_path, &source, 2, &fingerprint('b')).expect("append sequence 2");
+
+    let mut contents = fs::read(&absolute_path).expect("read rollout");
+    assert_eq!(contents.pop(), Some(b'\n'));
+    fs::write(&absolute_path, contents).expect("remove final newline");
+
+    append(&store, &relative_path, &source, 3, &fingerprint('c'))
+        .expect("append after valid crash tail");
+    let repaired = fs::read_to_string(&absolute_path).expect("read repaired rollout");
+    assert!(repaired.ends_with('\n'));
+    assert_eq!(
+        scan_rollout(&absolute_path)
+            .expect("scan repaired rollout")
+            .history
+            .iter()
+            .map(|record| record.sequence)
+            .collect::<Vec<_>>(),
+        vec![1, 2, 3]
+    );
+}
+
+#[test]
+fn append_history_truncates_only_a_malformed_crash_tail_and_keeps_sequence_gap() {
+    let (_temp, store, source, relative_path, absolute_path) = setup("partial-crash-tail");
+    append(&store, &relative_path, &source, 1, &fingerprint('a')).expect("append sequence 1");
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&absolute_path)
+        .and_then(|mut file| file.write_all(b"{\"type\":\"thread_history\",\"sequence\":2"))
+        .expect("append partial sequence 2");
+
+    append(&store, &relative_path, &source, 3, &fingerprint('c'))
+        .expect("append after malformed crash tail");
+    let repaired = fs::read_to_string(&absolute_path).expect("read repaired rollout");
+    assert!(!repaired.contains("\"sequence\":2"));
+    assert!(repaired.ends_with('\n'));
+    assert_eq!(
+        scan_rollout(&absolute_path)
+            .expect("scan repaired rollout")
+            .history
+            .iter()
+            .map(|record| record.sequence)
+            .collect::<Vec<_>>(),
+        vec![1, 3]
+    );
+}
+
+#[test]
+fn cold_snapshot_repairs_a_malformed_crash_tail_before_materialization() {
+    let (_temp, store, source, relative_path, absolute_path) = setup("cold-crash-tail");
+    append(&store, &relative_path, &source, 1, &fingerprint('a')).expect("append sequence 1");
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&absolute_path)
+        .and_then(|mut file| file.write_all(b"{\"type\":\"thread_history\""))
+        .expect("append crash tail");
+
+    let restarted = RolloutStore::new(store.agent_root.clone());
+    let snapshots = restarted.snapshots().expect("repair cold rollout");
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].history.len(), 1);
+    assert_eq!(snapshots[0].history[0].sequence, 1);
+    assert!(fs::read(&absolute_path)
+        .expect("read repaired rollout")
+        .ends_with(b"\n"));
+
+    append(&restarted, &relative_path, &source, 3, &fingerprint('c'))
+        .expect("continue after cold repair");
+}
+
+#[test]
+fn crash_tail_repair_leaves_middle_corruption_untouched() {
+    let (_temp, store, source, relative_path, absolute_path) = setup("middle-corruption");
+    append(&store, &relative_path, &source, 1, &fingerprint('a')).expect("append sequence 1");
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&absolute_path)
+        .and_then(|mut file| file.write_all(b"{\"broken\":}\n{\"type\":\"thread_history\""))
+        .expect("append middle corruption and crash tail");
+    let before = fs::read(&absolute_path).expect("read corrupted rollout");
+
+    let error = store
+        .snapshots()
+        .expect_err("middle corruption must fail closed");
+    assert!(error.contains("invalid rollout JSONL record"));
+    assert_eq!(fs::read(&absolute_path).expect("reread rollout"), before);
+}
+
+#[test]
+fn crash_tail_repair_rejects_a_complete_semantically_invalid_record() {
+    let (_temp, store, source, relative_path, absolute_path) = setup("invalid-complete-tail");
+    append(&store, &relative_path, &source, 1, &fingerprint('a')).expect("append sequence 1");
+    let invalid = serde_json::to_vec(&json!({
+        "type": "thread_history",
+        "schema_version": 1,
+        "session_id": source.session_id.as_str(),
+        "thread_id": "another-thread",
+        "sequence": 2,
+        "fingerprint": fingerprint('b'),
+        "content_digest": "0".repeat(64),
+        "changes": changes(2),
+    }))
+    .expect("encode invalid tail");
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&absolute_path)
+        .and_then(|mut file| file.write_all(&invalid))
+        .expect("append invalid complete tail");
+    let before = fs::read(&absolute_path).expect("read invalid rollout");
+
+    let error = append(&store, &relative_path, &source, 3, &fingerprint('c'))
+        .expect_err("semantic divergence must fail closed");
+    assert!(error.contains("invalid rollout history record"));
+    assert_eq!(fs::read(&absolute_path).expect("reread rollout"), before);
 }

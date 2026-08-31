@@ -39,22 +39,6 @@ impl RuntimeCore {
         let store = self.projection_store.as_deref().ok_or_else(|| {
             RuntimeCoreError::Backend("canonical thread store is unavailable".to_string())
         })?;
-        let source_metadata = store
-            .read_thread(ReadThreadParams {
-                thread_id: source_thread_id.clone(),
-                include_archived: true,
-                turns_view: ThreadTurnsView::NotLoaded,
-            })
-            .await
-            .map_err(store_error)?
-            .ok_or_else(|| {
-                RuntimeCoreError::Backend(format!("thread not found: {source_thread_id}"))
-            })?;
-        if is_paginated_history(&source_metadata.metadata) {
-            return Err(RuntimeCoreError::MethodNotFound(
-                "paginated_threads is not supported yet".to_string(),
-            ));
-        }
         let source = store
             .read_thread(ReadThreadParams {
                 thread_id: source_thread_id.clone(),
@@ -337,14 +321,6 @@ impl RuntimeCore {
         }
         Ok(())
     }
-}
-
-fn is_paginated_history(metadata: &Value) -> bool {
-    metadata
-        .get("historyMode")
-        .or_else(|| metadata.get("history_mode"))
-        .and_then(Value::as_str)
-        .is_some_and(|mode| mode == "paginated")
 }
 
 fn copy_fork_input_media(

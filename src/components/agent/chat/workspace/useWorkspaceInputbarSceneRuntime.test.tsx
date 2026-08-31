@@ -372,6 +372,44 @@ describe("useWorkspaceInputbarSceneRuntime", () => {
     ).toBeNull();
   });
 
+  it("active reverse request 应独占 action slot，不再把 Plan 决策面板挂在其下方", () => {
+    mockPendingInteractionRuntime.interactions = [
+      {
+        id: "request_user_input:session-1:turn-1:1",
+        thread_id: "session-1",
+        turn_id: "turn-1",
+        kind: "request_user_input",
+        status: "pending",
+        payload: {
+          request: {
+            requestId: "request-user-input-1",
+            actionType: "ask_user",
+            status: "pending",
+            prompt: "请补充发布目标",
+          },
+        },
+      },
+    ];
+
+    const container = renderHookNode(
+      createDefaultProps({
+        planDecisionAccessory: (
+          <div data-testid="plan-composer-decision-panel">计划确认</div>
+        ),
+      }),
+    );
+
+    expect(
+      container.querySelector('[data-testid="pending-interaction-layer"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="plan-composer-decision-panel"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="inputbar-mock"]'),
+    ).not.toBeNull();
+  });
+
   it("Inputbar 发送应绑定当前会话，避免落到旧 active session", async () => {
     const handleSend = vi.fn().mockResolvedValue(true);
     renderHookNode(

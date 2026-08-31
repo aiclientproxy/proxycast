@@ -36143,6 +36143,12 @@
         "message": {
           "type": "string"
         },
+        "notificationKind": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "threadId": {
           "type": "string"
         },
@@ -59979,6 +59985,12 @@
             },
             "message": {
               "type": "string"
+            },
+            "notificationKind": {
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "threadId": {
               "type": "string"

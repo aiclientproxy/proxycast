@@ -48,13 +48,15 @@ describe("useAgentChat canonical queue status", () => {
       ).toMatchObject({
         status: "queued",
       });
-      expect(mockResumeAgentRuntimeThread).not.toHaveBeenCalled();
+      expect(mockResumeAgentRuntimeThread).toHaveBeenCalledWith({
+        threadId: "thread-queue",
+      });
     } finally {
       harness.unmount();
     }
   });
 
-  it("切换到 running thread_read 时只水合状态，不自动调用 legacy resume", async () => {
+  it("切换到 running thread_read 时重新建立 canonical Thread 订阅", async () => {
     const sessionId = "session-running-auto-resume";
     mockListAgentRuntimeSessions.mockResolvedValue([
       {
@@ -87,7 +89,9 @@ describe("useAgentChat canonical queue status", () => {
       });
       await flushEffects();
 
-      expect(mockResumeAgentRuntimeThread).not.toHaveBeenCalled();
+      expect(mockResumeAgentRuntimeThread).toHaveBeenCalledWith({
+        threadId: "thread-running-auto-resume",
+      });
       expect(mockSubmitAgentRuntimeTurn).not.toHaveBeenCalled();
       expect(harness.getValue().isSending).toBe(false);
       expect(harness.getValue().threadRead).toMatchObject({

@@ -56,6 +56,7 @@ import type { AgentRuntimeAdapter } from "./agentRuntimeAdapter";
 import { isAuxiliaryAgentSessionId } from "@/lib/api/agentRuntime/sessionIdentity";
 import { filterConversationThreadItems } from "../utils/threadTimelineView";
 import { shouldResumeTaskSession } from "../utils/taskCenterTabs";
+import { permissionProfileIdFromAccessMode } from "../utils/accessModeRuntime";
 import {
   createSessionAccessModeFromExecutionRuntime,
   createSessionModelPreferenceFromExecutionRuntime,
@@ -228,25 +229,27 @@ function scheduleFreshSessionPostCreatePersistence(task: () => void): void {
 function buildFreshSessionProviderModelMetadata(
   providerType: string,
   model: string,
+  accessMode: AgentAccessMode,
 ): Record<string, unknown> | undefined {
   const providerSelector = providerType.trim();
   const modelName = model.trim();
-  if (!providerSelector || !modelName) {
-    return undefined;
-  }
-
   return {
-    providerSelector,
-    modelName,
-    executionRuntime: {
-      providerSelector,
-      modelName,
-    },
-    extensionData: {
-      "lime_provider_routing.v0": {
-        providerSelector,
-      },
-    },
+    permissions: permissionProfileIdFromAccessMode(accessMode),
+    ...(providerSelector && modelName
+      ? {
+          providerSelector,
+          modelName,
+          executionRuntime: {
+            providerSelector,
+            modelName,
+          },
+          extensionData: {
+            "lime_provider_routing.v0": {
+              providerSelector,
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -1411,6 +1414,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
               metadata: buildFreshSessionProviderModelMetadata(
                 nextProviderType,
                 nextModel,
+                accessMode,
               ),
             },
           );
@@ -1870,13 +1874,13 @@ export function useAgentSession(options: UseAgentSessionOptions) {
   );
 
   const loadRuntimeSessionDetail = useCallback(
-    (params: {
+    async (params: {
       topicId: string;
       startedAt: number;
       mode: "direct" | "deferred";
       resumeSessionStartHooks?: boolean;
-    }) =>
-      loadSessionDetailWithPrefetch({
+    }) => {
+      const detail = await loadSessionDetailWithPrefetch({
         getSession: (topicId, options) => runtime.getSession(topicId, options),
         mode: params.mode,
         onEvent: emitSessionDetailFetchEvent,
@@ -1885,7 +1889,27 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         startedAt: params.startedAt,
         topicId: params.topicId,
         workspaceId,
-      }),
+      });
+      const threadId =
+        detail.thread_read?.thread_id?.trim() || detail.thread_id?.trim();
+      if (!threadId) {
+        throw new Error("canonical session detail did not include a thread_id");
+      }
+
+      // Opening a persisted Thread must recreate the App Server subscription
+      // on the current Electron connection. Keep read-only refreshes separate.
+      const resumed = await runtime.resumeThread(threadId);
+      if (resumed === false) {
+        throw new Error("thread/resume did not restore the canonical thread");
+      }
+      logAgentDebug("useAgentSession", "switchTopic.threadResumed", {
+        mode: params.mode,
+        sessionId: params.topicId,
+        threadId,
+        workspaceId,
+      });
+      return detail;
+    },
     [emitSessionDetailFetchEvent, runtime, workspaceId],
   );
 

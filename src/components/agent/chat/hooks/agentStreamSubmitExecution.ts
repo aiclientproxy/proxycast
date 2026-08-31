@@ -74,6 +74,7 @@ interface ExecuteAgentStreamSubmitOptions {
     sessionId: string,
   ) => ChatToolPreferences | null;
   effectiveAccessMode: AgentAccessMode;
+  workingDir?: string | null;
   content: string;
   images: MessageImage[];
   inputMentions?: readonly AgentInputMention[];
@@ -216,6 +217,7 @@ export async function executeAgentStreamSubmit(
     getSyncedSessionExecutionStrategy,
     getSyncedSessionRecentPreferences,
     effectiveAccessMode,
+    workingDir,
     content,
     images,
     inputMentions,
@@ -475,9 +477,17 @@ export async function executeAgentStreamSubmit(
       const collaborationModePreset = collaborationMode
         ? await resolveCollaborationModeMask(collaborationMode)
         : undefined;
-      await resolveAllowedPermissionProfile(
-        permissionProfileIdFromAccessMode(effectiveAccessMode),
-      );
+      const permissionProfileId =
+        permissionProfileIdFromAccessMode(effectiveAccessMode);
+      const permissionCwd = workingDir?.trim();
+      if (permissionCwd) {
+        await resolveAllowedPermissionProfile(
+          permissionProfileId,
+          permissionCwd,
+        );
+      } else {
+        await resolveAllowedPermissionProfile(permissionProfileId);
+      }
       const submitOp = buildAgentStreamSubmitOp({
         content,
         images,

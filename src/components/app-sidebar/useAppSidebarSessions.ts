@@ -586,9 +586,18 @@ export function useAppSidebarSessions({
           : "";
       if (createdSessionId) {
         const now = Math.floor(Date.now() / 1000);
+        const createdSessionName =
+          typeof detail.name === "string" ? detail.name.trim() : "";
+        const createdThreadId =
+          typeof detail.threadId === "string" ? detail.threadId.trim() : "";
+        const createdWorkingDir =
+          typeof detail.workingDir === "string"
+            ? detail.workingDir.trim()
+            : "";
         const optimisticSession: AgentSessionInfo = {
           id: createdSessionId,
-          name: conversationUntitledLabel,
+          name: createdSessionName || conversationUntitledLabel,
+          thread_id: createdThreadId || undefined,
           created_at: now,
           updated_at: now,
           messages_count: 0,
@@ -596,6 +605,7 @@ export function useAppSidebarSessions({
             typeof detail.workspaceId === "string"
               ? detail.workspaceId.trim() || undefined
               : undefined,
+          working_dir: createdWorkingDir || undefined,
         };
         optimisticSidebarSessionsRef.current.set(
           createdSessionId,

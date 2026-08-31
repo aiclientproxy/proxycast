@@ -9,6 +9,7 @@ export type EnvironmentRuntimeConnectionStatus =
 export interface EnvironmentRuntimeConnectionState {
   environmentId: string;
   status: EnvironmentRuntimeConnectionStatus;
+  error?: string;
 }
 
 export type EnvironmentStatusAppServerClient = Pick<
@@ -51,7 +52,15 @@ export async function readEnvironmentRuntimeStatuses(
       ) {
         throw new Error("environment/status returned an invalid status");
       }
-      return { environmentId, status: projectStatus(status) };
+      const error =
+        typeof response.result?.error === "string"
+          ? response.result.error.trim()
+          : undefined;
+      return {
+        environmentId,
+        status: projectStatus(status),
+        ...(error ? { error } : {}),
+      };
     }),
   );
 }

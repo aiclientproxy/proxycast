@@ -309,6 +309,7 @@ describe("useAgentChat slash skill 执行链路", () => {
           metadata: {
             providerSelector: selectedProvider,
             modelName: selectedModel,
+            permissions: ":danger-full-access",
             executionRuntime: {
               providerSelector: selectedProvider,
               modelName: selectedModel,

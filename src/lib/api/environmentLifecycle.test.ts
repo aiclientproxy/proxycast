@@ -9,6 +9,9 @@ describe("readEnvironmentRuntimeStatuses", () => {
           environmentId === "local"
             ? ("ready" as const)
             : ("disconnected" as const),
+        ...(environmentId === "remote-a"
+          ? { error: "exec-server unavailable" }
+          : {}),
       },
     }));
 
@@ -18,7 +21,11 @@ describe("readEnvironmentRuntimeStatuses", () => {
       } as never),
     ).resolves.toEqual([
       { environmentId: "local", status: "connected" },
-      { environmentId: "remote-a", status: "disconnected" },
+      {
+        environmentId: "remote-a",
+        status: "disconnected",
+        error: "exec-server unavailable",
+      },
     ]);
     expect(readEnvironmentStatus).toHaveBeenCalledTimes(2);
     expect(readEnvironmentStatus).toHaveBeenCalledWith({

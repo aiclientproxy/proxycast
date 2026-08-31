@@ -13,6 +13,10 @@ import {
   type WorkspaceRightSurfaceState,
 } from "./right-surface";
 import { RightSurfaceBrowserPanel } from "./right-surface/browser/RightSurfaceBrowserPanel";
+import {
+  ThreadActivityPanel,
+  type ThreadActivityPanelProps,
+} from "./ThreadActivityPanel";
 
 type ArticleEditorRightSurfaceProps = ComponentProps<
   typeof WorkspaceArticleEditorRightSurface
@@ -53,6 +57,7 @@ export interface RenderWorkspaceRightSurfaceHostRuntimeParams {
   rightSurfaceState: WorkspaceRightSurfaceState;
   rightSurfaceTraceAvailable: boolean;
   rightSurfaceTraceEnabled: boolean;
+  activityPanelProps?: ThreadActivityPanelProps;
   runtimeWorkspaceId?: string | null;
   sceneSessionId?: string | null;
   sceneThreadId?: string | null;
@@ -91,6 +96,7 @@ export function renderWorkspaceRightSurfaceHostRuntime({
   rightSurfaceState,
   rightSurfaceTraceAvailable,
   rightSurfaceTraceEnabled,
+  activityPanelProps,
   runtimeWorkspaceId,
   sceneSessionId,
   sceneThreadId,
@@ -193,7 +199,12 @@ export function renderWorkspaceRightSurfaceHostRuntime({
               sessionId={sceneSessionId}
               workspaceId={runtimeWorkspaceId}
             />
-          ),
+        ),
+      }
+    : {}),
+    ...(activityPanelProps
+      ? {
+          activity: () => <ThreadActivityPanel {...activityPanelProps} />,
         }
       : {}),
     shell: () => (

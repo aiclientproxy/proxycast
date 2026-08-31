@@ -1,6 +1,6 @@
 use super::tool_process_metadata::{
     build_tool_process_metadata, merge_result_tool_process_metadata, merge_tool_process_metadata,
-    SoulStyleMetadata, ToolProcessMetadataInput, ToolProcessStatus,
+    promote_mcp_route_metadata, SoulStyleMetadata, ToolProcessMetadataInput, ToolProcessStatus,
 };
 use agent_protocol::{ItemStatus, ThreadItem, ThreadItemPayload, ToolArgument, ToolOutput};
 use lime_agent::{AgentEvent as RuntimeAgentEvent, AgentToolResult};
@@ -12,7 +12,9 @@ pub(super) fn enrich_runtime_tool_process_payload(
     payload_object: &mut Map<String, Value>,
     fallback_soul_style: Option<&SoulStyleMetadata>,
 ) {
-    promote_mcp_progress_route(event, payload_object);
+    if matches!(event, RuntimeAgentEvent::ToolProgress { .. }) {
+        promote_mcp_route_metadata(payload_object);
+    }
     let Some(input) = runtime_tool_process_input(event) else {
         return;
     };
@@ -34,27 +36,6 @@ pub(super) fn enrich_runtime_tool_process_payload(
         merge_tool_process_metadata(payload_object, &metadata);
         merge_result_tool_process_metadata(payload_object, &metadata);
         insert_runtime_tool_process_aliases(payload_object, &metadata);
-    }
-}
-
-fn promote_mcp_progress_route(event: &RuntimeAgentEvent, payload_object: &mut Map<String, Value>) {
-    let RuntimeAgentEvent::ToolProgress { progress, .. } = event else {
-        return;
-    };
-    let Some(metadata) = progress.metadata.as_ref() else {
-        return;
-    };
-    if read_metadata_string(metadata, &["notification_kind"]).as_deref() != Some("mcp_progress") {
-        return;
-    }
-    for (source, target) in [
-        ("server_name", "serverName"),
-        ("tool_name", "toolName"),
-        ("runtime_tool_name", "runtimeToolName"),
-    ] {
-        if let Some(value) = metadata.get(source).cloned() {
-            payload_object.insert(target.to_string(), value);
-        }
     }
 }
 

@@ -11,6 +11,9 @@ pub(super) fn item_status(event_type: &str, payload: &Value) -> ItemStatus {
     ) {
         return ItemStatus::Completed;
     }
+    if event_type == "tool.progress" {
+        return ItemStatus::InProgress;
+    }
     if let Some(status) = value_string(payload, &["status", "state"]) {
         match status.to_ascii_lowercase().as_str() {
             "completed" | "complete" | "success" | "succeeded" | "applied" => {

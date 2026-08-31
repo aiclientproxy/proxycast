@@ -9,7 +9,8 @@ export type WorkspaceRightSurfaceKind =
   | "files"
   | "shell"
   | "harness"
-  | "trace";
+  | "trace"
+  | "activity";
 
 export type WorkspaceRightSurfaceSource = "user" | "route" | "runtime";
 
@@ -50,6 +51,7 @@ export function normalizeWorkspaceRightSurfaceKind(
     case "shell":
     case "harness":
     case "trace":
+    case "activity":
       return normalized;
     default:
       return null;

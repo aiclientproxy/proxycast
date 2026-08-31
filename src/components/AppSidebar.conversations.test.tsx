@@ -394,7 +394,64 @@ describe("AppSidebar conversations", () => {
         projectId: "project-1",
         initialSessionId: "session-old",
       } as AgentPageParams,
+      requestedPage: "agent",
+      requestedPageParams: {
+        agentEntry: "claw",
+        projectId: "project-1",
+        initialSessionId: "session-old",
+      } as AgentPageParams,
       activeAgentSessionId: "session-new",
+    });
+    await flushEffects(2);
+
+    const activeButtons = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        'button[aria-current="page"]',
+      ),
+    ).map((button) => button.getAttribute("title"));
+
+    expect(activeButtons).toContain("新会话");
+    expect(activeButtons).not.toContain("旧会话");
+  });
+
+  it("导航尚未提交时应优先高亮 requested session", async () => {
+    mockListAgentRuntimeSessions.mockResolvedValue([
+      {
+        id: "session-old",
+        name: "旧会话",
+        created_at: 1713000000,
+        updated_at: 1713000600,
+        archived_at: null,
+        workspace_id: "project-1",
+        working_dir: "/repo/project-1",
+        messages_count: 3,
+      },
+      {
+        id: "session-new",
+        name: "新会话",
+        created_at: 1713001000,
+        updated_at: 1713001600,
+        archived_at: null,
+        workspace_id: "project-1",
+        working_dir: "/repo/project-1",
+        messages_count: 1,
+      },
+    ]);
+
+    const container = mountSidebarContainer({
+      currentPage: "agent",
+      currentPageParams: {
+        agentEntry: "claw",
+        projectId: "project-1",
+        initialSessionId: "session-old",
+      } as AgentPageParams,
+      requestedPage: "agent",
+      requestedPageParams: {
+        agentEntry: "claw",
+        projectId: "project-1",
+        initialSessionId: "session-new",
+      } as AgentPageParams,
+      activeAgentSessionId: "session-old",
     });
     await flushEffects(2);
 
@@ -1709,6 +1766,41 @@ describe("AppSidebar conversations", () => {
     );
     expect(openButton).not.toBeNull();
     expect(openButton?.getAttribute("title")).toBe("未命名对话");
+  });
+
+  it("Fork 创建事件应立即使用 canonical 标题而不是未命名占位", async () => {
+    mockListAgentRuntimeSessions.mockResolvedValue([]);
+
+    const container = mountSidebarContainer({
+      currentPage: "agent",
+      currentPageParams: {
+        agentEntry: "claw",
+        initialSessionId: "session-source",
+      } as AgentPageParams,
+      activeAgentSessionId: "session-forked",
+    });
+    await flushEffects(2);
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(AGENT_RUNTIME_SESSIONS_CHANGED_EVENT, {
+          detail: {
+            reason: "created",
+            sessionId: "session-forked",
+            threadId: "thread-forked",
+            name: "已继承标题的分叉对话",
+            workingDir: "/repo/project-1",
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+    await flushEffects(1);
+
+    const openButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="app-sidebar-conversation-open"][data-session-id="session-forked"]',
+    );
+    expect(openButton?.getAttribute("title")).toBe("已继承标题的分叉对话");
   });
 
   it("首页发送热路径期间会话列表变更不应立即抢占 listSessions", async () => {

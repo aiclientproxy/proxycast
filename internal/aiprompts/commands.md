@@ -387,10 +387,18 @@ Desktop 新回合的权限选择只允许走：
 catalog 只公开 `:read-only`、`:workspace`、`:danger-full-access` 三个 Lime Desktop 内建 profile。Renderer 提交前必须
 解析唯一且 `allowed=true` 的目标 profile；catalog 缺失、重复、禁止或形状非法时 fail closed。App Server 将 profile id
 映射为 `read-only`、`workspace-write`、`danger-full-access` runtime sandbox policy，并在 Turn metadata 写入
-`permissions` 与 `activePermissionProfile` provenance。`permissions + sandboxPolicy` 双传和未知 profile 必须拒绝。
+`permissions` 与 `activePermissionProfile` provenance。`thread/start` 与 `thread/settings/update.permissions` 使用同一 resolver；
+settings mutation 原子持久化 profile、active provenance 和 lowering 后的 sandbox policy，再通过
+`thread/settings/updated` 与 canonical `thread/read` 回流 GUI。`permissions + sandboxPolicy` 双传和未知 profile 必须拒绝；
+legacy `sandboxPolicy` settings mutation 必须清除旧 profile provenance，不能保留互相矛盾的状态。
+
+`permissionProfile/list`、`thread/start`、`turn/start` 与 `thread/settings/update` 共用同一个动态 policy producer。它从 Lime
+全局 `agent.workspace_sandbox`、物化后的请求 cwd、当前平台 sandbox backend 和 Windows setup artifact readiness 计算
+`allowed`；strict 模式要求受限 backend 但 backend 不可用时，`:read-only` 与 `:workspace` 必须禁止，
+`:danger-full-access` 保持显式逃生选项。Renderer 在提交 Turn 前用当前 Thread cwd 查询 catalog，不能只依赖启动时快照。
 
 Electron 不新增权限业务命令或本地 catalog；Renderer 不再从新回合 wire 发送 legacy `sandboxPolicy`。Lime Desktop
-不复制 Codex TUI picker，也不读取 project-local `.codex/config.toml` 自定义 profile。`thread/settings/update.permissions`
-尚未接入同一 resolver，保持 planned/fail-closed；不得用现有 list/Turn lowering 冒充 settings mutation 已完成。多模型
-catalog、model switch、provider capability/readiness、retry/circuit breaker 与多模态 sampling/media lowering 继续归
-Grok-aligned `model-provider`。
+不复制 Codex TUI picker，也不读取 project-local `.codex/config.toml` 自定义 profile。custom profile、deny-read、
+MDM/managed requirements、cwd 对应的 project-local policy layer 与真实 Windows packaged enforcement 仍未实现；cwd
+物化和 setup readiness 不能冒充这些未纳入产品范围的策略层。多模型 catalog、model switch、provider
+capability/readiness、retry/circuit breaker 与多模态 sampling/media lowering 继续归 Grok-aligned `model-provider`。

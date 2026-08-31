@@ -450,9 +450,11 @@ pub(super) fn attach_canonical_item_entity(
     pending_events: &[AgentEvent],
     event: &mut AgentEvent,
 ) -> Result<(), String> {
-    if !event.event_type.starts_with("item.")
-        || event.payload.get("item").is_some()
-        || !is_managed_lifecycle_payload(&event.payload)
+    let is_item_lifecycle = event.event_type.starts_with("item.");
+    let is_mcp_progress = is_mcp_tool_progress_event(event);
+    if event.payload.get("item").is_some()
+        || (!is_item_lifecycle && !is_mcp_progress)
+        || (is_item_lifecycle && !is_managed_lifecycle_payload(&event.payload))
     {
         return Ok(());
     }
@@ -468,7 +470,7 @@ pub(super) fn attach_canonical_item_entity(
     )
     .map_err(|error| {
         format!(
-            "cannot materialize canonical message lifecycle event {}: {error}",
+            "cannot materialize canonical item event {}: {error}",
             event.event_id
         )
     })?;
@@ -476,15 +478,10 @@ pub(super) fn attach_canonical_item_entity(
         .changed_items
         .into_iter()
         .find(|item| item.sequence == event.sequence)
-        .ok_or_else(|| {
-            format!(
-                "canonical message lifecycle event {} produced no Item",
-                event.event_id
-            )
-        })?;
+        .ok_or_else(|| format!("canonical item event {} produced no Item", event.event_id))?;
     let payload = event.payload.as_object_mut().ok_or_else(|| {
         format!(
-            "canonical message lifecycle event {} has non-object payload",
+            "canonical item event {} has non-object payload",
             event.event_id
         )
     })?;
@@ -492,12 +489,59 @@ pub(super) fn attach_canonical_item_entity(
         "item".to_string(),
         serde_json::to_value(item).map_err(|error| {
             format!(
-                "cannot serialize canonical message lifecycle Item for {}: {error}",
+                "cannot serialize canonical Item for {}: {error}",
                 event.event_id
             )
         })?,
     );
     Ok(())
+}
+
+fn is_mcp_tool_progress_event(event: &AgentEvent) -> bool {
+    if event.event_type != "tool.progress" {
+        return false;
+    }
+    let Some(metadata) = event
+        .payload
+        .pointer("/progress/metadata")
+        .and_then(Value::as_object)
+    else {
+        return false;
+    };
+    let Some(notification_kind) = ["notification_kind", "notificationKind"]
+        .into_iter()
+        .find_map(|key| metadata.get(key).and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|kind| {
+            matches!(
+                *kind,
+                "mcp_progress"
+                    | "mcp_resources_changed"
+                    | "mcp_tools_changed"
+                    | "mcp_prompts_changed"
+            )
+        })
+    else {
+        return false;
+    };
+    let has_server = string_field(
+        &event.payload,
+        &["serverName", "server_name", "mcpServer", "mcp_server"],
+    )
+    .or_else(|| {
+        ["server_name", "serverName"]
+            .into_iter()
+            .find_map(|key| metadata.get(key).and_then(Value::as_str))
+    })
+    .is_some();
+    let has_tool = string_field(&event.payload, &["toolName", "tool_name", "name"])
+        .or_else(|| {
+            ["tool_name", "toolName"]
+                .into_iter()
+                .find_map(|key| metadata.get(key).and_then(Value::as_str))
+        })
+        .is_some();
+    !notification_kind.is_empty() && has_server && has_tool
 }
 
 fn lifecycle_event(

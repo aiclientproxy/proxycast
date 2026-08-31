@@ -70,6 +70,7 @@ function appServerClientMock(): AppServerSessionRpcClient {
         thread: canonicalThread({
           id: "thread-forked",
           sessionId: "session-forked",
+          name: "Forked conversation",
         }),
       }),
     ),
@@ -122,6 +123,27 @@ describe("appServerSessionClient", () => {
     await expect(client.createAgentRuntimeSession()).resolves.toBe("session-1");
     expect(appServerClient.startSession).toHaveBeenCalledWith({
       cwd: undefined,
+      serviceName: "新对话",
+      threadSource: "appServer",
+      historyMode: "paginated",
+    });
+  });
+
+  it("create 应把权限 profile provenance 透传到 thread/start", async () => {
+    const appServerClient = appServerClientMock();
+    const client = createAppServerSessionClient({ appServerClient });
+
+    await expect(
+      client.createAgentRuntimeSession(undefined, undefined, undefined, {
+        metadata: {
+          permissions: ":read-only",
+        },
+      }),
+    ).resolves.toBe("session-1");
+
+    expect(appServerClient.startSession).toHaveBeenCalledWith({
+      cwd: undefined,
+      permissions: ":read-only",
       serviceName: "新对话",
       threadSource: "appServer",
       historyMode: "paginated",
@@ -1310,9 +1332,14 @@ describe("appServerSessionClient", () => {
     );
     const client = createAppServerSessionClient({ appServerClient });
 
-    await expect(client.forkAgentRuntimeSession(" session-1 ")).resolves.toBe(
-      "session-forked",
-    );
+    await expect(
+      client.forkAgentRuntimeSession(" session-1 "),
+    ).resolves.toEqual({
+      sessionId: "session-forked",
+      threadId: "thread-forked",
+      name: "Forked conversation",
+      workingDir: "/tmp/workspace-1",
+    });
     expect(appServerClient.forkThread).toHaveBeenCalledWith({
       threadId: "thread-1",
     });

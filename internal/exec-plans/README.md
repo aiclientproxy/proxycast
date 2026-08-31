@@ -43,6 +43,7 @@
 - Lime v1.131.0 发布执行计划：`internal/exec-plans/release-v1.131.0-plan.md`
 - Lime v1.132.0 发布执行计划：`internal/exec-plans/release-v1.132.0-plan.md`
 - Lime v1.136.0 发布执行计划：`internal/exec-plans/release-v1.136.0-plan.md`
+- Lime v1.137.0 发布执行计划：`internal/exec-plans/release-v1.137.0-plan.md`
 - Codex App GUI 对齐执行计划：`internal/exec-plans/codex-app-gui-alignment-plan.md`
 - Codex reasoning 投影与通知漂移修复：`internal/exec-plans/codex-reasoning-projection-and-notification-drift-fix.md`
 - Codex 对话兼容重构：`internal/exec-plans/codex-conversation-compat-refactor-plan.md`

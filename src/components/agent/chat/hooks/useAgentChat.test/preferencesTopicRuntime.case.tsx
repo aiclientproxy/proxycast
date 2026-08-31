@@ -1,9 +1,5 @@
 import { act } from "react";
-import {
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   flushEffects,
   mockGetAgentRuntimeSession,
@@ -104,7 +100,7 @@ describe("useAgentChat 偏好持久化 - topic runtime fallback", () => {
       expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
         threadId: topicId,
         approvalPolicy: "never",
-        sandboxPolicy: "danger-full-access",
+        permissions: ":danger-full-access",
         modelProvider: "gemini",
         model: "gemini-2.5-pro",
       });
@@ -139,7 +135,7 @@ describe("useAgentChat 偏好持久化 - topic runtime fallback", () => {
       expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
         threadId: topicId,
         approvalPolicy: "never",
-        sandboxPolicy: "danger-full-access",
+        permissions: ":danger-full-access",
       });
     } finally {
       harness.unmount();
@@ -173,7 +169,7 @@ describe("useAgentChat 偏好持久化 - topic runtime fallback", () => {
       expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
         threadId: topicId,
         approvalPolicy: "never",
-        sandboxPolicy: "danger-full-access",
+        permissions: ":danger-full-access",
       });
     } finally {
       harness.unmount();
@@ -207,7 +203,7 @@ describe("useAgentChat 偏好持久化 - topic runtime fallback", () => {
       expect(mockUpdateAgentRuntimeThreadSettings).toHaveBeenCalledWith({
         threadId: topicId,
         approvalPolicy: "on-request",
-        sandboxPolicy: "read-only",
+        permissions: ":read-only",
       });
     } finally {
       harness.unmount();

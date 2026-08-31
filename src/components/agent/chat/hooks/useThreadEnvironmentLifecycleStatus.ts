@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppServerJsonRpcNotification } from "@/lib/api/appServer";
 import {
   subscribeAppServerNotifications,
   type AppServerEventBusSubscription,
 } from "@/lib/api/appServerEventBus";
 import type { AgentRuntimeThreadReadModel } from "@/lib/api/agentRuntime/sessionTypes";
+import { readCanonicalThreadEnvironmentSelections } from "@/lib/api/agentRuntime/appServerCanonicalThreadProjection";
 import {
   readEnvironmentRuntimeStatuses,
   type EnvironmentRuntimeConnectionState,
@@ -18,6 +19,25 @@ type EnvironmentNotificationSubscriber = (
 type EnvironmentStatusReader = (
   environmentIds: readonly string[],
 ) => Promise<EnvironmentRuntimeConnectionState[]>;
+
+export function readThreadEnvironmentIds(
+  threadRead?: AgentRuntimeThreadReadModel | null,
+): string[] {
+  return readThreadEnvironmentSelections(threadRead).map(
+    (environment) => environment.environment_id,
+  );
+}
+
+function readThreadEnvironmentSelections(
+  threadRead?: AgentRuntimeThreadReadModel | null,
+) {
+  if (threadRead?.environment_selections) {
+    return threadRead.environment_selections;
+  }
+  return readCanonicalThreadEnvironmentSelections(
+    threadRead?.session_business_object_ref_metadata ?? undefined,
+  );
+}
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -34,23 +54,6 @@ function readEnvironmentId(value: unknown): string | null {
   return typeof candidate === "string" && candidate.trim()
     ? candidate.trim()
     : null;
-}
-
-export function readThreadEnvironmentIds(
-  threadRead?: AgentRuntimeThreadReadModel | null,
-): string[] {
-  const metadata = readRecord(threadRead?.session_business_object_ref_metadata);
-  const environments = metadata?.environments;
-  if (!Array.isArray(environments)) {
-    return [];
-  }
-  return Array.from(
-    new Set(
-      environments
-        .map(readEnvironmentId)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  );
 }
 
 export function isThreadEnvironmentLifecycleNotification(
@@ -89,7 +92,13 @@ export function projectThreadEnvironmentLifecycleStatus(
       : "disconnected";
   return current.some((item) => item.environmentId === environmentId)
     ? current.map((item) =>
-        item.environmentId === environmentId ? { ...item, status } : item,
+        item.environmentId === environmentId
+          ? {
+              ...item,
+              status,
+              ...(status === "connected" ? { error: undefined } : {}),
+            }
+          : item,
       )
     : [...current, { environmentId, status }];
 }
@@ -101,26 +110,45 @@ export function useThreadEnvironmentLifecycleStatus(options: {
   readStatuses?: EnvironmentStatusReader;
 }): ThreadEnvironmentLifecycleState[] {
   const threadId = options.threadId?.trim() || null;
-  const environmentIds = useMemo(
-    () => readThreadEnvironmentIds(options.threadRead),
+  const environmentSelections = useMemo(
+    () => readThreadEnvironmentSelections(options.threadRead),
     [options.threadRead],
   );
-  const environmentKey = environmentIds.join("\u0000");
+  const environmentIds = useMemo(
+    () =>
+      environmentSelections.map((environment) => environment.environment_id),
+    [environmentSelections],
+  );
+  const environmentKey = environmentSelections
+    .map(
+      (environment) =>
+        `${environment.environment_id}\u0000${environment.status ?? ""}\u0000${environment.error ?? ""}\u0000${environment.cwd ?? ""}`,
+    )
+    .join("\u0001");
   const subscribeNotifications =
     options.subscribeNotifications ?? subscribeAppServerNotifications;
   const readStatuses = options.readStatuses ?? readEnvironmentRuntimeStatuses;
+  const environmentSelectionsRef = useRef(environmentSelections);
+  const environmentIdsRef = useRef(environmentIds);
+  environmentSelectionsRef.current = environmentSelections;
+  environmentIdsRef.current = environmentIds;
   const [state, setState] = useState<ThreadEnvironmentLifecycleState[]>([]);
 
   useEffect(() => {
-    const initial = environmentIds.map(
-      (environmentId) =>
+    const selections = environmentSelectionsRef.current;
+    const ids = environmentIdsRef.current;
+    const initial = selections.map(
+      (selection) =>
         ({
-          environmentId,
-          status: environmentId === "local" ? "connected" : "pending",
+          environmentId: selection.environment_id,
+          status:
+            selection.status ??
+            (selection.environment_id === "local" ? "connected" : "pending"),
+          ...(selection.error ? { error: selection.error } : {}),
         }) satisfies ThreadEnvironmentLifecycleState,
     );
     setState(initial);
-    if (!threadId || environmentIds.length === 0) {
+    if (!threadId || ids.length === 0) {
       return;
     }
 
@@ -152,7 +180,7 @@ export function useThreadEnvironmentLifecycleStatus(options: {
         );
       },
     });
-    void readStatuses(environmentIds).then(
+    void readStatuses(ids).then(
       (statuses) => {
         if (!active) {
           return;
@@ -177,13 +205,7 @@ export function useThreadEnvironmentLifecycleStatus(options: {
       active = false;
       unsubscribe();
     };
-  }, [
-    environmentKey,
-    environmentIds,
-    readStatuses,
-    subscribeNotifications,
-    threadId,
-  ]);
+  }, [environmentKey, readStatuses, subscribeNotifications, threadId]);
 
   return state;
 }

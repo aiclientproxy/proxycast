@@ -51,6 +51,7 @@ interface UseWorkspaceRightSurfaceActionRuntimeParams {
   rightSurfaceActiveSurface: WorkspaceRightSurfaceKind | null;
   rightSurfaceHarnessEnabled: boolean;
   rightSurfaceTraceAvailable: boolean;
+  rightSurfaceActivityAvailable: boolean;
   sceneLayoutMode: LayoutMode;
   setActiveArticleWorkspace: Dispatch<
     SetStateAction<WorkspaceArticleWorkspace | null>
@@ -93,6 +94,7 @@ interface WorkspaceRightSurfaceActionRuntime {
   handleToggleRightSurfaceHarness: () => void;
   handleToggleRightSurfaceShell: () => void;
   handleToggleRightSurfaceTrace: () => void;
+  handleToggleRightSurfaceActivity: () => void;
 }
 
 export function useWorkspaceRightSurfaceActionRuntime({
@@ -118,6 +120,7 @@ export function useWorkspaceRightSurfaceActionRuntime({
   rightSurfaceActiveSurface,
   rightSurfaceHarnessEnabled,
   rightSurfaceTraceAvailable,
+  rightSurfaceActivityAvailable,
   sceneLayoutMode,
   setActiveArticleWorkspace,
   setActiveBrowserRightSurfaceIntent,
@@ -364,6 +367,29 @@ export function useWorkspaceRightSurfaceActionRuntime({
     setManualRightSurface,
   ]);
 
+  const handleToggleRightSurfaceActivity = useCallback(() => {
+    if (!rightSurfaceActivityAvailable) {
+      return;
+    }
+    const shouldOpenActivity = manualRightSurface !== "activity";
+    closeCompetingRightSurfaces();
+    setManualRightSurface(shouldOpenActivity ? "activity" : null);
+    if (shouldOpenActivity) {
+      void refreshRightSurfacePendingRequests();
+      void consumePendingRequestsForSurface("activity");
+    } else {
+      void dismissPendingRequestsForSurface("activity", "user_closed_surface");
+    }
+  }, [
+    closeCompetingRightSurfaces,
+    consumePendingRequestsForSurface,
+    dismissPendingRequestsForSurface,
+    manualRightSurface,
+    refreshRightSurfacePendingRequests,
+    rightSurfaceActivityAvailable,
+    setManualRightSurface,
+  ]);
+
   const handleToggleExpertInfoPanel = useCallback(() => {
     setHarnessPanelVisible(false);
     setManualRightSurface(null);
@@ -425,6 +451,9 @@ export function useWorkspaceRightSurfaceActionRuntime({
     if (manualRightSurface === "browser" && !browserRightSurfaceAvailable) {
       setManualRightSurface(null);
     }
+    if (manualRightSurface === "activity" && !rightSurfaceActivityAvailable) {
+      setManualRightSurface(null);
+    }
   }, [
     articleEditorRightSurfaceAvailable,
     browserRightSurfaceAvailable,
@@ -433,6 +462,7 @@ export function useWorkspaceRightSurfaceActionRuntime({
     pluginSurfaceRightSurfaceAvailable,
     rightSurfaceHarnessEnabled,
     rightSurfaceTraceAvailable,
+    rightSurfaceActivityAvailable,
     setActiveArticleWorkspace,
     setActiveFilesRightSurfaceTarget,
     setActivePluginSurfaceContainerId,
@@ -592,5 +622,6 @@ export function useWorkspaceRightSurfaceActionRuntime({
     handleToggleRightSurfaceHarness,
     handleToggleRightSurfaceShell,
     handleToggleRightSurfaceTrace,
+    handleToggleRightSurfaceActivity,
   };
 }

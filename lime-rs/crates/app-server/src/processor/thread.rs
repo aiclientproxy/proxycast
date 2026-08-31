@@ -323,13 +323,23 @@ impl RequestProcessor {
         let thread =
             project_thread_read_response(agent_protocol::thread::ThreadReadResponse { thread })?
                 .thread;
+        let metadata = thread.extra.clone().unwrap_or(serde_json::Value::Null);
+        let environments = super::turn_environment::persisted_environment_selections(&metadata)?;
+        let environments = self.normalize_environment_selections(environments).await?;
+        self.record_environment_selections(&thread_id, environments.as_deref());
         let dispatch = dispatch_result(ThreadUnarchiveResponse { thread })?;
         if !changed {
             return Ok(dispatch);
         }
         let notification: JsonRpcNotification =
-            ServerNotification::ThreadUnarchived(ThreadUnarchivedNotification { thread_id }).into();
-        Ok(dispatch.with_notification(notification))
+            ServerNotification::ThreadUnarchived(ThreadUnarchivedNotification {
+                thread_id: thread_id.clone(),
+            })
+            .into();
+        Ok(dispatch.with_notification(notification).with_notifications(
+            self.environment_selection_notifications(&thread_id, environments.as_deref())
+                .await,
+        ))
     }
 
     pub(super) async fn handle_thread_start_v2(
@@ -363,10 +373,18 @@ impl RequestProcessor {
         let environments = self
             .normalize_environment_selections(params.environments.clone())
             .await?;
+        let environment_world_state = self
+            .environment_world_state_snapshot(environments.as_deref())
+            .await;
+        let active_permission_profile = params
+            .permissions
+            .as_deref()
+            .map(|id| self.resolve_allowed_permission_profile(id, params.cwd.as_deref()))
+            .transpose()?;
         let source = "appServer";
         let thread_id = Uuid::now_v7().to_string();
         let session_id = thread_id.clone();
-        let metadata = json!({
+        let mut metadata = json!({
             "providerSelector": model_provider.clone(),
             "providerName": model_provider.clone(),
             "modelName": model.clone(),
@@ -381,7 +399,15 @@ impl RequestProcessor {
             "approvalPolicy": params.approval_policy,
             "approvalsReviewer": params.approvals_reviewer,
             "sandbox": params.sandbox,
-            "permissions": params.permissions,
+            "permissions": active_permission_profile
+                .as_ref()
+                .map(|profile| profile.id),
+            "activePermissionProfile": active_permission_profile
+                .as_ref()
+                .map(|profile| json!({ "id": profile.id })),
+            "sandboxPolicy": active_permission_profile
+                .as_ref()
+                .map(|profile| profile.sandbox_policy),
             "config": params.config,
             "baseInstructions": params.base_instructions,
             "developerInstructions": params.developer_instructions,
@@ -394,6 +420,12 @@ impl RequestProcessor {
             "experimentalRawEvents": params.experimental_raw_events,
             "cliVersion": env!("CARGO_PKG_VERSION"),
         });
+        if !environment_world_state.is_empty() {
+            metadata["environmentWorldState"] = serde_json::to_value(&environment_world_state)
+                .map_err(|error| {
+                    invalid_params(format!("invalid Environment world-state: {error}"))
+                })?;
+        }
         let start_params = AgentSessionStartParams {
             session_id: Some(session_id.clone()),
             thread_id: Some(thread_id.clone()),
@@ -457,7 +489,10 @@ impl RequestProcessor {
                 .get("sandbox")
                 .cloned()
                 .unwrap_or(serde_json::Value::Null),
-            active_permission_profile: None,
+            active_permission_profile: metadata
+                .get("activePermissionProfile")
+                .filter(|value| !value.is_null())
+                .cloned(),
             reasoning_effort: None,
             multi_agent_mode: agent_protocol::MultiAgentMode::default(),
         })

@@ -391,6 +391,7 @@ export function useAgentChatWorkspaceSceneRuntime({
         sceneLayoutMode,
         sceneSessionId,
         sceneThreadId: sceneThreadRead?.thread_id ?? null,
+        activityAvailable: Boolean(sceneThreadRead?.thread_id),
         sessionId,
         showHarnessToggle,
         suppressHomeNavbarUtilityActions,
@@ -405,6 +406,12 @@ export function useAgentChatWorkspaceSceneRuntime({
       host: {
         ensureBrowserWorkspaceOwner,
         generalWorkbenchHarnessPanelBaseProps,
+        activityPanelProps: {
+          canonicalChildren,
+          threadItems: sceneThreadItems,
+          toolInventory: generalWorkbenchHarnessPanelBaseProps.toolInventory,
+          onOpenSubagentSession: handleOpenSubagentSession,
+        },
         harnessState,
         preferredServiceSkillResultFileTarget,
         runtimeWorkspaceId,

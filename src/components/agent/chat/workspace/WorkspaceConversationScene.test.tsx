@@ -714,6 +714,51 @@ describe("WorkspaceConversationScene", () => {
     ).toBeNull();
   });
 
+  it("非任务中心的 active Thread 也应显示稳定页头并保留必要导航动作", () => {
+    const onBackHome = vi.fn();
+    const onToggleCanvas = vi.fn();
+    const onOpenSettings = vi.fn();
+    const container = renderScene({
+      navbarVisible: true,
+      navbarChrome: "full",
+      navbarContextVariant: "default",
+      onBackHome,
+      onToggleCanvas,
+      onOpenSettings,
+      threadHeader: {
+        sessionId: "thread-default-1",
+        title: "普通工作区任务",
+        status: "done",
+        workingDirectory: "/workspace/lime",
+      },
+    });
+
+    expect(
+      container.querySelector('[data-testid="thread-workspace-header"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector(
+        '[data-testid="thread-workspace-header-navigation"]',
+      ),
+    ).not.toBeNull();
+
+    const navigation = container.querySelector(
+      '[data-testid="thread-workspace-header-navigation"]',
+    );
+    const buttons = navigation?.querySelectorAll("button") ?? [];
+    expect(buttons.length).toBe(3);
+
+    act(() => {
+      (buttons[0] as HTMLButtonElement).click();
+      (buttons[1] as HTMLButtonElement).click();
+      (buttons[2] as HTMLButtonElement).click();
+    });
+
+    expect(onBackHome).toHaveBeenCalledTimes(1);
+    expect(onToggleCanvas).toHaveBeenCalledTimes(1);
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
   it("任务中心场景应把专家信息按钮状态透传给统一工具栏", () => {
     const onToggleExpertInfoPanel = vi.fn();
     const container = renderScene({

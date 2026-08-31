@@ -145,6 +145,7 @@ npm run smoke:mcp-config-electron-fixture
 npm run smoke:model-provider-capabilities-electron-gate-b
 npm run smoke:thread-queue-electron-gate-b
 npm run smoke:thread-revert-electron-gate-b
+npm run smoke:thread-fork-electron-gate-b
 npm run smoke:project-directory-electron-gate-b
 npm run smoke:mcp-oauth-notification-electron-fixture
 npm run smoke:mcp-startup-notification-electron-fixture
@@ -184,6 +185,8 @@ npm run smoke:orchestrator-skills-gate-b
 `npm run smoke:thread-queue-electron-gate-b` 在隔离 userData 和 unavailable backend 中经真实 preload 创建 canonical Thread、添加一条 durable Queue submission，再从真实 Electron 侧栏打开同一 Thread，断言 marker 在 canonical 时间线中唯一可见、`thread-queue-status` 只显示标题/数量且不重复正文、旧 `thread-queue-items` 节点不存在。setup 阶段由 preload 调用结果证明 `thread/start|thread/queue/add`，GUI 阶段由 safeInvoke trace 证明 `thread/read|thread/queue/list`；四段均绑定同一 Thread，mock/error 为 0。证据默认写入 `.lime/qc/gui-evidence/thread-queue-electron-gate-b/`，不启动 Turn、不调用模型，也不保存 Thread/Queue identity 或本机路径。
 
 `npm run smoke:thread-revert-electron-gate-b` 在隔离 userData 和 workspace 中创建 paginated canonical Thread，并由本地 external backend 完成两个 Turn；随后从第二轮用户消息的真实 GUI 入口确认恢复历史。Gate B 要求同一 Thread 上的第一轮保留、第二轮移除、Thread header 不变、工作区文件内容不变，并证明 GUI action 经 `electron-ipc -> app_server_handle_json_lines -> thread/revert -> thread/read` 刷新 canonical read model，同时观察到 `app_server_drain_events`，mock/invoke/console/page error 为 0。证据默认写入 `.lime/qc/gui-evidence/thread-revert-electron-gate-b/`，包含确认态与成功态截图；不调用正式模型，也不保存 Thread/Turn identity 或本机路径。
+
+`npm run smoke:thread-fork-electron-gate-b` 在隔离 userData 和 unavailable backend 中创建 paginated canonical source Thread，再从真实 Thread header 菜单执行 Fork。Gate B 要求新侧栏项成为 active Thread、成功 toast 可见、`thread/fork` 精确命中 source、`thread/read|resume` 精确命中 forked Thread、read model 与 `thread/started` notification 都以 Codex exact `forkedFromId` 保留同一来源关系，并要求 source/forked Thread 同时留在 `thread/list`；mock/invoke/console/page error 为 0。失败时证据只记录脱敏 method/error/toast/DOM 摘要，避免等待超时后丢失根因。证据默认写入 `.lime/qc/gui-evidence/thread-fork-electron-gate-b/`，不启动 Turn、不调用模型，也不保存 Thread identity 或本机路径；`parentThreadId` 只用于 SubAgent lineage，不作为普通 Fork 关系。
 
 `npm run smoke:project-directory-electron-gate-b` 在隔离 userData 和 unavailable backend 中经真实 preload 创建两个 Project 与一个 canonical Thread，从真实 Electron 侧栏打开该 Thread，在顶栏 Project 目录切换归属，并用 `thread/read` 冷读回。证据要求命中 `electron-ipc -> app_server_handle_json_lines -> project/create|list + thread/start|read|metadata/update`、GUI 目录和选择状态、同一 Thread/Project identity，以及零 mock/console/page/invoke error。默认写入 `.lime/qc/gui-evidence/project-directory-electron-gate-b/`，不启动 Turn、不调用模型，也不保存 Thread/Project identity 或本机路径；该 Gate B 只证明 Project 目录与 Thread 归属产品链，不证明 live provider 或模型回合。
 

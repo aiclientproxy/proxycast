@@ -19,7 +19,9 @@ import {
   seedThreadReadLongListCanonicalThread,
 } from "./lib/session-history-long-list-fixture.mjs";
 import {
+  assertThreadReadLongListColdRestartOracle,
   assertThreadReadLongListDomOracle,
+  runThreadReadLongListColdRestartOracle,
   runThreadReadLongListDomOracle,
 } from "./lib/session-history-long-list-oracle.mjs";
 import {
@@ -373,6 +375,7 @@ async function launchElectronFixture({
   appServerEnv,
   consoleErrors,
   pageErrors,
+  clearBuffersAfterReady = true,
 }) {
   const app = await electron.launch({
     executablePath: electronPath,
@@ -401,7 +404,9 @@ async function launchElectronFixture({
   page.setDefaultTimeout(options.timeoutMs);
   await page.setViewportSize({ width: 1440, height: 1000 });
   const rendererSnapshot = await waitForRendererReady(page, options);
-  await clearInvokeBuffers(page);
+  if (clearBuffersAfterReady) {
+    await clearInvokeBuffers(page);
+  }
   return { app, page, rendererSnapshot };
 }
 
@@ -497,6 +502,10 @@ async function run() {
     options.evidenceDir,
     `${options.prefix}-long-list.png`,
   );
+  const longListColdRestartScreenshotPath = path.join(
+    options.evidenceDir,
+    `${options.prefix}-long-list-cold-restart.png`,
+  );
   const runtimeEnv = createTempRuntimeEnv();
   const appServerBinary = resolveDevAppServerBinary({
     env: runtimeEnv.env,
@@ -524,10 +533,12 @@ async function run() {
     threadReadPageIsomorphicSummary: null,
     threadReadLongListSeed: null,
     threadReadLongListSummary: null,
+    threadReadLongListColdRestartSummary: null,
     consoleErrors: [],
     pageErrors: [],
     screenshot: null,
     longListScreenshot: null,
+    longListColdRestartScreenshot: null,
     rawEvidence: rawEvidencePath,
     summary: summaryPath,
     tempRoot: options.keepTemp ? runtimeEnv.tempRoot : null,
@@ -701,6 +712,31 @@ async function run() {
       path: longListScreenshotPath,
       fullPage: false,
     });
+    await clearInvokeBuffers(handle.page);
+    await closeElectronFixture(handle);
+    handle = null;
+
+    logStage("restart-electron-thread-read-long-list");
+    handle = await launchElectronFixture({
+      options,
+      runtimeEnv,
+      appServerEnv,
+      consoleErrors,
+      pageErrors,
+      clearBuffersAfterReady: false,
+    });
+    const longListColdRestartResult =
+      await runThreadReadLongListColdRestartOracle(handle.page, options);
+    rawEvidence.threadReadLongListColdRestart = sanitizeJson(
+      longListColdRestartResult,
+    );
+    summary.threadReadLongListColdRestartSummary = sanitizeJson(
+      assertThreadReadLongListColdRestartOracle(longListColdRestartResult),
+    );
+    await handle.page.screenshot({
+      path: longListColdRestartScreenshotPath,
+      fullPage: false,
+    });
     await closeElectronFixture(handle);
     handle = null;
 
@@ -716,6 +752,7 @@ async function run() {
     summary.pageErrors = pageErrors;
     summary.screenshot = screenshotPath;
     summary.longListScreenshot = longListScreenshotPath;
+    summary.longListColdRestartScreenshot = longListColdRestartScreenshotPath;
     summary.ok = true;
     summary.completedAt = new Date().toISOString();
     writeJsonFile(rawEvidencePath, rawEvidence);

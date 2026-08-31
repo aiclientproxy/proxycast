@@ -11,7 +11,10 @@ import {
   MoreHorizontal,
   GitBranch,
 } from "lucide-react";
-import type { CanvasWorkbenchChangeDiffStats } from "./CanvasWorkbenchChangesPanelViewModel";
+import type {
+  CanvasWorkbenchChangeDiffStats,
+  CanvasWorkbenchGitSummary,
+} from "./CanvasWorkbenchChangesPanelViewModel";
 import { DiffStats } from "./CanvasWorkbenchChangeStats";
 import {
   CanvasWorkbenchReviewMenu,
@@ -27,6 +30,8 @@ import {
 export interface CanvasWorkbenchChangesToolbarProps extends CanvasWorkbenchReviewMenuModel {
   translateWorkbench: CanvasWorkbenchTranslation;
   diffStats: CanvasWorkbenchChangeDiffStats;
+  gitSummary?: CanvasWorkbenchGitSummary;
+  changeFileCount?: number;
   checkpointCount?: number;
   reviewMenuOpen: boolean;
   baseMenuOpen: boolean;
@@ -63,6 +68,8 @@ export interface CanvasWorkbenchChangesToolbarProps extends CanvasWorkbenchRevie
 export function CanvasWorkbenchChangesToolbar({
   translateWorkbench,
   diffStats,
+  gitSummary,
+  changeFileCount = 0,
   checkpointCount,
   reviewMenuOpen,
   baseMenuOpen,
@@ -130,7 +137,7 @@ export function CanvasWorkbenchChangesToolbar({
   const toolbarButtonClassName =
     "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] border border-transparent bg-white text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300";
   const activeToolbarButtonClassName =
-      "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300";
+    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] border border-slate-200 bg-slate-50 text-slate-700 transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300";
   const reviewButtonLabelKey =
     reviewRunStatus === "completed" || reviewRunStatus === "failed"
       ? "agentChat.harness.codeReview.action.retry"
@@ -271,22 +278,83 @@ export function CanvasWorkbenchChangesToolbar({
         ) : null}
       </div>
 
+      {gitSummary?.currentRef ||
+      gitSummary?.comparisonBaseRef ||
+      gitSummary?.repositoryRoot ||
+      gitSummary?.uncommittedFileCount !== undefined ||
+      changeFileCount > 0 ? (
+        <div
+          className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-1 font-mono text-[11px] text-slate-500"
+          data-testid="canvas-workbench-changes-summary"
+        >
+          {gitSummary?.currentRef ? (
+            <span
+              className="inline-flex min-w-0 items-center gap-1"
+              data-testid="canvas-workbench-changes-current-ref"
+            >
+              <GitBranch className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <span
+                className="max-w-[min(32vw,280px)] truncate"
+                title={gitSummary.currentRef}
+              >
+                {gitSummary.currentRef}
+              </span>
+            </span>
+          ) : null}
+          {gitSummary?.comparisonBaseRef ? (
+            <span
+              className="truncate"
+              data-testid="canvas-workbench-changes-comparison-base"
+              title={gitSummary.comparisonBaseRef}
+            >
+              {translateWorkbench(
+                "agentChat.canvasWorkbench.coding.changes.summary.base",
+                {
+                  base: gitSummary.comparisonBaseRef,
+                },
+              )}
+            </span>
+          ) : null}
+          {changeFileCount > 0 ? (
+            <span
+              data-testid="canvas-workbench-changes-file-count"
+              data-count={changeFileCount}
+            >
+              {translateWorkbench(
+                "agentChat.canvasWorkbench.coding.changes.summary.files",
+                {
+                  count: changeFileCount,
+                },
+              )}
+            </span>
+          ) : null}
+          {gitSummary && gitSummary.uncommittedFileCount !== undefined ? (
+            <span
+              data-testid="canvas-workbench-changes-uncommitted-count"
+              data-count={gitSummary.uncommittedFileCount}
+            >
+              {translateWorkbench(
+                "agentChat.canvasWorkbench.coding.changes.summary.uncommitted",
+                { count: gitSummary.uncommittedFileCount },
+              )}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex shrink-0 items-center gap-1.5">
         {onStartReview ? (
           <button
             type="button"
             data-testid="code-review-summary-start-review"
-            aria-label={
-              translateWorkbench(reviewButtonLabelKey)
-            }
-            title={
-              translateWorkbench(reviewButtonLabelKey)
-            }
+            aria-label={translateWorkbench(reviewButtonLabelKey)}
+            title={translateWorkbench(reviewButtonLabelKey)}
             disabled={reviewStartDisabled}
             onClick={() => void onStartReview()}
             className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[7px] border border-sky-200 bg-sky-50 px-2.5 text-[12px] font-medium text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300"
           >
-            {reviewRunStatus === "starting" || reviewRunStatus === "inProgress" ? (
+            {reviewRunStatus === "starting" ||
+            reviewRunStatus === "inProgress" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <ClipboardCheck className="h-3.5 w-3.5" />

@@ -42,6 +42,9 @@ impl RequestProcessor {
             .await?;
         self.ensure_environment_execution_lowering(params.environments.as_deref())?;
         let session_id = self.resolve_loaded_v2_thread_session(&params.thread_id)?;
+        if let Some(profile_id) = params.permissions.as_deref() {
+            self.resolve_allowed_permission_profile(profile_id, params.cwd.as_deref())?;
+        }
         self.record_environment_selections(&params.thread_id, params.environments.as_deref());
         self.append_environment_world_state(&session_id, params.environments.as_deref())
             .map_err(to_jsonrpc_error)?;

@@ -14,6 +14,7 @@ const REQUIRED_METHODS = [
   "thread/turns/list",
   "thread/items/list",
 ];
+const COLD_RESTART_REQUIRED_METHODS = [...REQUIRED_METHODS, "thread/resume"];
 const FORBIDDEN_METHODS = [
   "agentSession/get",
   "agentSession/list",
@@ -153,6 +154,17 @@ async function readLongListSnapshot(page) {
   }, THREAD_READ_LONG_LIST);
 }
 
+function hasStableBoundedPerformance(snapshot) {
+  const performance = snapshot?.performanceSession;
+  return (
+    finiteNumber(performance?.messageListPaintCount) !== null &&
+    finiteNumber(performance?.finalThreadItemsCount) !== null &&
+    performance.finalThreadItemsCount <= MAX_INITIAL_THREAD_ITEMS &&
+    finiteNumber(performance?.hiddenHistoryCount) ===
+      snapshot.hiddenHistoryCount
+  );
+}
+
 export async function runThreadReadLongListDomOracle(page, options) {
   const click = await clickLongListConversation(page, options);
   const startedAt = Date.now();
@@ -165,7 +177,7 @@ export async function runThreadReadLongListDomOracle(page, options) {
       snapshot.latestUserVisible &&
       snapshot.latestAssistantHeadingVisible &&
       snapshot.longPreviewVisible &&
-      snapshot.performanceSession?.messageListPaintCount > 0
+      hasStableBoundedPerformance(snapshot)
     ) {
       return { click, snapshot };
     }
@@ -173,6 +185,32 @@ export async function runThreadReadLongListDomOracle(page, options) {
   }
   throw new Error(
     `long-list DOM/telemetry 未稳定: ${JSON.stringify(snapshot)}`,
+  );
+}
+
+export async function runThreadReadLongListColdRestartOracle(page, options) {
+  const click = await clickLongListConversation(page, options);
+  const startedAt = Date.now();
+  let snapshot = null;
+  while (Date.now() - startedAt < options.timeoutMs) {
+    snapshot = await readLongListSnapshot(page);
+    if (
+      snapshot.frameSessionId === THREAD_READ_LONG_LIST.sessionId &&
+      snapshot.turnGroupCount > 0 &&
+      snapshot.latestUserVisible &&
+      snapshot.latestAssistantHeadingVisible &&
+      snapshot.longPreviewVisible &&
+      hasStableBoundedPerformance(snapshot) &&
+      COLD_RESTART_REQUIRED_METHODS.every((method) =>
+        snapshot.requestMethods.includes(method),
+      )
+    ) {
+      return { click, navigation: "sidebar", snapshot };
+    }
+    await sleep(options.intervalMs);
+  }
+  throw new Error(
+    `long-list cold restart 侧栏打开后未恢复: ${JSON.stringify(snapshot)}`,
   );
 }
 
@@ -299,5 +337,27 @@ export function assertThreadReadLongListDomOracle(result) {
       longTaskMaxMs: finiteNumber(performance.longTaskMaxMs),
     },
     requestMethods: snapshot.requestMethods,
+  };
+}
+
+export function assertThreadReadLongListColdRestartOracle(result) {
+  const summary = assertThreadReadLongListDomOracle(result);
+  assert(
+    result?.click?.clicked === true && result?.navigation === "sidebar",
+    "long-list cold restart 必须从持久化侧栏打开 Thread",
+  );
+  assert(
+    COLD_RESTART_REQUIRED_METHODS.every((method) =>
+      summary.requestMethods.includes(method),
+    ),
+    `long-list cold restart 缺少 current method: ${COLD_RESTART_REQUIRED_METHODS.filter(
+      (method) => !summary.requestMethods.includes(method),
+    ).join(", ")}`,
+  );
+
+  return {
+    ...summary,
+    navigation: "sidebar",
+    processRestart: true,
   };
 }

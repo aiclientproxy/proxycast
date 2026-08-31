@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  ArrowLeft,
   CheckCircle2,
   CircleAlert,
   CircleDot,
@@ -8,8 +9,12 @@ import {
   GitFork,
   LoaderCircle,
   MoreHorizontal,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
   Archive,
+  Home,
+  Settings,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TaskStatus } from "../hooks/agentChatShared";
@@ -30,6 +35,13 @@ interface ThreadWorkspaceHeaderProps {
   onRename?: (title: string) => Promise<void>;
   onArchive?: () => Promise<void>;
   onFork?: () => Promise<void>;
+  onBackHome?: () => void;
+  onBackToResources?: () => void;
+  onBackToProjectManagement?: () => void;
+  showCanvasToggle?: boolean;
+  isCanvasOpen?: boolean;
+  onToggleCanvas?: () => void;
+  onOpenSettings?: () => void;
   actions?: ReactNode;
 }
 
@@ -91,6 +103,13 @@ export function ThreadWorkspaceHeader({
   onRename,
   onArchive,
   onFork,
+  onBackHome,
+  onBackToResources,
+  onBackToProjectManagement,
+  showCanvasToggle = false,
+  isCanvasOpen = false,
+  onToggleCanvas,
+  onOpenSettings,
   actions,
 }: ThreadWorkspaceHeaderProps) {
   const { t } = useTranslation("agent");
@@ -107,6 +126,13 @@ export function ThreadWorkspaceHeader({
       )
     : null;
   const StatusIcon = currentStatus?.Icon;
+  const hasNavigationActions = Boolean(
+    onBackHome ||
+    onBackToResources ||
+    onBackToProjectManagement ||
+    (showCanvasToggle && onToggleCanvas) ||
+    onOpenSettings,
+  );
   const handleRename = () => {
     if (!onRename || typeof window === "undefined") {
       return;
@@ -130,6 +156,84 @@ export function ThreadWorkspaceHeader({
         canAcceptDirectInput === null ? undefined : String(canAcceptDirectInput)
       }
     >
+      {hasNavigationActions ? (
+        <div
+          className="flex shrink-0 items-center gap-0.5"
+          data-testid="thread-workspace-header-navigation"
+        >
+          {onBackHome ? (
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] text-[color:var(--lime-chrome-muted)] transition hover:bg-[color:var(--lime-chrome-tab-hover)] hover:text-[color:var(--lime-chrome-text)]"
+              onClick={onBackHome}
+              aria-label={String(t("agentChat.navbar.backHome"))}
+              title={String(t("agentChat.navbar.backHome"))}
+            >
+              <Home className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
+          {onBackToResources ? (
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] text-[color:var(--lime-chrome-muted)] transition hover:bg-[color:var(--lime-chrome-tab-hover)] hover:text-[color:var(--lime-chrome-text)]"
+              onClick={onBackToResources}
+              aria-label={String(t("agentChat.navbar.backResources"))}
+              title={String(t("agentChat.navbar.backResources"))}
+            >
+              <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
+          {onBackToProjectManagement ? (
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] text-[color:var(--lime-chrome-muted)] transition hover:bg-[color:var(--lime-chrome-tab-hover)] hover:text-[color:var(--lime-chrome-text)]"
+              onClick={onBackToProjectManagement}
+              aria-label={String(t("agentChat.navbar.projectManagement"))}
+              title={String(t("agentChat.navbar.projectManagement"))}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
+          {showCanvasToggle && onToggleCanvas ? (
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] text-[color:var(--lime-chrome-muted)] transition hover:bg-[color:var(--lime-chrome-tab-hover)] hover:text-[color:var(--lime-chrome-text)]"
+              onClick={onToggleCanvas}
+              aria-label={String(
+                t(
+                  isCanvasOpen
+                    ? "agentChat.navbar.collapseCanvas"
+                    : "agentChat.navbar.expandCanvas",
+                ),
+              )}
+              title={String(
+                t(
+                  isCanvasOpen
+                    ? "agentChat.navbar.collapseCanvas"
+                    : "agentChat.navbar.expandCanvas",
+                ),
+              )}
+            >
+              {isCanvasOpen ? (
+                <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <PanelRightOpen className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+            </button>
+          ) : null}
+          {onOpenSettings ? (
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] text-[color:var(--lime-chrome-muted)] transition hover:bg-[color:var(--lime-chrome-tab-hover)] hover:text-[color:var(--lime-chrome-text)]"
+              onClick={onOpenSettings}
+              aria-label={String(t("agentChat.navbar.openSettings"))}
+              title={String(t("agentChat.navbar.openSettings"))}
+            >
+              <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <h1
           className="min-w-0 truncate text-[14px] font-semibold leading-5 text-[color:var(--lime-text-strong)]"

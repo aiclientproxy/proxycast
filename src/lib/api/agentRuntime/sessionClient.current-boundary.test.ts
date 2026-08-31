@@ -55,7 +55,10 @@ function appServerClientMock(): AppServerSessionRpcClient {
     forkThread: vi.fn().mockResolvedValue({
       id: 2,
       result: {
-        thread: canonicalThread("session-forked", "thread-forked"),
+        thread: {
+          ...canonicalThread("session-forked", "thread-forked"),
+          name: "Forked conversation",
+        },
       },
       response: { id: 2, result: {} },
       notifications: [],
@@ -147,6 +150,33 @@ describe("agentRuntime sessionClient current App Server boundary", () => {
 
     expect(appServerClient.unarchiveThread).toHaveBeenCalledWith({
       threadId: "thread-archived",
+    });
+  });
+
+  it("fork 应把 canonical 标题随 created 事件同步给侧栏", async () => {
+    const appServerClient = appServerClientMock();
+    const client = createSessionClient({ appServerClient });
+    const listener = vi.fn();
+    window.addEventListener(AGENT_RUNTIME_SESSIONS_CHANGED_EVENT, listener);
+
+    try {
+      await expect(
+        client.forkAgentRuntimeSession("session-recent"),
+      ).resolves.toBe("session-forked");
+    } finally {
+      window.removeEventListener(
+        AGENT_RUNTIME_SESSIONS_CHANGED_EVENT,
+        listener,
+      );
+    }
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect((listener.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
+      reason: "created",
+      sessionId: "session-forked",
+      threadId: "thread-forked",
+      name: "Forked conversation",
+      workingDir: "/tmp/workspace-1",
     });
   });
 

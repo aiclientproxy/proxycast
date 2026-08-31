@@ -232,6 +232,7 @@ describe("agentStreamSubmitExecution", () => {
         subagent: true,
       }),
       effectiveAccessMode: "read-only",
+      workingDir: " /workspace/project ",
       content: "继续生成提纲",
       images: [],
       skipUserMessage: false,
@@ -322,6 +323,7 @@ describe("agentStreamSubmitExecution", () => {
     expect(resolveCollaborationModeMaskMock).toHaveBeenCalledWith("plan");
     expect(resolveAllowedPermissionProfileMock).toHaveBeenCalledWith(
       ":read-only",
+      "/workspace/project",
     );
     expect(setThreadGoalMock).toHaveBeenCalledWith({
       threadId: "thread-1",

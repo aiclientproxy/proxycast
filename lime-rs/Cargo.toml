@@ -6,7 +6,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "1.136.0"
+version = "1.137.0"
 edition = "2021"
 authors = ["coso"]
 repository = "https://github.com/aiclientproxy/lime"

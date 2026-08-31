@@ -1,5 +1,5 @@
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 use agent_protocol::{Thread, ThreadHistoryChangeSet};
@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 mod append_guard;
 mod delete;
+mod tail_repair;
 #[cfg(test)]
 mod tests;
 
@@ -177,6 +178,7 @@ impl RolloutStore {
         changes: &ThreadHistoryChangeSet,
     ) -> Result<bool, String> {
         let path = self.resolve_active(relative_path)?;
+        tail_repair::repair_crash_tail(&path)?;
         let latest =
             append_guard::latest_history_for_append(&path, relative_path, session_id, thread_id)?;
         if let Some(existing) = latest
@@ -225,7 +227,7 @@ impl RolloutStore {
     ) -> Result<i64, String> {
         validate_metadata_update(expected, next)?;
         let path = self.resolve_active(relative_path)?;
-        let scan = scan_rollout(&path)?;
+        let scan = scan_rollout_repaired(&path)?;
         validate_scan_identity(
             &scan,
             relative_path,
@@ -292,7 +294,7 @@ impl RolloutStore {
         fingerprint: &str,
     ) -> Result<(), String> {
         let path = self.resolve_active(relative_path)?;
-        let scan = scan_rollout(&path)?;
+        let scan = scan_rollout_repaired(&path)?;
         validate_scan_identity(&scan, relative_path, session_id, thread_id, &path)?;
         match scan
             .history
@@ -364,7 +366,7 @@ impl RolloutStore {
                 relative_path.to_path_buf(),
             )
         };
-        let scan = scan_rollout(&path)?;
+        let scan = scan_rollout_repaired(&path)?;
         validate_scan_identity(&scan, &active_path, session_id, thread_id, &path)
     }
 
@@ -386,7 +388,7 @@ impl RolloutStore {
             } else {
                 self.resolve_active(&relative_path)?
             };
-            let scan = scan_rollout(&path)?;
+            let scan = scan_rollout_repaired(&path)?;
             let active_path = if archived {
                 active_path_from_archived(&relative_path)?
             } else {
@@ -415,7 +417,7 @@ impl RolloutStore {
         thread: &Thread,
         stored_path: &str,
     ) -> Result<(), String> {
-        let scan = scan_rollout(path)?;
+        let scan = scan_rollout_repaired(path)?;
         if scan.session_id == thread.session_id.as_str()
             && scan.thread_id == thread.thread_id.as_str()
             && scan.created_at_ms == thread.created_at_ms
@@ -449,7 +451,7 @@ impl RolloutStore {
         })?;
         match (source_exists, destination_exists) {
             (true, false) => {
-                let scan = scan_rollout(source)?;
+                let scan = scan_rollout_repaired(source)?;
                 validate_scan_identity(&scan, active_path, session_id, thread_id, source)?;
                 let parent = destination.parent().ok_or_else(|| {
                     format!("rollout path has no parent: {}", destination.display())
@@ -469,7 +471,7 @@ impl RolloutStore {
                 })
             }
             (false, true) => {
-                let scan = scan_rollout(destination)?;
+                let scan = scan_rollout_repaired(destination)?;
                 validate_scan_identity(&scan, active_path, session_id, thread_id, destination)
             }
             (true, true) => Err(format!(
@@ -551,10 +553,25 @@ fn validate_scan_identity(
     Err(format!("rollout identity mismatch for {}", path.display()))
 }
 
+fn scan_rollout_repaired(path: &Path) -> Result<RolloutScan, String> {
+    tail_repair::repair_crash_tail(path)?;
+    scan_rollout(path)
+}
+
 fn scan_rollout(path: &Path) -> Result<RolloutScan, String> {
     let file = File::open(path)
         .map_err(|error| format!("failed to read rollout file {}: {error}", path.display()))?;
-    let mut lines = BufReader::new(file).lines();
+    scan_rollout_reader(BufReader::new(file), path)
+}
+
+fn validate_rollout_prefix(path: &Path, byte_len: u64) -> Result<(), String> {
+    let file = File::open(path)
+        .map_err(|error| format!("failed to read rollout file {}: {error}", path.display()))?;
+    scan_rollout_reader(BufReader::new(file.take(byte_len)), path).map(|_| ())
+}
+
+fn scan_rollout_reader(reader: impl BufRead, path: &Path) -> Result<RolloutScan, String> {
+    let mut lines = reader.lines();
     let first = lines
         .next()
         .ok_or_else(|| format!("rollout file is empty: {}", path.display()))?

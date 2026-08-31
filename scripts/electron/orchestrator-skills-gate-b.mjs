@@ -259,6 +259,16 @@ export async function openRuntimeThreadInGui(page, runtime, options) {
     `textarea[name="agent-chat-message"][data-session-id="${runtime.sessionId}"]`,
   );
   await input.waitFor({ state: "visible", timeout: options.timeoutMs });
+  await page.waitForFunction(
+    (sessionId) => {
+      const candidate = document.querySelector(
+        `textarea[name="agent-chat-message"][data-session-id="${sessionId}"]`,
+      );
+      return candidate instanceof HTMLTextAreaElement && !candidate.disabled;
+    },
+    runtime.sessionId,
+    { timeout: options.timeoutMs },
+  );
   assert(
     (await input.getAttribute("data-session-id")) === runtime.sessionId,
     "GUI session identity 漂移",

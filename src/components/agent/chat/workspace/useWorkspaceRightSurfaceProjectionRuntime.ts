@@ -28,6 +28,7 @@ interface UseWorkspaceRightSurfaceProjectionRuntimeParams {
   showHarnessToggle: boolean;
   suppressHomeNavbarUtilityActions: boolean;
   traceAvailable: boolean;
+  activityAvailable?: boolean;
 }
 
 interface UseWorkspaceRightSurfaceProjectionRuntimeResult {
@@ -45,6 +46,7 @@ function resolveWorkspaceRightSurfaceOpenSurfaces({
   shellAvailable,
   harnessAvailable,
   traceAvailable,
+  activityAvailable,
 }: {
   appSurfaceAvailable: boolean;
   filesAvailable: boolean;
@@ -54,6 +56,7 @@ function resolveWorkspaceRightSurfaceOpenSurfaces({
   shellAvailable: boolean;
   harnessAvailable: boolean;
   traceAvailable: boolean;
+  activityAvailable: boolean;
 }): WorkspaceRightSurfaceKind[] {
   const next: WorkspaceRightSurfaceKind[] = [];
   const add = (kind: WorkspaceRightSurfaceKind, enabled: boolean) => {
@@ -69,11 +72,14 @@ function resolveWorkspaceRightSurfaceOpenSurfaces({
   add("shell", shellAvailable);
   add("harness", harnessAvailable);
   add("trace", traceAvailable);
+  add("activity", activityAvailable);
   add("articleWorkspace", manualRightSurface === "articleWorkspace");
   add("files", manualRightSurface === "files");
   add("shell", manualRightSurface === "shell");
   add("harness", manualRightSurface === "harness");
   add("trace", manualRightSurface === "trace");
+  add("activity", manualRightSurface === "activity");
+  add("activity", manualRightSurface === "activity");
   add("appSurface", manualRightSurface === "appSurface");
   add("expertInfo", manualRightSurface === "expertInfo");
   add("browser", manualRightSurface === "browser");
@@ -95,7 +101,9 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
   showHarnessToggle,
   suppressHomeNavbarUtilityActions,
   traceAvailable,
+  activityAvailable,
 }: UseWorkspaceRightSurfaceProjectionRuntimeParams): UseWorkspaceRightSurfaceProjectionRuntimeResult {
+  const effectiveActivityAvailable = activityAvailable === true;
   const harnessAvailable =
     !suppressHomeNavbarUtilityActions && showHarnessToggle;
   const effectiveTraceAvailable =
@@ -111,6 +119,7 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
         shellAvailable,
         harnessAvailable,
         traceAvailable: effectiveTraceAvailable,
+        activityAvailable: effectiveActivityAvailable,
       }),
     [
       appSurfaceAvailable,
@@ -121,6 +130,7 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
       manualRightSurface,
       sceneLayoutMode,
       shellAvailable,
+      effectiveActivityAvailable,
     ],
   );
   const rightSurfaceState = useMemo(
@@ -174,6 +184,7 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
         shellAvailable,
         showHarnessToggle,
         traceAvailable,
+        activityAvailable: effectiveActivityAvailable,
         suppressHomeNavbarUtilityActions,
       }),
     [
@@ -187,6 +198,7 @@ export function useWorkspaceRightSurfaceProjectionRuntime({
       showHarnessToggle,
       suppressHomeNavbarUtilityActions,
       traceAvailable,
+      effectiveActivityAvailable,
     ],
   );
 

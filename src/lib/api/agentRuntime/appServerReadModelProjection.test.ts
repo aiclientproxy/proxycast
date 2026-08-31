@@ -387,6 +387,12 @@ describe("appServerReadModelProjection", () => {
             id: "agent-session:workspace-1:session-1",
             metadata: {
               title: "代码文学专家",
+              environments: [
+                {
+                  environmentId: "local",
+                  cwd: "/workspace",
+                },
+              ],
               expert: { expertId: "code-literature" },
               harness: {
                 expert: { expert_id: "code-literature" },
@@ -399,11 +405,20 @@ describe("appServerReadModelProjection", () => {
 
     expect(result.session_business_object_ref_metadata).toEqual({
       title: "代码文学专家",
+      environments: [
+        {
+          environmentId: "local",
+          cwd: "/workspace",
+        },
+      ],
       expert: { expertId: "code-literature" },
       harness: {
         expert: { expert_id: "code-literature" },
       },
     });
+    expect(result.environment_selections).toEqual([
+      { environment_id: "local", cwd: "/workspace" },
+    ]);
   });
 
   it("detail.thread_read 的 session metadata 应优先于 session business object metadata", () => {
