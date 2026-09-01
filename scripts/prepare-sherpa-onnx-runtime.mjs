@@ -419,6 +419,7 @@ export function extractSherpaArchive(
     platform = process.platform,
     sevenZipCommands = WINDOWS_SEVEN_ZIP_COMMANDS,
     removeDirectory = fs.rmSync,
+    exists = fs.existsSync,
     run = runCommand,
     missingLibraries = missingSherpaRuntimeLibraries,
   } = {},
@@ -445,6 +446,49 @@ export function extractSherpaArchive(
       if (missing.length === 0) {
         console.log(`Extracted sherpa-onnx archive: ${plan.extractedDir}`);
         return;
+      }
+
+      // Windows 7-Zip extracts the bzip2 layer first and leaves a .tar file.
+      // Unpack that intermediate archive with the same executable so PowerShell
+      // does not depend on the runner's platform-specific tar implementation.
+      if (platform === "win32" && extraction.command !== "tar") {
+        const intermediateTarPath = plan.archivePath.replace(/\.bz2$/iu, "");
+        if (exists(intermediateTarPath)) {
+          console.log(
+            `Extracting sherpa-onnx intermediate tar: ${intermediateTarPath} (extractor=${extraction.command})`,
+          );
+          try {
+            run(
+              extraction.command,
+              [
+                "x",
+                "-y",
+                "-aoa",
+                intermediateTarPath,
+                `-o${plan.prebuiltRoot}`,
+              ],
+              {
+                cwd: extraction.cwd,
+                timeout: SHERPA_ARCHIVE_EXTRACT_TIMEOUT_MS,
+              },
+            );
+            const intermediateMissing = missingLibraries(plan);
+            if (intermediateMissing.length === 0) {
+              console.log(`Extracted sherpa-onnx archive: ${plan.extractedDir}`);
+              return;
+            }
+            console.warn(
+              `Sherpa intermediate tar extractor ${extraction.command} completed without expected libraries: ${intermediateMissing.join(", ")}`,
+            );
+          } catch (error) {
+            lastError = error;
+            console.warn(
+              `Sherpa intermediate tar extractor ${extraction.command} failed: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
+        }
       }
       console.warn(
         `Sherpa archive extractor ${extraction.command} completed without expected libraries: ${missing.join(", ")}`,

@@ -168,9 +168,15 @@ version = "1.13.0"
       platform: "win32",
       sevenZipCommands: ["7z"],
       removeDirectory() {},
-      run(command) {
+      exists() {
+        return true;
+      },
+      run(command, args) {
         commands.push(command);
-        if (command === "tar") {
+        if (
+          command === "7z" &&
+          args[3] === plan.archivePath.replace(/\.bz2$/u, "")
+        ) {
           librariesReady = true;
         }
       },
@@ -179,7 +185,7 @@ version = "1.13.0"
       },
     });
 
-    expect(commands).toEqual(["7z", "tar"]);
+    expect(commands).toEqual(["7z", "7z"]);
   });
 
   it("Windows Quality 为 sherpa 准备保留足够预算并记录清理/解压阶段", () => {

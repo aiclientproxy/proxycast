@@ -1,6 +1,6 @@
 # Lime v1.138.0 发布执行计划
 
-状态：`follow-up-required / tag-rebuild-confirmation-pending`
+状态：`second-follow-up-ready / Windows CI verification pending`
 日期：2026-09-01
 目标版本：`1.138.0`
 目标 tag：`v1.138.0`
@@ -36,6 +36,9 @@
 - 首轮 tag 已存在且绑定 `f79830804`，不能静默覆盖；完成修复验证后仍需明确执行远端 `v1.138.0` tag 重建，再重新运行 Release workflow，或改发补丁版本。
 - Follow-up 验证：sherpa/预算脚本回归 `19/19`，Windows native host、entrypoint 与 Squirrel 合同 `39/39`，`npm run lint`、`npm run typecheck`、`cargo fmt --all -- --check`、Rust related（含 `lime-agent`、App Server、MCP、services、model-provider、tool-runtime 及反向依赖）均通过。
 - 真实 Electron 证据：`npm run smoke:agent-runtime-current-fixture` 全部场景通过（`liveProviderUsed=false`）；`npm run verify:gui-smoke` 串行复跑通过，run `standalone-shell-01-20260901143936-28201`，`appserver.v0` version `1.138.0`，summary `result=pass`。并行构建产生的首次资源哈希错配未计入证据。
+- 首次 follow-up commit `ba9dbdaae` 已推送并重建 `v1.138.0` tag。Quality run `33521136350` 中 Bridge、GUI Smoke、Integrity、Rust Full 均通过；Release run `33521150327` 中 macOS arm64/x64 均通过，但发布资产因 Windows job 失败未进入聚合上传。
+- 第二轮失败根因已由任务日志确认：Windows native host 在 `get_CurrentNativeWindowHandle` 传入 `HWND*`，而 Windows SDK 接口要求 `int*`；Windows Quality 的 PowerShell 命中系统 `tar` 并对 `.tar.bz2` 超时；Frontend Full 的 `electron/systemUtilityHost.test.ts` 在 Linux runner 硬编码了 macOS Accessibility 状态。
+- 第二轮修复：native window handle 改为 SDK 契约的 `int` 后再安全提升为 `uintptr_t`；Windows 7-Zip 解出中间 `.tar` 后用同一 7-Zip 解第二层，继续保留 tar 兜底；环境预览测试按真实宿主平台断言 Accessibility。定向回归 `24/24` 通过，仍待 commit/tag 更新后由 Windows runner 证明 MSVC build、Squirrel、CodeMode Gate B 与 native host Gate B。
 
 已通过：
 

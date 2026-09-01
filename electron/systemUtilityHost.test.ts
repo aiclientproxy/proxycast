@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import process from "node:process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { openExternalMock } = vi.hoisted(() => ({
@@ -124,7 +125,9 @@ describe("SystemUtilityHost", () => {
         applicationId: "com.limecloud.lime",
         packaged: true,
         capabilities: expect.objectContaining({
-          accessibility: expect.objectContaining({ status: "not_granted" }),
+          accessibility: expect.objectContaining({
+            status: process.platform === "darwin" ? "not_granted" : "unsupported",
+          }),
           applicationGroups: expect.objectContaining({
             status: "not_configured",
             identifiers: [],
