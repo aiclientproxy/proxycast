@@ -6,8 +6,15 @@ import { ThreadQueueStatus } from "./ThreadQueueStatus";
 const queueHook = vi.hoisted(() => ({
   useAgentSessionThreadQueue: vi.fn(),
 }));
+const queueActions = vi.hoisted(() => ({
+  deleteThreadQueue: vi.fn().mockResolvedValue(true),
+  reorderThreadQueue: vi.fn().mockResolvedValue({}),
+  startThreadQueue: vi.fn().mockResolvedValue({ id: "turn-1" }),
+  updateThreadQueue: vi.fn().mockResolvedValue({ id: "queued-1" }),
+}));
 
 vi.mock("../hooks/useAgentSessionThreadQueue", () => queueHook);
+vi.mock("@/lib/api/agentRuntime/threadQueueActions", () => queueActions);
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { count?: number }) =>
@@ -90,7 +97,7 @@ describe("ThreadQueueStatus", () => {
     expect(container.textContent).not.toContain("修复测试");
     expect(container.textContent).not.toContain("更新文档");
     expect(
-      container.querySelector("[data-testid=thread-queue-items]"),
+      container.querySelector("[data-testid=thread-queue-action-list]"),
     ).toBeNull();
   });
 
@@ -138,5 +145,100 @@ describe("ThreadQueueStatus", () => {
       "agentChat.threadQueue.pendingCount",
     );
     expect(container.textContent).not.toContain("读取中的消息");
+  });
+
+  it("mutation 失败时应与读取失败使用不同状态文案", async () => {
+    queueActions.deleteThreadQueue.mockRejectedValueOnce(new Error("offline"));
+    queueHook.useAgentSessionThreadQueue.mockReturnValue({
+      error: null,
+      loading: false,
+      refresh: vi.fn(),
+      submissions: [
+        {
+          clientUserMessageId: "client-1",
+          id: "queued-1",
+          input: [{ type: "text", text: "待删除" }],
+        },
+      ],
+    });
+
+    const container = renderQueue();
+    act(() => {
+      (
+        container.querySelector(
+          '[aria-label="agentChat.threadQueue.expand"]',
+        ) as HTMLButtonElement
+      ).click();
+    });
+    await act(async () => {
+      (
+        container.querySelector(
+          '[aria-label="agentChat.threadQueue.delete"]',
+        ) as HTMLButtonElement
+      ).click();
+    });
+
+    expect(container.textContent).toContain(
+      "agentChat.threadQueue.actionFailed",
+    );
+    expect(container.textContent).not.toContain(
+      "agentChat.threadQueue.refreshFailed",
+    );
+  });
+
+  it("展开后通过 typed action 支持编辑、删除、排序和立即发送", async () => {
+    const refresh = vi.fn();
+    queueHook.useAgentSessionThreadQueue.mockReturnValue({
+      error: null,
+      loading: false,
+      refresh,
+      submissions: [
+        {
+          clientUserMessageId: "client-1",
+          id: "queued-1",
+          input: [{ type: "text", text: "第一条" }],
+        },
+        {
+          clientUserMessageId: "client-2",
+          id: "queued-2",
+          input: [{ type: "text", text: "第二条" }],
+        },
+      ],
+    });
+
+    const container = renderQueue();
+    const expand = container.querySelector(
+      '[aria-label="agentChat.threadQueue.expand"]',
+    ) as HTMLButtonElement;
+    await act(async () => expand.click());
+    expect(
+      container.querySelector("[data-testid=thread-queue-action-list]"),
+    ).not.toBeNull();
+
+    const edit = container.querySelector(
+      '[aria-label="agentChat.threadQueue.edit"]',
+    ) as HTMLButtonElement;
+    await act(async () => edit.click());
+    const editor = container.querySelector(
+      '[aria-label="agentChat.threadQueue.editInput"]',
+    ) as HTMLTextAreaElement;
+    await act(async () => {
+      editor.value = "已编辑";
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const save = container.querySelector(
+      '[aria-label="agentChat.threadQueue.save"]',
+    ) as HTMLButtonElement;
+    await act(async () => save.click());
+    expect(queueActions.updateThreadQueue).toHaveBeenCalled();
+
+    const sendNow = container.querySelector(
+      '[aria-label="agentChat.threadQueue.sendNow"]',
+    ) as HTMLButtonElement;
+    await act(async () => sendNow.click());
+    expect(queueActions.startThreadQueue).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      queuedSubmissionId: "queued-1",
+    });
   });
 });

@@ -35,7 +35,7 @@ describe("DeepSWE coding slice v2", () => {
       "outside the Lime repository",
     );
     expect(manifest.executionContract).toMatchObject({
-      adapterVersion: "deepswe-current-chain-adapter-v6",
+      adapterVersion: "deepswe-current-chain-adapter-v7",
       primaryModel:
         "custom-637ea2d5-e430-43de-86de-39c5f1735438 / agnes-2.0-flash",
       comparisonModel: "custom-1ae93b42-e57f-4a83-ac6e-3f5275a7b376 / gpt-5.5",

@@ -2611,6 +2611,36 @@ fn v2_method_registry_round_trips_wire_names() {
 }
 
 #[test]
+fn prompt_history_methods_round_trip_newest_first_contract() {
+    let request = ClientRequest::PromptHistoryRead {
+        id: RequestId::Integer(7),
+        params: PromptHistoryReadParams {
+            cursor: None,
+            limit: Some(20),
+            log_id: None,
+        },
+    };
+    assert_eq!(request.method(), Method::PromptHistoryRead);
+    let encoded = serde_json::to_value(&request).expect("encode prompt history request");
+    assert_eq!(encoded["method"], "promptHistory/read");
+    let decoded: ClientRequest = serde_json::from_value(encoded).expect("decode request");
+    assert_eq!(decoded, request);
+    let response = ClientResponsePayload::PromptHistoryAppend(PromptHistoryAppendResponse {
+        entry: PromptHistoryEntry {
+            offset: 0,
+            session_id: "thread-1".to_string(),
+            ts: 1,
+            text: "hello".to_string(),
+        },
+        log_id: "42".to_string(),
+        entry_count: 1,
+    })
+    .into_response(RequestId::Integer(7))
+    .expect("encode response");
+    assert_eq!(response.result["entry"]["sessionId"], "thread-1");
+}
+
+#[test]
 fn typed_thread_items_round_trip_v2_variant_tags() {
     let cases = [
         json!({

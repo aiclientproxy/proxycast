@@ -53,6 +53,7 @@ const HOST_SOURCE_FILES = [
   "packages/app-server-client/tsconfig.json",
   "scripts/electron/build-host.mjs",
   "scripts/electron/copy-desktop-assets.mjs",
+  "scripts/lib/electron-desktop-resources.mjs",
 ];
 const APP_SERVER_SOURCE_DIRS = ["lime-rs/crates", "lime-rs/vendor"];
 const APP_SERVER_SOURCE_FILES = [
@@ -65,6 +66,7 @@ const APP_SERVER_SOURCE_FILES = [
 ];
 const SOURCE_EXTENSIONS = new Set([
   ".cjs",
+  ".cpp",
   ".css",
   ".html",
   ".ico",
@@ -84,6 +86,7 @@ const SOURCE_EXTENSIONS = new Set([
   ".rs",
   ".sass",
   ".scss",
+  ".swift",
   ".svg",
   ".toml",
   ".ts",
@@ -189,6 +192,7 @@ function electronFixtureBuildSegments({ rootDir }) {
       label: "app-server sidecar",
       requiredFiles: [
         path.join(rootDir, "dist-electron", "app-server.release.json"),
+        path.join(rootDir, "dist-electron", "desktop-resources.manifest.json"),
         electronAppServerBinaryDestination({
           outputRoot: path.join(rootDir, "dist-electron"),
         }),

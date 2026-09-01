@@ -136,6 +136,14 @@ declare module "./connection.js" {
       params: protocol.ThreadQueueStartParams,
       options?: AppServerRequestOptions,
     ): Promise<AppServerRequestResult<protocol.ThreadQueueStartResponse>>;
+    readPromptHistory(
+      params: protocol.PromptHistoryReadParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.PromptHistoryReadResponse>>;
+    appendPromptHistory(
+      params: protocol.PromptHistoryAppendParams,
+      options?: AppServerRequestOptions,
+    ): Promise<AppServerRequestResult<protocol.PromptHistoryAppendResponse>>;
     listThreadTurns(
       params: protocol.ThreadTurnsListParams,
       options?: AppServerRequestOptions,

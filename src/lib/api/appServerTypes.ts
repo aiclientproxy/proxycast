@@ -565,6 +565,14 @@ export type AppServerThreadQueueReorderResponse =
 export type AppServerThreadQueueStartParams = protocol.ThreadQueueStartParams;
 export type AppServerThreadQueueStartResponse =
   protocol.ThreadQueueStartResponse;
+export type AppServerPromptHistoryEntry = protocol.PromptHistoryEntry;
+export type AppServerPromptHistoryReadParams = protocol.PromptHistoryReadParams;
+export type AppServerPromptHistoryReadResponse =
+  protocol.PromptHistoryReadResponse;
+export type AppServerPromptHistoryAppendParams =
+  protocol.PromptHistoryAppendParams;
+export type AppServerPromptHistoryAppendResponse =
+  protocol.PromptHistoryAppendResponse;
 export type AppServerThreadQueueChangedNotification =
   protocol.ThreadQueueChangedNotification;
 

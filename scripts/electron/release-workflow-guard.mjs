@@ -404,11 +404,19 @@ function assertBuildSteps(buildJob) {
   );
 
   const verifyStep = stepByName(steps, "Verify Electron package resources");
-  assertIncludes(
-    verifyStep?.run,
+  for (const required of [
     "scripts/electron/verify-package-resources.mjs",
-    "Electron package resource verification",
-  );
+    "--package-root release-electron",
+    '--platform "${{ matrix.host_platform }}"',
+    '--arch "${{ matrix.arch }}"',
+    "desktop-resources.manifest.json",
+  ]) {
+    assertIncludes(
+      verifyStep?.run,
+      required,
+      "Electron package resource verification",
+    );
+  }
 
   const stageStep = stepByName(steps, "Stage Electron release assets");
   assertIncludes(
@@ -486,6 +494,100 @@ function assertBuildSteps(buildJob) {
     windowsRcEvidenceStep?.with?.path,
     ".lime/qc/windows-squirrel-rc",
     "Windows Squirrel RC evidence upload",
+  );
+
+  const windowsCodeModeStep = stepByName(
+    steps,
+    "Run installed Windows CodeMode Gate B",
+  );
+  assertIncludes(
+    windowsCodeModeStep?.if,
+    "matrix.host_platform == 'win32'",
+    "Windows CodeMode Gate B condition",
+  );
+  for (const required of [
+    "scripts/agent-runtime/code-mode-electron-gate-b.mjs",
+    "--electron-executable",
+    "code-mode-electron-gate-b-windows",
+    "--timeout-ms 600000",
+  ]) {
+    assertIncludes(
+      windowsCodeModeStep?.run,
+      required,
+      "Windows CodeMode Gate B",
+    );
+  }
+
+  const windowsCodeModeEvidenceStep = stepByName(
+    steps,
+    "Upload Windows CodeMode Gate B evidence",
+  );
+  assertIncludes(
+    windowsCodeModeEvidenceStep?.if,
+    "always()",
+    "Windows CodeMode Gate B evidence upload condition",
+  );
+  assertIncludes(
+    windowsCodeModeEvidenceStep?.if,
+    "matrix.host_platform == 'win32'",
+    "Windows CodeMode Gate B evidence upload condition",
+  );
+  if (windowsCodeModeEvidenceStep?.uses !== "actions/upload-artifact@v4") {
+    throw new Error(
+      "Windows CodeMode Gate B evidence must use actions/upload-artifact@v4",
+    );
+  }
+  assertIncludes(
+    windowsCodeModeEvidenceStep?.with?.path,
+    "code-mode-electron-gate-b-windows",
+    "Windows CodeMode Gate B evidence upload",
+  );
+
+  const windowsNativeHostStep = stepByName(
+    steps,
+    "Run installed Windows native host Gate B",
+  );
+  assertIncludes(
+    windowsNativeHostStep?.if,
+    "matrix.host_platform == 'win32'",
+    "Windows native host Gate B condition",
+  );
+  for (const required of [
+    "scripts/electron/windows-native-host-gate-b.mjs",
+    "--electron-executable",
+    "windows-native-host-gate-b",
+    "--timeout-ms 120000",
+  ]) {
+    assertIncludes(
+      windowsNativeHostStep?.run,
+      required,
+      "Windows native host Gate B",
+    );
+  }
+
+  const windowsNativeHostEvidenceStep = stepByName(
+    steps,
+    "Upload Windows native host Gate B evidence",
+  );
+  assertIncludes(
+    windowsNativeHostEvidenceStep?.if,
+    "always()",
+    "Windows native host Gate B evidence upload condition",
+  );
+  assertIncludes(
+    windowsNativeHostEvidenceStep?.if,
+    "matrix.host_platform == 'win32'",
+    "Windows native host Gate B evidence upload condition",
+  );
+  if (windowsNativeHostEvidenceStep?.uses !== "actions/upload-artifact@v4") {
+    throw new Error(
+      "Windows native host Gate B evidence must use actions/upload-artifact@v4",
+    );
+  }
+  assertIncludes(
+    windowsNativeHostEvidenceStep?.with?.path,
+    "windows-native-host-gate-b",
+    "Windows native host Gate B evidence upload",
   );
 }
 
@@ -621,6 +723,7 @@ function assertForgeConfig(forgeConfigPath = DEFAULT_FORGE_CONFIG_PATH) {
     "RELEASE_OUTPUT_DIR",
     "LIME_ELECTRON_FORGE_OUT_DIR",
     "dist-electron/app-server.release.json",
+    "preparePackagedDesktopResources",
     "dist-electron/app-server",
   ]) {
     assertIncludes(forgeConfig, required, "Forge current maker config");

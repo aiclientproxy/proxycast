@@ -8,6 +8,8 @@ import type { InputCapabilitySelection } from "../../../skill-selection/inputCap
 import type { InputbarSendHandler } from "../inputbarSendPayload";
 import type { InputbarPluginSelection } from "../pluginInputCapability";
 import { useInputbarSend } from "./useInputbarSend";
+import { ComposerController } from "@/components/input-kit/ComposerController";
+import type { ComposerDraftSnapshot } from "@/components/input-kit";
 
 const { recordAgentUiPerformanceMetricMock } = vi.hoisted(() => ({
   recordAgentUiPerformanceMetricMock: vi.fn(),
@@ -33,6 +35,12 @@ interface HarnessProps {
   pendingImages?: MessageImage[];
   projectId?: string | null;
   sessionId?: string | null;
+  composerController?: ComposerController;
+  isLoading?: boolean;
+  onComposerCommitted?: (
+    text: string,
+    draft?: ComposerDraftSnapshot,
+  ) => void;
 }
 
 const mountedRoots: MountedHarness[] = [];
@@ -40,6 +48,7 @@ let latestSend:
   | ((metadata?: {
       triggeredAt?: number;
       triggerSource?: "button" | "enter" | "ime" | "adapter";
+      submitTarget?: "start" | "queue" | "steer" | "interrupt" | "command";
     }) => Promise<void>)
   | null = null;
 let clearPathReferencesMock: ReturnType<typeof vi.fn>;
@@ -57,6 +66,9 @@ function Harness({
   pendingImages = [],
   projectId = null,
   sessionId = null,
+  composerController,
+  isLoading = false,
+  onComposerCommitted,
 }: HarnessProps) {
   const handleSend = useInputbarSend({
     input,
@@ -68,6 +80,9 @@ function Harness({
     activeTools,
     projectId,
     sessionId,
+    composerController,
+    isLoading,
+    onComposerCommitted,
     onSend,
     clearPendingImages: clearPendingImagesMock,
     clearPathReferences: clearPathReferencesMock,
@@ -452,6 +467,38 @@ describe("useInputbarSend", () => {
           threadGoal: { objective: "保持当前修复目标" },
         }),
       }),
+    );
+  });
+
+  it("active turn 的显式 queue target 应生成 queue intent 并在成功后提交草稿", async () => {
+    const onSend = vi.fn().mockResolvedValue(true);
+    const onComposerCommitted = vi.fn();
+    const composerController = new ComposerController({ text: "排队处理" });
+    renderHarness({
+      composerController,
+      input: "排队处理",
+      isLoading: true,
+      onComposerCommitted,
+      onSend,
+    });
+
+    await sendWithMetadata({
+      triggeredAt: Date.now(),
+      triggerSource: "button",
+      submitTarget: "queue",
+    });
+
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        composerIntent: "queue",
+        composerTarget: "queue",
+        composerDraft: expect.objectContaining({ text: "排队处理" }),
+      }),
+    );
+    expect(composerController.getDocument().text).toBe("");
+    expect(onComposerCommitted).toHaveBeenCalledWith(
+      "",
+      expect.objectContaining({ text: "排队处理" }),
     );
   });
 });

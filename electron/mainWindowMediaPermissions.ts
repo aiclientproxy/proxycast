@@ -24,7 +24,12 @@ export function shouldAllowMainWindowMediaPermission({
     return false;
   }
 
-  if (permission === "microphone" || permission === "audioCapture") {
+  if (
+    permission === "microphone" ||
+    permission === "audioCapture" ||
+    permission === "camera" ||
+    permission === "videoCapture"
+  ) {
     return true;
   }
   if (permission !== "media") {
@@ -32,7 +37,12 @@ export function shouldAllowMainWindowMediaPermission({
   }
 
   const mediaTypes = details?.mediaTypes ?? [];
-  return mediaTypes.includes("audio") && !mediaTypes.includes("video");
+  return (
+    mediaTypes.length > 0 &&
+    mediaTypes.every(
+      (mediaType) => mediaType === "audio" || mediaType === "video",
+    )
+  );
 }
 
 export function installMainWindowMediaPermissionHandler({

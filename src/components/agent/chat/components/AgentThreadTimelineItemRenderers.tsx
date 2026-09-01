@@ -78,8 +78,8 @@ function SurfaceCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="py-1.5">
-      <div className="flex items-start gap-2.5">
+    <div className="py-0.5">
+      <div className="flex items-start gap-2">
         <div className="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400">
           <Icon className="h-4 w-4" />
         </div>
@@ -91,7 +91,7 @@ function SurfaceCard({
               <div className="text-xs text-slate-400">{timestamp}</div>
             ) : null}
           </div>
-          <div className="ml-0 mt-1.5">{children}</div>
+          <div className="ml-0 mt-1">{children}</div>
         </div>
       </div>
     </div>
@@ -112,7 +112,7 @@ function CanonicalActivityRow({
   testId: string;
 }) {
   return (
-    <div className="flex items-start gap-2.5 py-1.5" data-testid={testId}>
+    <div className="flex items-start gap-2 py-0.5" data-testid={testId}>
       <div className="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400">
         <Icon className="h-3.5 w-3.5" />
       </div>
@@ -223,8 +223,8 @@ function ThinkingItemCard({
         : Sparkles;
 
   return (
-    <div className="py-1.5">
-      <div className="flex items-start gap-2.5">
+    <div className="py-0.5">
+      <div className="flex items-start gap-2">
         <div className="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400">
           <ToneIcon
             className={cn(
@@ -235,10 +235,10 @@ function ThinkingItemCard({
         </div>
         <div className="min-w-0 flex-1">
           {statusLabel ? (
-            <div className="mb-1 text-xs text-slate-500">{statusLabel}</div>
+            <div className="mb-0.5 text-xs text-slate-500">{statusLabel}</div>
           ) : null}
           {content ? (
-            <div className="text-sm leading-7 text-slate-800">{content}</div>
+            <div className="text-sm leading-6 text-slate-800">{content}</div>
           ) : null}
         </div>
       </div>
@@ -284,8 +284,8 @@ function InlinePlanBlock({
   }
 
   return (
-    <div className="py-1.5">
-      <div className="flex items-start gap-2.5">
+    <div className="py-0.5">
+      <div className="flex items-start gap-2">
         <div className="flex h-5 w-5 shrink-0 items-center justify-center text-slate-400">
           {isComplete ? (
             <ListChecks className="h-4 w-4" />
@@ -294,10 +294,10 @@ function InlinePlanBlock({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="mb-1 text-xs text-slate-500">
+          <div className="mb-0.5 text-xs text-slate-500">
             {resolveTimelinePlanTitle(isComplete ? "completed" : "in_progress")}
           </div>
-          <div className="text-sm leading-7 text-slate-800">
+          <div className="text-sm leading-6 text-slate-800">
             <MarkdownRenderer content={content} />
           </div>
         </div>
@@ -357,7 +357,7 @@ function GroupedThinkingRow({
           : Sparkles;
 
   return (
-    <div className="flex items-start gap-2 py-1.5">
+    <div className="flex items-start gap-2 py-0.5">
       <span className="pt-0.5 font-mono text-xs text-slate-400">
         {groupMarker}
       </span>
@@ -681,7 +681,7 @@ function renderGroupItemDetails(
     item.type === "unknown_item" ? item.field_names : [];
 
   return (
-    <div className="py-1.5" data-testid="timeline-unsupported-item">
+    <div className="py-0.5" data-testid="timeline-unsupported-item">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-sm font-medium text-foreground">
           {t("agentChat.threadTimeline.unsupportedItem.title", {

@@ -63,6 +63,15 @@ describe("ThreadWorkspaceHeader", () => {
     expect(
       container.querySelector('[data-testid="header-action"]'),
     ).not.toBeNull();
+    expect(
+      container
+        .querySelector('[data-testid="thread-workspace-header-actions"]')
+        ?.getAttribute("data-header-action-overflow"),
+    ).toBe("scroll");
+    expect(
+      container.querySelector('[data-testid="thread-workspace-header-actions"]')
+        ?.className,
+    ).toContain("overflow-x-auto");
 
     act(() => root.unmount());
   });

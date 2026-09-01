@@ -72,9 +72,11 @@ mod projection_status;
 mod projection_store;
 #[cfg(test)]
 mod projection_store_tests;
+mod prompt_history;
 pub(crate) mod provider_history;
 mod rollout_budget;
 pub use execution_backend::ExecutionBackend;
+pub(crate) use prompt_history::PromptHistoryStore;
 #[doc(hidden)]
 pub use provider_history::ProviderTurnHistory;
 mod queued_turn_intent;
@@ -328,6 +330,7 @@ pub struct RuntimeCore {
     pub(in crate::runtime) trace_event_writer: Option<Arc<TraceEventWriter>>,
     pub(in crate::runtime) projection_store: Option<Arc<ProjectionStore>>,
     pub(in crate::runtime) telemetry_store: Option<Arc<TelemetryStore>>,
+    pub(in crate::runtime) prompt_history_store: Option<Arc<prompt_history::PromptHistoryStore>>,
     pub(in crate::runtime) event_hub: RuntimeEventHub,
     knowledge_builder_runtime_executor: Arc<dyn KnowledgeBuilderRuntimeExecutor>,
     app_data_source: Arc<dyn AppDataSource>,
@@ -427,6 +430,7 @@ impl RuntimeCore {
             trace_event_writer: None,
             projection_store: None,
             telemetry_store: None,
+            prompt_history_store: None,
             event_hub: RuntimeEventHub::new(),
             knowledge_builder_runtime_executor: Arc::new(
                 NativeKnowledgeBuilderRuntimeExecutor::new(),
@@ -535,6 +539,15 @@ impl RuntimeCore {
     pub fn with_telemetry_store(mut self, telemetry_store: Arc<TelemetryStore>) -> Self {
         self.telemetry_store = Some(telemetry_store);
         self
+    }
+
+    pub fn with_prompt_history_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.prompt_history_store = Some(Arc::new(prompt_history::PromptHistoryStore::new(path)));
+        self
+    }
+
+    pub(crate) fn prompt_history_store(&self) -> Option<Arc<prompt_history::PromptHistoryStore>> {
+        self.prompt_history_store.clone()
     }
 
     pub fn with_knowledge_builder_runtime_executor(

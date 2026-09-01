@@ -94,6 +94,7 @@ export class ElectronHostCommands {
     this.#systemUtilityHost = new SystemUtilityHost({
       appDataRoot,
       readConfig: () => this.#readConfig(),
+      emit,
     });
     this.#voiceModelHost = new VoiceModelHost(appDataRoot, emit);
   }
@@ -108,6 +109,10 @@ export class ElectronHostCommands {
         return openResourceManagerWindow(args);
       case "open_system_settings_url":
         return await this.#systemUtilityHost.openSystemSettingsUrl(args);
+      case "macos_native_host_invoke":
+        return await this.#systemUtilityHost.invokeMacOSNativeHost(args);
+      case "windows_native_host_invoke":
+        return await this.#systemUtilityHost.invokeWindowsNativeHost(args);
       case "show_desktop_notification":
         return showDesktopNotification(args);
       case "reveal_in_finder":
@@ -191,6 +196,10 @@ export class ElectronHostCommands {
       default:
         throw new Error(`Electron host command is not implemented: ${command}`);
     }
+  }
+
+  dispose(): void {
+    this.#systemUtilityHost.dispose();
   }
 
   async #appServerRequest<T>(

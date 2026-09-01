@@ -35,6 +35,8 @@ const {
   systemUtilityHostGetChromeBridgeStatusMock,
   systemUtilityHostGetChromeProfileSessionsMock,
   systemUtilityHostGetEnvironmentPreviewMock,
+  systemUtilityHostInvokeMacOSNativeHostMock,
+  systemUtilityHostInvokeWindowsNativeHostMock,
   systemUtilityHostOpenExternalUrlMock,
   systemUtilityHostOpenSystemSettingsUrlMock,
   voiceModelHostDeleteMock,
@@ -121,6 +123,8 @@ const {
     systemUtilityHostGetChromeBridgeStatusMock: vi.fn(),
     systemUtilityHostGetChromeProfileSessionsMock: vi.fn(),
     systemUtilityHostGetEnvironmentPreviewMock: vi.fn(),
+    systemUtilityHostInvokeMacOSNativeHostMock: vi.fn(),
+    systemUtilityHostInvokeWindowsNativeHostMock: vi.fn(),
     systemUtilityHostOpenExternalUrlMock: vi.fn(),
     systemUtilityHostOpenSystemSettingsUrlMock: vi.fn(),
     voiceModelHostDeleteMock: vi.fn(),
@@ -198,6 +202,8 @@ vi.mock("./systemUtilityHost", () => ({
     getChromeBridgeStatus: systemUtilityHostGetChromeBridgeStatusMock,
     getChromeProfileSessions: systemUtilityHostGetChromeProfileSessionsMock,
     getEnvironmentPreview: systemUtilityHostGetEnvironmentPreviewMock,
+    invokeMacOSNativeHost: systemUtilityHostInvokeMacOSNativeHostMock,
+    invokeWindowsNativeHost: systemUtilityHostInvokeWindowsNativeHostMock,
     openExternalUrl: systemUtilityHostOpenExternalUrlMock,
     openSystemSettingsUrl: systemUtilityHostOpenSystemSettingsUrlMock,
   })),
@@ -903,6 +909,7 @@ describe("ElectronHostCommands app config persistence", () => {
     expect(SystemUtilityHost).toHaveBeenCalledWith({
       appDataRoot,
       readConfig: expect.any(Function),
+      emit: expect.any(Function),
     });
     expect(VoiceModelHost).toHaveBeenCalledWith(
       appDataRoot,
@@ -1105,6 +1112,12 @@ describe("ElectronHostCommands system utilities", () => {
     systemUtilityHostGetEnvironmentPreviewMock.mockResolvedValueOnce({
       entries: [],
     });
+    systemUtilityHostInvokeMacOSNativeHostMock.mockResolvedValueOnce({
+      status: "ready",
+    });
+    systemUtilityHostInvokeWindowsNativeHostMock.mockResolvedValueOnce({
+      status: "ready",
+    });
     systemUtilityHostGetBrowserConnectorSettingsMock.mockReturnValueOnce({
       enabled: true,
     });
@@ -1140,6 +1153,20 @@ describe("ElectronHostCommands system utilities", () => {
     await expect(host.invoke("get_environment_preview")).resolves.toEqual({
       entries: [],
     });
+    const nativeArgs = {
+      method: "accessibility.read",
+      params: {},
+    };
+    await expect(
+      host.invoke("macos_native_host_invoke", nativeArgs),
+    ).resolves.toEqual({ status: "ready" });
+    const windowsNativeArgs = {
+      method: "windows.uiAutomation.capabilities",
+      params: {},
+    };
+    await expect(
+      host.invoke("windows_native_host_invoke", windowsNativeArgs),
+    ).resolves.toEqual({ status: "ready" });
     await expect(
       host.invoke("get_browser_connector_settings_cmd"),
     ).resolves.toEqual({ enabled: true });
@@ -1169,6 +1196,12 @@ describe("ElectronHostCommands system utilities", () => {
       settingsArgs,
     );
     expect(systemUtilityHostGetEnvironmentPreviewMock).toHaveBeenCalledOnce();
+    expect(systemUtilityHostInvokeMacOSNativeHostMock).toHaveBeenCalledWith(
+      nativeArgs,
+    );
+    expect(systemUtilityHostInvokeWindowsNativeHostMock).toHaveBeenCalledWith(
+      windowsNativeArgs,
+    );
     expect(
       systemUtilityHostGetBrowserConnectorSettingsMock,
     ).toHaveBeenCalledOnce();

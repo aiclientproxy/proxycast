@@ -1028,10 +1028,18 @@ function registerIpcHandlers(): void {
         const result = await handleHostInvoke(event, command, args);
         return { ok: true, result } satisfies ElectronInvokeResponse;
       } catch (error) {
+        const hostError =
+          error && typeof error === "object"
+            ? (error as { code?: unknown; data?: unknown })
+            : {};
         return {
           ok: false,
           error: {
             message: error instanceof Error ? error.message : String(error),
+            ...(typeof hostError.code === "string"
+              ? { code: hostError.code }
+              : {}),
+            ...(hostError.data !== undefined ? { data: hostError.data } : {}),
           },
         } satisfies ElectronInvokeResponse;
       }
@@ -1511,6 +1519,7 @@ app.on("before-quit", () => {
   tray = null;
   devHttpBridge?.stop();
   devHttpBridge = null;
+  hostCommands.dispose();
   void appServerHost.stop();
 });
 

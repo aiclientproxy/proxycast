@@ -6,6 +6,7 @@ import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 
 import { brandMacHelperApps } from "./scripts/electron/brand-mac-helper-apps.mjs";
+import { preparePackagedDesktopResources } from "./scripts/lib/electron-desktop-resources.mjs";
 
 const PRODUCT_NAME = "Lime";
 const APP_ID = "com.limecloud.lime";
@@ -267,6 +268,7 @@ export default {
       },
     ],
     extendInfo: {
+      NSCameraUsageDescription: "Lime 需要访问摄像头以使用视觉输入功能",
       NSMicrophoneUsageDescription: "Lime 需要访问麦克风以使用语音输入功能",
       NSAppleEventsUsageDescription: "Lime 需要控制其他应用以输入识别的文本",
     },
@@ -280,15 +282,21 @@ export default {
     },
     afterCopyExtraResources: [
       (buildPath, _electronVersion, platform, _arch, done) => {
-        if (platform !== "darwin") {
-          done();
-          return;
-        }
         try {
-          brandMacHelperApps({
-            appOutDir: buildPath,
+          preparePackagedDesktopResources({
+            buildPath,
+            platform,
+            arch: _arch,
+            version: PACKAGE_VERSION,
+            applicationId: APP_ID,
             productName: PRODUCT_NAME,
           });
+          if (platform === "darwin") {
+            brandMacHelperApps({
+              appOutDir: buildPath,
+              productName: PRODUCT_NAME,
+            });
+          }
           done();
         } catch (error) {
           done(error);

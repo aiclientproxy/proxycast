@@ -30,6 +30,7 @@ import type { InputbarSendHandler } from "./inputbarSendPayload";
 import type { InterruptedInputRestoreRequest } from "../../hooks/agentStreamInputRestoreTypes";
 import type { ModelReasoningEffortLevel } from "@/lib/types/modelRegistry";
 import type { ThreadGoal } from "@limecloud/app-server-client";
+import type { ComposerSubmitTarget } from "@/components/input-kit";
 
 const SecondaryControlsRow = styled.div`
   position: absolute;
@@ -120,6 +121,7 @@ interface InputbarProps extends SkillSelectionSourceProps {
   defaultCuratedTaskReferenceMemoryIds?: string[];
   defaultCuratedTaskReferenceEntries?: CuratedTaskReferenceEntry[];
   inputCompletionEnabled?: boolean;
+  submitTarget?: ComposerSubmitTarget;
 }
 
 export const Inputbar: React.FC<InputbarProps> = ({
@@ -191,6 +193,7 @@ export const Inputbar: React.FC<InputbarProps> = ({
   defaultCuratedTaskReferenceMemoryIds = [],
   defaultCuratedTaskReferenceEntries = [],
   inputCompletionEnabled = true,
+  submitTarget,
 }) => {
   const { t } = useTranslation("agent");
   const inputbarCopy = React.useMemo(
@@ -216,6 +219,7 @@ export const Inputbar: React.FC<InputbarProps> = ({
   );
   const {
     textareaRef,
+    composerController,
     isWorkspaceVariant,
     pendingImages,
     fileInputRef,
@@ -292,6 +296,7 @@ export const Inputbar: React.FC<InputbarProps> = ({
     onNavigateToSettings,
     onImportSkill,
     onRefreshSkills,
+    submitTarget,
   });
 
   return (
@@ -333,6 +338,7 @@ export const Inputbar: React.FC<InputbarProps> = ({
         workflowProgressLabel={workflowProgressLabel}
         workflowSummaryLabel={workflowSummaryLabel}
         inputAdapter={inputAdapter}
+        composerController={composerController}
         characters={characters}
         skillSelection={skillSelection}
         onSkillSuggestionsNeeded={onSkillSuggestionsNeeded}

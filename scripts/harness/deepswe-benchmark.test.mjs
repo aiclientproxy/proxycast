@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { DEEPSWE_ADAPTER_VERSION } from "./deepswe-adapter-core.mjs";
 import {
   aggregateBatch,
   createBatchPlan,
@@ -111,7 +112,7 @@ describe("DeepSWE Core batch benchmark", () => {
             runner: "datacurve-pier==0.3.1",
           },
           executionContract: {
-            adapterVersion: "deepswe-current-chain-adapter-v6",
+            adapterVersion: DEEPSWE_ADAPTER_VERSION,
           },
           slices: { "release-20": ["task-a", "task-b"] },
           tasks: [],
@@ -137,7 +138,7 @@ describe("DeepSWE Core batch benchmark", () => {
               sourceCommit: "435ee89ec2f2e2289f33b0da4f992f0b7b7266b9",
               task: { id: taskId, schemaVersion: "1.3" },
               executionContract: {
-                adapterVersion: "deepswe-current-chain-adapter-v6",
+                adapterVersion: DEEPSWE_ADAPTER_VERSION,
               },
             }),
           );

@@ -57,6 +57,8 @@
     "project/move",
     "project/read",
     "project/update",
+    "promptHistory/append",
+    "promptHistory/read",
     "review/start",
     "skills/config/write",
     "skills/extraRoots/set",

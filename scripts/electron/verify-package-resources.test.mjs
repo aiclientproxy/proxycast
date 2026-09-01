@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -99,6 +105,103 @@ function createResourceRoot({
   ]) {
     writeFileSync(path.join(desktopAssetsDir, name), name);
   }
+  const resourceEntries = [
+    {
+      id: "app-server",
+      kind: "sidecar",
+      path: `app-server/${platformKey}/app-server${executableSuffix}`,
+      sha256: sha256(appServer),
+      required: true,
+    },
+    {
+      id: "code-mode-host",
+      kind: "sidecar",
+      path: `app-server/${platformKey}/code-mode-host${executableSuffix}`,
+      sha256: sha256(codeModeHost),
+      required: true,
+    },
+  ];
+  if (platformKey.startsWith("win32-")) {
+    resourceEntries.push(
+      {
+        id: "windows-sandbox-setup",
+        kind: "sidecar",
+        path: `app-server/${platformKey}/windows-sandbox-setup.exe`,
+        sha256: sha256(windowsSandboxSetup),
+        required: true,
+      },
+      {
+        id: "windows-sandbox-runner",
+        kind: "sidecar",
+        path: `app-server/${platformKey}/windows-sandbox-runner.exe`,
+        sha256: sha256(windowsSandboxRunner),
+        required: true,
+      },
+    );
+  }
+  const desktopManifest = {
+    schemaVersion: 1,
+    applicationId: "com.limecloud.lime",
+    version: "1.0.0",
+    platform: platformKey.startsWith("win32-") ? "win32" : "darwin",
+    arch: platformKey.startsWith("win32-") ? "x64" : "arm64",
+    platformKey,
+    minimumOsVersion: platformKey.startsWith("darwin-") ? "13.0" : null,
+    resources: resourceEntries,
+    native: { helper: null, entitlements: null },
+  };
+  if (platformKey.startsWith("win32-")) {
+    const nativeDir = path.join(root, "native", "windows");
+    mkdirSync(nativeDir, { recursive: true });
+    const nativePath = path.join(nativeDir, "windows-native-host.exe");
+    const nativeContent = "windows native host";
+    writeFileSync(nativePath, nativeContent);
+    resourceEntries.push({
+      id: "windows-native-host",
+      kind: "helper",
+      path: "native/windows/windows-native-host.exe",
+      sha256: sha256(nativeContent),
+      required: true,
+    });
+    desktopManifest.native = {
+      windowsHelper: {
+        id: "windows-native-host",
+        path: "native/windows/windows-native-host.exe",
+        api: ["UIAutomation", "RawInput"],
+        readOnly: true,
+        signedByForge: false,
+      },
+      helper: null,
+      entitlements: null,
+    };
+  }
+  if (platformKey.startsWith("darwin-")) {
+    const nativeDir = path.join(root, "native", "macos");
+    mkdirSync(nativeDir, { recursive: true });
+    const nativePath = path.join(nativeDir, "macos-native-host");
+    const nativeContent = "signed native host";
+    writeFileSync(nativePath, nativeContent);
+    resourceEntries.push({
+      id: "macos-native-host",
+      kind: "helper",
+      path: "native/macos/macos-native-host",
+      sha256: sha256(nativeContent),
+      required: true,
+    });
+    desktopManifest.native = {
+      helper: {
+        id: "macos-native-host",
+        path: "native/macos/macos-native-host",
+        bundleIdentifier: "com.limecloud.lime.native-host",
+        signedByForge: false,
+      },
+      entitlements: {
+        source: "lime-rs/entitlements.plist",
+        applicationGroups: [],
+        automationAppleEvents: true,
+      },
+    };
+  }
   writeFileSync(
     path.join(root, "app-server.release.json"),
     JSON.stringify({
@@ -118,6 +221,10 @@ function createResourceRoot({
         },
       ],
     }),
+  );
+  writeFileSync(
+    path.join(root, "desktop-resources.manifest.json"),
+    JSON.stringify(desktopManifest),
   );
   return root;
 }
@@ -249,6 +356,158 @@ describe("verify-electron-package-resources sidecar integrity", () => {
     ]);
   });
 
+  it("macOS native host 签名重写后允许通过 codesign 例外", () => {
+    const root = createResourceRoot({
+      appServer: "app-server",
+      codeModeHost: "code-mode-host",
+      manifestAppServer: "app-server",
+      manifestCodeModeHost: "code-mode-host",
+    });
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.native.helper.signedByForge = true;
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    writeFileSync(
+      path.join(root, "native/macos/macos-native-host"),
+      "post-signature helper",
+    );
+
+    expect(() =>
+      verifyResourceRoot(root, {
+        platform: "darwin",
+        arch: "arm64",
+        execFileSyncImpl: () => undefined,
+      }),
+    ).not.toThrow();
+  });
+
+  it("macOS native host 声明签名但 codesign 失败时 fail closed", () => {
+    const root = createResourceRoot();
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.native.helper.signedByForge = true;
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, {
+        platform: "darwin",
+        arch: "arm64",
+        execFileSyncImpl: () => {
+          throw new Error("invalid signature");
+        },
+      }),
+    ).toThrow(/macOS native host signature is invalid/u);
+  });
+
+  it("拒绝越界的 macOS native host bundle 路径", () => {
+    const root = createResourceRoot();
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.native.helper.bundlePath = "../outside/macos-native-host.app";
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "darwin", arch: "arm64" }),
+    ).toThrow(/macOS helper bundle path is invalid/u);
+  });
+
+  it("拒绝 macOS native host bundle identifier 漂移", () => {
+    const root = createResourceRoot();
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.native.helper.bundleIdentifier =
+      "2DC432GLL2.com.openai.codex.notifications";
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "darwin", arch: "arm64" }),
+    ).toThrow(/helper bundle identifier mismatch/u);
+  });
+
+  it("拒绝 macOS native host 实际 Info.plist bundle identifier 漂移", () => {
+    const root = createResourceRoot();
+    const bundlePath = path.join(
+      root,
+      "native/macos/macos-native-host.app/Contents",
+    );
+    mkdirSync(bundlePath, { recursive: true });
+    writeFileSync(
+      path.join(bundlePath, "Info.plist"),
+      buildInfoPlist([["CFBundleIdentifier", "com.openai.codex.native-host"]]),
+    );
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.native.helper.bundlePath = "native/macos/macos-native-host.app";
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "darwin", arch: "arm64" }),
+    ).toThrow(/Info\.plist bundle identifier mismatch/u);
+  });
+
+  it("拒绝 manifest 中的 OpenAI Application Group", () => {
+    const root = createResourceRoot();
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.native.entitlements.applicationGroups = [
+      "2DC432GLL2.com.openai.codex.notifications",
+    ];
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "darwin", arch: "arm64" }),
+    ).toThrow(/Application Group must use the Lime namespace/u);
+  });
+
+  it("拒绝缺少 Apple Events entitlement 的 macOS manifest", () => {
+    const root = createResourceRoot();
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.native.entitlements.automationAppleEvents = false;
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "darwin", arch: "arm64" }),
+    ).toThrow(/automationAppleEvents must be true/u);
+  });
+
+  it("拒绝 macOS desktop resource applicationId 漂移", () => {
+    const root = createResourceRoot();
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.applicationId = "com.openai.codex";
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "darwin", arch: "arm64" }),
+    ).toThrow(/applicationId mismatch/u);
+  });
+
+  it("拒绝 sidecar resource path 脱离当前平台资源组", () => {
+    const root = createResourceRoot();
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.resources.find((resource) => resource.id === "app-server").path =
+      "app-server/darwin-x64/app-server";
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "darwin", arch: "arm64" }),
+    ).toThrow(/app-server path mismatch/u);
+  });
+
+  it("拒绝错误的 macOS 最低系统版本声明", () => {
+    const root = createResourceRoot();
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.minimumOsVersion = "14.0";
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "darwin", arch: "arm64" }),
+    ).toThrow(/minimum OS version mismatch/u);
+  });
+
   it("Windows 资源必须包含 sandbox setup helper 与 command runner 并校验哈希", () => {
     const root = createResourceRoot({
       platformKey: "win32-x64",
@@ -290,6 +549,46 @@ describe("verify-electron-package-resources sidecar integrity", () => {
     expect(() =>
       verifyResourceRoot(root, { platform: "win32", arch: "x64" }),
     ).toThrow(/Windows sandbox runner is missing/u);
+  });
+
+  it("Windows 资源缺少 sandbox setup helper 时 fail closed", () => {
+    const root = createResourceRoot({
+      platformKey: "win32-x64",
+      appServer: "app-server",
+      codeModeHost: "code-mode-host",
+      windowsSandboxSetup: "windows-sandbox-setup",
+      windowsSandboxRunner: "windows-sandbox-runner",
+      manifestAppServer: "app-server",
+      manifestCodeModeHost: "code-mode-host",
+      manifestWindowsSandboxSetup: "windows-sandbox-setup",
+      manifestWindowsSandboxRunner: "windows-sandbox-runner",
+    });
+    rmSync(
+      path.join(root, "app-server", "win32-x64", "windows-sandbox-setup.exe"),
+    );
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "win32", arch: "x64" }),
+    ).toThrow(/Windows sandbox setup helper is missing/u);
+  });
+
+  it("Windows 资源缺少 native host 时 fail closed", () => {
+    const root = createResourceRoot({
+      platformKey: "win32-x64",
+      appServer: "app-server",
+      codeModeHost: "code-mode-host",
+      windowsSandboxSetup: "windows-sandbox-setup",
+      windowsSandboxRunner: "windows-sandbox-runner",
+      manifestAppServer: "app-server",
+      manifestCodeModeHost: "code-mode-host",
+      manifestWindowsSandboxSetup: "windows-sandbox-setup",
+      manifestWindowsSandboxRunner: "windows-sandbox-runner",
+    });
+    rmSync(path.join(root, "native/windows/windows-native-host.exe"));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "win32", arch: "x64" }),
+    ).toThrow(/Windows native host helper is missing/u);
   });
 
   it("Windows sandbox runner digest 漂移时 fail closed", () => {
@@ -341,6 +640,27 @@ describe("verify-electron-package-resources sidecar integrity", () => {
     ).toThrow(/app-server sidecar sha256 mismatch/u);
   });
 
+  it("拒绝 desktop manifest 与 release manifest 摘要不一致的 macOS app-server", () => {
+    const root = createResourceRoot({
+      appServer: "app-server",
+      codeModeHost: "code-mode-host",
+      manifestAppServer: "app-server",
+      manifestCodeModeHost: "code-mode-host",
+    });
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.resources.find((resource) => resource.id === "app-server").sha256 =
+      sha256("another app-server");
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, {
+        platform: "darwin",
+        arch: "arm64",
+      }),
+    ).toThrow(/desktop resource app-server sha256 mismatch/u);
+  });
+
   it("非 macOS sidecar 哈希变化时不接受签名例外", () => {
     const root = createResourceRoot({ platformKey: "win32-x64" });
     let codesignCalled = false;
@@ -355,6 +675,34 @@ describe("verify-electron-package-resources sidecar integrity", () => {
       }),
     ).toThrow(/code-mode host sidecar sha256 mismatch/u);
     expect(codesignCalled).toBe(false);
+  });
+
+  it("校验 Windows native helper 的只读 API 元数据和路径", () => {
+    const root = createResourceRoot({
+      platformKey: "win32-x64",
+      appServer: "app-server",
+      codeModeHost: "code-mode-host",
+      manifestAppServer: "app-server",
+      manifestCodeModeHost: "code-mode-host",
+      windowsSandboxSetup: "windows-sandbox-setup",
+      windowsSandboxRunner: "windows-sandbox-runner",
+      manifestWindowsSandboxSetup: "windows-sandbox-setup",
+      manifestWindowsSandboxRunner: "windows-sandbox-runner",
+    });
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(
+      verifyResourceRoot(root, { platform: "win32", arch: "x64" }).desktopManifest
+        .native.windowsHelper,
+    ).toMatchObject({ readOnly: true });
+
+    manifest.native.windowsHelper.readOnly = false;
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    expect(() =>
+      verifyResourceRoot(root, { platform: "win32", arch: "x64" }),
+    ).toThrow(/must be read-only/u);
   });
 });
 

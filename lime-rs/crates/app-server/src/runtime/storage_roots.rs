@@ -14,6 +14,7 @@ const STATE_DB_FILE_NAME: &str = "state.sqlite";
 const THREAD_HISTORY_DB_FILE_NAME: &str = "thread_history.sqlite";
 const PROJECTION_DB_FILE_NAME: &str = "projection_1.sqlite";
 const TELEMETRY_DB_FILE_NAME: &str = "telemetry_1.sqlite";
+const PROMPT_HISTORY_FILE_NAME: &str = "prompt_history.jsonl";
 
 /// Product DB 的唯一位置只由 AgentRoot 决定，供不持有 `StorageRoots` 的
 /// owner 复用同一个契约，避免各自重新解析库路径。
@@ -40,6 +41,7 @@ pub struct StorageRoots {
     pub thread_history_db_path: PathBuf,
     pub projection_db_path: PathBuf,
     pub telemetry_db_path: PathBuf,
+    pub prompt_history_path: PathBuf,
 }
 
 impl StorageRoots {
@@ -61,6 +63,7 @@ impl StorageRoots {
             thread_history_db_path: sqlite_root.join(THREAD_HISTORY_DB_FILE_NAME),
             projection_db_path: runtime_root.join(PROJECTION_DB_FILE_NAME),
             telemetry_db_path: runtime_root.join(TELEMETRY_DB_FILE_NAME),
+            prompt_history_path: data_root.join(PROMPT_HISTORY_FILE_NAME),
             app_data_root,
             data_root,
             runtime_root,
@@ -146,6 +149,10 @@ mod tests {
         assert_eq!(
             roots.telemetry_db_path,
             roots.runtime_root.join("telemetry_1.sqlite")
+        );
+        assert_eq!(
+            roots.prompt_history_path,
+            roots.data_root.join("prompt_history.jsonl")
         );
         assert!(roots.event_log_root.is_dir());
         assert!(roots.trace_log_root.is_dir());

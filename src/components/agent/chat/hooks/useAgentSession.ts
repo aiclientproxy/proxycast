@@ -1372,6 +1372,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     async (
       sessionName?: string,
       createOptions?: {
+        activateSession?: boolean;
         preserveCurrentSnapshot?: boolean;
         skipSessionStartHooks?: boolean;
       },
@@ -1383,6 +1384,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       const resolvedWorkspaceId = workspaceId?.trim() || "";
       const sessionScopeId =
         normalizedWorkingDir ?? (resolvedWorkspaceId || "detached");
+      const activateSession = createOptions?.activateSession !== false;
 
       const creationPromise = (async () => {
         const startedAt = Date.now();
@@ -1392,6 +1394,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
           invalidatePendingSessionSwitches();
           skipAutoRestoreRef.current = true;
           logAgentDebug("useAgentSession", "createFreshSession.start", {
+            activateSession,
             executionStrategy: creationExecutionStrategy,
             sessionName: sessionName?.trim() || null,
             sessionScopeId,
@@ -1423,31 +1426,37 @@ export function useAgentSession(options: UseAgentSessionOptions) {
             newSessionId,
           );
           appServerConfirmedSessionIdsRef.current.add(newSessionId);
+          canonicalThreadIdBySessionIdRef.current.set(
+            newSessionId,
+            freshThreadRead.thread_id,
+          );
 
           const now = new Date();
-          applySessionSnapshot({
-            ...createEmptyAgentSessionSnapshot({
-              workingDir: normalizedWorkingDir,
-            }),
-            sessionId: newSessionId,
-            messages:
-              createOptions?.preserveCurrentSnapshot === true
-                ? messagesRef.current
-                : [],
-            threadTurns:
-              createOptions?.preserveCurrentSnapshot === true
-                ? threadTurnsRef.current
-                : [],
-            threadItems:
-              createOptions?.preserveCurrentSnapshot === true
-                ? threadItemsRef.current
-                : [],
-            threadRead: freshThreadRead,
-          });
-          setSessionHistoryWindow(null);
-          setIsAutoRestoringSession(false);
-          setIsSessionHydrating(false);
-          setRecoveredStreamBindingSessionId(null);
+          if (activateSession) {
+            applySessionSnapshot({
+              ...createEmptyAgentSessionSnapshot({
+                workingDir: normalizedWorkingDir,
+              }),
+              sessionId: newSessionId,
+              messages:
+                createOptions?.preserveCurrentSnapshot === true
+                  ? messagesRef.current
+                  : [],
+              threadTurns:
+                createOptions?.preserveCurrentSnapshot === true
+                  ? threadTurnsRef.current
+                  : [],
+              threadItems:
+                createOptions?.preserveCurrentSnapshot === true
+                  ? threadItemsRef.current
+                  : [],
+              threadRead: freshThreadRead,
+            });
+            setSessionHistoryWindow(null);
+            setIsAutoRestoringSession(false);
+            setIsSessionHydrating(false);
+            setRecoveredStreamBindingSessionId(null);
+          }
           setTopics((prev) =>
             upsertFreshSessionDraftTopic(prev, {
               createdAt: now,
@@ -1458,25 +1467,35 @@ export function useAgentSession(options: UseAgentSessionOptions) {
               workingDir: normalizedWorkingDir,
             }),
           );
-          resetPendingActions();
-          resetStreamingRefs();
-          hydratedSessionRef.current = newSessionId;
-          restoredWorkspaceRef.current = resolvedWorkspaceId || null;
-          persistSessionRestoreCandidate(newSessionId);
+          if (activateSession) {
+            resetPendingActions();
+            resetStreamingRefs();
+            hydratedSessionRef.current = newSessionId;
+            restoredWorkspaceRef.current = resolvedWorkspaceId || null;
+            persistSessionRestoreCandidate(newSessionId);
+          }
 
           markSessionExecutionStrategySynced(
             newSessionId,
             creationExecutionStrategy,
           );
           if (nextProviderType.trim() && nextModel.trim()) {
-            applySessionModelPreference(
-              newSessionId,
-              {
-                providerType: nextProviderType,
-                model: nextModel,
-              },
-              { markSynced: true },
-            );
+            if (activateSession) {
+              applySessionModelPreference(
+                newSessionId,
+                {
+                  providerType: nextProviderType,
+                  model: nextModel,
+                },
+                { markSynced: true },
+              );
+            } else {
+              markSessionModelPreferenceSynced(
+                newSessionId,
+                nextProviderType,
+                nextModel,
+              );
+            }
           }
           const nextScopedKeys = scopedKeys;
           scheduleFreshSessionPostCreatePersistence(() => {
@@ -1486,13 +1505,16 @@ export function useAgentSession(options: UseAgentSessionOptions) {
               nextModel,
             );
             persistSessionAccessMode(newSessionId, accessMode);
-            saveTransient(nextScopedKeys.messagesKey, []);
-            saveTransient(nextScopedKeys.turnsKey, []);
-            saveTransient(nextScopedKeys.itemsKey, []);
-            saveTransient(nextScopedKeys.currentTurnKey, null);
+            if (activateSession) {
+              saveTransient(nextScopedKeys.messagesKey, []);
+              saveTransient(nextScopedKeys.turnsKey, []);
+              saveTransient(nextScopedKeys.itemsKey, []);
+              saveTransient(nextScopedKeys.currentTurnKey, null);
+            }
           });
 
           logAgentDebug("useAgentSession", "createFreshSession.success", {
+            activateSession,
             durationMs: Date.now() - startedAt,
             newSessionId,
             sessionName: sessionName?.trim() || null,
@@ -1508,6 +1530,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
             "useAgentSession",
             "createFreshSession.error",
             {
+              activateSession,
               durationMs: Date.now() - startedAt,
               error,
               sessionName: sessionName?.trim() || null,
@@ -1537,6 +1560,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       executionStrategy,
       invalidatePendingSessionSwitches,
       modelRef,
+      markSessionModelPreferenceSynced,
       markSessionExecutionStrategySynced,
       persistSessionModelPreference,
       persistSessionAccessMode,

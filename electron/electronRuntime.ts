@@ -20,6 +20,7 @@ export const {
   screen,
   session,
   shell,
+  systemPreferences,
   protocol,
   Tray,
   WebContentsView,

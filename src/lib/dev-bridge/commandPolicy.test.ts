@@ -180,6 +180,10 @@ describe("commandPolicy", () => {
     expect(shouldDisallowMockFallbackCommand("open_system_settings_url")).toBe(
       true,
     );
+    expect(isBridgeTruthCommand("macos_native_host_invoke")).toBe(false);
+    expect(shouldDisallowMockFallbackCommand("macos_native_host_invoke")).toBe(
+      true,
+    );
     expect(isBridgeTruthCommand("open_file_preview_window")).toBe(false);
     expect(shouldDisallowMockFallbackCommand("open_file_preview_window")).toBe(
       true,
@@ -187,6 +191,10 @@ describe("commandPolicy", () => {
     expect(isBridgeTruthCommand("open_resource_manager_window")).toBe(false);
     expect(
       shouldDisallowMockFallbackCommand("open_resource_manager_window"),
+    ).toBe(true);
+    expect(isBridgeTruthCommand("windows_native_host_invoke")).toBe(false);
+    expect(
+      shouldDisallowMockFallbackCommand("windows_native_host_invoke"),
     ).toBe(true);
   });
 

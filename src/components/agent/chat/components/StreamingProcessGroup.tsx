@@ -233,7 +233,7 @@ export const GroupedProcessShell: React.FC<{
   groupMarker: string;
   children: React.ReactNode;
 }> = ({ groupMarker, children }) => (
-  <div className="flex items-start gap-2 py-1.5">
+  <div className="flex items-start gap-2 py-0.5">
     <span className="pt-0.5 text-xs text-slate-300">{groupMarker}</span>
     <div className="min-w-0 flex-1">{children}</div>
   </div>
@@ -366,7 +366,7 @@ export const StreamingProcessGroup: React.FC<{
 
   return (
     <div
-      className="py-0.5"
+      className="py-0"
       data-testid="streaming-process-group"
       data-process-kind={processKind}
       data-process-running={descriptor?.hasRunning ? "yes" : "no"}
@@ -375,7 +375,7 @@ export const StreamingProcessGroup: React.FC<{
       <button
         type="button"
         className={cn(
-          "group flex w-full items-start gap-2 rounded-lg py-1.5 text-left transition-colors hover:bg-slate-50/70",
+          "group flex w-full items-start gap-2 rounded-lg py-1 text-left transition-colors hover:bg-slate-50/70",
           isWebSearchProcess && "pr-1",
         )}
         onClick={() => setExpanded((current) => !current)}
@@ -401,7 +401,7 @@ export const StreamingProcessGroup: React.FC<{
         )}
         <span
           className={cn(
-            "min-w-0 flex-1 text-[13px] leading-6",
+            "min-w-0 flex-1 text-[13px] leading-5",
             isWebSearchProcess
               ? "font-medium text-slate-700"
               : "font-normal text-slate-600",
@@ -409,7 +409,7 @@ export const StreamingProcessGroup: React.FC<{
         >
           <span className="block break-words">{summaryText}</span>
           {combinedMetaText ? (
-            <span className="mt-0.5 block text-xs font-normal leading-5 text-slate-500">
+            <span className="mt-0.5 block text-xs font-normal leading-4 text-slate-500">
               {combinedMetaText}
             </span>
           ) : null}
@@ -420,7 +420,7 @@ export const StreamingProcessGroup: React.FC<{
               {descriptor.supportingLines.slice(0, 5).map((line) => (
                 <span
                   key={line}
-                  className="block text-xs font-normal leading-5 text-slate-500"
+                  className="block text-xs font-normal leading-4 text-slate-500"
                 >
                   {line}
                 </span>

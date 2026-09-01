@@ -680,7 +680,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn declared_agnes_vision_hint_does_not_authorize_image_chat_route() {
+    async fn official_agnes_declared_vision_model_authorizes_image_chat_route() {
         let db = test_db();
         let service = ApiKeyProviderService::new();
         let provider = service
@@ -714,7 +714,7 @@ mod tests {
                 None,
                 None,
                 Some(vec![
-                    lime_core::models::model_registry::ProviderModelConfig::hint("agnes-2.0-flash"),
+                    lime_core::models::model_registry::ProviderModelConfig::hint("agnes-2.5-pro"),
                 ]),
             )
             .expect("declared model");
@@ -732,27 +732,20 @@ mod tests {
             &db,
             &service,
             &request,
-            &selection(&provider.id, "agnes-2.0-flash"),
+            &selection(&provider.id, "agnes-2.5-pro"),
             None,
         )
         .await
         .expect("route");
 
-        assert_eq!(
-            route
-                .resolved_route
-                .failure
-                .as_ref()
-                .map(|failure| failure.reason_code.as_str()),
-            Some("capability_snapshot_missing")
-        );
+        assert!(route.resolved_route.failure.is_none());
         assert!(route.resolved_route.capability_snapshot.capabilities.vision);
         assert!(route
             .resolved_route
             .capability_snapshot
             .input_modalities
             .contains(&"image".to_string()));
-        assert!(route.not_possible_payload.is_some());
+        assert!(route.not_possible_payload.is_none());
     }
 
     #[tokio::test]

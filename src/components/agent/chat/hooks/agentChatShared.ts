@@ -28,6 +28,11 @@ import type {
   InterruptedInputDraftSnapshot,
   InterruptedInputRestoreRequest,
 } from "./agentStreamInputRestoreTypes";
+import type {
+  ComposerDraftSnapshot,
+  ComposerIntent,
+  ComposerSubmitTarget,
+} from "@/components/input-kit";
 
 export type TaskStatus =
   | "draft"
@@ -141,6 +146,9 @@ export interface SendMessageOptions {
   targetSessionId?: string;
   skipSessionRestore?: boolean;
   skipSessionStartHooks?: boolean;
+  composerIntent?: ComposerIntent;
+  composerTarget?: ComposerSubmitTarget;
+  composerDraft?: ComposerDraftSnapshot;
 }
 
 export interface WorkspacePathMissingState {

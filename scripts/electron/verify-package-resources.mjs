@@ -6,6 +6,11 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  DESKTOP_APPLICATION_ID,
+  DESKTOP_RESOURCES_MANIFEST_NAME,
+  DESKTOP_RESOURCES_SCHEMA_VERSION,
+} from "../lib/electron-desktop-resources.mjs";
 
 const DEFAULT_PACKAGE_ROOT = "release-electron";
 const MAC_PRODUCT_NAME = "Lime";
@@ -75,8 +80,11 @@ function safeReadDir(dir) {
 function findResourceRoots(packageRoot) {
   const roots = walkDirectories(packageRoot).filter((dir) => {
     const manifest = path.join(dir, "app-server.release.json");
+    const desktopManifest = path.join(dir, DESKTOP_RESOURCES_MANIFEST_NAME);
     const assets = path.join(dir, "desktop-assets");
-    return existsSync(manifest) && existsSync(assets);
+    return (
+      existsSync(manifest) && existsSync(desktopManifest) && existsSync(assets)
+    );
   });
   return roots.sort();
 }
@@ -174,8 +182,20 @@ export function verifyResourceRoot(
   { platform, arch, execFileSyncImpl = execFileSync },
 ) {
   const manifestPath = path.join(root, "app-server.release.json");
+  const desktopManifestPath = path.join(root, DESKTOP_RESOURCES_MANIFEST_NAME);
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const desktopManifest = JSON.parse(readFileSync(desktopManifestPath, "utf8"));
   const key = platformKey(platform, arch);
+  const deferredDesktopResourceIntegrity = verifyDesktopResourceManifest(
+    desktopManifest,
+    {
+      root,
+      platform,
+      arch,
+      key,
+      execFileSyncImpl,
+    },
+  );
   const artifact = Array.isArray(manifest.artifacts)
     ? manifest.artifacts.find((item) => item?.platform === key)
     : null;
@@ -205,6 +225,10 @@ export function verifyResourceRoot(
     platform,
     label: "app-server sidecar",
     execFileSyncImpl,
+  });
+  verifyDeferredDesktopResourceIntegrity(deferredDesktopResourceIntegrity, {
+    appServer,
+    codeModeHost,
   });
   let windowsSandboxSetupPath = null;
   let windowsSandboxSetupIntegrity = null;
@@ -272,7 +296,358 @@ export function verifyResourceRoot(
     windowsSandboxRunnerPath,
     windowsSandboxRunnerIntegrity,
     sha256: appServer,
+    desktopManifest,
   };
+}
+
+function verifyDesktopResourceManifest(
+  manifest,
+  { root, platform, arch, key, execFileSyncImpl },
+) {
+  if (manifest?.schemaVersion !== DESKTOP_RESOURCES_SCHEMA_VERSION) {
+    throw new Error(
+      `desktop resource manifest schema version is unsupported: ${manifest?.schemaVersion ?? "missing"}`,
+    );
+  }
+  if (manifest.applicationId !== DESKTOP_APPLICATION_ID) {
+    throw new Error(
+      `desktop resource manifest applicationId mismatch: ${manifest.applicationId ?? "missing"}`,
+    );
+  }
+  if (manifest.platformKey !== key || manifest.platform !== platform) {
+    throw new Error(
+      `desktop resource manifest platform mismatch: expected ${key}, got ${manifest.platformKey ?? "missing"}`,
+    );
+  }
+  const expectedArch = platform === "win32" ? "x64" : arch;
+  if (manifest.arch !== expectedArch) {
+    throw new Error(
+      `desktop resource manifest architecture mismatch: expected ${expectedArch}, got ${manifest.arch ?? "missing"}`,
+    );
+  }
+  const expectedMinimumOsVersion = platform === "darwin" ? "13.0" : null;
+  if (manifest.minimumOsVersion !== expectedMinimumOsVersion) {
+    throw new Error(
+      `desktop resource manifest minimum OS version mismatch: expected ${expectedMinimumOsVersion ?? "null"}, got ${manifest.minimumOsVersion ?? "null"}`,
+    );
+  }
+  if (!Array.isArray(manifest.resources) || manifest.resources.length === 0) {
+    throw new Error("desktop resource manifest has no resources");
+  }
+
+  const ids = new Set();
+  const signedMacNativeHost =
+    platform === "darwin" && manifest.native?.helper?.signedByForge === true;
+  const macNativeHostBundlePath =
+    platform === "darwin"
+      ? resolveManifestPath(root, manifest.native?.helper?.bundlePath)
+      : null;
+  const signedMacNativeHostPath = signedMacNativeHost
+    ? macNativeHostBundlePath
+    : null;
+  const deferredIntegrity = [];
+  for (const resource of manifest.resources) {
+    if (!resource || typeof resource !== "object") {
+      throw new Error("desktop resource manifest contains an invalid resource");
+    }
+    const id = String(resource.id || "");
+    const relativePath = String(resource.path || "").replace(/\\/g, "/");
+    if (!id || ids.has(id)) {
+      throw new Error(
+        `desktop resource manifest has duplicate or missing id: ${id}`,
+      );
+    }
+    ids.add(id);
+    const expectedPath = expectedDesktopResourcePath(id, key, platform);
+    if (expectedPath && relativePath !== expectedPath) {
+      throw new Error(
+        `desktop resource ${id} path mismatch: expected ${expectedPath}, got ${relativePath}`,
+      );
+    }
+    if (
+      !relativePath ||
+      relativePath.startsWith("/") ||
+      relativePath.split("/").some((part) => part === "..")
+    ) {
+      throw new Error(`desktop resource path escapes package resources: ${id}`);
+    }
+    const resourcePath = path.resolve(root, relativePath);
+    if (!resourcePath.startsWith(`${path.resolve(root)}${path.sep}`)) {
+      throw new Error(`desktop resource path escapes package resources: ${id}`);
+    }
+    assertFile(resourcePath, desktopResourceLabel(id));
+    if (!/^[a-f0-9]{64}$/u.test(resource.sha256 ?? "")) {
+      throw new Error(`desktop resource ${id} sha256 is invalid`);
+    }
+    const packagedSha256 = sha256(resourcePath);
+    if (packagedSha256 !== resource.sha256) {
+      if (
+        !signedMacNativeHost ||
+        id !== "macos-native-host" ||
+        !isMacCodeSigned(
+          signedMacNativeHostPath ?? resourcePath,
+          execFileSyncImpl,
+        )
+      ) {
+        if (
+          platform === "darwin" &&
+          (id === "app-server" || id === "code-mode-host")
+        ) {
+          deferredIntegrity.push({
+            id,
+            resourcePath,
+            expected: resource.sha256,
+          });
+        } else {
+          throw new Error(
+            `desktop resource ${id} sha256 mismatch: ${resourcePath}`,
+          );
+        }
+      }
+    }
+  }
+  if (platform === "win32") {
+    const helperMetadata = manifest.native?.windowsHelper;
+    const helperResource = manifest.resources.find(
+      (resource) => resource?.id === "windows-native-host",
+    );
+    if (helperMetadata || helperResource) {
+      if (helperMetadata?.id !== "windows-native-host") {
+        throw new Error(
+          "desktop resource manifest Windows native helper metadata is invalid",
+        );
+      }
+      if (
+        typeof helperMetadata.path !== "string" ||
+        String(helperMetadata.path).replace(/\\/g, "/") !==
+          String(helperResource?.path || "").replace(/\\/g, "/")
+      ) {
+        throw new Error(
+          "desktop resource manifest Windows native helper path does not match resource",
+        );
+      }
+      if (
+        String(helperMetadata.path).replace(/\\/g, "/") !==
+        "native/windows/windows-native-host.exe"
+      ) {
+        throw new Error(
+          "desktop resource manifest Windows native helper path mismatch",
+        );
+      }
+      if (helperMetadata.readOnly !== true) {
+        throw new Error(
+          "desktop resource manifest Windows native helper must be read-only",
+        );
+      }
+      if (!Array.isArray(helperMetadata.api) || helperMetadata.api.length === 0) {
+        throw new Error(
+          "desktop resource manifest Windows native helper API metadata is missing",
+        );
+      }
+    }
+  }
+
+  const requiredIds = ["app-server", "code-mode-host"];
+  if (platform === "win32") {
+    requiredIds.push(
+      "windows-sandbox-setup",
+      "windows-sandbox-runner",
+      "windows-native-host",
+    );
+  }
+  if (platform === "darwin") {
+    requiredIds.push("macos-native-host");
+    const helperMetadata = manifest.native?.helper;
+    const helperResource = manifest.resources.find(
+      (resource) => resource?.id === "macos-native-host",
+    );
+    if (helperMetadata?.id !== "macos-native-host") {
+      throw new Error(
+        "desktop resource manifest is missing macOS native helper metadata",
+      );
+    }
+    if (
+      typeof helperMetadata.path !== "string" ||
+      String(helperMetadata.path).replace(/\\/g, "/") !==
+        String(helperResource?.path || "").replace(/\\/g, "/")
+    ) {
+      throw new Error(
+        "desktop resource manifest macOS helper path does not match resource",
+      );
+    }
+    if (
+      helperMetadata.bundleIdentifier !==
+      `${DESKTOP_APPLICATION_ID}.native-host`
+    ) {
+      throw new Error(
+        "desktop resource manifest macOS helper bundle identifier mismatch",
+      );
+    }
+    if (helperMetadata.bundlePath && !macNativeHostBundlePath) {
+      throw new Error(
+        "desktop resource manifest macOS helper bundle path is invalid",
+      );
+    }
+    if (helperMetadata.bundlePath && macNativeHostBundlePath) {
+      if (!statSync(macNativeHostBundlePath).isDirectory()) {
+        throw new Error(
+          "desktop resource manifest macOS helper bundle path must be a directory",
+        );
+      }
+      const bundleInfoPlist = path.join(
+        macNativeHostBundlePath,
+        "Contents",
+        "Info.plist",
+      );
+      if (!existsSync(bundleInfoPlist)) {
+        throw new Error(
+          "desktop resource manifest macOS helper bundle is missing Info.plist",
+        );
+      }
+      const bundleInfoPlistContent = readFileSync(bundleInfoPlist, "utf8");
+      if (
+        !plistContainsString(
+          bundleInfoPlistContent,
+          "CFBundleIdentifier",
+          helperMetadata.bundleIdentifier,
+        )
+      ) {
+        throw new Error(
+          "desktop resource manifest macOS helper Info.plist bundle identifier mismatch",
+        );
+      }
+    }
+    const applicationGroups = manifest.native?.entitlements?.applicationGroups;
+    if (!Array.isArray(applicationGroups)) {
+      throw new Error(
+        "desktop resource manifest macOS entitlements applicationGroups must be an array",
+      );
+    }
+    for (const group of applicationGroups) {
+      if (
+        typeof group !== "string" ||
+        (group !== DESKTOP_APPLICATION_ID &&
+          !group.startsWith(`${DESKTOP_APPLICATION_ID}.`))
+      ) {
+        throw new Error(
+          "desktop resource manifest macOS Application Group must use the Lime namespace",
+        );
+      }
+    }
+    if (manifest.native?.entitlements?.automationAppleEvents !== true) {
+      throw new Error(
+        "desktop resource manifest macOS entitlements automationAppleEvents must be true",
+      );
+    }
+    if (helperMetadata.signedByForge === true) {
+      const signaturePath =
+        resolveManifestPath(root, manifest.native.helper.bundlePath) ??
+        (typeof helperResource?.path === "string"
+          ? path.resolve(root, helperResource.path)
+          : null);
+      if (!signaturePath) {
+        throw new Error(
+          "desktop resource manifest is missing macOS native helper resource path",
+        );
+      }
+      try {
+        execFileSyncImpl("codesign", ["--verify", "--strict", signaturePath], {
+          stdio: "ignore",
+        });
+      } catch (error) {
+        throw new Error(
+          `macOS native host signature is invalid: ${signaturePath}`,
+          {
+            cause: error,
+          },
+        );
+      }
+    }
+  }
+  for (const id of requiredIds) {
+    if (!ids.has(id)) {
+      throw new Error(
+        `desktop resource manifest is missing required resource: ${id}`,
+      );
+    }
+  }
+
+  return deferredIntegrity;
+}
+
+function verifyDeferredDesktopResourceIntegrity(
+  deferredIntegrity,
+  { appServer, codeModeHost },
+) {
+  for (const entry of deferredIntegrity) {
+    const sidecar = entry.id === "app-server" ? appServer : codeModeHost;
+    if (
+      !sidecar ||
+      entry.expected !== sidecar.manifest ||
+      (!sidecar.matches && sidecar.acceptedBecause !== "macos-signed-sidecar")
+    ) {
+      throw new Error(
+        `desktop resource ${entry.id} sha256 mismatch: ${entry.resourcePath}`,
+      );
+    }
+  }
+}
+
+function resolveManifestPath(root, value) {
+  const relativePath = String(value || "").replace(/\\/g, "/");
+  if (
+    !relativePath ||
+    relativePath.startsWith("/") ||
+    relativePath.split("/").some((part) => part === "..")
+  ) {
+    return null;
+  }
+  const resolved = path.resolve(root, relativePath);
+  return resolved.startsWith(`${path.resolve(root)}${path.sep}`) &&
+    existsSync(resolved)
+    ? resolved
+    : null;
+}
+
+function desktopResourceLabel(id) {
+  switch (id) {
+    case "windows-sandbox-setup":
+      return "Windows sandbox setup helper";
+    case "windows-sandbox-runner":
+      return "Windows sandbox runner";
+    case "app-server":
+      return "app-server sidecar";
+    case "code-mode-host":
+      return "code-mode host sidecar";
+    case "macos-native-host":
+      return "macOS native host helper";
+    case "windows-native-host":
+      return "Windows native host helper";
+    default:
+      return `desktop resource ${id}`;
+  }
+}
+
+function expectedDesktopResourcePath(id, key, platform) {
+  const suffix = platform === "win32" ? ".exe" : "";
+  switch (id) {
+    case "app-server":
+      return `app-server/${key}/app-server${suffix}`;
+    case "code-mode-host":
+      return `app-server/${key}/code-mode-host${suffix}`;
+    case "windows-sandbox-setup":
+      return platform === "win32"
+        ? `app-server/${key}/windows-sandbox-setup.exe`
+        : null;
+    case "windows-sandbox-runner":
+      return platform === "win32"
+        ? `app-server/${key}/windows-sandbox-runner.exe`
+        : null;
+    case "windows-native-host":
+      return platform === "win32" ? "native/windows/windows-native-host.exe" : null;
+    default:
+      return null;
+  }
 }
 
 function verifyMainBundle(repoRoot) {

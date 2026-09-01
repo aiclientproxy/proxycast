@@ -1537,6 +1537,46 @@
       ],
       "type": "object"
     },
+    "PromptHistoryAppendParams": {
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "text"
+      ],
+      "type": "object"
+    },
+    "PromptHistoryReadParams": {
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "logId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "RequestId": {
       "anyOf": [
         {
@@ -4317,6 +4357,46 @@
         },
         "params": {
           "$ref": "#/$defs/ThreadQueueStartParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "promptHistory/read",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PromptHistoryReadParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "method": {
+          "const": "promptHistory/append",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/PromptHistoryAppendParams"
         }
       },
       "required": [

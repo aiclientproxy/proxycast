@@ -141,6 +141,12 @@ pub(super) fn into_parts(
         ClientRequest::ThreadQueueStart { id, params } => {
             parts(id, Method::ThreadQueueStart, params)
         }
+        ClientRequest::PromptHistoryRead { id, params } => {
+            parts(id, Method::PromptHistoryRead, params)
+        }
+        ClientRequest::PromptHistoryAppend { id, params } => {
+            parts(id, Method::PromptHistoryAppend, params)
+        }
         ClientRequest::ProjectList { id, params } => parts(id, Method::ProjectList, params),
         ClientRequest::ProjectRead { id, params } => parts(id, Method::ProjectRead, params),
         ClientRequest::ProjectCreate { id, params } => parts(id, Method::ProjectCreate, params),

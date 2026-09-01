@@ -283,7 +283,61 @@ export interface ShellImportPreview {
   durationMs?: number | null;
 }
 
+export interface DesktopCapability {
+  status:
+    | "ready"
+    | "not_granted"
+    | "not_configured"
+    | "unverified"
+    | "unsupported"
+    | "unavailable";
+  reason: string;
+  settingsUrl?: string | null;
+}
+
+export interface DesktopCapabilities {
+  schemaVersion: number;
+  platform: string;
+  arch: string;
+  applicationId: string;
+  appVersion: string;
+  packaged: boolean;
+  capabilities: {
+    accessibility: DesktopCapability;
+    inputMonitoring: DesktopCapability;
+    applicationGroups: DesktopCapability & { identifiers: string[] };
+    nativeModules: DesktopCapability & { identifiers: string[] };
+    windowHandles: DesktopCapability;
+    windowOrchestration: DesktopCapability;
+    accessibilityTree: DesktopCapability;
+    displays: DesktopCapability;
+    displayWatcher: DesktopCapability;
+    hidTopology: DesktopCapability;
+    bareModifierMonitor: DesktopCapability;
+    screenCapture: DesktopCapability;
+    appleEvents: DesktopCapability;
+    uiAutomation: DesktopCapability;
+    rawInput: DesktopCapability;
+    mediaPermissions: {
+      microphone: DesktopCapability;
+      camera: DesktopCapability;
+    };
+    securityScopedBookmarks: DesktopCapability;
+    deviceKey: DesktopCapability;
+    localAuthentication: DesktopCapability;
+    resourceManifest: DesktopCapability & {
+      identifiers: string[];
+      platformKey: string | null;
+    };
+    sidecars: DesktopCapability & { identifiers: string[] };
+    codeMode: DesktopCapability;
+    updates: DesktopCapability;
+    sandbox: DesktopCapability;
+  };
+}
+
 export interface EnvironmentPreview {
+  desktopCapabilities?: DesktopCapabilities;
   shellImport: ShellImportPreview;
   entries: EnvironmentPreviewEntry[];
 }

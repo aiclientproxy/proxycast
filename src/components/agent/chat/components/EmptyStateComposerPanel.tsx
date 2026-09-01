@@ -65,6 +65,7 @@ import {
 import type { InputbarCoreCopy } from "./Inputbar/components/inputbarCoreCopy";
 import type { ModelReasoningEffortLevel } from "@/lib/types/modelRegistry";
 import type { BaseComposerSendMetadata } from "@/components/input-kit";
+import type { ComposerController } from "@/components/input-kit";
 import {
   HomeComposerAccent,
   HomeComposerDecorationFrame,
@@ -136,6 +137,8 @@ const ConnectedComposerShell = styled.div`
 
 interface EmptyStateComposerPanelProps {
   input: string;
+  setInput: (value: string) => void;
+  controller?: ComposerController;
   placeholder: string;
   onSend: (
     inputOverride?: string,
@@ -274,6 +277,8 @@ function GuideHelpToolbarBadge({
 
 export function EmptyStateComposerPanel({
   input,
+  setInput,
+  controller,
   placeholder,
   onSend,
   onStop,
@@ -345,7 +350,6 @@ export function EmptyStateComposerPanel({
   onClearGuideHelp,
 }: EmptyStateComposerPanelProps) {
   const { composerDecorations } = useHomeSkinPresentation();
-  const [draftInput, setDraftInput] = useState(input);
   const [activePluginSelection, setActivePluginSelection] =
     useState<InputbarPluginSelection | null>(null);
   const pluginSelectionInputSyncedRef = useRef(false);
@@ -368,10 +372,6 @@ export function EmptyStateComposerPanel({
   const { mentionProps: mentionSkillProps, selectorProps: skillSelectorProps } =
     buildSkillSelectionBindings(skillSelection);
   useEffect(() => {
-    setDraftInput(input);
-  }, [input]);
-
-  useEffect(() => {
     if (!activePluginSelection) {
       pluginSelectionInputSyncedRef.current = false;
       return;
@@ -382,7 +382,7 @@ export function EmptyStateComposerPanel({
       return;
     }
 
-    const inputText = draftInput.trimStart();
+    const inputText = input.trimStart();
     const trigger = activePluginSelection.trigger.trim();
     if (inputText === trigger || inputText.startsWith(`${trigger} `)) {
       pluginSelectionInputSyncedRef.current = true;
@@ -395,11 +395,12 @@ export function EmptyStateComposerPanel({
 
     pluginSelectionInputSyncedRef.current = false;
     setActivePluginSelection(null);
-  }, [activePluginSelection, draftInput]);
+  }, [activePluginSelection, input]);
 
   const handleSendDraft = (triggerMetadata?: BaseComposerSendMetadata) => {
+    const composerInput = controller?.getDocument().text ?? input;
     const submittedInput = resolveInputbarPluginSubmissionText({
-      input: draftInput,
+      input: composerInput,
       selection: activePluginSelection,
     });
     const result = onSend(
@@ -411,18 +412,18 @@ export function EmptyStateComposerPanel({
       },
       triggerMetadata,
     );
-    if (result === false) {
+    if (result === false || controller) {
       return;
     }
     if (result && typeof result === "object" && "then" in result) {
       void result.then((accepted) => {
         if (accepted !== false) {
-          setDraftInput("");
+          setInput("");
         }
       });
       return;
     }
-    setDraftInput("");
+    setInput("");
   };
 
   const handleToggleSubagentMode = () => {
@@ -456,13 +457,13 @@ export function EmptyStateComposerPanel({
       return;
     }
     const selection = applyInputbarPluginSelection({
-      input: options?.inputOverride ?? draftInput,
+      input: options?.inputOverride ?? input,
       plugin,
       skill,
       preserveInput: options?.preserveInputOverride === true,
     });
     pluginSelectionInputSyncedRef.current = false;
-    setDraftInput(selection.text);
+    setInput(selection.text);
     setActivePluginSelection(selection);
     window.requestAnimationFrame(() => {
       textareaRef.current?.focus();
@@ -478,10 +479,10 @@ export function EmptyStateComposerPanel({
       return;
     }
     const nextInput = removeInputbarPluginSelection({
-      input: draftInput,
+      input,
       selection: activePluginSelection,
     });
-    setDraftInput(nextInput);
+    setInput(nextInput);
     setActivePluginSelection(null);
   };
 
@@ -590,7 +591,7 @@ export function EmptyStateComposerPanel({
       renderMode="inline"
       knowledgePackSelection={knowledgePackSelection}
       knowledgePackOptions={knowledgePackOptions}
-      inputText={draftInput}
+      inputText={input}
       openKnowledgeHubRequestKey={knowledgeHubOpenRequestKey}
       onToggleKnowledgePack={onToggleKnowledgePack}
       onSelectKnowledgePack={onSelectKnowledgePack}
@@ -766,8 +767,8 @@ export function EmptyStateComposerPanel({
         {...mentionSkillProps}
         characters={characters}
         inputRef={textareaRef}
-        value={draftInput}
-        onChange={setDraftInput}
+        value={input}
+        onChange={setInput}
         onSelectInputCapability={onSelectInputCapability}
         pluginSuggestions={pluginSuggestions}
         onPluginSuggestionsNeeded={onPluginSuggestionsNeeded}
@@ -800,9 +801,10 @@ export function EmptyStateComposerPanel({
         <ConnectedComposerShell data-testid="inputbar-connected-composer">
           <InputbarCore
             uiCopy={inputbarCopy}
+            controller={controller}
             textareaRef={textareaRef}
-            text={draftInput}
-            setText={setDraftInput}
+            text={input}
+            setText={setInput}
             onSend={handleSendDraft}
             onStop={onStop}
             isLoading={isLoading}

@@ -324,6 +324,10 @@ mod tests {
             Some("agnes/agnes-2.5-flash".to_string())
         );
         assert_eq!(
+            map_to_canonical_model("agnes", "agnes-2.5-pro", r),
+            Some("agnes/agnes-2.5-pro".to_string())
+        );
+        assert_eq!(
             map_to_canonical_model("agnes", "agnes-2.5-pro-alpha", r),
             Some("agnes/agnes-2.5-pro-alpha".to_string())
         );

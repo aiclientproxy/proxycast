@@ -150,6 +150,27 @@ describe("resolveTaskCenterHomeSurfaceState", () => {
     expect(state.sceneSessionId).toBeNull();
   });
 
+  it("旧 route transition 滞留时不应覆盖已有真实会话活动", () => {
+    const state = resolveTaskCenterHomeSurfaceState({
+      agentEntry: "claw",
+      draftSurfaceActive: false,
+      shouldSuppressDraftContent: false,
+      sessionSwitchPending: true,
+      hasInitialSessionRoute: true,
+      hasConversationActivity: true,
+      hasCurrentSessionActivity: true,
+      sessionId: "active-session",
+      embeddedHomeSessionIds: new Set(),
+      isAutoRestoringSession: false,
+      isSessionHydrating: false,
+    });
+
+    expect(state.shouldRenderEmbeddedHome).toBe(false);
+    expect(state.shouldHideCurrentSessionContent).toBe(false);
+    expect(state.isRestoringSession).toBe(false);
+    expect(state.sceneSessionId).toBe("active-session");
+  });
+
   it("侧栏新建任务激活草稿 surface 时应压住旧 route session", () => {
     const state = resolveTaskCenterHomeSurfaceState({
       agentEntry: "claw",

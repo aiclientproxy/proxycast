@@ -43,6 +43,8 @@ const electronHostNoMockFallbackCommands = new Set([
   "open_file_preview_window",
   "open_resource_manager_window",
   "open_system_settings_url",
+  "macos_native_host_invoke",
+  "windows_native_host_invoke",
   "save_layered_design_project_export",
   "read_layered_design_project_export",
   "recognize_layered_design_text",

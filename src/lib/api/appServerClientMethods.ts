@@ -86,6 +86,16 @@ declare module "./appServerClient" {
     ): Promise<
       appServer.AppServerRequestResult<appServer.AppServerThreadQueueStartResponse>
     >;
+    readPromptHistory(
+      params: appServer.AppServerPromptHistoryReadParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerPromptHistoryReadResponse>
+    >;
+    appendPromptHistory(
+      params: appServer.AppServerPromptHistoryAppendParams,
+    ): Promise<
+      appServer.AppServerRequestResult<appServer.AppServerPromptHistoryAppendResponse>
+    >;
     listSessions(
       params?: appServer.AppServerAgentSessionListParams,
     ): Promise<

@@ -41,6 +41,7 @@ import {
   ImagePlus,
   Loader2,
   Mic,
+  ListPlus,
   Plus,
   Square,
   X,
@@ -49,6 +50,7 @@ import {
   BaseComposer,
   type BaseComposerSendMetadata,
 } from "@/components/input-kit";
+import type { ComposerController } from "@/components/input-kit";
 import { isKnowledgeTextSourceCandidate } from "@/features/knowledge/import/knowledgeSourceSupport";
 import type { MessageImage, MessagePathReference } from "../../../types";
 import type { InputbarCoreCopy } from "./inputbarCoreCopy";
@@ -88,6 +90,7 @@ function formatRecordingDuration(durationSecs: number): string {
 
 interface InputbarCoreProps {
   uiCopy: InputbarCoreCopy;
+  controller?: ComposerController;
   text: string;
   setText: (text: string) => void;
   onSend: (metadata?: BaseComposerSendMetadata) => void;
@@ -138,6 +141,7 @@ interface InputbarCoreProps {
 
 export const InputbarCore: React.FC<InputbarCoreProps> = ({
   uiCopy,
+  controller,
   text,
   setText,
   onSend,
@@ -306,6 +310,7 @@ export const InputbarCore: React.FC<InputbarCoreProps> = ({
 
   return (
     <BaseComposer
+      controller={controller}
       text={text}
       setText={setText}
       onSend={onSend}
@@ -561,6 +566,23 @@ export const InputbarCore: React.FC<InputbarCoreProps> = ({
                     >
                       <span>{loadingSecondaryActionLabel}</span>
                     </SecondaryActionButton>
+                  ) : null}
+                  {isLoading ? (
+                    <InputIconButton
+                      type="button"
+                      onClick={() =>
+                        onSend({
+                          triggeredAt: Date.now(),
+                          triggerSource: "button",
+                          submitTarget: "queue",
+                        })
+                      }
+                      disabled={isPrimaryDisabled}
+                      aria-label={uiCopy.action.queue}
+                      title={uiCopy.action.queue}
+                    >
+                      <ListPlus size={14} />
+                    </InputIconButton>
                   ) : null}
                   {isLoading ? (
                     <InputIconButton

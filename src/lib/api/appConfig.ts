@@ -29,6 +29,8 @@ export type {
   ClawTraceConfig,
   ClawTraceLevelConfig,
   Config,
+  DesktopCapabilities,
+  DesktopCapability,
   CrashReportingConfig,
   ChatAppearanceConfig,
   DeveloperConfig,

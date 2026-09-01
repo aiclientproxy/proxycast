@@ -113,7 +113,7 @@ const CURRENT_HOST_USER_DATA_CHILDREN: UsageBaseline = {
 };
 
 const CURRENT_APP_DATA_ROOT_CHILDREN: UsageBaseline = {
-  "electron/systemUtilityHost.ts": { connectors: 2 },
+  "electron/systemUtilityHost.ts": { connectors: 2, macos: 1 },
   "electron/voiceModelHost.ts": { models: 2 },
 };
 

@@ -61,10 +61,7 @@ function requireMatch(source: string, pattern: RegExp, label: string): string {
 function extractTypeFieldNames(source: string, name: string): string[] {
   const body = requireMatch(
     source,
-    new RegExp(
-      `export interface ${name} \\{\\n(?<body>[\\s\\S]*?)\\n\\}`,
-      "u",
-    ),
+    new RegExp(`export interface ${name} \\{\\n(?<body>[\\s\\S]*?)\\n\\}`, "u"),
     name,
   );
   return [...body.matchAll(/^\s{2}([a-zA-Z_][a-zA-Z0-9_]*)\??:/gmu)].map(
@@ -95,9 +92,9 @@ describe("Codex model context policy origin", () => {
   it("ModelContextPolicyInput 只接收 Codex ModelInfo context / auto compact 字段", () => {
     const limeSource = readRepoFile(LIME_CONTEXT_POLICY_SOURCE);
 
-    expect(extractTypeFieldNames(limeSource, "ModelContextPolicyInput")).toEqual(
-      LIME_CONTEXT_POLICY_INPUT_FIELDS,
-    );
+    expect(
+      extractTypeFieldNames(limeSource, "ModelContextPolicyInput"),
+    ).toEqual(LIME_CONTEXT_POLICY_INPUT_FIELDS);
     expect(extractTypeFieldNames(limeSource, "ModelContextPolicy")).toEqual(
       LIME_CONTEXT_POLICY_FIELDS,
     );
@@ -122,7 +119,9 @@ describe("Codex model context policy origin", () => {
     const limeSource = readRepoFile(LIME_CONTEXT_POLICY_SOURCE);
 
     expect(limeSource).toContain("contextWindow ?? maxContextWindow");
-    expect(limeSource).toContain("AUTO_COMPACT_CONTEXT_WINDOW_RATIO_NUMERATOR = 9");
+    expect(limeSource).toContain(
+      "AUTO_COMPACT_CONTEXT_WINDOW_RATIO_NUMERATOR = 9",
+    );
     expect(limeSource).toContain(
       "AUTO_COMPACT_CONTEXT_WINDOW_RATIO_DENOMINATOR = 10",
     );
@@ -154,13 +153,18 @@ describe("Codex model context policy origin", () => {
   it("model context window 沿用 Codex effective_context_window_percent 语义", () => {
     const limeSource = readRepoFile(LIME_CONTEXT_POLICY_SOURCE);
 
-    expect(limeSource).toContain("DEFAULT_EFFECTIVE_CONTEXT_WINDOW_PERCENT = 95");
+    expect(limeSource).toContain(
+      "DEFAULT_EFFECTIVE_CONTEXT_WINDOW_PERCENT = 95",
+    );
     expect(limeSource).toContain(
       "(resolvedContextWindow * effectiveContextWindowPercent) / 100",
     );
 
     const codexSource = readExistingFile(CODEX_TURN_CONTEXT_SOURCE);
-    if (!codexSource) {
+    const codexOpenaiModelsSource = readExistingFile(
+      CODEX_OPENAI_MODELS_SOURCE,
+    );
+    if (!codexSource || !codexOpenaiModelsSource) {
       return;
     }
 
@@ -170,9 +174,25 @@ describe("Codex model context policy origin", () => {
       "    pub(crate) fn apps_enabled(&self)",
     );
 
-    expect(modelContextWindow).toContain("effective_context_window_percent");
-    expect(modelContextWindow).toContain(
-      "context_window.saturating_mul(effective_context_window_percent) / 100",
-    );
+    if (
+      modelContextWindow.includes("self.model_info().usable_context_window()")
+    ) {
+      const usableContextWindow = sourceBetween(
+        codexOpenaiModelsSource,
+        "    pub fn usable_context_window(&self)",
+        "    pub fn auto_compact_token_limit(&self)",
+      );
+      expect(usableContextWindow).toContain(
+        "self.effective_context_window_percent",
+      );
+      expect(usableContextWindow).toContain(
+        "context_window.saturating_mul(self.effective_context_window_percent) / 100",
+      );
+    } else {
+      expect(modelContextWindow).toContain("effective_context_window_percent");
+      expect(modelContextWindow).toContain(
+        "context_window.saturating_mul(effective_context_window_percent) / 100",
+      );
+    }
   });
 });

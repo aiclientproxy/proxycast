@@ -4,8 +4,7 @@ import { cwd, env } from "node:process";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = cwd();
-const LIME_NATIVE_TOOL_POLICY_SOURCE =
-  "src/lib/model/modelNativeToolPolicy.ts";
+const LIME_NATIVE_TOOL_POLICY_SOURCE = "src/lib/model/modelNativeToolPolicy.ts";
 const DEFAULT_CODEX_OPENAI_MODELS_SOURCE =
   "/Users/coso/Documents/dev/rust/codex/codex-rs/protocol/src/openai_models.rs";
 const DEFAULT_CODEX_TOOL_CONFIG_SOURCE =
@@ -63,10 +62,7 @@ function requireMatch(source: string, pattern: RegExp, label: string): string {
 function extractTypeFieldNames(source: string, name: string): string[] {
   const body = requireMatch(
     source,
-    new RegExp(
-      `export interface ${name} \\{\\n(?<body>[\\s\\S]*?)\\n\\}`,
-      "u",
-    ),
+    new RegExp(`export interface ${name} \\{\\n(?<body>[\\s\\S]*?)\\n\\}`, "u"),
     name,
   );
   return [...body.matchAll(/^\s{2}([a-zA-Z_][a-zA-Z0-9_]*)\??:/gmu)].map(
@@ -100,9 +96,9 @@ describe("Codex model native tool policy origin", () => {
     expect(
       extractTypeFieldNames(limeSource, "ModelNativeToolPolicyInput"),
     ).toEqual(LIME_NATIVE_TOOL_POLICY_INPUT_FIELDS);
-    expect(
-      extractTypeFieldNames(limeSource, "ModelNativeToolPolicy"),
-    ).toEqual(LIME_NATIVE_TOOL_POLICY_FIELDS);
+    expect(extractTypeFieldNames(limeSource, "ModelNativeToolPolicy")).toEqual(
+      LIME_NATIVE_TOOL_POLICY_FIELDS,
+    );
 
     const codexOpenaiModelsSource = readIfExists(CODEX_OPENAI_MODELS_SOURCE);
     if (!codexOpenaiModelsSource) {
@@ -139,11 +135,9 @@ describe("Codex model native tool policy origin", () => {
       );
       expect(shellType).toContain("UnifiedExec");
       expect(shellType).toContain("Disabled");
-      const hasLegacyVariants = [
-        "Default",
-        "Local",
-        "ShellCommand",
-      ].every((variant) => shellType.includes(variant));
+      const hasLegacyVariants = ["Default", "Local", "ShellCommand"].every(
+        (variant) => shellType.includes(variant),
+      );
       const hasCurrentAliases = [
         'alias = "default"',
         'alias = "local"',
@@ -197,9 +191,14 @@ describe("Codex model native tool policy origin", () => {
       return;
     }
 
-    expect(codexSpecPlanSource).toContain(
-      "environment_mode.has_environment() && turn_context.model_info.apply_patch_tool_type.is_some()",
-    );
+    expect(
+      codexSpecPlanSource.includes(
+        "environment_mode.has_environment() && turn_context.model_info.apply_patch_tool_type.is_some()",
+      ) ||
+        codexSpecPlanSource.includes(
+          "environment_mode.has_environment() && context.model_info.apply_patch_tool_type.is_some()",
+        ),
+    ).toBe(true);
     expect(codexSpecPlanSource).toContain(
       "registry.add(ApplyPatchHandler::new(include_environment_id));",
     );

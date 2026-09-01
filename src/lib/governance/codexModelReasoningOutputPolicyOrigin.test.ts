@@ -12,6 +12,8 @@ const DEFAULT_CODEX_CONFIG_TYPES_SOURCE =
   "/Users/coso/Documents/dev/rust/codex/codex-rs/protocol/src/config_types.rs";
 const DEFAULT_CODEX_TURN_CONTEXT_SOURCE =
   "/Users/coso/Documents/dev/rust/codex/codex-rs/core/src/session/turn_context.rs";
+const DEFAULT_CODEX_STEP_SETTINGS_SOURCE =
+  "/Users/coso/Documents/dev/rust/codex/codex-rs/core/src/session/step_settings.rs";
 const DEFAULT_CODEX_CLIENT_SOURCE =
   "/Users/coso/Documents/dev/rust/codex/codex-rs/core/src/client.rs";
 const CODEX_OPENAI_MODELS_SOURCE =
@@ -20,15 +22,12 @@ const CODEX_CONFIG_TYPES_SOURCE =
   env.CODEX_CONFIG_TYPES_SOURCE ?? DEFAULT_CODEX_CONFIG_TYPES_SOURCE;
 const CODEX_TURN_CONTEXT_SOURCE =
   env.CODEX_TURN_CONTEXT_SOURCE ?? DEFAULT_CODEX_TURN_CONTEXT_SOURCE;
+const CODEX_STEP_SETTINGS_SOURCE =
+  env.CODEX_STEP_SETTINGS_SOURCE ?? DEFAULT_CODEX_STEP_SETTINGS_SOURCE;
 const CODEX_CLIENT_SOURCE =
   env.CODEX_CLIENT_SOURCE ?? DEFAULT_CODEX_CLIENT_SOURCE;
 
-const CODEX_REASONING_SUMMARY_VALUES = [
-  "auto",
-  "concise",
-  "detailed",
-  "none",
-];
+const CODEX_REASONING_SUMMARY_VALUES = ["auto", "concise", "detailed", "none"];
 
 const CODEX_VERBOSITY_VALUES = ["low", "medium", "high"];
 
@@ -86,10 +85,7 @@ function extractConstStringArray(source: string, name: string): string[] {
 function extractTypeFieldNames(source: string, name: string): string[] {
   const body = requireMatch(
     source,
-    new RegExp(
-      `export interface ${name} \\{\\n(?<body>[\\s\\S]*?)\\n\\}`,
-      "u",
-    ),
+    new RegExp(`export interface ${name} \\{\\n(?<body>[\\s\\S]*?)\\n\\}`, "u"),
     name,
   );
   return [...body.matchAll(/^\s{2}([a-zA-Z_][a-zA-Z0-9_]*)\??:/gmu)].map(
@@ -126,9 +122,9 @@ describe("Codex model reasoning output policy origin", () => {
     expect(
       extractConstStringArray(limeSource, "MODEL_REASONING_SUMMARIES"),
     ).toEqual(CODEX_REASONING_SUMMARY_VALUES);
-    expect(extractConstStringArray(limeSource, "MODEL_VERBOSITY_LEVELS")).toEqual(
-      CODEX_VERBOSITY_VALUES,
-    );
+    expect(
+      extractConstStringArray(limeSource, "MODEL_VERBOSITY_LEVELS"),
+    ).toEqual(CODEX_VERBOSITY_VALUES);
 
     const codexConfigTypesSource = readIfExists(CODEX_CONFIG_TYPES_SOURCE);
     if (!codexConfigTypesSource) {
@@ -173,18 +169,29 @@ describe("Codex model reasoning output policy origin", () => {
     const limeSource = readRepoFile(LIME_REASONING_OUTPUT_POLICY_SOURCE);
 
     expect(limeSource).toContain("modelSupportsReasoningSummaries");
-    expect(limeSource).toContain("requested ?? policy.default_reasoning_summary");
+    expect(limeSource).toContain(
+      "requested ?? policy.default_reasoning_summary",
+    );
     expect(limeSource).toContain('summary === "none"');
 
     const codexTurnContextSource = readIfExists(CODEX_TURN_CONTEXT_SOURCE);
+    const codexStepSettingsSource = readIfExists(CODEX_STEP_SETTINGS_SOURCE);
     const codexClientSource = readIfExists(CODEX_CLIENT_SOURCE);
-    if (!codexTurnContextSource || !codexClientSource) {
+    if (
+      (!codexTurnContextSource && !codexStepSettingsSource) ||
+      !codexClientSource
+    ) {
       return;
     }
 
-    expect(codexTurnContextSource).toContain(
-      ".unwrap_or(model_info.default_reasoning_summary)",
-    );
+    expect(
+      codexStepSettingsSource?.includes(
+        ".unwrap_or(model_info.default_reasoning_summary)",
+      ) ||
+        codexTurnContextSource?.includes(
+          ".unwrap_or(model_info.default_reasoning_summary)",
+        ),
+    ).toBe(true);
     expect(codexClientSource).toContain(
       "model_info.supports_reasoning_summary_parameter",
     );

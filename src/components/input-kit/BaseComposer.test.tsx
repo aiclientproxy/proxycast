@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BaseComposer, type BaseComposerSendMetadata } from "./BaseComposer";
+import { ComposerController, LARGE_PASTE_CHAR_THRESHOLD } from "./ComposerController";
 
 interface RenderResult {
   container: HTMLDivElement;
@@ -43,6 +44,7 @@ interface HarnessProps {
   hasAdditionalContent?: boolean;
   deferSendOnEnter?: boolean;
   sendOnPointerDown?: boolean;
+  controller?: ComposerController;
   onSend: (metadata?: BaseComposerSendMetadata) => void;
   onStop: () => void;
 }
@@ -54,6 +56,7 @@ const Harness: React.FC<HarnessProps> = ({
   hasAdditionalContent = false,
   deferSendOnEnter = false,
   sendOnPointerDown = false,
+  controller,
   onSend,
   onStop,
 }) => {
@@ -70,6 +73,7 @@ const Harness: React.FC<HarnessProps> = ({
       hasAdditionalContent={hasAdditionalContent}
       deferSendOnEnter={deferSendOnEnter}
       sendOnPointerDown={sendOnPointerDown}
+      controller={controller}
       placeholder="输入内容"
     >
       {({
@@ -115,6 +119,7 @@ const renderHarness = (props: Partial<HarnessProps> = {}): RenderResult => {
         hasAdditionalContent={props.hasAdditionalContent}
         deferSendOnEnter={props.deferSendOnEnter}
         sendOnPointerDown={props.sendOnPointerDown}
+        controller={props.controller}
         onSend={onSend}
         onStop={onStop}
       />,
@@ -350,5 +355,135 @@ describe("BaseComposer", () => {
 
     expect(textarea.getAttribute("id")).toBeTruthy();
     expect(textarea.getAttribute("name")).toBe("agent-chat-message");
+  });
+
+  it.each([
+    ["Win32", "windows"],
+    ["MacIntel", "macos"],
+    ["Linux x86_64", "linux"],
+  ])("%s DOM paste 应归一化 CRLF 并保留 shell sigil", (platform) => {
+    Object.defineProperty(window.navigator, "platform", {
+      configurable: true,
+      value: platform,
+    });
+    const controller = new ComposerController();
+    const { container } = renderHarness({ controller });
+    const textarea = getTextarea(container);
+    const pastedText = "%PATH%\r\n$VAR `echo hi` ^&|<>";
+    const pasteEvent = new Event("paste", {
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      configurable: true,
+      value: {
+        getData: (format: string) => (format === "text" ? pastedText : ""),
+      },
+    });
+
+    act(() => {
+      textarea.dispatchEvent(pasteEvent);
+    });
+
+    expect(pasteEvent.defaultPrevented).toBe(true);
+    expect(textarea.value).toBe("%PATH%\n$VAR `echo hi` ^&|<>");
+    expect(controller.getDocument().text).toBe(textarea.value);
+  });
+
+  it("Windows DOM paste 的大文本使用占位符，提交 draft 时再展开", () => {
+    Object.defineProperty(window.navigator, "platform", {
+      configurable: true,
+      value: "Win32",
+    });
+    const controller = new ComposerController();
+    const { container } = renderHarness({ controller });
+    const textarea = getTextarea(container);
+    const pastedText = "x".repeat(LARGE_PASTE_CHAR_THRESHOLD + 1);
+    const pasteEvent = new Event("paste", {
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      configurable: true,
+      value: { getData: () => pastedText },
+    });
+
+    act(() => {
+      textarea.dispatchEvent(pasteEvent);
+    });
+
+    expect(textarea.value).toMatch(/^\[Pasted text 1:/);
+    const receipt = controller.submit("start");
+    expect(receipt.kind).toBe("accepted");
+    if (receipt.kind === "accepted") {
+      expect(receipt.draft.text).toBe(pastedText);
+    }
+  });
+
+  it("Windows AltGr 字符不会被 Composer 快捷键拦截", () => {
+    Object.defineProperty(window.navigator, "platform", {
+      configurable: true,
+      value: "Win32",
+    });
+    const { container, onSend } = renderHarness({ initialText: "" });
+    const textarea = getTextarea(container);
+    const altGrEvent = new KeyboardEvent("keydown", {
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+      key: "@",
+    });
+
+    act(() => {
+      textarea.dispatchEvent(altGrEvent);
+    });
+
+    expect(altGrEvent.defaultPrevented).toBe(false);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("上下键只在文本边界回放会话内历史", () => {
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      (callback: (timestamp: number) => void) => {
+        callback(0);
+        return 1;
+      },
+    );
+    const controller = new ComposerController({ text: "第一条" });
+    const firstReceipt = controller.submit("start");
+    if (firstReceipt.kind === "accepted") {
+      controller.commit(firstReceipt);
+    }
+    controller.setText("第二条");
+    const secondReceipt = controller.submit("start");
+    if (secondReceipt.kind === "accepted") {
+      controller.commit(secondReceipt);
+    }
+
+    const { container } = renderHarness({ controller });
+    const textarea = getTextarea(container);
+    const up = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "ArrowUp",
+    });
+    act(() => {
+      textarea.dispatchEvent(up);
+    });
+    expect(up.defaultPrevented).toBe(true);
+    expect(textarea.value).toBe("第二条");
+
+    act(() => {
+      textarea.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ArrowDown",
+        }),
+      );
+    });
+    expect(textarea.value).toBe("");
   });
 });

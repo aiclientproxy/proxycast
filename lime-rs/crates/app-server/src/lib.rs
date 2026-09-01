@@ -3977,7 +3977,13 @@ mod tests {
             );
         }
 
-        for method in [METHOD_INITIALIZE, METHOD_THREAD_START, METHOD_TURN_START] {
+        for method in [
+            METHOD_INITIALIZE,
+            METHOD_THREAD_START,
+            METHOD_TURN_START,
+            v2::METHOD_PROMPT_HISTORY_READ,
+            v2::METHOD_PROMPT_HISTORY_APPEND,
+        ] {
             assert!(
                 !is_experimental_api_method(method),
                 "expected stable method {method} to remain available"

@@ -17,6 +17,16 @@ const mockStrictReviewRuntime = vi.hoisted(() => ({
     turnId: string;
   },
 }));
+const mockThreadQueueActions = vi.hoisted(() => ({
+  addThreadQueue: vi.fn().mockResolvedValue({
+    id: "queued-1",
+    clientUserMessageId: "client-1",
+    input: [{ type: "text", text: "排队任务" }],
+  }),
+}));
+const toastMock = vi.hoisted(() => ({
+  error: vi.fn(),
+}));
 
 vi.mock("../components/Inputbar", () => ({
   Inputbar: (props: { overlayAccessory?: React.ReactNode }) => {
@@ -38,6 +48,11 @@ vi.mock("./WorkspaceHarnessDialogs", () => ({
     <div data-testid="general-workbench-dialog-mock" />
   ),
 }));
+vi.mock(
+  "@/lib/api/agentRuntime/threadQueueActions",
+  () => mockThreadQueueActions,
+);
+vi.mock("sonner", () => ({ toast: toastMock }));
 
 vi.mock("./knowledge/useWorkspaceKnowledgeRuntime", () => ({
   useWorkspaceKnowledgeRuntime: () => ({
@@ -255,6 +270,18 @@ function getLatestInputbarProps(): {
   onSend?: (payload?: {
     images?: unknown[];
     textOverride?: string;
+    composerTarget?: "start" | "queue" | "steer" | "interrupt" | "command";
+    composerIntent?: string;
+    composerDraft?: {
+      text: string;
+      selectionStart: number;
+      selectionEnd: number;
+      textElements: readonly unknown[];
+      mentionBindings: readonly unknown[];
+      attachments: readonly unknown[];
+      pathReferences: readonly unknown[];
+      pendingPastes: readonly unknown[];
+    };
     sendOptions?: {
       requestMetadata?: Record<string, unknown>;
       targetSessionId?: string;
@@ -275,6 +302,18 @@ function getLatestInputbarProps(): {
     onSend?: (payload?: {
       images?: unknown[];
       textOverride?: string;
+      composerTarget?: "start" | "queue" | "steer" | "interrupt" | "command";
+      composerIntent?: string;
+      composerDraft?: {
+        text: string;
+        selectionStart: number;
+        selectionEnd: number;
+        textElements: readonly unknown[];
+        mentionBindings: readonly unknown[];
+        attachments: readonly unknown[];
+        pathReferences: readonly unknown[];
+        pendingPastes: readonly unknown[];
+      };
       sendOptions?: {
         requestMetadata?: Record<string, unknown>;
         targetSessionId?: string;
@@ -481,6 +520,74 @@ describe("useWorkspaceInputbarSceneRuntime", () => {
         skipSessionRestore: true,
       }),
     );
+  });
+
+  it("Composer queue intent 应通过 thread/queue/add 写入 canonical Thread", async () => {
+    renderHookNode(
+      createDefaultProps({
+        threadId: "thread-queue",
+        submitTarget: "queue",
+      }),
+    );
+
+    await act(async () => {
+      await getLatestInputbarProps().onSend?.({
+        composerTarget: "queue",
+        composerIntent: "queue",
+        composerDraft: {
+          text: "排队任务",
+          selectionStart: 4,
+          selectionEnd: 4,
+          textElements: [],
+          mentionBindings: [],
+          attachments: [],
+          pathReferences: [],
+          pendingPastes: [],
+        },
+        textOverride: "排队任务",
+      });
+    });
+
+    expect(mockThreadQueueActions.addThreadQueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-queue",
+        input: [{ type: "text", text: "排队任务" }],
+      }),
+    );
+  });
+
+  it("Composer queue 写入失败时应保留草稿并显示可见错误", async () => {
+    mockThreadQueueActions.addThreadQueue.mockRejectedValueOnce(
+      new Error("queue unavailable"),
+    );
+    renderHookNode(
+      createDefaultProps({
+        threadId: "thread-queue-failed",
+        submitTarget: "queue",
+      }),
+    );
+
+    let result: boolean | void = true;
+    await act(async () => {
+      result = await getLatestInputbarProps().onSend?.({
+        composerTarget: "queue",
+        composerIntent: "queue",
+        composerDraft: {
+          text: "保留这份草稿",
+          selectionStart: 7,
+          selectionEnd: 7,
+          textElements: [],
+          mentionBindings: [],
+          attachments: [],
+          pathReferences: [],
+          pendingPastes: [],
+        },
+        textOverride: "保留这份草稿",
+      });
+    });
+
+    expect(result).toBe(false);
+    expect(toastMock.error).toHaveBeenCalledWith("队列操作失败，请重试");
   });
 
   it("有已保存创作声线时应在输入区显示本轮开关并响应切换", () => {

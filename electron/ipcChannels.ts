@@ -57,6 +57,8 @@ export const ELECTRON_HOST_COMMANDS = [
   "open_file_preview_window",
   "open_resource_manager_window",
   "open_system_settings_url",
+  "macos_native_host_invoke",
+  "windows_native_host_invoke",
   "show_desktop_notification",
   "open_with_default_app",
   "read_layered_design_project_export",

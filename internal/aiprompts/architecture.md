@@ -89,6 +89,7 @@ Renderer 可以临时保存输入框、选择态、展开态和 optimistic UI；
 | `electron/preload.ts`                 | `contextBridge`、最小暴露面和 IPC 调用入口。                                                   |
 | `electron/ipcChannels.ts`             | IPC channel 常量与协议白名单。                                                                 |
 | `electron/*Host.ts`                   | 一个桌面能力一个 owner，例如 App Server sidecar、文件/项目壳、窗口、通知、更新、浏览器、语音。 |
+| `electron/desktopResourceReadiness.ts` | 运行时读取并校验 macOS/Windows desktop resource manifest 的身份与必需资源存在性；不替代发布 verifier。 |
 | `electron/appServerHost.ts`           | sidecar 生命周期与 `app_server_handle_json_lines` 的宿主边界。                                 |
 | `electron/forge/`、`forge.config.mjs` | Forge 打包、maker、签名和 release 事实源。                                                     |
 
@@ -97,6 +98,65 @@ Electron 负责窗口、托盘、Dock、系统文件选择、权限、外部链�
 新增 Electron 命令前先判断是否只是已有 `app_server_handle_json_lines` 的转发。只有系统宿主能力才新增 IPC；业务能力一律优先新增 App Server JSON-RPC。
 
 App Server 发起的 reverse JSON-RPC request 仍复用同一 JSONL/stdio、`app_server_drain_events` 与 `app_server_handle_json_lines` 通道。Electron 只负责从 typed connection drain notification/request，并把 Renderer 的 Response/Error 原样写回 sidecar；不得解释 server request method、生成业务 decision、持有 pending waiter 或把 request 降级成 Electron IPC 业务命令。
+
+### 4.1 跨平台 Desktop capability/readiness contract
+
+Desktop 平台能力由 `electron/platformCapabilities.ts` 作为唯一 Host owner 计算，并通过现有
+`get_environment_preview` current Host 命令的 `desktopCapabilities` 字段供设置页和诊断投影消费。
+该合同只描述平台、架构、包状态、Accessibility/Apple Events 授权、资源清单/sidecar/Code Mode/更新状态和已验证/未配置的原生资源；它不承接
+Thread/Turn/Item、provider、工具执行或沙箱策略。
+
+macOS 的 Application Group、Input Monitoring、HID、Computer Use、PIP 等能力只有在 Lime 自己的
+签名 helper/extension、entitlement、资源 manifest 和 Gate B 证据同时存在时才能报告 `ready`。
+当前已具备最小 Swift `macos-native-host`，由 `scripts/lib/electron-desktop-resources.mjs`
+编译并写入 `desktop-resources.manifest.json`，通过 `macos_native_host_invoke` 提供
+Accessibility/Input Monitoring、Apple Events 授权查询/consent request、Screen Recording、Launch Services、security-scoped bookmark、CGWindow/NSScreen、IOHID
+（含拓扑变化事件）、bare modifier、LocalAuthentication 和 Secure Enclave device-key 的结构化结果；
+Screen Recording 还支持在 helper 内生成受权限保护的全屏、显示器或窗口 PNG 快照；Chronicle/ScreenCaptureKit
+媒体管线、PIP 以及 Computer Use 控制注入仍保持 `not_configured`。helper 已提供受 Accessibility 授权保护的只读
+`accessibilityTree.read` 观察结果（有界深度、节点数和文本长度），以及 CoreGraphics `display.watch.start/stop` 拓扑事件，但不注入鼠标/键盘事件。窗口控制还支持 Accessibility AX raise、窗口所属应用
+hide/unhide、按锚点定位、显式堆叠顺序和带原始可见性恢复的 hide-for-task lease；这组接口不冒充私有 overlay
+或 Remote Hosted PIP。Application Group 仍不申请或复制 OpenAI Team ID，
+无 consumer 时返回 `not_configured`。Windows sandbox readiness 继续由 `tool-runtime` 和 packaged
+resource verifier 负责，Desktop Host 只返回 `unverified`，不得从平台名称推断安全后端已就绪。
+媒体权限由同一 Swift helper 的 `mediaPermissions.read/request` 负责，分别查询或请求
+摄像头、麦克风 TCC 状态；helper 和主包均声明对应 usage description，主包 entitlement
+同时声明 camera/audio-input。能力合同只报告
+`mediaPermissions.microphone/camera` 的平台与原生资源 readiness，不把未授权状态伪造成
+`ready`，也不在 Electron 或 App Server 中保存媒体流。Windows 复用主窗口 Electron
+permission handler，合同保持 `unverified`，等待安装后系统授权证据。
+Apple Events 由同一 helper 的 `appleEvents.targets`、`appleEvents.read/request`、`appleEvents.openSettings` 负责。调用方可先
+从当前运行应用列表选择目标，再提供目标应用 bundle
+identifier；helper 仅调用 `AEDeterminePermissionToAutomateTarget` 查询或显式触发系统 consent，
+不发送实际控制事件。目标未运行、授权未授予、需要用户 consent 和系统异常均返回结构化状态，
+设置跳转使用 macOS Automation 隐私面板。主 App 与 helper 签名资源声明
+`com.apple.security.automation.apple-events`，资源 manifest 同步登记 `automationAppleEvents=true`。
+`desktopCapabilities.appleEvents` 只表示 helper
+调用面存在；缺少签名、目标授权和 Gate B 证据时保持 `unverified`，不得作为无边界 Computer Use
+注入通道。
+Windows 原生能力沿同一 Desktop Host 资源边界实现：`electron/native/windows/windows-native-host.cpp`
+使用系统 UI Automation COM API 提供有界、只读的 `windows.uiAutomation.read` 控件树观察，并使用
+`RegisterRawInputDevices` 仅监听修饰键按下/释放事件（`windows.bareModifierMonitor.start/stop`），不提供
+鼠标/键盘注入、ValuePattern 写入或窗口控制。`windows_native_host_invoke` 通过 Electron Host JSONL
+边界转发，helper 的路径、SHA-256、API 元数据和 `readOnly=true` 由资源 manifest/verifier 校验；缺少
+helper 或 digest 漂移时返回 `unavailable`。`desktopCapabilities.uiAutomation/rawInput` 仅在 helper
+资源存在时报告 `unverified`，Windows UIA/Raw Input 权限、签名、Squirrel 安装后 sidecar 和真实 Gate B
+仍需 Windows runner 证据，不能从源码或 manifest 存在推断为 `ready`。同一 helper 还提供
+`windows.window.read` 和 `windows.display.read` 的只读窗口/显示枚举（HWND、进程、标题、类名、边界、
+工作区和主显示标记），用于 `desktopCapabilities.windowHandles/displays`；不提供窗口移动、激活、隐藏或
+覆盖层控制。`windows.displayWatcher.start/stop` 使用隐藏顶层窗口接收 `WM_DISPLAYCHANGE`，以
+`display.changed` 事件转发位深、分辨率和最新显示器快照；该观察接口同样不声明 display link、屏幕捕获或
+任何窗口控制能力，`desktopCapabilities.displayWatcher` 在资源存在时保持 `unverified`。
+security-scoped bookmark 的编码数据由 `SystemUtilityHost` 按稳定 ID 写入受管的
+`appDataRoot/macos/security-scoped-bookmarks`，支持冷启动 resolve/start 和显式 revoke；Renderer
+不得自行持有 bookmark 事实源或绕过 helper 生命周期。
+HID/bare modifier 的 unsolicited JSONL event 由 `MacOSNativeHostClient.onEvent` 接收，再经
+`SystemUtilityHost` 注入 Electron Host emitter 广播到 `evt:*`；订阅者异常不会破坏 response framing，
+`before-quit` 会先解除订阅并停止 helper。
+
+Architecture impact: major; cross-platform Host capability contract added. Responsible developer
+confirmation: root, 2026-09-01. Window orchestration owner/data flow updated: root, 2026-09-01.
+Apple Events authorization owner/data flow updated: root, 2026-09-01.
 
 ## 5. TypeScript Package 规范
 
@@ -162,6 +222,10 @@ outer JSON-RPC id 只负责 App Server 到客户端的响应关联，domain toke
 | `thread-store`   | Codex raw canonical rollout item append、独立 metadata patch、Thread/Turn/Item 的存储、检索、分页、历史、graph/identity/mailbox。 |
 
 会话提交的唯一执行 owner 是 `agent-runtime::session_loop`：每个 session 只有一个串行 actor，FIFO task、regular/review/compact kind、replace/interrupt/shutdown、迟到 completion 防护和 steer/mailbox 分流均在此收口。所有 actor 命令先进入统一 operation envelope；envelope 使用 UUIDv7 identity，并携带可选 client user message identity 与 W3C trace carrier，首次启动和 FIFO promote 必须把同一份不可变 metadata 交给 task context。普通用户输入只通过 typed `UserInput` operation 进入该队列：active regular task 存在时原子 steer，否则启动或排队 candidate task，同一份输入必须成为新 task 的 initial input；App Server 只能消费 actor 返回的 `Submitted/Steered` receipt，不能把 read model 的预判当成调度事实。Review、Compact、ThreadSettings、SetMemoryMode、RefreshMcp、ReloadConfig 与 RunShell 使用各自的 typed task operation，并校验 operation 与 task kind 一致；Approval、UserInput、Permission、DynamicTool 与 MCP elicitation response 使用五类独立 response operation，禁止恢复通用 response operation。durable inter-agent append 成功后，App Server 只向已经存在的 recipient actor 提交 typed `InterAgentCommunication` envelope，保留 message/root/sender/recipient/source-turn identity、kind、result status 与 delivery mode；actor 只发布 durable activity，不复制 store payload，也不得为了通知创建空 actor。child terminal result 必须先完成 canonical Turn 与 durable result mailbox append，再由正常 append、durable replay、restart recovery 三条路径统一发布同一 typed activity；通知失败不能回滚 durable record，也不能创建空 actor。provider boundary 只能由 durable loader 把同一记录转换为 typed runtime input，禁止重新解析自由 JSON。steer 与 mailbox activity 通过 typed watch 发布；mailbox pending 使用单调 generation，loader 成功只确认调用前捕获的 generation，失败或并发新 append 必须继续保持 pending。sampling step snapshot 单调增加 step index；pending context rollover 只由下一次 snapshot 原子消费并推进一次 context epoch，显式推进 epoch 也必须清除 pending rollover，禁止在后续 step 重复滚动。RuntimeCore 只负责把 provider/tool 执行、canonical event 持久化和 durable mailbox loader 接到该 actor；QueueOnly mailbox 只有在 provider step 明确打开 mailbox boundary 后才 append + ack，不能由 AgentControl 或 GUI 另起活动回合旁路。AgentControl wait 必须先向既有 actor 注册 activity receiver，再读取 pending snapshot；steer、mailbox 和 queued admission 由 actor 的 typed watch 唤醒，不能通过固定间隔扫描 RuntimeCore turns。
+
+Composer 的唯一 Renderer 结构化输入 owner 是 `input-kit::ComposerController`。它持有 `ComposerDocument`（文本、光标/选择区、文本元素、mention、图片、路径引用和 pending paste）及可恢复 `ComposerDraftSnapshot`，通过 external-store subscription 提供给 Inputbar、首页和其他输入 surface；现有受控 text、图片和路径 hooks 只能作为 UI adapter 同步，不得发展成第二套 intent/queue owner。Controller 只产生 typed `ComposerIntent` / `ComposerSubmitResult`（`start`、`queue`、`steer`、`interrupt`、`command`、`edit`、`clear`），不保存 Thread/Turn/Queue 事实，也不依据本地 `isLoading` 猜测运行状态；workspace orchestrator 结合 canonical Thread/Turn read model 与 queueing preference 解析 `ComposerSubmitTarget`。`start`、`steer`、`interrupt` 进入 `turn/start|turn/steer|turn/interrupt`，`queue` 和 queued edit/delete/reorder/start 进入 Codex v2 `thread/queue/*` typed App Server 方法。Queue mutation 不直接改 Renderer queue 内容；`thread/queue/changed` 或 mutation 成功后的显式 refresh 只能触发 canonical queue 重读，Renderer 不得建立 queue snapshot、乐观删除或第二个 queue facade。Composer controller 当前统一 CRLF 和大粘贴 placeholder/提交前展开，并沿用 `BaseComposer` 的浏览器 IME 处理；Windows 非 bracketed paste burst 与 AltGr 原生 lowering 仍是平台 adapter 缺口。提交失败保留 draft，成功 receipt 仅在 revision 未变化时清理 pending state，避免旧异步回执覆盖新草稿。Architecture impact: major; owner/data flow and public action contract changed. Architecture diagram updated: this paragraph. Responsible developer confirmation: root, 2026-09-01.
+
+Composer 纯文本历史只允许沿 `Composer -> typed AppServerClient -> app_server_handle_json_lines -> App Server promptHistory/read|append -> RuntimeCore PromptHistoryStore` 流动；Electron 仅转发 JSON-RPC，Renderer 不得以 `localStorage`、SQLite 或旧 Desktop facade 建立第二事实源。`PromptHistoryStore` 使用受控数据根下的 append-only `prompt_history.jsonl`、文件锁和 4 MiB 保留上限，坏行跳过但保留 offset；macOS/Linux 的 `logId` 使用 inode，Windows 使用文件 creation time，用于分页 cursor 的快照一致性。读取返回 newest-first bounded pages，客户端在 Composer 内按 oldest-first 合并；异步读取完成时只合并服务端快照与本地新提交的边界重叠，不覆盖已产生的 draft/history。只追加成功提交的纯文本和 session identity；附件、路径引用、mention 与大粘贴原文保持会话内，不写入 JSONL。`promptHistory/read|append` 是稳定 v2 方法，不要求 `initialize.capabilities.experimentalApi`。Architecture impact: major; persistent history owner and cross-platform identity semantics fixed. Responsible developer confirmation: root, 2026-09-01.
 
 World state 的 typed DTO owner 固定为 `agent-protocol::world_state::RuntimeWorldState`。当前链路为：
 

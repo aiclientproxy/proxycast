@@ -8,6 +8,11 @@ import type { ModeKind, RuntimeSearchMode } from "@limecloud/app-server-client";
 import type { ChatToolPreferences } from "../utils/chatToolPreferences";
 import type { InputCapabilitySendRoute } from "../skill-selection/inputCapabilitySelection";
 import type { InterruptedInputDraftSnapshot } from "./agentStreamInputRestoreTypes";
+import type {
+  ComposerDraftSnapshot,
+  ComposerIntent,
+  ComposerSubmitTarget,
+} from "@/components/input-kit";
 
 export interface HandleSendObserver {
   onComplete?: (content: string) => void;
@@ -39,4 +44,7 @@ export interface HandleSendOptions {
   targetSessionId?: string;
   skipSessionRestore?: boolean;
   skipSessionStartHooks?: boolean;
+  composerIntent?: ComposerIntent;
+  composerTarget?: ComposerSubmitTarget;
+  composerDraft?: ComposerDraftSnapshot;
 }

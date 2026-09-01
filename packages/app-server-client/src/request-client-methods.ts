@@ -186,6 +186,18 @@ export const APP_SERVER_REQUEST_CLIENT_METHODS: readonly AppServerRequestClientM
       params: "required",
     },
     {
+      name: "readPromptHistory",
+      method: protocol.METHOD_PROMPT_HISTORY_READ,
+      kind: "request",
+      params: "required",
+    },
+    {
+      name: "appendPromptHistory",
+      method: protocol.METHOD_PROMPT_HISTORY_APPEND,
+      kind: "request",
+      params: "required",
+    },
+    {
       name: "listThreadTurns",
       method: protocol.METHOD_THREAD_TURNS_LIST,
       kind: "request",

@@ -45,6 +45,8 @@ pub const METHOD_THREAD_QUEUE_UPDATE: &str = "thread/queue/update";
 pub const METHOD_THREAD_QUEUE_DELETE: &str = "thread/queue/delete";
 pub const METHOD_THREAD_QUEUE_REORDER: &str = "thread/queue/reorder";
 pub const METHOD_THREAD_QUEUE_START: &str = "thread/queue/start";
+pub const METHOD_PROMPT_HISTORY_READ: &str = "promptHistory/read";
+pub const METHOD_PROMPT_HISTORY_APPEND: &str = "promptHistory/append";
 pub const METHOD_PROJECT_LIST: &str = "project/list";
 pub const METHOD_PROJECT_READ: &str = "project/read";
 pub const METHOD_PROJECT_CREATE: &str = "project/create";
@@ -268,6 +270,10 @@ pub enum Method {
     ThreadQueueReorder,
     #[serde(rename = "thread/queue/start")]
     ThreadQueueStart,
+    #[serde(rename = "promptHistory/read")]
+    PromptHistoryRead,
+    #[serde(rename = "promptHistory/append")]
+    PromptHistoryAppend,
     #[serde(rename = "project/list")]
     ProjectList,
     #[serde(rename = "project/read")]
@@ -446,6 +452,8 @@ impl Method {
             Self::ThreadQueueDelete => METHOD_THREAD_QUEUE_DELETE,
             Self::ThreadQueueReorder => METHOD_THREAD_QUEUE_REORDER,
             Self::ThreadQueueStart => METHOD_THREAD_QUEUE_START,
+            Self::PromptHistoryRead => METHOD_PROMPT_HISTORY_READ,
+            Self::PromptHistoryAppend => METHOD_PROMPT_HISTORY_APPEND,
             Self::ProjectList => METHOD_PROJECT_LIST,
             Self::ProjectRead => METHOD_PROJECT_READ,
             Self::ProjectCreate => METHOD_PROJECT_CREATE,
@@ -562,6 +570,8 @@ impl Method {
             METHOD_THREAD_QUEUE_DELETE => Some(Self::ThreadQueueDelete),
             METHOD_THREAD_QUEUE_REORDER => Some(Self::ThreadQueueReorder),
             METHOD_THREAD_QUEUE_START => Some(Self::ThreadQueueStart),
+            METHOD_PROMPT_HISTORY_READ => Some(Self::PromptHistoryRead),
+            METHOD_PROMPT_HISTORY_APPEND => Some(Self::PromptHistoryAppend),
             METHOD_PROJECT_LIST => Some(Self::ProjectList),
             METHOD_PROJECT_READ => Some(Self::ProjectRead),
             METHOD_PROJECT_CREATE => Some(Self::ProjectCreate),
@@ -677,6 +687,8 @@ pub const METHODS: &[&str] = &[
     METHOD_THREAD_QUEUE_DELETE,
     METHOD_THREAD_QUEUE_REORDER,
     METHOD_THREAD_QUEUE_START,
+    METHOD_PROMPT_HISTORY_READ,
+    METHOD_PROMPT_HISTORY_APPEND,
     METHOD_PROJECT_LIST,
     METHOD_PROJECT_READ,
     METHOD_PROJECT_CREATE,

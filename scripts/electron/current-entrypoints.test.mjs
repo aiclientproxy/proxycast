@@ -161,6 +161,16 @@ function currentElectronEntrypointFiles() {
     "scripts/electron/run-preview.mjs",
     "scripts/electron/stage-release-assets.mjs",
     "scripts/electron/verify-package-resources.mjs",
+    "scripts/lib/electron-desktop-resources.mjs",
+    "electron/native/macos/macos-native-host.swift",
+    "electron/native/macos/macos-screen-capture.swift",
+    "electron/native/macos/macos-security.swift",
+    "electron/native/macos/macos-window-orchestration.swift",
+    "electron/native/macos/macos-accessibility-tree.swift",
+    "electron/native/macos/macos-display-watcher.swift",
+    "electron/native/macos/macos-media-permissions.swift",
+    "electron/native/macos/macos-apple-events.swift",
+    "electron/native/windows/windows-native-host.cpp",
   ];
   return [
     ...explicitFiles,

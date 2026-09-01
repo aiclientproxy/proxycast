@@ -61,6 +61,8 @@ Options:
   --output <path>       Evidence JSON path
   --timeout-ms <ms>     Overall timeout, default ${DEFAULT_TIMEOUT_MS}
   --interval-ms <ms>    Predicate polling interval, default ${DEFAULT_INTERVAL_MS}
+  --electron-executable <path>
+                        Optional packaged Lime executable to launch directly
   -h, --help            Show this help
 `;
 }
@@ -94,6 +96,13 @@ export function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === "--electron-executable" && argv[index + 1]) {
+      options.electronExecutable = path.resolve(
+        String(argv[index + 1]).trim(),
+      );
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown argument: ${arg}`);
   }
   if (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 30_000) {
@@ -101,6 +110,14 @@ export function parseArgs(argv) {
   }
   if (!Number.isFinite(options.intervalMs) || options.intervalMs < 100) {
     throw new Error("--interval-ms must be >= 100");
+  }
+  if (
+    options.electronExecutable &&
+    !fs.existsSync(options.electronExecutable)
+  ) {
+    throw new Error(
+      `--electron-executable does not exist: ${options.electronExecutable}`,
+    );
   }
   return options;
 }
@@ -715,11 +732,17 @@ export function readCodeModeProcessEvidence({
 } = {}) {
   const rows = readProcessTable({ platform, runner });
   const descendants = descendantProcessIds(rows, electronPid);
-  const normalizedAppServer = normalizeProcessPath(appServerBinary, platform);
+  const normalizedAppServer = appServerBinary
+    ? normalizeProcessPath(appServerBinary, platform)
+    : null;
   const appServer = rows.find(
     (row) =>
       descendants.has(row.pid) &&
-      normalizeProcessPath(row.command, platform).includes(normalizedAppServer),
+      (normalizedAppServer
+        ? normalizeProcessPath(row.command, platform).includes(
+            normalizedAppServer,
+          )
+        : isAppServerProcess(row.command, platform)),
   );
   const codeModeHostName =
     platform === "win32" ? "code-mode-host.exe" : "code-mode-host";
@@ -796,6 +819,12 @@ function normalizeProcessPath(value, platform) {
   return platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
+function isAppServerProcess(command, platform) {
+  return /(?:^|[\/\s"'])app-server(?:\.exe)?(?=[\s"']|$)/u.test(
+    normalizeProcessPath(command, platform),
+  );
+}
+
 function writeEvidence(outputPath, evidence) {
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -805,13 +834,18 @@ export async function runGateB(options) {
   const runtimeEnv = createTempRuntimeEnv();
   const requestLog = [];
   const errors = { console: [], page: [] };
-  const appServerBinary = resolveDevAppServerBinary({
-    env: runtimeEnv.env,
-    repoRoot: process.cwd(),
-  });
-  const appServerEnv = resolveElectronAppServerRuntimeEnv({
-    env: { ...runtimeEnv.env, APP_SERVER_BIN: appServerBinary },
-  });
+  const packagedExecutable = options.electronExecutable || null;
+  const appServerBinary = packagedExecutable
+    ? null
+    : resolveDevAppServerBinary({
+        env: runtimeEnv.env,
+        repoRoot: process.cwd(),
+      });
+  const appServerEnv = packagedExecutable
+    ? { APP_SERVER_BIN: "" }
+    : resolveElectronAppServerRuntimeEnv({
+        env: { ...runtimeEnv.env, APP_SERVER_BIN: appServerBinary },
+      });
   let fixture = null;
   let electronHandle = null;
   try {
@@ -898,7 +932,8 @@ export async function runGateB(options) {
       generatedAt: new Date().toISOString(),
       proofLevel: "Gate B",
       claimBoundary:
-        "real Electron host/preload/IPC/App Server runtime/standalone code-mode-host process/read model/visible DOM with a controlled Responses fixture; not a live-provider or cross-platform packaged parity claim",
+        `${packagedExecutable ? "installed packaged" : "development"} Electron host/preload/IPC/App Server runtime/standalone code-mode-host process/read model/visible DOM with a controlled Responses fixture; not a live-provider or cross-platform packaged parity claim`,
+      packagedExecutable: Boolean(packagedExecutable),
       url: page.url(),
       identity: {
         sessionId: identity.sessionId,

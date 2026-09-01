@@ -143,6 +143,12 @@ jobs:
           npm run electron:build
           npx electron-forge make --platform win32 --arch x64 --targets squirrel
           VERSION="$(node -p "require('./package.json').version")"
+          manifest_count="$(find release-electron -name 'desktop-resources.manifest.json' -type f | wc -l | tr -d ' ')"
+          if [ "$manifest_count" -eq 0 ]; then
+            echo "Electron desktop resource manifest is missing from release-electron" >&2
+            exit 1
+          fi
+          find release-electron -name 'desktop-resources.manifest.json' -type f -print
           node scripts/electron/verify-package-resources.mjs \
             --package-root release-electron \
             --platform win32 \
@@ -219,6 +225,28 @@ jobs:
             --prefix "plugin-package-electron-gate-b-windows" \
             --timeout-ms 600000
 
+      - name: Run installed Windows CodeMode Gate B
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          CODE_MODE_GATE_EXECUTABLE="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));const executable=summary.evidence?.installation?.executable;if(!executable)throw new Error('Windows Squirrel evidence is missing the installed executable');process.stdout.write(executable);")"
+          npm run smoke:code-mode-electron-gate-b -- \
+            --electron-executable "$CODE_MODE_GATE_EXECUTABLE" \
+            --output ".lime/qc/gui-evidence/code-mode-electron-gate-b-windows/code-mode-electron-gate-b-summary.json" \
+            --timeout-ms 600000
+
+      - name: Run installed Windows native host Gate B
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          NATIVE_HOST_GATE_EXECUTABLE="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));const executable=summary.evidence?.installation?.executable;if(!executable)throw new Error('Windows Squirrel evidence is missing the installed executable');process.stdout.write(executable);")"
+          node scripts/electron/windows-native-host-gate-b.mjs \
+            --electron-executable "$NATIVE_HOST_GATE_EXECUTABLE" \
+            --evidence-dir ".lime/qc/gui-evidence/windows-native-host-gate-b" \
+            --timeout-ms 120000
+
       - name: Upload Windows Squirrel RC evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -236,6 +264,24 @@ jobs:
           if-no-files-found: warn
           retention-days: ${{ github.event.inputs.retention_days || 7 }}
           path: .lime/qc/gui-evidence/plugin-package-electron-gate-b-windows
+
+      - name: Upload Windows CodeMode Gate B evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lime-windows-code-mode-gate-b-evidence
+          if-no-files-found: warn
+          retention-days: ${{ github.event.inputs.retention_days || 7 }}
+          path: .lime/qc/gui-evidence/code-mode-electron-gate-b-windows
+
+      - name: Upload Windows native host Gate B evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lime-windows-native-host-gate-b-evidence
+          if-no-files-found: warn
+          retention-days: ${{ github.event.inputs.retention_days || 7 }}
+          path: .lime/qc/gui-evidence/windows-native-host-gate-b
 
       - name: Upload Windows test package
         uses: actions/upload-artifact@v4

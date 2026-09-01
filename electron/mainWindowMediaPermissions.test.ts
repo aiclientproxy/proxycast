@@ -5,7 +5,7 @@ import {
 } from "./mainWindowMediaPermissions";
 
 describe("mainWindowMediaPermissions", () => {
-  it("只允许主窗口请求麦克风音频权限", () => {
+  it("只允许主窗口请求音频和视频媒体权限", () => {
     const mainWebContents = { id: 1 };
     const requestWebContents = { id: 1 };
 
@@ -29,7 +29,30 @@ describe("mainWindowMediaPermissions", () => {
         mainWebContents,
         requestWebContents,
         permission: "media",
+        details: { mediaTypes: ["video"] },
+      }),
+    ).toBe(true);
+    expect(
+      shouldAllowMainWindowMediaPermission({
+        mainWebContents,
+        requestWebContents,
+        permission: "camera",
+      }),
+    ).toBe(true);
+    expect(
+      shouldAllowMainWindowMediaPermission({
+        mainWebContents,
+        requestWebContents,
+        permission: "media",
         details: { mediaTypes: ["audio", "video"] },
+      }),
+    ).toBe(true);
+    expect(
+      shouldAllowMainWindowMediaPermission({
+        mainWebContents,
+        requestWebContents,
+        permission: "media",
+        details: { mediaTypes: ["unknown"] },
       }),
     ).toBe(false);
     expect(

@@ -21,6 +21,7 @@ export type InputbarComposerSectionCopyKey =
   | "agentChat.inputbar.planStatus.reasoning.xhigh"
   | "agentChat.inputbar.planStatus.reasoning.max"
   | "agentChat.inputbar.planStatus.reasoning.ultra"
+  | "agentChat.inputbar.planStatus.reasoning.persistent"
   | "agentChat.inputbar.plusMenu.open"
   | "agentChat.inputbar.plusMenu.addFiles"
   | "agentChat.inputbar.plusMenu.attachKnowledge"
@@ -136,6 +137,9 @@ export function buildInputbarComposerSectionCopy(
         xhigh: translate("agentChat.inputbar.planStatus.reasoning.xhigh"),
         max: translate("agentChat.inputbar.planStatus.reasoning.max"),
         ultra: translate("agentChat.inputbar.planStatus.reasoning.ultra"),
+        persistent: translate(
+          "agentChat.inputbar.planStatus.reasoning.persistent",
+        ),
       },
     },
     plusMenu: {

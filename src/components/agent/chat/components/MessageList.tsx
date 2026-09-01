@@ -435,9 +435,11 @@ const MessageListInner: React.FC<MessageListProps> = ({
         >
           <div
             data-testid="message-list-column"
+            data-content-axis="thread"
+            data-layout-density="compact"
             style={{ maxWidth: CONVERSATION_CONTENT_MAX_WIDTH }}
             className={[
-              "mx-auto flex min-h-full w-full flex-col gap-4 py-4",
+              "mx-auto flex min-h-full w-full flex-col gap-3 py-3",
               compactLeadingSpacing ? "pl-2.5 pr-3" : "pl-4 pr-4",
               "justify-start",
             ].join(" ")}
@@ -514,7 +516,7 @@ const MessageListInner: React.FC<MessageListProps> = ({
                         ? "offscreen-deferred"
                         : "tail"
                     }
-                    className="py-2"
+                    className="py-1"
                   >
                     <ConversationTurnTimeline
                       entry={entry}
@@ -589,7 +591,7 @@ const MessageListInner: React.FC<MessageListProps> = ({
                       ? "offscreen-deferred"
                       : "tail"
                   }
-                  className="py-2"
+                  className="py-1"
                 >
                   <div className="space-y-1">
                     {group.messages.map((msg, messageIndex) => (

@@ -2321,7 +2321,7 @@ describe("EmptyState", () => {
       latestCall.onChange("@技能A");
     });
 
-    expect(setInput).not.toHaveBeenCalled();
+    expect(setInput).toHaveBeenCalledWith("@技能A");
 
     const sendButton = container.querySelector(
       'button[title="发送"]',
@@ -2335,6 +2335,11 @@ describe("EmptyState", () => {
     expectEmptyStateSend(onSend, {
       textOverride: "@技能A",
     });
+    const payload = onSend.mock.calls.at(-1)?.[0] as
+      | InputbarSendPayload
+      | undefined;
+    expect(payload?.composerTarget).toBe("start");
+    expect(payload?.composerDraft?.text).toBe("@技能A");
   });
 
   it("应把服务型技能与选择回调透传给 CharacterMention", async () => {

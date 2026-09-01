@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef } from "react";
+import type { ComposerController } from "./ComposerController";
 
 interface BaseComposerRenderContext {
   textareaRef: React.RefObject<HTMLTextAreaElement>;
@@ -15,6 +16,7 @@ export type BaseComposerSendTriggerSource = "button" | "enter" | "ime";
 export interface BaseComposerSendMetadata {
   triggeredAt: number;
   triggerSource: BaseComposerSendTriggerSource;
+  submitTarget?: "start" | "queue" | "steer" | "interrupt" | "command";
 }
 
 export interface BaseComposerProps {
@@ -40,6 +42,7 @@ export interface BaseComposerProps {
   allowSendWhileLoading?: boolean;
   allowEmptySend?: boolean;
   sendOnPointerDown?: boolean;
+  controller?: ComposerController;
   children: (context: BaseComposerRenderContext) => React.ReactNode;
 }
 
@@ -66,6 +69,7 @@ export const BaseComposer: React.FC<BaseComposerProps> = ({
   allowSendWhileLoading = false,
   allowEmptySend = false,
   sendOnPointerDown = false,
+  controller,
   children,
 }) => {
   const internalTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -203,6 +207,42 @@ export const BaseComposer: React.FC<BaseComposerProps> = ({
         return;
       }
 
+      if (
+        controller &&
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        (event.key === "ArrowUp" || event.key === "ArrowDown")
+      ) {
+        const atHistoryBoundary =
+          event.key === "ArrowUp"
+            ? event.currentTarget.selectionStart === 0 &&
+              event.currentTarget.selectionEnd === 0
+            : event.currentTarget.selectionStart === event.currentTarget.value.length &&
+              event.currentTarget.selectionEnd === event.currentTarget.value.length;
+        if (atHistoryBoundary) {
+          const recalled = controller.recallHistory(
+            event.key === "ArrowUp" ? "previous" : "next",
+          );
+          if (recalled) {
+            event.preventDefault();
+            setText(recalled.text);
+            window.requestAnimationFrame(() => {
+              const textarea = textareaRef.current;
+              if (!textarea) {
+                return;
+              }
+              textarea.setSelectionRange(
+                recalled.selectionStart,
+                recalled.selectionEnd,
+              );
+            });
+          }
+          return;
+        }
+      }
+
       if (event.key === "Enter" && sendOnEnter && !event.shiftKey) {
         const triggeredAt = Date.now();
         event.preventDefault();
@@ -226,6 +266,7 @@ export const BaseComposer: React.FC<BaseComposerProps> = ({
     },
     [
       canSend,
+      controller,
       deferSendOnEnter,
       isFullscreen,
       isImeComposing,
@@ -233,6 +274,8 @@ export const BaseComposer: React.FC<BaseComposerProps> = ({
       onKeyDown,
       onSend,
       sendOnEnter,
+      setText,
+      textareaRef,
     ],
   );
 
@@ -254,14 +297,53 @@ export const BaseComposer: React.FC<BaseComposerProps> = ({
     });
   }, [sendOnEnter]);
 
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      onPaste?.(event);
+      if (event.defaultPrevented || !controller) {
+        return;
+      }
+
+      const pasted = event.clipboardData.getData("text");
+      if (!pasted) {
+        return;
+      }
+
+      event.preventDefault();
+      controller.ingestPaste(pasted, {
+        platform:
+          typeof navigator !== "undefined" && /Win/i.test(navigator.platform)
+            ? "windows"
+            : typeof navigator !== "undefined" &&
+                /Mac/i.test(navigator.platform)
+              ? "macos"
+              : "unknown",
+      });
+      setText(controller.getSnapshot().document.text);
+    },
+    [controller, onPaste, setText],
+  );
+
   const textareaProps: React.TextareaHTMLAttributes<HTMLTextAreaElement> = {
     id: textareaId,
     name: "agent-chat-message",
     value: text,
-    onChange: (event) => setText(event.target.value),
+    onChange: (event) => {
+      controller?.setText(event.target.value, {
+        start: event.target.selectionStart,
+        end: event.target.selectionEnd,
+      });
+      setText(event.target.value);
+    },
     onKeyDown: handleKeyDown,
     onCompositionEnd: handleCompositionEnd,
-    onPaste,
+    onSelect: (event) => {
+      controller?.setSelection(
+        event.currentTarget.selectionStart,
+        event.currentTarget.selectionEnd,
+      );
+    },
+    onPaste: handlePaste,
     placeholder,
     disabled,
     rows,

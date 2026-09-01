@@ -165,6 +165,11 @@ describe("AgentThreadTimeline", () => {
     ).toBeNull();
     expect((container.textContent?.split("思考中").length ?? 1) - 1).toBe(1);
     expect(container.textContent).toContain(reasoningText);
+    expect(
+      container
+        .querySelector('[data-testid="agent-thread-flow"]')
+        ?.getAttribute("data-layout-density"),
+    ).toBe("compact");
   });
   it("已完成的单条思考应默认只保留摘要，展开后再显示完整正文", () => {
     const reasoningText =

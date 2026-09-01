@@ -295,6 +295,8 @@ export const METHOD_PROJECT_MATERIAL_LIST = "projectMaterial/list";
 export const METHOD_PROJECT_MATERIAL_UPDATE = "projectMaterial/update";
 export const METHOD_PROJECT_MATERIAL_UPLOAD = "projectMaterial/upload";
 export const METHOD_PROJECT_MEMORY_READ = "projectMemory/read";
+export const METHOD_PROMPT_HISTORY_APPEND = "promptHistory/append";
+export const METHOD_PROMPT_HISTORY_READ = "promptHistory/read";
 export const METHOD_REVIEW_START = "review/start";
 export const METHOD_SCHEDULED_TASK_CHANGED = "scheduledTask/changed";
 export const METHOD_SCHEDULED_TASK_CREATE = "scheduledTask/create";
@@ -1419,6 +1421,14 @@ export const GENERATED_APP_SERVER_METHODS = [
   {
     kind: "request",
     method: "projectMemory/read",
+  },
+  {
+    kind: "request",
+    method: "promptHistory/append",
+  },
+  {
+    kind: "request",
+    method: "promptHistory/read",
   },
   {
     kind: "request",
@@ -4500,6 +4510,16 @@ export type ClientRequest =
     }
   | {
       id: number | string;
+      method: "promptHistory/read";
+      params: PromptHistoryReadParams;
+    }
+  | {
+      id: number | string;
+      method: "promptHistory/append";
+      params: PromptHistoryAppendParams;
+    }
+  | {
+      id: number | string;
       method: "project/list";
       params: ProjectListParams;
     }
@@ -7304,6 +7324,8 @@ export type Method =
   | "project/move"
   | "project/read"
   | "project/update"
+  | "promptHistory/append"
+  | "promptHistory/read"
   | "review/start"
   | "skills/config/write"
   | "skills/extraRoots/set"
@@ -8410,6 +8432,37 @@ export interface ProjectUpdateParams {
 
 export interface ProjectUpdateResponse {
   project: Project;
+}
+
+export interface PromptHistoryAppendParams {
+  sessionId: string;
+  text: string;
+}
+
+export interface PromptHistoryAppendResponse {
+  entry: PromptHistoryEntry;
+  entryCount: number;
+  logId: string;
+}
+
+export interface PromptHistoryEntry {
+  offset: number;
+  sessionId: string;
+  text: string;
+  ts: number;
+}
+
+export interface PromptHistoryReadParams {
+  cursor?: null | string;
+  limit?: number | null;
+  logId?: null | string;
+}
+
+export interface PromptHistoryReadResponse {
+  data: PromptHistoryEntry[];
+  entryCount: number;
+  logId: string;
+  nextCursor?: null | string;
 }
 
 export type ProtocolKind =

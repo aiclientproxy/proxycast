@@ -9,10 +9,14 @@ const DEFAULT_CODEX_OPENAI_MODELS_SOURCE =
   "/Users/coso/Documents/dev/rust/codex/codex-rs/protocol/src/openai_models.rs";
 const DEFAULT_CODEX_TURN_CONTEXT_SOURCE =
   "/Users/coso/Documents/dev/rust/codex/codex-rs/core/src/session/turn_context.rs";
+const DEFAULT_CODEX_STEP_SETTINGS_SOURCE =
+  "/Users/coso/Documents/dev/rust/codex/codex-rs/core/src/session/step_settings.rs";
 const CODEX_OPENAI_MODELS_SOURCE =
   env.CODEX_OPENAI_MODELS_SOURCE ?? DEFAULT_CODEX_OPENAI_MODELS_SOURCE;
 const CODEX_TURN_CONTEXT_SOURCE =
   env.CODEX_TURN_CONTEXT_SOURCE ?? DEFAULT_CODEX_TURN_CONTEXT_SOURCE;
+const CODEX_STEP_SETTINGS_SOURCE =
+  env.CODEX_STEP_SETTINGS_SOURCE ?? DEFAULT_CODEX_STEP_SETTINGS_SOURCE;
 
 const CODEX_REASONING_EFFORT_VALUES = [
   "none",
@@ -23,6 +27,7 @@ const CODEX_REASONING_EFFORT_VALUES = [
   "xhigh",
   "max",
   "ultra",
+  "persistent",
 ];
 
 const CODEX_REASONING_MODEL_INFO_FIELDS = [
@@ -82,10 +87,7 @@ function extractConstStringArray(source: string, name: string): string[] {
 function extractTypeFieldNames(source: string, name: string): string[] {
   const body = requireMatch(
     source,
-    new RegExp(
-      `export interface ${name} \\{\\n(?<body>[\\s\\S]*?)\\n\\}`,
-      "u",
-    ),
+    new RegExp(`export interface ${name} \\{\\n(?<body>[\\s\\S]*?)\\n\\}`, "u"),
     name,
   );
   return [...body.matchAll(/^\s{2}([a-zA-Z_][a-zA-Z0-9_]*)\??:/gmu)].map(
@@ -128,13 +130,11 @@ describe("Codex model reasoning policy origin", () => {
       return;
     }
 
-    expect(
-      extractRustEnumWireValues(codexSource, "ReasoningEffort"),
-    ).toEqual(CODEX_REASONING_EFFORT_VALUES);
-    expect(codexSource).toContain("Self::Custom(effort)");
-    expect(codexSource).toContain(
-      "reasoning_effort must not be empty",
+    expect(extractRustEnumWireValues(codexSource, "ReasoningEffort")).toEqual(
+      CODEX_REASONING_EFFORT_VALUES,
     );
+    expect(codexSource).toContain("Self::Custom(effort)");
+    expect(codexSource).toContain("reasoning_effort must not be empty");
   });
 
   it("ModelReasoningPolicyInput 只接收 Codex ModelInfo reasoning 字段", () => {
@@ -170,21 +170,28 @@ describe("Codex model reasoning policy origin", () => {
     expect(limeSource).toContain("return policy.default_reasoning_level");
 
     const codexTurnContextSource = readIfExists(CODEX_TURN_CONTEXT_SOURCE);
-    if (!codexTurnContextSource) {
+    const codexStepSettingsSource = readIfExists(CODEX_STEP_SETTINGS_SOURCE);
+    if (!codexTurnContextSource && !codexStepSettingsSource) {
       return;
     }
 
-    expect(codexTurnContextSource).toContain(
-      ".or_else(|| self.model_info.default_reasoning_level.clone())",
-    );
+    expect(
+      codexStepSettingsSource?.includes(
+        ".or(self.model_info.default_reasoning_level.as_ref())",
+      ) ||
+        codexTurnContextSource?.includes(
+          ".or_else(|| self.model_info.default_reasoning_level.clone())",
+        ) ||
+        codexTurnContextSource?.includes(
+          ".or_else(|| model_info.default_reasoning_level.clone())",
+        ),
+    ).toBe(true);
   });
 
   it("切模型 reasoning effort 沿用 Codex：保留受支持 current，否则取 supported 中位数再 fallback default", () => {
     const limeSource = readRepoFile(LIME_REASONING_POLICY_SOURCE);
 
-    expect(limeSource).toContain(
-      "Math.floor((supported.length - 1) / 2)",
-    );
+    expect(limeSource).toContain("Math.floor((supported.length - 1) / 2)");
     expect(limeSource).toContain(
       "middleSupportedEffort(policy) ?? policy.default_reasoning_level",
     );
@@ -195,7 +202,7 @@ describe("Codex model reasoning policy origin", () => {
     }
 
     expect(codexTurnContextSource).toContain(
-      "supported_reasoning_levels.contains(&current_reasoning_effort)",
+      "supported_reasoning_levels.contains(current_reasoning_effort)",
     );
     expect(codexTurnContextSource).toContain(
       ".get(supported_reasoning_levels.len().saturating_sub(1) / 2)",

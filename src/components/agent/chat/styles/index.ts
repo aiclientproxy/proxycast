@@ -102,7 +102,7 @@ export const MessageWrapper = styled.div<{
   align-items: flex-start;
   justify-content: ${({ $isUser }) => ($isUser ? "flex-end" : "flex-start")};
   padding: ${({ $compactLeadingSpacing }) =>
-    $compactLeadingSpacing ? "8px 2px" : "8px 4px"};
+    $compactLeadingSpacing ? "6px 2px" : "6px 4px"};
   gap: 0;
   width: 100%;
   max-width: none;

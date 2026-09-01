@@ -16,15 +16,15 @@ use app_server_protocol::protocol::v2::{
     METHOD_THREAD_LIST, METHOD_THREAD_TURNS_LIST,
 };
 use app_server_protocol::{
-    METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_RESUME,
-    METHOD_THREAD_START, METHOD_TURN_START, error_codes,
+    error_codes, METHOD_INITIALIZE, METHOD_INITIALIZED, METHOD_THREAD_READ, METHOD_THREAD_RESUME,
+    METHOD_THREAD_START, METHOD_TURN_START,
 };
 use async_trait::async_trait;
 use model_provider::current_client::{
     CurrentProviderContent, CurrentProviderMessage, CurrentProviderRole,
 };
-use rusqlite::{Connection, params};
-use serde_json::{Value, json};
+use rusqlite::{params, Connection};
+use serde_json::{json, Value};
 use tempfile::TempDir;
 use tokio::sync::Notify;
 use tokio::time::timeout;
@@ -324,13 +324,7 @@ async fn thread_fork_preserves_paginated_history_boundary_across_restart() {
         target_read.pointer("/result/thread/name"),
         Some(&json!(SOURCE_TITLE))
     );
-    let listed = request(
-        &server,
-        8,
-        METHOD_THREAD_LIST,
-        json!({"archived": false}),
-    )
-    .await;
+    let listed = request(&server, 8, METHOD_THREAD_LIST, json!({"archived": false})).await;
     let listed_threads = listed["result"]["data"]
         .as_array()
         .expect("thread/list data");
@@ -859,14 +853,12 @@ async fn thread_fork_rebuilds_provider_history_across_restarts_without_duplicate
         .as_str()
         .and_then(|uri| uri.strip_prefix("sidecar://media/"))
         .expect("canonical input media URI");
-    assert!(
-        sidecar_root
-            .join("sessions")
-            .join(&target_thread_id)
-            .join("media")
-            .join(canonical_file_name)
-            .is_file()
-    );
+    assert!(sidecar_root
+        .join("sessions")
+        .join(&target_thread_id)
+        .join("media")
+        .join(canonical_file_name)
+        .is_file());
     drop(server);
 
     let restarted = AppServer::with_runtime(runtime());
@@ -973,11 +965,9 @@ fn assert_canonical_multimodal_input(content: &Value) {
     assert_eq!(parts[1]["type"], "image");
     assert_eq!(parts[1]["url"], "https://example.com/remote.png");
     assert_eq!(parts[2]["type"], "image");
-    assert!(
-        parts[2]["url"]
-            .as_str()
-            .is_some_and(|url| url.starts_with("sidecar://media/input-") && url.ends_with(".png"))
-    );
+    assert!(parts[2]["url"]
+        .as_str()
+        .is_some_and(|url| url.starts_with("sidecar://media/input-") && url.ends_with(".png")));
     assert!(parts[2].get("path").is_none());
     assert_eq!(parts[3]["type"], "skill");
     assert_eq!(parts[4]["type"], "mention");

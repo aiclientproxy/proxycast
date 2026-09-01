@@ -3,7 +3,7 @@
 > status: active / D0-desktop-baseline-blocked -> D2-D3-complete -> D4-multi-agent-durable-complete -> D4-windows-enforcement-phase
 > owner: agent-ui + app-server
 > started: 2026-07-18
-> last reviewed: 2026-08-31
+> last reviewed: 2026-09-01
 > target: Codex App GUI interaction model
 > backend reference: `/Users/coso/Documents/dev/rust/codex/codex-rs`
 > architecture baseline: `internal/aiprompts/architecture.md`
@@ -29,7 +29,7 @@ Codex App 只作为 GUI 信息架构和交互层级参考；后端 Thread/Turn/I
 
 - 当前阶段：`D2 Environment and lifecycle`、`D3 Runtime surfaces`、D4 ThreadStore、Permission Policy 和 Multi-Agent durable semantics 均已完成。Environment/status、Changes、Thread lifecycle、Thread Activity、Skills/MCP change、240 Turn / 720 Item 长历史和进程级冷启动恢复都有真实 Electron Gate B；canonical rollout 已补 crash-tail byte-offset repair、sequence gap continuation 和同步 writer teardown/discard 证据；Thread 创建、Turn 启动、settings mutation、GUI 提交前 catalog 查询以及 AgentControl child resume 共用 current App Server/runtime/read-model 链；Codex Desktop 实时窗口读取仍因 macOS AppleEvent / Computer Use 超时停留在 D0 blocked。
 - 已确认 current：Fork 从 canonical `thread/fork` response 继承标题、cwd 与 `forkedFromId`；Renderer 只把该摘要用于即时侧栏投影，随后仍由 `thread/read|resume|list` 收敛。paginated Fork、archive/unarchive、revert、turn start/steer/interrupt 和冷启动恢复均沿同一 Thread/Turn/Item identity，未新增第二套 metadata fallback、history store、legacy wrapper 或生产 mock。
-- 下一刀：进入 `D4 Runtime parity` 的真实 Windows packaged enforcement 与 ACL/ConPTY/网络隔离证据；custom permission profile、deny-read 与 MDM/project-local requirements 保持 product-scope excluded，除非先建立真实 consumer 和唯一 owner。
+- 下一刀：完成 `D4 Runtime parity` 的 Windows packaged sidecar/runtime 与 Gate B 证据。真实 `windows-2022` CI 已证明 ACL/ConPTY/网络隔离安全矩阵；custom permission profile、deny-read 与 MDM/project-local requirements 保持 product-scope excluded，除非先建立真实 consumer 和唯一 owner。
 - 本轮收口写集：`lime-rs/crates/app-server/src/permission_profile.rs`、`processor/{permission_profile,thread,turn}.rs`、`runtime/session_operations.rs`、`tests/permission_profile_jsonrpc.rs`、`src/lib/api/permissionProfiles*`、`src/components/agent/chat/hooks/{agentStreamPreparedSendEnv,agentStreamUserInputSubmission,agentStreamSubmitExecution,useAgentStream,useAgentChat}*`、`internal/aiprompts/commands.md` 与本执行计划；D4 Multi-Agent 追加 `lime-rs/crates/app-server/src/runtime/agent_control.rs`、`runtime/tests/agent_control/restart.rs`、`tests/thread_direct_input_policy_jsonrpc.rs` 和 `scripts/agent-runtime/tool-execution-managed-smoke.mjs`；未新增协议 method、Electron 业务命令、GUI 状态或权限 compat API。
 - 避让：其余 MCP、Right Surface、Claw fixture 热区和未跟踪参考文件 `local-conversation-page-B5LUHmAw.js` 均只读。
 
@@ -47,7 +47,7 @@ Codex App 只作为 GUI 信息架构和交互层级参考；后端 Thread/Turn/I
 - `AgentChatWorkspace.tsx` 已拆分为 13 行入口；主要编排已下沉到 `WorkspaceConversationScene.tsx`（692 行）和相关 hooks，后续重点是减少 scene 层状态竞争，而不是继续堆叠入口文件。
 - `TaskCenterUtilityToolbar.tsx` 当前约 853 行，仍同时拥有环境读取、任务轨道、App 打开和多个 panel 控制，接近非生成文件 800 行拆分阈值。
 - 全局 App Sidebar 是 Codex App 风格的稳定一级导航，应继续保留；当前 Thread 缺少稳定、紧凑的页头主对象，工作区内部也需避免再造第二套左侧会话导航。
-- 首页首屏仍是皮肤 Hero、营销文案和技能入口，和 Codex App 的任务工作区心智不一致。
+- 首页首屏的皮肤 Hero、Banner、营销文案和技能入口按用户裁决保留，不纳入 Codex App 对齐范围；Codex 对齐只作用于已进入 Thread 的工作区。
 - 环境、计划、审批、运行状态同时出现在 Toolbar popover、Inputbar、Timeline、Harness、Canvas session view 等多套 surface。
 - GUI 仍有大量 `agentSession/event/*` 绑定和历史 fixture；Codex-rs current 写链应以 `thread/*`、`turn/*` 为准，`agentSession/event` 只能作为受控旁路诊断，不能成为 GUI 生命周期事实源。Codex 的 `thread/rollback` 已 deprecated，Lime GUI current 以 `thread/revert` 为准。
 
@@ -81,7 +81,7 @@ Codex App 只作为 GUI 信息架构和交互层级参考；后端 Thread/Turn/I
 
 | 领域                  | Codex-rs 参考能力                                                                                                                 | Lime current                                                                                                                                    | 尚未对齐                                                                                                                                       | owner / 优先级                    |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| Windows sandbox       | restricted token、ACL/DACL read-back、ConPTY、Job Object、网络隔离和 packaged resource 守卫                                       | `windowsSandbox/setupStart` 等协议与 `tool-runtime::windows_setup` 已有                                                                         | 真实 Windows/MSVC enforcement、审计和 Gate B evidence 未完成                                                                                   | tool-runtime + app-server / P0    |
+| Windows sandbox       | restricted token、ACL/DACL read-back、ConPTY、Job Object、网络隔离和 packaged resource 守卫                                       | `windowsSandbox/setupStart` 等协议与 `tool-runtime::windows_setup` 已有；真实 `windows-2022` CI security matrix 与 provision 7/7 通过 | packaged sidecar/runtime 全路径与 Windows Electron Gate B 尚未完成                                                                                 | tool-runtime + app-server / P0    |
 | Permission profile    | config layer/managed requirements、动态 allowed、custom profile、deny-read 和 cwd 解析                                            | 三个内置 profile、动态 `allowed`、cwd 物化、全局 sandbox config/platform/setup readiness、Thread/Turn/settings lowering 与 GUI 提交前查询已实现 | custom profile、deny-read、MDM/project-local requirements 与真实 Windows packaged enforcement 未实现；cwd 没有 project-local policy layer      | app-server + tool-runtime / P1    |
 | ThreadStore lifecycle | live writer、flush/shutdown/discard、history materialization、latest model context、paginated fork lineage、ordinal/offset repair | canonical SQLite projection、sequence/cursor、revert、paginated Fork、干净重启和 crash-tail repair 已有                                         | 已完成：合法 unterminated record 保留、非法尾部按 byte offset 截断、sequence gap 续写、中段损坏 fail closed；同步 writer 无额外 pending buffer | thread-store + app-server / done  |
 | Multi-Agent           | parent-child registry、resident unload/reload、execution limiter、control tools、durable graph/mailbox                            | graph、mailbox、control gateway、activity projection、parent-owned child canonical resume、capacity/residency cold restart 均有受控 fixture 与 Gate B | 真实 Windows packaged enforcement 与跨平台资源限制仍待平台证据；Multi-Agent current 语义本身已收口                                      | agent-runtime + thread-store / done |
@@ -99,7 +99,7 @@ Codex App 只作为 GUI 信息架构和交互层级参考；后端 Thread/Turn/I
 | done   | ThreadStore 崩溃恢复       | partial JSONL、byte offset/sequence gap repair、同步 writer close 与 delete/discard 已由 D4 第一阶段收口                        | thread-store + App Server       |
 | P1     | Composer 稳定              | 首页与会话输入区形态、装饰和高度变化明显；运行态/排队态入口分散                                                                 | command model                   |
 | P2     | 产品/诊断分层              | Harness、Trace、Shell、Browser、Workbench 在主 Toolbar 近似等权                                                                 | 右侧 surface catalog            |
-| P2     | 首页对齐任务产品           | Hero 和技能陈列压过新任务输入，不像工作型桌面应用                                                                               | shell/navigation                |
+| excluded | 首页 Banner / 皮肤 Hero | 按用户裁决保留现有首页视觉，不纳入 Codex App 对齐范围                                                                                 | product scope                  |
 
 ## 5. 实施切片
 
@@ -272,8 +272,8 @@ npm run smoke:agent-runtime-current-fixture
 ## 8. 完成度
 
 - 源码与静态打包资源差距审计：100%；真实 Codex Desktop 视觉基线：0%（D0 受 accessibility blocker 阻塞）。
-- GUI 对齐实现：D1、D2、D3 已完成；D4 ThreadStore、Permission provenance/settings mutation、动态 policy producer 与 Multi-Agent durable semantics 均已完成，D0 真实视觉基线和 Windows 平台 enforcement 未完成。
-- 当前总完成度：86%。D2/D3 已证明 lifecycle、Activity、MCP/Skills change、长历史分页/有界首帧和进程级冷启动恢复；D4 已补 crash-tail repair、同步 writer lifecycle、动态 permission policy，以及 AgentControl parent-child 的 canonical resume、ack/retry、capacity/residency 和 cold-restart 证据；D0 实时视觉基线与 Windows packaged enforcement 仍未完成。
+- GUI 对齐实现：D1、D2、D3 已完成；D4 ThreadStore、Permission provenance/settings mutation、动态 policy producer 与 Multi-Agent durable semantics 均已完成；Windows restricted execution security matrix 已取得真实 CI evidence，但 packaged sidecar/runtime 与 D0 真实视觉基线仍未完成。
+- 当前总完成度：86%。D2/D3 已证明 lifecycle、Activity、MCP/Skills change、长历史分页/有界首帧和进程级冷启动恢复；D4 已补 crash-tail repair、同步 writer lifecycle、动态 permission policy，以及 AgentControl parent-child 的 canonical resume、ack/retry、capacity/residency 和 cold-restart 证据；Windows 安全矩阵已在真实 Windows/MSVC runner 通过，packaged enforcement 与 D0 实时视觉基线仍未完成。
 
 ## 9. 架构图确认
 
@@ -339,7 +339,7 @@ npm run smoke:agent-runtime-current-fixture
 
 - Codex Desktop 实时窗口读取当前因 macOS AppleEvent 超时（`-1743`）未完成；在 D0 解除前，静态 `app.asar` 证据只可用于信息架构假设，不能作为视觉验收或 Gate B。
 - 已安装客户端实际版本和资源路径已记录，但不把其远程/cloud/PR 能力自动移入 Lime scope。
-- Environment/Changes/lifecycle 已由 D2 收口；MCP subscriptions/list_changed、Skills change、SubAgent Activity 和长历史干净进程重启已由 D3 收口；ThreadStore crash recovery/writer lifecycle 与动态 permission policy 已由 D4 前三阶段收口。Windows sandbox 与 Multi-Agent durable semantics 仍是 D4 跨层差距，不能通过 GUI 文案宣称完成。
+- Environment/Changes/lifecycle 已由 D2 收口；MCP subscriptions/list_changed、Skills change、SubAgent Activity 和长历史干净进程重启已由 D3 收口；ThreadStore crash recovery/writer lifecycle、动态 permission policy 与 Multi-Agent durable semantics 已由 D4 收口。Windows security matrix 已有真实 CI evidence，但 packaged sidecar/runtime 与 Electron Gate B 仍是 D4 跨层差距，不能通过 GUI 文案宣称完成。
 
 ### 13.5 计划完成标准
 
@@ -506,3 +506,133 @@ D0-D4 的退出条件全部满足，Gate A 与真实 Electron Gate B 证据可�
 - 真实 Electron Gate B：`codex-app-gui-d4-agent-control-cold-restart-final.json` 证明 child 在 Electron 进程替换后通过 `thread/resume` 保持 identity、Activity 和只读 composer；`codex-app-gui-d4-agent-control-capacity-final.json` 证明并发 child 数量限制和拒绝路径；`codex-app-gui-d4-agent-control-residency-final.json` 证明 terminal slot reuse、LRU cold reload、follow-up 复用既有 child identity。三组均为 `status=pass`、真实 `electron-ipc`、console/invoke error 为 0、生产 mock fallback 为 0。
 - 诊断与治理：managed smoke 仅增加 invoke error 与 parent-owned child raw `thread/resume` probe 的失败诊断，不改变生产协议或 GUI 行为；`agent-control`、Thread/Turn/Item projection、activity 和 durable graph/mailbox 均保持 `current`，未新增 `compat/deprecated/dead`。首次 residency 运行有一次 child wait 时序失败，重跑后完整 Gate B 通过，证据以独立输出路径保存。
 - 边界与完成度：Multi-Agent durable ack/retry/residency 阶段标记完成，整体约 86%。本阶段为 macOS 受控 fixture，不宣称真实 Windows/MSVC packaged enforcement、live provider 或 Codex Desktop 实时视觉；下一刀为 Windows sandbox/ACL/ConPTY/网络隔离平台证据，D0 AppleEvent `-1743` 仍保持 blocked。
+
+## 30. 2026-08-31 D4 Windows enforcement 阶段进展与 packaged 阻塞
+
+- 现状审阅：`tool-runtime::windows_setup` 已包含账户/DPAPI artifact、ACL/DACL、重解析点拒绝、默认读取权限、Firewall/WFP、ConPTY、Job Object 与 packaged sidecar 路径；`windows_restricted_execution` 集成矩阵覆盖 workspace 写入边界、offline 网络隔离、输出上限、stdin、ConPTY、Everyone 可写 ACL 审计和进程树终止。
+- 真实 Windows CI evidence：workflow run `33348108423` 的 `Windows Shell Runtime`（`windows-2022`、MSVC）已完成 provision 与安全矩阵，`summary.json` 为 `platform=win32`、`result=pass`、`setup.result=pass`、`tests.passed=7`、`matrix.complete=true`、`blockers=[]`。证据已归档到 `.lime/qc/windows-restricted-execution/github-33348108423/`，覆盖账户/ACL/网络规则、7 项 restricted execution 测试及 stdout/stderr；该证据证明安全 enforcement，不等价于 Electron packaged Gate B。
+- 本机与前置回归：`npm run test:rust:unit -- -p tool-runtime windows_setup::tests` 通过 7/7，`npm run test:contracts`、`npm run typecheck`、`npm run i18n:check:json`、全量 ESLint、`npm run governance:legacy-report` 与 `npm run verify:gui-smoke` 均通过；本次 Electron smoke evidence 为 `.lime/qc/project-gates/standalone-shell-01-20260831023247-8207/shell-01-electron-smoke/summary.json`。hook 定向测试 37/37 通过；macOS evidence runner 的 `.lime/qc/windows-restricted-execution/codex-app-gui-d4-windows-final.json` 仍正确保持 `evidence-pending`，没有伪造平台结果。
+- 当前边界：run `33348108423` 已最终为 `failure`：`Windows Shell Runtime` 在 `Prepare sherpa-onnx runtime` 阶段被取消，Windows sidecar build、shell fallback、timeout、file browser 与 Agent Plugin MCP parity 均未执行；该旧 run 的 Frontend Full 也曾因 `useAgentRuntimeSyncEffects.ts:634` React Hook dependency 缺失而失败，当前工作树已补齐依赖且本地全量 ESLint 通过。packaged enforcement 继续保持 OPEN_REF，不进入 release evidence；D0 Codex Desktop 实时视觉仍因 macOS AppleEvent `-1712/-1743` blocked。完成度保持 86%，下一步是修复 Windows runner 的 sherpa-onnx 准备阶段并取得 packaged sidecar/runtime 的真实证据。
+
+## 31. 2026-08-31 D1 Thread 阅读列宽度与密度收口
+
+- 用户反馈与根因：对照 Codex Desktop Thread 页面时，assistant 正文和过程时间线没有落在同一内容轴；原 `CONVERSATION_CONTENT_TARGET_WIDTH` 使用 `68%`，嵌套在外层 `720px` 上限后会让正文实际收缩到约 `640px`，而过程摘要仍按外层列宽展开，形成右侧错位。历史过程块的纵向间距也明显松于 Codex Desktop。
+- 实现：在既有 `conversationLayoutTokens` owner 内将目标宽度收敛为 `clamp(640px, 100%, 720px)`，让外层 workspace 负责上限、正文与时间线共同填充内容列；`MessageList`、inline/floating composer 继续复用同一 token。消息列和 turn 间距收紧为 `gap-3/py-3`、`py-1`，过程摘要、思考详情、工具行、计划行统一为紧凑纵向节奏；新增 `data-content-axis="thread"` 与 `data-layout-density="compact"` 作为稳定 DOM 回归标记。
+- 写集：`conversationLayoutTokens.ts`、`styles/index.ts`、`MessageList.tsx`、`AgentThreadTimeline.tsx`、`AgentThreadTimelineItemRenderers.tsx`、`StreamingProcessGroup.tsx` 及对应布局/思考测试；未新增协议、命令、runtime owner 或生产 mock。
+- 稳定回归：`MessageList.test.tsx` 20/20、`AgentThreadTimeline.reasoning.test.tsx` 15/15，共 35/35；断言单一内容轴、紧凑密度、assistant 宽度 token、过程详情收纳和历史首帧布局。
+- 跨层验证：`npm run lint`、`npm run typecheck`、`npm run test:contracts`、`npm run i18n:check:json`、`npm run verify:gui-smoke` 与 `git diff --check` 均通过。最新真实 Electron shell evidence 为 `.lime/qc/project-gates/standalone-shell-01-20260831033444-66411/shell-01-electron-smoke/summary.json`，`result=pass`、`proofLevel=Gate B-F`、console/page/preload/invoke/trace/legacy/mock 错误均为 0；Thread fixture 的 DOM geometry 已确认 assistant 与过程时间线同为约 `680px`。
+- 视觉与证据边界：本轮遵循 Thread 工作区“单一主阅读列、信息优先、紧凑时间线、composer 与正文复用内容轴”的 Lime 规则；当前主对象为 active Thread，阶段为阅读/执行中，下一步由既有 composer/action slot 承接。Codex Desktop 实时窗口仍受 macOS AppleEvent `-1712/-1743` 阻塞，因此不宣称 D0 实时视觉验收；整体计划完成度保持 86%，D1 该增量已完成，Windows packaged enforcement 仍为 OPEN_REF。
+
+## 32. 2026-08-31 D4 Windows Sherpa 准备阶段收口
+
+- 根因与范围：Windows `windows_shell_runtime` 在 Sherpa 预置运行时阶段曾被取消，后续 sidecar 构建和 packaged Gate B 未执行。本轮只修复准备脚本的跨平台下载/解压边界，不改变 Windows sandbox owner、协议或 GUI；首页 Banner / 皮肤 Hero 仍保留且不纳入对齐。
+- 实现：`prepare-sherpa-onnx-runtime.mjs` 在 Windows 使用明确的 `curl.exe`，下载写入 `.part` 后原子重命名，并设置 5 分钟进程级下载超时；Windows 解压按 `7z`、系统 7-Zip 路径、`tar` 顺序尝试，每个 extractor 设置 120 秒超时，失败时清理目标目录并 fail closed。既有 macOS `tar` 与 Mach-O rpath 路径保持不变。
+- 稳定回归：`scripts/prepare-sherpa-onnx-runtime.test.mjs` 15/15，覆盖 Windows `curl.exe` 下载命令、`.part` 临时文件、7-Zip/tar 回退及驱动器路径；`scripts/electron/verify-package-resources.test.mjs` 与 `scripts/electron/release-workflow-guard.test.mjs` 共 48/48；Prettier、Node syntax check 与 `git diff --check` 通过。
+- 跨层回归：`npm run governance:scripts`、`npm run test:contracts`（299 checks）、`npm run typecheck`、`npm run lint` 与 `npm run verify:gui-smoke` 均通过；最新 Electron shell evidence 为 `.lime/qc/project-gates/standalone-shell-01-20260831053656-76569/shell-01-electron-smoke/summary.json`，`result=pass`、21/21 assertions，console/page/preload/invoke、renderer crash/unresponsive、legacy/mock fallback 均为 0，Renderer、preload、IPC、App Server 初始化和重载均正常。
+- 当前 macOS packaged 复核：隔离目录 `.tmp/codex-alignment-packaged-current-20260831` 通过 `verify-package-resources.mjs --platform darwin --arch arm64`；`codesign --verify --deep --strict`、主包/Helper identity、`app-server` 与 `code-mode-host` 资源完整。`npm run smoke:app-server-packaged-external-backend-failure` 通过，证明 packaged external backend 在部分输出后以结构化失败收口。
+- 证据边界：当前只能证明本地脚本契约和既有 macOS packaged/resource 检查；真实 Windows runner 需要重新执行 `windows-2022` 的 Sherpa、sidecar build、Windows Squirrel 安装与 Electron Gate B，不能用本机结果替代。D0 Codex Desktop 实时窗口仍因 AppleEvent `-1712/-1743` blocked；计划整体仍保持约 86%，Windows packaged enforcement 为 OPEN_REF。
+
+## 33. 2026-08-31 本地门禁复核与外部基线阻塞
+
+- 本轮复核：`npm run verify:local` 已通过版本一致性、i18n 检查、全量 ESLint 和类型检查，随后在 Vitest 第 26/118 批次停止；失败测试为 `scripts/harness/deepswe-benchmark.test.mjs`，夹具仍写死 `deepswe-current-chain-adapter-v6`，而 current owner `deepswe-adapter-core.mjs` 已要求 `v7`，导致 `infraValid=false`。该漂移不在本轮写集，未修改 DeepSWE owner 或测试。
+- 受影响范围的独立证据：Thread 布局/密度测试 35/35、Sherpa 准备脚本测试 15/15、`npm run test:contracts` 299 checks 通过；最新 `npm run verify:gui-smoke` 为 Gate B-F、21/21 assertions，通过证据为 `.lime/qc/project-gates/standalone-shell-01-20260831064342-75335/shell-01-electron-smoke/summary.json`；`git diff --check` 无错误。失败仅阻断完整 `verify:local`，不改变本轮 GUI/Sherpa 定向结论。
+- CI 状态：`gh run list` 未发现新的 Windows runner；`33348108423` 仍是旧 run，Windows `Prepare sherpa-onnx runtime` 被取消，未产生 packaged sidecar/runtime 或 Electron Gate B 证据。未未经确认触发 workflow。
+- 下一步与边界：由责任开发者在 `windows-2022` 重新执行 Sherpa、sidecar、Squirrel 安装和 Electron Gate B；Codex Desktop 实时窗口继续受 AppleEvent `-1712/-1743` 阻塞。整体完成度保持约 86%，Windows packaged enforcement 与 D0 视觉基线仍为 `OPEN_REF`。
+
+## 34. 2026-08-31 DeepSWE 契约收口与治理基线阻塞
+
+- 修复：current adapter 已升级为 `deepswe-current-chain-adapter-v7`，同步更新 `internal/test/deepswe-coding-slice-v2.json`、`deepswe-coding-slice.test.mjs` 和 `deepswe-benchmark.test.mjs`；benchmark 测试直接从 `deepswe-adapter-core.mjs` 导入 owner 常量，避免再次写死或依赖未导出的符号。该变更只修复测试/清单契约，不改变产品 runtime 或 GUI。
+- 定向证据：DeepSWE benchmark 4/4、coding-slice 3/3、adapter 25/25 均通过；Thread 布局 35/35、Sherpa 15/15、`npm run test:contracts` 299 checks 和 Electron Gate B 21/21 仍保持通过。
+- 完整门禁：`npm run verify:local` 曾在第 56/118 个 Vitest 批次被 6 个源级治理断言阻断；本轮已将断言同步到 current Rust owner 的 `ModelInfo::usable_context_window`、`ResolvedStepSettings`、`CoreToolPlanContext` 和迁移后的 reasoning switch 语义，并补齐 `persistent` reasoning effort，相关治理/模型定向测试 20/20 通过。
+- 下一步与边界：Windows packaged Gate B 和 Codex Desktop 实时视觉基线仍为 `OPEN_REF`，整体完成度保持约 86%。
+
+## 35. 2026-08-31 current Codex reasoning policy 对齐
+
+- 范围：对照已安装 Codex current source 收口模型 reasoning policy 的源级事实，不扩展到新的 provider 或 runtime owner；首页 Banner / 皮肤 Hero 继续保留，不纳入对齐。
+- 实现：`MODEL_REASONING_EFFORTS` 增加 Codex 正式 `persistent` 值；输入栏 `Record<ModelReasoningEffortLevel, string>`、Model Selector 和 `common` / `agentInputbar` 的 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`ko-KR` 文案同步，避免将内部 wire token 裸露给用户并补齐 max/ultra 的选择器翻译。治理测试改为验证 current owner 的委托关系与公式：context 通过 `ModelInfo::usable_context_window`，reasoning summary 通过 `ResolvedStepSettings`，apply-patch 通过 `CoreToolPlanContext.model_info`，reasoning effort 通过 step settings/default 与 current switch clamp。
+- 稳定回归：Codex policy origin 四组测试、`modelReasoningPolicy` 共 20/20；`ModelSelector` 与 Inputbar plan status 共 47/47；`npm run i18n:check:json` 通过（5 locale、14 namespace、8709 keys、无缺失/多余 key）；`npx tsc --noEmit` 已启动复核。
+- 证据边界：本轮验证证明 Lime 的 policy projection 和 GUI 选择器可承接 Codex current reasoning values；不宣称 Windows packaged enforcement 或 Codex Desktop 实时视觉，二者继续保持 `OPEN_REF`。
+
+## 36. 2026-08-31 Codex 通知 identity 与 Lime 模型扩展边界收口
+
+- 根因：`model/list/updated` 是 Lime `model-provider + App Server` 自有扩展，覆盖 fixture 明确将其放在 `limeExtensions`，但 Renderer drift catalog 同时把它登记进 Codex notification identity，导致 current method inventory（78 项）与 `listCodexV2NotificationMethods()`（79 项）漂移。
+- 修复：从 `CODEX_V2_NOTIFICATION_METHODS` 移除 `model/list/updated`，保留 `DIAGNOSTIC_ONLY_NOTIFICATION_METHODS` 登记，使该通知继续分类为 `known_diagnostic_only` 且不产生 conversation warning；未改变 App Server producer、typed protocol、model registry consumer 或 GUI 行为。
+- 回归：`appServerNotificationDrift.test.ts` 与 `renderProjectionCoverageBoundary.test.ts` 共 15/15 通过，`git diff --check` 通过。
+- 边界：Codex 72 项通知与 Lime model catalog refresh 继续保持不同 owner；首页 Banner / 皮肤 Hero 不纳入对齐。Windows packaged Gate B 与 Codex Desktop 实时视觉基线仍为 `OPEN_REF`。
+
+## 37. 2026-08-31 本地门禁与 Thread 模型恢复夹具收口
+
+- 夹具同步：`ChatModelSelector.integration.test.tsx` 的 session detail 补齐 canonical `thread_id`，runtime adapter 的 `resumeThread` 返回成功，恢复 current `thread/resume` 合同；生产代码仍保持缺失 identity 或恢复失败时 fail closed。
+- 完整门禁：`npm run verify:local` 通过版本一致性、i18n 结构/未引用 key、ESLint、硬编码扫描、TypeScript、Vitest 118/118 批次和 GUI smoke。`npm test` 全量批次无失败，模型切换恢复测试 4/4、通知 drift/coverage 15/15 均通过。
+- Gate B 证据：`.lime/qc/project-gates/standalone-shell-01-20260831090637-48611/shell-01-electron-smoke/summary.json` 为 `Gate B-F`、21/21 assertions，通过真实 Electron/preload/IPC、`app_server_handle_json_lines` 与 App Server 初始化；console/page/preload/invoke/renderer crash/unresponsive、legacy command 和 mock fallback 均为 0。
+- 边界：该证据覆盖 macOS Electron 壳与 current bridge，不等价于 Windows packaged enforcement，也不解除 Codex Desktop 实时视觉基线的 AppleEvent `-1712/-1743` 阻塞；首页 Banner / 皮肤 Hero 继续保留。整体完成度仍约 86%，上述两项保持 `OPEN_REF`。
+
+## 38. 2026-08-31 收尾门禁复核
+
+- `git diff --check` 通过；`npm run test:contracts` 通过（协议生成无漂移、App Server client 299 checks、命令/脚本/文档边界均通过）。
+- 最新 `npm run verify:gui-smoke` 通过，Gate B-F 证据为 `.lime/qc/project-gates/standalone-shell-01-20260831091007-54581/shell-01-electron-smoke/summary.json`：21/21 assertions，真实 Electron/preload/IPC、`app_server_handle_json_lines`、current App Server method、runtime/read model 与 GUI 链路命中；console/page/preload/invoke、renderer crash/unresponsive、legacy command 和 mock fallback 均为 0。
+- 本轮未新增产品实现；首页 Banner / 皮肤 Hero 仍按用户裁决保留。Windows packaged enforcement 与 Codex Desktop 实时视觉基线继续为 `OPEN_REF`，整体完成度保持约 86%，不进入 release evidence。
+
+## 39. 2026-08-31 Agnes 官方模型路由修复
+
+- 用户反馈：首页当前模型为 `agnes-2.5-pro` 时显示“当前模型通道暂时不可用”，但该模型是 Agnes 官方文档公布的 OpenAI 兼容聊天模型；问题不是首页 Banner / 皮肤 Hero，不纳入本刀对齐。
+- 根因：自定义 Provider 只保存模型 ID 时，`resolve_provider_model_metadata` 使用 Provider ID 构造声明模型，官方 Agnes endpoint 没有参与 canonical provider 识别，导致 `agnes-2.5-pro` 变成 `inferred_hint`，RuntimeCore 在 Turn admission 前拒绝执行；选择器随后只能呈现通用 Provider 不可用提示。
+- 实现：canonical registry 新增 `agnes/agnes-2.5-pro`（文本/图片输入、文本输出、流式、工具、推理）；模型声明元数据新增受控 endpoint-aware 构造器，仅 `https://apihub.agnes-ai.com:443` 识别为 Agnes，未知 custom host 继续保持 `inferred_hint`。App Server 官方 Agnes route 回归改为验证 `agnes-2.5-pro` 可执行，非官方 host 负向回归保留。
+- 写集：`lime-rs/crates/model-provider/src/canonical/data/canonical_models.json`、`canonical/name_builder.rs`、`services/model_registry_service.rs`、`services/model_registry_service/runtime_metadata.rs`、`app-server/src/runtime_backend/model_route_resolver.rs`；未修改数据库、API key、Electron bridge 或首页 Banner。
+- 定向验证：`lime-services` 全量 216 passed / 4 ignored，本轮再次复核 `model_registry_service` 76/76；`model-provider` canonical tests 11/11；前端 `ModelSelector` + provider compatibility 52/52；Rustfmt 与 `git diff --check` 通过。App Server 测试 profile 的 Agnes 路由测试仍被本机 `rusty_v8 v150.4.0` macOS arm64 预编译包 404 阻断，未伪造通过证据；dev profile 已成功构建包含本轮修复的新 App Server sidecar。
+- 跨层验证：`npm run test:contracts` 通过（App Server client 299 checks、modality contracts 7/7、命令/脚本/文档边界无漂移）；`npm run verify:gui-smoke` 通过，Gate B-F 证据为 `.lime/qc/project-gates/standalone-shell-01-20260831153535-57886/shell-01-electron-smoke/summary.json`，21/21 assertions，真实 Electron/preload/IPC、`app_server_handle_json_lines`、App Server 初始化和 GUI shell 命中，console/page/preload/invoke、legacy command 与 mock fallback 均为 0。
+- 治理分类：官方 Agnes endpoint canonical 映射与模型注册为 `current`；未知 endpoint、无 capability 的 custom 模型仍是 `inferred_hint` / fail closed；无新增 `compat/deprecated/dead`，不恢复旧 runtime 或 fallback。
+- 边界与完成度：代码路径和新 sidecar 已修复，实际 Agnes 网络成功仍取决于用户 API key 的授权/额度；当前既有 Electron 窗口需重启后加载新 sidecar。真实窗口只读复核被 macOS AppleEvent `-1712` 阻断，本轮未发送 live Provider 请求，因此不宣称 Agnes 网络 Gate B。Windows packaged enforcement 与 Codex Desktop 实时视觉基线仍为 `OPEN_REF`，整体计划约 88%。
+
+## 40. 2026-09-01 Composer 受控输入与生产 bundle 稳定性复核
+
+- 根因与修复：Electron smoke 使用旧 `dist` 产物时暴露 `EmptyState` 的 `pendingImages` TDZ（压缩 bundle 将同步 effect 提前到后置局部变量之前），同时 `BaseComposer` 历史快捷键依赖数组漏列。当前 `EmptyState` 以 `ComposerController` 快照作为唯一输入事实，外部输入同步改为幂等 `setText`，提交直接读取 controller 文档；`BaseComposer` 补齐 `controller`、`setText`、`textareaRef` hook 依赖。Controller 自身做文档相等判断，不产生额外更新。
+- 写集：`src/components/agent/chat/components/EmptyState.tsx`、`EmptyStateComposerPanel.tsx`、`src/components/input-kit/BaseComposer.tsx`、`ComposerController.ts`、`useComposerController.ts` 及对应测试；不改变 Thread/Turn/Item 协议、Electron bridge、Provider 配置或首页 Banner / 皮肤 Hero。
+- 稳定回归：ComposerController 6/6、BaseComposer 16/16、EmptyState 62/62，共 84/84；目标 ESLint 无 warning；`npm run typecheck` 通过；`git diff --check` 通过。
+- 跨层验证：`npm run test:contracts` 通过（App Server client 299 checks、modality contracts 7/7、脚本/命令/文档边界通过）；重新构建压缩 renderer、Electron main/preload 与本地 app-server sidecar 后，`npm run verify:gui-smoke` 通过，最新 Gate B-F summary 为 `.lime/qc/project-gates/standalone-shell-01-20260831234458-29753/shell-01-electron-smoke/summary.json`：21/21 assertions，renderer crash/unresponsive、console/page/preload/invoke error、legacy command 和 mock fallback 均为 0。
+- 视觉与证据边界：本轮保持首页 Hero/Banner，修复的是 Codex Desktop 风格工作区 Composer 的稳定性；当前主对象为输入草稿，阶段为可提交/可中断，下一步由 `start|steer|interrupt` typed action 承接。证据为真实 Electron Gate B-F shell，不包含 Agnes live provider 请求、Windows packaged enforcement 或 Codex Desktop 实时视觉验收；后两项继续 `OPEN_REF`，整体计划约 89%。
+
+## 41. 2026-09-01 Windows packaged 资源链本地守卫补强
+
+- 范围：继续 D4 Windows packaged sidecar/runtime 对齐；不修改 Windows sandbox owner、协议或 Electron 业务命令，也不把首页 Banner / 皮肤 Hero 纳入对齐。
+- 实现：确认 `verify-package-resources` 对 Windows `windows-sandbox-setup.exe` 与 `windows-sandbox-runner.exe` 均执行存在性和 manifest SHA-256 校验；补充 setup helper 缺失时的 fail-closed 回归。Windows Squirrel workflow 回归现在锁定 `Prepare sherpa-onnx runtime -> electron:build/Forge make -> verify-package-resources -> stage-release-assets -> installed Squirrel SHELL-01 -> Agent Plugin Gate B` 的存在与顺序，避免工作流退化成只打包或只上传。
+- 验证：`scripts/electron/verify-package-resources.test.mjs` 21/21、`scripts/electron/windows-squirrel-rc-smoke.test.mjs` 18/18；此前已通过的 `npm run test:contracts`、`npm run typecheck`、`npm run verify:gui-smoke` 证据继续有效；本轮 `git diff --check` 通过，`npm run governance:scripts` 通过。
+- 证据边界：本轮只增加 macOS 可执行的资源/工作流契约守卫，不证明 Windows 安装、Squirrel N-1 更新、packaged sidecar 实际启动或 Windows Electron Gate B。必须由 `windows-2022` 重新执行 workflow 并上传 `.lime/qc/windows-squirrel-rc/**` 与 packaged Gate B evidence；Codex Desktop 实时视觉基线仍受 AppleEvent `-1712/-1743` 阻塞。计划继续保持 `active`，Windows packaged enforcement 与 D0 视觉基线为 `OPEN_REF`，整体约 89%。
+
+## 42. 2026-09-01 Windows packaged CodeMode Gate B 接入
+
+- 范围：继续 D4 Windows packaged sidecar/runtime 对齐，补齐安装后 CodeMode 的真实 Electron Gate B 入口；不修改 CodeMode 协议、App Server 业务命令、Windows sandbox owner，也不把首页 Banner / 皮肤 Hero 纳入对齐。
+- 实现：`code-mode-electron-gate-b.mjs` 新增 `--electron-executable`，packaged 模式直启安装后的 Lime executable，并强制 `APP_SERVER_BIN=""`，避免源码 sidecar override；Windows 进程树采集通过 PowerShell `Win32_Process` 识别安装包内 `app-server.exe`，继续要求 `code-mode-host.exe` 为 App Server 子进程。`build-windows-test.yml` 在安装后 Agent Plugin Gate B 之后追加 CodeMode Gate B，并上传结构化 evidence；工作流守卫锁定 Sherpa 准备、Windows sidecar 打包、安装后 Gate B 的存在与顺序。
+- 稳定回归：CodeMode Gate B、Windows Squirrel RC 与 package resource 定向测试共 46/46 通过；`npm run test:contracts`（App Server client 299 checks、modality/命令/脚本/文档边界）、`npm run typecheck`、`npm run governance:scripts` 与 `git diff --check` 均通过。
+- 证据边界：本轮只有 macOS 本地静态/单元/契约证据，尚未证明 Windows Squirrel 实际安装、`Lime.exe -> app-server.exe -> code-mode-host.exe` 真实进程链、restricted runner 或 packaged Electron Gate B；不得将本地测试标记为 platform pass。必须由责任开发者确认后重新运行 `windows-2022` workflow 并上传 `.lime/qc/windows-squirrel-rc/**` 与 `.lime/qc/gui-evidence/code-mode-electron-gate-b-windows/**`。Codex Desktop 实时视觉基线继续受 AppleEvent `-1712/-1743` 阻塞，计划保持 `active`，Windows packaged enforcement 与 D0 视觉基线为 `OPEN_REF`，整体完成度约 90%。
+
+## 43. 2026-09-01 首页预热 session 会话接管时机修复
+
+- 最终根因：`input_warmup` 的职责仅是提前准备底层 session；预热成功后错误调用 `markTaskCenterLocalSessionOverride`，会让路由同步 owner 把尚未 commit 的 session 当作正式本地会话接管，继而清空 active draft。首页因此从保留 Banner / Hero 的 EmptyState 切成空 MessageList，正式发送也无法继续复用预热 session。此前“预热后立即设置 local override”的诊断和方案已被真实 Electron 热路径证据推翻，本节以最终结论为准。
+- 实现：预热阶段只创建并缓存 session，不建立正式本地会话接管；用户发送并执行 commit 时才沿既有 owner 建立 override、切换路由和提交 turn。首页 Banner / 皮肤 Hero 继续作为明确产品设计保留，不纳入 Codex Desktop 对齐删除范围。
+- 稳定回归：`useTaskCenterDraftMaterializationRuntime.test.tsx`、`useWorkspaceInputbarSceneRuntime.test.tsx` 等定向 Vitest 共 36/36 通过；新增断言锁定预热不得调用正式会话接管，且草稿标签与 active draft 必须保持。
+- 真实验证：`.lime/qc/gui-evidence/claw-chat-current-fixture/claw-chat-current-fixture-home-hotpath-prewarm-fix-summary.json` 与聚合 `claw-chat-current-fixture-home-hotpath-regression-summary.json` 均为 `ok=true`。输入后、提交切换和完成后三个稳定窗口均无闪烁，正式 turn 复用预热 session `01a05c87-572a-7bc1-ba94-9143a538a6fe`，用户消息、助手完成态和 Thread/Turn/Item identity 一致；真实 Electron/preload/IPC/App Server JSON-RPC 命中，legacy command 与 mock fallback 为 0，`liveProviderUsed=false`。
+- 证据边界：完整 `npm run smoke:agent-runtime-current-fixture` 已通过受控 provider fixture；最新 GUI shell Gate B-F 为 `.lime/qc/project-gates/standalone-shell-01-20260901104344-8413/shell-01-electron-smoke/summary.json`，21/21 assertions。上述证据不等价于 Windows packaged enforcement 或 live provider，二者按各自门禁继续验证。
+
+## 44. 2026-09-01 Codex Composer 持久化历史与异步合并收口
+
+- 对比结论：Codex TUI 的 `~/.codex/history.jsonl` 是 append-only 纯文本历史，支持 newest-first cursor 分页、Unix inode / Windows creation-time log identity 和坏行容错；Lime 将同一语义收敛到 App Server current 主链，不复制 TUI 的 ANSI/终端状态。
+- 实现：新增稳定 v2 `promptHistory/read|append` 与 typed App Server client；Rust `PromptHistoryStore` 在受控 `data_root/prompt_history.jsonl` 下以文件锁、Unix `0600`、4 MiB 上限、malformed-row skip 和跨平台 `logId` identity 提供分页读写。Composer Controller 保持本地 session history 与受控 draft，成功提交后追加纯文本；服务端历史加载按 oldest-first 合并，读取期间发生的本地提交通过边界重叠去重，不再被异步快照覆盖。
+- 治理分类：`current` 为 `ComposerController`、`promptHistory/*`、`PromptHistoryStore` 和两层 typed client；`compat/deprecated` 无新增；`dead/forbidden-to-restore` 为 renderer `localStorage`/旧 Desktop history facade/第二持久化 owner。附件、路径引用、mention 与大粘贴原文只保留会话内，不能进入 JSONL。
+- 验证：`cargo check -p app-server-protocol`、`cargo test -p app-server-protocol`（133/133，含新增契约测试）、`npm run generate:protocol-types`、`npm run check:protocol-types`、`npm run typecheck`、Composer + `promptHistory` Vitest 12/12、`npm run test:contracts` 均通过；`cargo check -p app-server --lib` 仍受本机 `rusty_v8 v150.4.0` Apple Silicon 预编译包 404 阻塞，不能伪造 App Server profile 通过。Electron sidecar dev build 已通过且无新增 Rust warning。
+- 证据边界：真实 Electron Gate B 只证明 current bridge/runtime/read-model 链，不等价于 Windows packaged enforcement；Codex Desktop 实时 accessibility/screenshot 继续受 AppleEvent `-1712/-1743` 阻塞。下一刀回到 `windows-2022` Sherpa、Squirrel 安装、双 sidecar 进程链和 packaged CodeMode Gate B，整体计划保持 `active`，Windows packaged 与 D0 视觉基线为 `OPEN_REF`。
+
+## 45. 2026-09-01 Windows packaged Gate B 远程证据前置核对
+
+- 用户已确认可以触发真实 `windows-2022` GitHub Actions；本次先核对远程分支 `codex/windows-restricted-evidence-20260826`，其远端仍指向 `fd1059e94feeddf614648b8679808844380fbb8e`，与当前 `HEAD` 相同。
+- 远程 workflow 仍只有安装后的 Agent Plugin Gate B，没有本轮新增的 `Run installed Windows CodeMode Gate B`、`--electron-executable` 入口或对应 evidence 上传；远程近期没有可复用的 packaged CodeMode run。因此不能触发并把旧 workflow 结果宣称为本轮实现证据。
+- 当前 CodeMode workflow、Gate B 脚本和首页预热 session 修复均仍是未提交工作树改动；根 `package.json` 同时存在外部 Codex Desktop 工程替换，导致本地 Lime Electron 入口和 `verify:app-version` 脚本不可用。上述外部改动未覆盖、未回滚。
+- 可交付本地证据保持有效：使用已安装 Vitest runner 重跑 CodeMode/Windows Squirrel/package resource 定向回归 46/46、相关 task-center owner 测试 54/54、目标 TypeScript/ESLint、`npm run test:contracts`、`npm run verify:gui-smoke` 21/21、开发态 CodeMode Electron Gate B 均通过。Windows 安装、双 sidecar 进程链和 packaged CodeMode Gate B 继续为 `OPEN_REF`，需要责任开发者将本轮改动发布到远程分支后再触发 workflow。
+- 计划状态保持 `active`，完成度不因静态或旧版本 CI 结果上调；首页 Banner/皮肤 Hero 继续按用户裁决保留，不纳入对齐。
+
+## 46. 2026-09-01 v1.138.0 发布前最终复核
+
+- Lime 根 manifest、CLI npm 包、Rust workspace 与 Cargo.lock 已统一为 `1.138.0`；外部 Codex Desktop manifest 漂移已从 release candidate 排除，4 个根目录压缩 bundle 继续仅作只读参考，不进入版本提交。
+- 本地发布门禁已通过：`npm run verify:app-version`、`npm run typecheck`、`npm run test:contracts`、`npm run smoke:agent-runtime-current-fixture`、定向 Vitest 36/36、目标 ESLint、`git diff --check`。`npm run verify:gui-smoke` 最新 Gate B-F 为 21/21，真实 Electron/preload/IPC、`app_server_handle_json_lines` 和 current App Server method 命中，全部错误、legacy command 与 mock fallback 计数为 0。
+- `npm run test:related -- ...` 曾在测试收集阶段把 `electron/` 目录当成文件读取并报 `EISDIR`；直接 Vitest 精确入口已覆盖同一受影响集合并全部通过，该问题记录为 runner 收集缺陷，不是产品断言失败。
+- `v1.138.0` 本地与远端 tag 均不存在。下一步是获得 release Git 写操作确认，提交完整 candidate、创建并推送 tag；随后由 release workflow 在 `windows-2022` 上验证 Squirrel 安装、packaged CodeMode Gate B 与发布资产。首页 Banner / 皮肤 Hero 保持明确产品例外。

@@ -101,7 +101,11 @@ pub(crate) fn model_catalog(
             append_model(
                 &mut models,
                 &mut seen,
-                model_registry_service.build_declared_model_metadata(provider_id, model_id),
+                model_registry_service.build_declared_model_metadata_for_endpoint(
+                    provider_id,
+                    &provider.provider.api_host,
+                    model_id,
+                ),
             );
         }
 
@@ -1261,6 +1265,51 @@ mod tests {
         assert_eq!(catalogs.len(), 1);
         assert_eq!(catalogs[0].models.len(), 1);
         assert_eq!(catalogs[0].models[0].id, "gpt-ready");
+    }
+
+    #[tokio::test]
+    async fn model_catalog_uses_official_agnes_endpoint_capabilities() {
+        let db = setup_model_provider_db();
+        insert_typed_provider_with_host(
+            &db,
+            "custom-agnes",
+            "openai",
+            "https://apihub.agnes-ai.com/v1",
+            true,
+            &["agnes-2.5-pro"],
+        );
+        let api_key_provider_service = ApiKeyProviderService::new();
+        api_key_provider_service
+            .add_api_key(&db, "custom-agnes", "sk-agnes", None, true)
+            .expect("add enabled Agnes key");
+        let model_registry_service = ModelRegistryService::new(db.clone());
+
+        let catalogs = model_catalog(
+            &db,
+            &api_key_provider_service,
+            &model_registry_service,
+            crate::ModelCatalogQuery {
+                provider_id: Some("custom-agnes".to_string()),
+            },
+        )
+        .expect("list Agnes models");
+
+        assert_eq!(catalogs.len(), 1);
+        assert_eq!(catalogs[0].models.len(), 1);
+        let model = &catalogs[0].models[0];
+        assert_eq!(model.id, "agnes-2.5-pro");
+        assert_eq!(
+            model.capability_provenance,
+            lime_core::models::model_registry::ModelCapabilityProvenance::Canonical
+        );
+        assert_eq!(
+            model.canonical_model_id.as_deref(),
+            Some("agnes/agnes-2.5-pro")
+        );
+        assert!(model.capabilities.vision);
+        assert!(model.capabilities.tools);
+        assert!(model.capabilities.streaming);
+        assert!(model.capabilities.reasoning);
     }
 
     #[tokio::test]

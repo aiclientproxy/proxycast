@@ -12,7 +12,7 @@
     "licensePolicy": "Apache-2.0 task contributions with upstream repository licenses documented in PROVENANCE.md"
   },
   "executionContract": {
-    "adapterVersion": "deepswe-current-chain-adapter-v6",
+    "adapterVersion": "deepswe-current-chain-adapter-v7",
     "adapterCommand": "npm run harness:deepswe:run",
     "agentPath": "Lime App Server JSON-RPC current chain",
     "workspace": "system temporary directory outside the Lime repository at the task base commit",

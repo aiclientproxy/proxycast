@@ -23,6 +23,7 @@ chrono-tz.workspace = true
 cron.workspace = true
 dirs.workspace = true
 flate2.workspace = true
+fs2.workspace = true
 futures.workspace = true
 agent-protocol.workspace = true
 agent-runtime.workspace = true

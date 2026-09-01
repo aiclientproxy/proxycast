@@ -106,6 +106,7 @@ impl ModelRegistryService {
         let requested_model_id = model_id.trim();
         let provider_type = provider.provider.effective_provider_type();
         let api_host = provider.provider.api_host.trim();
+        let mut cached_model_count = None;
         if !api_host.is_empty() {
             let cached = if matches!(cache_access, ProviderModelCacheAccess::Keyless)
                 && Self::requires_api_key_for_runtime(provider_id, api_host, provider_type)
@@ -120,7 +121,7 @@ impl ModelRegistryService {
                 )?
             };
             if let Some(cached) = cached {
-                let cached_model_count = Some(cached.models.len());
+                cached_model_count = Some(cached.models.len());
                 if let Some(model) = find_model_metadata(&cached.models, requested_model_id) {
                     return Ok(ProviderModelRegistryMetadata {
                         provider_id: provider_id.to_string(),
@@ -134,20 +135,15 @@ impl ModelRegistryService {
                         model: Some(model.clone()),
                     });
                 }
-
-                if cached_model_count != Some(0) {
-                    return Ok(ProviderModelRegistryMetadata::runtime_selection_only(
-                        provider_id,
-                        requested_model_id,
-                        "provider_models_cache_missing_requested_model",
-                        cached_model_count,
-                    ));
-                }
             }
         }
 
         if let Some(model_config) = find_declared_model(&provider.provider.models, model_id) {
-            let model = self.build_declared_model_metadata(provider_id, model_config);
+            let model = if api_host.is_empty() {
+                self.build_declared_model_metadata(provider_id, model_config)
+            } else {
+                self.build_declared_model_metadata_for_endpoint(provider_id, api_host, model_config)
+            };
             return Ok(ProviderModelRegistryMetadata {
                 provider_id: provider_id.to_string(),
                 requested_model_id: requested_model_id.to_string(),
@@ -159,6 +155,15 @@ impl ModelRegistryService {
                 provider_declared_model: true,
                 model: Some(model),
             });
+        }
+
+        if cached_model_count.is_some_and(|count| count != 0) {
+            return Ok(ProviderModelRegistryMetadata::runtime_selection_only(
+                provider_id,
+                requested_model_id,
+                "provider_models_cache_missing_requested_model",
+                cached_model_count,
+            ));
         }
 
         Ok(ProviderModelRegistryMetadata::runtime_selection_only(
@@ -505,5 +510,110 @@ mod tests {
         assert!(model
             .runtime_features
             .contains(&ModelRuntimeFeature::Streaming));
+    }
+
+    #[test]
+    fn official_agnes_declared_model_uses_endpoint_canonical_capabilities() {
+        let service = service();
+        let mut provider = provider("custom-agnes", "https://apihub.agnes-ai.com/v1");
+        provider.provider.models = vec![ProviderModelConfig::hint("agnes-2.5-pro")];
+
+        let metadata = service
+            .resolve_provider_model_metadata(
+                Some(&provider),
+                "custom-agnes",
+                "agnes-2.5-pro",
+                ProviderModelCacheAccess::Unavailable,
+            )
+            .expect("Agnes model metadata");
+
+        let model = metadata.model.expect("Agnes canonical model metadata");
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::Canonical
+        );
+        assert_eq!(
+            model.canonical_model_id.as_deref(),
+            Some("agnes/agnes-2.5-pro")
+        );
+        assert!(model.task_families.contains(&ModelTaskFamily::Chat));
+        assert!(model.input_modalities.contains(&ModelModality::Image));
+        assert!(model.output_modalities.contains(&ModelModality::Text));
+        assert!(model
+            .runtime_features
+            .contains(&ModelRuntimeFeature::Streaming));
+    }
+
+    #[test]
+    fn official_agnes_declared_model_survives_stale_cache_miss() {
+        let service = service();
+        let mut provider = provider("custom-agnes", "https://apihub.agnes-ai.com/v1");
+        provider.provider.models = vec![ProviderModelConfig::hint("agnes-2.5-pro")];
+        let runtime_credential = credential("key-agnes", "sk-agnes");
+        let stale_model = EnhancedModelMetadata::new(
+            "agnes-2.5-flash".to_string(),
+            "Agnes 2.5 Flash".to_string(),
+            "custom-agnes".to_string(),
+            "Agnes".to_string(),
+        );
+
+        service
+            .save_provider_models_cache_scoped(
+                "custom-agnes",
+                "https://apihub.agnes-ai.com/v1",
+                Some(ApiProviderType::Openai),
+                &[stale_model],
+                Some("https://apihub.agnes-ai.com/v1/models".to_string()),
+                chrono::Utc::now().timestamp(),
+                ModelRegistryService::credential_cache_fingerprint("sk-agnes").as_deref(),
+            )
+            .expect("save stale Agnes cache");
+
+        let metadata = service
+            .resolve_provider_model_metadata(
+                Some(&provider),
+                "custom-agnes",
+                "agnes-2.5-pro",
+                ProviderModelCacheAccess::Credential(&runtime_credential),
+            )
+            .expect("Agnes model metadata");
+
+        assert_eq!(
+            metadata.source,
+            ProviderModelRegistryMetadataSource::ProviderDeclaredModel
+        );
+        assert_eq!(metadata.cached_model_count, None);
+        let model = metadata.model.expect("declared Agnes model metadata");
+        assert_eq!(
+            model.canonical_model_id.as_deref(),
+            Some("agnes/agnes-2.5-pro")
+        );
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::Canonical
+        );
+    }
+
+    #[test]
+    fn untrusted_agnes_host_keeps_declared_model_as_inferred_hint() {
+        let service = service();
+        let mut provider = provider("custom-agnes", "https://gateway.example.com/v1");
+        provider.provider.models = vec![ProviderModelConfig::hint("agnes-2.5-pro")];
+
+        let metadata = service
+            .resolve_provider_model_metadata(
+                Some(&provider),
+                "custom-agnes",
+                "agnes-2.5-pro",
+                ProviderModelCacheAccess::Unavailable,
+            )
+            .expect("Agnes model metadata");
+
+        let model = metadata.model.expect("declared model metadata");
+        assert_eq!(
+            model.capability_provenance,
+            ModelCapabilityProvenance::InferredHint
+        );
+        assert!(model.canonical_model_id.is_none());
     }
 }

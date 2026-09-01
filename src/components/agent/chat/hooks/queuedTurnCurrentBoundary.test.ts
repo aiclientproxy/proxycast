@@ -41,6 +41,8 @@ const CURRENT_QUEUE_READER_PATHS = [
   "src/components/agent/chat/hooks/useAgentSessionThreadQueue.ts",
   "src/components/agent/chat/components/ThreadQueueStatus.tsx",
 ];
+const CURRENT_QUEUE_ACTION_PATH =
+  "src/lib/api/agentRuntime/threadQueueActions.ts";
 
 describe("queued turn current owner boundary", () => {
   it("已迁出的 Renderer/UI/send surface 不得重新读取 queued snapshot", () => {
@@ -94,7 +96,7 @@ describe("queued turn current owner boundary", () => {
     }
   });
 
-  it("GUI Queue consumer 只读取 typed list/changed，不恢复 renderer snapshot owner", () => {
+  it("GUI Queue consumer 使用 typed list/changed 和独立 action owner，不恢复 renderer snapshot owner", () => {
     for (const relativePath of CURRENT_QUEUE_READER_PATHS) {
       expect(existsSync(join(cwd(), relativePath)), relativePath).toBe(true);
       const source = readFileSync(join(cwd(), relativePath), "utf8");
@@ -122,5 +124,17 @@ describe("queued turn current owner boundary", () => {
       "utf8",
     );
     expect(hook).toContain('notification.method !== "thread/queue/changed"');
+
+    const actions = readFileSync(
+      join(cwd(), CURRENT_QUEUE_ACTION_PATH),
+      "utf8",
+    );
+    expect(actions).toContain("appServerClient.addThreadQueue");
+    expect(actions).toContain("appServerClient.updateThreadQueue");
+    expect(actions).toContain("appServerClient.deleteThreadQueue");
+    expect(actions).toContain("appServerClient.reorderThreadQueue");
+    expect(actions).toContain("appServerClient.startThreadQueue");
+    expect(actions).not.toContain('from "@/lib/api/queuedTurn"');
+    expect(actions).not.toContain("safeInvoke(");
   });
 });

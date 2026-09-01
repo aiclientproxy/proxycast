@@ -22,6 +22,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Lime 需要访问摄像头以使用视觉输入功能</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Lime 需要访问麦克风以使用语音输入功能</string>
 	<key>NSAppleEventsUsageDescription</key>

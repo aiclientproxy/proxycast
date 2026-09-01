@@ -87,6 +87,16 @@ export const APP_SERVER_CLIENT_METHODS: readonly AppServerClientMethodSpec[] = [
     params: "required",
   },
   {
+    name: "readPromptHistory",
+    method: constants.APP_SERVER_METHOD_PROMPT_HISTORY_READ,
+    params: "required",
+  },
+  {
+    name: "appendPromptHistory",
+    method: constants.APP_SERVER_METHOD_PROMPT_HISTORY_APPEND,
+    params: "required",
+  },
+  {
     name: "listSessions",
     method: constants.APP_SERVER_METHOD_THREAD_LIST,
     params: "optional-empty",

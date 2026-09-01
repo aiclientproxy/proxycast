@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { QueuedSubmission } from "@limecloud/app-server-client";
 import type { AppServerJsonRpcNotification } from "@/lib/api/appServer";
 import {
@@ -43,7 +43,7 @@ export function useAgentSessionThreadQueue(params: {
   readQueue?: ThreadQueueReader;
   subscribeNotifications?: ThreadQueueSubscriber;
   threadId?: string | null;
-}): Omit<ThreadQueueState, "threadId"> {
+}): Omit<ThreadQueueState, "threadId"> & { refresh: () => void } {
   const readQueue = params.readQueue ?? listThreadQueue;
   const subscribeNotifications =
     params.subscribeNotifications ?? subscribeAppServerNotifications;
@@ -54,6 +54,10 @@ export function useAgentSessionThreadQueue(params: {
     submissions: [],
     threadId: null,
   });
+  const [refreshToken, setRefreshToken] = useState(0);
+  const refresh = useCallback(() => {
+    setRefreshToken((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     if (!threadId) {
@@ -68,7 +72,7 @@ export function useAgentSessionThreadQueue(params: {
 
     let active = true;
     let readRevision = 0;
-    const refresh = () => {
+    const readNow = () => {
       const revision = ++readRevision;
       void readQueue(threadId).then(
         (submissions) => {
@@ -119,29 +123,31 @@ export function useAgentSessionThreadQueue(params: {
             isScopedThreadQueueChangedNotification(notification, threadId),
           )
         ) {
-          refresh();
+          readNow();
         }
       },
     });
-    refresh();
+    readNow();
 
     return () => {
       active = false;
       readRevision += 1;
       unsubscribe();
     };
-  }, [readQueue, subscribeNotifications, threadId]);
+  }, [readQueue, refreshToken, subscribeNotifications, threadId]);
 
   if (state.threadId !== threadId) {
     return {
       error: null,
       loading: Boolean(threadId),
       submissions: [],
+      refresh,
     };
   }
   return {
     error: state.error,
     loading: state.loading,
     submissions: state.submissions,
+    refresh,
   };
 }

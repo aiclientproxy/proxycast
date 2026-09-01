@@ -41,7 +41,8 @@ use super::{
     ProjectCreateResponse, ProjectDeleteParams, ProjectDeleteResponse, ProjectImportParams,
     ProjectImportResponse, ProjectListParams, ProjectListResponse, ProjectMoveParams,
     ProjectMoveResponse, ProjectReadParams, ProjectReadResponse, ProjectUpdateParams,
-    ProjectUpdateResponse, ReasoningSummaryPartAddedNotification,
+    ProjectUpdateResponse, PromptHistoryAppendParams, PromptHistoryAppendResponse,
+    PromptHistoryReadParams, PromptHistoryReadResponse, ReasoningSummaryPartAddedNotification,
     ReasoningSummaryTextDeltaNotification, ReasoningTextDeltaNotification, ReviewStartParams,
     ReviewStartResponse, ScheduledTaskChangedNotification, ScheduledTaskRunUpdatedNotification,
     ServerRequestResolvedNotification, SkillsChangedNotification, SkillsConfigWriteParams,
@@ -338,6 +339,16 @@ pub enum ClientRequest {
     ThreadQueueStart {
         id: RequestId,
         params: ThreadQueueStartParams,
+    },
+    #[serde(rename = "promptHistory/read")]
+    PromptHistoryRead {
+        id: RequestId,
+        params: PromptHistoryReadParams,
+    },
+    #[serde(rename = "promptHistory/append")]
+    PromptHistoryAppend {
+        id: RequestId,
+        params: PromptHistoryAppendParams,
     },
     #[serde(rename = "project/list")]
     ProjectList {
@@ -705,6 +716,8 @@ impl ClientRequest {
             | Self::ThreadQueueDelete { id, .. }
             | Self::ThreadQueueReorder { id, .. }
             | Self::ThreadQueueStart { id, .. }
+            | Self::PromptHistoryRead { id, .. }
+            | Self::PromptHistoryAppend { id, .. }
             | Self::ProjectList { id, .. }
             | Self::ProjectRead { id, .. }
             | Self::ProjectCreate { id, .. }
@@ -821,6 +834,8 @@ impl ClientRequest {
             Self::ThreadQueueDelete { .. } => Method::ThreadQueueDelete,
             Self::ThreadQueueReorder { .. } => Method::ThreadQueueReorder,
             Self::ThreadQueueStart { .. } => Method::ThreadQueueStart,
+            Self::PromptHistoryRead { .. } => Method::PromptHistoryRead,
+            Self::PromptHistoryAppend { .. } => Method::PromptHistoryAppend,
             Self::ProjectList { .. } => Method::ProjectList,
             Self::ProjectRead { .. } => Method::ProjectRead,
             Self::ProjectCreate { .. } => Method::ProjectCreate,
@@ -947,6 +962,8 @@ pub enum ClientResponsePayload {
     ThreadQueueDelete(ThreadQueueDeleteResponse),
     ThreadQueueReorder(ThreadQueueReorderResponse),
     ThreadQueueStart(ThreadQueueStartResponse),
+    PromptHistoryRead(PromptHistoryReadResponse),
+    PromptHistoryAppend(PromptHistoryAppendResponse),
     ProjectList(ProjectListResponse),
     ProjectRead(ProjectReadResponse),
     ProjectCreate(ProjectCreateResponse),
@@ -1048,6 +1065,8 @@ impl ClientResponsePayload {
             Self::ThreadQueueDelete(_) => Method::ThreadQueueDelete,
             Self::ThreadQueueReorder(_) => Method::ThreadQueueReorder,
             Self::ThreadQueueStart(_) => Method::ThreadQueueStart,
+            Self::PromptHistoryRead(_) => Method::PromptHistoryRead,
+            Self::PromptHistoryAppend(_) => Method::PromptHistoryAppend,
             Self::ProjectList(_) => Method::ProjectList,
             Self::ProjectRead(_) => Method::ProjectRead,
             Self::ProjectCreate(_) => Method::ProjectCreate,
@@ -1147,6 +1166,8 @@ impl ClientResponsePayload {
             Self::ThreadQueueDelete(response) => serde_json::to_value(response)?,
             Self::ThreadQueueReorder(response) => serde_json::to_value(response)?,
             Self::ThreadQueueStart(response) => serde_json::to_value(response)?,
+            Self::PromptHistoryRead(response) => serde_json::to_value(response)?,
+            Self::PromptHistoryAppend(response) => serde_json::to_value(response)?,
             Self::ProjectList(response) => serde_json::to_value(response)?,
             Self::ProjectRead(response) => serde_json::to_value(response)?,
             Self::ProjectCreate(response) => serde_json::to_value(response)?,

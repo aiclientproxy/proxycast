@@ -21,11 +21,14 @@ describe("CodeMode Electron Gate B", () => {
         "60000",
         "--interval-ms",
         "200",
+        "--electron-executable",
+        process.execPath,
       ]),
     ).toMatchObject({
       output: path.resolve(".lime/qc/code-mode.json"),
       timeoutMs: 60_000,
       intervalMs: 200,
+      electronExecutable: path.resolve(process.execPath),
     });
     expect(parseArgs(["--help"]).help).toBe(true);
     expect(() => parseArgs(["--timeout-ms", "1000"])).toThrow(
@@ -34,6 +37,9 @@ describe("CodeMode Electron Gate B", () => {
     expect(() => parseArgs(["--interval-ms", "10"])).toThrow(
       "--interval-ms must be >= 100",
     );
+    expect(() =>
+      parseArgs(["--electron-executable", "/missing/lime.exe"]),
+    ).toThrow("--electron-executable does not exist");
     expect(() => parseArgs(["--unknown"])).toThrow(
       "Unknown argument: --unknown",
     );
@@ -291,6 +297,44 @@ describe("CodeMode Electron Gate B", () => {
     });
   });
 
+  it("packaged Windows evidence resolves app-server.exe without a source override", () => {
+    const evidence = readCodeModeProcessEvidence({
+      electronPid: 200,
+      appServerBinary: null,
+      platform: "win32",
+      runner(command, args) {
+        expect(command).toBe("powershell.exe");
+        expect(args.join(" ")).toContain("ConvertTo-Json -Compress");
+        return JSON.stringify([
+          {
+            ProcessId: 200,
+            ParentProcessId: 1,
+            CommandLine: "C:\\Program Files\\Lime\\Lime.exe",
+          },
+          {
+            ProcessId: 201,
+            ParentProcessId: 200,
+            CommandLine:
+              '"C:\\Program Files\\Lime\\resources\\app-server\\win32-x64\\app-server.exe" --stdio',
+          },
+          {
+            ProcessId: 202,
+            ParentProcessId: 201,
+            CommandLine:
+              "C:\\Program Files\\Lime\\resources\\app-server\\win32-x64\\code-mode-host.exe",
+          },
+        ]);
+      },
+    });
+
+    expect(evidence).toMatchObject({
+      electronPid: 200,
+      appServerPid: 201,
+      codeModeHostPid: 202,
+      codeModeHostParentPid: 201,
+    });
+  });
+
   it("keeps runtime, provider capability, and Electron fixture boundaries explicit", () => {
     const source = fs.readFileSync(
       path.resolve("scripts/agent-runtime/code-mode-electron-gate-b.mjs"),
@@ -305,6 +349,8 @@ describe("CodeMode Electron Gate B", () => {
       'const OFFICIAL_OPENAI_BASE_URL = "http://api.openai.com/v1"',
     );
     expect(source).toContain('backendMode: "runtime"');
+    expect(source).toContain('APP_SERVER_BIN: ""');
+    expect(source).toContain("--electron-executable");
     expect(source).toContain("HTTP_PROXY");
     expect(source).toContain('modelToolMode: "code_mode"');
     expect(source).toContain('"custom_tools"');

@@ -23,11 +23,13 @@ interface ProbeSnapshot {
   homePendingPreviewRequest: TaskCenterDraftSendRequest | null;
   input: string;
   taskCenterDraftSendRequest: TaskCenterDraftSendRequest | null;
+  transitionTopicId: string | null;
 }
 
 interface ProbeProps {
   createFreshSession: ReturnType<typeof vi.fn>;
   initialPendingRequest?: TaskCenterDraftSendRequest | null;
+  initialTransitionTopicId?: string | null;
   onRuntime?: (runtime: {
     commitMaterializedTaskCenterDraftTab: (
       draftTabId: string,
@@ -58,6 +60,7 @@ interface ProbeProps {
 function Probe({
   createFreshSession,
   initialPendingRequest = null,
+  initialTransitionTopicId = null,
   markTaskCenterEmbeddedHomeSession = vi.fn(),
   markTaskCenterLocalSessionOverride = vi.fn(),
   onRuntime,
@@ -80,7 +83,9 @@ function Probe({
   const [, setMentionedCharacters] = useState<Character[]>([]);
   const [, setSelectedText] = useState("");
   const [, setTaskCenterDetachedTopicId] = useState<string | null>(null);
-  const [, setTaskCenterTransitionTopicId] = useState<string | null>(null);
+  const [transitionTopicId, setTaskCenterTransitionTopicId] = useState<
+    string | null
+  >(initialTransitionTopicId);
   const draftSurfaceActiveRef = useRef(true);
 
   const runtime = useTaskCenterDraftMaterializationRuntime({
@@ -119,6 +124,7 @@ function Probe({
       homePendingPreviewRequest,
       input,
       taskCenterDraftSendRequest,
+      transitionTopicId,
     });
   }, [
     activeDraftTabId,
@@ -127,6 +133,7 @@ function Probe({
     input,
     onSnapshot,
     taskCenterDraftSendRequest,
+    transitionTopicId,
   ]);
 
   useEffect(() => {
@@ -177,6 +184,7 @@ describe("useTaskCenterDraftMaterializationRuntime", () => {
 
   it("输入预热只应创建底层会话，不应提交并移除草稿标签", async () => {
     const createFreshSession = vi.fn(async () => "session-warmup");
+    const markTaskCenterLocalSessionOverride = vi.fn();
     const upsertTaskCenterOpenTab = vi.fn();
     const snapshots: ProbeSnapshot[] = [];
 
@@ -184,6 +192,9 @@ describe("useTaskCenterDraftMaterializationRuntime", () => {
       root.render(
         <Probe
           createFreshSession={createFreshSession}
+          markTaskCenterLocalSessionOverride={
+            markTaskCenterLocalSessionOverride
+          }
           onSnapshot={(snapshot) => {
             snapshots.push(snapshot);
           }}
@@ -199,10 +210,12 @@ describe("useTaskCenterDraftMaterializationRuntime", () => {
     });
 
     expect(createFreshSession).toHaveBeenCalledWith("新对话", {
+      activateSession: false,
       preserveCurrentSnapshot: false,
       skipSessionStartHooks: true,
     });
     expect(upsertTaskCenterOpenTab).not.toHaveBeenCalled();
+    expect(markTaskCenterLocalSessionOverride).not.toHaveBeenCalled();
     const latestSnapshot = snapshots.at(-1);
     expect(latestSnapshot?.activeDraftTabId).toBe(initialDraft.id);
     expect(latestSnapshot?.draftTabs.map((tab) => tab.id)).toEqual([
@@ -314,6 +327,7 @@ describe("useTaskCenterDraftMaterializationRuntime", () => {
     expect(draftTabId).toMatch(/^task-draft-/);
     expect(materializedSessionId).toBe("session-immediate-send");
     expect(createFreshSession).toHaveBeenCalledWith("新对话", {
+      activateSession: false,
       preserveCurrentSnapshot: false,
       skipSessionStartHooks: true,
     });
@@ -327,6 +341,7 @@ describe("useTaskCenterDraftMaterializationRuntime", () => {
     const persistMaterializedSessionNavigation = vi.fn();
     const switchMaterializedSession = vi.fn(async () => "success");
     const upsertTaskCenterOpenTab = vi.fn();
+    const snapshots: ProbeSnapshot[] = [];
     let runtime: {
       materializeTaskCenterDraftTab: (
         draftTabId: string,
@@ -341,10 +356,13 @@ describe("useTaskCenterDraftMaterializationRuntime", () => {
       root.render(
         <Probe
           createFreshSession={createFreshSession}
+          initialTransitionTopicId="route-session"
           onRuntime={(nextRuntime) => {
             runtime = nextRuntime;
           }}
-          onSnapshot={() => undefined}
+          onSnapshot={(snapshot) => {
+            snapshots.push(snapshot);
+          }}
           persistMaterializedSessionNavigation={
             persistMaterializedSessionNavigation
           }
@@ -374,6 +392,7 @@ describe("useTaskCenterDraftMaterializationRuntime", () => {
         forceRefresh: true,
       },
     );
+    expect(snapshots.at(-1)?.transitionTopicId).toBeNull();
   });
 
   it("commit materialized 草稿可只同步路由不拉详情", async () => {

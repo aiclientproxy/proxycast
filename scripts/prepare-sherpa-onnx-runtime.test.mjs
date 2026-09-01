@@ -3,8 +3,11 @@ import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildSherpaArchiveDownloadCommand,
   ensureMacBinaryRpath,
   buildSherpaArchiveExtractCommand,
+  buildSherpaArchiveExtractCommands,
+  buildSherpaArchiveSevenZipExtractCommand,
   MACOS_EXECUTABLE_RPATH,
   missingSherpaRuntimeLibraries,
   readMachORpaths,
@@ -64,6 +67,35 @@ version = "1.13.0"
     ).toEqual(["libsherpa-onnx-c-api.dylib"]);
   });
 
+  it("按平台选择稳定的 sherpa 下载命令并写入临时文件", () => {
+    const plan = {
+      archivePath:
+        "D:\\a\\lime\\lime\\lime-rs\\target\\sherpa-onnx-prebuilt\\runtime.tar.bz2",
+      url: "https://example.test/runtime.tar.bz2",
+    };
+
+    expect(
+      buildSherpaArchiveDownloadCommand(plan, { platform: "win32" }),
+    ).toEqual({
+      command: "curl.exe",
+      args: [
+        "--fail",
+        "--location",
+        "--retry",
+        "5",
+        "--retry-connrefused",
+        "--connect-timeout",
+        "30",
+        "--output",
+        `${plan.archivePath}.part`,
+        plan.url,
+      ],
+    });
+    expect(
+      buildSherpaArchiveDownloadCommand(plan, { platform: "darwin" }).command,
+    ).toBe("curl");
+  });
+
   it("为 Windows 解析预置运行时归档和库文件", () => {
     const plan = resolveSherpaRuntimePlan({
       repoRoot: "/repo",
@@ -86,6 +118,7 @@ version = "1.13.0"
           "D:\\a\\lime\\lime\\lime-rs\\target\\sherpa-onnx-prebuilt",
       }),
     ).toEqual({
+      command: "tar",
       args: [
         "-xjf",
         "sherpa-onnx-v1.13.0-win-x64-shared-MT-Release-lib.tar.bz2",
@@ -94,6 +127,31 @@ version = "1.13.0"
       ],
       cwd: "D:\\a\\lime\\lime\\lime-rs\\target\\sherpa-onnx-prebuilt",
     });
+  });
+
+  it("Windows 优先使用 7-Zip 并保留 tar 超时回退", () => {
+    const plan = {
+      archivePath:
+        "D:\\a\\lime\\lime\\lime-rs\\target\\sherpa-onnx-prebuilt\\runtime.tar.bz2",
+      prebuiltRoot: "D:\\a\\lime\\lime\\lime-rs\\target\\sherpa-onnx-prebuilt",
+    };
+
+    expect(
+      buildSherpaArchiveSevenZipExtractCommand(
+        plan,
+        "C:\\Program Files\\7-Zip\\7z.exe",
+      ),
+    ).toEqual({
+      command: "C:\\Program Files\\7-Zip\\7z.exe",
+      args: ["x", "-y", "-aoa", plan.archivePath, `-o${plan.prebuiltRoot}`],
+      cwd: plan.prebuiltRoot,
+    });
+
+    const commands = buildSherpaArchiveExtractCommands(plan, {
+      platform: "win32",
+      sevenZipCommands: ["7z"],
+    });
+    expect(commands.map(({ command }) => command)).toEqual(["7z", "tar"]);
   });
 
   it("Windows Quality 为 sherpa 准备保留足够预算并记录清理/解压阶段", () => {

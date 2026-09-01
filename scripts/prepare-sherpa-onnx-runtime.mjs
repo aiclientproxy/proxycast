@@ -7,6 +7,14 @@ const DEFAULT_RUST_WORKSPACE_DIR = "lime-rs";
 const SHERPA_RELEASE_BASE_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download";
 export const MACOS_EXECUTABLE_RPATH = "@executable_path";
+export const SHERPA_ARCHIVE_DOWNLOAD_TIMEOUT_MS = 300_000;
+export const SHERPA_ARCHIVE_EXTRACT_TIMEOUT_MS = 120_000;
+const WINDOWS_SEVEN_ZIP_COMMANDS = [
+  "7z",
+  "7zz",
+  "C:\\Program Files\\7-Zip\\7z.exe",
+  "C:\\Program Files (x86)\\7-Zip\\7z.exe",
+];
 
 function fail(message) {
   throw new Error(message);
@@ -334,9 +342,38 @@ export function resolveRuntimeLibrarySource(plan, lib) {
 
 export function buildSherpaArchiveExtractCommand(plan) {
   return {
+    command: "tar",
     args: ["-xjf", path.win32.basename(plan.archivePath), "-C", "."],
     cwd: plan.prebuiltRoot,
   };
+}
+
+export function buildSherpaArchiveSevenZipExtractCommand(plan, command = "7z") {
+  return {
+    command,
+    args: ["x", "-y", "-aoa", plan.archivePath, `-o${plan.prebuiltRoot}`],
+    cwd: plan.prebuiltRoot,
+  };
+}
+
+export function buildSherpaArchiveExtractCommands(
+  plan,
+  {
+    platform = process.platform,
+    sevenZipCommands = WINDOWS_SEVEN_ZIP_COMMANDS,
+  } = {},
+) {
+  const tarCommand = buildSherpaArchiveExtractCommand(plan);
+  if (platform !== "win32") {
+    return [tarCommand];
+  }
+
+  return [
+    ...sevenZipCommands.map((command) =>
+      buildSherpaArchiveSevenZipExtractCommand(plan, command),
+    ),
+    tarCommand,
+  ];
 }
 
 export function missingSherpaRuntimeLibraries(
@@ -346,32 +383,69 @@ export function missingSherpaRuntimeLibraries(
   return plan.libs.filter((lib) => !exists(path.join(plan.libDir, lib)));
 }
 
+export function buildSherpaArchiveDownloadCommand(
+  plan,
+  { platform = process.platform } = {},
+) {
+  return {
+    command: platform === "win32" ? "curl.exe" : "curl",
+    args: [
+      "--fail",
+      "--location",
+      "--retry",
+      "5",
+      "--retry-connrefused",
+      "--connect-timeout",
+      "30",
+      "--output",
+      `${plan.archivePath}.part`,
+      plan.url,
+    ],
+  };
+}
+
 function downloadSherpaArchive(plan) {
   console.log(`Downloading sherpa-onnx shared runtime: ${plan.url}`);
-  const partialPath = `${plan.archivePath}.part`;
-  runCommand("curl", [
-    "--fail",
-    "--location",
-    "--retry",
-    "5",
-    "--retry-connrefused",
-    "--connect-timeout",
-    "30",
-    "--output",
-    partialPath,
-    plan.url,
-  ]);
-  fs.renameSync(partialPath, plan.archivePath);
+  const download = buildSherpaArchiveDownloadCommand(plan);
+  runCommand(download.command, download.args, {
+    timeout: SHERPA_ARCHIVE_DOWNLOAD_TIMEOUT_MS,
+  });
+  fs.renameSync(`${plan.archivePath}.part`, plan.archivePath);
 }
 
 function extractSherpaArchive(plan) {
   console.log(`Removing previous sherpa-onnx runtime: ${plan.extractedDir}`);
   fs.rmSync(plan.extractedDir, { recursive: true, force: true });
   console.log(`Removed previous sherpa-onnx runtime: ${plan.extractedDir}`);
-  const extraction = buildSherpaArchiveExtractCommand(plan);
-  console.log(`Extracting sherpa-onnx archive: ${plan.archivePath}`);
-  runCommand("tar", extraction.args, { cwd: extraction.cwd });
-  console.log(`Extracted sherpa-onnx archive: ${plan.extractedDir}`);
+
+  let lastError = null;
+  for (const extraction of buildSherpaArchiveExtractCommands(plan)) {
+    fs.rmSync(plan.extractedDir, { recursive: true, force: true });
+    console.log(
+      `Extracting sherpa-onnx archive: ${plan.archivePath} (extractor=${extraction.command})`,
+    );
+    try {
+      runCommand(extraction.command, extraction.args, {
+        cwd: extraction.cwd,
+        timeout: SHERPA_ARCHIVE_EXTRACT_TIMEOUT_MS,
+      });
+      console.log(`Extracted sherpa-onnx archive: ${plan.extractedDir}`);
+      return;
+    } catch (error) {
+      lastError = error;
+      console.warn(
+        `Sherpa archive extractor ${extraction.command} failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  fail(
+    `Unable to extract sherpa-onnx archive: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
 }
 
 function ensureArchiveExtracted(plan) {

@@ -118,6 +118,39 @@ describe("Electron release workflow guard", () => {
     );
   });
 
+  it("rejects release workflow without installed Windows CodeMode Gate B", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        /      - name: Run installed Windows CodeMode Gate B[\s\S]*?          --timeout-ms 600000\n\n/,
+        "",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /Windows CodeMode Gate B condition must include matrix\.host_platform == 'win32'/,
+    );
+  });
+
+  it("rejects release workflow without explicit desktop resource manifest gate", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current
+        .replace(
+          /          manifest_count="\$\(find release-electron -name 'desktop-resources\.manifest\.json' -type f \| wc -l \| tr -d ' '\)"\n/,
+          "",
+        )
+        .replace(
+          /          find release-electron -name 'desktop-resources\.manifest\.json' -type f -print\n/,
+          "",
+        ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /Electron package resource verification must include desktop-resources\.manifest\.json/,
+    );
+  });
+
   it("rejects missing explicit Forge package step before make", () => {
     const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
     const workflowPath = tempWorkflowPath(

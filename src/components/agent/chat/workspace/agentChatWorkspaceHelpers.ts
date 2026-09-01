@@ -339,8 +339,12 @@ export function resolveTaskCenterHomeSurfaceState({
     !hasCurrentSessionActivity &&
     (draftSurfaceActive || hasEmbeddedHomeSession),
   );
+  const shouldBlockForSessionSwitch =
+    sessionSwitchPending && !hasCurrentSessionActivity;
   const isSessionRestorePending =
-    isAutoRestoringSession || isSessionHydrating || sessionSwitchPending;
+    isAutoRestoringSession ||
+    isSessionHydrating ||
+    shouldBlockForSessionSwitch;
   const shouldHideBackgroundSessionContent =
     isHomeSessionBackgroundRecovery && !hasInitialSessionRoute;
   const shouldKeepDraftHomeShell =
@@ -349,7 +353,7 @@ export function resolveTaskCenterHomeSurfaceState({
     !shouldProtectInitialSessionRoute &&
     !hasCurrentSessionActivity;
   const shouldHideCurrentSessionContent =
-    sessionSwitchPending ||
+    shouldBlockForSessionSwitch ||
     shouldHideBackgroundSessionContent ||
     (shouldSuppressDraftContent &&
       !shouldProtectInitialSessionRoute &&

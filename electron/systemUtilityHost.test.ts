@@ -11,6 +11,10 @@ vi.mock("./electronRuntime", () => ({
   app: {
     getName: () => "Lime",
     getVersion: () => "0.0.0-test",
+    isPackaged: true,
+  },
+  systemPreferences: {
+    isTrustedAccessibilityClient: () => false,
   },
   shell: {
     openExternal: openExternalMock,
@@ -109,8 +113,26 @@ describe("SystemUtilityHost", () => {
 
     const result = await host.getEnvironmentPreview();
     const shellImport = result.shellImport as Record<string, unknown>;
+    const desktopCapabilities = result.desktopCapabilities as Record<
+      string,
+      unknown
+    >;
 
     expect(result).not.toHaveProperty("diagnostic");
+    expect(desktopCapabilities).toEqual(
+      expect.objectContaining({
+        applicationId: "com.limecloud.lime",
+        packaged: true,
+        capabilities: expect.objectContaining({
+          accessibility: expect.objectContaining({ status: "not_granted" }),
+          applicationGroups: expect.objectContaining({
+            status: "not_configured",
+            identifiers: [],
+          }),
+        }),
+      }),
+    );
+    expect(JSON.stringify(desktopCapabilities)).not.toContain("openai");
     expect(shellImport).not.toHaveProperty("diagnostic");
     expect(shellImport).toEqual(
       expect.objectContaining({

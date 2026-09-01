@@ -159,6 +159,8 @@ describe("electron/ipcChannels", () => {
     );
     expect(isElectronHostCommand("embedded_browser_view_destroy")).toBe(true);
     expect(isElectronHostCommand("open_system_settings_url")).toBe(true);
+    expect(isElectronHostCommand("macos_native_host_invoke")).toBe(true);
+    expect(isElectronHostCommand("windows_native_host_invoke")).toBe(true);
     expect(isElectronHostCommand("open_with_default_app")).toBe(true);
     expect(isElectronHostCommand("open_project_path_with_tool")).toBe(true);
     expect(isElectronHostCommand("run_project_shell_command")).toBe(false);

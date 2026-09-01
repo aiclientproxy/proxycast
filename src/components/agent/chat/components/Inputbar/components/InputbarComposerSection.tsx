@@ -52,6 +52,7 @@ import type {
   InputbarPluginSkillCapability,
 } from "../pluginInputCapability";
 import type { BaseComposerSendMetadata } from "@/components/input-kit";
+import type { ComposerController } from "@/components/input-kit";
 import type { ThreadGoal } from "@limecloud/app-server-client";
 
 interface InputbarComposerSectionProps {
@@ -66,6 +67,7 @@ interface InputbarComposerSectionProps {
   workflowProgressLabel: string;
   workflowSummaryLabel: string;
   inputAdapter: ChatInputAdapter;
+  composerController?: ComposerController;
   characters: Character[];
   skillSelection: SkillSelectionProps;
   onSkillSuggestionsNeeded?: () => void;
@@ -145,6 +147,7 @@ export const InputbarComposerSection: React.FC<
   workflowProgressLabel,
   workflowSummaryLabel,
   inputAdapter,
+  composerController,
   characters,
   skillSelection,
   onSkillSuggestionsNeeded,
@@ -504,6 +507,7 @@ export const InputbarComposerSection: React.FC<
       />
       <InputbarCore
         uiCopy={inputbarCopy}
+        controller={composerController}
         textareaRef={textareaRef}
         text={inputAdapter.state.text}
         setText={inputAdapter.actions.setText}

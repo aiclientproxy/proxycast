@@ -12139,6 +12139,46 @@
           ],
           "type": "object"
         },
+        "PromptHistoryAppendParams": {
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sessionId",
+            "text"
+          ],
+          "type": "object"
+        },
+        "PromptHistoryReadParams": {
+          "properties": {
+            "cursor": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "limit": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "logId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "type": "object"
+        },
         "RequestId": {
           "anyOf": [
             {
@@ -14919,6 +14959,46 @@
             },
             "params": {
               "$ref": "#/$defs/ThreadQueueStartParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "promptHistory/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PromptHistoryReadParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RequestId"
+            },
+            "method": {
+              "const": "promptHistory/append",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/PromptHistoryAppendParams"
             }
           },
           "required": [
@@ -38978,6 +39058,8 @@
         "project/move",
         "project/read",
         "project/update",
+        "promptHistory/append",
+        "promptHistory/read",
         "review/start",
         "skills/config/write",
         "skills/extraRoots/set",
@@ -49974,6 +50056,195 @@
         "project"
       ],
       "title": "ProjectUpdateResponse",
+      "type": "object"
+    },
+    "PromptHistoryAppendParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "text"
+      ],
+      "title": "PromptHistoryAppendParams",
+      "type": "object"
+    },
+    "PromptHistoryAppendResponse": {
+      "$defs": {
+        "PromptHistoryEntry": {
+          "description": "Persistent prompt history entry. Rich composer state is intentionally not\npersisted here; attachments and placeholders remain session-local.",
+          "properties": {
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sessionId": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "ts": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "offset",
+            "sessionId",
+            "text",
+            "ts"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "entry": {
+          "$ref": "#/$defs/PromptHistoryEntry"
+        },
+        "entryCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "logId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entry",
+        "entryCount",
+        "logId"
+      ],
+      "title": "PromptHistoryAppendResponse",
+      "type": "object"
+    },
+    "PromptHistoryEntry": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Persistent prompt history entry. Rich composer state is intentionally not\npersisted here; attachments and placeholders remain session-local.",
+      "properties": {
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "ts": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "sessionId",
+        "text",
+        "ts"
+      ],
+      "title": "PromptHistoryEntry",
+      "type": "object"
+    },
+    "PromptHistoryReadParams": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "logId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "title": "PromptHistoryReadParams",
+      "type": "object"
+    },
+    "PromptHistoryReadResponse": {
+      "$defs": {
+        "PromptHistoryEntry": {
+          "description": "Persistent prompt history entry. Rich composer state is intentionally not\npersisted here; attachments and placeholders remain session-local.",
+          "properties": {
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sessionId": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "ts": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "offset",
+            "sessionId",
+            "text",
+            "ts"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "data": {
+          "items": {
+            "$ref": "#/$defs/PromptHistoryEntry"
+          },
+          "type": "array"
+        },
+        "entryCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "logId": {
+          "type": "string"
+        },
+        "nextCursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "data",
+        "entryCount",
+        "logId"
+      ],
+      "title": "PromptHistoryReadResponse",
       "type": "object"
     },
     "ProtocolKind": {
@@ -123910,6 +124181,8 @@
               "projectMaterial/update",
               "projectMaterial/upload",
               "projectMemory/read",
+              "promptHistory/append",
+              "promptHistory/read",
               "review/start",
               "scheduledTask/create",
               "scheduledTask/delete",

@@ -31,6 +31,7 @@ mod plugin;
 mod process;
 mod project;
 mod project_git;
+mod prompt_history;
 mod request_serialization;
 mod request_trace;
 mod review;
@@ -57,6 +58,7 @@ use crate::command_exec::CommandExecServer;
 use crate::fs::FsServer;
 use crate::fuzzy_file_search::FuzzyFileSearchServer;
 use crate::process::ProcessServer;
+use crate::runtime::PromptHistoryStore;
 use crate::thread_state::ThreadStateManager;
 use crate::AppServerError;
 use crate::RuntimeCore;
@@ -129,6 +131,7 @@ pub struct RequestProcessor {
     pub(crate) environment_registry: Arc<EnvironmentRegistry>,
     environment_execution_lowering: bool,
     selected_environment_threads: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    prompt_history: Arc<PromptHistoryStore>,
 }
 
 #[derive(Debug, Default)]
@@ -185,6 +188,13 @@ impl RequestProcessor {
         > = environment_registry.clone();
         let environment_execution_lowering =
             runtime.set_filesystem_gateway(filesystem_gateway).is_ok();
+        let prompt_history = runtime.prompt_history_store().unwrap_or_else(|| {
+            Arc::new(PromptHistoryStore::new(
+                runtime
+                    .environment_registry_path()
+                    .with_file_name("prompt_history.jsonl"),
+            ))
+        });
         Self {
             state: Arc::new(Mutex::new(ProcessorState::default())),
             runtime: Arc::new(runtime),
@@ -202,6 +212,7 @@ impl RequestProcessor {
             environment_registry,
             environment_execution_lowering,
             selected_environment_threads: Arc::new(Mutex::new(HashMap::new())),
+            prompt_history,
         }
     }
 

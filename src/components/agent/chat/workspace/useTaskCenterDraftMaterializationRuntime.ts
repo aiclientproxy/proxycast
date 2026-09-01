@@ -32,6 +32,7 @@ type AgentEntry = "new-task" | "claw";
 type CreateFreshSession = (
   sessionName?: string,
   options?: {
+    activateSession?: boolean;
     preserveCurrentSnapshot?: boolean;
     skipSessionStartHooks?: boolean;
   },
@@ -227,6 +228,7 @@ export function useTaskCenterDraftMaterializationRuntime({
       taskCenterDraftSurfaceActiveRef.current = false;
       taskCenterDraftWarmupSessionIdsRef.current.delete(draftTabId);
       startTransition(() => {
+        setTaskCenterTransitionTopicId(null);
         setTaskCenterDraftTabs((current) =>
           removeTaskCenterDraftTab(current, draftTabId),
         );
@@ -267,6 +269,7 @@ export function useTaskCenterDraftMaterializationRuntime({
       persistMaterializedSessionNavigation,
       setActiveTaskCenterDraftTabId,
       setTaskCenterDraftTabs,
+      setTaskCenterTransitionTopicId,
       switchMaterializedSession,
       taskCenterDraftSurfaceActiveRef,
       taskCenterWorkspaceId,
@@ -327,6 +330,7 @@ export function useTaskCenterDraftMaterializationRuntime({
 
       const materializePromise = (async () => {
         const newSessionId = await createFreshSession("新对话", {
+          activateSession: options?.commit !== false,
           preserveCurrentSnapshot: false,
           skipSessionStartHooks: true,
         });

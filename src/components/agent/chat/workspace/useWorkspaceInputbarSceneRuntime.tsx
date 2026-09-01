@@ -5,6 +5,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import type {
   AgentInitialInputCapabilityParams,
   AgentInitialKnowledgePackSelectionParams,
@@ -26,6 +27,8 @@ import {
 import { deriveRuntimeToolAvailability } from "../utils/runtimeToolAvailability";
 import type { WorkspaceGeneralWorkbenchHarnessPanelBaseProps } from "./useWorkspaceGeneralWorkbenchHarnessSurfaceRuntime";
 import type { InputbarSendHandler } from "../components/Inputbar/inputbarSendPayload";
+import { buildTurnInput } from "../utils/buildUserInputSubmitOp";
+import { addThreadQueue } from "@/lib/api/agentRuntime/threadQueueActions";
 import type { WorkspaceHandleSend } from "./useWorkspaceSendActions";
 import type { CuratedTaskReferenceEntry } from "../utils/curatedTaskReferenceSelection";
 import { useWorkspaceKnowledgeRuntime } from "./knowledge/useWorkspaceKnowledgeRuntime";
@@ -49,6 +52,7 @@ interface UseWorkspaceInputbarSceneRuntimeParams {
   isThemeWorkbench: InputbarScenePresentationParams["isThemeWorkbench"];
   sessionId: InputbarParams["sessionId"];
   threadId: InputbarParams["threadId"];
+  submitTarget?: InputbarParams["submitTarget"];
   canAcceptDirectInput?: boolean | null;
   threadGoal: InputbarParams["threadGoal"];
   threadGoalError: InputbarParams["threadGoalError"];
@@ -138,6 +142,7 @@ export function useWorkspaceInputbarSceneRuntime({
   isThemeWorkbench,
   sessionId,
   threadId,
+  submitTarget,
   canAcceptDirectInput,
   threadGoal,
   threadGoalError,
@@ -266,6 +271,39 @@ export function useWorkspaceInputbarSceneRuntime({
       if (directInputBlocked) {
         return false;
       }
+      if (payload.composerTarget === "queue") {
+        const targetThreadId = threadId?.trim();
+        if (!targetThreadId) {
+          return false;
+        }
+        const draft = payload.composerDraft;
+        const pathText = (draft?.pathReferences ?? [])
+          .map((reference) => reference.path.trim())
+          .filter(Boolean)
+          .join("\n");
+        const content =
+          payload.textOverride?.trim() ||
+          draft?.text.trim() ||
+          (pathText ? `请查看这些文件或文件夹。\n${pathText}` : "");
+        if (!content && !(payload.images?.length ?? 0)) {
+          return false;
+        }
+        return addThreadQueue({
+          threadId: targetThreadId,
+          clientUserMessageId: crypto.randomUUID(),
+          input: buildTurnInput({
+            content,
+            images: payload.images ?? [],
+            inputMentions: payload.sendOptions?.inputMentions,
+          }),
+        }).then(
+          () => true,
+          () => {
+            toast.error(String(t("agentChat.threadQueue.actionFailed")));
+            return false;
+          },
+        );
+      }
       const payloadTargetSessionId =
         payload.sendOptions?.targetSessionId?.trim() || undefined;
       const sendOptions =
@@ -286,7 +324,7 @@ export function useWorkspaceInputbarSceneRuntime({
         sendOptions,
       );
     },
-    [directInputBlocked, handleSend, inputbarTargetSessionId],
+    [directInputBlocked, handleSend, inputbarTargetSessionId, t, threadId],
   );
   const handleInputbarToolStatesChange = useCallback(
     (nextToolStates: WorkspaceInputbarToolStates) => {
@@ -352,6 +390,7 @@ export function useWorkspaceInputbarSceneRuntime({
         onProjectContextChange: navigationActions.handleProjectChange,
         sessionId,
         threadId,
+        submitTarget,
         threadGoal,
         threadGoalError,
         threadGoalLoading,

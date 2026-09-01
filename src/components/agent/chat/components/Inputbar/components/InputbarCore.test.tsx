@@ -762,6 +762,28 @@ describe("InputbarCore", () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
+  it("生成中有草稿时应允许显式加入 canonical queue", async () => {
+    const onSend = vi.fn();
+    const container = await renderInputbarCore({
+      text: "下一步检查测试",
+      onSend,
+      onStop: vi.fn(),
+      isLoading: true,
+    });
+    const queueButton = container.querySelector(
+      'button[aria-label="加入队列"]',
+    ) as HTMLButtonElement | null;
+
+    expect(queueButton).toBeTruthy();
+    await act(async () => queueButton?.click());
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        triggerSource: "button",
+        submitTarget: "queue",
+      }),
+    );
+  });
+
   it("点击图片删除按钮应触发 onRemoveImage", async () => {
     const onRemoveImage = vi.fn();
     const container = await renderInputbarCore({

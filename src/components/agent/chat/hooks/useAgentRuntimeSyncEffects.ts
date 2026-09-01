@@ -640,6 +640,7 @@ export function useAgentRuntimeSyncEffects(
     threadReadStatus,
     threadTurns,
     normalizedCurrentStreamTurnId,
+    normalizedCurrentTurnEventName,
     currentTurnEventNameRef,
   ]);
 

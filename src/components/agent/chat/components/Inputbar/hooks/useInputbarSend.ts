@@ -16,7 +16,12 @@ import {
 } from "../../../skill-selection/inputCapabilitySelection";
 import { buildInputbarToolPreferencesOverride } from "../utils/inputbarModeRequestMetadata";
 import { recordAgentUiPerformanceMetric } from "@/lib/agentUiPerformanceMetrics";
-import type { BaseComposerSendMetadata } from "@/components/input-kit";
+import type {
+  BaseComposerSendMetadata,
+  ComposerController,
+  ComposerDraftSnapshot,
+  ComposerSubmitTarget,
+} from "@/components/input-kit";
 
 interface UseInputbarSendParams {
   input: string;
@@ -28,11 +33,15 @@ interface UseInputbarSendParams {
   activeTools?: Record<string, boolean>;
   projectId?: string | null;
   sessionId?: string | null;
+  isLoading?: boolean;
   onSend: InputbarSendHandler;
   clearPendingImages: () => void;
   clearPathReferences?: () => void;
   clearActiveCapability: () => void;
   getInputRestoreEpoch?: () => number;
+  composerController?: ComposerController;
+  onComposerCommitted?: (text: string, draft?: ComposerDraftSnapshot) => void;
+  submitTarget?: ComposerSubmitTarget;
 }
 
 export function useInputbarSend({
@@ -45,11 +54,15 @@ export function useInputbarSend({
   activeTools = {},
   projectId,
   sessionId,
+  isLoading = false,
   onSend,
   clearPendingImages,
   clearPathReferences,
   clearActiveCapability,
   getInputRestoreEpoch,
+  composerController,
+  onComposerCommitted,
+  submitTarget,
 }: UseInputbarSendParams) {
   return useCallback(
     async (triggerMetadata?: BaseComposerSendMetadata) => {
@@ -72,8 +85,19 @@ export function useInputbarSend({
         workspaceId: projectId ?? null,
       });
       const sendRestoreEpoch = getInputRestoreEpoch?.() ?? 0;
+      const resolvedSubmitTarget: ComposerSubmitTarget =
+        triggerMetadata?.submitTarget ??
+        submitTarget ??
+        (isLoading ? "steer" : "start");
+      composerController?.setAttachments(pendingImages);
+      composerController?.setPathReferences(pathReferences);
+      const composerReceipt = composerController?.submit(resolvedSubmitTarget);
+      if (composerReceipt?.kind === "empty") {
+        return;
+      }
+      const composerDraft = composerReceipt?.draft;
       const submittedInput = resolveInputbarPluginSubmissionText({
-        input,
+        input: composerDraft?.text ?? input,
         selection: activePluginSelection,
       });
       const inputMentions = activePluginSelection
@@ -98,7 +122,8 @@ export function useInputbarSend({
         !activeCapability &&
         !activePluginSelection &&
         !knowledgePackSelection?.enabled &&
-        !hasRuntimeMode;
+        !hasRuntimeMode &&
+        resolvedSubmitTarget !== "queue";
       if (canUsePlainTextFastPath) {
         recordAgentUiPerformanceMetric("inputbar.send.plainTextFastPath", {
           elapsedMs: Math.max(0, Date.now() - triggeredAt),
@@ -112,6 +137,13 @@ export function useInputbarSend({
           images: undefined,
           textOverride: submittedInput,
           sendOptions: undefined,
+          ...(composerReceipt?.kind === "accepted"
+            ? {
+                composerIntent: composerReceipt.intent,
+                composerTarget: composerReceipt.target,
+                composerDraft,
+              }
+            : {}),
           ...(triggerMetadata
             ? {
                 triggeredAt,
@@ -127,9 +159,21 @@ export function useInputbarSend({
         ) {
           return;
         }
+        if (
+          composerReceipt?.kind === "accepted" &&
+          !composerController?.commit(composerReceipt)
+        ) {
+          return;
+        }
         clearPendingImages();
         clearPathReferences?.();
         clearActiveCapability();
+        if (composerReceipt?.kind === "accepted") {
+          onComposerCommitted?.(
+            composerController?.getDocument().text ?? "",
+            composerDraft,
+          );
+        }
         return;
       }
 
@@ -217,6 +261,13 @@ export function useInputbarSend({
           images: pendingImages.length > 0 ? pendingImages : undefined,
           textOverride,
           sendOptions,
+          ...(composerReceipt?.kind === "accepted"
+            ? {
+                composerIntent: composerReceipt.intent,
+                composerTarget: composerReceipt.target,
+                composerDraft,
+              }
+            : {}),
           ...(triggerMetadata
             ? {
                 triggeredAt,
@@ -240,9 +291,21 @@ export function useInputbarSend({
         ) {
           return;
         }
+        if (
+          composerReceipt?.kind === "accepted" &&
+          !composerController?.commit(composerReceipt)
+        ) {
+          return;
+        }
         clearPendingImages();
         clearPathReferences?.();
         clearActiveCapability();
+        if (composerReceipt?.kind === "accepted") {
+          onComposerCommitted?.(
+            composerController?.getDocument().text ?? "",
+            composerDraft,
+          );
+        }
       } catch {
         // 发送失败时保留图片与技能，交由上层 toast / 恢复逻辑处理。
       }
@@ -252,12 +315,16 @@ export function useInputbarSend({
       activePluginSelection,
       activeTools,
       clearActiveCapability,
+      composerController,
       clearPendingImages,
       clearPathReferences,
       getInputRestoreEpoch,
       input,
+      isLoading,
       knowledgePackSelection,
+      onComposerCommitted,
       projectId,
+      submitTarget,
       sessionId,
       onSend,
       pendingImages,

@@ -209,6 +209,7 @@ export function renderPanel(
 
   const defaultProps: React.ComponentProps<typeof EmptyStateComposerPanel> = {
     input: "",
+    setInput: vi.fn(),
     placeholder: "输入内容",
     onSend: vi.fn(),
     activeTheme: "general",
@@ -233,8 +234,20 @@ export function renderPanel(
     onRemoveImage: vi.fn(),
   };
 
+  const panelProps = { ...defaultProps, ...props };
+  const ControlledPanel = () => {
+    const [value, setValue] = React.useState(panelProps.input);
+    return (
+      <EmptyStateComposerPanel
+        {...panelProps}
+        input={value}
+        setInput={setValue}
+      />
+    );
+  };
+
   act(() => {
-    root.render(<EmptyStateComposerPanel {...defaultProps} {...props} />);
+    root.render(<ControlledPanel />);
   });
 
   mountedRoots.push({ root, container });
@@ -248,19 +261,24 @@ export function renderStatefulPanel(
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
+  const initialInput = props?.input ?? "";
   const {
+    input: _ignoredInput,
+    setInput: _ignoredSetInput,
     subagentEnabled: _ignoredSubagentEnabled,
     onSubagentEnabledChange: _ignoredOnSubagentEnabledChange,
     ...restProps
   } = props || {};
 
   const StatefulPanel = () => {
+    const [input, setInput] = React.useState(initialInput);
     const [subagentEnabled, setSubagentEnabled] = React.useState(
       initialSubagentEnabled,
     );
     return (
       <EmptyStateComposerPanel
-        input=""
+        input={input}
+        setInput={setInput}
         placeholder="输入内容"
         onSend={vi.fn()}
         activeTheme="general"

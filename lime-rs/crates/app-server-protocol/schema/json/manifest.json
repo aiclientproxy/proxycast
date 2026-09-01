@@ -940,6 +940,14 @@
     },
     {
       "kind": "request",
+      "method": "promptHistory/append"
+    },
+    {
+      "kind": "request",
+      "method": "promptHistory/read"
+    },
+    {
+      "kind": "request",
       "method": "review/start"
     },
     {
@@ -2534,6 +2542,11 @@
       "ProjectRoot",
       "ProjectUpdateParams",
       "ProjectUpdateResponse",
+      "PromptHistoryAppendParams",
+      "PromptHistoryAppendResponse",
+      "PromptHistoryEntry",
+      "PromptHistoryReadParams",
+      "PromptHistoryReadResponse",
       "QueuedSubmission",
       "ReasoningEffortOption",
       "ReasoningSummaryPartAddedNotification",

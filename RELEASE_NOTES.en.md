@@ -1,40 +1,42 @@
-## Lime v1.137.0
+## Lime v1.138.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- Added a thread activity panel for subagents, MCP tools, and skills, with workspace navigation entry points.
-- Added a real Electron Gate B thread-fork scenario and environment-selection projection that preserves Thread/Turn/Item identity and environment world state.
-- Added MCP tools, prompts, and resources list-changed notifications with automatic GUI refresh for the affected data.
+- Added a unified Composer Controller so the home and conversation composers share structured drafts, submit intents, history recall, and start, queue, steer, and interrupt routing.
+- Added persistent App Server `promptHistory/read|append` history with cross-process JSONL paging, file locking, malformed-row tolerance, and cross-platform log identity.
+- Added a Desktop capability/readiness contract, a macOS native helper, and security-scoped bookmark lifecycle support for permissions, Launch Services, displays, HID, device keys, and packaged-resource status.
+- Added a cross-platform desktop resource manifest covering App Server, Code Mode, Windows sandbox helpers, and the macOS native host with identity, architecture, and SHA-256 verification.
 
 ### Fixes
 
-- Fixed recent notification replay after the Electron App Server connection consumed a notification early, and completed typed MCP progress projection.
-- Fixed permission-profile catalog and runtime policy drift so thread start, resume, and fork share the same allow-list checks.
-- Fixed canonical Agent Runtime thread projection for environments, Provider routes, and session metadata instead of exposing raw business metadata to the GUI.
-- Fixed Workspace, Canvas Workbench change summaries, thread navigation, and session lifecycle behavior across state transitions.
+- Fixed home warm-up writing the production local override too early, which made the routing owner clear the active draft, hide the Banner/skin Hero, and prevent send from reusing the warmed session; warm-up now only prepares the session and routing changes at commit time.
+- Fixed the official Agnes `agnes-2.5-pro` endpoint being treated as a non-executable custom model; unknown endpoints remain fail closed.
+- Fixed Composer production-bundle initialization order, asynchronous history merging, failed-draft retention, and large-paste expansion boundaries.
+- Fixed drift in queued-thread actions, model restoration, reasoning projection, and narrow-window Header and Timeline layouts.
 
 ### Improvements and Refactoring
 
-- Converged permission profiles, environment selections, and thread-fork state on App Server/RuntimeCore current owners while preserving the real Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> GUI path.
-- Refactored MCP event bridging, the App Server session client, thread activity, and Right Surface projection to reduce duplicate state reads and keep five-locale UI copy aligned.
-- Expanded Agent Runtime, MCP, Session History, and Workspace observability plus Gate B smoke scripts for real notification replay and terminal assertions.
+- Converged Composer, prompt history, Desktop capabilities, and resource integrity on single current owners without adding an Electron business backend or Renderer persistence source.
+- Aligned the current Codex reasoning policy with `persistent` effort, five-locale selector copy, and source-of-truth guards for model context and tool policy.
+- Strengthened the Windows Squirrel release path with an installed Code Mode Gate B that verifies the `Lime.exe -> app-server.exe -> code-mode-host.exe` process chain.
+- Updated DeepSWE adapter contracts and governance assertions to prevent fixture manifests from drifting from current owners.
 
 ### Testing and Quality
 
-- Added regressions for the thread activity panel, thread fork, MCP list-changed events, permission profiles, environment lifecycle, and Canvas Workbench.
-- Expanded App Server protocol/client contracts, MCP notification projection, Agent current fixture, Electron Gate B, and five-locale resource checks.
-- Release validation covers version consistency, TypeScript, protocol contracts, affected Rust/frontend tests, and real Electron GUI smoke; results are recorded in the release plan.
+- Expanded App Server protocol/schema/generated-client, Composer, prompt-history, Desktop Host, macOS native-host, resource-manifest, Windows Squirrel, and Code Mode Gate B regressions.
+- Release validation covers version consistency, TypeScript, protocol contracts, affected frontend/Rust tests, real Electron GUI smoke, and release-workflow guards.
+- Windows packaged Gate B evidence is produced by the `windows-2022` release workflow; local static tests are not presented as a Windows platform pass.
 
 ### Documentation
 
-- Updated command boundaries, the Codex App GUI alignment plan, and script documentation with current owners for MCP notifications, permission profiles, environment projection, and thread activity.
-- Added the v1.137.0 release execution plan with candidate scope, the excluded build-reference artifact, validation evidence, and release closeout steps.
+- Updated the global architecture, Codex GUI alignment plan, and Desktop platform parity plan with current owners, capability matrices, evidence levels, and remaining platform gaps.
+- Added the v1.138.0 release execution plan with candidate scope, excluded Codex build references, validation, and release closeout steps.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.137.0`.
-- Windows official signing/notarization, cross-platform installer/release assets, and live-provider evidence still require the corresponding platform or CI runner and are not claimed locally.
+- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.138.0`.
+- The live Codex Desktop visual baseline remains blocked by macOS AppleEvent permissions; the home Banner and skin Hero remain an explicit product exception.
 
-**Full changes**: `v1.136.0` -> `v1.137.0`
+**Full changes**: `v1.137.0` -> `v1.138.0`

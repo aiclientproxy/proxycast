@@ -291,7 +291,7 @@ function createRuntimeAdapterFixture(): AgentRuntimeAdapter {
     steerTurn: unsupported,
     compactSession: unsupported,
     interruptTurn: async () => false,
-    resumeThread: async () => false,
+    resumeThread: async () => true,
     respondToAction: unsupported,
     listenToTurnEvents: (eventName, handler) =>
       mockSafeListen(eventName, handler),
@@ -426,6 +426,7 @@ beforeEach(async () => {
   ]);
   mockGetAgentRuntimeSession.mockImplementation(async (topicId: string) => ({
     id: topicId,
+    thread_id: topicId,
     created_at: createdAt,
     updated_at: createdAt,
     messages: [],

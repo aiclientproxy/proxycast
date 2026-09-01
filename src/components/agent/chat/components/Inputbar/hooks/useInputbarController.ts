@@ -60,6 +60,10 @@ import { buildInputbarControllerCopy } from "./inputbarControllerCopy";
 import { buildInputbarWorkflowStateCopy } from "../inputbarWorkflowCopy";
 import { logAgentDebug } from "@/lib/agentDebug";
 import type { ModelReasoningEffortLevel } from "@/lib/types/modelRegistry";
+import { useComposerController } from "@/components/input-kit/useComposerController";
+import type { ComposerSubmitTarget } from "@/components/input-kit/types";
+import { AppServerClient } from "@/lib/api/appServer";
+import { readPromptHistory } from "@/lib/api/promptHistory";
 import {
   applyInputbarPluginSelection,
   removeInputbarPluginSelection,
@@ -102,6 +106,7 @@ interface UseInputbarControllerParams {
   onClearPathReferences?: () => void;
   inputRestoreRequest?: InterruptedInputRestoreRequest | null;
   onInputRestoreRequestHandled?: (requestId: string) => void;
+  submitTarget?: ComposerSubmitTarget;
 }
 
 export function useInputbarController({
@@ -136,6 +141,7 @@ export function useInputbarController({
   onClearPathReferences,
   inputRestoreRequest = null,
   onInputRestoreRequestHandled,
+  submitTarget,
   skills,
   serviceSkills,
   serviceSkillGroups,
@@ -179,6 +185,55 @@ export function useInputbarController({
     replacePendingImages,
     openFileDialog,
   } = useImageAttachments();
+  const {
+    controller: composerController,
+    snapshot: composerSnapshot,
+    setText: setComposerControllerText,
+    setAttachments: setComposerControllerAttachments,
+    setPathReferences: setComposerControllerPathReferences,
+  } = useComposerController({
+    initialDocument: {
+      text: input,
+      pathReferences,
+    },
+  });
+  const promptHistoryClientRef = useRef<AppServerClient | null>(null);
+  if (!promptHistoryClientRef.current) {
+    promptHistoryClientRef.current = new AppServerClient();
+  }
+  useEffect(() => {
+    let cancelled = false;
+    void readPromptHistory(promptHistoryClientRef.current ?? undefined)
+      .then((entries) => {
+        if (!cancelled) {
+          composerController.mergeHistory(
+            entries.reverse().map((entry) => ({ text: entry.text })),
+          );
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [composerController]);
+  const setComposerText = useCallback(
+    (value: string) => {
+      setComposerControllerText(value);
+      setInput(value);
+    },
+    [setComposerControllerText, setInput],
+  );
+  useEffect(() => {
+    if (composerSnapshot.document.text !== input) {
+      setComposerControllerText(input);
+    }
+  }, [composerSnapshot.document.text, input, setComposerControllerText]);
+  useEffect(() => {
+    setComposerControllerAttachments(pendingImages);
+  }, [pendingImages, setComposerControllerAttachments]);
+  useEffect(() => {
+    setComposerControllerPathReferences(pathReferences);
+  }, [pathReferences, setComposerControllerPathReferences]);
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
       const customReferences = readCustomPathReferencesFromDataTransfer(
@@ -287,7 +342,7 @@ export function useInputbarController({
       requestId,
       restoreEpoch,
     });
-    setInput(draft.text);
+    setComposerText(draft.text);
     replacePendingImages([...(draft.images ?? [])]);
     onClearPathReferences?.();
     if (restoredPathReferences.length > 0) {
@@ -309,7 +364,7 @@ export function useInputbarController({
     onClearPathReferences,
     onInputRestoreRequestHandled,
     replacePendingImages,
-    setInput,
+    setComposerText,
     skills,
   ]);
 
@@ -351,7 +406,7 @@ export function useInputbarController({
       !input.trim() &&
       route.prompt.trim().length > 0
     ) {
-      setInput(route.prompt);
+      setComposerText(route.prompt);
     }
 
     setActiveCapability(resolvedCapability);
@@ -366,7 +421,7 @@ export function useInputbarController({
     initialInputCapability,
     initialInputCapabilitySignature,
     input,
-    setInput,
+    setComposerText,
     skills,
   ]);
 
@@ -384,12 +439,13 @@ export function useInputbarController({
     handleHintSelect,
     handleHintKeyDown,
   } = useHintRoutes({
-    setInput,
+    setInput: setComposerText,
     textareaRef,
   });
 
   const handleSend = useInputbarSend({
     input,
+    isLoading,
     pendingImages,
     pathReferences,
     activeCapability,
@@ -403,7 +459,24 @@ export function useInputbarController({
     clearPathReferences: onClearPathReferences,
     clearActiveCapability: () => setActiveCapability(null),
     getInputRestoreEpoch: () => inputRestoreEpochRef.current,
+    composerController,
+    onComposerCommitted: (text, draft) => {
+      setInput(text);
+      if (sessionId && draft?.text.trim()) {
+        void promptHistoryClientRef.current
+          ?.appendPromptHistory({
+            sessionId,
+            text: draft.text,
+          })
+          .catch(() => undefined);
+      }
+    },
+    submitTarget,
   });
+  const handleInterrupt = useCallback(() => {
+    composerController.submit("interrupt", { allowEmpty: true });
+    onStop?.();
+  }, [composerController, onStop]);
   const inputAdapter = useInputbarAdapter({
     input,
     setInput: handleSetInput,
@@ -416,7 +489,7 @@ export function useInputbarController({
     reasoningEffort,
     setReasoningEffort,
     handleSend,
-    onStop,
+    onStop: handleInterrupt,
     pendingImages,
   });
 
@@ -479,7 +552,7 @@ export function useInputbarController({
                   ),
                 }),
                 onClear: () => {
-                  setInput(
+                  setComposerText(
                     removeInputbarPluginSelection({
                       input,
                       selection: activePluginSelection,
@@ -542,7 +615,7 @@ export function useInputbarController({
                     referenceEntries: nextReferenceEntries,
                   });
 
-                  setInput(
+                    setComposerText(
                     replaceCuratedTaskLaunchPromptInInput({
                       currentInput: input,
                       previousPrompt: activeCapability.task.prompt,
@@ -617,7 +690,7 @@ export function useInputbarController({
         inputValues,
         referenceEntries: referenceSelection.referenceEntries,
       });
-      setInput(
+      setComposerText(
         replaceCuratedTaskLaunchPromptInInput({
           currentInput: input,
           previousPrompt,
@@ -637,7 +710,7 @@ export function useInputbarController({
       setCuratedTaskEditorPrefillHint(null);
       setEditingCuratedTaskCapability(null);
     },
-    [editingCuratedTaskCapability, input, setInput],
+    [editingCuratedTaskCapability, input, setComposerText],
   );
   const dialogLayer = editingCuratedTaskCapability
     ? React.createElement(CuratedTaskLauncherDialog, {
@@ -679,7 +752,7 @@ export function useInputbarController({
       preserveInput: options?.preserveInputOverride === true,
     });
     pluginSelectionInputSyncedRef.current = false;
-    setInput(selection.text);
+    setComposerText(selection.text);
     setActivePluginSelection(selection);
   };
   const handleSelectInputCapability = (
@@ -724,6 +797,7 @@ export function useInputbarController({
 
   return {
     textareaRef,
+    composerController,
     isWorkspaceVariant,
     pendingImages,
     fileInputRef,

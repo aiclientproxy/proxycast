@@ -7,14 +7,13 @@ export const MODEL_REASONING_EFFORTS = [
   "xhigh",
   "max",
   "ultra",
+  "persistent",
 ] as const;
 
 export type KnownModelReasoningEffort =
   (typeof MODEL_REASONING_EFFORTS)[number];
 
-export type ModelReasoningEffort =
-  | KnownModelReasoningEffort
-  | (string & {});
+export type ModelReasoningEffort = KnownModelReasoningEffort | (string & {});
 
 export interface ModelReasoningEffortPreset {
   id: string;
@@ -118,11 +117,7 @@ function normalizeReasoningEffortPresets(
   for (const item of value) {
     const preset = normalizeReasoningEffortPreset(item);
     const normalizedId = preset?.id.toLocaleLowerCase("en-US") ?? "";
-    if (
-      !preset ||
-      seenIds.has(normalizedId) ||
-      seenValues.has(preset.value)
-    ) {
+    if (!preset || seenIds.has(normalizedId) || seenValues.has(preset.value)) {
       continue;
     }
     seenIds.add(normalizedId);
@@ -179,10 +174,7 @@ export function buildModelReasoningPolicy(
     ]),
   );
   const defaultReasoningLevel = normalizeModelReasoningEffort(
-    firstPresent(source, [
-      "default_reasoning_level",
-      "defaultReasoningLevel",
-    ]),
+    firstPresent(source, ["default_reasoning_level", "defaultReasoningLevel"]),
   );
   const supportedReasoningLevels = normalizeReasoningEffortPresets(
     firstPresent(source, [

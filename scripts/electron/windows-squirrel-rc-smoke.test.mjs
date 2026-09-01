@@ -341,6 +341,9 @@ describe("Windows Squirrel RC smoke", () => {
       const pluginGate = steps.find(
         (step) => step.name === "Run installed Windows Agent Plugin Gate B",
       );
+      const codeModeGate = steps.find(
+        (step) => step.name === "Run installed Windows CodeMode Gate B",
+      );
       const upload = steps.find(
         (step) => step.name === "Upload Windows Squirrel RC evidence",
       );
@@ -349,6 +352,9 @@ describe("Windows Squirrel RC smoke", () => {
       );
       const pluginPathUpload = steps.find(
         (step) => step.name === "Upload Windows Agent Plugin path contract log",
+      );
+      const codeModeUpload = steps.find(
+        (step) => step.name === "Upload Windows CodeMode Gate B evidence",
       );
 
       expect(download?.run).toContain("gh release download");
@@ -397,7 +403,78 @@ describe("Windows Squirrel RC smoke", () => {
         );
         expect(pluginPathUpload?.with?.["if-no-files-found"]).toBe("warn");
         expect(pluginPathUpload?.if).toBe("${{ always() }}");
+        expect(codeModeGate?.run).toContain(
+          "npm run smoke:code-mode-electron-gate-b",
+        );
+        expect(codeModeGate?.run).toContain("--electron-executable");
+        expect(codeModeGate?.run).toContain(
+          ".lime/qc/gui-evidence/code-mode-electron-gate-b-windows",
+        );
+        expect(codeModeUpload?.with?.path).toBe(
+          ".lime/qc/gui-evidence/code-mode-electron-gate-b-windows",
+        );
       }
     }
+  });
+
+  it("Windows test workflow 必须先准备并验证 packaged sidecar，再进入安装后 Gate B", () => {
+    const workflow = YAML.parse(
+      fs.readFileSync(".github/workflows/build-windows-test.yml", "utf8"),
+    );
+    const steps = workflow.jobs["build-windows-test"].steps;
+    const sherpa = steps.find(
+      (step) => step.name === "Prepare sherpa-onnx runtime",
+    );
+    const build = steps.find(
+      (step) =>
+        step.name ===
+        "Build Electron Windows test package with app-server and code-mode-host sidecars",
+    );
+    const installSmoke = steps.find(
+      (step) => step.name === "Smoke installed Windows Squirrel candidate",
+    );
+    const pluginGate = steps.find(
+      (step) => step.name === "Run installed Windows Agent Plugin Gate B",
+    );
+    const codeModeGate = steps.find(
+      (step) => step.name === "Run installed Windows CodeMode Gate B",
+    );
+
+    expect(sherpa).toBeDefined();
+    expect(build).toBeDefined();
+    expect(installSmoke).toBeDefined();
+    expect(pluginGate).toBeDefined();
+    expect(codeModeGate).toBeDefined();
+    expect(sherpa?.run).toContain(
+      "scripts/prepare-sherpa-onnx-runtime.mjs",
+    );
+    expect(sherpa?.run).toContain("x86_64-pc-windows-msvc");
+    expect(build?.run).toContain("electron-forge make --platform win32");
+    expect(build?.run).toContain("npm run electron:build");
+    expect(build?.run).toContain(
+      "scripts/electron/verify-package-resources.mjs",
+    );
+    expect(build?.run).toContain("--platform win32");
+    expect(build?.run).toContain("scripts/electron/stage-release-assets.mjs");
+    expect(installSmoke?.run).toContain(
+      "scripts/electron/windows-squirrel-rc-smoke.mjs",
+    );
+    expect(pluginGate?.run).toContain(
+      "npm run smoke:plugin-package-electron-gate-b",
+    );
+
+    const orderedNames = steps.map((step) => step.name);
+    expect(orderedNames.indexOf(sherpa.name)).toBeLessThan(
+      orderedNames.indexOf(build.name),
+    );
+    expect(orderedNames.indexOf(build.name)).toBeLessThan(
+      orderedNames.indexOf(installSmoke.name),
+    );
+    expect(orderedNames.indexOf(installSmoke.name)).toBeLessThan(
+      orderedNames.indexOf(pluginGate.name),
+    );
+    expect(orderedNames.indexOf(pluginGate.name)).toBeLessThan(
+      orderedNames.indexOf(codeModeGate.name),
+    );
   });
 });

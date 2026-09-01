@@ -24,6 +24,32 @@ describe("MessageList layout and scrolling", () => {
     ).toBe("session-canonical-1");
   });
 
+  it("Thread 消息列应使用单一内容轴和紧凑密度", () => {
+    const container = render([
+      {
+        id: "msg-thread-axis",
+        role: "assistant",
+        content: "保持正文与过程时间线在同一列。",
+      } as Message,
+    ]);
+
+    const messageColumn = container.querySelector<HTMLElement>(
+      '[data-testid="message-list-column"]',
+    );
+    const assistantBubble = container.querySelector<HTMLElement>(
+      '[data-message-role="assistant"]',
+    );
+
+    expect(messageColumn?.dataset.contentAxis).toBe("thread");
+    expect(messageColumn?.dataset.layoutDensity).toBe("compact");
+    expect(messageColumn?.className).toContain("gap-3");
+    expect(messageColumn?.className).toContain("py-3");
+    expect(assistantBubble).not.toBeNull();
+    expect(getComputedStyle(assistantBubble!).maxWidth).toContain(
+      "clamp(640px, 100%, 720px)",
+    );
+  });
+
   it("应在同一滚动区域顶部渲染 leadingContent", () => {
     const container = render(
       [

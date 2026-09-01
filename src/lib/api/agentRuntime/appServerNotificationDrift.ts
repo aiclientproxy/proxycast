@@ -48,7 +48,6 @@ const CODEX_V2_NOTIFICATION_METHODS = new Set([
   "mcpServer/event/stream/notification",
   "mcpServer/oauthLogin/completed",
   "mcpServer/startupStatus/updated",
-  "model/list/updated",
   "model/rerouted",
   "model/safetyBuffering/updated",
   "model/verification",

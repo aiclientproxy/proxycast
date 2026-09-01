@@ -275,7 +275,7 @@ function TimelineBlockCard({
   if (renderPlan.shouldRenderArtifactCardsInline) {
     return (
       <div
-        className={cn("py-0.5", block.items.length === 1 && "space-y-2")}
+        className={cn("py-0.5", block.items.length === 1 && "space-y-1")}
         data-testid={dataTestId}
         data-emphasis={emphasis}
       >
@@ -399,7 +399,7 @@ function TimelineBlockCard({
       >
         <summary
           className={cn(
-            "list-none rounded-md px-2 py-1.5",
+            "list-none rounded-md px-1 py-1",
             hasInteractiveDetails ? "cursor-pointer" : "cursor-default",
             emphasis === "active" &&
               !renderPlan.isThinkingOnlyBlock &&
@@ -469,7 +469,7 @@ function TimelineBlockCard({
 
         {hasInteractiveDetails && open ? (
           <div
-            className="ml-6 space-y-2 pb-1 pl-3"
+            className="ml-6 space-y-1 pb-0 pl-2"
             data-testid={`${dataTestId}:details`}
           >
             {detailEntries.map((entry) => (
@@ -579,9 +579,10 @@ export const AgentThreadTimeline: React.FC<AgentThreadTimelineProps> = ({
 
   return (
     <div
-      className={cn("space-y-2", placement === "leading" ? "mt-0" : "mt-3")}
+      className={cn("space-y-1", placement === "leading" ? "mt-0" : "mt-2")}
       data-testid="agent-thread-flow"
       data-placement={placement}
+      data-layout-density="compact"
     >
       {showInlineStatusHint && inlineStatusHint ? (
         <ThreadInlineStatusHint hint={inlineStatusHint} />

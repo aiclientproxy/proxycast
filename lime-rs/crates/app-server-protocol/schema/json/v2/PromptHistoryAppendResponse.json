@@ -1,0 +1,53 @@
+{
+  "$defs": {
+    "PromptHistoryEntry": {
+      "description": "Persistent prompt history entry. Rich composer state is intentionally not\npersisted here; attachments and placeholders remain session-local.",
+      "properties": {
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "ts": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "sessionId",
+        "text",
+        "ts"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "entry": {
+      "$ref": "#/$defs/PromptHistoryEntry"
+    },
+    "entryCount": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "logId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "entry",
+    "entryCount",
+    "logId"
+  ],
+  "title": "PromptHistoryAppendResponse",
+  "type": "object"
+}

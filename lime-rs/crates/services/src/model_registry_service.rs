@@ -3276,6 +3276,7 @@ impl ModelRegistryService {
     }
 
     /// 转换 API 模型格式为内部格式
+    #[cfg(test)]
     fn convert_api_model(
         &self,
         model: ApiModelResponse,
@@ -3462,9 +3463,24 @@ impl ModelRegistryService {
         provider_id: &str,
         now: i64,
     ) -> EnhancedModelMetadata {
+        self.build_provider_declared_model_with_canonical_provider(
+            model,
+            provider_id,
+            provider_id,
+            now,
+        )
+    }
+
+    fn build_provider_declared_model_with_canonical_provider(
+        &self,
+        model: &ProviderModelConfig,
+        provider_id: &str,
+        canonical_provider_id: &str,
+        now: i64,
+    ) -> EnhancedModelMetadata {
         let model_id = model.id.trim();
         let mut metadata = self
-            .convert_api_model(
+            .convert_api_model_with_canonical_provider(
                 ApiModelResponse {
                     id: model_id.to_string(),
                     display_name: model.display_name.clone(),
@@ -3490,6 +3506,7 @@ impl ModelRegistryService {
                     default_service_tier: None,
                 },
                 provider_id,
+                canonical_provider_id,
                 now,
             )
             .with_source(ModelSource::Custom);
@@ -3510,6 +3527,28 @@ impl ModelRegistryService {
         model: &ProviderModelConfig,
     ) -> EnhancedModelMetadata {
         self.build_provider_declared_model(model, provider_id, chrono::Utc::now().timestamp())
+    }
+
+    /// 使用受信任的 endpoint-specific canonical Provider 身份构建声明模型元数据。
+    ///
+    /// 自定义 Provider 可以接入官方上游 endpoint（例如 Agnes 的 OpenAI 兼容 API）。只有
+    /// `canonical_provider_id_for_api_host` 能识别的 endpoint 才能授权无 capability 的模型；
+    /// 任意未知 custom host 仍保持为 inferred hint。
+    pub fn build_declared_model_metadata_for_endpoint(
+        &self,
+        provider_id: &str,
+        api_host: &str,
+        model: &ProviderModelConfig,
+    ) -> EnhancedModelMetadata {
+        let now = chrono::Utc::now().timestamp();
+        let canonical_provider_id =
+            Self::canonical_provider_id_for_api_host(api_host).unwrap_or(provider_id);
+        self.build_provider_declared_model_with_canonical_provider(
+            model,
+            provider_id,
+            canonical_provider_id,
+            now,
+        )
     }
 
     fn build_declared_models(
@@ -4059,6 +4098,7 @@ mod tests {
         for (model_id, canonical_model_id) in [
             ("agnes-2.0-flash", "agnes/agnes-2.0-flash"),
             ("agnes-2.5-flash", "agnes/agnes-2.5-flash"),
+            ("agnes-2.5-pro", "agnes/agnes-2.5-pro"),
             ("agnes-2.5-pro-alpha", "agnes/agnes-2.5-pro-alpha"),
         ] {
             let response = ModelRegistryService::parse_openai_models_response(&format!(

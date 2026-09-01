@@ -273,6 +273,10 @@ impl RequestProcessor {
                 .handle_thread_queue_reorder_impl(params)
                 .boxed(),
             v2::METHOD_THREAD_QUEUE_START => self.handle_thread_queue_start_impl(params).boxed(),
+            v2::METHOD_PROMPT_HISTORY_READ => self.handle_prompt_history_read_impl(params).boxed(),
+            v2::METHOD_PROMPT_HISTORY_APPEND => {
+                self.handle_prompt_history_append_impl(params).boxed()
+            }
             v2::METHOD_PROJECT_LIST => self.handle_project_list_impl(params).boxed(),
             v2::METHOD_PROJECT_READ => self.handle_project_read_impl(params).boxed(),
             v2::METHOD_PROJECT_CREATE => self.handle_project_create_impl(params).boxed(),

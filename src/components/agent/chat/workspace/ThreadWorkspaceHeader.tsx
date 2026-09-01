@@ -158,8 +158,9 @@ export function ThreadWorkspaceHeader({
     >
       {hasNavigationActions ? (
         <div
-          className="flex shrink-0 items-center gap-0.5"
+          className="flex shrink-0 items-center gap-0.5 max-[640px]:hidden"
           data-testid="thread-workspace-header-navigation"
+          data-responsive-navigation="collapse"
         >
           {onBackHome ? (
             <button
@@ -246,6 +247,7 @@ export function ThreadWorkspaceHeader({
           <span
             className={cn(
               "inline-flex shrink-0 items-center gap-1 text-[11px] font-medium",
+              "max-[760px]:hidden",
               currentStatus.className,
             )}
             data-testid="thread-workspace-header-status"
@@ -275,8 +277,9 @@ export function ThreadWorkspaceHeader({
       </div>
       {actions || onRename || onArchive || onFork ? (
         <div
-          className="flex min-w-0 shrink-0 items-center justify-end gap-1"
+          className="flex min-w-0 max-w-[min(48%,calc(100vw-8rem))] shrink-0 items-center justify-end gap-1 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           data-testid="thread-workspace-header-actions"
+          data-header-action-overflow="scroll"
         >
           {actions}
           {onRename || onArchive || onFork ? (

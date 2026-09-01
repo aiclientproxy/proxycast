@@ -531,6 +531,61 @@ describe("useAgentChat slash skill 执行链路", () => {
     }
   });
 
+  it("后台预热新会话时不应激活会话或覆盖首页快照", async () => {
+    const workspaceId = "ws-create-fresh-background";
+    const createdSessionId = "session-fresh-background";
+    mockCreateAgentRuntimeSession.mockResolvedValue(createdSessionId);
+
+    const harness = mountHook(workspaceId);
+
+    try {
+      await flushEffects();
+      expect(harness.getValue().sessionId).toBeNull();
+
+      await act(async () => {
+        const newSessionId = await harness.getValue().createFreshSession(
+          "新对话",
+          {
+            activateSession: false,
+            preserveCurrentSnapshot: false,
+            skipSessionStartHooks: true,
+          },
+        );
+        expect(newSessionId).toBe(createdSessionId);
+      });
+
+      expect(harness.getValue().sessionId).toBeNull();
+      expect(harness.getValue().messages).toEqual([]);
+      expect(harness.getValue().turns).toEqual([]);
+      expect(harness.getValue().threadItems).toEqual([]);
+      expect(harness.getValue().getThreadIdForSubmit(createdSessionId)).toBe(
+        createdSessionId,
+      );
+      expect(
+        harness.getValue().topics.some((topic) => topic.id === createdSessionId),
+      ).toBe(true);
+      expect(
+        sessionStorage.getItem(`agent_curr_sessionId_${workspaceId}`),
+      ).toBeNull();
+      expect(localStorage.getItem(`agent_last_sessionId_${workspaceId}`)).toBe(
+        null,
+      );
+
+      await act(async () => {
+        const ensuredSessionId = await harness.getValue().ensureSession({
+          targetSessionId: createdSessionId,
+          skipSessionRestore: true,
+          skipSessionStartHooks: true,
+        });
+        expect(ensuredSessionId).toBe(createdSessionId);
+      });
+
+      expect(harness.getValue().sessionId).toBe(createdSessionId);
+    } finally {
+      harness.unmount();
+    }
+  });
+
   it("新建会话后旧会话的流事件不应继续写入当前消息列表", async () => {
     const workspaceId = "ws-create-fresh-detach-old-stream";
     const previousSessionId = "session-old-stream";

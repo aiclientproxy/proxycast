@@ -1,38 +1,40 @@
-## Lime v1.137.0
+## Lime v1.138.0
 
 ### 新功能
 
-- 新增线程活动面板，统一展示子任务、MCP 工具和技能执行状态，并支持从工作区导航打开。
-- 新增线程 fork 的 Electron Gate B 场景与环境选择投影，保留真实 Thread/Turn/Item 身份和环境世界状态。
-- 新增 MCP 工具、提示词和资源列表变更通知，GUI 收到通知后自动刷新对应数据。
+- 新增统一 Composer Controller，首页与会话输入栏共享结构化草稿、提交意图、历史召回以及 start、queue、steer、interrupt 路由语义。
+- 新增 App Server `promptHistory/read|append` 持久化历史，提供跨进程 JSONL 分页、文件锁、坏行容错和跨平台日志身份。
+- 新增 Desktop capability/readiness 合同、macOS 原生 helper 与 security-scoped bookmark 生命周期，覆盖权限、Launch Services、显示器、HID、设备密钥和打包资源状态。
+- 新增跨平台 desktop resource manifest，将 App Server、Code Mode、Windows sandbox helpers 和 macOS native host 纳入统一身份、架构及 SHA-256 校验。
 
 ### 修复
 
-- 修复 Electron App Server 连接层提前消费通知后，近期通知无法回放的问题，并为 MCP 进度通知补齐 typed projection。
-- 修复权限配置文件目录与运行时策略脱节的问题，线程启动、恢复和 fork 现在使用同一套允许性校验。
-- 修复 Agent Runtime canonical thread projection 的环境、Provider 路由和会话元数据归一化，避免 GUI 读取原始业务元数据。
-- 修复 Workspace、Canvas Workbench 变更摘要、线程导航和会话生命周期在多状态切换下的显示与交互边界。
+- 修复首页预热阶段过早写入正式 local override，导致路由 owner 清空 active draft、Banner/皮肤 Hero 消失且发送无法复用预热 session 的问题；预热现在只准备 session，正式提交时才接管路由。
+- 修复 Agnes 官方 `agnes-2.5-pro` endpoint 被识别为不可执行自定义模型的问题，未知 endpoint 继续 fail closed。
+- 修复 Composer 压缩 bundle 的初始化时序、异步历史合并、失败草稿保留和大粘贴展开边界。
+- 修复线程排队操作、模型恢复、reasoning 状态投影以及窄窗口 Header/Timeline 布局中的漂移和可用性问题。
 
 ### 优化与重构
 
-- 将权限 profile、环境选择和线程 fork 状态收敛到 App Server/RuntimeCore 的 current owner，保持 Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> GUI 单一路径。
-- 重构 MCP 事件桥接、App Server session client、线程活动与 Right Surface 投影，减少重复状态读取并统一五语言 UI 文案。
-- 扩展 Agent Runtime、MCP、Session History 和 Workspace 的可观察性与 Gate B smoke 脚本，支持真实通知回放和终态断言。
+- 将 Composer、prompt history、Desktop capability 和资源完整性分别收敛到唯一 current owner，不新增 Electron 业务后端或 Renderer 持久化事实源。
+- 对齐 Codex current reasoning policy，补齐 `persistent` effort、五语言选择器文案以及模型上下文和工具策略的事实源守卫。
+- 强化 Windows Squirrel 发布链，安装后执行 Code Mode Gate B 并验证 `Lime.exe -> app-server.exe -> code-mode-host.exe` 进程链。
+- 更新 DeepSWE adapter 契约与治理断言，避免测试清单和 current owner 版本漂移。
 
 ### 测试与质量
 
-- 新增线程活动面板、线程 fork、MCP list-changed、权限 profile、环境生命周期和 Canvas Workbench 回归测试。
-- 扩展 App Server protocol/client contracts、MCP notification projection、Agent current fixture、Electron Gate B 和五语言资源校验。
-- 发布前执行版本一致性、TypeScript、协议 contracts、受影响 Rust/前端定向测试及真实 Electron GUI smoke；结果记录在发布执行计划。
+- 扩展 App Server protocol/schema/generated client、Composer、prompt history、Desktop Host、macOS native host、资源 manifest、Windows Squirrel 与 Code Mode Gate B 回归。
+- 发布门禁覆盖版本一致性、TypeScript、协议 contracts、受影响前端/Rust 测试、真实 Electron GUI smoke 和 release workflow guard。
+- Windows packaged Gate B 由 `windows-2022` release workflow 生成平台证据；本地静态测试不冒充 Windows platform pass。
 
 ### 文档
 
-- 更新命令边界、Codex App GUI 对齐计划和脚本目录说明，记录 MCP 通知、权限 profile、环境投影与线程活动的 current owner。
-- 新增 v1.137.0 发布执行计划，明确候选范围、排除的构建参考文件、验证证据和发布收口步骤。
+- 更新全局架构、Codex GUI 对齐计划和 Desktop 平台对齐计划，记录 current owner、能力矩阵、证据等级与剩余平台缺口。
+- 新增 v1.138.0 发布执行计划，明确候选范围、排除的 Codex 构建参考文件、验证和发布收口步骤。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.137.0`。
-- Windows 正式签名、公证、跨平台 installer/release assets 和 live provider 证据仍需对应平台或 CI runner，本地不作虚假声明。
+- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.138.0`。
+- Codex Desktop 实时视觉基线仍受 macOS AppleEvent 权限阻塞；首页 Banner/皮肤 Hero 按产品裁决保留，不纳入对齐。
 
-**完整变更**: `v1.136.0` -> `v1.137.0`
+**完整变更**: `v1.137.0` -> `v1.138.0`
