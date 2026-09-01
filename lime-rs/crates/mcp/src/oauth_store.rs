@@ -48,9 +48,24 @@ impl PersistentCredentialStore {
     }
 
     pub fn path(&self) -> PathBuf {
+        let server_stem = sanitize_file_stem(&self.server_name);
+        let server_key = if crate::naming::is_valid_server_name(&self.server_name)
+            && self
+                .server_name
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
+        {
+            server_stem
+        } else {
+            format!(
+                "{}-{}",
+                server_stem,
+                fnv1a64_hex(self.server_name.as_bytes())
+            )
+        };
         self.root_dir.join(format!(
             "{}-{}.json",
-            sanitize_file_stem(&self.server_name),
+            server_key,
             fnv1a64_hex(self.server_url.as_bytes())
         ))
     }
@@ -279,6 +294,23 @@ mod tests {
             second.load().await.expect("load second").unwrap().client_id,
             "client-2"
         );
+    }
+
+    #[test]
+    fn separates_package_names_that_sanitize_to_the_same_stem() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let first = PersistentCredentialStore::new_in(
+            temp.path(),
+            "npm:@scope/server.tools",
+            "https://example.com/mcp",
+        );
+        let second = PersistentCredentialStore::new_in(
+            temp.path(),
+            "npm/@scope/server-tools",
+            "https://example.com/mcp",
+        );
+
+        assert_ne!(first.path(), second.path());
     }
 
     #[tokio::test]

@@ -387,6 +387,7 @@ impl McpClientManager {
     ///
     /// 如果服务器已存在，返回错误；否则添加成功。
     pub async fn add_client(&self, name: String, client: McpClientWrapper) -> Result<(), McpError> {
+        crate::naming::validate_server_name(&name).map_err(McpError::ConfigError)?;
         let mut clients = self.clients.write().await;
         if clients.contains_key(&name) {
             return Err(McpError::ServerAlreadyRunning(name));

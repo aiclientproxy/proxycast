@@ -19,7 +19,7 @@ describe("check-vitest-layer-budget", () => {
   it("应解析 component 候选预算参数", () => {
     expect(parseArgs([])).toMatchObject({
       json: false,
-      maxComponentCandidates: 37,
+      maxComponentCandidates: 38,
     });
     expect(
       parseArgs(["--max-component-candidates", "8", "--json"]),

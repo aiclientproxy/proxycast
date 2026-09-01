@@ -295,6 +295,10 @@ Swift helper 当前不申请或声明 OpenAI Application Group；`applicationGro
 
 本轮增量（2026-09-01，Windows display watcher）：同一 native host 增加 `windows.displayWatcher.start/stop`，通过独立隐藏顶层窗口接收 `WM_DISPLAYCHANGE`，以 `display.changed` 事件返回位深、分辨率和最新 `windows.display.read` 快照；启停、线程退出和窗口注销保持幂等，继续只读，不实现 display link、屏幕捕获或窗口控制。资源 manifest API 元数据加入 `DisplayWatcher`，`desktopCapabilities.displayWatcher` 在 helper 存在时报告 `unverified`。本机仅完成源码/合同/资源测试，Windows SDK 编译、显示器热插拔事件和 Squirrel 安装后 Gate B 仍待 Windows runner。
 
+本轮增量（2026-09-01，Windows native host Gate B 入口收口）：新增 `npm run smoke:windows-native-host-gate-b` 作为安装后 helper 验证入口，并在 Windows test/release workflow 中固定执行与上传证据；`windows-native-host-gate-b.mjs` 从已安装 `Lime.exe` 定位 resources，复核 manifest 身份、helper 路径和 SHA-256，再真实调用 UI Automation、窗口/显示枚举、display watcher 和 Raw Input 启停。脚本在中途失败时仍写出包含已完成检查、失败原因和 digest 的 `summary.json`，随后以非零状态让 CI fail closed。当前 macOS 主机仅验证入口解析、脚本/工作流合同和负向测试，未将其升级为 Windows packaged/platform Gate B；真实 MSVC 编译、UIA 树、显示器事件、Raw Input 和签名/Squirrel 行为仍需 Windows runner。
+
+本轮增量（2026-09-01，Windows JSONL 协议回归）：`electron/windowsNativeHost.test.ts` 补齐并发乱序响应、`display.changed` 事件转发、helper 退出时批量拒绝 pending 请求和请求超时清理；这些测试通过可执行 Node fixture 验证 Electron Host 生命周期，不把 macOS 主机上的进程 fixture 当作 Windows API 或 packaged 证据。
+
 本轮真实 observation smoke（2026-09-01）：使用重新编译的 arm64 helper 对当前 Lime 窗口执行 `window.read` + `accessibilityTree.read(maxDepth=3,maxNodes=200)`，真实 Accessibility 授权返回 `AXWindow` 根节点、标题 `Lime`、`nodeCount=8`、`truncated=false`；`display.watch.start -> start -> stop -> stop` 返回 `alreadyRunning/stopped` 幂等结果并包含当前两块显示器。该证据属于本机 native `lime-local/live`，未使用用户输入注入，也未升级为 packaged Gate B；重建 dist packaged helper 期间因并行 Cargo 构建占满磁盘（`No space left on device`）失败，未篡改资源清单或绕过构建链。
 
 ## 10. 计划内证据和禁止混淆项

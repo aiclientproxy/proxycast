@@ -37,6 +37,7 @@ pub use events::{
 };
 pub use extension_surface::{build_runtime_extension_surface, runtime_extension_name};
 pub use manager::{McpBridgeSnapshot, McpClientManager, McpRuntimeOwner, McpRuntimeServerSpec};
+pub use naming::{config_key_for_server_name, is_valid_server_name, validate_server_name};
 pub use oauth::{McpOAuthLoginHandle, McpOAuthLoginParams, McpOAuthRegistry};
 pub use tool_converter::ToolConverter;
 pub use types::{

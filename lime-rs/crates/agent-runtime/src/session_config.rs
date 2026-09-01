@@ -52,6 +52,8 @@ pub struct AgentSessionConfigurationRequest {
     pub forked_from_thread_id: Option<String>,
     pub max_turns: Option<u32>,
     pub provider_token_budget: Option<u64>,
+    /// 标记本回合是否需要 provider 侧的历史摄取语义。
+    pub history_ingest_requested: bool,
     pub rollout_budget_reminder_source: Option<RolloutBudgetReminderSourceHandle>,
     pub system_prompt: Option<String>,
     pub turn_context: Option<AgentTurnContext>,
@@ -67,6 +69,7 @@ pub struct AgentSessionConfig {
     pub schedule_id: Option<String>,
     pub max_turns: Option<u32>,
     pub provider_token_budget: Option<u64>,
+    pub history_ingest_requested: bool,
     pub rollout_budget_reminder_source: Option<RolloutBudgetReminderSourceHandle>,
     pub system_prompt: Option<String>,
     pub system_prompt_override: Option<bool>,
@@ -85,6 +88,7 @@ pub fn build_agent_session_config(request: AgentSessionConfigurationRequest) -> 
         schedule_id: None,
         max_turns: request.max_turns,
         provider_token_budget: request.provider_token_budget,
+        history_ingest_requested: request.history_ingest_requested,
         rollout_budget_reminder_source: request.rollout_budget_reminder_source,
         system_prompt: request.system_prompt,
         system_prompt_override: Some(true),
@@ -107,6 +111,7 @@ pub struct SessionConfigBuilder {
     schedule_id: Option<String>,
     max_turns: Option<u32>,
     provider_token_budget: Option<u64>,
+    history_ingest_requested: bool,
     rollout_budget_reminder_source: Option<RolloutBudgetReminderSourceHandle>,
     system_prompt: Option<String>,
     system_prompt_override: Option<bool>,
@@ -126,6 +131,7 @@ impl SessionConfigBuilder {
             schedule_id: None,
             max_turns: None,
             provider_token_budget: None,
+            history_ingest_requested: false,
             rollout_budget_reminder_source: None,
             system_prompt: None,
             system_prompt_override: None,
@@ -163,6 +169,11 @@ impl SessionConfigBuilder {
 
     pub fn provider_token_budget(mut self, tokens: u64) -> Self {
         self.provider_token_budget = Some(tokens);
+        self
+    }
+
+    pub fn history_ingest_requested(mut self, requested: bool) -> Self {
+        self.history_ingest_requested = requested;
         self
     }
 
@@ -205,6 +216,7 @@ impl SessionConfigBuilder {
             schedule_id: self.schedule_id,
             max_turns: self.max_turns,
             provider_token_budget: self.provider_token_budget,
+            history_ingest_requested: self.history_ingest_requested,
             rollout_budget_reminder_source: self.rollout_budget_reminder_source,
             system_prompt: self.system_prompt,
             system_prompt_override: self.system_prompt_override,
@@ -229,6 +241,7 @@ mod tests {
             forked_from_thread_id: Some("thread-source".to_string()),
             max_turns: Some(2),
             provider_token_budget: Some(1_000),
+            history_ingest_requested: true,
             rollout_budget_reminder_source: None,
             system_prompt: Some("system".to_string()),
             turn_context: None,
@@ -244,6 +257,7 @@ mod tests {
         );
         assert_eq!(config.max_turns, Some(2));
         assert_eq!(config.provider_token_budget, Some(1_000));
+        assert!(config.history_ingest_requested);
         assert_eq!(config.system_prompt.as_deref(), Some("system"));
         assert_eq!(config.system_prompt_override, Some(true));
         assert_eq!(config.include_context_trace, Some(true));

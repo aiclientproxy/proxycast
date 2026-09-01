@@ -549,6 +549,7 @@ where
                     turn_id.clone(),
                     session_config.forked_from_thread_id.clone(),
                 )
+                .with_history_ingest_requested(session_config.history_ingest_requested)
             });
         let mut request = CurrentProviderRequest::new(initial_messages.clone())
             .with_system_prompt(session_config.system_prompt.clone())

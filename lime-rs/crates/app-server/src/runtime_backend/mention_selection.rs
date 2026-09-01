@@ -324,6 +324,7 @@ mod tests {
             schedule_id: None,
             max_turns: None,
             provider_token_budget: None,
+            history_ingest_requested: false,
             rollout_budget_reminder_source: None,
             system_prompt: Some("base".to_string()),
             system_prompt_override: Some(true),

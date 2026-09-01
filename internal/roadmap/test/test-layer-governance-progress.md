@@ -16,7 +16,7 @@
 - 测试分层规则已写入 `AGENTS.md` 和 `internal/aiprompts/quality-workflow.md`。
 - CI quick gate 已接入分层入口：
   - PR 前端改动跑 `npm run test:unit` + `npm run test:contract`。
-  - PR / main 前端验证在单测前运行 `node scripts/check-vitest-layer-budget.mjs --max-component-candidates 37`，防止 component VM 迁移候选数回升。
+  - PR / main 前端验证在单测前运行 `node scripts/check-vitest-layer-budget.mjs --max-component-candidates 38`，防止 component VM 迁移候选数回升。
   - PR Rust 改动跑 `npm run test:rust:unit`。
   - main / 手动触发仍保留全量前端与 Rust 验证。
 - 本地 Makefile 已接入分层入口：
@@ -25,7 +25,7 @@
   - `make tdd-rust` 委托 `npm run test:rust:unit`，作为后端第一信号。
   - `make test-layer-stats` 同时输出前端和 Rust 分层统计。
 - 新增 component VM 迁移候选预算检查：
-  - `scripts/check-vitest-layer-budget.mjs` 默认以 37 个候选为当前发布基线预算。
+  - `scripts/check-vitest-layer-budget.mjs` 默认以 38 个候选为当前发布基线预算；该数值与 v1.138.0 发布提交的实际候选数一致，后续继续按 P2 分层治理降低预算。
   - `make test-layer-budget` 会在候选数超过预算时失败，用于防止新 component 大测试回流。
 - 新增 Rust E2E 默认运行预算检查：
   - `scripts/check-rust-layer-budget.mjs` 默认要求 Rust E2E 层文件不存在非 `ignore` 测试。

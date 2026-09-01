@@ -460,26 +460,16 @@ impl McpClientManager {
 }
 
 fn validate_server_name(server_name: &str) -> Result<&str, McpError> {
-    let server_name = server_name.trim();
-    if server_name.is_empty() {
-        return Err(McpError::ConfigError(
-            "MCP resource server cannot be empty".to_string(),
-        ));
-    }
-    Ok(server_name)
+    crate::naming::validate_server_name(server_name).map_err(McpError::ConfigError)
 }
 
 fn validate_resource_target<'a>(
     server_name: &'a str,
     uri: &'a str,
 ) -> Result<(&'a str, &'a str), McpError> {
-    let server_name = server_name.trim();
+    let server_name =
+        crate::naming::validate_server_name(server_name).map_err(McpError::ConfigError)?;
     let uri = uri.trim();
-    if server_name.is_empty() {
-        return Err(McpError::ConfigError(
-            "MCP resource server cannot be empty".to_string(),
-        ));
-    }
     if uri.is_empty() {
         return Err(McpError::ConfigError(
             "MCP resource URI cannot be empty".to_string(),

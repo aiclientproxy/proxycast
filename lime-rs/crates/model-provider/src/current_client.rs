@@ -95,6 +95,7 @@ const THREAD_ID_METADATA_KEY: &str = "thread_id";
 const TURN_ID_METADATA_KEY: &str = "turn_id";
 const FORKED_FROM_THREAD_ID_METADATA_KEY: &str = "forked_from_thread_id";
 const REQUEST_KIND_METADATA_KEY: &str = "request_kind";
+const HISTORY_INGEST_REQUESTED_METADATA_KEY: &str = "history_ingest_requested";
 const X_CODEX_TURN_METADATA_KEY: &str = "x-codex-turn-metadata";
 const RESERVED_TURN_METADATA_KEYS: &[&str] = &[
     SESSION_ID_METADATA_KEY,
@@ -102,6 +103,7 @@ const RESERVED_TURN_METADATA_KEYS: &[&str] = &[
     TURN_ID_METADATA_KEY,
     FORKED_FROM_THREAD_ID_METADATA_KEY,
     REQUEST_KIND_METADATA_KEY,
+    HISTORY_INGEST_REQUESTED_METADATA_KEY,
     X_CODEX_TURN_METADATA_KEY,
 ];
 
@@ -111,6 +113,7 @@ pub struct CurrentProviderRequestMetadata {
     pub thread_id: String,
     pub turn_id: String,
     pub forked_from_thread_id: Option<String>,
+    pub history_ingest_requested: Option<bool>,
     extra: ProviderMetadata,
 }
 
@@ -126,8 +129,14 @@ impl CurrentProviderRequestMetadata {
             thread_id: thread_id.into(),
             turn_id: turn_id.into(),
             forked_from_thread_id,
+            history_ingest_requested: None,
             extra: ProviderMetadata::new(),
         }
+    }
+
+    pub fn with_history_ingest_requested(mut self, requested: bool) -> Self {
+        self.history_ingest_requested = requested.then_some(true);
+        self
     }
 
     pub fn with_extra(mut self, extra: ProviderMetadata) -> Self {
@@ -160,6 +169,12 @@ impl CurrentProviderRequestMetadata {
             metadata.insert(
                 FORKED_FROM_THREAD_ID_METADATA_KEY.to_string(),
                 Value::String(forked_from_thread_id.clone()),
+            );
+        }
+        if let Some(requested) = self.history_ingest_requested {
+            metadata.insert(
+                HISTORY_INGEST_REQUESTED_METADATA_KEY.to_string(),
+                Value::Bool(requested),
             );
         }
         metadata

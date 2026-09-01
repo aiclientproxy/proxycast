@@ -10,6 +10,26 @@ fn is_valid_toml_key(key: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
+/// 将 MCP server 名称降低为安全的 TOML dotted-key segment。
+///
+/// Codex 支持 `npm:@scope/server.tool` 这类 package-style 名称；这类名称
+/// 必须使用 basic string 引号，不能直接拼接到表头中。
+fn mcp_server_toml_key(name: &str) -> Option<String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty()
+        || !trimmed
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | ':' | '@' | '/' | '.'))
+    {
+        return None;
+    }
+    if is_valid_toml_key(trimmed) {
+        Some(trimmed.to_string())
+    } else {
+        Some(format!("\"{}\"", escape_toml_string(trimmed)))
+    }
+}
+
 /// P0 安全修复：转义 TOML 字符串值中的特殊字符
 fn escape_toml_string(s: &str) -> String {
     s.replace('\\', "\\\\")
@@ -156,16 +176,19 @@ fn sync_mcp_to_codex(
     // Add new MCP server sections - use name as key
     for server in servers {
         // P0 安全修复：校验 server.name 防止 TOML 注入
-        if !is_valid_toml_key(&server.name) {
-            tracing::warn!(
-                "[MCP Sync] 跳过无效的服务器名称: {} (仅允许字母、数字、下划线和连字符)",
-                server.name
-            );
-            continue;
-        }
+        let server_key = match mcp_server_toml_key(&server.name) {
+            Some(key) => key,
+            None => {
+                tracing::warn!(
+                    "[MCP Sync] 跳过无效的服务器名称: {} (仅允许 ASCII 字母、数字、'-'、'_'、':'、'@'、'/'、'.')",
+                    server.name
+                );
+                continue;
+            }
+        };
 
         new_lines.push(String::new());
-        new_lines.push(format!("[mcp_servers.{}]", server.name));
+        new_lines.push(format!("[mcp_servers.{server_key}]"));
 
         if let Some(config) = server.server_config.as_object() {
             // Convert JSON config to TOML format
@@ -184,7 +207,7 @@ fn sync_mcp_to_codex(
             }
 
             if let Some(env) = config.get("env").and_then(|v| v.as_object()) {
-                new_lines.push("[mcp_servers.".to_string() + &server.name + ".env]");
+                new_lines.push(format!("[mcp_servers.{server_key}.env]"));
                 for (key, value) in env {
                     // P0 安全修复：校验 env key 并转义值
                     if !is_valid_toml_key(key) {
@@ -246,6 +269,23 @@ fn sync_mcp_to_gemini(
     Ok(())
 }
 
+fn parse_mcp_server_section(section: &str) -> Option<(String, bool)> {
+    let inner = section.strip_prefix("[mcp_servers.")?.strip_suffix(']')?;
+    let (server_key, is_env) = inner
+        .strip_suffix(".env")
+        .map(|key| (key, true))
+        .unwrap_or((inner, false));
+    let server_name = if server_key.starts_with('"') && server_key.ends_with('"') {
+        serde_json::from_str::<String>(server_key).ok()?
+    } else if is_valid_toml_key(server_key) {
+        server_key.to_string()
+    } else {
+        return None;
+    };
+    mcp_server_toml_key(&server_name)?;
+    Some((server_name, is_env))
+}
+
 /// Remove a specific MCP server from an app's config
 pub fn remove_mcp_from_app(
     app_type: &AppType,
@@ -295,8 +335,11 @@ fn remove_mcp_from_codex(server_id: &str) -> Result<(), Box<dyn std::error::Erro
     let content = std::fs::read_to_string(&config_path)?;
     let lines: Vec<&str> = content.lines().collect();
     let mut new_lines: Vec<String> = Vec::new();
-    let section_header = format!("[mcp_servers.{server_id}]");
-    let env_header = format!("[mcp_servers.{server_id}.env]");
+    let Some(server_key) = mcp_server_toml_key(server_id) else {
+        return Ok(());
+    };
+    let section_header = format!("[mcp_servers.{server_key}]");
+    let env_header = format!("[mcp_servers.{server_key}.env]");
     let mut skip_section = false;
 
     for line in &lines {
@@ -414,37 +457,35 @@ pub fn import_mcp_from_codex(
     for line in content.lines() {
         let trimmed = line.trim();
 
-        // Check for [mcp_servers.name] section
-        if trimmed.starts_with("[mcp_servers.") && trimmed.ends_with(']') {
-            // Save previous server if any
-            if let Some(ref id) = current_server_id {
-                if !current_env.is_empty() {
-                    current_config.insert("env".to_string(), Value::Object(current_env.clone()));
+        // Check for [mcp_servers.name] section. Package-style names are quoted
+        // and may contain dots, so parse the key segment instead of slicing it
+        // as an unquoted identifier.
+        if let Some((server_id, is_env)) = parse_mcp_server_section(trimmed) {
+            if !is_env {
+                // Save previous server if any.
+                if let Some(ref id) = current_server_id {
+                    if !current_env.is_empty() {
+                        current_config
+                            .insert("env".to_string(), Value::Object(current_env.clone()));
+                    }
+                    let server = lime_core::models::McpServer {
+                        id: id.clone(),
+                        name: id.clone(),
+                        server_config: Value::Object(current_config.clone()),
+                        description: None,
+                        enabled_lime: true,
+                        enabled_claude: false,
+                        enabled_codex: true,
+                        enabled_gemini: false,
+                        created_at: Some(chrono::Utc::now().timestamp()),
+                    };
+                    servers.push(server);
                 }
-                let server = lime_core::models::McpServer {
-                    id: id.clone(),
-                    name: id.clone(),
-                    server_config: Value::Object(current_config.clone()),
-                    description: None,
-                    enabled_lime: true,
-                    enabled_claude: false,
-                    enabled_codex: true,
-                    enabled_gemini: false,
-                    created_at: Some(chrono::Utc::now().timestamp()),
-                };
-                servers.push(server);
-            }
-
-            // Parse new server ID
-            let section = &trimmed[13..trimmed.len() - 1]; // Remove "[mcp_servers." and "]"
-            if section.ends_with(".env") {
-                in_env_section = true;
-            } else {
-                current_server_id = Some(section.to_string());
+                current_server_id = Some(server_id);
                 current_config = Map::new();
                 current_env = Map::new();
-                in_env_section = false;
             }
+            in_env_section = is_env;
             continue;
         }
 
@@ -569,7 +610,9 @@ pub fn import_mcp_from_app(
 
 #[cfg(test)]
 mod tests {
-    use super::{escape_toml_string, is_valid_toml_key};
+    use super::{
+        escape_toml_string, is_valid_toml_key, mcp_server_toml_key, parse_mcp_server_section,
+    };
 
     #[test]
     fn test_valid_toml_key_accepts_alphanumeric() {
@@ -596,6 +639,39 @@ mod tests {
         // 含特殊字符
         assert!(!is_valid_toml_key("bad=key"));
         assert!(!is_valid_toml_key("bad[key"));
+    }
+
+    #[test]
+    fn test_mcp_server_toml_key_quotes_package_style_names() {
+        assert_eq!(mcp_server_toml_key("docs").as_deref(), Some("docs"));
+        assert_eq!(
+            mcp_server_toml_key("npm:@modelcontextprotocol/server-sequential.thinking").as_deref(),
+            Some("\"npm:@modelcontextprotocol/server-sequential.thinking\"")
+        );
+        assert!(mcp_server_toml_key("bad server").is_none());
+        assert!(mcp_server_toml_key("bad]\n[evil").is_none());
+    }
+
+    #[test]
+    fn test_parse_mcp_server_section_decodes_quoted_package_name() {
+        assert_eq!(
+            parse_mcp_server_section(
+                "[mcp_servers.\"npm:@modelcontextprotocol/server-sequential.thinking\"]"
+            ),
+            Some((
+                "npm:@modelcontextprotocol/server-sequential.thinking".to_string(),
+                false
+            ))
+        );
+        assert_eq!(
+            parse_mcp_server_section(
+                "[mcp_servers.\"npm:@modelcontextprotocol/server-sequential.thinking\".env]"
+            ),
+            Some((
+                "npm:@modelcontextprotocol/server-sequential.thinking".to_string(),
+                true
+            ))
+        );
     }
 
     #[test]

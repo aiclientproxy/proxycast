@@ -215,6 +215,7 @@
     "smoke:agent-runtime-current-fixture": "node scripts/agent-runtime/current-fixture-regression-smoke.mjs",
     "smoke:agent-runtime-multimodal-capture": "node scripts/agent-runtime/multimodal-provider-capture-smoke.mjs",
     "smoke:code-mode-electron-gate-b": "node scripts/agent-runtime/code-mode-electron-gate-b.mjs",
+    "smoke:windows-native-host-gate-b": "node scripts/electron/windows-native-host-gate-b.mjs",
     "smoke:browser-runtime-gate-a": "node scripts/agent-runtime/browser-runtime-electron-gate-b.mjs --scenario projection",
     "smoke:browser-runtime-electron-gate-b": "node scripts/agent-runtime/browser-runtime-electron-gate-b.mjs",
     "smoke:browser-runtime-locale-matrix": "node scripts/agent-runtime/browser-runtime-locale-matrix.mjs",

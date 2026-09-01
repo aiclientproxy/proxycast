@@ -267,6 +267,8 @@ pub(crate) fn build_tool_inventory(
     };
     let native_tool_policy_gate =
         NativeToolPolicyGate::from_request_metadata(request_metadata.as_ref());
+    let update_plan_enabled =
+        tool_runtime::update_plan::update_plan_enabled_from_metadata(request_metadata.as_ref());
 
     let mut mcp_servers = mcp_server_names
         .into_iter()
@@ -282,6 +284,7 @@ pub(crate) fn build_tool_inventory(
     let mut default_allowed_tools = workspace_default_allowed_tool_names(surface)
         .into_iter()
         .filter(|name| native_tool_policy_gate.allows_tool_name(name))
+        .filter(|name| *name != tool_runtime::update_plan::UPDATE_PLAN_NAME || update_plan_enabled)
         .map(ToString::to_string)
         .collect::<Vec<_>>();
     default_allowed_tools.sort();
@@ -289,6 +292,9 @@ pub(crate) fn build_tool_inventory(
     let catalog_tools = tool_catalog_entries_for_surface(surface)
         .into_iter()
         .filter(|entry| native_tool_policy_gate.allows_catalog_entry(entry))
+        .filter(|entry| {
+            entry.name != tool_runtime::update_plan::UPDATE_PLAN_NAME || update_plan_enabled
+        })
         .map(|entry| {
             let resolution =
                 resolve_tool_execution_policy_resolution(entry.name, execution_policy_input);
@@ -311,6 +317,12 @@ pub(crate) fn build_tool_inventory(
         })
         .collect::<Vec<_>>();
 
+    let current_tool_definitions = current_tool_definitions
+        .into_iter()
+        .filter(|definition| {
+            definition.name != tool_runtime::update_plan::UPDATE_PLAN_NAME || update_plan_enabled
+        })
+        .collect::<Vec<_>>();
     let native_tools = build_native_inventory(
         &current_tool_definitions,
         &caller,
@@ -1452,6 +1464,55 @@ mod tests {
         assert!(inventory
             .default_allowed_tools
             .contains(&"social_generate_cover_image".to_string()));
+    }
+
+    #[test]
+    fn test_build_tool_inventory_removes_update_plan_when_turn_disables_it() {
+        let inventory = build_tool_inventory(AgentToolInventoryBuildInput {
+            surface: WorkspaceToolSurface::core(),
+            caller: "assistant".to_string(),
+            agent_initialized: true,
+            warnings: Vec::new(),
+            persisted_execution_policy: None,
+            request_metadata: Some(json!({
+                "harness": { "update_plan_enabled": false }
+            })),
+            mcp_server_names: Vec::new(),
+            mcp_tools: Vec::new(),
+            current_tool_definitions: vec![
+                definition(
+                    tool_runtime::update_plan::UPDATE_PLAN_NAME,
+                    "update checklist",
+                    json!({ "type": "object" }),
+                ),
+                definition("Read", "read file", json!({ "type": "object" })),
+            ],
+            resource_helpers_supported: false,
+            extension_configs: Vec::new(),
+            visible_extension_tools: Vec::new(),
+            searchable_extension_tools: Vec::new(),
+        });
+
+        assert!(!inventory
+            .default_allowed_tools
+            .iter()
+            .any(|name| name == tool_runtime::update_plan::UPDATE_PLAN_NAME));
+        assert!(!inventory
+            .catalog_tools
+            .iter()
+            .any(|entry| entry.name == tool_runtime::update_plan::UPDATE_PLAN_NAME));
+        assert!(!inventory
+            .native_tools
+            .iter()
+            .any(|entry| entry.name == tool_runtime::update_plan::UPDATE_PLAN_NAME));
+        assert!(!inventory
+            .runtime_tools
+            .iter()
+            .any(|entry| entry.name == tool_runtime::update_plan::UPDATE_PLAN_NAME));
+        assert!(inventory
+            .native_tools
+            .iter()
+            .any(|entry| entry.name == "Read"));
     }
 
     #[test]

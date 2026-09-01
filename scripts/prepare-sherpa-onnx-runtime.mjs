@@ -413,24 +413,42 @@ function downloadSherpaArchive(plan) {
   fs.renameSync(`${plan.archivePath}.part`, plan.archivePath);
 }
 
-function extractSherpaArchive(plan) {
+export function extractSherpaArchive(
+  plan,
+  {
+    platform = process.platform,
+    sevenZipCommands = WINDOWS_SEVEN_ZIP_COMMANDS,
+    removeDirectory = fs.rmSync,
+    run = runCommand,
+    missingLibraries = missingSherpaRuntimeLibraries,
+  } = {},
+) {
   console.log(`Removing previous sherpa-onnx runtime: ${plan.extractedDir}`);
-  fs.rmSync(plan.extractedDir, { recursive: true, force: true });
+  removeDirectory(plan.extractedDir, { recursive: true, force: true });
   console.log(`Removed previous sherpa-onnx runtime: ${plan.extractedDir}`);
 
   let lastError = null;
-  for (const extraction of buildSherpaArchiveExtractCommands(plan)) {
-    fs.rmSync(plan.extractedDir, { recursive: true, force: true });
+  for (const extraction of buildSherpaArchiveExtractCommands(plan, {
+    platform,
+    sevenZipCommands,
+  })) {
+    removeDirectory(plan.extractedDir, { recursive: true, force: true });
     console.log(
       `Extracting sherpa-onnx archive: ${plan.archivePath} (extractor=${extraction.command})`,
     );
     try {
-      runCommand(extraction.command, extraction.args, {
+      run(extraction.command, extraction.args, {
         cwd: extraction.cwd,
         timeout: SHERPA_ARCHIVE_EXTRACT_TIMEOUT_MS,
       });
-      console.log(`Extracted sherpa-onnx archive: ${plan.extractedDir}`);
-      return;
+      const missing = missingLibraries(plan);
+      if (missing.length === 0) {
+        console.log(`Extracted sherpa-onnx archive: ${plan.extractedDir}`);
+        return;
+      }
+      console.warn(
+        `Sherpa archive extractor ${extraction.command} completed without expected libraries: ${missing.join(", ")}`,
+      );
     } catch (error) {
       lastError = error;
       console.warn(

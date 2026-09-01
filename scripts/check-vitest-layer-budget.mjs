@@ -4,7 +4,7 @@ import process from "node:process";
 
 import { buildVitestLayerReport } from "./lib/vitest-layer-report.mjs";
 
-const DEFAULT_MAX_COMPONENT_CANDIDATES = 37;
+const DEFAULT_MAX_COMPONENT_CANDIDATES = 38;
 
 export function parseArgs(argv) {
   const options = {

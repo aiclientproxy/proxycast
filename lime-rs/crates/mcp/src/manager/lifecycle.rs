@@ -1,5 +1,6 @@
 use super::McpClientManager;
 use crate::environment::McpEnvironment;
+use crate::naming::validate_server_name;
 use crate::stdio_launcher::{LocalStdioLauncher, StdioLaunch};
 use crate::streamable_http::{
     build_oauth_streamable_http_transport, build_streamable_http_transport,
@@ -33,6 +34,7 @@ impl McpClientManager {
     /// 4. 初始化 MCP 客户端
     /// 5. 失效工具缓存
     pub async fn start_server(&self, name: &str, config: &McpServerConfig) -> Result<(), McpError> {
+        validate_server_name(name).map_err(McpError::ConfigError)?;
         config.validate().map_err(McpError::ConfigError)?;
         if !config.enabled {
             return Err(McpError::ConfigError(format!("MCP 服务器 '{name}' 已禁用")));

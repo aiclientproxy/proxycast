@@ -8,6 +8,7 @@ import {
   buildSherpaArchiveExtractCommand,
   buildSherpaArchiveExtractCommands,
   buildSherpaArchiveSevenZipExtractCommand,
+  extractSherpaArchive,
   MACOS_EXECUTABLE_RPATH,
   missingSherpaRuntimeLibraries,
   readMachORpaths,
@@ -152,6 +153,33 @@ version = "1.13.0"
       sevenZipCommands: ["7z"],
     });
     expect(commands.map(({ command }) => command)).toEqual(["7z", "tar"]);
+  });
+
+  it("7-Zip 只解出 tar 时继续使用 tar 解压", () => {
+    const plan = {
+      archivePath: "D:\\a\\lime\\lime\\runtime.tar.bz2",
+      extractedDir: "D:\\a\\lime\\lime\\runtime",
+      prebuiltRoot: "D:\\a\\lime\\lime",
+    };
+    const commands = [];
+    let librariesReady = false;
+
+    extractSherpaArchive(plan, {
+      platform: "win32",
+      sevenZipCommands: ["7z"],
+      removeDirectory() {},
+      run(command) {
+        commands.push(command);
+        if (command === "tar") {
+          librariesReady = true;
+        }
+      },
+      missingLibraries() {
+        return librariesReady ? [] : ["onnxruntime.dll"];
+      },
+    });
+
+    expect(commands).toEqual(["7z", "tar"]);
   });
 
   it("Windows Quality 为 sherpa 准备保留足够预算并记录清理/解压阶段", () => {

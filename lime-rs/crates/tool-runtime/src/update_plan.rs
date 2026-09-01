@@ -12,6 +12,62 @@ use std::sync::{Arc, OnceLock};
 pub const UPDATE_PLAN_NAME: &str = "update_plan";
 pub const UPDATE_PLAN_LEGACY_ALIASES: &[&str] =
     &["UpdatePlan", "UpdatePlanTool", "update_plan_tool"];
+
+/// Resolves the per-turn checklist exposure switch.
+///
+/// The absence of a switch preserves Lime's existing product default. Callers can
+/// explicitly disable the surface through trusted runtime/config metadata, matching
+/// Codex's opt-in semantics without allowing arbitrary prompt text to change tools.
+pub fn update_plan_enabled_from_metadata(metadata: Option<&serde_json::Value>) -> bool {
+    let Some(metadata) = metadata else {
+        return true;
+    };
+    [
+        "/harness/update_plan_enabled",
+        "/harness/updatePlanEnabled",
+        "/harness/features/update_plan/enabled",
+        "/harness/features/updatePlan/enabled",
+        "/runtime_request/update_plan_enabled",
+        "/runtime_request/updatePlanEnabled",
+        "/runtime_request/features/update_plan/enabled",
+        "/runtime_request/features/updatePlan/enabled",
+        "/config/agent/toolExecution/update_plan_enabled",
+        "/config/agent/toolExecution/updatePlanEnabled",
+        "/config/experimental/update_plan/enabled",
+        "/config/experimental/updatePlan/enabled",
+    ]
+    .into_iter()
+    .find_map(|pointer| {
+        metadata
+            .pointer(pointer)
+            .and_then(serde_json::Value::as_bool)
+    })
+    .unwrap_or(true)
+}
+
+#[cfg(test)]
+mod feature_tests {
+    use super::update_plan_enabled_from_metadata;
+    use serde_json::json;
+
+    #[test]
+    fn explicit_disable_is_honored_across_camel_and_snake_paths() {
+        assert!(!update_plan_enabled_from_metadata(Some(&json!({
+            "harness": {"updatePlanEnabled": false}
+        }))));
+        assert!(!update_plan_enabled_from_metadata(Some(&json!({
+            "runtime_request": {"features": {"update_plan": {"enabled": false}}}
+        }))));
+    }
+
+    #[test]
+    fn missing_switch_keeps_lime_default() {
+        assert!(update_plan_enabled_from_metadata(None));
+        assert!(update_plan_enabled_from_metadata(Some(
+            &json!({"harness": {}})
+        )));
+    }
+}
 pub const PLAN_UPDATED_MESSAGE: &str = "Plan updated";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

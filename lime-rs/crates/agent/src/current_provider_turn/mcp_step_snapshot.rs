@@ -201,6 +201,12 @@ fn tool_definitions(
     agent_control_gateway: Option<&tool_runtime::agent_control::AgentControlGatewayHandle>,
 ) -> Result<(Vec<RuntimeToolDefinition>, Vec<DynamicToolRoute>), String> {
     let native_policy = native_tool_policy_from_turn_context(turn_context);
+    let update_plan_enabled = turn_context
+        .map(|context| {
+            let metadata = Value::Object(context.metadata.clone().into_iter().collect());
+            tool_runtime::update_plan::update_plan_enabled_from_metadata(Some(&metadata))
+        })
+        .unwrap_or(true);
     let tool_surface_mode = turn_context
         .and_then(|context| runtime_turn_tool_surface_mode_from_metadata(&context.metadata));
     let tool_scope = turn_context
@@ -250,6 +256,8 @@ fn tool_definitions(
                 .iter()
                 .any(|name| is_same_tool(name, &definition.name))
             && !policy.matches_any_disallowed_tool(&definition.name)
+            && (definition.name != tool_runtime::update_plan::UPDATE_PLAN_NAME
+                || update_plan_enabled)
             && (policy.allows_web_search() || !is_web_tool(&definition.name))
             && runtime_turn_tool_surface_allows_tool_name(
                 &definition.name,

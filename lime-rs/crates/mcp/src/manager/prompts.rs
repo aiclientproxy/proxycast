@@ -231,13 +231,9 @@ fn validate_prompt_target<'a>(
     server_name: &'a str,
     name: &'a str,
 ) -> Result<(&'a str, &'a str), McpError> {
-    let server_name = server_name.trim();
+    let server_name =
+        crate::naming::validate_server_name(server_name).map_err(McpError::ConfigError)?;
     let name = name.trim();
-    if server_name.is_empty() {
-        return Err(McpError::ConfigError(
-            "MCP prompt server cannot be empty".to_string(),
-        ));
-    }
     if name.is_empty() {
         return Err(McpError::ConfigError(
             "MCP prompt name cannot be empty".to_string(),

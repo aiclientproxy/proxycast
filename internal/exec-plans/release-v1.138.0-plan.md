@@ -1,6 +1,6 @@
 # Lime v1.138.0 发布执行计划
 
-状态：`release-ready / git-confirmation-pending`
+状态：`follow-up-required / tag-rebuild-confirmation-pending`
 日期：2026-09-01
 目标版本：`1.138.0`
 目标 tag：`v1.138.0`
@@ -27,6 +27,15 @@
 本轮重大架构变更已在 `internal/aiprompts/architecture.md` 记录并确认：Composer Controller、App Server PromptHistoryStore、Desktop capability/readiness、macOS native host 与 desktop resource manifest 均有唯一 current owner；Electron 继续只承接 Desktop Host/IPC/sidecar 生命周期，Agent 产品链保持 `Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI`。责任开发者确认：root，2026-09-01。
 
 ## 验证记录
+
+### 发布后 follow-up（2026-09-01）
+
+- 已完成首轮发布：commit `f79830804`、tag `v1.138.0` 已推送，GitHub Release 已公开，但当前 Release 尚无安装资产。
+- Release workflow `33513208903` 失败于 Windows `Prepare sherpa-onnx runtime`：7-Zip 对 `.tar.bz2` 只解出中间 `.tar`，命令返回成功但预期 DLL 不存在；Quality workflow `33513188500` 同因 Windows sherpa 步骤失败，Frontend Full 另因 component migration candidates `38 > 37` 失败。
+- 本地 follow-up 已让 sherpa 解压在“命令成功但库缺失”时继续执行 tar fallback，并新增回归测试；预算事实源同步为当前已存在的 `38`（脚本默认值、Makefile、Quality workflow 与治理文档）。
+- 首轮 tag 已存在且绑定 `f79830804`，不能静默覆盖；完成修复验证后仍需明确执行远端 `v1.138.0` tag 重建，再重新运行 Release workflow，或改发补丁版本。
+- Follow-up 验证：sherpa/预算脚本回归 `19/19`，Windows native host、entrypoint 与 Squirrel 合同 `39/39`，`npm run lint`、`npm run typecheck`、`cargo fmt --all -- --check`、Rust related（含 `lime-agent`、App Server、MCP、services、model-provider、tool-runtime 及反向依赖）均通过。
+- 真实 Electron 证据：`npm run smoke:agent-runtime-current-fixture` 全部场景通过（`liveProviderUsed=false`）；`npm run verify:gui-smoke` 串行复跑通过，run `standalone-shell-01-20260901143936-28201`，`appserver.v0` version `1.138.0`，summary `result=pass`。并行构建产生的首次资源哈希错配未计入证据。
 
 已通过：
 
@@ -57,4 +66,4 @@ git diff --check
 - `compat`：无新增 compat wrapper。
 - `deprecated`：无新增 deprecated owner。
 - `dead / deleted`：外部 Codex manifest 和 4 个压缩 bundle 不进入 release；不恢复旧 runtime、生产 mock fallback 或第二持久化 owner。
-- 当前完成度：`85%`；release candidate、版本事实源、双语 release notes 与本地必要门禁已收口，等待危险操作确认、commit/tag/push、GitHub Release 和 Windows packaged Gate B。
+- 当前完成度：`90%`；首轮 commit/tag/push 与 GitHub Release 已完成，follow-up 修复和质量预算已落地，仍待 follow-up commit、远端同名 tag 重建确认、Release workflow 资产和 Windows packaged Gate B。

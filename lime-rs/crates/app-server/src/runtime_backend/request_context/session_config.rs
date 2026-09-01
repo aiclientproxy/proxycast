@@ -143,10 +143,31 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugins_and_o
         forked_from_thread_id: request.forked_from_thread_id.clone(),
         max_turns: harness_max_provider_steps(runtime_metadata),
         provider_token_budget: harness_provider_token_budget(runtime_metadata),
+        history_ingest_requested: history_ingest_requested(request),
         rollout_budget_reminder_source: request.rollout_budget_reminder_source.clone(),
         system_prompt,
         turn_context,
         include_context_trace: !turn_tool_surface.uses_light_session_prompt(),
+    })
+}
+
+fn history_ingest_requested(request: &ExecutionRequest) -> bool {
+    let explicit = request.runtime_metadata().and_then(|metadata| {
+        [
+            "/harness/history_ingest_requested",
+            "/harness/historyIngestRequested",
+            "/history_ingest_requested",
+            "/historyIngestRequested",
+        ]
+        .into_iter()
+        .find_map(|pointer| metadata.pointer(pointer).and_then(Value::as_bool))
+    });
+    explicit.unwrap_or_else(|| {
+        request
+            .session
+            .business_object_ref
+            .as_ref()
+            .is_some_and(|reference| reference.kind == "conversation.import")
     })
 }
 

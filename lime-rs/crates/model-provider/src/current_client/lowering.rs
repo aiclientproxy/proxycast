@@ -190,9 +190,13 @@ fn responses_client_metadata(request: &CanonicalRequest) -> Option<Map<String, V
         .metadata
         .iter()
         .filter_map(|(key, value)| {
-            value
-                .as_str()
-                .map(|value| (key.clone(), Value::String(value.to_string())))
+            if value.is_boolean() && key == "history_ingest_requested" {
+                Some((key.clone(), value.clone()))
+            } else {
+                value
+                    .as_str()
+                    .map(|value| (key.clone(), Value::String(value.to_string())))
+            }
         })
         .collect::<Map<String, Value>>();
     turn_metadata.insert(
@@ -1195,6 +1199,7 @@ mod tests {
             "turn-1",
             Some("thread-source".to_string()),
         )
+        .with_history_ingest_requested(true)
         .with_extra(runtime_core::ProviderMetadata::from([
             ("session_id".to_string(), json!("overridden-session")),
             (
@@ -1202,6 +1207,7 @@ mod tests {
                 json!("overridden-source"),
             ),
             ("request_kind".to_string(), json!("overridden-kind")),
+            ("history_ingest_requested".to_string(), json!(false)),
             ("workspace_kind".to_string(), json!("local")),
             ("ignored_object".to_string(), json!({"value": true})),
         ]));
@@ -1240,6 +1246,7 @@ mod tests {
         assert_eq!(turn_metadata["turn_id"], "turn-1");
         assert_eq!(turn_metadata["forked_from_thread_id"], "thread-source");
         assert_eq!(turn_metadata["request_kind"], "turn");
+        assert_eq!(turn_metadata["history_ingest_requested"], true);
         assert_eq!(turn_metadata["workspace_kind"], "local");
         assert!(turn_metadata.get("ignored_object").is_none());
 
@@ -1254,6 +1261,40 @@ mod tests {
             .expect("Anthropic lowering");
         assert!(chat.get("client_metadata").is_none());
         assert!(anthropic.get("client_metadata").is_none());
+    }
+
+    #[test]
+    fn responses_omits_history_ingest_metadata_for_normal_turns() {
+        let metadata = super::super::CurrentProviderRequestMetadata::new(
+            "session-1",
+            "thread-1",
+            "turn-1",
+            None,
+        );
+        let provider_request = super::super::CurrentProviderRequest::new(vec![
+            super::super::CurrentProviderMessage::user(vec![
+                super::super::CurrentProviderContent::Text("hello".to_string()),
+            ]),
+        ])
+        .with_metadata(metadata);
+        let canonical = provider_request
+            .into_canonical("gpt-5-codex")
+            .expect("canonical request");
+
+        let responses = responses_request(
+            &config(Some("high")),
+            &canonical,
+            &RuntimeReplyProviderRequestWireShape::default(),
+            &BTreeMap::new(),
+        )
+        .expect("Responses lowering");
+        let turn_metadata: Value = serde_json::from_str(
+            responses["client_metadata"]["x-codex-turn-metadata"]
+                .as_str()
+                .expect("serialized turn metadata"),
+        )
+        .expect("valid turn metadata JSON");
+        assert!(turn_metadata.get("history_ingest_requested").is_none());
     }
 
     #[test]
