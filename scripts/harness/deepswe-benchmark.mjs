@@ -164,6 +164,7 @@ export function createBatchPlan({
   sourceRoot = path.resolve(root, ".lime/benchmark/sources/deep-swe"),
   sliceName = "release-20",
   trials = 1,
+  resolveSourceCommit,
 } = {}) {
   const { manifest } = loadSliceManifest(root, manifestPath);
   const taskIds = taskIdsForSlice(manifest, sliceName);
@@ -172,6 +173,7 @@ export function createBatchPlan({
     sourceRoot,
     sliceName,
     manifestPath,
+    ...(resolveSourceCommit ? { resolveSourceCommit } : {}),
   });
   const tasks = taskIds.flatMap((taskId) =>
     Array.from({ length: trials }, (_, index) => ({

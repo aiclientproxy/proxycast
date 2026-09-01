@@ -1,6 +1,6 @@
 # Lime v1.138.0 发布执行计划
 
-状态：`second-follow-up-ready / Windows CI verification pending`
+状态：`third-follow-up-ready / Windows UIA SDK contract verification pending`
 日期：2026-09-01
 目标版本：`1.138.0`
 目标 tag：`v1.138.0`
@@ -39,6 +39,9 @@
 - 首次 follow-up commit `ba9dbdaae` 已推送并重建 `v1.138.0` tag。Quality run `33521136350` 中 Bridge、GUI Smoke、Integrity、Rust Full 均通过；Release run `33521150327` 中 macOS arm64/x64 均通过，但发布资产因 Windows job 失败未进入聚合上传。
 - 第二轮失败根因已由任务日志确认：Windows native host 在 `get_CurrentNativeWindowHandle` 传入 `HWND*`，而 Windows SDK 接口要求 `int*`；Windows Quality 的 PowerShell 命中系统 `tar` 并对 `.tar.bz2` 超时；Frontend Full 的 `electron/systemUtilityHost.test.ts` 在 Linux runner 硬编码了 macOS Accessibility 状态。
 - 第二轮修复：native window handle 改为 SDK 契约的 `int` 后再安全提升为 `uintptr_t`；Windows 7-Zip 解出中间 `.tar` 后用同一 7-Zip 解第二层，继续保留 tar 兜底；环境预览测试按真实宿主平台断言 Accessibility。定向回归 `24/24` 通过，仍待 commit/tag 更新后由 Windows runner 证明 MSVC build、Squirrel、CodeMode Gate B 与 native host Gate B。
+- 第二轮 follow-up commit `1ac3364de` 已证明 sherpa 双层解压通过、GUI Smoke 通过，但 Release run `33569593531` 的 Windows MSVC 编译仍在 `get_CurrentNativeWindowHandle` 失败。Windows SDK 事实源显示 `typedef void *UIA_HWND`，接口参数为 `UIA_HWND *`；此前 `HWND` 和 `int` 均不匹配。第三轮修复改为直接使用 `UIA_HWND`，并让 `cl` 继承 CI 标准输出，后续失败不再退化为不可读 Buffer 字节数组。
+- Quality run `33569587544` 的 Frontend Full 在第 32/119 批出现 5 个 DeepSWE 失败。根因不是 `PATH` 并发污染：默认测试直接依赖被 `.gitignore` 排除的 `.lime/benchmark/sources/deep-swe` 本地 cache，干净 CI 中 source cwd 不存在，Node 启动 `git` 因此报 `spawnSync git ENOENT`，其余断言随 task metadata 缺失级联失败。默认测试现改用临时自包含 source fixture，production preflight 仍默认执行真实 `git rev-parse` 并校验固定 commit；无 live 授权路径也在读取外部 task cache 前 fail closed。
+- 第三轮本地验证：Windows/sherpa/Electron 定向回归 `31/31`；DeepSWE adapter/benchmark `29/29`；对应 smart runner 完整并行批次 `108/108`；真实本地 DeepSWE Release 20 preflight `205/205`；受影响 ESLint、`npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version`、脚本治理和 `git diff --check` 全部通过。仍待 follow-up commit/tag 更新后由 `windows-2022` 证明 MSVC、Squirrel、安装态 CodeMode/native host Gate B，并由干净 Linux runner 复验 Frontend Full。
 
 已通过：
 

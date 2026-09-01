@@ -174,11 +174,11 @@ std::string readElement(IUIAutomationElement* element,
   if (SUCCEEDED(element->get_CurrentProcessId(&processId))) {
     object << "\"processId\":" << processId << ",";
   }
-  int nativeWindowHandle = 0;
+  UIA_HWND nativeWindowHandle = nullptr;
   if (SUCCEEDED(element->get_CurrentNativeWindowHandle(&nativeWindowHandle)) &&
       nativeWindowHandle) {
     object << "\"nativeWindowHandle\":"
-           << static_cast<uintptr_t>(nativeWindowHandle) << ",";
+           << reinterpret_cast<uintptr_t>(nativeWindowHandle) << ",";
   }
   RECT rect{};
   if (SUCCEEDED(element->get_CurrentBoundingRectangle(&rect))) {

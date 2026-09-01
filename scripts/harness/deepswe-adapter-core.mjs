@@ -208,11 +208,12 @@ export function preflightSelectedTasks({
   sourceRoot,
   sliceName = "release-20",
   manifestPath = DEEPSWE_MANIFEST_PATH,
+  resolveSourceCommit = (root) => runGit(root, ["rev-parse", "HEAD"]),
 }) {
   const checks = [];
   const add = (name, passed, detail) => checks.push({ name, passed, detail });
   const { manifest } = loadSliceManifest(repoRoot, manifestPath);
-  const sourceHead = runGit(sourceRoot, ["rev-parse", "HEAD"]);
+  const sourceHead = resolveSourceCommit(sourceRoot);
   add(
     "source-commit",
     sourceHead === manifest.source.commit &&

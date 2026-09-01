@@ -442,7 +442,7 @@ function compileWindowsNativeHost({
         "-o",
         outputPath,
       ];
-  execFileSyncImpl(compiler, args, { stdio: "pipe" });
+  execFileSyncImpl(compiler, args, { stdio: "inherit" });
   chmodSync(outputPath, 0o755);
 }
 

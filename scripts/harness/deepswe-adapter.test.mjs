@@ -25,15 +25,24 @@ import {
   verifierCompletionStatus,
   verifierTaskIdForRun,
 } from "./deepswe-adapter-core.mjs";
+import { createDeepSweSourceFixture } from "./fixtures/deepswe-source.mjs";
 
 const repoRoot = process.cwd();
-const sourceRoot = path.join(repoRoot, ".lime/benchmark/sources/deep-swe");
 const temporaryRoots = [];
+let sourceFixture = null;
 
 function temporaryRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepswe-adapter-test-"));
   temporaryRoots.push(root);
   return root;
+}
+
+function deepSweSourceFixture() {
+  if (!sourceFixture) {
+    sourceFixture = createDeepSweSourceFixture({ repoRoot });
+    temporaryRoots.push(sourceFixture.sourceRoot);
+  }
+  return sourceFixture;
 }
 
 function git(cwd, args) {
@@ -56,6 +65,7 @@ afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {
     fs.rmSync(root, { recursive: true, force: true });
   }
+  sourceFixture = null;
 });
 
 describe("DeepSWE current-chain adapter", () => {
@@ -171,10 +181,12 @@ describe("DeepSWE current-chain adapter", () => {
   });
 
   it("validates all selected Release 20 tasks against the pinned source", () => {
+    const fixture = deepSweSourceFixture();
     const result = preflightSelectedTasks({
       repoRoot,
-      sourceRoot,
+      sourceRoot: fixture.sourceRoot,
       sliceName: "release-20",
+      resolveSourceCommit: () => fixture.sourceCommit,
     });
 
     expect(result.status).toBe("pass");
@@ -194,17 +206,22 @@ describe("DeepSWE current-chain adapter", () => {
   }, 20_000);
 
   it("loads task metadata with TOML semantics instead of ad hoc line parsing", () => {
+    const fixture = deepSweSourceFixture();
     const task = loadTaskDefinition({
       repoRoot,
-      sourceRoot,
+      sourceRoot: fixture.sourceRoot,
       taskId: "happy-dom-abort-pending-body-reads",
     });
+    const fixtureTask = fixture.tasks.get(
+      "happy-dom-abort-pending-body-reads",
+    );
 
     expect(task).toMatchObject({
       id: "happy-dom-abort-pending-body-reads",
       schemaVersion: "1.3",
       repository: "capricorn86/happy-dom",
-      baseCommit: "82a0888cb2c87a6123e05424b528f8e8c9b3e426",
+      repositoryUrl: fixtureTask.repositoryUrl,
+      baseCommit: fixtureTask.baseCommit,
       artifacts: ["/logs/artifacts/model.patch"],
       agent: { networkMode: "no-network", timeoutSec: 5400 },
       verifier: {
@@ -213,14 +230,14 @@ describe("DeepSWE current-chain adapter", () => {
         collect: [
           {
             command: expect.stringContaining(
-              "git diff --binary 82a0888cb2c87a6123e05424b528f8e8c9b3e426 HEAD",
+              `git diff --binary ${fixtureTask.baseCommit} HEAD`,
             ),
             timeoutSec: 300,
           },
         ],
       },
     });
-    expect(task.instruction).toContain("AbortError");
+    expect(task.instruction).toBe(fixtureTask.instruction);
   });
 
   it("prepares an isolated branch and captures committed plus uncommitted changes", () => {
@@ -1079,6 +1096,7 @@ fs.writeFileSync(path.join(verifierDir, "test-stdout.txt"), "passed");
 
   it("records verifier prerequisite blockers without overwriting product failure evidence", () => {
     const root = temporaryRoot();
+    const fixture = deepSweSourceFixture();
     const runDir = path.join(root, "existing-run");
     fs.mkdirSync(runDir);
     fs.writeFileSync(
@@ -1108,6 +1126,8 @@ fs.writeFileSync(path.join(verifierDir, "test-stdout.txt"), "passed");
         "--verifier-only",
         "--run-dir",
         runDir,
+        "--source-root",
+        fixture.sourceRoot,
         "--pier-bin",
         path.join(root, "missing-pier"),
         "--container-bin",

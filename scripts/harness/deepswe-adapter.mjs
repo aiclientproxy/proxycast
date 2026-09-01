@@ -246,6 +246,11 @@ async function main() {
       throw new Error("--verifier-only requires --run-dir");
     }
   }
+  if (!options.verifierOnly && !options.allowLiveProvider) {
+    throw new Error(
+      "real DeepSWE execution requires --allow-live-provider; preflight remains offline",
+    );
+  }
   const taskId = options.verifierOnly
     ? verifierTaskIdForRun({
         runDir: options.runDir,
@@ -330,11 +335,6 @@ async function main() {
     return;
   }
 
-  if (!options.allowLiveProvider) {
-    throw new Error(
-      "real DeepSWE execution requires --allow-live-provider; preflight remains offline",
-    );
-  }
   const runId = `${timestampId()}-${task.id}`;
   const runDir = path.join(options.runsRoot, runId);
   const { workspaceRoot, workspaceDir } = createTaskWorkspaceLocation({

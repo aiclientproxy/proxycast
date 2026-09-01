@@ -9,35 +9,46 @@ import {
   createBatchPlan,
   parseArgs,
 } from "./deepswe-benchmark.mjs";
+import { createDeepSweSourceFixture } from "./fixtures/deepswe-source.mjs";
 
 const repoRoot = process.cwd();
 
 describe("DeepSWE Core batch benchmark", () => {
   it("plans Smoke 10 and Release 20 with explicit trial counts", () => {
-    const smoke = createBatchPlan({
+    const fixture = createDeepSweSourceFixture({ repoRoot });
+    const options = {
       repoRoot,
-      sliceName: "smoke-10",
-      trials: 1,
-    });
-    const release = createBatchPlan({
-      repoRoot,
-      sliceName: "release-20",
-      trials: 3,
-    });
+      sourceRoot: fixture.sourceRoot,
+      resolveSourceCommit: () => fixture.sourceCommit,
+    };
+    try {
+      const smoke = createBatchPlan({
+        ...options,
+        sliceName: "smoke-10",
+        trials: 1,
+      });
+      const release = createBatchPlan({
+        ...options,
+        sliceName: "release-20",
+        trials: 3,
+      });
 
-    expect(smoke).toMatchObject({
-      status: "ready",
-      taskCount: 10,
-      expectedTrialCount: 10,
-      trialsPerTask: 1,
-    });
-    expect(release).toMatchObject({
-      status: "ready",
-      taskCount: 20,
-      expectedTrialCount: 60,
-      trialsPerTask: 3,
-    });
-    expect(new Set(release.tasks.map((task) => task.trialKey)).size).toBe(60);
+      expect(smoke).toMatchObject({
+        status: "ready",
+        taskCount: 10,
+        expectedTrialCount: 10,
+        trialsPerTask: 1,
+      });
+      expect(release).toMatchObject({
+        status: "ready",
+        taskCount: 20,
+        expectedTrialCount: 60,
+        trialsPerTask: 3,
+      });
+      expect(new Set(release.tasks.map((task) => task.trialKey)).size).toBe(60);
+    } finally {
+      fs.rmSync(fixture.sourceRoot, { recursive: true, force: true });
+    }
   }, 60_000);
 
   it("rejects ambiguous modes and non-release trial counts", () => {

@@ -46,6 +46,19 @@ function createWindowsPackage() {
 }
 
 describe("electron desktop resource manifest", () => {
+  it("Windows native host 使用 SDK UIA_HWND 类型接收窗口句柄", () => {
+    const source = readFileSync(
+      "electron/native/windows/windows-native-host.cpp",
+      "utf8",
+    );
+
+    expect(source).toContain("UIA_HWND nativeWindowHandle = nullptr;");
+    expect(source).not.toContain("int nativeWindowHandle = 0;");
+    expect(source).not.toMatch(
+      /^\s*HWND nativeWindowHandle = nullptr;\s*$/mu,
+    );
+  });
+
   it("按平台和架构生成稳定的资源清单", () => {
     expect(desktopResourcePlatformKey("darwin", "arm64")).toBe("darwin-arm64");
     expect(desktopResourcePlatformKey("win32", "x64")).toBe("win32-x64");
