@@ -47,7 +47,7 @@
 - 修复后 Release run `33667794033` 在 `main@277fa91ec` 全绿：Windows x64、macOS x64/arm64 打包与资源校验、macOS packaged native-host Gate B、Windows Squirrel 安装/N-1 升级、Code Mode Gate B、native-host Gate B、四个平台 CLI、GitHub Release 上传及 Cloudflare R2 updater 发布全部成功。
 - GitHub Release `Lime v1.139.0` 已正式发布，共 13 个 uploaded assets：Windows Setup/full nupkg/RELEASES，macOS x64/arm64 DMG、zip 与 updater JSON，以及 Windows、macOS x64/arm64、Linux x64 CLI 压缩包。
 - Pages run `33666030217` 在 `81f89d567` 全绿，build 与 deploy 均成功。
-- 最终远端身份：`origin/main=277fa91ec8c2b3fbcd80ff5c7ca7c5f64605587a`，`refs/tags/v1.139.0=a00f31fccee6f5e0136673ffac7911c80d2bc3fe`。标签未移动或重打；修复后的正式发布资产由 `main@277fa91ec` 构建。
+- 正式资产构建身份：`main@277fa91ec8c2b3fbcd80ff5c7ca7c5f64605587a`，`refs/tags/v1.139.0=a00f31fccee6f5e0136673ffac7911c80d2bc3fe`。标签未移动或重打；修复后的正式发布资产由该 main 提交构建，后续仅追加发布证据文档，不改变 tag 或资产来源身份。
 
 ## 收尾分类
 
