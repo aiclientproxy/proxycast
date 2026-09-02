@@ -6,9 +6,16 @@ import path from "node:path";
 export function createDeepSweSourceFixture({
   repoRoot,
   manifestPath = "internal/test/deepswe-coding-slice-v2.json",
+  desktopManifestPath = "internal/test/deepswe-desktop-smoke-v1.json",
 } = {}) {
   const manifest = JSON.parse(
     fs.readFileSync(path.resolve(repoRoot, manifestPath), "utf8"),
+  );
+  const desktopManifest = JSON.parse(
+    fs.readFileSync(path.resolve(repoRoot, desktopManifestPath), "utf8"),
+  );
+  const desktopTasks = new Map(
+    desktopManifest.tasks.map((task) => [task.id, task]),
   );
   const sourceRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), "lime-deepswe-source-test-"),
@@ -26,7 +33,9 @@ export function createDeepSweSourceFixture({
 
   for (const task of manifest.tasks) {
     const taskDir = path.join(tasksRoot, task.id);
-    const baseCommit = createHash("sha1").update(task.id).digest("hex");
+    const baseCommit =
+      desktopTasks.get(task.id)?.baseCommit ||
+      createHash("sha1").update(task.id).digest("hex");
     const repositoryUrl = `https://github.com/${task.repository}.git`;
     const instruction = `Fix the ${task.id} regression.`;
 

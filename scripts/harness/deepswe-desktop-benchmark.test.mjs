@@ -9,6 +9,7 @@ import {
   readTrialEvidence,
   runBenchmark,
 } from "./deepswe-desktop-benchmark.mjs";
+import { createDeepSweSourceFixture } from "./fixtures/deepswe-source.mjs";
 
 describe("DeepSWE desktop benchmark CLI", () => {
   it("parses preflight and evidence modes", () => {
@@ -31,13 +32,24 @@ describe("DeepSWE desktop benchmark CLI", () => {
   });
 
   it("runs the source preflight from the repository fact source", () => {
-    const result = runBenchmark(
-      { preflight: true, evidencePath: null, write: false },
-      process.cwd(),
-    );
-    expect(result.status).toBe("pass");
-    expect(result.taskCount).toBe(5);
-    expect(result.checks).toHaveLength(53);
+    const fixture = createDeepSweSourceFixture({ repoRoot: process.cwd() });
+    try {
+      const result = runBenchmark(
+        {
+          preflight: true,
+          evidencePath: null,
+          sourceRoot: fixture.sourceRoot,
+          resolveSourceCommit: () => fixture.sourceCommit,
+          write: false,
+        },
+        process.cwd(),
+      );
+      expect(result.status).toBe("pass");
+      expect(result.taskCount).toBe(5);
+      expect(result.checks).toHaveLength(53);
+    } finally {
+      fs.rmSync(fixture.sourceRoot, { recursive: true, force: true });
+    }
   }, 20_000);
 
   it("discovers only desktop trial evidence recursively", () => {

@@ -114,7 +114,12 @@ function writeJson(filePath, value) {
 export function runBenchmark(options, repoRoot = process.cwd()) {
   const { manifest } = loadDesktopManifest(repoRoot);
   if (options.preflight) {
-    const preflight = preflightDesktopManifest({ repoRoot, manifest });
+    const preflight = preflightDesktopManifest({
+      repoRoot,
+      manifest,
+      sourceRoot: options.sourceRoot,
+      resolveSourceCommit: options.resolveSourceCommit,
+    });
     if (preflight.status !== "pass") process.exitCode = 1;
     return preflight;
   }

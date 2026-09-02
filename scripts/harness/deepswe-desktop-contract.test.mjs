@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   DEEPSWE_DESKTOP_TRIAL_SCHEMA,
@@ -13,9 +13,41 @@ import {
   sha256,
   validateDesktopManifest,
 } from "./deepswe-desktop-contract.mjs";
+import { createDeepSweSourceFixture } from "./fixtures/deepswe-source.mjs";
 
 const repoRoot = process.cwd();
 const { manifest } = loadDesktopManifest(repoRoot);
+let sourceFixture;
+
+beforeAll(() => {
+  sourceFixture = createDeepSweSourceFixture({ repoRoot });
+});
+
+afterAll(() => {
+  fs.rmSync(sourceFixture.sourceRoot, { recursive: true, force: true });
+});
+
+function sourceRoot() {
+  return sourceFixture.sourceRoot;
+}
+
+function evaluateTrial(evidence) {
+  return evaluateDesktopTrial({
+    evidence,
+    manifest,
+    repoRoot,
+    sourceRoot: sourceRoot(),
+  });
+}
+
+function evaluateSuite(evidenceList) {
+  return evaluateDesktopSuite({
+    evidenceList,
+    manifest,
+    repoRoot,
+    sourceRoot: sourceRoot(),
+  });
+}
 
 function passingEvidence(task, overrides = {}) {
   const patchSha256 = "a".repeat(64);
@@ -23,7 +55,12 @@ function passingEvidence(task, overrides = {}) {
   const threadId = `thread-${task.id}`;
   const turnId = `turn-${task.id}`;
   const instruction = fs.readFileSync(
-    path.resolve(repoRoot, task.instructionPath),
+    path.join(
+      sourceRoot(),
+      "tasks",
+      task.id,
+      path.basename(task.instructionPath),
+    ),
   );
   const base = {
     schemaVersion: DEEPSWE_DESKTOP_TRIAL_SCHEMA,
@@ -190,7 +227,12 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
   });
 
   it("preflights original instructions, task metadata, and separate verifier mode", () => {
-    const preflight = preflightDesktopManifest({ repoRoot, manifest });
+    const preflight = preflightDesktopManifest({
+      repoRoot,
+      manifest,
+      sourceRoot: sourceRoot(),
+      resolveSourceCommit: () => sourceFixture.sourceCommit,
+    });
     expect(preflight.status).toBe("pass");
     expect(preflight.taskCount).toBe(5);
     expect(preflight.checks).toHaveLength(53);
@@ -210,7 +252,7 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
 
   it("accepts a live trial only when Gate B, verifier, and patch identity all match", () => {
     const evidence = passingEvidence(manifest.tasks[0]);
-    const verdict = evaluateDesktopTrial({ evidence, manifest, repoRoot });
+    const verdict = evaluateTrial(evidence);
     expect(verdict.gateBPass).toBe(true);
     expect(verdict.verifierPass).toBe(true);
     expect(verdict.desktopCodingPass).toBe(true);
@@ -228,7 +270,7 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
         artifacts: [],
       },
     });
-    const verdict = evaluateDesktopTrial({ evidence, manifest, repoRoot });
+    const verdict = evaluateTrial(evidence);
     expect(verdict.gateBPass).toBe(true);
     expect(verdict.verifierPass).toBe(false);
     expect(verdict.desktopCodingPass).toBe(false);
@@ -332,7 +374,7 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
     ],
   ])("rejects %s", (_label, mutate, assertionName) => {
     const evidence = mutate(passingEvidence(manifest.tasks[0]));
-    const verdict = evaluateDesktopTrial({ evidence, manifest, repoRoot });
+    const verdict = evaluateTrial(evidence);
     expect(verdict.assertions[assertionName]).toBe(false);
     expect(verdict.desktopCodingPass).toBe(false);
   });
@@ -341,7 +383,7 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
     const evidence = passingEvidence(manifest.tasks[0], {
       workspace: path.join(repoRoot, "invalid"),
     });
-    const verdict = evaluateDesktopTrial({ evidence, manifest, repoRoot });
+    const verdict = evaluateTrial(evidence);
     expect(verdict.gateBPass).toBe(false);
     expect(verdict.claimConsistent).toBe(false);
     expect(verdict.valid).toBe(false);
@@ -359,7 +401,7 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
         },
       }),
     );
-    const suite = evaluateDesktopSuite({ evidenceList, manifest, repoRoot });
+    const suite = evaluateSuite(evidenceList);
     expect(suite.status).toBe("pass");
     expect(suite.desktopCodingPass).toBe(true);
     expect(suite.recoveryCoverage).toEqual({
@@ -369,11 +411,7 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
     });
 
     evidenceList[0].recovery.cancelNoGhostWrite.status = "not_run";
-    const incomplete = evaluateDesktopSuite({
-      evidenceList,
-      manifest,
-      repoRoot,
-    });
+    const incomplete = evaluateSuite(evidenceList);
     expect(incomplete.desktopCodingPass).toBe(false);
     expect(incomplete.failedAssertions).toContain("recoveryCoverageComplete");
 
@@ -381,11 +419,7 @@ describe("DeepSWE Desktop Smoke 5 contract", () => {
     evidenceList.forEach((evidence) => {
       evidence.recovery.coldRestart.status = "not_run";
     });
-    const restartIncomplete = evaluateDesktopSuite({
-      evidenceList,
-      manifest,
-      repoRoot,
-    });
+    const restartIncomplete = evaluateSuite(evidenceList);
     expect(restartIncomplete.desktopCodingPass).toBe(false);
     expect(restartIncomplete.recoveryCoverage.cold_restart).toBe(false);
   });

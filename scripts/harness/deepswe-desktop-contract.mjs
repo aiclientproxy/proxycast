@@ -167,20 +167,27 @@ export function validateDesktopManifest(manifest) {
   return manifest;
 }
 
-export function preflightDesktopManifest({ repoRoot, manifest }) {
+export function preflightDesktopManifest({
+  repoRoot,
+  manifest,
+  sourceRoot: sourceRootOverride,
+  resolveSourceCommit = (root) =>
+    execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      encoding: "utf8",
+    }).trim(),
+}) {
   const checks = [];
   const add = (name, passed, detail = null) =>
     checks.push({ name, passed: passed === true, detail });
   const sourceRoot = path.resolve(
-    repoRoot,
-    path.dirname(manifest.taskSourceRoot),
+    sourceRootOverride ||
+      path.join(repoRoot, path.dirname(manifest.taskSourceRoot)),
   );
+  const sourceTasksRoot = path.join(sourceRoot, "tasks");
   let sourceHead = "unavailable";
   try {
-    sourceHead = execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: sourceRoot,
-      encoding: "utf8",
-    }).trim();
+    sourceHead = resolveSourceCommit(sourceRoot);
   } catch {
     // The source identity check below remains fail-closed.
   }
@@ -197,8 +204,16 @@ export function preflightDesktopManifest({ repoRoot, manifest }) {
   );
   add("source-pier", manifest.runner === DEEPSWE_PIER_PACKAGE, manifest.runner);
   for (const task of manifest.tasks) {
-    const instructionPath = path.resolve(repoRoot, task.instructionPath);
-    const taskTomlPath = path.resolve(repoRoot, task.taskTomlPath);
+    const instructionPath = path.join(
+      sourceTasksRoot,
+      task.id,
+      path.basename(task.instructionPath),
+    );
+    const taskTomlPath = path.join(
+      sourceTasksRoot,
+      task.id,
+      path.basename(task.taskTomlPath),
+    );
     add(
       `${task.id}:instruction`,
       fs.existsSync(instructionPath),
@@ -352,7 +367,12 @@ export function coldRestartEvidencePasses({
   );
 }
 
-function buildTrialAssertions({ evidence, manifest, repoRoot }) {
+function buildTrialAssertions({
+  evidence,
+  manifest,
+  repoRoot,
+  sourceRoot: sourceRootOverride,
+}) {
   const task = taskById(manifest, normalizeString(evidence?.taskId));
   const toolPhases = completedToolPhases(evidence?.toolLifecycle);
   const changedFiles = uniqueStrings(evidence?.changedFiles);
@@ -364,8 +384,17 @@ function buildTrialAssertions({ evidence, manifest, repoRoot }) {
   const terminalStatus = normalizeStatus(evidence?.readModel?.terminalStatus);
   const identity = evidence?.identity ?? {};
   const gateIdentity = evidence?.gui?.identity ?? {};
+  const sourceRoot = path.resolve(
+    sourceRootOverride ||
+      path.join(repoRoot, path.dirname(manifest.taskSourceRoot)),
+  );
+  const sourceTasksRoot = path.join(sourceRoot, "tasks");
   const instructionPath = task
-    ? path.resolve(repoRoot, task.instructionPath)
+    ? path.join(
+        sourceTasksRoot,
+        task.id,
+        path.basename(task.instructionPath),
+      )
     : "";
   const instructionSha256 =
     instructionPath && fs.existsSync(instructionPath)
@@ -446,8 +475,18 @@ function buildTrialAssertions({ evidence, manifest, repoRoot }) {
   };
 }
 
-export function evaluateDesktopTrial({ evidence, manifest, repoRoot }) {
-  const assertions = buildTrialAssertions({ evidence, manifest, repoRoot });
+export function evaluateDesktopTrial({
+  evidence,
+  manifest,
+  repoRoot,
+  sourceRoot,
+}) {
+  const assertions = buildTrialAssertions({
+    evidence,
+    manifest,
+    repoRoot,
+    sourceRoot,
+  });
   const gateBAssertionNames = [
     "schemaCurrent",
     "taskSelected",
@@ -526,10 +565,20 @@ function recoveryCoverage(evidenceList) {
   };
 }
 
-export function evaluateDesktopSuite({ evidenceList, manifest, repoRoot }) {
+export function evaluateDesktopSuite({
+  evidenceList,
+  manifest,
+  repoRoot,
+  sourceRoot,
+}) {
   const trials = evidenceList.map((evidence) => ({
     evidence,
-    verdict: evaluateDesktopTrial({ evidence, manifest, repoRoot }),
+    verdict: evaluateDesktopTrial({
+      evidence,
+      manifest,
+      repoRoot,
+      sourceRoot,
+    }),
   }));
   const selectedTaskIds = new Set(manifest.tasks.map((task) => task.id));
   const observedTaskIds = new Set(
