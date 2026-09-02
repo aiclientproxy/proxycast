@@ -1,6 +1,6 @@
 # Lime v1.139.0 发布执行计划
 
-状态：`ready_for_release / local quality gates passed`
+状态：`completed`
 日期：2026-09-03
 目标版本：`1.139.0`
 目标 tag：`v1.139.0`
@@ -39,6 +39,16 @@
 - `git diff --check`：通过。
 - 发布前远端复核：本地 `HEAD`、`origin/main` 与 merge base 均为 `8413925fe`，双向差异 `0/0`；本地和远端均无 `v1.139.0` tag。
 
+## 发布结果
+
+- release commit `a00f31fccee6f5e0136673ffac7911c80d2bc3fe` 已推送，`v1.139.0` tag 固定指向该提交；发布后的修复提交为 `81f89d567`（Docs workflow / lint guard）、`b87d27438`（Rust commands 清理守卫）与 `277fa91ec`（低高度窗口首页输入框布局）。
+- 首次 Release run `33663513570` 在 Windows Squirrel 安装态 GUI 的 `layoutGeometryStable` 失败；macOS 两架构与 Windows 安装、N-1 升级和 App Server `1.139.0` 初始化均已通过。根因修复后，本地 `npm run typecheck`、定向 ESLint、4 个测试文件共 84 tests 及 `npm run verify:gui-smoke` 全绿；GUI smoke run id 为 `standalone-shell-01-20260902183119-37065`。
+- Quality run `33667770446` 在 `main@277fa91ec` 全绿：Frontend Full、Rust Full、Integrity、GUI Smoke 与 Quality results 均成功。
+- 修复后 Release run `33667794033` 在 `main@277fa91ec` 全绿：Windows x64、macOS x64/arm64 打包与资源校验、macOS packaged native-host Gate B、Windows Squirrel 安装/N-1 升级、Code Mode Gate B、native-host Gate B、四个平台 CLI、GitHub Release 上传及 Cloudflare R2 updater 发布全部成功。
+- GitHub Release `Lime v1.139.0` 已正式发布，共 13 个 uploaded assets：Windows Setup/full nupkg/RELEASES，macOS x64/arm64 DMG、zip 与 updater JSON，以及 Windows、macOS x64/arm64、Linux x64 CLI 压缩包。
+- Pages run `33666030217` 在 `81f89d567` 全绿，build 与 deploy 均成功。
+- 最终远端身份：`origin/main=277fa91ec8c2b3fbcd80ff5c7ca7c5f64605587a`，`refs/tags/v1.139.0=a00f31fccee6f5e0136673ffac7911c80d2bc3fe`。标签未移动或重打；修复后的正式发布资产由 `main@277fa91ec` 构建。
+
 ## 收尾分类
 
 - `current`：Feature Map、Plugin、Electron Desktop Host、App Server JSON-RPC、RuntimeCore / Agent Runtime、model-provider、Curated Task / Memory。
@@ -46,4 +56,4 @@
 - `deprecated`：无新增。
 - `dead / deleted`：SceneApp、`src-tauri`、Tauri capability/schema、测试专用 WebviewWindow 生产入口及被替代历史文档。
 
-当前完成度：`95%`；清理、替换、版本元数据和本地质量门禁完成，待 release commit、tag、main/tag 推送及 GitHub Quality / Release 复核。
+当前完成度：`100%`；清理、替换、版本元数据、本地与远端质量门禁、release commit、tag、main/tag 推送、GitHub Release、跨平台资产及 Pages 部署均已完成。

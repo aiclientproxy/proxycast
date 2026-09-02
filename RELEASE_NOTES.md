@@ -11,6 +11,8 @@
 - 修复资源管理器生产路径动态加载测试窗口夹具的问题，关闭行为直接使用当前窗口语义。
 - 移除服务端对 `tauri://localhost` 与 `tauri.localhost` 的 CORS 放行，只保留当前本地开发入口。
 - 修复 Curated Task 结果参考、Memory continuation、模型配置和 provider route 中的事实源漂移。
+- 修复 Windows `980x680` 等低高度窗口中首页输入框被底部裁切的问题，同时保持常规高度窗口的原有布局。
+- 修复 GitHub Pages 文档部署与 lint guard，并恢复 Rust commands 清理守卫，防止已删除桌面命令回流。
 
 ### 优化与重构
 

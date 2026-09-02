@@ -13,6 +13,8 @@ Simplified Chinese release notes are the primary version.
 - Fixed the Resource Manager production path dynamically loading a test-only window fixture; close now uses the current window semantics directly.
 - Removed CORS access for `tauri://localhost` and `tauri.localhost`, retaining only current local development origins.
 - Fixed source-of-truth drift across Curated Task references, Memory continuation, model configuration, and provider routing.
+- Fixed the home composer being clipped at the bottom of short Windows viewports such as `980x680`, while preserving the existing layout at normal window heights.
+- Repaired the GitHub Pages documentation workflow and lint guard, and restored the Rust commands cleanup guard to prevent retired desktop commands from returning.
 
 ### Improvements and Refactoring
 
