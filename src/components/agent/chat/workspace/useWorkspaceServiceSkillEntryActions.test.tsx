@@ -741,7 +741,9 @@ describe("useWorkspaceServiceSkillEntryActions", () => {
         schedule: {
           type: "daily",
           time: "09:00",
-          timezone: "Asia/Shanghai",
+          timezone:
+            Intl.DateTimeFormat().resolvedOptions().timeZone ||
+            "Asia/Shanghai",
         },
         execution: expect.objectContaining({
           threadMode: "continue_thread",
