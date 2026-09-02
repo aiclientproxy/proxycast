@@ -227,7 +227,9 @@ describe("service skill automation draft", () => {
     expect(initialValues.threadMode).toBe("continue_thread");
     expect(initialValues.scheduleType).toBe("daily");
     expect(initialValues.time).toBe("09:00");
-    expect(initialValues.timezone).toBe("Asia/Shanghai");
+    expect(initialValues.timezone).toBe(
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai",
+    );
     expect(initialValues.enabled).toBe(false);
     expect(initialValues.prompt).toContain("[技能任务] 每日趋势摘要");
     expect(initialValues.prompt).toContain("[自动化执行要求]");
