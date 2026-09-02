@@ -59,7 +59,7 @@ export function useAgentChatWorkspaceCommandRuntime({
     setInput, setLayoutMode, showSidebar, activeSessionIdRef, deferSessionRecentMetadataSyncForNavigation, setChatToolPreferences, projectSelectionRuntime,
     projectId, shouldDisableSessionRestore, applyProjectSelection, taskCenterWorkspaceId, normalizedInitialSessionId, sessionRestorePresentation, shouldPreserveBlankHomeSurface, shouldUseBrowserWorkspaceHomeChrome,
     shouldDeferWorkspaceAuxiliaryLoads, project, isInitialContentLoading, canvasState, setCanvasState, setDocumentVersionStatusMap, lastCanvasSyncRequestRef, initialAutoSendAllowsDetachedSession,
-    initialCreationReplay, initialCreationReplaySurface, initialPendingServiceSkillLaunchSignature, validatedRuntimeProjectId, generalCanvasState, setGeneralCanvasState, taskFiles, setTaskFiles,
+    initialCreationReplay, initialPendingServiceSkillLaunchSignature, validatedRuntimeProjectId, generalCanvasState, setGeneralCanvasState, taskFiles, setTaskFiles,
     selectedFileId, setSelectedFileId, taskFilesRef, socialStageLogRef, openedProjects, serviceModels, agentResponseLanguage, refreshServiceModelsConfig,
     soulArtifactVoiceGenerationBrief, soulInteractionCopy, soulArtifactVoiceEnabledForTurn, setSoulArtifactVoiceEnabledForTurn, effectiveImageWorkbenchPreference, imageWorkbenchGenerationRuntime, setOnDemandMediaDefaults, imageWorkbenchSelectedProviderId,
     imageWorkbenchSelectedModelId, imageWorkbenchSelectedSize, setImageWorkbenchSelectedSize, imageWorkbenchPreferredProviderUnavailable, ensureImageWorkbenchProvidersLoaded, imageWorkbenchProvidersLoading, mentionedCharacters,

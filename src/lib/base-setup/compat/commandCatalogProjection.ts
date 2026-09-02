@@ -34,7 +34,6 @@ function resolveCommandRenderContract(
     SkillCatalogCommandEntry["binding"]
   >["executionKind"],
   projection: BaseSetupCatalogProjection,
-  bindingProfile: BaseSetupBindingProfile,
 ): SkillCatalogCommandEntry["renderContract"] {
   if (projection.commandRenderContract) {
     return {
@@ -195,11 +194,7 @@ function compileCommandProjectionEntry(params: {
       ...(requestDefaults ? { requestDefaults } : {}),
       ...(intentConfirmation ? { intentConfirmation } : {}),
     },
-    renderContract: resolveCommandRenderContract(
-      executionKind,
-      projection,
-      bindingProfile,
-    ),
+    renderContract: resolveCommandRenderContract(executionKind, projection),
   };
 }
 

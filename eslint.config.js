@@ -1138,6 +1138,16 @@ export default [
       "src/lib/api/providerRuntime.ts",
       "src/lib/api/serverTools.ts",
       "src/lib/api/voiceTools.ts",
+      "src/lib/api/appServerTransport.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": "off",
+    },
+  },
+  {
+    files: [
+      "src/lib/desktop-host/core.test.ts",
+      "src/lib/dev-bridge/safeInvoke.test.ts",
     ],
     rules: {
       "no-restricted-syntax": "off",
