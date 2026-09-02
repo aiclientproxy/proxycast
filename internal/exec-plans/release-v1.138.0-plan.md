@@ -1,6 +1,6 @@
 # Lime v1.138.0 发布执行计划
 
-状态：`eighth-follow-up-ready / clean CI deleted-owner scan verification pending`
+状态：`completed / Quality and Release passed`
 日期：2026-09-01
 目标版本：`1.138.0`
 目标 tag：`v1.138.0`
@@ -47,6 +47,7 @@
 - Quality run `33575987530` 已跨过 App Server client 发布产物批次并运行至第 `91/119` 批，随后发现 `automationDraft.test.ts` 把宿主默认时区硬编码为 `Asia/Shanghai`；产品实现按 `Intl.DateTimeFormat().resolvedOptions().timeZone` 读取用户宿主时区，Linux CI 因此正确返回 `UTC`。测试现按宿主 IANA 时区断言，显式 automation profile 的 `Asia/Shanghai` 断言保持不变；`TZ=UTC` 精确回归 `4/4`、受影响 ESLint 与 `git diff --check` 通过，仍待干净 CI 完成剩余批次。
 - Quality run `33577323728` 已跨过第 `91/119` 批，并在第 `112/119` 批发现同类断言：Workspace Service Skill 创建计划任务的测试把默认时区硬编码为 `Asia/Shanghai`，而产品仍正确使用宿主 IANA 时区。该断言现与产品契约一致，显式时区行为未改；`TZ=UTC npm test -- --resume` 已从第 `112/119` 批续跑并完成至 `119/119`，仍待提交后由干净 Linux runner 完成最终复验。
 - Quality run `33578220485` 已越过第 `112/119` 批，并在第 `114/119` 批暴露另一处脏工作树依赖：`workspaceArticleWorkspaceMetadata.unit.test.ts` 仍扫描自 v1.124.0 已删除的 `src/features/plugin-content-factory` owner。本地残留的 Git 不跟踪空目录让扫描误通过，干净 checkout 则正确报 `ENOENT`；生产扫描列表现只保留 current `src/components/agent/chat` 根，并继续对该根严格失败，不增加“目录不存在即跳过”的宽松路径。精确回归 `9/9`、`TZ=UTC` smart runner 第 `114-119/119` 批、受影响 ESLint 与 `git diff --check` 已通过。
+- 最终 commit/tag `ab2958ba9` 的 Quality run `33579972961` 完整成功：Frontend Full 完成 `119/119` 批，Integrity、Rust Full、GUI Smoke 与 Quality results 全部通过。Release run `33580471385` 完整成功：macOS arm64/x64 与 Windows x64 Electron 构建、Windows Squirrel 安装态、CodeMode/native host Gate B、GitHub Release 资产、Cloudflare R2 updater 和 Linux/macOS arm64/macOS x64/Windows CLI 资产全部通过。前一轮 run `33578746024` 仅因 GitHub Results Service 创建 macOS x64 artifact 连续超时失败，最终 run 已证明无需代码或 workflow 变更。
 
 已通过：
 
@@ -71,7 +72,7 @@ git diff --check
 - 最终 GUI smoke：`.lime/qc/project-gates/standalone-shell-01-20260901112400-63590/shell-01-electron-smoke/summary.json` 为 `result=pass`，App Server `protocol=appserver.v0 version=1.138.0`；此前完整 GUI shell Gate B-F `.lime/qc/project-gates/standalone-shell-01-20260901104344-8413/shell-01-electron-smoke/summary.json` 为 21/21，真实 Electron/preload/IPC/App Server JSON-RPC 命中，错误、legacy command 与 mock fallback 均为 0。
 - `npm run test:related -- ...` 的收集器曾把 `electron/` 目录作为文件读取并报 `EISDIR`；直接 Vitest 精确入口覆盖相同受影响测试并全部通过，不属于测试断言失败。
 - 额外执行的完整 Rust workspace 测试未完成：裸 `npm run test:rust` 下载 denoland `rusty_v8 v150.4.0` Apple Silicon 预编译包时遇到上游 URL 404；改用仓库 `resolveRustyV8CargoEnv` 后完成核心 crate 编译，但在链接 `app-server` 测试产物时因本机磁盘仅余约 1.4 GiB 报 `No space left on device`。该项不是默认发布硬门禁，未将环境失败表述为测试通过。
-- Windows packaged Squirrel、安装后 Agent/CodeMode Gate B 和发布资产尚未执行；它们必须在 commit/tag 推送后由 `windows-2022` release workflow 生成平台证据。
+- Windows packaged Squirrel、安装后 CodeMode/native host Gate B 与证据上传已由最终 Release run `33580471385` 通过；GitHub Release 共 `13` 个 uploaded 资产，覆盖 Windows Setup/nupkg、macOS arm64/x64 dmg/zip/updater metadata 和四平台 CLI。
 
 ## 收尾记录
 
@@ -79,4 +80,4 @@ git diff --check
 - `compat`：无新增 compat wrapper。
 - `deprecated`：无新增 deprecated owner。
 - `dead / deleted`：外部 Codex manifest 和 4 个压缩 bundle 不进入 release；不恢复旧 runtime、生产 mock fallback 或第二持久化 owner。
-- 当前完成度：`90%`；首轮 commit/tag/push 与 GitHub Release 已完成，follow-up 修复和质量预算已落地，仍待 follow-up commit、远端同名 tag 重建确认、Release workflow 资产和 Windows packaged Gate B。
+- 当前完成度：`100%`；`v1.138.0` 的发布提交为 `ab2958ba9`，Quality `33579972961`、Release `33580471385` 和 GitHub Release 安装资产均已复核通过。本条作为发布后 evidence 提交推进 `main`，不再移动已发布 tag。
