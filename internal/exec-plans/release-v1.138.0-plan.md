@@ -1,6 +1,6 @@
 # Lime v1.138.0 发布执行计划
 
-状态：`seventh-follow-up-ready / clean CI timezone verification pending`
+状态：`eighth-follow-up-ready / clean CI deleted-owner scan verification pending`
 日期：2026-09-01
 目标版本：`1.138.0`
 目标 tag：`v1.138.0`
@@ -46,6 +46,7 @@
 - Quality run `33574821717` 已证明 Desktop Smoke cache 修复通过原失败批次，但 Frontend Full 在第 `37/119` 批发现下一处干净工作区依赖：`packages/app-server-client/tests/apps.test.mjs` 保留对发布产物 `../dist/index.js` 的契约验证，而根测试入口未先构建该包。根 `pretest` 现统一执行 App Server client build，`test:frontend:all`、`test:resume`、`test:related` 与 `test:changed` 均委托唯一 `npm test` 入口；不把发布产物测试降级为源码直连。package 测试 `131/131`、根入口定向批次和参数透传已通过，仍待提交后由干净 CI 完成全部 Frontend Full。
 - Quality run `33575987530` 已跨过 App Server client 发布产物批次并运行至第 `91/119` 批，随后发现 `automationDraft.test.ts` 把宿主默认时区硬编码为 `Asia/Shanghai`；产品实现按 `Intl.DateTimeFormat().resolvedOptions().timeZone` 读取用户宿主时区，Linux CI 因此正确返回 `UTC`。测试现按宿主 IANA 时区断言，显式 automation profile 的 `Asia/Shanghai` 断言保持不变；`TZ=UTC` 精确回归 `4/4`、受影响 ESLint 与 `git diff --check` 通过，仍待干净 CI 完成剩余批次。
 - Quality run `33577323728` 已跨过第 `91/119` 批，并在第 `112/119` 批发现同类断言：Workspace Service Skill 创建计划任务的测试把默认时区硬编码为 `Asia/Shanghai`，而产品仍正确使用宿主 IANA 时区。该断言现与产品契约一致，显式时区行为未改；`TZ=UTC npm test -- --resume` 已从第 `112/119` 批续跑并完成至 `119/119`，仍待提交后由干净 Linux runner 完成最终复验。
+- Quality run `33578220485` 已越过第 `112/119` 批，并在第 `114/119` 批暴露另一处脏工作树依赖：`workspaceArticleWorkspaceMetadata.unit.test.ts` 仍扫描自 v1.124.0 已删除的 `src/features/plugin-content-factory` owner。本地残留的 Git 不跟踪空目录让扫描误通过，干净 checkout 则正确报 `ENOENT`；生产扫描列表现只保留 current `src/components/agent/chat` 根，并继续对该根严格失败，不增加“目录不存在即跳过”的宽松路径。精确回归 `9/9`、`TZ=UTC` smart runner 第 `114-119/119` 批、受影响 ESLint 与 `git diff --check` 已通过。
 
 已通过：
 
@@ -57,6 +58,7 @@ npm run smoke:agent-runtime-current-fixture
 npm run verify:gui-smoke
 npm test -- --resume                           # 119/119 批次
 TZ=UTC npm test -- --resume                    # 第 112-119 批通过
+TZ=UTC npm test -- --from-batch 114            # 第 114-119 批通过
 npx vitest run <受影响前端/Electron/脚本精确入口>  # 36/36
 npx eslint <受影响前端路径> --max-warnings 0
 git diff --check

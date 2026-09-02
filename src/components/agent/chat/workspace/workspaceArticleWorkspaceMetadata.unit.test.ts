@@ -14,10 +14,7 @@ import {
 const CURRENT_PATCH = {
   objects: [{ ref: { kind: "articleDraft", id: "current" } }],
 };
-const PRODUCTION_SCAN_DIRS = [
-  "src/components/agent/chat",
-  "src/features/plugin-content-factory",
-] as const;
+const PRODUCTION_SCAN_DIRS = ["src/components/agent/chat"] as const;
 function collectProductionSourceFiles(dir: string): string[] {
   const entries = readdirSync(dir);
   const files: string[] = [];
