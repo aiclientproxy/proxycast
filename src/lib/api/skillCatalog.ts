@@ -28,12 +28,6 @@ export type SkillCatalogExecutionKind =
   | "agent_turn"
   | "automation_job";
 
-// legacy compat only：若远端或旧包仍返回 cloud_scene，解析层会先正规化为 agent_turn。
-export type SkillCatalogCompatExecutionKind = "cloud_scene";
-type SkillCatalogAnyExecutionKind =
-  | SkillCatalogExecutionKind
-  | SkillCatalogCompatExecutionKind;
-
 export interface SkillCatalogExecution {
   kind: SkillCatalogExecutionKind;
 }
@@ -509,12 +503,6 @@ function resolveSkillCatalogExecutionKind(
   }
 }
 
-function normalizeCompatSkillCatalogExecutionKind(
-  kind: SkillCatalogAnyExecutionKind,
-): SkillCatalogExecutionKind {
-  return kind === "cloud_scene" ? "agent_turn" : kind;
-}
-
 function isLegacyCompatSceneSourceItem(
   item: Pick<ServiceSkillItem, "sceneBinding">,
 ): boolean {
@@ -529,12 +517,11 @@ function parseCommandBindingExecutionKind(
     normalized === "native_skill" ||
     normalized === "agent_turn" ||
     normalized === "automation_job" ||
-    normalized === "cloud_scene" ||
     normalized === "task_queue" ||
     normalized === "server_api" ||
     normalized === "cli"
   ) {
-    return normalized === "cloud_scene" ? "agent_turn" : normalized;
+    return normalized;
   }
   return undefined;
 }
@@ -575,10 +562,9 @@ function parseSceneExecutionKind(
     normalized === "native_skill" ||
     normalized === "agent_turn" ||
     normalized === "automation_job" ||
-    normalized === "cloud_scene" ||
     normalized === "scene"
   ) {
-    return normalized === "cloud_scene" ? "agent_turn" : normalized;
+    return normalized;
   }
   return undefined;
 }
@@ -747,9 +733,7 @@ function buildSceneEntryFromCatalogItem(
     surfaceScopes: item.surfaceScopes,
     linkedSkillId: item.id,
     skillLocator: createCatalogSkillLocator(item),
-    executionKind: normalizeCompatSkillCatalogExecutionKind(
-      item.execution.kind,
-    ),
+    executionKind: item.execution.kind,
     renderContract: {
       resultKind: "tool_timeline",
       detailKind: "scene_detail",
@@ -1060,14 +1044,13 @@ function parseSkillCatalogExecution(
   if (
     kind !== "native_skill" &&
     kind !== "agent_turn" &&
-    kind !== "automation_job" &&
-    kind !== "cloud_scene"
+    kind !== "automation_job"
   ) {
     return null;
   }
 
   return {
-    kind: normalizeCompatSkillCatalogExecutionKind(kind),
+    kind,
   };
 }
 
@@ -1310,9 +1293,10 @@ function parseSkillCatalogEntry(value: unknown): SkillCatalogEntry | null {
           );
           return {
             skillId,
-            skillLocator: parseSkillCatalogSkillLocator(
-              value.binding.skillLocator ?? value.binding.skill_locator,
-            ) ?? skillLocatorFromSkillId(skillId),
+            skillLocator:
+              parseSkillCatalogSkillLocator(
+                value.binding.skillLocator ?? value.binding.skill_locator,
+              ) ?? skillLocatorFromSkillId(skillId),
             executionKind: parseCommandBindingExecutionKind(
               value.binding.executionKind ?? value.binding.execution_kind,
             ),
@@ -1362,9 +1346,10 @@ function parseSkillCatalogEntry(value: unknown): SkillCatalogEntry | null {
       surfaceScopes: normalizeSurfaceScopes(value.surfaceScopes),
       homePresentation,
       linkedSkillId,
-      skillLocator: parseSkillCatalogSkillLocator(
-        value.skillLocator ?? value.skill_locator,
-      ) ?? skillLocatorFromSkillId(linkedSkillId),
+      skillLocator:
+        parseSkillCatalogSkillLocator(
+          value.skillLocator ?? value.skill_locator,
+        ) ?? skillLocatorFromSkillId(linkedSkillId),
       executionKind: parseSceneExecutionKind(value.executionKind),
       ...(requestDefaults ? { requestDefaults } : {}),
       placeholder: normalizeText(value.placeholder) ?? undefined,

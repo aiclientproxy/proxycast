@@ -193,7 +193,7 @@ describe("asrProvider API", () => {
 
   it("旧转写、输出与录音控制入口应本地 fail closed，不再调用旧命令", async () => {
     const currentBlockedMessage =
-      "旧实时语音转写、润色、输出与录音控制入口已退役，请使用 App Server current 语音转写通道，旧 Tauri in-process command 已退役。";
+      "旧实时语音转写、润色、输出与录音控制入口已退役，请使用 App Server current 语音转写通道，旧进程内桌面命令已退役。";
 
     await expect(
       transcribeAudio(new Uint8Array([1, 2, 3]), 16000, "cred-1"),

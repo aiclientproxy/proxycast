@@ -21,7 +21,7 @@ ST-6 的旧公开 Automation 双轨已物理删除并补负向守卫，Windows N
 | ST-3 | 真实运行闭环           | RuntimeCore、Thread/Turn metadata、Agent Run                  | due/manual/catch-up 都产出 canonical Thread/Turn  |
 | ST-4 | 主从工作台             | sidebar/router/page/VM/i18n/tests                             | 截图核心列表/创建/详情/历史交互完成               |
 | ST-5 | 对话内创建与通知       | Agent UI projection、draft confirm、Desktop Host notification | 自然语言 draft -> 用户确认 -> create；通知可用    |
-| ST-6 | 迁移删除与 Gate B      | 旧 Settings/browser/SceneApp、guards、fixtures                | 双轨清零，macOS/Windows 与真实 Electron 门禁完成  |
+| ST-6 | 迁移删除与 Gate B      | 旧 Settings/browser/应用编排上下文、guards、fixtures          | 双轨清零，macOS/Windows 与真实 Electron 门禁完成  |
 
 ## 3. ST-0：合同冻结
 
@@ -69,7 +69,7 @@ ST-6 的旧公开 Automation 双轨已物理删除并补负向守卫，Windows N
 ## 9. ST-6：清理与交付
 
 - 完成 [迁移账本](./05-migration-ledger.md)。
-- 删除旧设置业务工作台、browser payload、SceneApp context、orphan i18n/tests。
+- 删除旧设置业务工作台、browser payload、已退役应用编排 context、orphan i18n/tests。
 - 加 retired guard，更新 commands/architecture/quality 事实源。
 - 通过本地门禁和真实 Electron Gate B，补 Windows 证据。
 

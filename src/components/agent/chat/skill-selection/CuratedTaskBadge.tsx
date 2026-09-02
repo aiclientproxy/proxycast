@@ -14,9 +14,9 @@ import {
 import { buildReviewFeedbackProjection } from "../utils/reviewFeedbackProjection";
 import type { CuratedTaskReferenceEntry } from "../utils/curatedTaskReferenceSelection";
 import {
-  buildSceneAppExecutionReviewPrefillHighlights,
-  buildSceneAppExecutionReviewPrefillSnapshot,
-} from "../utils/sceneAppCuratedTaskReference";
+  buildCuratedTaskResultBaselineHighlights,
+  buildCuratedTaskResultBaselineSnapshot,
+} from "../utils/curatedTaskResultBaseline";
 
 interface CuratedTaskBadgeProps {
   task: CuratedTaskTemplateItem;
@@ -65,15 +65,15 @@ export const CuratedTaskBadge: React.FC<CuratedTaskBadgeProps> = ({
     includeFollowUpActions: true,
     followUpLimit: 2,
   });
-  const sceneAppReviewSnapshot = useMemo(() => {
-    return buildSceneAppExecutionReviewPrefillSnapshot({
+  const resultBaselineSnapshot = useMemo(() => {
+    return buildCuratedTaskResultBaselineSnapshot({
       referenceEntries,
       taskId: task.id,
     });
   }, [referenceEntries, task.id]);
-  const sceneAppReviewHighlights = useMemo(
-    () => buildSceneAppExecutionReviewPrefillHighlights(sceneAppReviewSnapshot),
-    [sceneAppReviewSnapshot],
+  const resultBaselineHighlights = useMemo(
+    () => buildCuratedTaskResultBaselineHighlights(resultBaselineSnapshot),
+    [resultBaselineSnapshot],
   );
   const latestReviewSignal = useMemo(() => {
     void recommendationSignalsVersion;
@@ -134,47 +134,47 @@ export const CuratedTaskBadge: React.FC<CuratedTaskBadgeProps> = ({
             }),
       )
     : null;
-  const sceneAppStatusSummary = sceneAppReviewSnapshot?.statusLabel
+  const resultStatusSummary = resultBaselineSnapshot?.statusLabel
     ? truncateBadgeReviewText(
         t("inputCapabilities.baseline.status", {
-          value: sceneAppReviewSnapshot.statusLabel,
+          value: resultBaselineSnapshot.statusLabel,
         }),
         34,
       )
-    : sceneAppReviewSnapshot?.failureSignalLabel
+    : resultBaselineSnapshot?.failureSignalLabel
       ? truncateBadgeReviewText(
-          t("curatedTask.badge.sceneApp.failureSignal", {
-            value: sceneAppReviewSnapshot.failureSignalLabel,
+          t("curatedTask.badge.result.failureSignal", {
+            value: resultBaselineSnapshot.failureSignalLabel,
           }),
           34,
         )
       : null;
-  const sceneAppNextSummary = sceneAppReviewSnapshot?.destinationsLabel
+  const resultNextSummary = resultBaselineSnapshot?.destinationsLabel
     ? truncateBadgeReviewText(
         t("inputCapabilities.baseline.destination", {
-          value: sceneAppReviewSnapshot.destinationsLabel,
+          value: resultBaselineSnapshot.destinationsLabel,
         }),
         28,
       )
-    : sceneAppReviewSnapshot?.operatingAction
+    : resultBaselineSnapshot?.operatingAction
       ? truncateBadgeReviewText(
           t("inputCapabilities.baseline.operatingAction", {
-            value: sceneAppReviewSnapshot.operatingAction,
+            value: resultBaselineSnapshot.operatingAction,
           }),
           28,
         )
       : null;
-  const sceneAppSummaryTitle =
-    sceneAppReviewSnapshot && sceneAppReviewHighlights.length > 0
+  const resultSummaryTitle =
+    resultBaselineSnapshot && resultBaselineHighlights.length > 0
       ? [
           t("inputCapabilities.baseline.title", {
-            title: sceneAppReviewSnapshot.sourceTitle,
+            title: resultBaselineSnapshot.sourceTitle,
           }),
-          ...sceneAppReviewHighlights,
+          ...resultBaselineHighlights,
         ].join(t("skills.workspace.curatedTask.segmentSeparator"))
-      : sceneAppReviewSnapshot?.sourceTitle
+      : resultBaselineSnapshot?.sourceTitle
         ? t("inputCapabilities.baseline.title", {
-            title: sceneAppReviewSnapshot.sourceTitle,
+            title: resultBaselineSnapshot.sourceTitle,
           })
         : null;
 
@@ -225,22 +225,22 @@ export const CuratedTaskBadge: React.FC<CuratedTaskBadgeProps> = ({
           </span>
         </button>
       ) : null}
-      {sceneAppStatusSummary ? (
+      {resultStatusSummary ? (
         <span
-          data-testid="curated-task-badge-sceneapp-status"
+          data-testid="curated-task-badge-result-status"
           className="inline-flex max-w-[240px] items-center rounded-full border border-sky-300/70 bg-white/90 px-2 py-0.5 text-[11px] leading-4 text-sky-700"
-          title={sceneAppSummaryTitle || undefined}
+          title={resultSummaryTitle || undefined}
         >
-          <span className="truncate">{sceneAppStatusSummary}</span>
+          <span className="truncate">{resultStatusSummary}</span>
         </span>
       ) : null}
-      {sceneAppNextSummary ? (
+      {resultNextSummary ? (
         <span
-          data-testid="curated-task-badge-sceneapp-next"
+          data-testid="curated-task-badge-result-next"
           className="inline-flex max-w-[220px] items-center rounded-full border border-emerald-300/70 bg-white/90 px-2 py-0.5 text-[11px] leading-4 text-emerald-700"
-          title={sceneAppSummaryTitle || undefined}
+          title={resultSummaryTitle || undefined}
         >
-          <span className="truncate">{sceneAppNextSummary}</span>
+          <span className="truncate">{resultNextSummary}</span>
         </span>
       ) : null}
       {followUpSummary ? (

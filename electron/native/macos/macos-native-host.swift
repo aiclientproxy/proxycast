@@ -109,6 +109,8 @@ func readCapabilities() -> [String: Any] {
         "reason": "The native host API is available; packaged entitlement and user authorization are reported separately.",
     ]
     return [
+        "protocolVersion": 1,
+        "helperId": "macos-native-host",
         "platform": "darwin",
         "applicationId": bundleIdentifier,
         "accessibility": capabilityStatus(
@@ -271,7 +273,7 @@ func setWindowOwnerVisibility(windowID: UInt32, hidden: Bool) throws -> [String:
         throw HostError.unavailable("The requested macOS window owner is no longer running.")
     }
     let alreadyHidden = application.isHidden
-    let changed = alreadyHidden == hidden || (hidden ? application.hide() : application.unhide())
+    let changed = alreadyHidden == hidden || setApplicationHidden(application, hidden: hidden)
     guard changed else {
         throw HostError.operationFailed("The macOS window owner visibility could not be updated.")
     }

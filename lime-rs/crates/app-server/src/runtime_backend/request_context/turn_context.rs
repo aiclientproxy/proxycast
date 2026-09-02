@@ -63,14 +63,19 @@ pub(in crate::runtime_backend) fn turn_context_from_request(
     if let Some(w3c_trace_context) = w3c_trace_context_metadata_from_request(request) {
         metadata.insert("w3c_trace_context".to_string(), w3c_trace_context);
     }
+    if let Some(config_metadata) = config_metadata.as_ref() {
+        if let Some(context_policy) = lime_runtime_context_policy_from_metadata(config_metadata) {
+            merge_lime_runtime_metadata(&mut metadata, context_policy);
+        }
+    }
     if let Some(context_policy) = lime_runtime_context_policy_from_request(request) {
         merge_lime_runtime_metadata(&mut metadata, context_policy);
     }
     if let Some(turn_policy) = super::app_server_turn_policy_runtime(request) {
         merge_lime_runtime_metadata(&mut metadata, Value::Object(turn_policy.clone()));
     }
-    if let Some(config_metadata) = config_metadata {
-        metadata.insert("config".to_string(), config_metadata);
+    if let Some(config_metadata) = config_metadata.as_ref() {
+        metadata.insert("config".to_string(), config_metadata.clone());
     }
     let world_state = world_state_from_request(
         request,
@@ -79,6 +84,7 @@ pub(in crate::runtime_backend) fn turn_context_from_request(
         selection,
         workspace_scope.working_dir.as_deref(),
         workspace_scope.project_root.as_deref(),
+        config_metadata.as_ref(),
     );
     let primary_environment_cwd = world_state.as_ref().and_then(|state| {
         state
@@ -115,6 +121,7 @@ fn world_state_from_request(
     selection: &RuntimeModelSelection,
     working_dir: Option<&Path>,
     project_root: Option<&Path>,
+    config_metadata: Option<&Value>,
 ) -> Option<RuntimeWorldState> {
     let environments = world_environments_from_request(request);
     let primary_cwd = environments
@@ -150,7 +157,8 @@ fn world_state_from_request(
         environments,
         permissions,
         collaboration,
-        multi_agent: Some(MultiAgentMode::from_reasoning_effort(
+        multi_agent: Some(multi_agent_mode_from_model_metadata(
+            config_metadata,
             selection.reasoning_effort.as_deref(),
         )),
         instruction_sections: Vec::new(),
@@ -204,6 +212,79 @@ fn world_environments_from_request(
     environments
 }
 
+fn multi_agent_mode_from_model_metadata(
+    metadata: Option<&Value>,
+    reasoning_effort: Option<&str>,
+) -> MultiAgentMode {
+    let Some(metadata) = metadata else {
+        return MultiAgentMode::ExplicitRequestOnly;
+    };
+    let registry = metadata
+        .get("modelRegistry")
+        .or_else(|| metadata.get("model_registry"));
+    let version = registry
+        .and_then(|registry| {
+            [
+                "/multiAgentVersion",
+                "/multi_agent_version",
+                "/model/multiAgentVersion",
+                "/model/multi_agent_version",
+            ]
+            .into_iter()
+            .find_map(|pointer| registry.pointer(pointer).and_then(Value::as_str))
+        })
+        .map(str::trim)
+        .filter(|version| matches!(*version, "v1" | "v2" | "disabled"));
+    if version != Some("v2") {
+        return MultiAgentMode::ExplicitRequestOnly;
+    }
+
+    let model_messages = registry.and_then(|registry| {
+        [
+            "/modelMessages",
+            "/model_messages",
+            "/model/modelMessages",
+            "/model/model_messages",
+        ]
+        .into_iter()
+        .find_map(|pointer| registry.pointer(pointer))
+    });
+    let mode = model_messages.and_then(|messages| {
+        [
+            "/multiAgent/mode",
+            "/multi_agent/mode",
+            "/multiAgent/modeMessages",
+            "/multi_agent/mode_messages",
+        ]
+        .into_iter()
+        .find_map(|pointer| messages.pointer(pointer))
+    });
+    let hint_text = mode.and_then(|mode| {
+        ["/hintText", "/hint_text"].into_iter().find_map(|pointer| {
+            mode.pointer(pointer)
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+    });
+    if let Some(hint_text) = hint_text {
+        return MultiAgentMode::Custom(hint_text);
+    }
+
+    if reasoning_effort.is_some_and(|effort| effort.eq_ignore_ascii_case("ultra")) {
+        mode.and_then(|mode| mode.get("proactive"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .map(MultiAgentMode::Custom)
+            .unwrap_or(MultiAgentMode::Proactive)
+    } else {
+        mode.and_then(|mode| mode.get("explicit"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .map(MultiAgentMode::Custom)
+            .unwrap_or(MultiAgentMode::ExplicitRequestOnly)
+    }
+}
+
 fn w3c_trace_context_metadata_from_request(request: &ExecutionRequest) -> Option<Value> {
     request
         .runtime_metadata()
@@ -252,14 +333,19 @@ fn lime_runtime_context_policy_from_request(request: &ExecutionRequest) -> Optio
 }
 
 fn lime_runtime_context_policy_from_metadata(metadata: &Value) -> Option<Value> {
-    let policy = [
+    let model_registry_policy = model_registry_context_policy(metadata);
+    let request_policy = [
         "/harness/model_request_policy/context_policy",
         "/harness/modelRequestPolicy/contextPolicy",
         "/model_request_policy/context_policy",
         "/modelRequestPolicy/contextPolicy",
     ]
     .into_iter()
-    .find_map(|pointer| metadata.pointer(pointer))?;
+    .find_map(|pointer| metadata.pointer(pointer));
+    let (policy, source) = match request_policy {
+        Some(policy) => (policy, "model_request_policy"),
+        None => (model_registry_policy.as_ref()?, "model_catalog"),
+    };
 
     let context_window = positive_i64_field(policy, &["context_window", "contextWindow"]);
     let max_context_window =
@@ -310,7 +396,7 @@ fn lime_runtime_context_policy_from_metadata(metadata: &Value) -> Option<Value> 
     }
 
     let mut context_policy = serde_json::Map::new();
-    context_policy.insert("source".to_string(), json!("model_request_policy"));
+    context_policy.insert("source".to_string(), json!(source));
     if let Some(value) = context_window {
         context_policy.insert("context_window".to_string(), json!(value));
     }
@@ -344,6 +430,39 @@ fn lime_runtime_context_policy_from_metadata(metadata: &Value) -> Option<Value> 
     }
 
     Some(Value::Object(runtime))
+}
+
+fn model_registry_context_policy(metadata: &Value) -> Option<Value> {
+    let registry = metadata
+        .get("modelRegistry")
+        .or_else(|| metadata.get("model_registry"))?;
+    let limits = registry.get("model")?.get("limits")?;
+    let context_window = positive_i64_field(limits, &["context_length", "contextLength"]);
+    let max_context_window =
+        positive_i64_field(limits, &["max_context_length", "maxContextLength"]);
+    let auto_compact_token_limit = positive_i64_field(
+        limits,
+        &["auto_compact_token_limit", "autoCompactTokenLimit"],
+    );
+    let effective_context_window_percent = positive_i64_field(
+        limits,
+        &[
+            "effective_context_window_percent",
+            "effectiveContextWindowPercent",
+        ],
+    );
+    if context_window.is_none()
+        && max_context_window.is_none()
+        && auto_compact_token_limit.is_none()
+    {
+        return None;
+    }
+    Some(json!({
+        "context_window": context_window,
+        "max_context_window": max_context_window,
+        "auto_compact_token_limit": auto_compact_token_limit,
+        "effective_context_window_percent": effective_context_window_percent,
+    }))
 }
 
 fn output_schema_from_request(

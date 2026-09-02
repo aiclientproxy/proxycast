@@ -8,10 +8,7 @@ import {
   parseSkillCatalog,
   type SkillCatalog,
 } from "./skillCatalog";
-import {
-  buildLegacyCatalogWithSiteEntries,
-  buildLegacyCloudSceneCatalog,
-} from "./skillCatalogTestFixtures";
+import { buildLegacyCatalogWithSiteEntries } from "./skillCatalogTestFixtures";
 
 describe("skillCatalog pure catalog projection", () => {
   it("seeded 目录不应再暴露站点 adapter 或 browser assist 首页入口", () => {
@@ -197,50 +194,6 @@ describe("skillCatalog pure catalog projection", () => {
         }),
       }),
     );
-  });
-
-  it("解析旧版 raw skill catalog 时应把 cloud_scene 正规化为本地 agent_turn", () => {
-    const catalog = parseSkillCatalog(buildLegacyCloudSceneCatalog());
-    const skillItem = catalog?.items.find(
-      (item) => item.id === "legacy-cloud-scene-skill",
-    );
-    const autoSceneEntry = listSkillCatalogSceneEntries(catalog!).find(
-      (entry) => entry.id === "scene:legacy-cloud-scene-skill",
-    );
-    const commandEntry = listSkillCatalogCommandEntries(catalog!).find(
-      (entry) => entry.commandKey === "legacy_voice_runtime",
-    );
-
-    expect(skillItem).toEqual(
-      expect.objectContaining({
-        defaultExecutorBinding: "agent_turn",
-        executionLocation: "client_default",
-        execution: expect.objectContaining({
-          kind: "agent_turn",
-        }),
-      }),
-    );
-    expect(autoSceneEntry).toEqual(
-      expect.objectContaining({
-        linkedSkillId: "legacy-cloud-scene-skill",
-        executionKind: "agent_turn",
-      }),
-    );
-    expect(commandEntry).toEqual(
-      expect.objectContaining({
-        binding: expect.objectContaining({
-          skillId: "legacy-cloud-scene-skill",
-          executionKind: "agent_turn",
-        }),
-      }),
-    );
-    expect(JSON.stringify(catalog)).toContain(
-      '"defaultExecutorBinding":"agent_turn"',
-    );
-    expect(JSON.stringify(catalog)).not.toContain(
-      '"defaultExecutorBinding":"cloud_scene"',
-    );
-    expect(JSON.stringify(catalog)).not.toContain('"kind":"cloud_scene"');
   });
 
   it("应从统一目录中暴露 command 与 scene 扩展入口", () => {

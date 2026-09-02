@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MockWindow, getCurrentWindow } from "./window";
-import { WebviewWindow } from "./webviewWindow";
 
 function clearElectronBridge(): void {
   delete (window as any).electronAPI;
@@ -79,19 +78,6 @@ describe("desktop-host/window", () => {
       );
       await expect(appWindow.isVisible()).rejects.toThrow(
         "window.isVisible 只能在测试环境使用",
-      );
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-
-  it("生产环境不能构造测试 WebviewWindow", () => {
-    vi.stubEnv("MODE", "production");
-    vi.stubEnv("VITEST", "");
-
-    try {
-      expect(() => new WebviewWindow("preview", { url: "/preview" })).toThrow(
-        "WebviewWindow 只能在测试环境使用",
       );
     } finally {
       vi.unstubAllEnvs();

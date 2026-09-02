@@ -31,7 +31,7 @@
 | 旧命令 policy | `plugin_runtime_*`、`pluginUiRuntime/*`、`pluginInstalled/*` 特殊 timeout/no-mock/current catalog | current catalog 只登记七个 `plugin/*` 方法 |
 | MCP 私有 runtime fixture | `--allow-plugin-runtime-fixture`、`plugin_runtime_capabilities`、`plugin_mcp_targets` 正向 smoke、transport summary 与五语孤立文案 | Rust inventory 负向测试与 smoke source guard 禁止私有投影回流 |
 | 孤立 connector smoke | 无 npm/CI/文档入口且仍调用 `plugin_runtime_get_task` 的 `connector-outbox-smoke.mjs` | `scripts/plugin/` 只保留 connector production delivery current 检查 |
-| Plugin v2 active 执行计划 | `plugin-v2-current-plan.md` 与 exec-plan current 导航 | v3 执行计划是唯一 active Plugin 计划；v2 roadmap 仅保留历史快照 |
+| Plugin v1/v2 active 执行计划与路线图 | `internal/roadmap/plugin/v2/**`、根部旧 PRD/计划/原型 | 有效决策已替换到 v3 合同；旧版本文档已从 active tree 删除，Git history 仅用于追溯 |
 | Plugin Lab i18n/sidebar | 五语言 `plugin.lab.*` 155 个 source key 与 `navigation.sidebar.items.pluginLab` 1 个 source key（共 780 条资源） | `plugin-lab-retired-i18n-keys` dead guard；禁止旧 Lab/sidebar 文案回流 |
 | 旧 Plugin 技术标准文档 | `internal/tech/plugin/README.md`、`lime-plugin-package-v1.md` 及现役入站导航 | 已物理删除；`docs:boundary` 的 Plugin v3 文档守卫禁止重新引用 |
 

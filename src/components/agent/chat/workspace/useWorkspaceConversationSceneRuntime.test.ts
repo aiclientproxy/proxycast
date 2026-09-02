@@ -105,23 +105,6 @@ describe("useWorkspaceConversationSceneRuntime", () => {
     );
   });
 
-  it("应把做法执行摘要卡透传给 WorkspaceConversationScene", () => {
-    const sceneAppExecutionSummaryCard = React.createElement(
-      "div",
-      { "data-testid": "sceneapp-summary-card-probe" },
-      "sceneapp summary",
-    );
-    const params = createBaseParams({
-      sceneAppExecutionSummaryCard,
-    });
-
-    const sceneProps = getRenderedSceneProps(params);
-
-    expect(sceneProps.landingSurface.sceneAppExecutionSummaryCard).toBe(
-      sceneAppExecutionSummaryCard,
-    );
-  });
-
   it("parent-owned thread 不应暴露手动上下文压缩入口", () => {
     const params = createBaseParams({
       sessionId: "session-child",

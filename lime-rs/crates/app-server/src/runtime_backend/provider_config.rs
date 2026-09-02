@@ -28,6 +28,12 @@ pub(crate) fn current_agent_runtime_config_metadata() -> Option<Value> {
             }));
         }
     };
+    current_agent_runtime_config_metadata_from_config(&config)
+}
+
+fn current_agent_runtime_config_metadata_from_config(
+    config: &lime_core::config::Config,
+) -> Option<Value> {
     let mut agent_config = serde_json::Map::new();
     if !WorkspaceSandboxConfig::is_default(&config.agent.workspace_sandbox) {
         agent_config.insert(
@@ -73,6 +79,48 @@ pub(crate) fn current_agent_runtime_config_metadata() -> Option<Value> {
     }
 
     Some(Value::Object(metadata))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::current_agent_runtime_config_metadata_from_config;
+    use lime_core::config::Config;
+    use serde_json::json;
+
+    #[test]
+    fn default_config_does_not_emit_runtime_metadata() {
+        assert!(current_agent_runtime_config_metadata_from_config(&Config::default()).is_none());
+    }
+
+    #[test]
+    fn enabled_update_plan_is_emitted_under_tool_execution_config() {
+        let mut config = Config::default();
+        config.agent.tool_execution.update_plan_enabled = true;
+
+        let metadata = current_agent_runtime_config_metadata_from_config(&config)
+            .expect("enabled update_plan should produce config metadata");
+
+        assert_eq!(
+            metadata.pointer("/agent/toolExecution/update_plan_enabled"),
+            Some(&json!(true))
+        );
+        assert!(metadata
+            .pointer("/agent/toolExecution/tool_overrides")
+            .is_none());
+    }
+
+    #[test]
+    fn emitted_metadata_is_read_by_update_plan_runtime_gate() {
+        let mut config = Config::default();
+        config.agent.tool_execution.update_plan_enabled = true;
+        let config_metadata = current_agent_runtime_config_metadata_from_config(&config)
+            .expect("enabled update_plan should produce config metadata");
+        let runtime_metadata = json!({"config": config_metadata});
+
+        assert!(
+            tool_runtime::update_plan::update_plan_enabled_from_metadata(Some(&runtime_metadata))
+        );
+    }
 }
 
 pub(super) fn model_effective_event_from_runtime(

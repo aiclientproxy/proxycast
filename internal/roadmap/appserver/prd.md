@@ -30,7 +30,7 @@ Lime 当前已经具备较完整的本地 AI Agent runtime：会话、线程、�
 4. 让同一套 runtime 能服务多个产品形态：桌面工作台、内容工厂、垂直 Plugin、自动化任务入口。
 5. 让 App 只关心业务对象和 UI 投影，不关心模型调用、工具调度、权限和证据链路的内部实现。
 
-迁移边界：`lime-rs/src/commands/**` 只是旧 Tauri command wrapper 清理区，不再承接本 PRD 的新业务逻辑、API adapter、runtime 分支、领域服务实现、compat wrapper 或退场 stub。PRD 中提到的 legacy desktop command glue 只表示待迁出 / 待删除对象；新增 Rust 后端能力必须进入 App Server crates / RuntimeCore / services，桌面壳能力进入 Electron Desktop Host。
+迁移边界：`lime-rs/src/commands/**` 已物理删除，只允许在负向回流守卫或不可变历史 evidence 中引用。PRD 中提到的 legacy desktop command glue 只表示历史迁移对象；新增 Rust 后端能力必须进入 App Server crates / RuntimeCore / services，桌面壳能力进入 Electron Desktop Host。
 
 ## 4. 工程目标
 
@@ -195,7 +195,7 @@ P1 最小闭环完成时必须满足：
 6. client 可取消 active turn。
 7. 协议 fixture 覆盖 request / response / notification。
 8. legacy desktop command 迁移计划明确哪些保留为 compat facade。
-9. `lime-rs/src/commands/**` 的旧 wrapper 清理状态已登记到执行计划；任何暂留对象都有 blocker、阻塞文件和退出条件，不能作为完成态。
+9. `lime-rs/src/commands/**` 的旧 wrapper 已删除；治理守卫禁止路径、注册和命令面回流。
 
 P4 content-studio 试点完成时必须满足：
 

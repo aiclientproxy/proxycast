@@ -71,34 +71,34 @@ export function buildLegacyCatalogWithSiteEntries(): SkillCatalog {
 
 export function buildBaseSetupPackage() {
   return {
-    id: "sceneapp-base-setup",
+    id: "content-workflow-base-setup",
     version: "tenant-2026-04-15",
-    title: "SceneApp Base Setup",
+    title: "Content Workflow Base Setup",
     summary: "通过基础设置包定义多模态场景入口",
     bundle_refs: [
       {
-        id: "sceneapp-bundle",
+        id: "content-workflow-bundle",
         source: "remote",
-        path_or_uri: "lime://bundles/sceneapp",
+        path_or_uri: "lime://bundles/content-workflow",
         kind: "skill_bundle",
       },
     ],
     catalog_projections: [
       {
-        id: "sceneapp-service",
+        id: "content-workflow-service",
         target_catalog: "service_skill_catalog",
-        entry_key: "sceneapp-service",
+        entry_key: "content-workflow-service",
         skill_key: "story-video-suite",
         title: "短视频编排",
         summary: "把文本、线框图、配乐和短视频串起来。",
-        category: "Scene Apps",
+        category: "Workflows",
         output_hint: "结果包",
-        bundle_ref_id: "sceneapp-bundle",
-        slot_profile_ref: "sceneapp-slot-profile",
-        binding_profile_ref: "sceneapp-binding-profile",
-        artifact_profile_ref: "sceneapp-artifact-profile",
-        scorecard_profile_ref: "sceneapp-scorecard-profile",
-        policy_profile_ref: "sceneapp-policy-profile",
+        bundle_ref_id: "content-workflow-bundle",
+        slot_profile_ref: "content-workflow-slot-profile",
+        binding_profile_ref: "content-workflow-binding-profile",
+        artifact_profile_ref: "content-workflow-artifact-profile",
+        scorecard_profile_ref: "content-workflow-scorecard-profile",
+        policy_profile_ref: "content-workflow-policy-profile",
         scene_binding: {
           scene_key: "story-video-suite",
           command_prefix: "/legacy-story-video",
@@ -108,20 +108,20 @@ export function buildBaseSetupPackage() {
         },
       },
       {
-        id: "sceneapp-scene",
+        id: "content-workflow-scene",
         target_catalog: "scene_catalog",
-        entry_key: "sceneapp-service",
+        entry_key: "content-workflow-service",
         skill_key: "story-video-suite",
         title: "短视频编排显式场景",
         summary: "用显式 projection 覆盖 auto scene。",
-        category: "Scene Apps",
+        category: "Workflows",
         output_hint: "结果包",
-        bundle_ref_id: "sceneapp-bundle",
-        slot_profile_ref: "sceneapp-slot-profile",
-        binding_profile_ref: "sceneapp-binding-profile",
-        artifact_profile_ref: "sceneapp-artifact-profile",
-        scorecard_profile_ref: "sceneapp-scorecard-profile",
-        policy_profile_ref: "sceneapp-policy-profile",
+        bundle_ref_id: "content-workflow-bundle",
+        slot_profile_ref: "content-workflow-slot-profile",
+        binding_profile_ref: "content-workflow-binding-profile",
+        artifact_profile_ref: "content-workflow-artifact-profile",
+        scorecard_profile_ref: "content-workflow-scorecard-profile",
+        policy_profile_ref: "content-workflow-policy-profile",
         scene_binding: {
           scene_key: "story-video-suite",
           command_prefix: "/story-video-suite",
@@ -131,20 +131,20 @@ export function buildBaseSetupPackage() {
         },
       },
       {
-        id: "sceneapp-command",
+        id: "content-workflow-command",
         target_catalog: "command_catalog",
-        entry_key: "sceneapp-service",
+        entry_key: "content-workflow-service",
         skill_key: "voice_runtime",
         title: "短视频配音入口",
         summary: "用显式 command projection 覆盖 seeded voice_runtime。",
-        category: "Scene Apps",
+        category: "Workflows",
         output_hint: "结果包",
-        bundle_ref_id: "sceneapp-bundle",
-        slot_profile_ref: "sceneapp-slot-profile",
-        binding_profile_ref: "sceneapp-binding-profile",
-        artifact_profile_ref: "sceneapp-artifact-profile",
-        scorecard_profile_ref: "sceneapp-scorecard-profile",
-        policy_profile_ref: "sceneapp-policy-profile",
+        bundle_ref_id: "content-workflow-bundle",
+        slot_profile_ref: "content-workflow-slot-profile",
+        binding_profile_ref: "content-workflow-binding-profile",
+        artifact_profile_ref: "content-workflow-artifact-profile",
+        scorecard_profile_ref: "content-workflow-scorecard-profile",
+        policy_profile_ref: "content-workflow-policy-profile",
         aliases: ["短视频配音", "story-voice"],
         trigger_hints: ["@配音", "/voice-runtime"],
         command_binding: {
@@ -162,7 +162,7 @@ export function buildBaseSetupPackage() {
     ],
     slot_profiles: [
       {
-        id: "sceneapp-slot-profile",
+        id: "content-workflow-slot-profile",
         slots: [
           {
             key: "topic",
@@ -176,13 +176,13 @@ export function buildBaseSetupPackage() {
     ],
     binding_profiles: [
       {
-        id: "sceneapp-binding-profile",
-        binding_family: "cloud_scene",
+        id: "content-workflow-binding-profile",
+        binding_family: "agent_turn",
       },
     ],
     artifact_profiles: [
       {
-        id: "sceneapp-artifact-profile",
+        id: "content-workflow-artifact-profile",
         delivery_contract: "artifact_bundle",
         required_parts: ["index.md"],
         viewer_kind: "artifact_bundle",
@@ -190,90 +190,20 @@ export function buildBaseSetupPackage() {
     ],
     scorecard_profiles: [
       {
-        id: "sceneapp-scorecard-profile",
+        id: "content-workflow-scorecard-profile",
         metrics: ["success_rate"],
       },
     ],
     policy_profiles: [
       {
-        id: "sceneapp-policy-profile",
+        id: "content-workflow-policy-profile",
         surface_scopes: ["mention", "workspace"],
       },
     ],
     compatibility: {
       min_app_version: "1.11.0",
-      required_kernel_capabilities: ["cloud_scene"],
+      required_kernel_capabilities: ["agent_turn"],
       seeded_fallback: true,
     },
-  };
-}
-
-export function buildLegacyCloudSceneCatalog(): unknown {
-  const seeded = getSeededSkillCatalog();
-  const generalSkill = seeded.items[0]!;
-
-  return {
-    version: "tenant-2026-04-21",
-    tenantId: "tenant-demo",
-    syncedAt: "2026-04-21T12:00:00.000Z",
-    groups: [
-      {
-        key: "general",
-        title: "通用技能",
-        summary: "历史目录中的旧场景项。",
-        sort: 90,
-        itemCount: 1,
-      },
-    ],
-    entries: [
-      {
-        id: "command:legacy-voice-runtime",
-        kind: "command",
-        title: "旧版配音入口",
-        summary: "历史目录仍把配音命令写成 cloud_scene。",
-        commandKey: "legacy_voice_runtime",
-        triggers: [{ mode: "mention", prefix: "@旧配音" }],
-        binding: {
-          skillId: "legacy-cloud-scene-skill",
-          executionKind: "cloud_scene",
-        },
-        renderContract: {
-          resultKind: "tool_timeline",
-          detailKind: "scene_detail",
-          supportsStreaming: true,
-          supportsTimeline: true,
-        },
-      },
-      {
-        id: "scene:legacy-cloud-scene-skill",
-        kind: "scene",
-        title: "旧版云场景",
-        summary: "历史目录仍把 scene executionKind 写成 cloud_scene。",
-        sceneKey: "legacy-cloud-scene-skill",
-        commandPrefix: "/legacy-cloud-scene-skill",
-        linkedSkillId: "legacy-cloud-scene-skill",
-        executionKind: "cloud_scene",
-        renderContract: {
-          resultKind: "tool_timeline",
-          detailKind: "scene_detail",
-          supportsStreaming: true,
-          supportsTimeline: true,
-        },
-      },
-    ],
-    items: [
-      {
-        ...generalSkill,
-        id: "legacy-cloud-scene-skill",
-        title: "旧版云场景技能",
-        summary: "历史目录中的 cloud_scene 技能项。",
-        defaultExecutorBinding: "cloud_scene",
-        executionLocation: "cloud_required",
-        groupKey: "general",
-        execution: {
-          kind: "cloud_scene",
-        },
-      },
-    ],
   };
 }

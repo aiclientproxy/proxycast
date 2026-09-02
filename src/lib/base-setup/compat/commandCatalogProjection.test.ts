@@ -24,12 +24,12 @@ function createBaseSetupPackage(): BaseSetupPackage {
         entryKey: "voice-runtime-service",
         skillKey: "story-video-suite",
         title: "短视频编排服务",
-        summary: "把脚本、镜头和配音串成一条云端场景链。",
-        category: "Scene Apps",
+        summary: "把脚本、镜头和配音串成一条内容工作流。",
+        category: "Workflows",
         outputHint: "结果包",
         bundleRefId: "scene-bundle",
         slotProfileRef: "voice-runtime-slots",
-        bindingProfileRef: "cloud-scene-binding",
+        bindingProfileRef: "agent-turn-binding",
         artifactProfileRef: "voice-runtime-artifact",
         scorecardProfileRef: "voice-runtime-scorecard",
         policyProfileRef: "command-policy",
@@ -40,12 +40,12 @@ function createBaseSetupPackage(): BaseSetupPackage {
         entryKey: "voice-runtime-service",
         skillKey: "voice_runtime",
         title: "配音",
-        summary: "从输入栏直接进入云端配音链路。",
-        category: "Scene Apps",
+        summary: "从输入栏直接进入配音工作流。",
+        category: "Workflows",
         outputHint: "结果包",
         bundleRefId: "scene-bundle",
         slotProfileRef: "voice-runtime-slots",
-        bindingProfileRef: "cloud-scene-binding",
+        bindingProfileRef: "agent-turn-binding",
         artifactProfileRef: "voice-runtime-artifact",
         scorecardProfileRef: "voice-runtime-scorecard",
         policyProfileRef: "command-policy",
@@ -69,8 +69,8 @@ function createBaseSetupPackage(): BaseSetupPackage {
     ],
     bindingProfiles: [
       {
-        id: "cloud-scene-binding",
-        bindingFamily: "cloud_scene",
+        id: "agent-turn-binding",
+        bindingFamily: "agent_turn",
       },
     ],
     artifactProfiles: [
@@ -96,7 +96,7 @@ function createBaseSetupPackage(): BaseSetupPackage {
     ],
     compatibility: {
       minAppVersion: "1.11.0",
-      requiredKernelCapabilities: ["cloud_scene"],
+      requiredKernelCapabilities: ["agent_turn"],
       seededFallback: true,
       compatCatalogProjection: true,
     },
@@ -119,7 +119,7 @@ describe("compileCommandCatalogProjection", () => {
       expect.objectContaining({
         id: "command:voice_runtime",
         title: "配音",
-        summary: "从输入栏直接进入云端配音链路。",
+        summary: "从输入栏直接进入配音工作流。",
         commandKey: "voice_runtime",
         aliases: ["配音", "旁白"],
         surfaceScopes: ["mention", "workspace"],
@@ -137,7 +137,7 @@ describe("compileCommandCatalogProjection", () => {
         }),
         renderContract: expect.objectContaining({
           resultKind: "tool_timeline",
-          detailKind: "scene_detail",
+          detailKind: "json",
         }),
       }),
     ]);
@@ -167,7 +167,7 @@ describe("compileCommandCatalogProjection", () => {
       skillKey: "poster_generate",
       title: "海报",
       summary: "显式声明 task_queue 海报命令契约。",
-      bindingProfileRef: "cloud-scene-binding",
+      bindingProfileRef: "agent-turn-binding",
       triggerHints: ["@海报"],
       commandBinding: {
         skillId: "image_generate",
@@ -179,8 +179,7 @@ describe("compileCommandCatalogProjection", () => {
           id: "plain_image_generation",
           ruleKey: "agentChat.inputIntent.imageGeneration.rules",
           confirmationKey: "agentChat.inputIntent.imageGeneration.confirm",
-          systemPromptKey:
-            "agentChat.inputIntent.imageGeneration.systemPrompt",
+          systemPromptKey: "agentChat.inputIntent.imageGeneration.systemPrompt",
         },
       },
       commandRenderContract: {
@@ -214,8 +213,7 @@ describe("compileCommandCatalogProjection", () => {
           intentConfirmation: {
             id: "plain_image_generation",
             ruleKey: "agentChat.inputIntent.imageGeneration.rules",
-            confirmationKey:
-              "agentChat.inputIntent.imageGeneration.confirm",
+            confirmationKey: "agentChat.inputIntent.imageGeneration.confirm",
             systemPromptKey:
               "agentChat.inputIntent.imageGeneration.systemPrompt",
           },

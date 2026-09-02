@@ -7,18 +7,11 @@ const EVIDENCE_CURRENT_OWNER_SOURCES = [
   "src/components/agent/chat/components/HarnessVerificationSummarySection.tsx",
   "src/components/agent/chat/components/RuntimeReviewDecisionDialog.tsx",
   "src/components/agent/chat/components/HarnessStatusPanel.reviewGuard.test.tsx",
-  "src/components/agent/chat/workspace/useSceneAppReviewDecisionRuntime.ts",
-  "src/components/agent/chat/workspace/useSceneAppReviewDecisionRuntime.test.tsx",
   "src/components/agent/chat/utils/curatedTaskRecommendationSignals.ts",
-] as const;
-
-const EXPORT_CLIENT_CONSUMERS = [
-  "src/components/agent/chat/workspace/useSceneAppReviewDecisionRuntime.ts",
 ] as const;
 
 const EXPORT_CLIENT_MOCKS = [
   "src/components/agent/chat/components/HarnessStatusPanel.testFixtures.tsx",
-  "src/components/agent/chat/workspace/useSceneAppReviewDecisionRuntime.test.tsx",
 ] as const;
 
 const DELETED_EVIDENCE_SURFACES = [
@@ -64,12 +57,6 @@ describe("evidence current owner boundary", () => {
     for (const relativePath of EVIDENCE_CURRENT_OWNER_SOURCES) {
       expect(readSource(relativePath), relativePath).toContain(
         'from "@/lib/api/agentRuntime/evidenceTypes"',
-      );
-    }
-
-    for (const relativePath of EXPORT_CLIENT_CONSUMERS) {
-      expect(readSource(relativePath), relativePath).toContain(
-        'from "@/lib/api/agentRuntime/exportClient"',
       );
     }
 

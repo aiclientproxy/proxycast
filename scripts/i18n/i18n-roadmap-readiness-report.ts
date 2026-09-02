@@ -841,7 +841,7 @@ export function analyzeI18nRoadmapReadinessReport(
       ),
       buildCheck(
         "knowledge-browser-artifact-main-entries",
-        "Knowledge / SceneApp / Browser / Artifact 主要入口迁移对应 namespace。",
+        "Knowledge / Plugin / Browser / Artifact 主要入口迁移对应 namespace。",
         EVIDENCE_PATHS.sourceLocaleExport,
         p2NamespacesReady &&
           sourceExportContains(
@@ -995,7 +995,7 @@ export function analyzeI18nRoadmapReadinessReport(
       ),
       buildCheck(
         "glossary-established",
-        "建立 glossary：产品名、功能名、Agent 术语、Browser Runtime 术语、SceneApp 术语。",
+        "建立 glossary：产品名、功能名、Agent 术语、Browser Runtime 与 Plugin 术语。",
         SOURCE_PATHS.glossary,
         fileExists(path.join(repoRoot, SOURCE_PATHS.glossary)),
         {

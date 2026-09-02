@@ -23,6 +23,7 @@ export class SystemUtilityHost {
   readonly #readConfig: ConfigReader;
   readonly #macOSNativeHost = new MacOSNativeHostClient();
   readonly #windowsNativeHost = new WindowsNativeHostClient();
+  readonly #activeBookmarkTokens = new Map<string, string>();
   readonly #unsubscribeNativeEvents: () => void;
 
   constructor(options: SystemUtilityHostOptions) {
@@ -75,10 +76,22 @@ export class SystemUtilityHost {
         : {};
     if (method === "bookmark.revoke") {
       const bookmarkId = readBookmarkId(rawParams.bookmarkId);
+      const token = this.#activeBookmarkTokens.get(bookmarkId);
+      if (token) {
+        await this.#macOSNativeHost.invoke({
+          method: "bookmark.stop",
+          params: { token },
+        });
+        this.#activeBookmarkTokens.delete(bookmarkId);
+      }
       await this.#revokeBookmark(bookmarkId);
       return { bookmarkId, revoked: true };
     }
 
+    const bookmarkId =
+      method === "bookmark.start" || method === "bookmark.stop"
+        ? optionalBookmarkId(rawParams.bookmarkId)
+        : undefined;
     const persistId =
       method === "bookmark.create"
         ? optionalBookmarkId(rawParams.persistId)
@@ -89,9 +102,25 @@ export class SystemUtilityHost {
       (method === "bookmark.resolve" || method === "bookmark.start") &&
       !readString(params, "bookmark")
     ) {
-      const bookmarkId = readBookmarkId(params.bookmarkId);
-      const persisted = await this.#readBookmark(bookmarkId);
+      const persistedId = readBookmarkId(params.bookmarkId);
+      const persisted = await this.#readBookmark(persistedId);
       params.bookmark = persisted.bookmark;
+    }
+    if (method === "bookmark.stop" && !readString(params, "token")) {
+      if (!bookmarkId) {
+        throw new NativeHostError(
+          "invalid_argument",
+          "bookmark.stop requires a token or bookmarkId.",
+        );
+      }
+      const token = this.#activeBookmarkTokens.get(bookmarkId);
+      if (!token) {
+        throw new NativeHostError(
+          "bookmark_unavailable",
+          `No active security-scoped bookmark token exists: ${bookmarkId}`,
+        );
+      }
+      params.token = token;
     }
     delete params.bookmarkId;
 
@@ -104,6 +133,26 @@ export class SystemUtilityHost {
         path: readString(bookmark, "path") ?? null,
       });
       return { ...bookmark, bookmarkId: persistId, persisted: true };
+    }
+    if (method === "bookmark.start" && bookmarkId) {
+      const token = readString(result, "token");
+      if (token) {
+        this.#activeBookmarkTokens.set(bookmarkId, token);
+        return { ...toRecord(result), bookmarkId };
+      }
+    }
+    if (method === "bookmark.stop") {
+      if (bookmarkId) {
+        this.#activeBookmarkTokens.delete(bookmarkId);
+      } else {
+        for (const [activeBookmarkId, activeToken] of this
+          .#activeBookmarkTokens) {
+          if (activeToken === readString(result, "token")) {
+            this.#activeBookmarkTokens.delete(activeBookmarkId);
+            break;
+          }
+        }
+      }
     }
     return result;
   }
@@ -127,6 +176,7 @@ export class SystemUtilityHost {
   }
 
   dispose(): void {
+    this.#activeBookmarkTokens.clear();
     this.#unsubscribeNativeEvents();
     this.#macOSNativeHost.dispose();
     this.#windowsNativeHost.dispose();

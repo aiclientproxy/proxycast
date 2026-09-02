@@ -3,7 +3,7 @@
 //! 提供双通道能力：
 //! - observer 通道：Chrome 扩展上报页面信息、心跳、命令执行结果
 //! - control 通道：外部控制端下发命令并接收回传
-//! - API 通道：Tauri 命令直接触发命令并等待结果
+//! - API 通道：App Server 请求触发命令并等待结果
 
 use chrono::{DateTime, Utc};
 use once_cell::sync::Lazy;

@@ -1,6 +1,6 @@
 //! 应用通用工具函数
 //!
-//! 包含 API Key 生成、绑定地址校验、Token 掩码等与 Tauri 无关的逻辑。
+//! 包含 API Key 生成、绑定地址校验、Token 掩码等与桌面宿主无关的逻辑。
 
 use crate::config;
 

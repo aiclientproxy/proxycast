@@ -1,7 +1,7 @@
 //! Skill 执行回调 trait 和 Payload 类型
 //!
 //! 定义 Skill 执行过程中的回调接口和事件数据类型。
-//! Tauri 实现（TauriExecutionCallback）留在主 crate。
+//! 具体宿主实现由 App Server 或 Desktop Host 边界注入。
 
 use serde::Serialize;
 
@@ -41,7 +41,7 @@ pub struct ExecutionCompletePayload {
     pub error: Option<String>,
 }
 
-/// Tauri 事件名称常量
+/// Skill 执行事件名称常量
 pub mod events {
     pub const STEP_START: &str = "skill:step_start";
     pub const STEP_COMPLETE: &str = "skill:step_complete";

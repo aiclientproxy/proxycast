@@ -50,7 +50,7 @@ function createBaseSetupPackage(): BaseSetupPackage {
     bindingProfiles: [
       {
         id: "cloud-voice",
-        bindingFamily: "cloud_scene",
+        bindingFamily: "agent_turn",
         runnerType: "managed",
       },
     ],
@@ -75,7 +75,7 @@ function createBaseSetupPackage(): BaseSetupPackage {
     ],
     compatibility: {
       minAppVersion: "1.11.0",
-      requiredKernelCapabilities: ["cloud_scene"],
+      requiredKernelCapabilities: ["agent_turn"],
       seededFallback: true,
     },
   };

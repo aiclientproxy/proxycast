@@ -2603,7 +2603,7 @@ describe("Inputbar", () => {
     );
   });
 
-  it("输入条已激活复盘模板时，应把 sceneapp 项目结果引用透传给 badge", async () => {
+  it("输入条已激活复盘模板时，应把 结果基线引用透传给 badge", async () => {
     renderInputbar({
       input: "请帮我判断这个账号或项目当前该怎么推进",
       activeTheme: "general",
@@ -2619,8 +2619,8 @@ describe("Inputbar", () => {
           },
           referenceEntries: [
             {
-              id: "sceneapp:content-pack:run:1",
-              sourceKind: "sceneapp_execution_summary",
+              id: "memory:content-pack:run:1",
+              sourceKind: "memory",
               title: "AI 内容周报",
               summary: "当前已有一轮项目结果，可直接作为复盘基线。",
               category: "experience",
@@ -2641,9 +2641,7 @@ describe("Inputbar", () => {
       '[data-testid="curated-task-badge"]',
     ) as HTMLDivElement | null;
     expect(curatedTaskBadge?.dataset.referenceCount).toBe("1");
-    expect(curatedTaskBadge?.dataset.firstSourceKind).toBe(
-      "sceneapp_execution_summary",
-    );
+    expect(curatedTaskBadge?.dataset.firstSourceKind).toBe("memory");
   });
 
   it("结果模板带着灵感引用发送时，应附带结构化 request metadata", async () => {

@@ -4,7 +4,17 @@ import path from "node:path";
 export const ELECTRON_SMOKE_SCENARIO_ID = "SHELL-01-electron-smoke";
 export const ELECTRON_SMOKE_PROOF_LEVEL = "Gate B-F";
 export const ELECTRON_SMOKE_CLAIM_BOUNDARY =
-  "Real Electron startup, renderer reload, preload/IPC, App Server JSON-RPC, Workbench readiness, and Settings route; no provider turn, Thread/Turn/Item identity, live-provider, or packaged-app claim.";
+  "Real Electron startup, renderer reload, preload/IPC, App Server JSON-RPC, Workbench readiness, Settings route, and three-size responsive layout contract; no provider turn, Thread/Turn/Item identity, live-provider, packaged-app, or Codex Desktop pixel-parity claim.";
+export const ELECTRON_SMOKE_LAYOUT_PROOF_LEVEL =
+  "electron-responsive-layout-contract";
+export const ELECTRON_SMOKE_LAYOUT_CLAIM_BOUNDARY =
+  "Real Electron BrowserWindow setSize/getSize and renderer geometry across 1536x960, 1280x800, and 980x680; this is a responsive layout contract, not Codex Desktop pixel-level visual parity or Windows packaged evidence.";
+
+export const ELECTRON_SMOKE_LAYOUT_VIEWPORTS = [
+  { width: 1536, height: 960 },
+  { width: 1280, height: 800 },
+  { width: 980, height: 680 },
+] as const;
 
 export interface ElectronSmokeRouteSnapshot {
   stage: "startup" | "workbench" | "workbench-reload" | "settings-memory";
@@ -27,6 +37,53 @@ export interface ElectronSmokeRendererEvidence {
   pageErrorCount: number;
 }
 
+export interface ElectronSmokeLayoutNodeEvidence {
+  testId: string;
+  present: boolean;
+  visible: boolean;
+  required: boolean;
+  rect: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    right: number;
+    bottom: number;
+  } | null;
+  withinViewport: boolean;
+}
+
+export interface ElectronSmokeLayoutViewportEvidence {
+  requested: { width: number; height: number };
+  window: { width: number; height: number };
+  viewport: { width: number; height: number };
+  document: { scrollWidth: number; scrollHeight: number };
+  nodes: Record<string, ElectronSmokeLayoutNodeEvidence>;
+  assertions: {
+    windowSizeMatchesRequest: boolean;
+    requiredNodesVisible: boolean;
+    requiredNodesWithinViewport: boolean;
+    contentSurfacePresent: boolean;
+    noHorizontalOverflow: boolean;
+    headerTitleVisible: boolean;
+    headerActionsDoNotOverlap: boolean;
+  };
+}
+
+export interface ElectronSmokeLayoutEvidence {
+  proofLevel: typeof ELECTRON_SMOKE_LAYOUT_PROOF_LEVEL;
+  claimBoundary: typeof ELECTRON_SMOKE_LAYOUT_CLAIM_BOUNDARY;
+  viewports: ElectronSmokeLayoutViewportEvidence[];
+  screenshots: string[];
+  assertions: {
+    expectedViewportCount: number;
+    capturedViewportCount: number;
+    allViewportsPass: boolean;
+    composerHeightStable: boolean;
+    composerHeightRange: number | null;
+  };
+}
+
 export interface ElectronSmokeDiagnostics {
   consoleErrorCount: number;
   rendererCrashCount: number;
@@ -45,6 +102,7 @@ export interface ElectronSmokeSummaryInput {
   hostAppServerProtocol: string | null;
   routes: ElectronSmokeRouteSnapshot[];
   renderer: ElectronSmokeRendererEvidence;
+  layout: ElectronSmokeLayoutEvidence;
   diagnostics: ElectronSmokeDiagnostics;
   artifacts: {
     summary: string;
@@ -80,6 +138,7 @@ export interface ElectronSmokeSummary {
     complete: boolean;
   };
   routes: ElectronSmokeRouteSnapshot[];
+  layout: ElectronSmokeLayoutEvidence;
   bridge: {
     electron: boolean;
     preloadInvoke: boolean;
@@ -187,6 +246,14 @@ export function buildElectronSmokeSummary(
     noMockFallbackHits: input.renderer.mockFallbackHitCount === 0,
     traceCaptured: input.artifacts.trace !== null,
     screenshotCaptured: input.artifacts.screenshotCaptured,
+    layoutViewportsCaptured:
+      input.layout.viewports.length === ELECTRON_SMOKE_LAYOUT_VIEWPORTS.length,
+    layoutGeometryStable:
+      input.layout.assertions.allViewportsPass &&
+      input.layout.assertions.composerHeightStable,
+    layoutScreenshotsCaptured:
+      input.layout.screenshots.length ===
+      ELECTRON_SMOKE_LAYOUT_VIEWPORTS.length,
   };
   const failed = Object.entries(assertionDetails)
     .filter(([, passed]) => !passed)
@@ -225,6 +292,7 @@ export function buildElectronSmokeSummary(
       complete: result === "pass",
     },
     routes: input.routes,
+    layout: input.layout,
     bridge: {
       electron: input.renderer.electron,
       preloadInvoke: input.renderer.preloadInvoke,

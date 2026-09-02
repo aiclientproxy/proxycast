@@ -10,7 +10,7 @@
 
 代码、文件、终端、工具、研究、内容、多模态和多 Agent 协作，都在同一个可恢复的任务空间里完成。
 
-[English](./README.md) · **简体中文** · [文档](./docs/README.md) · [发布记录](./RELEASE_NOTES.md) · [问题反馈](https://github.com/limecloud/lime/issues)
+[English](./README.md) · **简体中文** · [功能地图](./FEATURE-MAP.md) · [文档](./docs/README.md) · [发布记录](./RELEASE_NOTES.md) · [问题反馈](https://github.com/limecloud/lime/issues)
 
 <p>
   <a href="https://github.com/limecloud/lime/releases"><img src="https://img.shields.io/github/v/release/limecloud/lime?label=release" alt="Lime GitHub Release" /></a>

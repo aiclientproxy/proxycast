@@ -59,9 +59,14 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugins_and_o
     let turn_tool_surface = super::turn_tool_surface_for_request(request);
     let runtime_metadata = request.runtime_metadata();
     let (system_prompt, skill_snapshot) = if turn_tool_surface.uses_light_session_prompt() {
+        let system_prompt = append_soul_context_to_system_prompt(
+            Some(request_system_prompt(request)),
+            config_metadata.as_ref(),
+            runtime_metadata,
+        );
         (
-            append_soul_context_to_system_prompt(
-                Some(request_system_prompt(request)),
+            append_model_owned_instructions(
+                system_prompt,
                 config_metadata.as_ref(),
                 runtime_metadata,
             ),
@@ -91,7 +96,14 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugins_and_o
             runtime_metadata,
         );
         (
-            merge_system_prompt_with_request_tool_policy(system_prompt, request_tool_policy),
+            merge_system_prompt_with_request_tool_policy(
+                append_model_owned_instructions(
+                    system_prompt,
+                    config_metadata.as_ref(),
+                    runtime_metadata,
+                ),
+                request_tool_policy,
+            ),
             skills_context.snapshot,
         )
     };
@@ -149,6 +161,91 @@ pub(in crate::runtime_backend) fn session_config_from_request_with_plugins_and_o
         turn_context,
         include_context_trace: !turn_tool_surface.uses_light_session_prompt(),
     })
+}
+
+fn append_model_owned_instructions(
+    system_prompt: Option<String>,
+    config_metadata: Option<&Value>,
+    runtime_metadata: Option<&Value>,
+) -> Option<String> {
+    let instructions = config_metadata
+        .and_then(|metadata| {
+            model_owned_instructions(
+                metadata,
+                personality_from_runtime_metadata(runtime_metadata),
+            )
+        })
+        .map(|instructions| instructions.trim().to_string())
+        .filter(|instructions| !instructions.is_empty());
+    let Some(instructions) = instructions else {
+        return system_prompt;
+    };
+    Some(match system_prompt {
+        Some(system_prompt) if !system_prompt.trim().is_empty() => {
+            format!("{instructions}\n\n{system_prompt}")
+        }
+        _ => instructions,
+    })
+}
+
+fn model_owned_instructions(metadata: &Value, personality: Option<&str>) -> Option<String> {
+    let registry = metadata
+        .get("modelRegistry")
+        .or_else(|| metadata.get("model_registry"))?;
+    let model_messages = [
+        "/modelMessages",
+        "/model_messages",
+        "/model/modelMessages",
+        "/model/model_messages",
+    ]
+    .into_iter()
+    .find_map(|pointer| registry.pointer(pointer))?;
+    let template = ["/instructionsTemplate", "/instructions_template"]
+        .into_iter()
+        .find_map(|pointer| model_messages.pointer(pointer).and_then(Value::as_str))?;
+    let variables = ["/instructionsVariables", "/instructions_variables"]
+        .into_iter()
+        .find_map(|pointer| model_messages.pointer(pointer));
+    let Some(variables) = variables else {
+        return Some(template.to_string());
+    };
+
+    let variable_name = match personality
+        .map(str::trim)
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("friendly") => "personality_friendly",
+        Some("pragmatic") => "personality_pragmatic",
+        Some("none") => return Some(template.replace("{{ personality }}", "")),
+        _ => "personality_default",
+    };
+    let replacement = variables
+        .get(variable_name)
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    Some(template.replace("{{ personality }}", replacement))
+}
+
+fn personality_from_runtime_metadata(metadata: Option<&Value>) -> Option<&str> {
+    metadata
+        .and_then(|metadata| {
+            [
+                "personality",
+                "/threadSettings/personality",
+                "/thread_settings/personality",
+            ]
+            .into_iter()
+            .find_map(|pointer| {
+                if pointer.starts_with('/') {
+                    metadata.pointer(pointer).and_then(Value::as_str)
+                } else {
+                    metadata.get(pointer).and_then(Value::as_str)
+                }
+            })
+        })
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
 }
 
 fn history_ingest_requested(request: &ExecutionRequest) -> bool {

@@ -4,19 +4,19 @@
 //!
 //! ## 线程安全设计
 //!
-//! 由于 `cpal::Stream` 不实现 `Send` trait，无法直接在 Tauri 的 async 命令中使用。
+//! 由于 `cpal::Stream` 不实现 `Send` trait，无法跨异步任务直接共享。
 //! 本模块采用**独立线程 + channel 通信**的方案：
 //!
 //! ```text
 //! ┌─────────────────┐     Command      ┌─────────────────┐
-//! │  Tauri Command  │ ───────────────> │  Recording      │
+//! │  App Server API │ ───────────────> │  Recording      │
 //! │  (async)        │                  │  Thread         │
 //! │                 │ <─────────────── │  (owns Stream)  │
 //! └─────────────────┘     Response     └─────────────────┘
 //! ```
 //!
 //! - 录音线程拥有 `cpal::Stream`，在独立线程中运行
-//! - Tauri 命令通过 channel 发送控制指令
+//! - App Server 通过 channel 发送控制指令
 //! - 录音线程通过 channel 返回结果
 
 use crate::types::AudioData;
@@ -72,7 +72,7 @@ pub enum RecordingResponse {
 
 /// 录音服务
 ///
-/// 使用独立线程管理 cpal::Stream，通过 channel 与 Tauri 命令通信
+/// 使用独立线程管理 cpal::Stream，通过 channel 与 App Server 通信
 pub struct RecordingService {
     /// 命令发送端
     command_tx: Option<Sender<RecordingCommand>>,

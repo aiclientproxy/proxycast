@@ -54,10 +54,6 @@ export interface AppMetadataWorkflowReport {
     winTargets: string[];
   };
   repoRoot: string;
-  shellCapability: {
-    description: string | null;
-    identifier: string | null;
-  };
   rustCargoToml: {
     description: string | null;
     homepage: string | null;
@@ -100,7 +96,6 @@ const REVIEWED_METADATA_FIELDS = [
   { path: "forge.config.mjs", field: "mac.target" },
   { path: "forge.config.mjs", field: "win.icon" },
   { path: "forge.config.mjs", field: "win.target" },
-  { path: "lime-rs/capabilities/plugin-shell.json", field: "description" },
 ] as const;
 
 function normalizePath(filePath: string): string {
@@ -358,19 +353,6 @@ function readElectronForgeConfig(
   };
 }
 
-function readShellCapability(
-  filePath: string,
-): AppMetadataWorkflowReport["shellCapability"] {
-  if (!fileExists(filePath)) {
-    return { description: null, identifier: null };
-  }
-  const json = readJsonObject(filePath);
-  return {
-    description: typeof json.description === "string" ? json.description : null,
-    identifier: typeof json.identifier === "string" ? json.identifier : null,
-  };
-}
-
 function analyzeMetadataTranslationScope(
   repoRoot: string,
   scopePath: string,
@@ -478,12 +460,6 @@ export function analyzeAppMetadataWorkflowReport(
   const appPackageJsonPath = path.join(repoRoot, "package.json");
   const cargoTomlPath = path.join(repoRoot, "lime-rs", "Cargo.toml");
   const electronForgeConfigPath = path.join(repoRoot, "forge.config.mjs");
-  const shellCapabilityPath = path.join(
-    repoRoot,
-    "lime-rs",
-    "capabilities",
-    "plugin-shell.json",
-  );
   const appMetadataTranslationScopePath = path.join(
     repoRoot,
     "internal",
@@ -503,7 +479,6 @@ export function analyzeAppMetadataWorkflowReport(
   const appPackageJson = readPackageJson(appPackageJsonPath);
   const cargoToml = readCargoToml(cargoTomlPath);
   const electronForgeConfig = readElectronForgeConfig(electronForgeConfigPath);
-  const shellCapability = readShellCapability(shellCapabilityPath);
   const appMetadataTranslationScope = analyzeMetadataTranslationScope(
     repoRoot,
     appMetadataTranslationScopePath,
@@ -535,7 +510,6 @@ export function analyzeAppMetadataWorkflowReport(
     cargoToml.description,
     electronForgeConfig.productName,
     electronForgeConfig.appId,
-    shellCapability.description,
   ].filter((value): value is string =>
     Boolean(value && value.trim().length > 0),
   );
@@ -550,9 +524,8 @@ export function analyzeAppMetadataWorkflowReport(
     appPackageJson,
     electronForgeConfig,
     repoRoot,
-    shellCapability,
     rustCargoToml: cargoToml,
-    schemaVersion: "lime.i18n.appMetadataWorkflowReport.v1",
+    schemaVersion: "lime.i18n.appMetadataWorkflowReport.v2",
     summary: {
       appMetadataLocaleBuildManifestReady,
       hasInstallerLocalizationWorkflow: appMetadataLocaleBuildManifestReady,
@@ -602,7 +575,6 @@ export function formatAppMetadataWorkflowReport(
     `deep link schemes: ${report.electronForgeConfig.deepLinkSchemes.join(", ") || "(none)"}`,
     `mac targets: ${report.electronForgeConfig.macTargets.join(", ") || "(none)"}`,
     `win targets: ${report.electronForgeConfig.winTargets.join(", ") || "(none)"}`,
-    `shell capability: ${report.shellCapability.identifier ?? "(missing)"}`,
   ];
 
   return `${lines.join("\n")}\n`;

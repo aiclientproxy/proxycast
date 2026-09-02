@@ -78,7 +78,7 @@ flowchart TB
 
 ## 5. Command Gateway 层
 
-本层只用 `lime-rs/src/commands/**` 定位历史迁移锚点。该目录是旧 Tauri command wrapper 删除清理区，不是 AgentUI 的 current 实现目录；新增 runtime、tool、session、thread read、evidence 或 DTO 能力必须进入 App Server JSON-RPC、RuntimeCore、`lime-rs/crates/agent` 或 services。旧文件完成迁出后应撤 runner / DevBridge / catalog / mock 注册并删除，删不动时登记 blocker。
+`lime-rs/src/commands/**` 已物理删除，只允许在负向回流守卫或不可变历史 evidence 中作为迁移锚点出现。新增 runtime、tool、session、thread read、evidence 或 DTO 能力必须进入 App Server JSON-RPC、RuntimeCore、`lime-rs/crates/agent` 或 services；不得恢复 runner、DevBridge、catalog 或 mock 注册。
 
 | 文件 | 当前职责 | AgentUI 相关能力 |
 | --- | --- | --- |

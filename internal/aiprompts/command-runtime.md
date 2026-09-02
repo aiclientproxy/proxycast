@@ -187,15 +187,15 @@ Agent turn 必须把当前 OS、工作目录、shell 运行时和本机路径格
 
 **这个 skill / scene 内部是按 `Pipeline`、`Inversion`、`Generator`、`Tool Wrapper` 还是 `Reviewer` 组织的。**
 
-也就是说，后续新增命令或 SceneApp 时，至少要做三次分类：
+也就是说，后续新增命令或 Plugin workflow 时，至少要做三次分类：
 
 1. **产品分型**
    - `Agent + Task`
    - `Agent + ServiceSkill`
    - `Agent + Workflow`
    - `Agent + Prompt`
-2. **SceneApp 运行形态与基础设施画像**
-   - `sceneapp_type`
+2. **Workflow 运行形态与基础设施画像**
+   - `execution_profile`
    - `infra_profile`
 3. **编排模式分型**
    - `Pipeline`
@@ -204,7 +204,7 @@ Agent turn 必须把当前 OS、工作目录、shell 运行时和本机路径格
    - `Tool Wrapper`
    - `Reviewer`
 
-同一个产品分型可以搭配不同的 `SceneApp` 运行形态、基础设施画像与模式组合。
+同一个产品分型可以搭配不同的 workflow 运行形态、基础设施画像与模式组合。
 
 新增命令前，必须先判断它属于哪一种产品分型：
 
@@ -416,8 +416,10 @@ Agent turn 必须把当前 OS、工作目录、shell 运行时和本机路径格
 - `architecture.md`
 - `flowcharts.md`
 - `sequences.md`
-- `code-structure.md`
 - `tasks.md`
+
+共享代码 owner 统一由 `internal/roadmap/gongneng/command-runtime/code-structure.md`
+记录；单功能只在 `architecture.md` / `tasks.md` 记录特有落点，不复制整套路径快照。
 
 当前已落地或已定型的完整功能包包括：
 
@@ -445,11 +447,11 @@ Agent turn 必须把当前 OS、工作目录、shell 运行时和本机路径格
 
 如果这一步说不清，禁止直接开始实现。
 
-### 2. 再补 SceneApp 设计卡
+### 2. 再补执行设计卡
 
 至少要明确：
 
-- `sceneapp_type`
+- `execution_profile`
 - `pattern_primary`
 - `pattern_stack`
 - `infra_profile`
@@ -458,7 +460,7 @@ Agent turn 必须把当前 OS、工作目录、shell 运行时和本机路径格
 
 固定要求：
 
-- `sceneapp_type` 回答它主要是本地即时、本地 durable、浏览器依赖、目录同步兼容型还是混合型
+- `execution_profile` 回答它主要是本地即时、本地 durable、浏览器依赖还是混合型
 - `pattern_primary / pattern_stack` 回答它内部怎么组织逻辑
 - `infra_profile` 回答它到底用了浏览器、server skill、CLI、schedule、db、markdown 还是 json
 - 如果这一卡片写不出来，说明这个命令还没被真正设计清楚
@@ -486,7 +488,7 @@ Agent turn 必须把当前 OS、工作目录、shell 运行时和本机路径格
 
 方案包至少要回答：
 
-- `SceneApp` 设计卡怎么填
+- 执行设计卡怎么填
 - Agent 如何判断
 - 如何补参
 - 目录项由谁下发，客户端如何兜底

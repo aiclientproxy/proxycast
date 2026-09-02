@@ -91,7 +91,7 @@
     {
       "id": "sceneapp-context-layer-directory-surface",
       "classification": "dead",
-      "description": "已删除的 SceneApp context layer 类型与 barrel；历史执行摘要只保留只读 payload 投影，不得恢复平行 context owner",
+      "description": "已删除的 SceneApp context layer 类型与 barrel；不得恢复平行 context owner、历史摘要类型或兼容投影",
       "targets": [
         "src/lib/context-layer/index.ts",
         "src/lib/context-layer/types.ts"
@@ -322,8 +322,38 @@
     {
       "id": "sceneapp-runtime-context-compat-barrel",
       "classification": "dead",
-      "description": "已删除的 SceneApp runtime context 历史转发壳；历史 sceneapp_execution_summary 只读类型收敛到 src/lib/agent/legacySceneAppExecutionSummary.ts",
+      "description": "已删除的 SceneApp runtime context 历史转发壳；旧执行摘要类型与兼容投影均不得恢复",
       "targets": ["src/lib/sceneapp/types-runtime-context.ts"],
+      "allowedPaths": []
+    },
+    {
+      "id": "retired-src-tauri-root-surface",
+      "classification": "dead",
+      "description": "已退役 desktop/runtime workspace 根目录；桌面宿主归 Electron，Rust 后端只进入 lime-rs/crates",
+      "targets": ["src-tauri"],
+      "allowedPaths": []
+    },
+    {
+      "id": "sceneapp-agent-chat-execution-surface",
+      "classification": "dead",
+      "description": "已删除的 Agent Chat SceneApp 执行摘要、复核、内容结果、脚手架与专用 reference helper；通用结果基线归 Curated Task + Memory reference",
+      "targets": [
+        "src/components/agent/chat/utils/sceneAppCuratedTaskReference.test.ts",
+        "src/components/agent/chat/utils/sceneAppCuratedTaskReference.ts",
+        "src/components/agent/chat/utils/sceneAppSkillScaffoldDraft.test.ts",
+        "src/components/agent/chat/utils/sceneAppSkillScaffoldDraft.ts",
+        "src/components/agent/chat/workspace/SceneAppExecutionSummaryCard.test.tsx",
+        "src/components/agent/chat/workspace/SceneAppExecutionSummaryCard.tsx",
+        "src/components/agent/chat/workspace/sceneAppExecutionContentPosts.test.ts",
+        "src/components/agent/chat/workspace/sceneAppExecutionContentPosts.ts",
+        "src/components/agent/chat/workspace/useSceneAppExecutionSummaryRuntime.test.tsx",
+        "src/components/agent/chat/workspace/useSceneAppExecutionSummaryRuntime.ts",
+        "src/components/agent/chat/workspace/useSceneAppReviewDecisionRuntime.test.tsx",
+        "src/components/agent/chat/workspace/useSceneAppReviewDecisionRuntime.ts",
+        "src/components/agent/chat/workspace/useWorkspaceSceneAppExecutionSurfaceRuntime.tsx",
+        "src/lib/agent/legacySceneAppExecutionSummary.current-boundary.test.ts",
+        "src/lib/agent/legacySceneAppExecutionSummary.ts"
+      ],
       "allowedPaths": []
     },
     {
@@ -381,8 +411,8 @@
     },
     {
       "id": "sceneapps-workflow-rail-entry",
-      "classification": "dead-candidate",
-      "description": "已删除的 SceneApps 独立工作流 rail；现役页面流程统一收敛到 SceneAppsPage 顶部状态条、view tabs 与 workflowShortcut",
+      "classification": "dead",
+      "description": "已删除的 SceneApps 独立工作流 rail；应用目录归 Plugin，任务执行归 App Server / Agent Runtime，不得恢复独立页面流程",
       "targets": ["src/components/sceneapps/SceneAppsWorkflowRail.tsx"],
       "allowedPaths": []
     },
@@ -410,7 +440,7 @@
     {
       "id": "sceneapp-automation-detail-runtime-surface",
       "classification": "dead",
-      "description": "已删除的设置页 SceneApp 自动化详情运行面、运行详情面板和旧 sceneapps barrel；旧自动化任务只显示下线提示，不得恢复独立 SceneApp 复盘/治理入口",
+      "description": "已删除的设置页 SceneApp 自动化详情运行面、运行详情面板和旧 barrel；不得恢复独立复盘、治理或兼容展示入口",
       "targets": [
         "src/components/settings-v2/system/automation/useAutomationSceneAppRuntime.ts",
         "src/components/sceneapps/SceneAppRunDetailPanel.tsx",
@@ -422,14 +452,14 @@
     {
       "id": "sceneapp-api-runtime-polling-surface",
       "classification": "dead",
-      "description": "已删除的 SceneApp 前端 API 网关与执行摘要旧运行轮询侧链；历史 sceneapp_execution_summary 只保留 payload 内只读摘要，不得再拉取 SceneApp runs/scorecard 或动态准备治理 artifact",
+      "description": "已删除的 SceneApp 前端 API 网关与执行摘要轮询侧链；旧 source kind、只读摘要兼容和动态治理 artifact 均不得恢复",
       "targets": ["src/lib/api/sceneapp.ts"],
       "allowedPaths": []
     },
     {
       "id": "sceneapp-library-directory-surface",
       "classification": "dead",
-      "description": "已删除的 src/lib/sceneapp 目录；历史 sceneapp_execution_summary 只保留只读 payload 类型，不得恢复旧 SceneApp library、runtime helper 或产品投影",
+      "description": "已删除的 src/lib/sceneapp 目录；不得恢复旧 library、runtime helper、摘要类型或产品投影",
       "targets": [
         "src/lib/sceneapp/automation.ts",
         "src/lib/sceneapp/error.ts",
@@ -491,7 +521,7 @@
     },
     {
       "id": "empty-state-legacy-sceneapps-panel-entry",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "已删除的首页空态 SceneApp 独立面板；首页能力入口当前收敛到 EmptyStateComposerPanel 与 curatedTaskTemplates",
       "targets": [
         "src/components/agent/chat/components/EmptyStateSceneAppsPanel.tsx"
@@ -4480,7 +4510,7 @@
     },
     {
       "id": "empty-state-legacy-sceneapps-panel-surface",
-      "classification": "dead-candidate",
+      "classification": "dead",
       "description": "不允许恢复首页空态 SceneApp 旧面板组件名或 data-testid；首页入口当前统一由 EmptyStateComposerPanel 与 curatedTaskTemplates 呈现",
       "patterns": ["EmptyStateSceneAppsPanel", "sceneapps-home-directory"],
       "includePathPrefixes": ["src/components/agent/chat"],
@@ -4568,7 +4598,7 @@
     {
       "id": "sceneapp-execution-summary-live-api-frontend-surface",
       "classification": "dead",
-      "description": "Agent Chat 历史 sceneapp_execution_summary 不得恢复对旧 SceneApp API 的实时轮询、scorecard 拉取或治理 artifact 动态准备；只允许展示随入口传入的历史摘要 payload",
+      "description": "Agent Chat 不得恢复旧执行摘要 source kind、实时 API 轮询、scorecard 拉取或治理 artifact 动态准备",
       "patterns": [
         "@/lib/api/sceneapp",
         "listSceneAppRuns",
@@ -4584,7 +4614,7 @@
     {
       "id": "sceneapp-execution-summary-run-detail-helper-surface",
       "classification": "dead",
-      "description": "Agent Chat 历史 sceneapp_execution_summary 不得恢复旧运行详情样本筛选或 run detail 动态构造；历史摘要只消费入口 payload 内已存在的只读字段",
+      "description": "Agent Chat 不得恢复旧执行摘要、运行详情样本筛选、run detail 动态构造或任何只读兼容投影",
       "patterns": [
         "buildSceneAppExecutionSummaryRunDetailViewModel",
         "buildSceneAppExecutionPromptActions",
@@ -4598,6 +4628,29 @@
         "sceneAppExecutionPromptContinuation"
       ],
       "includePathPrefixes": ["src/components/agent/chat", "src/lib/sceneapp"],
+      "allowedPaths": []
+    },
+    {
+      "id": "sceneapp-retired-symbol-and-schema-surface",
+      "classification": "dead",
+      "description": "前端生产代码不得恢复 SceneApp 专用类型、source kind、i18n key、cloud scene catalog 值或专用执行 helper",
+      "patterns": [
+        "initialSceneAppExecutionSummary",
+        "sceneapp_execution_summary",
+        "legacySceneAppExecutionSummary",
+        "SceneAppExecutionSummaryCard",
+        "useSceneAppExecutionSummaryRuntime",
+        "useWorkspaceSceneAppExecutionSurfaceRuntime",
+        "useSceneAppReviewDecisionRuntime",
+        "sceneAppCuratedTaskReference",
+        "sceneAppSkillScaffoldDraft",
+        "sceneAppExecutionContentPosts",
+        "curatedTask.sceneAppReference.",
+        "curatedTask.badge.sceneApp.",
+        "sceneAppExecutionSummary.",
+        "cloud_scene"
+      ],
+      "includePathPrefixes": ["src"],
       "allowedPaths": []
     },
     {
@@ -6656,7 +6709,7 @@
     {
       "id": "rust-sceneapp-command-module-surface",
       "classification": "dead",
-      "description": "Rust 不得恢复 SceneApp 命令模块、应用服务或 DevBridge dispatcher；执行与目录能力回到 Plugin / agent_runtime current 主链",
+      "description": "Rust 不得恢复 SceneApp 命令模块、应用服务或 dispatcher；执行与目录能力回到 Plugin / App Server / Agent Runtime current 主链",
       "patterns": [
         "commands::sceneapp_cmd::",
         "pub mod sceneapp",

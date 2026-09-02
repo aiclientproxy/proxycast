@@ -45,10 +45,6 @@ function inferSkillType(
 function normalizeExecutorBinding(
   bindingProfile: BaseSetupBindingProfile,
 ): ServiceSkillItem["defaultExecutorBinding"] {
-  if (bindingProfile.bindingFamily === "cloud_scene") {
-    return "agent_turn";
-  }
-
   return bindingProfile.bindingFamily;
 }
 
@@ -56,10 +52,7 @@ function inferExecutionLocation(
   projection: BaseSetupCatalogProjection,
   bindingProfile: BaseSetupBindingProfile,
 ): ServiceSkillExecutionLocation {
-  if (
-    bindingProfile.executionLocation === "cloud_required" ||
-    bindingProfile.bindingFamily === "cloud_scene"
-  ) {
+  if (bindingProfile.executionLocation === "cloud_required") {
     return "client_default";
   }
   if (bindingProfile.executionLocation) {

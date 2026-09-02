@@ -9,9 +9,7 @@ import {
   saveStoredBaseSetupPackageSnapshot,
   type StoredBaseSetupPackageSnapshot,
 } from "@/lib/base-setup/storage";
-import {
-  createSeededCloudServiceSkillCatalog,
-} from "@/lib/base-setup/seededServiceSkillPackage";
+import { createSeededCloudServiceSkillCatalog } from "@/lib/base-setup/seededServiceSkillPackage";
 
 export type ServiceSkillSource = "cloud_catalog" | "local_custom";
 
@@ -42,11 +40,7 @@ export type ServiceSkillCurrentExecutorBinding =
   | "native_skill"
   | "agent_turn"
   | "automation_job";
-// legacy compat only：仅允许作为旧目录输入，不再代表 current 执行面。
-export type ServiceSkillCompatExecutorBinding = "cloud_scene";
-export type ServiceSkillAnyExecutorBinding =
-  | ServiceSkillCurrentExecutorBinding
-  | ServiceSkillCompatExecutorBinding;
+export type ServiceSkillAnyExecutorBinding = ServiceSkillCurrentExecutorBinding;
 export type ServiceSkillExecutorBinding = ServiceSkillCurrentExecutorBinding;
 
 export type ServiceSkillSlotType =
@@ -259,9 +253,7 @@ function resolveCurrentServiceSkillExecutionLocation(
 function resolveCurrentServiceSkillExecutorBinding(
   item: Pick<ServiceSkillCompatItem, "defaultExecutorBinding">,
 ): ServiceSkillExecutorBinding {
-  return item.defaultExecutorBinding === "cloud_scene"
-    ? "agent_turn"
-    : item.defaultExecutorBinding;
+  return item.defaultExecutorBinding;
 }
 
 function toServiceSkillBundleMetadata(
@@ -315,9 +307,7 @@ function toServiceSkillBundleMetadata(
 function resolveDerivedServiceSkillOutputDestination(
   item: Pick<
     ServiceSkillCompatItem,
-    | "outputDestination"
-    | "executionLocation"
-    | "runnerType"
+    "outputDestination" | "executionLocation" | "runnerType"
   >,
 ): string {
   if (trimToUndefined(item.outputDestination)) {
@@ -653,7 +643,9 @@ function isServiceSkillCompatItem(
     (item.triggerHints === undefined || isStringArray(item.triggerHints)) &&
     typeof item.source === "string" &&
     typeof item.runnerType === "string" &&
-    typeof item.defaultExecutorBinding === "string" &&
+    (item.defaultExecutorBinding === "native_skill" ||
+      item.defaultExecutorBinding === "agent_turn" ||
+      item.defaultExecutorBinding === "automation_job") &&
     typeof item.executionLocation === "string" &&
     artifactKindValid &&
     promptTemplateKeyValid &&
@@ -864,12 +856,10 @@ function shouldIgnoreServerSyncedCatalog(
 function normalizeServiceSkillCatalog(
   catalog: ServiceSkillCompatCatalog,
 ): ServiceSkillCatalog {
-  return cloneServiceSkillCatalog(
-    {
-      ...catalog,
-      items: catalog.items.map((item) => normalizeServiceSkillItem(item)),
-    },
-  );
+  return cloneServiceSkillCatalog({
+    ...catalog,
+    items: catalog.items.map((item) => normalizeServiceSkillItem(item)),
+  });
 }
 
 function normalizeServiceSkillCatalogInput(

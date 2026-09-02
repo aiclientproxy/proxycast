@@ -43,7 +43,7 @@ App Server + JSON-RPC Protocol + RuntimeCore + ExecutionBackend Adapters
 | `current reference` | `lime-rs/crates/agent`                                                          | 当前最接近 runtime core 的 crate，后续继续拆公共模型与服务。                                                                   |
 | `current bridge`    | `src/lib/dev-bridge/safeInvoke.ts`、HTTP client、`app_server_handle_json_lines` | Lime Desktop renderer 进入 Electron Desktop Host / App Server JSON-RPC 的 current 传输、可用性探测和事件监听边界。             |
 | `current client`    | Lime Desktop / content-studio / 更多独立 App 的 app-server client               | 独立 App 只通过协议消费 runtime，不直接 import Lime 内部实现。                                                                 |
-| `compat cleanup`    | `lime-rs/src/commands/**`                                                       | 旧 Tauri command wrapper 清理区；只能迁出核心逻辑、撤注册、删除；删不动登记 blocker，不再保留 stub / compat wrapper。          |
+| `dead / deleted`    | `lime-rs/src/commands/**`                                                       | 已物理删除；只允许负向回流守卫或不可变历史 evidence 引用，不得恢复 stub / compat wrapper。                                   |
 | `compat cleanup`    | `src/lib/dev-bridge/commandPolicy.ts` 中的旧命令 truth / no-mock fallback       | 只作为迁移期 fail-closed / 阻塞记录存在；旧命令迁到 current 后必须从 production truth、mock policy、旧 smoke 和 catalog 撤出。 |
 | `compat`            | legacy desktop facade                                                           | 迁移期继续服务 Lime Desktop，但只能委托 App Server / Electron Desktop Host current 主链，不继续拥有独立 runtime 事实。         |
 | `deprecated`        | 壳层内直接拼接 runtime 业务逻辑                                                 | 只允许迁移和下线，不允许新增能力。                                                                                             |
@@ -91,7 +91,7 @@ App Server + JSON-RPC Protocol + RuntimeCore + ExecutionBackend Adapters
 3. 不让独立 App 直接调用 Lime 内部 Rust 模块。
 4. 不新增第二套 tool runtime、skill runtime、workspace runtime。
 5. 不在 App 侧用 UI-only state 模拟 Agent 执行成功。
-6. 不一次性迁完所有 legacy desktop commands；但 `lime-rs/src/commands/**` 只允许作为清理区处理，不再新增实现、stub、compat wrapper 或 thin facade。
+6. 不恢复已经物理删除的 `lime-rs/src/commands/**`、stub、compat wrapper 或 thin facade。
 7. 不把 `Agent`、`runtime_turn.rs` 或 legacy desktop command DTO 直接定义成公共协议。
 
 ## 6. 当前执行顺序

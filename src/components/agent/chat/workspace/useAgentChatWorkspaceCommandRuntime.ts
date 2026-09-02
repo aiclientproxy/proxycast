@@ -41,7 +41,7 @@ export function useAgentChatWorkspaceCommandRuntime({
 }: UseAgentChatWorkspaceCommandRuntimeParams) {
   // prettier-ignore
   const {
-    onNavigate: _onNavigate, projectId: externalProjectId, contentId, initialSessionId, initialSceneAppExecutionSummary, initialAutoSendRequestMetadata, autoRunInitialPromptOnMount, agentEntry,
+    onNavigate: _onNavigate, projectId: externalProjectId, contentId, initialSessionId, initialAutoSendRequestMetadata, autoRunInitialPromptOnMount, agentEntry,
     theme: initialTheme, initialCreationMode, lockTheme, showChatPanel, hideTopBar, topBarChrome, onWorkflowProgressChange, initialUserPrompt,
     initialUserImages, initialSessionName, initialInputCapability, initialProjectFileOpenTarget, onInitialUserPromptConsumed, newChatAt, onHasMessagesChange: _onHasMessagesChange,
   } = props;
@@ -374,22 +374,6 @@ export function useAgentChatWorkspaceCommandRuntime({
         workbenchRequests,
       },
       surface: {
-        sceneAppExecution: {
-          artifacts,
-          initialSummary: initialSceneAppExecutionSummary,
-          isSending,
-          onApplyFollowUpAction: applyWorkbenchFollowUpActionPayload,
-          onNavigate: _onNavigate,
-          projectId,
-          readSessionFile,
-          replayReferenceEntries:
-            initialCreationReplaySurface?.defaultReferenceEntries,
-          replayReferenceMemoryIds:
-            initialCreationReplaySurface?.defaultReferenceMemoryIds,
-          sessionFiles,
-          sessionId,
-          taskFiles,
-        },
         setLayoutMode,
         workbenchRequests,
       },
@@ -414,11 +398,7 @@ export function useAgentChatWorkspaceCommandRuntime({
     shouldCollapseCodeBlockInChat,
     shouldCollapseCodeBlocks,
     handleWriteFile,
-    defaultCuratedTaskReferenceEntries,
-    defaultCuratedTaskReferenceMemoryIds,
     handleJumpToTimelineItem,
-    sceneAppExecutionSummaryCard,
-    sceneAppReviewDecisionDialogNode,
     serviceSkillExecutionCard,
   } = artifactInteractionRuntime;
   useWorkspaceWorkbenchSideEffectRuntime({
@@ -634,7 +614,7 @@ export function useAgentChatWorkspaceCommandRuntime({
     suppressHomeNavbarUtilityActions, taskCenterDraftMaterializedSessionIdsRef, taskCenterDraftWarmupSessionIdsRef, taskCenterHomeSurfaceState, taskCenterTabsNode, bindArticleEditorRightSurface, bindRightSurfacePendingActions, handleCodeBlockClick,
     handleHarnessLoadFilePreview, handleOpenArtifactFromTimeline, handleOpenMessagePreview, handleOpenSavedSiteContent, handleOpenServiceSkillResultFile, handleOpenUrlPreview, handleSaveArtifactDocument, handleWorkspaceArtifactClick,
     handleWorkspaceFileClick, openProjectFilePreviewInCanvas, openWorkspaceArtifactInWorkbench, preferredServiceSkillResultFileTarget, renderArtifactWorkbenchToolbarActions, shouldCollapseCodeBlockInChat, shouldCollapseCodeBlocks, handleWriteFile,
-    defaultCuratedTaskReferenceEntries, defaultCuratedTaskReferenceMemoryIds, handleJumpToTimelineItem, sceneAppExecutionSummaryCard, sceneAppReviewDecisionDialogNode, serviceSkillExecutionCard, generalWorkbenchActivityLogs,
+    handleJumpToTimelineItem, serviceSkillExecutionCard, generalWorkbenchActivityLogs,
     generalWorkbenchWorkflowSteps, handleExpandGeneralWorkbenchSidebar, renderGeneralWorkbenchSidebarNode, planComposerPendingActions, planDecisionAccessory, handleSaveMessageAsSkill,
   };
 }

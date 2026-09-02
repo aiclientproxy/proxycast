@@ -1,7 +1,7 @@
 //! 系统信息服务
 //!
 //! 提供 CPU、内存等系统信息的获取和订阅功能。
-//! 不依赖 Tauri，事件发送通过回调注入。
+//! 不依赖桌面宿主，事件发送通过回调注入。
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};

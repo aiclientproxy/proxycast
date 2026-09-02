@@ -58,6 +58,7 @@ internal/exec-plans/*
 !internal/exec-plans/templates/
 !internal/exec-plans/templates/*.md
 !internal/exec-plans/README.md
+!internal/exec-plans/documentation-convergence-plan.md
 !internal/exec-plans/scheduled-tasks-implementation.md
 !internal/exec-plans/release-v*-plan.md
 !internal/exec-plans/claw-streaming-rendering-codex-refactor-plan.md
@@ -81,8 +82,6 @@ internal/exec-plans/*
 !internal/exec-plans/writing-v2-workflow-completion-plan.md
 !internal/exec-plans/workflow-standardization-plan.md
 !internal/exec-plans/p16-diagnostics-current-fail-closed-progress.md
-!internal/exec-plans/tauri-wrapper-quick-cleanup-queue.md
-!internal/exec-plans/tauri-wrapper-command-inventory.md
 !internal/exec-plans/db-slimming-codex-alignment-plan.md
 !internal/exec-plans/models-runtime-unification-plan.md
 !internal/exec-plans/mcp-modernization-progress.md

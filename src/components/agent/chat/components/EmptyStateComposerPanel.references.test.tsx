@@ -65,7 +65,9 @@ describe("EmptyStateComposerPanel", () => {
       knowledgePanel.querySelector('[data-testid="inputbar-knowledge-hub"]'),
     ).toBeTruthy();
     expect(
-      knowledgePanel.querySelector('[data-testid="inputbar-knowledge-hub-dismiss"]'),
+      knowledgePanel.querySelector(
+        '[data-testid="inputbar-knowledge-hub-dismiss"]',
+      ),
     ).toBeNull();
     expect(knowledgePanel.textContent).toContain("选择项目资料");
   });
@@ -241,7 +243,7 @@ describe("EmptyStateComposerPanel", () => {
     expect(container.textContent).toContain("品牌风格样本");
   });
 
-  it("首页输入区已激活复盘模板时，应把 sceneapp 项目结果引用继续透传给 badge", () => {
+  it("首页输入区已激活复盘模板时，应把 结果基线引用继续透传给 badge", () => {
     const container = renderPanel({
       activeCapability: {
         kind: "curated_task",
@@ -267,8 +269,8 @@ describe("EmptyStateComposerPanel", () => {
         },
         referenceEntries: [
           {
-            id: "sceneapp:content-pack:run:1",
-            sourceKind: "sceneapp_execution_summary",
+            id: "memory:content-pack:run:1",
+            sourceKind: "memory",
             title: "AI 内容周报",
             summary: "当前已有一轮项目结果，可直接作为复盘基线。",
             category: "experience",
@@ -284,7 +286,7 @@ describe("EmptyStateComposerPanel", () => {
     ) as HTMLDivElement | null;
 
     expect(badge?.dataset.referenceCount).toBe("1");
-    expect(badge?.dataset.firstSourceKind).toBe("sceneapp_execution_summary");
+    expect(badge?.dataset.firstSourceKind).toBe("memory");
   });
 
   it("通用对话且存在站点型 service skill 时不应再展示首页专属提示按钮", () => {
@@ -302,5 +304,4 @@ describe("EmptyStateComposerPanel", () => {
 
     expect(hint).toBeFalsy();
   });
-
 });

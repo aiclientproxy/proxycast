@@ -3,9 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GeneralWorkbenchSidebar } from "./GeneralWorkbenchSidebar";
-import {
-  recordCuratedTaskRecommendationSignal,
-} from "../utils/curatedTaskRecommendationSignals";
+import { recordCuratedTaskRecommendationSignal } from "../utils/curatedTaskRecommendationSignals";
 
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
 const mockWriteClipboardText = vi.fn();
@@ -840,13 +838,13 @@ describe("GeneralWorkbenchSidebar", () => {
     expect(onViewRunDetail).toHaveBeenCalledWith("run-abcdef123456");
   });
 
-  it("复盘结果带着 sceneapp 基线时，应在当前进展里显影当前结果基线", () => {
+  it("复盘结果带着 结果基线时，应在当前进展里显影当前结果基线", () => {
     const { container } = renderSidebar({
       activeRunDetail: {
-        id: "run-sceneapp-baseline-workflow",
+        id: "run-result-baseline-workflow",
         source: "skill",
         source_ref: "account-project-review",
-        session_id: "session-sceneapp-baseline-workflow",
+        session_id: "session-result-baseline-workflow",
         status: "success",
         started_at: "2026-03-06T01:12:03Z",
         finished_at: "2026-03-06T01:12:10Z",
@@ -860,8 +858,8 @@ describe("GeneralWorkbenchSidebar", () => {
               task_title: "复盘这个账号/项目",
               reference_entries: [
                 {
-                  id: "sceneapp:ai-weekly:run:1",
-                  source_kind: "sceneapp_execution_summary",
+                  id: "memory:ai-weekly:run:1",
+                  source_kind: "memory",
                   title: "AI 内容周报",
                   summary: "已有一轮可继续放量的结果。",
                   category: "experience",
@@ -893,7 +891,7 @@ describe("GeneralWorkbenchSidebar", () => {
     }
 
     const baselineCard = container.querySelector(
-      '[data-testid="workflow-sidebar-sceneapp-baseline-card"]',
+      '[data-testid="workflow-sidebar-result-baseline-card"]',
     ) as HTMLElement | null;
     expect(baselineCard).toBeTruthy();
     expect(baselineCard?.textContent).toContain("当前结果基线");
@@ -940,8 +938,8 @@ describe("GeneralWorkbenchSidebar", () => {
               task_title: "复盘这个账号/项目",
               reference_entries: [
                 {
-                  id: "sceneapp:ai-weekly:run:3",
-                  source_kind: "sceneapp_execution_summary",
+                  id: "memory:ai-weekly:run:3",
+                  source_kind: "memory",
                   title: "AI 内容周报",
                   summary: "当前已有一轮结果，可直接进入下游主稿。",
                   category: "experience",
@@ -994,7 +992,7 @@ describe("GeneralWorkbenchSidebar", () => {
           prompt: expect.stringContaining("当前结果基线：AI 内容周报"),
           referenceEntries: [
             expect.objectContaining({
-              sourceKind: "sceneapp_execution_summary",
+              sourceKind: "memory",
               title: "AI 内容周报",
             }),
           ],

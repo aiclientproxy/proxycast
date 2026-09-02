@@ -67,7 +67,6 @@ Workbench 不是外部 SDK 套壳，也不是第二套 runtime。外部 AG-UI、
 - `internal/roadmap/agentui/README.md`
 - `internal/roadmap/agentruntime/README.md`
 - `internal/roadmap/agentruntime/agentui-adoption-gap.md`
-- `internal/roadmap/agentruntime/agentruntime-standard-adoption-gap.md`
 - `internal/roadmap/plugin/README.md`
 
 ## current / compat / deprecated / dead

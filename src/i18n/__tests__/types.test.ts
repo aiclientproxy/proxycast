@@ -549,24 +549,13 @@ function assertI18nKeyTypes() {
     ns: "agent",
     message: "network down",
   });
-  i18n.t("curatedTask.sceneAppReference.followUpBanner", {
+  i18n.t("curatedTask.resultReference.followUpBanner", {
     ns: "agent",
     title: "Break Down a Viral Piece",
   });
-  i18n.t("curatedTask.sceneAppReference.highlight.status", {
+  i18n.t("curatedTask.resultReference.highlight.status", {
     ns: "agent",
     value: "Ready to review",
-  });
-  i18n.t("curatedTask.sceneAppReference.resultSummaryFallback", {
-    ns: "agent",
-  });
-  i18n.t("sceneAppExecutionSummary.title", { ns: "agent" });
-  i18n.t("sceneAppExecutionSummary.overview.referenceCount", {
-    ns: "agent",
-    count: 2,
-  });
-  i18n.t("sceneAppExecutionSummary.followup.action.saveAsSkill", {
-    ns: "agent",
   });
   i18n.t("generalWorkbench.workflow.current.title", { ns: "agent" });
   i18n.t("generalWorkbench.workflow.queue.hiddenCount", {
@@ -654,7 +643,7 @@ function assertI18nKeyTypes() {
     ns: "agent",
     title: "Review",
   });
-  i18n.t("curatedTask.badge.sceneApp.failureSignal", {
+  i18n.t("curatedTask.badge.result.failureSignal", {
     ns: "agent",
     value: "Needs review",
   });

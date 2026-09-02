@@ -58,7 +58,7 @@ git status --short
 | 主目标 | 把 App Server / RuntimeCore / ExecutionBackend 与 AgentUI 的配合写成实现合同。 |
 | 推荐写集 | `docs/contracts/app-server-host.md`、`docs/contracts/runtime-read-model.md`、`docs/quickstart/runtime-provider.md`。 |
 | 暂不触碰 | Lime 主仓 `src/lib/dev-bridge/**`、`lime-rs/**`。 |
-| 依赖 | `internal/roadmap/agentruntime/README.md`、`internal/roadmap/agentruntime/agentruntime-standard-adoption-gap.md`。 |
+| 依赖 | `internal/roadmap/agentruntime/README.md`、`internal/roadmap/plugin/v3/README.md`。 |
 | 验收 | Runtime provider 不依赖 React；UI 不拥有 facts；read model / event stream repair / action response 有明确 owner。 |
 
 ## Workstream D：Content Studio / Product App 接入

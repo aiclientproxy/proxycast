@@ -169,7 +169,6 @@ const I18N_APP_METADATA_WORKFLOW_FILES = new Set([
   "scripts/i18n/i18n-app-metadata-workflow-report.test.ts",
   "scripts/i18n/i18n-app-metadata-workflow-report.ts",
   "lime-rs/Cargo.toml",
-  "lime-rs/capabilities/plugin-shell.json",
   "forge.config.mjs",
 ]);
 

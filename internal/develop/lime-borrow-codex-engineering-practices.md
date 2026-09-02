@@ -345,11 +345,8 @@ Lime 当前已经有：
 - `npm run governance:legacy-report`
 - `scripts/report-legacy-surfaces.mjs`
 
-同时我们也已经在 `internal/develop/` 下沉淀了不少退场与治理文档，例如：
-
-- `execution-tracker-deprecation-plan.md`
-- `execution-tracker-p0-acceptance-report.md`
-
+Execution Tracker 专项文档已在完成退场后从 active tree 删除；当前分类与回流规则统一由
+`internal/aiprompts/task-agent-taxonomy.md` 和 `internal/aiprompts/governance.md` 承接。
 这意味着 Lime 已经具备治理意识，但还可以更进一步：
 
 ### 建议做法

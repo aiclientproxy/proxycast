@@ -11,6 +11,7 @@ import { app } from "./electronRuntime";
 const RESOURCE_MANIFEST = "desktop-resources.manifest.json";
 const RESOURCE_SCHEMA_VERSION = 1;
 const RESOURCE_APPLICATION_ID = "com.limecloud.lime";
+const NATIVE_HOST_PROTOCOL_VERSION = 1;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export type MacOSNativeHostRequest = {
@@ -42,8 +43,15 @@ type NativeHostResponse = {
   error?: { code?: string; message?: string; data?: unknown };
 };
 
+type MacOSNativeHostDescriptor = {
+  path: string;
+  protocolVersion?: number;
+};
+
 export class MacOSNativeHostClient {
   #child: ChildProcessWithoutNullStreams | null = null;
+  #ready: Promise<void> | null = null;
+  #readyChild: ChildProcessWithoutNullStreams | null = null;
   #stdoutBuffer = "";
   #nextRequestId = 1;
   readonly #pending = new Map<string, PendingRequest>();
@@ -64,14 +72,23 @@ export class MacOSNativeHostClient {
         "macOS native host is only available on macOS.",
       );
     }
-    const helperPath = resolveMacOSNativeHostPath();
-    if (!helperPath) {
+    const descriptor = resolveMacOSNativeHostDescriptor();
+    if (!descriptor) {
       throw new NativeHostError(
         "unavailable",
         "macOS native host resource is missing or failed integrity verification.",
       );
     }
-    const child = this.#ensureChild(helperPath);
+    const child = this.#ensureChild(descriptor.path);
+    await this.#ensureReady(child, descriptor.protocolVersion);
+    return await this.#invoke(child, method, params);
+  }
+
+  async #invoke(
+    child: ChildProcessWithoutNullStreams,
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<unknown> {
     const id = String(this.#nextRequestId++);
     return await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -100,6 +117,8 @@ export class MacOSNativeHostClient {
   dispose(): void {
     const child = this.#child;
     this.#child = null;
+    this.#ready = null;
+    this.#readyChild = null;
     if (child && !child.killed) {
       child.kill();
     }
@@ -123,15 +142,57 @@ export class MacOSNativeHostClient {
     child.stderr.on("data", () => undefined);
     child.once("error", (error) => {
       this.#child = null;
+      this.#ready = null;
+      this.#readyChild = null;
       this.#settleAllFailure(error);
     });
     child.once("exit", () => {
       if (this.#child === child) {
         this.#child = null;
       }
+      if (this.#readyChild === child) {
+        this.#ready = null;
+        this.#readyChild = null;
+      }
       this.#settleAllFailure(new Error("macOS native host exited"));
     });
     return child;
+  }
+
+  async #ensureReady(
+    child: ChildProcessWithoutNullStreams,
+    protocolVersion?: number,
+  ): Promise<void> {
+    if (protocolVersion !== NATIVE_HOST_PROTOCOL_VERSION) {
+      return;
+    }
+    if (this.#readyChild === child && this.#ready) {
+      return await this.#ready;
+    }
+    this.#readyChild = child;
+    this.#ready = this.#invoke(child, "capabilities.read", {}).then((value) => {
+      const capabilities = toRecord(value);
+      if (
+        capabilities?.protocolVersion !== NATIVE_HOST_PROTOCOL_VERSION ||
+        capabilities.helperId !== "macos-native-host" ||
+        capabilities.platform !== "darwin" ||
+        capabilities.applicationId !== `${RESOURCE_APPLICATION_ID}.native-host`
+      ) {
+        throw new NativeHostError(
+          "protocol_mismatch",
+          "macOS native host readiness handshake did not match the packaged helper identity.",
+          { expectedProtocolVersion: NATIVE_HOST_PROTOCOL_VERSION },
+        );
+      }
+    });
+    try {
+      await this.#ready;
+    } catch (error) {
+      if (this.#child === child && !child.killed) {
+        child.kill();
+      }
+      throw error;
+    }
   }
 
   #consumeStdout(chunk: string): void {
@@ -223,6 +284,10 @@ export class NativeHostError extends Error {
 }
 
 export function resolveMacOSNativeHostPath(): string | null {
+  return resolveMacOSNativeHostDescriptor()?.path ?? null;
+}
+
+function resolveMacOSNativeHostDescriptor(): MacOSNativeHostDescriptor | null {
   if (process.platform !== "darwin") {
     return null;
   }
@@ -251,6 +316,7 @@ export function resolveMacOSNativeHostPath(): string | null {
       helper?: {
         id?: string;
         path?: string;
+        protocolVersion?: number;
         signedByForge?: boolean;
         bundlePath?: string;
         bundleIdentifier?: string;
@@ -322,12 +388,18 @@ export function resolveMacOSNativeHostPath(): string | null {
     }
     if (digest === resource?.sha256) {
       if (manifest.native?.helper?.signedByForge !== true) {
-        return helperPath;
+        return {
+          path: helperPath,
+          protocolVersion: helperMetadata.protocolVersion,
+        };
       }
       execFileSync("codesign", ["--verify", "--strict", signaturePath], {
         stdio: "ignore",
       });
-      return helperPath;
+      return {
+        path: helperPath,
+        protocolVersion: helperMetadata.protocolVersion,
+      };
     }
     if (manifest.native?.helper?.signedByForge !== true) {
       return null;
@@ -335,7 +407,10 @@ export function resolveMacOSNativeHostPath(): string | null {
     execFileSync("codesign", ["--verify", "--strict", signaturePath], {
       stdio: "ignore",
     });
-    return helperPath;
+    return {
+      path: helperPath,
+      protocolVersion: helperMetadata.protocolVersion,
+    };
   } catch {
     return null;
   }
@@ -354,5 +429,11 @@ function resolveManifestRelativePath(resourcesRoot: string, value?: string) {
   return resolved.startsWith(`${path.resolve(resourcesRoot)}${path.sep}`) &&
     existsSync(resolved)
     ? resolved
+    : null;
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
     : null;
 }

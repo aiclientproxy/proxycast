@@ -38,19 +38,6 @@ const agentCompatRestrictedPatterns = [
   },
 ];
 
-const sceneAppDeadRestrictedPatterns = [
-  {
-    group: [
-      "@/lib/sceneapp/types-runtime-context",
-      "@/lib/sceneapp/types-runtime-context.*",
-      "**/types-runtime-context",
-      "**/types-runtime-context.*",
-    ],
-    message:
-      "types-runtime-context.ts 历史转发文件已删除；请统一改用 @/lib/sceneapp/types 或当前 sceneapp barrel，避免 dead 类型副本重新扩散。",
-  },
-];
-
 const deprecatedAgentRuntimeHelperNames = Object.keys(
   agentCommandCatalog.deprecatedHelperReplacements,
 );
@@ -447,7 +434,6 @@ const createLegacyChatImportRule = (
       message:
         "components/chat 为遗留聊天模块，禁止新增依赖；请优先使用现役聊天入口。",
     },
-    ...sceneAppDeadRestrictedPatterns,
   ];
 
   if (includeAgentCompatPatterns) {
@@ -892,54 +878,6 @@ const apiCompatibilityCommandSelectors = ["check_api_compatibility"].map(
   }),
 );
 
-const sceneAppCurrentProjectionAliasImportSelectors = [
-  {
-    selector:
-      "ImportSpecifier[imported.name='SceneAppCurrentDescriptor'], ImportSpecifier[imported.name='SceneAppCurrentPlanResult'], ImportSpecifier[imported.name='SceneAppCurrentCatalog']",
-    message:
-      "SceneApp base type 现已是 current 事实源；业务层请直接改用 SceneAppDescriptor / SceneAppPlanResult / SceneAppCatalog，避免继续依赖 SceneAppCurrent* 过渡别名。",
-  },
-];
-
-const sceneAppWideExecutionTypeImportSelectors = [
-  {
-    selector:
-      "ImportSpecifier[imported.name='SceneAppBindingFamily'], ImportSpecifier[imported.name='SceneAppRuntimeAction']",
-    message:
-      "SceneApp 宽执行类型只允许停留在 API 归一化边界；业务层与测试夹具请改用 SceneAppExecutorBindingFamily / SceneAppExecutionRuntimeAction。",
-  },
-];
-
-const sceneAppCompatInputTypeImportSelectors = [
-  {
-    selector:
-      "ImportSpecifier[imported.name='SceneAppCompatDescriptorInput'], ImportSpecifier[imported.name='SceneAppCompatCatalogInput'], ImportSpecifier[imported.name='SceneAppCompatExecutionPlanInput'], ImportSpecifier[imported.name='SceneAppCompatPlanResultInput']",
-    message:
-      "SceneApp raw compat 输入类型只允许停留在 API 归一化边界；业务层与测试夹具请改用 SceneAppCurrent* 或 current 业务投影。",
-  },
-];
-
-const sceneAppCompatTokenSelectors = [
-  {
-    selector:
-      "Literal[value='cloud_managed'], Literal[value='cloud_runtime'], Literal[value='cloud_session'], Literal[value='cloud_scene'], Literal[value='launch_cloud_scene'], Literal[value='cloudSessionReady'], Literal[value='cloud_session_ready']",
-    message:
-      "SceneApp compat token 只允许停留在 API/目录编译/compat 展示边界；业务层请统一使用 current 语义。",
-  },
-  {
-    selector:
-      "Property[key.name='cloudSessionReady'], TSPropertySignature[key.name='cloudSessionReady'], MemberExpression[property.name='cloudSessionReady']",
-    message:
-      "cloudSessionReady 只允许停留在 SceneApp compat input 边界；业务层请统一改用 directorySessionReadyCompat 或 current 语义。",
-  },
-  {
-    selector:
-      "Property[key.name='cloud_session_ready'], TSPropertySignature[key.name='cloud_session_ready'], MemberExpression[property.name='cloud_session_ready']",
-    message:
-      "cloud_session_ready 只允许停留在 SceneApp compat input 边界；业务层请统一改用 directorySessionReadyCompat 或 current 语义。",
-  },
-];
-
 const endpointProvidersCommandSelectors = [
   "get_endpoint_providers",
   "set_endpoint_provider",
@@ -1200,7 +1138,6 @@ export default [
       "src/lib/api/providerRuntime.ts",
       "src/lib/api/serverTools.ts",
       "src/lib/api/voiceTools.ts",
-      "src/lib/api/sceneapp.ts",
     ],
     rules: {
       "no-restricted-syntax": "off",
@@ -1253,41 +1190,6 @@ export default [
             },
           ],
         },
-      ],
-    },
-  },
-  {
-    files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/lib/api/sceneapp.ts"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...sceneAppCurrentProjectionAliasImportSelectors,
-        ...sceneAppWideExecutionTypeImportSelectors,
-        ...sceneAppCompatInputTypeImportSelectors,
-      ],
-    },
-  },
-  {
-    files: [
-      "src/lib/sceneapp/**/*.{ts,tsx}",
-      "src/components/sceneapps/**/*.{ts,tsx}",
-      "src/components/settings-v2/system/automation/**/*.{ts,tsx}",
-      "src/components/agent/chat/workspace/**/*.{ts,tsx}",
-      "src/components/agent/chat/AgentChatWorkspace.tsx",
-    ],
-    ignores: [
-      "**/*.test.ts",
-      "**/*.test.tsx",
-      "src/lib/sceneapp/types.ts",
-      "src/lib/sceneapp/catalog.ts",
-      "src/lib/sceneapp/presentation.ts",
-    ],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...sceneAppCurrentProjectionAliasImportSelectors,
-        ...sceneAppCompatTokenSelectors,
       ],
     },
   },

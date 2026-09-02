@@ -1,11 +1,83 @@
 import { describe, expect, it } from "vitest";
 import {
   buildElectronSmokeSummary,
+  ELECTRON_SMOKE_LAYOUT_CLAIM_BOUNDARY,
+  ELECTRON_SMOKE_LAYOUT_PROOF_LEVEL,
+  ELECTRON_SMOKE_LAYOUT_VIEWPORTS,
   isElectronSmokeStartupUrl,
   normalizeElectronSmokeRunId,
   sanitizeElectronSmokeLocation,
+  type ElectronSmokeLayoutEvidence,
   type ElectronSmokeSummaryInput,
 } from "./smokeEvidence";
+
+function passingLayout(): ElectronSmokeLayoutEvidence {
+  const rect = {
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    right: 100,
+    bottom: 100,
+  };
+  const nodes = Object.fromEntries(
+    [
+      ["workspaceShell", "workspace-shell-scene", true],
+      ["workspaceMainArea", "workspace-main-area", true],
+      ["inputbarCore", "inputbar-core-container", true],
+      ["composerInput", "agent-chat-message", true],
+      ["messageListColumn", "message-list-column", false],
+      ["emptyStateFirstScreen", "empty-state-first-screen", true],
+      ["threadHeader", "thread-workspace-header", false],
+      ["threadHeaderTitle", "thread-workspace-header-title", false],
+      ["threadHeaderActions", "thread-workspace-header-actions", false],
+    ].map(([key, testId, required]) => [
+      key,
+      {
+        testId,
+        present: true,
+        visible: true,
+        required,
+        rect,
+        withinViewport: true,
+      },
+    ]),
+  ) as ElectronSmokeLayoutEvidence["viewports"][number]["nodes"];
+  const viewports = ELECTRON_SMOKE_LAYOUT_VIEWPORTS.map((requested) => ({
+    requested,
+    window: requested,
+    viewport: requested,
+    document: {
+      scrollWidth: requested.width,
+      scrollHeight: requested.height,
+    },
+    nodes,
+    assertions: {
+      windowSizeMatchesRequest: true,
+      requiredNodesVisible: true,
+      requiredNodesWithinViewport: true,
+      contentSurfacePresent: true,
+      noHorizontalOverflow: true,
+      headerTitleVisible: true,
+      headerActionsDoNotOverlap: true,
+    },
+  }));
+  return {
+    proofLevel: ELECTRON_SMOKE_LAYOUT_PROOF_LEVEL,
+    claimBoundary: ELECTRON_SMOKE_LAYOUT_CLAIM_BOUNDARY,
+    viewports,
+    screenshots: ELECTRON_SMOKE_LAYOUT_VIEWPORTS.map(
+      ({ width, height }) => `layout-${width}x${height}.png`,
+    ),
+    assertions: {
+      expectedViewportCount: ELECTRON_SMOKE_LAYOUT_VIEWPORTS.length,
+      capturedViewportCount: ELECTRON_SMOKE_LAYOUT_VIEWPORTS.length,
+      allViewportsPass: true,
+      composerHeightStable: true,
+      composerHeightRange: 0,
+    },
+  };
+}
 
 function passingInput(): ElectronSmokeSummaryInput {
   return {
@@ -51,6 +123,7 @@ function passingInput(): ElectronSmokeSummaryInput {
       mockFallbackHitCount: 0,
       pageErrorCount: 0,
     },
+    layout: passingLayout(),
     diagnostics: {
       consoleErrorCount: 0,
       rendererCrashCount: 0,
@@ -80,13 +153,16 @@ describe("electron smoke evidence", () => {
     ]);
     expect(summary.assertions.failed).toEqual([]);
     expect(summary.assertions.details.traceCaptured).toBe(true);
+    expect(summary.assertions.details.layoutViewportsCaptured).toBe(true);
+    expect(summary.assertions.details.layoutGeometryStable).toBe(true);
+    expect(summary.assertions.details.layoutScreenshotsCaptured).toBe(true);
     expect(summary.surfaceProof).toEqual({
       surfaceId: "SHELL-01",
       proof: "gate-b-f",
       complete: true,
     });
     expect(JSON.stringify(summary)).not.toContain("params");
-    expect(JSON.stringify(summary)).not.toContain("request");
+    expect(JSON.stringify(summary)).not.toContain('"request":');
   });
 
   it("fails closed when bridge, route, or error assertions are missing", () => {
@@ -96,6 +172,7 @@ describe("electron smoke evidence", () => {
     input.renderer.appServerMethods = [];
     input.diagnostics.consoleErrorCount = 1;
     input.artifacts.trace = null;
+    input.layout.assertions.allViewportsPass = false;
 
     const summary = buildElectronSmokeSummary(input);
 
@@ -110,8 +187,20 @@ describe("electron smoke evidence", () => {
         "currentAppServerMethodObserved",
         "noConsoleErrors",
         "traceCaptured",
+        "layoutGeometryStable",
       ]),
     );
+  });
+
+  it("fails closed when a viewport geometry assertion fails", () => {
+    const input = passingInput();
+    input.layout.viewports[2].assertions.noHorizontalOverflow = false;
+    input.layout.assertions.allViewportsPass = false;
+
+    const summary = buildElectronSmokeSummary(input);
+
+    expect(summary.result).toBe("fail");
+    expect(summary.assertions.failed).toContain("layoutGeometryStable");
   });
 
   it("normalizes run ids and removes local path and query values", () => {

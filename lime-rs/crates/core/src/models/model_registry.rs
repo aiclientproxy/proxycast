@@ -266,6 +266,15 @@ impl Default for ModelPricing {
 pub struct ModelLimits {
     /// 上下文长度
     pub context_length: Option<u32>,
+    /// 模型允许的最大上下文长度；对应 Codex model catalog 的 max_context_window。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_context_length: Option<u32>,
+    /// 自动压缩阈值；对应 Codex model catalog 的 auto_compact_token_limit。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_compact_token_limit: Option<u32>,
+    /// 用于输入的有效上下文比例。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_context_window_percent: Option<u32>,
     /// 最大输出 token 数
     pub max_output_tokens: Option<u32>,
     /// 每分钟请求数限制
@@ -449,6 +458,12 @@ pub struct EnhancedModelMetadata {
     /// 模型显式声明支持的 Multi-Agent runtime；缺失时不得推断。
     #[serde(default)]
     pub multi_agent_version: Option<ModelMultiAgentVersion>,
+    /// 模型目录拥有的消息与运行时指令。仅允许来自可信 catalog/provider metadata。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_messages: Option<serde_json::Value>,
+    /// 模型目录指定的 Multi-Agent 推理档位；缺失时不得按模型名推断。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multi_agent_reasoning_effort: Option<String>,
     /// 部署来源
     #[serde(default)]
     pub deployment_source: ModelDeploymentSource,
@@ -508,6 +523,8 @@ impl EnhancedModelMetadata {
             runtime_features: vec![],
             tool_mode: None,
             multi_agent_version: None,
+            model_messages: None,
+            multi_agent_reasoning_effort: None,
             deployment_source: ModelDeploymentSource::UserCloud,
             management_plane: ModelManagementPlane::LocalSettings,
             canonical_model_id: None,
@@ -862,6 +879,8 @@ impl ModelsDevModel {
             runtime_features: vec![],
             tool_mode: None,
             multi_agent_version: None,
+            model_messages: None,
+            multi_agent_reasoning_effort: None,
             deployment_source: ModelDeploymentSource::UserCloud,
             management_plane: ModelManagementPlane::LocalSettings,
             canonical_model_id: None,
@@ -876,6 +895,9 @@ impl ModelsDevModel {
             }),
             limits: ModelLimits {
                 context_length: self.limit.as_ref().and_then(|l| l.context),
+                max_context_length: None,
+                auto_compact_token_limit: None,
+                effective_context_window_percent: None,
                 max_output_tokens: self.limit.as_ref().and_then(|l| l.output),
                 requests_per_minute: None,
                 tokens_per_minute: None,

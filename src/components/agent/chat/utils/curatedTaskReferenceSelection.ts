@@ -13,9 +13,7 @@ import { buildMemoryEntryCreationReplayRequestMetadata } from "./creationReplayM
 import type { CreationReplayMetadata } from "./creationReplayMetadata";
 import type { CuratedTaskInputValues } from "./curatedTaskTemplates";
 
-export type CuratedTaskReferenceSourceKind =
-  | "memory"
-  | "sceneapp_execution_summary";
+export type CuratedTaskReferenceSourceKind = "memory";
 
 export interface CuratedTaskReferenceEntry {
   id: string;
@@ -300,10 +298,7 @@ function normalizeCuratedTaskReferenceEntry(
   });
   const summary = normalizeUserFacingMemorySummary(entry.summary);
   const tags = normalizeUserFacingMemoryTags(entry.tags, 6);
-  const sourceKind =
-    entry.sourceKind === "sceneapp_execution_summary"
-      ? "sceneapp_execution_summary"
-      : "memory";
+  const sourceKind = "memory";
   const taskPrefillByTaskId = Object.fromEntries(
     Object.entries(entry.taskPrefillByTaskId ?? {})
       .map(
@@ -380,26 +375,21 @@ export function normalizeCuratedTaskReferenceMemoryIds(
 }
 
 export function getCuratedTaskReferenceSourceKind(
-  entry?: Pick<CuratedTaskReferenceEntry, "sourceKind"> | null,
+  _entry?: Pick<CuratedTaskReferenceEntry, "sourceKind"> | null,
 ): CuratedTaskReferenceSourceKind {
-  return entry?.sourceKind === "sceneapp_execution_summary"
-    ? "sceneapp_execution_summary"
-    : "memory";
+  return "memory";
 }
 
 export function getCuratedTaskReferenceSourceLabel(
-  entry?: Pick<CuratedTaskReferenceEntry, "sourceKind"> | null,
+  _entry?: Pick<CuratedTaskReferenceEntry, "sourceKind"> | null,
 ): string {
-  return getCuratedTaskReferenceSourceKind(entry) ===
-    "sceneapp_execution_summary"
-    ? "项目结果"
-    : "记忆参考";
+  return "记忆参考";
 }
 
 export function getCuratedTaskReferenceMemoryId(
   entry?: Pick<CuratedTaskReferenceEntry, "id" | "sourceKind"> | null,
 ): string | undefined {
-  if (!entry || getCuratedTaskReferenceSourceKind(entry) !== "memory") {
+  if (!entry) {
     return undefined;
   }
 

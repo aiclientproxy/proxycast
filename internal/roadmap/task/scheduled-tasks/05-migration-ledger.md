@@ -17,7 +17,7 @@
 | `TaskSchedule::Every/Cron/At` | `current internal lowering` | `ScheduledTaskSchedule` 在 App Server 边界统一 lower/raise | 不得出现在 Renderer 或公开 Scheduled Task wire |
 | `agent_turn` payload | `current normalized` | 收敛为 execution snapshot + Thread policy | task/run/thread/turn identity 贯穿 |
 | `browser_session` Scheduled Task payload | `dead / rejected` | 创建边界不再生成，执行边界 fail closed | 与 current `browserSession/*` 独立能力不得混淆 |
-| SceneApp legacy context | `dead / deleted` | projection、文案和测试正向路径已删除 | 只允许历史 evidence / negative guard |
+| 旧应用编排 context | `dead / deleted` | projection、文案和测试正向路径已删除 | 只允许 negative guard |
 | 设置页完整 Automation workspace | `dead / deleted` | 业务功能迁到一级 Scheduled Tasks 页面 | 不得恢复重复 CRUD |
 | 旧 `AutomationPage` | `dead / deleted` | 替换为 `src/components/scheduled-tasks/**` | 一级导航只进入 current 工作台 |
 | automation draft / Agent UI projection | `split` | Service Skill 创建迁到 typed Scheduled Task；`automation_job_projection` 删除 | 不得重建 `background_teammate` 平行 read model |
@@ -51,7 +51,7 @@
   -> 建立同一 domain owner 与 migration
   -> 迁移 typed client / GUI / Agent draft
   -> 迁移 fixture 与 Gate B
-  -> 清零旧 protocol/Settings/browser/SceneApp 正向引用
+  -> 清零旧 protocol、Settings、browser 与应用编排正向引用
   -> 物理删除旧分支和孤立文案
   -> contracts + governance + cold-start evidence
 ```

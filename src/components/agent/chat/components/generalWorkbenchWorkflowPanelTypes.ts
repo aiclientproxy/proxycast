@@ -6,7 +6,7 @@ import type {
   TopicBranchStatus,
 } from "../hooks/useTopicBranchBoard";
 import type { ReviewFeedbackProjection } from "../utils/reviewFeedbackProjection";
-import type { SceneAppExecutionReviewPrefillSnapshot } from "../utils/sceneAppCuratedTaskReference";
+import type { CuratedTaskResultBaselineSnapshot } from "../utils/curatedTaskResultBaseline";
 import type { GeneralWorkbenchFollowUpActionPayload } from "./generalWorkbenchSidebarContract";
 import type {
   buildGeneralWorkbenchActivityLogGroups,
@@ -199,8 +199,8 @@ export interface GeneralWorkbenchRunDetailArtifactProjection {
 export interface GeneralWorkbenchFollowUpProjection {
   reviewFeedbackProjection: ReviewFeedbackProjection | null;
   reviewFeedbackFollowUpActionPayload: GeneralWorkbenchFollowUpActionPayload | null;
-  sceneAppReviewBaselineSnapshot: SceneAppExecutionReviewPrefillSnapshot | null;
-  sceneAppReviewBaselineHighlights: string[];
+  resultBaselineSnapshot: CuratedTaskResultBaselineSnapshot | null;
+  resultBaselineHighlights: string[];
   curatedTaskFollowUpHintText: string | null;
   shouldShowFollowUpHint: boolean;
 }

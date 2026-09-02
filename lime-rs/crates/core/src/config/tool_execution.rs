@@ -145,6 +145,10 @@ impl ToolExecutionOverrideConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ToolExecutionPolicyConfig {
+    /// Whether the Codex-compatible checklist tool is exposed to the model.
+    /// The feature is opt-in, matching Codex's `tools.update_plan.enabled` default.
+    #[serde(default, alias = "updatePlanEnabled", skip_serializing_if = "is_false")]
+    pub update_plan_enabled: bool,
     #[serde(
         default,
         alias = "toolOverrides",
@@ -163,8 +167,13 @@ pub struct ToolExecutionPolicyConfig {
 
 impl ToolExecutionPolicyConfig {
     pub fn is_default(value: &Self) -> bool {
-        value.tool_overrides.is_empty()
+        !value.update_plan_enabled
+            && value.tool_overrides.is_empty()
             && value.shell_command_rules.is_empty()
             && value.network_rules.is_empty()
     }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }

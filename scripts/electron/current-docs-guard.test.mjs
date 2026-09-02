@@ -341,19 +341,11 @@ describe("Electron current testing docs guard", () => {
     const execPlan = readFile(
       "internal/exec-plans/app-server-implementation-plan.md",
     );
-    const referenceScope = sectionBetween(
-      execPlan,
-      "## 2. 参考 Codex 的范围",
-      "\n## 3.",
-    );
-    expect(referenceScope).toContain("Codex CLI");
-    expect(referenceScope).toContain("Codex CLI 版本代码");
-    expect(referenceScope).toContain("codex-rs");
-    expect(referenceScope).toContain("不包含 Codex App 前端实现");
-    expect(referenceScope).toContain("不参考 Codex App UI");
-    expect(referenceScope).toContain("Electron shell、tray、Dock、updater");
-    expect(referenceScope).not.toContain("Codex App 前端参考");
-    expect(referenceScope).not.toContain("Codex App UI 参考");
+    expect(execPlan).toContain("Electron Desktop Host JSONL transport");
+    expect(execPlan).toContain("App Server JSON-RPC");
+    expect(execPlan).toContain("RuntimeCore / domain owner");
+    expect(execPlan).not.toContain("Codex App 前端参考");
+    expect(execPlan).not.toContain("Codex App UI 参考");
   });
 
   it("blocks positive Codex App UI or desktop shell references in current docs", () => {
@@ -637,19 +629,9 @@ describe("Electron current testing docs guard", () => {
     expect(evaluation).not.toContain("真实 Tauri");
     expect(evaluation).not.toContain("手工复制多份 Tauri 配置");
 
-    const progress = readFile(
-      "internal/roadmap/i18n/implementation-progress.md",
-    );
-    const currentSection = sectionBetween(
-      progress,
-      "## 2026-05-27：P0-P4 全路线图 readiness 审计",
-      "\n## 2026-05-27：P4 Chrome extension standard locale decision 收口",
-    );
-    expect(currentSection).toContain("Electron Forge / installer 配置");
-    expect(currentSection).toContain("forge.config.mjs");
-    expect(currentSection).toContain("Electron Forge 配置");
-    expect(currentSection).not.toContain("真实 Tauri");
-    expect(currentSection).not.toContain("tauri.conf");
+    expect(evaluation).toContain("9 个 metadata entry");
+    expect(evaluation).toContain("`9` 个真实 app / installer metadata 字段");
+    expect(evaluation).not.toContain("implementation-progress.md");
   });
 
   it("keeps App Server protocol aligned with codex-rs initialize and in-process boundaries", () => {

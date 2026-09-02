@@ -62,7 +62,7 @@ flowchart TD
     L -- 是 --> N["旧 wrapper 撤注册并删除<br/>删不动登记 blocker"]
 ```
 
-说明：服务抽取完成后，`lime-rs/src/commands/**` 不保留新的 thin facade、fail-closed stub、compat wrapper 或 tombstone；该目录只作为旧 Tauri wrapper 删除清理区。需要保留兼容命令名时，兼容入口也必须在 Electron Desktop Host / App Server current 边界内说明退出条件。
+说明：服务抽取完成后，`lime-rs/src/commands/**` 已物理删除，不得恢复 thin facade、fail-closed stub、compat wrapper 或 tombstone。需要保留兼容命令名时，兼容入口也必须在 Electron Desktop Host / App Server current 边界内说明退出条件。
 
 ## 4. 渐进式替换流程
 

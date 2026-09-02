@@ -177,6 +177,8 @@ export interface ToolExecutionNetworkRuleConfig {
 }
 
 export interface ToolExecutionPolicyConfig {
+  /** Codex-compatible checklist tool exposure; disabled unless explicitly enabled. */
+  update_plan_enabled?: boolean;
   tool_overrides?: Record<string, ToolExecutionOverrideConfig>;
   shell_command_rules?: ToolExecutionCommandRuleConfig[];
   network_rules?: ToolExecutionNetworkRuleConfig[];

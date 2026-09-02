@@ -30,12 +30,32 @@ export function readElectronSmokeSummary({
     summary.artifacts?.screenshot,
     evidenceDir,
   );
+  const layoutScreenshots = Array.isArray(summary.layout?.screenshots)
+    ? summary.layout.screenshots
+        .map((value) => resolveEvidenceArtifact(value, evidenceDir))
+        .filter(Boolean)
+    : [];
   const checks = [
     [summary.candidateRunId === runId, "candidate-run-id"],
     [summary.result === "pass", "result"],
     [failedAssertions.length === 0, "failed-assertions"],
     [Boolean(tracePath && fileExists(tracePath)), "trace"],
     [Boolean(screenshotPath && fileExists(screenshotPath)), "screenshot"],
+    [
+      summary.layout?.proofLevel === "electron-responsive-layout-contract",
+      "layout-proof",
+    ],
+    [
+      summary.layout?.assertions?.capturedViewportCount === 3 &&
+        summary.layout?.assertions?.allViewportsPass === true &&
+        summary.layout?.assertions?.composerHeightStable === true,
+      "layout-geometry",
+    ],
+    [
+      layoutScreenshots.length === 3 &&
+        layoutScreenshots.every((filePath) => fileExists(filePath)),
+      "layout-screenshots",
+    ],
   ];
   const failedCheck = checks.find(([passed]) => !passed)?.[1] || null;
 

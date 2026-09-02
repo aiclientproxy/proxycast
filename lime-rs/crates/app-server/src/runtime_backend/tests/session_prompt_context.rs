@@ -63,6 +63,192 @@ fn session_config_projects_bounded_deepswe_provider_step_budget() {
 }
 
 #[test]
+fn session_config_applies_model_catalog_instructions_and_context_defaults() {
+    let mut request = request_for_test("继续实现", None, None);
+    let options = request.runtime_options.as_mut().expect("runtime options");
+    options.runtime_request_mut().provider_preference = Some("openai".to_string());
+    options.runtime_request_mut().model_preference = Some("gpt-5.6-sol".to_string());
+    let host_request = runtime_request_from_request(&request);
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("selection");
+    let policy = request_tool_policy_from_request(host_request.as_ref());
+    let config = session_config_from_request(
+        &request,
+        host_request.as_ref(),
+        &scope,
+        &selection,
+        &policy,
+        Some(json!({
+            "modelRegistry": {
+                "model": {
+                    "limits": {
+                        "context_length": 100000,
+                        "max_context_length": 400000,
+                        "auto_compact_token_limit": 80000,
+                        "effective_context_window_percent": 80
+                    }
+                },
+                "modelMessages": {
+                    "instructions_template": "模型目录指令：先确认当前目标，再执行变更。"
+                }
+            }
+        })),
+    );
+
+    let prompt = config.system_prompt.expect("system prompt");
+    assert!(prompt.starts_with("模型目录指令：先确认当前目标，再执行变更。"));
+    let turn_context = config.turn_context.expect("turn context");
+    let runtime = turn_context
+        .metadata
+        .get("lime_runtime")
+        .expect("lime runtime metadata");
+    assert_eq!(runtime["model_context_window"], 80000);
+    assert_eq!(runtime["auto_compact_token_limit"], 80000);
+    assert_eq!(runtime["context_policy"]["source"], "model_catalog");
+    assert_eq!(runtime["context_policy"]["max_context_window"], 400000);
+    assert_eq!(
+        runtime["context_policy"]["effective_context_window_percent"],
+        80
+    );
+}
+
+#[test]
+fn session_config_prefers_request_context_policy_over_model_catalog_defaults() {
+    let request = request_for_test(
+        "继续实现",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-5.6-sol".to_string()),
+            ..RuntimeRequest::default()
+        }),
+        Some(json!({
+            "harness": {
+                "model_request_policy": {
+                    "context_policy": {
+                        "context_window": 200000,
+                        "effective_context_window_percent": 50,
+                        "auto_compact_token_limit": 70000
+                    }
+                }
+            }
+        })),
+    );
+    let host_request = runtime_request_from_request(&request);
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("selection");
+    let policy = request_tool_policy_from_request(host_request.as_ref());
+    let config = session_config_from_request(
+        &request,
+        host_request.as_ref(),
+        &scope,
+        &selection,
+        &policy,
+        Some(json!({
+            "modelRegistry": {
+                "model": {
+                    "limits": {
+                        "context_length": 100000,
+                        "effective_context_window_percent": 80,
+                        "auto_compact_token_limit": 80000
+                    }
+                }
+            }
+        })),
+    );
+
+    let turn_context = config.turn_context.expect("turn context");
+    let runtime = turn_context
+        .metadata
+        .get("lime_runtime")
+        .expect("lime runtime metadata");
+    assert_eq!(runtime["context_policy"]["source"], "model_request_policy");
+    assert_eq!(runtime["model_context_window"], 100000);
+    assert_eq!(runtime["auto_compact_token_limit"], 70000);
+}
+
+#[test]
+fn session_config_renders_model_catalog_personality_variable() {
+    let request = request_for_test(
+        "继续实现",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-5.5".to_string()),
+            metadata: Some(json!({"personality": "pragmatic"})),
+            ..RuntimeRequest::default()
+        }),
+        None,
+    );
+    let host_request = runtime_request_from_request(&request);
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("selection");
+    let policy = request_tool_policy_from_request(host_request.as_ref());
+    let config = session_config_from_request(
+        &request,
+        host_request.as_ref(),
+        &scope,
+        &selection,
+        &policy,
+        Some(json!({
+            "modelRegistry": {
+                "modelMessages": {
+                    "instructions_template": "before {{ personality }} after",
+                    "instructions_variables": {
+                        "personality_default": "default",
+                        "personality_friendly": "friendly",
+                        "personality_pragmatic": "pragmatic"
+                    }
+                }
+            }
+        })),
+    );
+
+    let prompt = config.system_prompt.expect("system prompt");
+    assert!(prompt.starts_with("before pragmatic after"));
+    assert!(!prompt.contains("{{ personality }}"));
+}
+
+#[test]
+fn session_config_renders_none_personality_as_empty_model_variable() {
+    let request = request_for_test(
+        "继续实现",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-5.5".to_string()),
+            metadata: Some(json!({"personality": "none"})),
+            ..RuntimeRequest::default()
+        }),
+        None,
+    );
+    let host_request = runtime_request_from_request(&request);
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("selection");
+    let policy = request_tool_policy_from_request(host_request.as_ref());
+    let config = session_config_from_request(
+        &request,
+        host_request.as_ref(),
+        &scope,
+        &selection,
+        &policy,
+        Some(json!({
+            "modelRegistry": {
+                "modelMessages": {
+                    "instructions_template": "before {{ personality }} after",
+                    "instructions_variables": {
+                        "personality_default": "default",
+                        "personality_friendly": "friendly",
+                        "personality_pragmatic": "pragmatic"
+                    }
+                }
+            }
+        })),
+    );
+
+    let prompt = config.system_prompt.expect("system prompt");
+    assert!(prompt.starts_with("before  after"));
+    assert!(!prompt.contains("{{ personality }}"));
+}
+
+#[test]
 fn session_config_projects_harness_direct_answer_surface() {
     let mut request = request_for_test(
         "inspect the attached image",

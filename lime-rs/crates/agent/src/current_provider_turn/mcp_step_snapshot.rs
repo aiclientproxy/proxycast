@@ -206,7 +206,7 @@ fn tool_definitions(
             let metadata = Value::Object(context.metadata.clone().into_iter().collect());
             tool_runtime::update_plan::update_plan_enabled_from_metadata(Some(&metadata))
         })
-        .unwrap_or(true);
+        .unwrap_or(false);
     let tool_surface_mode = turn_context
         .and_then(|context| runtime_turn_tool_surface_mode_from_metadata(&context.metadata));
     let tool_scope = turn_context
@@ -612,6 +612,7 @@ mod tests {
             .0;
 
         assert!(compact.len() < full.len());
+        assert!(!full.iter().any(|tool| tool.name == "update_plan"));
         assert!(compact.iter().any(|tool| tool.name == "WebSearch"));
         assert!(compact.iter().any(|tool| tool.name == "tool_search"));
         assert!(compact.iter().any(|tool| tool.name == "exec_command"));
@@ -620,6 +621,20 @@ mod tests {
         assert!(compact.iter().any(|tool| tool.name == "request_user_input"));
         assert!(!compact.iter().any(|tool| tool.name == "update_plan"));
         assert!(direct.is_empty());
+
+        let mut enabled_context = agent_protocol::turn_context::TurnContextOverride::default();
+        enabled_context.metadata.insert(
+            "config".to_string(),
+            json!({
+                "agent": {
+                    "toolExecution": { "update_plan_enabled": true }
+                }
+            }),
+        );
+        let enabled = tool_definitions(&state, &policy, Some(&enabled_context), &snapshot, None)
+            .expect("enabled definitions")
+            .0;
+        assert!(enabled.iter().any(|tool| tool.name == "update_plan"));
     }
 
     #[test]

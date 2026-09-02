@@ -347,6 +347,9 @@ describe("Windows Squirrel RC smoke", () => {
       const nativeHostGate = steps.find(
         (step) => step.name === "Run installed Windows native host Gate B",
       );
+      const packagedEvidence = steps.find(
+        (step) => step.name === "Validate Windows packaged Gate B evidence identity",
+      );
       const upload = steps.find(
         (step) => step.name === "Upload Windows Squirrel RC evidence",
       );
@@ -361,6 +364,9 @@ describe("Windows Squirrel RC smoke", () => {
       );
       const nativeHostUpload = steps.find(
         (step) => step.name === "Upload Windows native host Gate B evidence",
+      );
+      const packagedEvidenceUpload = steps.find(
+        (step) => step.name === "Upload Windows packaged Gate B evidence identity",
       );
 
       expect(download?.run).toContain("gh release download");
@@ -430,6 +436,15 @@ describe("Windows Squirrel RC smoke", () => {
       expect(nativeHostUpload?.with?.path).toContain(
         "windows-native-host-gate-b",
       );
+      expect(packagedEvidence?.run).toContain(
+        "scripts/electron/windows-packaged-evidence.mjs",
+      );
+      expect(packagedEvidence?.run).toContain("--squirrel-summary");
+      expect(packagedEvidence?.run).toContain("--code-mode-summary");
+      expect(packagedEvidence?.run).toContain("--native-host-summary");
+      expect(packagedEvidenceUpload?.with?.path).toContain(
+        "windows-packaged-evidence",
+      );
     }
   });
 
@@ -458,6 +473,9 @@ describe("Windows Squirrel RC smoke", () => {
     const nativeHostGate = steps.find(
       (step) => step.name === "Run installed Windows native host Gate B",
     );
+    const packagedEvidence = steps.find(
+      (step) => step.name === "Validate Windows packaged Gate B evidence identity",
+    );
 
     expect(sherpa).toBeDefined();
     expect(build).toBeDefined();
@@ -465,6 +483,7 @@ describe("Windows Squirrel RC smoke", () => {
     expect(pluginGate).toBeDefined();
     expect(codeModeGate).toBeDefined();
     expect(nativeHostGate).toBeDefined();
+    expect(packagedEvidence).toBeDefined();
     expect(sherpa?.run).toContain("scripts/prepare-sherpa-onnx-runtime.mjs");
     expect(sherpa?.run).toContain("x86_64-pc-windows-msvc");
     expect(build?.run).toContain("electron-forge make --platform win32");
@@ -483,6 +502,9 @@ describe("Windows Squirrel RC smoke", () => {
     expect(nativeHostGate?.run).toContain(
       "scripts/electron/windows-native-host-gate-b.mjs",
     );
+    expect(packagedEvidence?.run).toContain(
+      "scripts/electron/windows-packaged-evidence.mjs",
+    );
 
     const orderedNames = steps.map((step) => step.name);
     expect(orderedNames.indexOf(sherpa.name)).toBeLessThan(
@@ -499,6 +521,9 @@ describe("Windows Squirrel RC smoke", () => {
     );
     expect(orderedNames.indexOf(codeModeGate.name)).toBeLessThan(
       orderedNames.indexOf(nativeHostGate.name),
+    );
+    expect(orderedNames.indexOf(nativeHostGate.name)).toBeLessThan(
+      orderedNames.indexOf(packagedEvidence.name),
     );
   });
 });

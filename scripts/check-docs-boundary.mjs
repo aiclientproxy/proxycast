@@ -67,15 +67,14 @@ const skippedExtensions = new Set([
 
 const pluginV3CurrentDocuments = [
   "internal/aiprompts/README.md",
-  "internal/roadmap/Writing/README.md",
-  "internal/roadmap/Writing/architecture.md",
-  "internal/roadmap/Writing/workflow-design.md",
-  "internal/roadmap/Writing/sequence-diagrams.md",
-  "internal/roadmap/Writing/article-frame-fix-plan.md",
-  "internal/roadmap/Writing/implementation-plan.md",
-  "internal/roadmap/Writing/product-requirements.md",
-  "internal/roadmap/plugin/prd.md",
-  "internal/roadmap/plugin/deverlop/plugin-publish-center-prd.md",
+  "internal/roadmap/Writing/v2/README.md",
+  "internal/roadmap/Writing/v2/product-requirements.md",
+  "internal/roadmap/Writing/v2/content-factory-plugin-reframe.md",
+  "internal/roadmap/plugin/v3/00-current-baseline.md",
+  "internal/roadmap/plugin/v3/01-target-contract.md",
+  "internal/roadmap/plugin/v3/03-execution-plan.md",
+  "internal/roadmap/plugin/v3/04-verification.md",
+  "internal/roadmap/plugin/v3/05-codex-parity-matrix.md",
 ];
 
 const retiredPluginContractPatterns = [

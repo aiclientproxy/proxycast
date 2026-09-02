@@ -2,7 +2,7 @@
 
 > 状态：active roadmap
 > 更新时间：2026-07-07
-> 关联主线：`internal/research/refactor/v1`
+> 关联主线：`internal/aiprompts/architecture.md`、`internal/aiprompts/query-loop.md`
 > 推进计划：`internal/exec-plans/clawstream-codex-derived-guardrail-plan.md`
 > 当前 S1 计划：`internal/exec-plans/clawstream-s1-p0-implementation-plan.md`
 > 场景骨架：`internal/roadmap/test/clawstream/scenario-registry.json`
@@ -12,7 +12,7 @@
 
 Claw 是当前 Agent GUI 的重灾区：消息、工具、reasoning、artifact、历史恢复和输入框状态已经被多轮迭代叠了多套实现。后续不能只靠“再补一个组件测试”维持正确性，必须先建立标准化全链路护栏，再按护栏删除旧实现。
 
-本路线图继承 `internal/research/refactor/v1/thread-turn-item-invariant.md`：
+本路线图继承 current 架构与 Query Loop 的 Thread / Turn / Item invariant：
 
 ```text
 Thread 管历史，Turn 管执行，Item 管投影。
@@ -45,7 +45,7 @@ GUI 和 Electron fixture 如何证明它没有回归？
 
 | 层级                | current owner                                                 | 说明                                                                                                    |
 | ------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 架构 invariant      | `internal/research/refactor/v1/thread-turn-item-invariant.md` | 所有场景按 Thread / Turn / Item 填表                                                                    |
+| 架构 invariant      | `internal/aiprompts/architecture.md`、`internal/aiprompts/query-loop.md` | 所有场景按 Thread / Turn / Item 填表                                                                    |
 | 验证工作流          | `internal/aiprompts/quality-workflow.md`                      | 按协议、runtime、projection、GUI、governance 的实际改动选择最小证据集                                  |
 | streaming 正确性    | `internal/aiprompts/claw-streaming-rendering-correctness.md`  | `ContentPart` 保留 `sequence / turnId / itemId / phase / source`                                        |
 | 流畅性目标          | `internal/roadmap/thread/streaming-fluidity-architecture.md`  | overlay live、process boundary commit、terminal commit 分层                                             |

@@ -51,8 +51,6 @@ export const BASE_SETUP_POLICY_ROLLOUT_STAGES = [
 export const BASE_SETUP_ALLOWED_BINDING_FAMILIES = [
   "agent_turn",
   "automation_job",
-  // legacy compat only：current 目录不应再主动产出 cloud_scene binding。
-  "cloud_scene",
   "native_skill",
 ] as const;
 
@@ -66,8 +64,6 @@ export const BASE_SETUP_ALLOWED_KERNEL_CAPABILITIES = [
 export const BASE_SETUP_ALLOWED_COMMAND_EXECUTION_KINDS = [
   "agent_turn",
   "automation_job",
-  // legacy compat only：仅用于兼容旧 Base Setup / 远端目录输入。
-  "cloud_scene",
   "native_skill",
   "task_queue",
   "server_api",

@@ -12,7 +12,6 @@ import {
 import {
   buildBaseSetupPackage,
   buildLegacyCatalogWithSiteEntries,
-  buildLegacyCloudSceneCatalog,
 } from "./skillCatalogTestFixtures";
 
 describe("skillCatalog", () => {
@@ -49,13 +48,13 @@ describe("skillCatalog", () => {
       (entry) => entry.commandKey === "voice_runtime",
     );
     const skillEntry = catalog.items.find(
-      (item) => item.id === "sceneapp-service",
+      (item) => item.id === "content-workflow-service",
     );
 
     expect(skillEntry).toEqual(
       expect.objectContaining({
-        id: "sceneapp-service",
-        groupKey: "scene-apps",
+        id: "content-workflow-service",
+        groupKey: "workflows",
         execution: expect.objectContaining({
           kind: "agent_turn",
         }),
@@ -67,7 +66,7 @@ describe("skillCatalog", () => {
         commandPrefix: "/story-video-suite",
         summary: "把文本生成线框图、配乐、剧本和短视频串成一条场景链。",
         aliases: ["story-video", "mv-pipeline"],
-        linkedSkillId: "sceneapp-service",
+        linkedSkillId: "content-workflow-service",
         skillLocator: {
           source: "catalog",
           name: "story-video-suite",
@@ -90,7 +89,7 @@ describe("skillCatalog", () => {
           { mode: "slash", prefix: "/voice-runtime" },
         ],
         binding: {
-          skillId: "sceneapp-service",
+          skillId: "content-workflow-service",
           skillLocator: {
             source: "catalog",
             name: "voice_runtime",
@@ -111,58 +110,6 @@ describe("skillCatalog", () => {
     expect(commandEntry?.summary).not.toBe(
       "把视频或旁白需求切到云端配音技能主链，优先提交服务型技能运行。",
     );
-  });
-
-  it("读取旧版 raw skill catalog 时应把 cloud_scene 正规化为本地 agent_turn", async () => {
-    saveSkillCatalog(buildLegacyCloudSceneCatalog(), "bootstrap_sync");
-
-    const catalog = await getSkillCatalog();
-    const skillItem = catalog.items.find(
-      (item) => item.id === "legacy-cloud-scene-skill",
-    );
-    const autoSceneEntry = listSkillCatalogSceneEntries(catalog).find(
-      (entry) => entry.id === "scene:legacy-cloud-scene-skill",
-    );
-    const commandEntry = listSkillCatalogCommandEntries(catalog).find(
-      (entry) => entry.commandKey === "legacy_voice_runtime",
-    );
-
-    expect(skillItem).toEqual(
-      expect.objectContaining({
-        defaultExecutorBinding: "agent_turn",
-        executionLocation: "client_default",
-        execution: expect.objectContaining({
-          kind: "agent_turn",
-        }),
-      }),
-    );
-    expect(autoSceneEntry).toEqual(
-      expect.objectContaining({
-        linkedSkillId: "legacy-cloud-scene-skill",
-        skillLocator: {
-          source: "catalog",
-          name: "legacy-cloud-scene-skill",
-        },
-        executionKind: "agent_turn",
-      }),
-    );
-    expect(commandEntry).toEqual(
-      expect.objectContaining({
-        binding: expect.objectContaining({
-          skillId: "legacy-cloud-scene-skill",
-          executionKind: "agent_turn",
-        }),
-      }),
-    );
-
-    const stored = window.localStorage.getItem("lime:skill-catalog:v1");
-    expect(stored).toContain('"defaultExecutorBinding":"agent_turn"');
-    expect(stored).toContain('"executionLocation":"client_default"');
-    expect(stored).not.toContain('"defaultExecutorBinding":"cloud_scene"');
-    expect(stored).not.toContain('"executionLocation":"cloud_required"');
-    expect(stored).toContain('"executionKind":"agent_turn"');
-    expect(stored).not.toContain('"executionKind":"cloud_scene"');
-    expect(stored).not.toContain('"kind":"cloud_scene"');
   });
 
   it("应把本地图片模型 @命令绑定合并进当前目录", async () => {

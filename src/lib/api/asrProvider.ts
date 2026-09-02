@@ -242,7 +242,7 @@ function mergeVoiceInputConfig(
 
 function failClosedRetiredVoiceInputCommand(): never {
   throw new Error(
-    `${VOICE_REALTIME_CURRENT_BLOCKED_MESSAGE}，旧 Tauri in-process command 已退役。`,
+    `${VOICE_REALTIME_CURRENT_BLOCKED_MESSAGE}，旧进程内桌面命令已退役。`,
   );
 }
 

@@ -3,7 +3,7 @@
 > status: active / D0-desktop-baseline-blocked -> D2-D3-complete -> D4-multi-agent-durable-complete -> D4-windows-enforcement-phase
 > owner: agent-ui + app-server
 > started: 2026-07-18
-> last reviewed: 2026-09-01
+> last reviewed: 2026-09-02
 > target: Codex App GUI interaction model
 > backend reference: `/Users/coso/Documents/dev/rust/codex/codex-rs`
 > architecture baseline: `internal/aiprompts/architecture.md`
@@ -79,27 +79,27 @@ Codex App 只作为 GUI 信息架构和交互层级参考；后端 Thread/Turn/I
 
 ### 3.6 跨层语义差距（Codex runtime 参考）
 
-| 领域                  | Codex-rs 参考能力                                                                                                                 | Lime current                                                                                                                                    | 尚未对齐                                                                                                                                       | owner / 优先级                    |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| Windows sandbox       | restricted token、ACL/DACL read-back、ConPTY、Job Object、网络隔离和 packaged resource 守卫                                       | `windowsSandbox/setupStart` 等协议与 `tool-runtime::windows_setup` 已有；真实 `windows-2022` CI security matrix 与 provision 7/7 通过 | packaged sidecar/runtime 全路径与 Windows Electron Gate B 尚未完成                                                                                 | tool-runtime + app-server / P0    |
-| Permission profile    | config layer/managed requirements、动态 allowed、custom profile、deny-read 和 cwd 解析                                            | 三个内置 profile、动态 `allowed`、cwd 物化、全局 sandbox config/platform/setup readiness、Thread/Turn/settings lowering 与 GUI 提交前查询已实现 | custom profile、deny-read、MDM/project-local requirements 与真实 Windows packaged enforcement 未实现；cwd 没有 project-local policy layer      | app-server + tool-runtime / P1    |
-| ThreadStore lifecycle | live writer、flush/shutdown/discard、history materialization、latest model context、paginated fork lineage、ordinal/offset repair | canonical SQLite projection、sequence/cursor、revert、paginated Fork、干净重启和 crash-tail repair 已有                                         | 已完成：合法 unterminated record 保留、非法尾部按 byte offset 截断、sequence gap 续写、中段损坏 fail closed；同步 writer 无额外 pending buffer | thread-store + app-server / done  |
-| Multi-Agent           | parent-child registry、resident unload/reload、execution limiter、control tools、durable graph/mailbox                            | graph、mailbox、control gateway、activity projection、parent-owned child canonical resume、capacity/residency cold restart 均有受控 fixture 与 Gate B | 真实 Windows packaged enforcement 与跨平台资源限制仍待平台证据；Multi-Agent current 语义本身已收口                                      | agent-runtime + thread-store / done |
+| 领域                  | Codex-rs 参考能力                                                                                                                 | Lime current                                                                                                                                          | 尚未对齐                                                                                                                                       | owner / 优先级                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Windows sandbox       | restricted token、ACL/DACL read-back、ConPTY、Job Object、网络隔离和 packaged resource 守卫                                       | `windowsSandbox/setupStart` 等协议与 `tool-runtime::windows_setup` 已有；真实 `windows-2022` CI security matrix 与 provision 7/7 通过                 | packaged sidecar/runtime 全路径与 Windows Electron Gate B 尚未完成                                                                             | tool-runtime + app-server / P0      |
+| Permission profile    | config layer/managed requirements、动态 allowed、custom profile、deny-read 和 cwd 解析                                            | 三个内置 profile、动态 `allowed`、cwd 物化、全局 sandbox config/platform/setup readiness、Thread/Turn/settings lowering 与 GUI 提交前查询已实现       | custom profile、deny-read、MDM/project-local requirements 与真实 Windows packaged enforcement 未实现；cwd 没有 project-local policy layer      | app-server + tool-runtime / P1      |
+| ThreadStore lifecycle | live writer、flush/shutdown/discard、history materialization、latest model context、paginated fork lineage、ordinal/offset repair | canonical SQLite projection、sequence/cursor、revert、paginated Fork、干净重启和 crash-tail repair 已有                                               | 已完成：合法 unterminated record 保留、非法尾部按 byte offset 截断、sequence gap 续写、中段损坏 fail closed；同步 writer 无额外 pending buffer | thread-store + app-server / done    |
+| Multi-Agent           | parent-child registry、resident unload/reload、execution limiter、control tools、durable graph/mailbox                            | graph、mailbox、control gateway、activity projection、parent-owned child canonical resume、capacity/residency cold restart 均有受控 fixture 与 Gate B | 真实 Windows packaged enforcement 与跨平台资源限制仍待平台证据；Multi-Agent current 语义本身已收口                                             | agent-runtime + thread-store / done |
 
 ## 4. 差距优先级
 
-| 优先级 | 目标                       | 当前差距                                                                                                                        | 依赖                            |
-| ------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| P0     | 当前 Thread 成为主画布对象 | 全局 Sidebar 需要保留，但项目 tabs、任务 tabs 和消息区仍竞争上下文；活跃任务页头不稳定                                          | GUI-only，可先做                |
-| P0     | 单一 canonical 时间线      | commentary、reasoning、tool、状态摘要存在重复渲染与过量纵向展开                                                                 | `thread/read` Item projection   |
-| P0     | 单一 action-required 入口  | Approval/Plan/request-user-input 可同时出现在输入区、时间线和环境任务轨道                                                       | canonical Approval/Plan Item    |
-| P0     | 写链对齐 Codex-rs          | GUI 仍由 session-oriented hooks 与 `agentSession/event/*` 历史绑定承接部分生命周期；current 主写应明确落到 `thread/*`、`turn/*` | App Server protocol/runtime     |
-| P1     | Thread 绑定的环境面        | 现有环境浮层只读 project Git，且把任务轨道混入环境面；缺 environment identity/status                                            | `environment/*` + project Git   |
-| P1     | 变更审查闭环               | 已有 diff/workbench，但环境面没有增删行、比较基线和进入 review 的明确动作                                                       | project Git + workbench command |
-| done   | ThreadStore 崩溃恢复       | partial JSONL、byte offset/sequence gap repair、同步 writer close 与 delete/discard 已由 D4 第一阶段收口                        | thread-store + App Server       |
-| P1     | Composer 稳定              | 首页与会话输入区形态、装饰和高度变化明显；运行态/排队态入口分散                                                                 | command model                   |
-| P2     | 产品/诊断分层              | Harness、Trace、Shell、Browser、Workbench 在主 Toolbar 近似等权                                                                 | 右侧 surface catalog            |
-| excluded | 首页 Banner / 皮肤 Hero | 按用户裁决保留现有首页视觉，不纳入 Codex App 对齐范围                                                                                 | product scope                  |
+| 优先级   | 目标                       | 当前差距                                                                                                                        | 依赖                            |
+| -------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| P0       | 当前 Thread 成为主画布对象 | 全局 Sidebar 需要保留，但项目 tabs、任务 tabs 和消息区仍竞争上下文；活跃任务页头不稳定                                          | GUI-only，可先做                |
+| P0       | 单一 canonical 时间线      | commentary、reasoning、tool、状态摘要存在重复渲染与过量纵向展开                                                                 | `thread/read` Item projection   |
+| P0       | 单一 action-required 入口  | Approval/Plan/request-user-input 可同时出现在输入区、时间线和环境任务轨道                                                       | canonical Approval/Plan Item    |
+| P0       | 写链对齐 Codex-rs          | GUI 仍由 session-oriented hooks 与 `agentSession/event/*` 历史绑定承接部分生命周期；current 主写应明确落到 `thread/*`、`turn/*` | App Server protocol/runtime     |
+| P1       | Thread 绑定的环境面        | 现有环境浮层只读 project Git，且把任务轨道混入环境面；缺 environment identity/status                                            | `environment/*` + project Git   |
+| P1       | 变更审查闭环               | 已有 diff/workbench，但环境面没有增删行、比较基线和进入 review 的明确动作                                                       | project Git + workbench command |
+| done     | ThreadStore 崩溃恢复       | partial JSONL、byte offset/sequence gap repair、同步 writer close 与 delete/discard 已由 D4 第一阶段收口                        | thread-store + App Server       |
+| P1       | Composer 稳定              | 首页与会话输入区形态、装饰和高度变化明显；运行态/排队态入口分散                                                                 | command model                   |
+| P2       | 产品/诊断分层              | Harness、Trace、Shell、Browser、Workbench 在主 Toolbar 近似等权                                                                 | 右侧 surface catalog            |
+| excluded | 首页 Banner / 皮肤 Hero    | 按用户裁决保留现有首页视觉，不纳入 Codex App 对齐范围                                                                           | product scope                   |
 
 ## 5. 实施切片
 
@@ -636,3 +636,46 @@ D0-D4 的退出条件全部满足，Gate A 与真实 Electron Gate B 证据可�
 - 本地发布门禁已通过：`npm run verify:app-version`、`npm run typecheck`、`npm run test:contracts`、`npm run smoke:agent-runtime-current-fixture`、定向 Vitest 36/36、目标 ESLint、`git diff --check`。`npm run verify:gui-smoke` 最新 Gate B-F 为 21/21，真实 Electron/preload/IPC、`app_server_handle_json_lines` 和 current App Server method 命中，全部错误、legacy command 与 mock fallback 计数为 0。
 - `npm run test:related -- ...` 曾在测试收集阶段把 `electron/` 目录当成文件读取并报 `EISDIR`；直接 Vitest 精确入口已覆盖同一受影响集合并全部通过，该问题记录为 runner 收集缺陷，不是产品断言失败。
 - `v1.138.0` 本地与远端 tag 均不存在。下一步是获得 release Git 写操作确认，提交完整 candidate、创建并推送 tag；随后由 release workflow 在 `windows-2022` 上验证 Squirrel 安装、packaged CodeMode Gate B 与发布资产。首页 Banner / 皮肤 Hero 保持明确产品例外。
+
+## 47. 2026-09-01 业务层工具暴露语义对齐
+
+- Codex HEAD `d58d0e5841` 的 `tools.update_plan.enabled` 默认关闭；显式开关才注册 checklist tool，且与 Plan Mode 解耦。Lime 已将这一语义放入 current `ToolExecutionPolicyConfig`、App Server config metadata、Agent inventory/current provider tool filtering 和设置页，不复制 Codex TUI 的终端交互。
+- GUI 设置页新增“计划工具”开关，默认关闭，开启后通过现有 `config` 写链保存；`zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`ko-KR` 文案和 summary 状态同步，未新增第二业务后端或 Renderer mock。
+- 验证：配置相关 Rust 单测 `3/3`、Agent inventory `15/15`、current provider tool snapshot `6/6`、App Server provider/inventory 各 `3/3`、`test:rust:related` 全部受影响包通过；设置页 Vitest `5/5`、`lime-core` cargo check、`verify:gui-smoke`（真实 Electron/preload/IPC/App Server 链，`21/21`）及 `git diff --check` 通过。未注入 V8 缓存时 Darwin arm64 预编译资产下载返回 404，本轮使用仓库已有临时缓存完成 Rust 验证，fresh-environment 下载仍未验证。
+- 治理分类：`current` 为计划工具配置/投影/GUI；`compat` 为历史工具名别名；`deprecated` 无新增；`dead/forbidden-to-restore` 为旧 UI 二次 owner、Renderer mock 和第二套状态机；Codex account/rate-limit/TUI 专属业务、未确认 token budget/proactive catalog contract 归 `product-scope-excluded` 或 `gap / pending owner`。
+
+## 48. 2026-09-02 模型目录驱动的回合语义
+
+- 对齐 Codex `ModelInfo/ModelMessages` 与 `core::session::multi_agents`：可信模型目录现在保留 instructions template/variables、context/max-context/auto-compact/effective-percent、Multi-Agent v2 文案与 Ultra provider override；App Server 每回合只从选中 route 的 catalog metadata 合并到 current session/turn context。
+- Multi-Agent v2 精确按字段存在性解析：`hint_text`（含空字符串）优先；Ultra 使用 `proactive`，缺失时使用内置 proactive；非 Ultra 使用 `explicit`，缺失时保持 explicit-request-only。World State 保留用户选择的 `ultra`，provider wire 则按目录 override、`max`、最高非 Ultra、`medium` 的顺序 lowering；本地 `persistent` 在 provider wire 上 lowering 为 `disabled`。
+- `model/list.supportsPersonality` 不再硬编码：只有 instructions template 含 `{{ personality }}`，且 default/friendly/pragmatic 三个变量都是字符串时才为 true，空字符串仍算目录显式声明。人格模板渲染、model limits 和 API 解析均补定向回归。
+- 验证状态：`cargo check -p app-server` 通过；模型目录 `2/2`、reasoning effort `4/4`、provider configuration `7/7`、Multi-Agent turn context `13/13`、session/config `19/19`、personality model list `1/1` 和 direct provider metadata `1/1` 定向回归通过；`npm run test:rust:related -- <本轮 Rust 写集>` 推导的 20 个反向依赖包全部通过。`npm run test:contracts` 通过 protocol types、App Server client 299 checks、command/harness/contracts、scripts governance 和 docs boundary；`npm run smoke:agent-runtime-current-fixture` 通过且 `liveProviderUsed=false`；`npm run verify:gui-smoke` 通过真实 Electron Desktop Host、preload/IPC、App Server `appserver.v0`、Claw shell reload 和 memory settings Gate B。`cargo fmt --all -- --check` 与 `git diff --check` 通过。Codex release 的 Darwin arm64 archive/binding 均可下载并校验；历史 404 仅对应 Deno 默认 sandbox URL 或错误的 mirror 路径，本轮已将缓存固定到稳定 OS 用户缓存目录并增加下载重试/超时。
+- 后续 blocker：model-owned `approvals`、`permissions`、`auto_review`、Guardian v2 和完整 token-budget 语义仍未进入可信 catalog -> App Server -> provider/tool runtime 消费链；`model_messages.token_budget` 不得直接映射现有 provider hard token budget。
+
+## 49. 2026-09-02 Codex Rusty V8 资产下载收口
+
+- 继续采用 Codex 的 `rusty-v8-v<version>` release 资产，不引入 Lime 自建镜像或关闭 `v8_enable_sandbox`。`RUSTY_V8_MIRROR` 不作为入口，因为 v8 crate 的 `/v<version>` 拼接规则与 Codex release tag 不兼容。
+- `scripts/lib/rusty-v8-artifacts.mjs` 现在使用 macOS/Windows/Linux 稳定用户缓存目录，并为 curl 下载增加有限重试、连接超时和总超时；显式 `LIME_RUSTY_V8_CACHE_DIR` 仍可用于隔离 CI 或维护者验证。
+- 验证：helper 真实解析 `v8=150.4.0` 并成功取得 Codex Darwin arm64 archive/binding；资产 supply-chain Vitest `6/6` 通过，输出路径位于 `~/Library/Caches/Lime/rusty-v8`。该切片不改变 Cargo.lock、V8 feature 或运行时资源打包边界。
+
+## 50. 2026-09-02 Windows packaged GUI evidence identity
+
+- Windows workflow 的 CodeMode/native host Gate B 现在显式继承 Squirrel 安装候选的 `candidateRunId`，并由 `windows-packaged-evidence.mjs` 绑定安装后的 `Lime.exe`、资源清单、sidecar 进程命令和 native helper 路径。GUI Gate B 因此只能声明同一 packaged candidate 的 Electron/preload/IPC/App Server/runtime/read-model/DOM 证据。
+- 这不等于 Codex Desktop 实时视觉一致：本轮没有获得 ChatGPT.app accessibility tree 或 1536x960、1280x800、窄窗口的真实对照截图，也没有 Windows packaged GUI 运行结果；视觉基线和 Windows GUI Gate B 继续保持 `OPEN_REF`。
+- 当前 GUI current owner 仍是 Thread/Turn/Item projection、ThreadWorkspaceHeader、canonical timeline、Composer 和右侧 context surface；平台 host 只提供系统能力，不新增 Windows 业务后端或 macOS Swift 平行业务链。
+
+## 51. 2026-09-02 GUI 三档窗口几何回归
+
+- 范围：将现有真实 Electron `SHELL-01` smoke 扩展为 `1536x960`、`1280x800`、`980x680` 三档 `BrowserWindow.setSize/getSize` 几何契约；不把它表述为 Codex Desktop 像素级视觉一致性，也不替代 Windows packaged Gate B。
+- 实现：`electron/smokeChecks.ts` 在 renderer reload 后采集窗口尺寸、viewport、文档溢出、workspace shell/main area、Composer、输入框、可选 message list/Thread header 的稳定矩形，断言必要节点可见、在视口内、横向无意外溢出、标题与 header actions 不遮挡，并保存三张 `layout-<width>x<height>.png` 截图。`electron/smokeEvidence.ts` 将 `layout.proofLevel`、三档 viewport、断言和 screenshot 列表纳入同一 `SHELL-01` summary；summary validator 对布局 proof、几何稳定性和三张截图 fail closed。
+- 产品修复：首页 EmptyState 的 Composer frame 在短窗口使用基于 `100vh` 的有限负上边距，使 `980x680` 最小受支持窗口中 205px 高 Composer 完整进入视口；高窗口和业务链路保持不变。
+- 验证：`electron/smokeEvidence`、入口守卫、summary validator、EmptyStateLayout 定向测试通过；`npm run typecheck:electron`、Prettier 通过；真实 `npm run verify:gui-smoke` 通过，最新 summary 为 `.lime/qc/project-gates/standalone-shell-01-20260902095726-86015/shell-01-electron-smoke/summary.json`，24/24 assertions，三档 `layoutGeometryStable=true`，`980x680` Composer bottom=`678.67px`，console/page/preload/invoke/legacy/mock 均为 0。
+- 证据边界与下一步：本轮证明 Lime 真实 Electron responsive layout contract 和现有 preload/IPC/App Server shell 主链未回归；没有取得 Codex Desktop 实时 accessibility/screenshot，也没有 Windows packaged GUI 结果。后续仍由 `windows-2022` 真实候选完成 Squirrel 安装、sidecar/native host/CodeMode 与 packaged GUI Gate B，D0 实时视觉继续 `OPEN_REF`。
+
+## 52. 2026-09-02 GUI 几何证据复核
+
+- 复核范围：重新构建 renderer、Electron main/preload 与本地 App Server sidecar，重新执行三档 `BrowserWindow.setSize/getSize` 几何采集和 summary fail-closed 校验；不改变布局 owner 或平台业务边界。
+- 最新证据：`.lime/qc/project-gates/standalone-shell-01-20260902105148-51228/shell-01-electron-smoke/summary.json` 为 `Gate B-F`、24/24 assertions；`1536x960`、`1280x800`、`980x680` 均 `windowSizeMatchesRequest`、必要节点可见且在视口内、无横向溢出、header actions 不遮挡，`composerHeightStable=true`，三张布局截图均存在。真实 Electron/preload/IPC、`app_server_handle_json_lines`、App Server 初始化命中，console/page/preload/invoke、renderer crash/unresponsive、legacy command 和 mock fallback 均为 0。
+- 交叉门禁：`npm run test:contracts` 与 `npm run governance:scripts` 通过；本轮定向 Vitest 4 个文件 26/26、`npm run typecheck:electron`、Prettier 和 `git diff --check` 通过。
+- 稳定性补充：统一 `npm test -- --resume` 续跑 119/119 批全部通过；修复五语言执行策略描述中的来源品牌词，并将治理测试从已删除历史文档迁移到 current `internal/aiprompts/architecture.md` 事实源，相关 i18n/治理测试通过。
+- 证据边界：该复核证明 Lime macOS Electron responsive layout contract 和 current shell 主链未回归，不证明 Codex Desktop 像素级视觉一致、Windows packaged 安装/升级或系统权限。Windows `windows-2022` packaged GUI/CodeMode/native host Gate B 与 Codex Desktop 实时 accessibility/screenshot 继续为 `OPEN_REF`。

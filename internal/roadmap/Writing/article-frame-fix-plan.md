@@ -1,7 +1,9 @@
 # 修复：聊天产物卡收口为"完整文章产物"
 
+> 状态：`legacy historical reference`（2026-09-02）；本文记录的修复已被 Writing v2 与 current Article artifact contract 承接，不再作为独立实施计划。
+
 更新时间：2026-06-30
-状态：已收口
+状态：历史修复已收口
 主线：Writing 闭环 P4「通用 ArtifactFrame 与右侧 Article Editor」回归修复
 
 右侧承载标准统一见 `../rightsurface/README.md`；本计划只聚焦文章产物框与 Article Editor 子面，不重复 dock / tab 规则。

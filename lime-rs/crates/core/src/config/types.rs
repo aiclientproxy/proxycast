@@ -3030,6 +3030,7 @@ memory:
     #[test]
     fn test_tool_execution_policy_config_roundtrip_preserves_non_default_policy() {
         let config = ToolExecutionPolicyConfig {
+            update_plan_enabled: true,
             tool_overrides: HashMap::from([(
                 "bash".to_string(),
                 ToolExecutionOverrideConfig {
@@ -3064,6 +3065,20 @@ memory:
             serde_json::from_value(value).expect("tool execution config should deserialize");
 
         assert_eq!(parsed, config);
+    }
+
+    #[test]
+    fn test_tool_execution_policy_config_omits_disabled_update_plan_by_default() {
+        let value = serde_json::to_value(ToolExecutionPolicyConfig::default())
+            .expect("default tool execution config should serialize");
+        assert_eq!(value, serde_json::json!({}));
+
+        let enabled = ToolExecutionPolicyConfig {
+            update_plan_enabled: true,
+            ..Default::default()
+        };
+        let value = serde_json::to_value(enabled).expect("enabled update_plan should serialize");
+        assert_eq!(value["update_plan_enabled"], true);
     }
 
     #[test]

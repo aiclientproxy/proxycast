@@ -1,11 +1,14 @@
 # 图片能力系统路线图
 
 更新时间：2026-07-02
-状态：进行中，App Server / Media Runtime worker 常驻调度骨架已接入；图片默认模型占位污染已收口，Provider adapter 细节仍在推进
+状态：`legacy current reference`（已由图片能力 v2 路线图替换）
 Owner：Agent Runtime / Media Runtime / Settings / Workspace
 
+当前路线图：`internal/roadmap/images/v2/README.md`
 对应执行计划：`internal/exec-plans/image-capability-feature-flag-extension-tool-plan.md`
 进度记录：`internal/exec-plans/image-capability-feature-flag-extension-tool-progress.md`
+
+> 版本替换说明：本文保留 v1 的背景、迁移证据和历史实现记录，不再定义图片能力的 current 合同。新入口、确定性 command workflow、Media Runtime worker、Provider route 和 UI 投影统一以 [图片能力 v2](./v2/README.md)、[v2 产品需求](./v2/product-requirements.md)、[v2 架构](./v2/architecture.md) 与 [v2 流程](./v2/flows.md) 为准。v1 中的 `Skill(image_generate)`、prompt-driven 首发和 renderer 直连 Provider 仅作为被替换的历史语义，不得恢复为生产路径。
 
 ## 1. 背景
 

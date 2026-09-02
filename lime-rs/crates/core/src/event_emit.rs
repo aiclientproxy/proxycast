@@ -1,14 +1,14 @@
 //! 通用事件发射 trait
 //!
-//! 提供与 Tauri 解耦的事件发射抽象，供独立 crate 使用。
-//! 主 crate 通过实现 `EventEmit` trait 注入 Tauri 的 `AppHandle.emit()`。
+//! 提供与桌面宿主解耦的事件发射抽象，供独立 crate 使用。
+//! App Server 或 Desktop Host 边界通过实现 `EventEmit` trait 注入事件通道。
 
 use std::sync::Arc;
 
 /// 事件发射 trait
 ///
 /// 所有需要向前端发送事件的 crate 都通过此 trait 抽象，
-/// 避免直接依赖 Tauri。
+/// 避免直接依赖桌面宿主。
 pub trait EventEmit: Send + Sync + 'static {
     /// 发送事件
     ///

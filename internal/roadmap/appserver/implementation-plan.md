@@ -12,7 +12,7 @@
 4. App Server 和 legacy desktop facade 必须共享 RuntimeCore。
 5. 旧 command glue 只能迁出或下线；确需临时兼容时只允许在 current 边界投影，不继续长业务逻辑，也不在 `lime-rs/src/commands/**` 保留 facade。
 6. 新 App 只能走 App Server Client，不直接链接 Lime 内部实现。
-7. `lime-rs/src/commands/**` 是旧 Tauri command wrapper 清理区，不再承接新的业务逻辑、API adapter、runtime 分支或领域服务实现。
+7. `lime-rs/src/commands/**` 已物理删除，不得恢复业务逻辑、API adapter、runtime 分支或领域服务实现。
 
 ## 2. 阶段总览
 

@@ -133,6 +133,12 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
                 "model": null,
                 "modelCapabilities": model_capabilities.clone(),
                 "model_capabilities": model_capabilities,
+                "modelMessages": model_messages_from_provider_config(config.model_capabilities.as_ref()),
+                "model_messages": model_messages_from_provider_config(config.model_capabilities.as_ref()),
+                "multiAgentVersion": multi_agent_version_from_provider_config(config.model_capabilities.as_ref()),
+                "multi_agent_version": multi_agent_version_from_provider_config(config.model_capabilities.as_ref()),
+                "multiAgentReasoningEffort": multi_agent_reasoning_effort_from_provider_config(config.model_capabilities.as_ref()),
+                "multi_agent_reasoning_effort": multi_agent_reasoning_effort_from_provider_config(config.model_capabilities.as_ref()),
                 "modelAlias": null,
                 "model_alias": null,
                 "reasoning": null,
@@ -236,6 +242,24 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
             "model": model,
             "modelCapabilities": model_capabilities,
             "model_capabilities": model_capabilities,
+            "modelMessages": chat_wire_model
+                .as_ref()
+                .and_then(|model| model.model_messages.clone()),
+            "model_messages": chat_wire_model
+                .as_ref()
+                .and_then(|model| model.model_messages.clone()),
+            "multiAgentVersion": chat_wire_model
+                .as_ref()
+                .and_then(|model| model.multi_agent_version.map(model_multi_agent_version_name)),
+            "multi_agent_version": chat_wire_model
+                .as_ref()
+                .and_then(|model| model.multi_agent_version.map(model_multi_agent_version_name)),
+            "multiAgentReasoningEffort": chat_wire_model
+                .as_ref()
+                .and_then(|model| model.multi_agent_reasoning_effort.clone()),
+            "multi_agent_reasoning_effort": chat_wire_model
+                .as_ref()
+                .and_then(|model| model.multi_agent_reasoning_effort.clone()),
             "modelAlias": model_alias,
             "model_alias": model_alias,
             "reasoning": reasoning,
@@ -252,6 +276,44 @@ fn chat_wire_model_metadata(model: &EnhancedModelMetadata) -> EnhancedModelMetad
         .input_modalities
         .retain(|modality| matches!(modality, ModelModality::Text | ModelModality::Image));
     model
+}
+
+fn model_multi_agent_version_name(
+    version: lime_core::models::model_registry::ModelMultiAgentVersion,
+) -> &'static str {
+    match version {
+        lime_core::models::model_registry::ModelMultiAgentVersion::Disabled => "disabled",
+        lime_core::models::model_registry::ModelMultiAgentVersion::V1 => "v1",
+        lime_core::models::model_registry::ModelMultiAgentVersion::V2 => "v2",
+    }
+}
+
+fn model_messages_from_provider_config(capabilities: Option<&Value>) -> Option<Value> {
+    capabilities.and_then(|value| {
+        ["modelMessages", "model_messages"]
+            .into_iter()
+            .find_map(|key| value.get(key).cloned())
+    })
+}
+
+fn multi_agent_version_from_provider_config(capabilities: Option<&Value>) -> Option<Value> {
+    capabilities.and_then(|value| {
+        ["multiAgentVersion", "multi_agent_version"]
+            .into_iter()
+            .find_map(|key| value.get(key).cloned())
+            .filter(|value| matches!(value.as_str(), Some("disabled" | "v1" | "v2")))
+    })
+}
+
+fn multi_agent_reasoning_effort_from_provider_config(
+    capabilities: Option<&Value>,
+) -> Option<Value> {
+    capabilities.and_then(|value| {
+        ["multiAgentReasoningEffort", "multi_agent_reasoning_effort"]
+            .into_iter()
+            .find_map(|key| value.get(key).cloned())
+            .filter(Value::is_string)
+    })
 }
 
 fn model_capability_payload(model: &EnhancedModelMetadata) -> Value {
@@ -482,6 +544,8 @@ mod tests {
                     "inputModalities": ["text", "image", "audio"],
                     "outputModalities": ["text"],
                     "runtimeFeatures": ["streaming"],
+                    "multiAgentVersion": "v2",
+                    "multiAgentReasoningEffort": "high",
                     "capabilities": {
                         "streaming": true,
                         "apiKey": "must-not-persist"
@@ -524,6 +588,8 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(true)
         );
+        assert_eq!(metadata.payload()["multiAgentVersion"], "v2");
+        assert_eq!(metadata.payload()["multiAgentReasoningEffort"], "high");
         assert_eq!(
             metadata.tool_mode(),
             tool_runtime::code_mode::RuntimeToolMode::Direct

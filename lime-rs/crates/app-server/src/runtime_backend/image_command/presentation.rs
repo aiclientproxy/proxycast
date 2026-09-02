@@ -131,6 +131,7 @@ pub(super) async fn generate_image_task_presentation(
     let provider_configuration = model_route_contract::provider_configuration_from_runtime(
         &selection,
         &route_resolution.resolved_route,
+        route_resolution.decision_payload.get("modelRegistry"),
         direct_provider_config,
         request_context::service_tier_from_request(request),
     );

@@ -83,19 +83,6 @@ describe("i18n app metadata workflow report", () => {
     writeFile(root, "forge.config.mjs", forgeConfigFixture());
     writeFile(
       root,
-      "lime-rs/capabilities/plugin-shell.json",
-      JSON.stringify(
-        {
-          identifier: "plugin-shell",
-          description:
-            "Plugin 独立 Shell 只允许使用 Desktop Host IPC 调用宿主封装能力。",
-        },
-        null,
-        2,
-      ),
-    );
-    writeFile(
-      root,
       "internal/roadmap/i18n/evidence/app-metadata-locale-build-manifest.json",
       JSON.stringify(
         {
@@ -181,12 +168,6 @@ describe("i18n app metadata workflow report", () => {
               localization: "source-only",
               priority: "source-only",
             },
-            {
-              path: "lime-rs/capabilities/plugin-shell.json",
-              field: "description",
-              localization: "internal-source-only",
-              priority: "source-only",
-            },
           ],
         },
         null,
@@ -196,7 +177,7 @@ describe("i18n app metadata workflow report", () => {
 
     const report = analyzeAppMetadataWorkflowReport({ repoRoot: root });
 
-    expect(report.schemaVersion).toBe("lime.i18n.appMetadataWorkflowReport.v1");
+    expect(report.schemaVersion).toBe("lime.i18n.appMetadataWorkflowReport.v2");
     expect(report.summary.hasInstallerLocalizationWorkflow).toBe(true);
     expect(report.summary.hasAppMetadataLocaleBuildManifest).toBe(true);
     expect(report.summary.appMetadataLocaleBuildManifestReady).toBe(true);
@@ -204,20 +185,20 @@ describe("i18n app metadata workflow report", () => {
     expect(report.summary.hasLocalizedAppMetadataArtifacts).toBe(true);
     expect(report.summary.hasLocaleAwareMetadataSources).toBe(true);
     expect(report.summary.metadataMissingScopedFieldCount).toBe(0);
-    expect(report.summary.metadataReviewedFieldCount).toBe(10);
-    expect(report.summary.metadataScopeItemCount).toBe(10);
+    expect(report.summary.metadataReviewedFieldCount).toBe(9);
+    expect(report.summary.metadataScopeItemCount).toBe(9);
     expect(report.summary.metadataTranslatableFieldCount).toBe(1);
     expect(report.summary.metadataUnscopedFieldCount).toBe(0);
     expect(report.appMetadataTranslationScope).toEqual(
       expect.objectContaining({
         generatedMetadataAllowed: false,
         manifestGenerationAllowed: true,
-        itemCount: 10,
+        itemCount: 9,
         owner: "release",
         requiredBeforeMultilingualReleaseCount: 1,
         schemaVersion: "lime.i18n.appMetadataTranslationScope.v1",
         sourceLocale: "zh-CN",
-        sourceOnlyFieldCount: 6,
+        sourceOnlyFieldCount: 5,
         stableFieldCount: 3,
         targetLocales: ["en-US"],
         translatableFieldCount: 1,
@@ -249,7 +230,7 @@ describe("i18n app metadata workflow report", () => {
     );
     expect(JSON.parse(formatAppMetadataWorkflowReport(report, "json"))).toEqual(
       expect.objectContaining({
-        schemaVersion: "lime.i18n.appMetadataWorkflowReport.v1",
+        schemaVersion: "lime.i18n.appMetadataWorkflowReport.v2",
       }),
     );
   });
@@ -276,11 +257,6 @@ describe("i18n app metadata workflow report", () => {
       '[package]\nname = "lime"\nversion = "1.47.0"\n',
     );
     writeFile(root, "forge.config.mjs", forgeConfigFixture());
-    writeFile(
-      root,
-      "lime-rs/capabilities/plugin-shell.json",
-      JSON.stringify({ identifier: "plugin-shell" }, null, 2),
-    );
     writeFile(
       root,
       "internal/roadmap/i18n/app-metadata-translation-scope.json",
@@ -346,11 +322,6 @@ describe("i18n app metadata workflow report", () => {
       '[package]\nname = "lime"\nversion = "1.47.0"\n',
     );
     writeFile(root, "forge.config.mjs", forgeConfigFixture());
-    writeFile(
-      root,
-      "lime-rs/capabilities/plugin-shell.json",
-      JSON.stringify({ identifier: "plugin-shell" }, null, 2),
-    );
 
     const outFile = path.join(root, "report.json");
     const writeSpy = vi
@@ -370,7 +341,7 @@ describe("i18n app metadata workflow report", () => {
     expect(writeSpy).not.toHaveBeenCalled();
     expect(JSON.parse(fs.readFileSync(outFile, "utf8"))).toEqual(
       expect.objectContaining({
-        schemaVersion: "lime.i18n.appMetadataWorkflowReport.v1",
+        schemaVersion: "lime.i18n.appMetadataWorkflowReport.v2",
       }),
     );
   });

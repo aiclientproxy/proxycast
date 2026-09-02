@@ -88,7 +88,7 @@ export function useAgentChatWorkspaceSceneRuntime({
     suppressHomeNavbarUtilityActions, taskCenterDraftMaterializedSessionIdsRef, taskCenterDraftWarmupSessionIdsRef, taskCenterHomeSurfaceState, taskCenterTabsNode, bindArticleEditorRightSurface, bindRightSurfacePendingActions, handleCodeBlockClick,
     handleHarnessLoadFilePreview, handleOpenArtifactFromTimeline, handleOpenMessagePreview, handleOpenSavedSiteContent, handleOpenServiceSkillResultFile, handleOpenUrlPreview, handleSaveArtifactDocument, handleWorkspaceArtifactClick,
     handleWorkspaceFileClick, openProjectFilePreviewInCanvas, openWorkspaceArtifactInWorkbench, preferredServiceSkillResultFileTarget, renderArtifactWorkbenchToolbarActions, shouldCollapseCodeBlockInChat, shouldCollapseCodeBlocks, handleWriteFile,
-    defaultCuratedTaskReferenceEntries, defaultCuratedTaskReferenceMemoryIds, handleJumpToTimelineItem, sceneAppExecutionSummaryCard, sceneAppReviewDecisionDialogNode, serviceSkillExecutionCard, generalWorkbenchActivityLogs,
+    handleJumpToTimelineItem, serviceSkillExecutionCard, generalWorkbenchActivityLogs,
     generalWorkbenchWorkflowSteps, handleExpandGeneralWorkbenchSidebar, renderGeneralWorkbenchSidebarNode, planComposerPendingActions, planDecisionAccessory, handleSaveMessageAsSkill,
   } = commandRuntime;
   const inputbarScene = useWorkspaceInputbarSceneRuntime({
@@ -169,8 +169,10 @@ export function useAgentChatWorkspaceSceneRuntime({
     mappedTheme,
     activeRuntimeStatusTitle: contextHarnessRuntime.activeRuntimeStatusTitle,
     chatToolPreferences: effectiveChatToolPreferences,
-    defaultCuratedTaskReferenceMemoryIds: defaultCuratedTaskReferenceMemoryIds,
-    defaultCuratedTaskReferenceEntries: defaultCuratedTaskReferenceEntries,
+    defaultCuratedTaskReferenceMemoryIds:
+      initialCreationReplaySurface?.defaultReferenceMemoryIds,
+    defaultCuratedTaskReferenceEntries:
+      initialCreationReplaySurface?.defaultReferenceEntries,
     pathReferences,
     onAddPathReferences: handleAddPathReferences,
     inputRestoreRequest,
@@ -451,8 +453,10 @@ export function useAgentChatWorkspaceSceneRuntime({
         contentId,
         creationMode,
         creationReplaySurface: initialCreationReplaySurface,
-        defaultCuratedTaskReferenceEntries,
-        defaultCuratedTaskReferenceMemoryIds,
+        defaultCuratedTaskReferenceEntries:
+          initialCreationReplaySurface?.defaultReferenceEntries,
+        defaultCuratedTaskReferenceMemoryIds:
+          initialCreationReplaySurface?.defaultReferenceMemoryIds,
         emptyStateDisabled: sceneIsPreparingSend || sceneIsSending,
         emptyStateIsLoading: sceneIsPreparingSend || sceneIsSending,
         emptyStateSendOnPointerDown: true,
@@ -503,7 +507,6 @@ export function useAgentChatWorkspaceSceneRuntime({
         recentSessionSummary: recentSessionTopic?.lastPreview ?? null,
         recentSessionTitle: recentSessionTopic?.title ?? null,
         resolvedCanvasState,
-        sceneAppExecutionSummaryCard,
         serviceSkillExecutionCard,
         serviceSkillGroups: activeTheme === "general" ? serviceSkillGroups : [],
         serviceSkills: activeTheme === "general" ? serviceSkills : [],
@@ -709,7 +712,6 @@ export function useAgentChatWorkspaceSceneRuntime({
           workspaceServiceSkillEntryActions.handleAutomationDialogSubmit
         }
       />
-      {sceneAppReviewDecisionDialogNode}
     </>
   );
 }

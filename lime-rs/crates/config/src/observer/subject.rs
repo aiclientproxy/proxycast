@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
-/// Tauri 事件名称常量
+/// 配置事件名称常量
 pub const CONFIG_CHANGED_EVENT: &str = "config-changed";
 /// 预留：配置重新加载事件
 #[allow(dead_code)]
@@ -33,7 +33,7 @@ pub struct ConfigSubject {
     current_config: RwLock<Config>,
     /// 事件广播通道
     event_tx: broadcast::Sender<ConfigChangeEvent>,
-    /// 事件发射器（抽象 Tauri AppHandle）
+    /// 事件发射器（抽象宿主事件通道）
     emitter: RwLock<Option<Arc<dyn ConfigEventEmit>>>,
     /// 是否启用事件发射
     events_enabled: RwLock<bool>,

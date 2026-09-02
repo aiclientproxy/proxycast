@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
@@ -28,5 +28,20 @@ describe("windows-native-host-gate-b", () => {
     const resources = path.join(root, "app-1.0.0", "resources");
     mkdirSync(resources, { recursive: true });
     expect(resolveInstalledResourcesRoot(executable)).toBe(resources);
+  });
+
+  it("summary 必须记录候选 identity 与安装资源路径", () => {
+    const source = readFileSync(
+      "scripts/electron/windows-native-host-gate-b.mjs",
+      "utf8",
+    );
+    expect(source).toContain(
+      "candidateRunId: process.env.LIME_GATE_RUN_ID?.trim() || null",
+    );
+    expect(source).toContain(
+      "electronExecutable: path.resolve(options.electronExecutable)",
+    );
+    expect(source).toContain("path: helper.helperPath");
+    expect(source).toContain("resourcesRoot,");
   });
 });

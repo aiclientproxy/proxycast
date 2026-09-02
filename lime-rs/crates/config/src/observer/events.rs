@@ -51,7 +51,7 @@ impl ConfigChangeEvent {
 pub enum ConfigChangeSource {
     /// 文件热重载
     HotReload,
-    /// Tauri 命令 / API 调用
+    /// App Server / API 调用
     ApiCall,
     /// 前端 UI
     FrontendUI,

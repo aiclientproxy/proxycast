@@ -361,7 +361,7 @@ git diff --check
 
 - `current`：`scheduledTask/* -> App Server -> scheduler -> RuntimeCore -> Thread/Turn/Item -> Agent Run -> GUI`；`automation_jobs` 与 `AutomationJob` DAO 仅是 current 内部存储映射，`TaskSchedule::{Every,Cron,At}` 仅是 scheduler lowering。
 - `compat`：Base Setup / Service Skill 的 `automation_job` binding family 仍有真实消费者，只允许边界委托和一次性迁移，不得扩展第二套任务协议。
-- `dead / deleted / forbidden-to-restore`：旧 Automation public method/schema/client、页面、Settings tab、renderer projection、smoke 与旧 i18n consumer；`browser_session` 自动任务、SceneApp automation context、生产 mock fallback、renderer timer。
+- `dead / deleted / forbidden-to-restore`：旧 Automation public method/schema/client、页面、Settings tab、renderer projection、smoke 与旧 i18n consumer；`browser_session` 自动任务、已退役应用编排 context、生产 mock fallback、renderer timer。
 - 不建立新的长期 compat owner；现有 compat taxonomy 必须继续向 Scheduled Task current API 收敛。
 
 ## 阶段

@@ -94,7 +94,6 @@ const {
   mockGetChromeBridgeStatus: vi.fn(),
 }));
 
-
 const mockCharacterMention = vi.fn<
   (props: {
     characters?: Character[];
@@ -2936,8 +2935,8 @@ describe("EmptyState", () => {
       setInput,
       defaultCuratedTaskReferenceEntries: [
         {
-          id: "sceneapp:content-pack:run:1",
-          sourceKind: "sceneapp_execution_summary",
+          id: "memory:content-pack:run:1",
+          sourceKind: "memory",
           title: "AI 内容周报",
           summary: "当前已有一轮运行结果，可直接作为复盘基线。",
           category: "experience",
@@ -2999,8 +2998,8 @@ describe("EmptyState", () => {
     const container = renderEmptyState({
       defaultCuratedTaskReferenceEntries: [
         {
-          id: "sceneapp:content-pack:run:1",
-          sourceKind: "sceneapp_execution_summary",
+          id: "memory:content-pack:run:1",
+          sourceKind: "memory",
           title: "AI 内容周报",
           summary: "当前已有一轮运行结果，可直接作为后续生成基线。",
           category: "experience",

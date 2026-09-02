@@ -418,6 +418,53 @@ function assertBuildSteps(buildJob) {
     );
   }
 
+  const macNativeHostStep = stepByName(
+    steps,
+    "Run packaged macOS native host Gate B",
+  );
+  assertIncludes(
+    macNativeHostStep?.if,
+    "matrix.host_platform == 'darwin'",
+    "macOS native host Gate B condition",
+  );
+  for (const required of [
+    "scripts/electron/macos-native-host-gate-b.mjs",
+    "--electron-executable",
+    "--arch",
+    "macos-native-host-gate-b",
+  ]) {
+    assertIncludes(
+      macNativeHostStep?.run,
+      required,
+      "macOS native host Gate B",
+    );
+  }
+
+  const macNativeHostEvidenceStep = stepByName(
+    steps,
+    "Upload packaged macOS native host Gate B evidence",
+  );
+  assertIncludes(
+    macNativeHostEvidenceStep?.if,
+    "always()",
+    "macOS native host Gate B evidence upload condition",
+  );
+  assertIncludes(
+    macNativeHostEvidenceStep?.if,
+    "matrix.host_platform == 'darwin'",
+    "macOS native host Gate B evidence upload condition",
+  );
+  if (macNativeHostEvidenceStep?.uses !== "actions/upload-artifact@v4") {
+    throw new Error(
+      "macOS native host Gate B evidence must use actions/upload-artifact@v4",
+    );
+  }
+  assertIncludes(
+    macNativeHostEvidenceStep?.with?.path,
+    "macos-native-host-gate-b",
+    "macOS native host Gate B evidence upload",
+  );
+
   const stageStep = stepByName(steps, "Stage Electron release assets");
   assertIncludes(
     stageStep?.run,
@@ -588,6 +635,61 @@ function assertBuildSteps(buildJob) {
     windowsNativeHostEvidenceStep?.with?.path,
     "windows-native-host-gate-b",
     "Windows native host Gate B evidence upload",
+  );
+
+  const windowsPackagedEvidenceStep = stepByName(
+    steps,
+    "Validate Windows packaged Gate B evidence identity",
+  );
+  assertIncludes(
+    windowsPackagedEvidenceStep?.if,
+    "always()",
+    "Windows packaged evidence validator condition",
+  );
+  assertIncludes(
+    windowsPackagedEvidenceStep?.if,
+    "matrix.host_platform == 'win32'",
+    "Windows packaged evidence validator condition",
+  );
+  for (const required of [
+    "scripts/electron/windows-packaged-evidence.mjs",
+    "--squirrel-summary",
+    "--code-mode-summary",
+    "--native-host-summary",
+    "windows-packaged-evidence",
+  ]) {
+    assertIncludes(
+      windowsPackagedEvidenceStep?.run,
+      required,
+      "Windows packaged evidence validator",
+    );
+  }
+
+  const windowsPackagedEvidenceUploadStep = stepByName(
+    steps,
+    "Upload Windows packaged Gate B evidence identity",
+  );
+  assertIncludes(
+    windowsPackagedEvidenceUploadStep?.if,
+    "always()",
+    "Windows packaged evidence upload condition",
+  );
+  assertIncludes(
+    windowsPackagedEvidenceUploadStep?.if,
+    "matrix.host_platform == 'win32'",
+    "Windows packaged evidence upload condition",
+  );
+  if (
+    windowsPackagedEvidenceUploadStep?.uses !== "actions/upload-artifact@v4"
+  ) {
+    throw new Error(
+      "Windows packaged evidence must use actions/upload-artifact@v4",
+    );
+  }
+  assertIncludes(
+    windowsPackagedEvidenceUploadStep?.with?.path,
+    "windows-packaged-evidence",
+    "Windows packaged evidence upload",
   );
 }
 

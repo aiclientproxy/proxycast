@@ -191,6 +191,7 @@ function createResourceRoot({
     desktopManifest.native = {
       helper: {
         id: "macos-native-host",
+        protocolVersion: 1,
         path: "native/macos/macos-native-host",
         bundleIdentifier: "com.limecloud.lime.native-host",
         signedByForge: false,
@@ -471,6 +472,18 @@ describe("verify-electron-package-resources sidecar integrity", () => {
     ).toThrow(/automationAppleEvents must be true/u);
   });
 
+  it("拒绝缺少 native helper 协议版本的 macOS manifest", () => {
+    const root = createResourceRoot();
+    const manifestPath = path.join(root, "desktop-resources.manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    delete manifest.native.helper.protocolVersion;
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(() =>
+      verifyResourceRoot(root, { platform: "darwin", arch: "arm64" }),
+    ).toThrow(/native helper protocol version is unsupported/u);
+  });
+
   it("拒绝 macOS desktop resource applicationId 漂移", () => {
     const root = createResourceRoot();
     const manifestPath = path.join(root, "desktop-resources.manifest.json");
@@ -694,8 +707,8 @@ describe("verify-electron-package-resources sidecar integrity", () => {
     writeFileSync(manifestPath, JSON.stringify(manifest));
 
     expect(
-      verifyResourceRoot(root, { platform: "win32", arch: "x64" }).desktopManifest
-        .native.windowsHelper,
+      verifyResourceRoot(root, { platform: "win32", arch: "x64" })
+        .desktopManifest.native.windowsHelper,
     ).toMatchObject({ readOnly: true });
 
     manifest.native.windowsHelper.readOnly = false;

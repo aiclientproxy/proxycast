@@ -181,9 +181,6 @@ export function AppPageContent({
           projectId={agentPageParams.projectId}
           contentId={agentPageParams.contentId}
           initialSessionId={agentPageParams.initialSessionId}
-          initialSceneAppExecutionSummary={
-            agentPageParams.initialSceneAppExecutionSummary
-          }
           initialRequestMetadata={agentPageParams.initialRequestMetadata}
           initialAutoSendRequestMetadata={
             agentPageParams.initialAutoSendRequestMetadata

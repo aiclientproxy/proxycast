@@ -48,16 +48,16 @@ fn collect_rust_files(dir: &Path, files: &mut Vec<PathBuf>) {
 
 #[test]
 fn production_rust_code_should_not_bypass_protocol_projection() {
-    let src_tauri_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let rust_workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut files = Vec::new();
 
-    collect_rust_files(&src_tauri_root.join("src"), &mut files);
-    collect_rust_files(&src_tauri_root.join("crates"), &mut files);
+    collect_rust_files(&rust_workspace_root.join("src"), &mut files);
+    collect_rust_files(&rust_workspace_root.join("crates"), &mut files);
 
     let mut offenders = Vec::new();
     for file_path in files {
         let relative_path = file_path
-            .strip_prefix(&src_tauri_root)
+            .strip_prefix(&rust_workspace_root)
             .expect("相对路径转换失败");
         let relative_path_string = relative_path.to_string_lossy().replace('\\', "/");
         let Ok(content) = read_to_string(&file_path) else {

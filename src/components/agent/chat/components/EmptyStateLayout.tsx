@@ -68,6 +68,11 @@ const ComposerGlowFrame = styled.div`
   position: relative;
   isolation: isolate;
 
+  @media (max-height: 780px) {
+    margin-top: clamp(-48px, calc(100vh - 720px), 0px);
+    z-index: 60;
+  }
+
   &::after {
     content: "";
     position: absolute;
@@ -176,7 +181,11 @@ interface EmptyStateComposerFrameProps {
 export function EmptyStateComposerFrame({
   children,
 }: EmptyStateComposerFrameProps) {
-  return <ComposerGlowFrame>{children}</ComposerGlowFrame>;
+  return (
+    <ComposerGlowFrame data-testid="empty-state-composer-frame">
+      {children}
+    </ComposerGlowFrame>
+  );
 }
 
 interface EmptyStatePrimaryStackProps {

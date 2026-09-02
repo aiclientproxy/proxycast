@@ -209,7 +209,7 @@
 - 参考：
   - Claude Code：`COORDINATOR_MODE`
   - Lime：`internal/aiprompts/task-agent-taxonomy.md`
-  - Lime：`internal/exec-plans/claude-code-agent-task-runtime-alignment-plan.md`
+  - Lime：`internal/aiprompts/task-agent-taxonomy.md` 与 `internal/aiprompts/query-loop.md`
 - 期望：
   - 子代理过程在 GUI 中不重复、不吞最终答复。
   - 多代理结果有证据、归因和状态收敛。

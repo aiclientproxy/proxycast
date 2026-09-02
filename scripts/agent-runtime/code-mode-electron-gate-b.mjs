@@ -933,7 +933,9 @@ export async function runGateB(options) {
       proofLevel: "Gate B",
       claimBoundary:
         `${packagedExecutable ? "installed packaged" : "development"} Electron host/preload/IPC/App Server runtime/standalone code-mode-host process/read model/visible DOM with a controlled Responses fixture; not a live-provider or cross-platform packaged parity claim`,
+      candidateRunId: process.env.LIME_GATE_RUN_ID?.trim() || null,
       packagedExecutable: Boolean(packagedExecutable),
+      packagedExecutablePath: packagedExecutable,
       url: page.url(),
       identity: {
         sessionId: identity.sessionId,

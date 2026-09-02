@@ -74,7 +74,7 @@ Electron Desktop Host
 - 到期任务与“立即运行”都走同一真实 Thread/Turn/Item 链，且每次运行可追溯。
 - 暂停、恢复、编辑、删除、搜索、筛选、运行历史和失败恢复均可用。
 - 冷启动后任务、next-run 和历史一致；macOS 与 Windows 行为一致。
-- 旧“持续流程”入口、旧浏览器任务与旧 SceneApp 上下文完成迁出/删除，不形成双轨。
+- 旧“持续流程”入口、旧浏览器任务与已退役应用编排上下文完成迁出/删除，不形成双轨。
 - 通过 Rust related、contracts、current fixture、GUI smoke 与真实 Electron Gate B。
 
 ## 当前下一刀

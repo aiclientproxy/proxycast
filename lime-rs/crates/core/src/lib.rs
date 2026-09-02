@@ -53,7 +53,7 @@ pub mod provider_prompt_cache_support;
 // WebSocket 核心类型
 pub mod websocket;
 
-// 事件发射抽象（供独立 crate 解耦 Tauri 依赖）
+// 事件发射抽象（供独立 crate 解耦桌面宿主依赖）
 pub mod event_emit;
 
 // 网络工具

@@ -1,19 +1,15 @@
 # Skill Forge 启发下的 Lime 实施计划
 
 > 状态：P0-P10 第六刀完成；Read-Only HTTP API policy 已有 runtime evidence pack 端到端审计回归，并通过 GUI smoke
-> 更新时间：2026-05-07
+> 更新时间：2026-09-02
 > 目标：把 Skill Forge / workspace-local generated skill / Agent envelope 的落地拆成可执行阶段，确保实现不偏离 Lime current 主链。
 
 依赖文档：
 
 - [./README.md](./README.md)
-- [./coding-agent-layer.md](./coding-agent-layer.md)
-- [./architecture-review.md](./architecture-review.md)
-- [./diagrams.md](./diagrams.md)
-- [./prototype.md](./prototype.md)
 - [../../aiprompts/architecture.md](../../aiprompts/architecture.md)
-- [../../research/skill-forge/pivot-and-org-harness.md](../../research/skill-forge/pivot-and-org-harness.md)
-- [../../research/skill-forge/agent-product-model.md](../../research/skill-forge/agent-product-model.md)
+- [../../aiprompts/skill-standard.md](../../aiprompts/skill-standard.md)
+- [../../aiprompts/query-loop.md](../../aiprompts/query-loop.md)
 - [../../exec-plans/skill-forge-completion-audit.md](../../exec-plans/skill-forge-completion-audit.md)
 - [../../exec-plans/skill-forge-prompt-to-artifact-p5-plan.md](../../exec-plans/skill-forge-prompt-to-artifact-p5-plan.md)
 - [../../exec-plans/skill-forge-readonly-http-api-p6-audit.md](../../exec-plans/skill-forge-readonly-http-api-p6-audit.md)
@@ -112,8 +108,8 @@ Level 6: policy-approved scheduled external write
 
 任务：
 
-1. 新增 `internal/research/skill-forge/` 研究拆解。
-2. 新增 `internal/roadmap/skill-forge/` 路线图、实施计划和图纸。
+1. 把 Skill Forge 研究结论收敛到本路线图与 current 工程规则。
+2. 建立 `internal/roadmap/skill-forge/` 路线图与实施计划。
 3. 在文档中固定：`Skill Forge` 是生成阶段，不是 runtime。
 4. 在文档中固定：`Generated Capability Draft` 不是长期主类型。
 5. 在文档中固定：`Agent envelope` 是 Workspace 产品组合面，不是执行实体。
@@ -128,7 +124,7 @@ Level 6: policy-approved scheduled external write
 
 ## 2.5 P0.5：实现前架构补强
 
-目标：进入代码前，先补齐 [./architecture-review.md](./architecture-review.md) 指出的硬边界，避免 P1A 变成不可治理的“生成脚本”。
+目标：进入代码前先固定 draft、verification、registration 与 runtime binding 硬边界，避免 P1A 变成不可治理的“生成脚本”。
 
 任务：
 
@@ -371,10 +367,8 @@ P1 不做完整独立 Coding Agent。首期只做受控的 `Capability Authoring
 参考研究：
 
 - [../../research/codex-goal/README.md](../../research/codex-goal/README.md)
-- [../../research/skill-forge/pivot-and-org-harness.md](../../research/skill-forge/pivot-and-org-harness.md)
-- [../../research/skill-forge/agent-product-model.md](../../research/skill-forge/agent-product-model.md)
-- [./coding-agent-layer.md](./coding-agent-layer.md)
-- [./architecture-review.md](./architecture-review.md)
+- [../../aiprompts/architecture.md](../../aiprompts/architecture.md)
+- [../../aiprompts/query-loop.md](../../aiprompts/query-loop.md)
 
 ### 6.1 固定定义
 

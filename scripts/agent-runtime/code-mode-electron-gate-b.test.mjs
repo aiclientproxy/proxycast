@@ -351,6 +351,8 @@ describe("CodeMode Electron Gate B", () => {
     expect(source).toContain('backendMode: "runtime"');
     expect(source).toContain('APP_SERVER_BIN: ""');
     expect(source).toContain("--electron-executable");
+    expect(source).toContain("candidateRunId: process.env.LIME_GATE_RUN_ID");
+    expect(source).toContain("packagedExecutablePath: packagedExecutable");
     expect(source).toContain("HTTP_PROXY");
     expect(source).toContain('modelToolMode: "code_mode"');
     expect(source).toContain('"custom_tools"');

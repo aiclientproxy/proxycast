@@ -786,13 +786,13 @@ describe("modelRegistry API", () => {
 
   it("模型偏好写链缺少 App Server current owner 时应 fail closed", async () => {
     await expect(toggleModelFavorite("gpt-4.1")).rejects.toThrow(
-      "toggleModelFavorite 尚未接入 App Server model preference current 写链；旧 Tauri 模型注册表业务命令已退役。",
+      "toggleModelFavorite 尚未接入 App Server model preference current 写链；旧桌面宿主模型注册表命令已退役。",
     );
     await expect(hideModel("gpt-4.1")).rejects.toThrow(
-      "hideModel 尚未接入 App Server model preference current 写链；旧 Tauri 模型注册表业务命令已退役。",
+      "hideModel 尚未接入 App Server model preference current 写链；旧桌面宿主模型注册表命令已退役。",
     );
     await expect(recordModelUsage("gpt-4.1")).rejects.toThrow(
-      "recordModelUsage 尚未接入 App Server model preference current 写链；旧 Tauri 模型注册表业务命令已退役。",
+      "recordModelUsage 尚未接入 App Server model preference current 写链；旧桌面宿主模型注册表命令已退役。",
     );
     expect(appServerRequestMock).not.toHaveBeenCalled();
     expect(safeInvoke).not.toHaveBeenCalled();

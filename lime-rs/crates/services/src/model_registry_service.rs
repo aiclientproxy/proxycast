@@ -15,10 +15,10 @@ use lime_core::image_generation_matcher::is_likely_image_generation_search_text;
 use lime_core::models::model_registry::{
     EnhancedModelMetadata, ModelAliasSource, ModelCapabilities, ModelCapabilityProvenance,
     ModelDeploymentSource, ModelLimits, ModelManagementPlane, ModelModality,
-    ModelReasoningEffortOption, ModelReasoningEffortSource, ModelReasoningEffortSupport,
-    ModelRuntimeFeature, ModelServiceTier, ModelSource, ModelStatus, ModelSyncState,
-    ModelTaskFamily, ModelTier, ModelVisibility, ProviderAliasConfig, ProviderModelConfig,
-    UserModelPreference,
+    ModelMultiAgentVersion, ModelReasoningEffortOption, ModelReasoningEffortSource,
+    ModelReasoningEffortSupport, ModelRuntimeFeature, ModelServiceTier, ModelSource, ModelStatus,
+    ModelSyncState, ModelTaskFamily, ModelTier, ModelVisibility, ProviderAliasConfig,
+    ProviderModelConfig, UserModelPreference,
 };
 use model_provider::canonical::{maybe_get_canonical_model, CanonicalModel};
 use model_provider::provider_url::{lime_tenant_id_from_base_url, LIME_TENANT_HEADER};
@@ -48,6 +48,15 @@ enum ModelFetchProtocol {
     Gemini,
     Ollama,
     Unsupported,
+}
+
+fn parse_multi_agent_version(value: Option<&str>) -> Option<ModelMultiAgentVersion> {
+    match value.map(str::trim).filter(|value| !value.is_empty()) {
+        Some("disabled") => Some(ModelMultiAgentVersion::Disabled),
+        Some("v1") => Some(ModelMultiAgentVersion::V1),
+        Some("v2") => Some(ModelMultiAgentVersion::V2),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -3111,12 +3120,19 @@ impl ModelRegistryService {
                 provider_name: None,
                 family: None,
                 context_length: None,
+                context_window: None,
+                max_context_window: None,
+                auto_compact_token_limit: None,
+                effective_context_window_percent: None,
                 task_families: None,
                 input_modalities: None,
                 output_modalities: None,
                 modalities: None,
                 runtime_features: None,
                 tool_mode: None,
+                multi_agent_version: None,
+                model_messages: None,
+                multi_agent_reasoning_effort: None,
                 vision_supported: None,
                 capabilities: None,
                 supported_parameters: None,
@@ -3211,12 +3227,19 @@ impl ModelRegistryService {
                 provider_name: None,
                 family: None,
                 context_length: model.input_token_limit,
+                context_window: None,
+                max_context_window: None,
+                auto_compact_token_limit: None,
+                effective_context_window_percent: None,
                 task_families: None,
                 input_modalities: None,
                 output_modalities: None,
                 modalities: None,
                 runtime_features: None,
                 tool_mode: None,
+                multi_agent_version: None,
+                model_messages: None,
+                multi_agent_reasoning_effort: None,
                 vision_supported: None,
                 capabilities: None,
                 supported_parameters: None,
@@ -3254,12 +3277,19 @@ impl ModelRegistryService {
                 provider_name: None,
                 family: model.details.and_then(|details| details.family),
                 context_length: None,
+                context_window: None,
+                max_context_window: None,
+                auto_compact_token_limit: None,
+                effective_context_window_percent: None,
                 task_families: None,
                 input_modalities: None,
                 output_modalities: None,
                 modalities: None,
                 runtime_features: None,
                 tool_mode: None,
+                multi_agent_version: None,
+                model_messages: None,
+                multi_agent_reasoning_effort: None,
                 vision_supported: None,
                 capabilities: None,
                 supported_parameters: None,
@@ -3434,7 +3464,9 @@ impl ModelRegistryService {
             output_modalities: taxonomy.output_modalities,
             runtime_features: taxonomy.runtime_features,
             tool_mode,
-            multi_agent_version: None,
+            multi_agent_version: parse_multi_agent_version(model.multi_agent_version.as_deref()),
+            model_messages: model.model_messages,
+            multi_agent_reasoning_effort: model.multi_agent_reasoning_effort,
             deployment_source: taxonomy.deployment_source,
             management_plane: taxonomy.management_plane,
             canonical_model_id: taxonomy.canonical_model_id,
@@ -3442,7 +3474,10 @@ impl ModelRegistryService {
             alias_source: taxonomy.alias_source,
             pricing: None,
             limits: ModelLimits {
-                context_length: model.context_length,
+                context_length: model.context_length.or(model.context_window),
+                max_context_length: model.max_context_window,
+                auto_compact_token_limit: model.auto_compact_token_limit,
+                effective_context_window_percent: model.effective_context_window_percent,
                 max_output_tokens: None,
                 requests_per_minute: None,
                 tokens_per_minute: None,
@@ -3487,12 +3522,19 @@ impl ModelRegistryService {
                     provider_name: Some(provider_id.to_string()),
                     family: None,
                     context_length: None,
+                    context_window: None,
+                    max_context_window: None,
+                    auto_compact_token_limit: None,
+                    effective_context_window_percent: None,
                     task_families: None,
                     input_modalities: None,
                     output_modalities: None,
                     modalities: None,
                     runtime_features: None,
                     tool_mode: None,
+                    multi_agent_version: None,
+                    model_messages: None,
+                    multi_agent_reasoning_effort: None,
                     vision_supported: None,
                     capabilities: None,
                     supported_parameters: None,
@@ -3685,6 +3727,14 @@ struct ApiModelResponse {
     family: Option<String>,
     #[serde(default)]
     context_length: Option<u32>,
+    #[serde(default, alias = "contextWindow")]
+    context_window: Option<u32>,
+    #[serde(default, alias = "maxContextWindow", alias = "max_context_length")]
+    max_context_window: Option<u32>,
+    #[serde(default, alias = "autoCompactTokenLimit")]
+    auto_compact_token_limit: Option<u32>,
+    #[serde(default, alias = "effectiveContextWindowPercent")]
+    effective_context_window_percent: Option<u32>,
     #[serde(default, alias = "taskFamilies")]
     task_families: Option<serde_json::Value>,
     #[serde(
@@ -3707,6 +3757,16 @@ struct ApiModelResponse {
     runtime_features: Option<serde_json::Value>,
     #[serde(default, alias = "toolMode")]
     tool_mode: Option<String>,
+    #[serde(default, alias = "multiAgentVersion", alias = "multi_agent_version")]
+    multi_agent_version: Option<String>,
+    #[serde(default, alias = "modelMessages", alias = "model_messages")]
+    model_messages: Option<serde_json::Value>,
+    #[serde(
+        default,
+        alias = "multiAgentReasoningEffort",
+        alias = "multi_agent_reasoning_effort"
+    )]
+    multi_agent_reasoning_effort: Option<String>,
     #[serde(
         default,
         alias = "visionSupported",
@@ -3897,8 +3957,8 @@ mod tests {
     use lime_core::database::DbConnection;
     use lime_core::models::model_registry::{
         EnhancedModelMetadata, ModelCapabilities, ModelCapabilityProvenance, ModelModality,
-        ModelReasoningEffortSource, ModelRuntimeFeature, ModelSource, ModelTaskFamily,
-        ModelVisibility, ProviderModelConfig,
+        ModelMultiAgentVersion, ModelReasoningEffortSource, ModelRuntimeFeature, ModelSource,
+        ModelTaskFamily, ModelVisibility, ProviderModelConfig,
     };
     use model_provider::provider_url::LIME_TENANT_HEADER;
     use rusqlite::{params, Connection};
@@ -4130,6 +4190,49 @@ mod tests {
                 .runtime_features
                 .contains(&ModelRuntimeFeature::ToolCalling));
         }
+    }
+
+    #[test]
+    fn model_catalog_preserves_model_owned_messages_and_multi_agent_metadata() {
+        let (service, _db) = setup_cache_service();
+        let response = ModelRegistryService::parse_openai_models_response(
+            r#"{"data":[{"id":"gpt-5.6-sol","multi_agent_version":"v2","multi_agent_reasoning_effort":"high","model_messages":{"instructions_template":"model-owned instructions","multi_agent":{"mode":{"proactive":"delegate independently"}}}}]}"#,
+        )
+        .expect("parse model catalog response");
+        let model = service.convert_api_model(
+            response.into_iter().next().expect("catalog model"),
+            "openai",
+            0,
+        );
+
+        assert_eq!(model.multi_agent_version, Some(ModelMultiAgentVersion::V2));
+        assert_eq!(model.multi_agent_reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(
+            model
+                .model_messages
+                .as_ref()
+                .and_then(|messages| messages["instructions_template"].as_str()),
+            Some("model-owned instructions")
+        );
+    }
+
+    #[test]
+    fn model_catalog_preserves_codex_context_limits() {
+        let (service, _db) = setup_cache_service();
+        let response = ModelRegistryService::parse_openai_models_response(
+            r#"{"data":[{"id":"gpt-5.6-sol","context_window":272000,"max_context_window":872000,"auto_compact_token_limit":240000,"effective_context_window_percent":80}]}"#,
+        )
+        .expect("parse model catalog response");
+        let model = service.convert_api_model(
+            response.into_iter().next().expect("catalog model"),
+            "openai",
+            0,
+        );
+
+        assert_eq!(model.limits.context_length, Some(272_000));
+        assert_eq!(model.limits.max_context_length, Some(872_000));
+        assert_eq!(model.limits.auto_compact_token_limit, Some(240_000));
+        assert_eq!(model.limits.effective_context_window_percent, Some(80));
     }
 
     #[test]

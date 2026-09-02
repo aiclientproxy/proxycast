@@ -39,7 +39,7 @@
 
 **后续新增 remote 能力时，只允许接到 `消息渠道 runtime` 或 `浏览器连接器 / ChromeBridge` 这两条 current ingress；不允许再造第三条并列 remote runtime。**
 
-补充迁移边界：本页保留的 `lime-rs/src/commands/*_cmd.rs` 只用于定位旧 Tauri wrapper 或迁移期命令面，不表示 `lime-rs/src/commands/**` 仍是 remote runtime 的实现目录。新增 remote control plane、agent/browser runtime 或跨 App remote 能力应进入 App Server / RuntimeCore / services；桌面壳、浏览器窗口、CDP 和系统打开能力进入 Electron Desktop Host。旧 wrapper 只允许迁出、撤注册、删除，删不动时登记 blocker。
+补充边界：`lime-rs/src/commands/**` 已物理删除，只允许作为负向回流守卫或不可变历史 evidence 出现。新增 remote control plane、agent/browser runtime 或跨 App remote 能力应进入 App Server / RuntimeCore / services；桌面壳、浏览器窗口、CDP 和系统打开能力进入 Electron Desktop Host。
 
 ## 代码入口地图
 
@@ -102,8 +102,8 @@ OpenClaw 安装、Gateway、Dashboard 与运行态管理模块已经判定为 `d
 
 当前这里负责：
 
-1. Rust `lime-rs/src/dev_bridge.rs` 仅在 `debug_assertions` 下提供旧 `3030` HTTP 桥
-2. Rust `lime-rs/src/dev_bridge/dispatcher/**` 只作为旧 Tauri command facade 的迁移来源和清理对象
+1. Rust `lime-rs/src/dev_bridge.rs` 与 `lime-rs/src/dev_bridge/dispatcher/**` 已物理删除，不得恢复旧 `3030` HTTP 桥或 Tauri command facade
+2. 已删除路径只允许出现在负向回流守卫或不可变历史 evidence 中
 3. 前端 `src/lib/dev-bridge/safeInvoke.ts` / `http-client.ts` 仍是 renderer 进入 Electron Desktop Host / App Server JSON-RPC 的 current 传输、可用性探测、事件监听和错误追踪边界
 4. 前端 `src/lib/dev-bridge/commandPolicy.ts` 只承接旧命令 truth / no-mock fallback 的迁移期分类，不是 remote runtime 事实源
 

@@ -88,8 +88,6 @@ export function createBaseParams(overrides: Record<string, unknown> = {}) {
         overrides.creationReplaySurface === undefined
           ? null
           : (overrides.creationReplaySurface as never),
-      sceneAppExecutionSummaryCard:
-        overrides.sceneAppExecutionSummaryCard as React.ReactNode,
       serviceSkillExecutionCard:
         overrides.serviceSkillExecutionCard as React.ReactNode,
       emptyStateProps: {
@@ -115,7 +113,6 @@ export function createBaseParams(overrides: Record<string, unknown> = {}) {
     },
     entryBannerVisible: false,
     entryBannerMessage: undefined,
-    sceneAppExecutionSummaryCard: undefined,
     serviceSkillExecutionCard: undefined,
     contextWorkspaceEnabled: false,
     canonicalChildren: overrides.canonicalChildren ?? [],

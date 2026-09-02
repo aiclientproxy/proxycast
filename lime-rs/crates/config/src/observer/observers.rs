@@ -1,7 +1,7 @@
 //! 内置配置观察者实现
 //!
 //! 提供常用组件的配置观察者。
-//! TauriObserver 保留在主 crate（依赖 Tauri）。
+//! 宿主事件转发由 App Server 边界负责。
 
 use super::events::ConfigChangeEvent;
 use super::traits::ConfigObserver;

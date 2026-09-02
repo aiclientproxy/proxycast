@@ -1,6 +1,6 @@
 //! 语音文本润色
 //!
-//! 提供与 Tauri 无关的文本模板处理和本地 LLM 调用能力。
+//! 提供与桌面宿主无关的文本模板处理和本地 LLM 调用能力。
 
 /// 语音润色的 System Prompt
 pub const VOICE_POLISH_SYSTEM_PROMPT: &str = r#"你是一个语音转文字的后处理助手。

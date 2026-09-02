@@ -7,6 +7,7 @@ pub mod lowering;
 pub mod provider_capabilities;
 pub mod provider_stream;
 pub mod provider_url;
+pub mod reasoning_effort;
 pub mod runtime_provider;
 pub mod safety;
 pub mod video;

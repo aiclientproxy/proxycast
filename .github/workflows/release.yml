@@ -398,6 +398,27 @@ jobs:
             --platform "${{ matrix.host_platform }}" \
             --arch "${{ matrix.arch }}"
 
+      - name: Run packaged macOS native host Gate B
+        if: matrix.host_platform == 'darwin'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_EXECUTABLE="release-electron/Lime-darwin-${{ matrix.arch }}/Lime.app/Contents/MacOS/Lime"
+          test -x "$APP_EXECUTABLE"
+          node scripts/electron/macos-native-host-gate-b.mjs \
+            --electron-executable "$APP_EXECUTABLE" \
+            --arch "${{ matrix.arch }}" \
+            --evidence-dir ".lime/qc/gui-evidence/macos-native-host-gate-b-${{ matrix.arch }}"
+
+      - name: Upload packaged macOS native host Gate B evidence
+        if: ${{ always() && matrix.host_platform == 'darwin' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-native-host-gate-b-evidence-${{ matrix.arch }}
+          path: .lime/qc/gui-evidence/macos-native-host-gate-b-${{ matrix.arch }}
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Stage Electron release assets
         shell: bash
         env:
@@ -465,6 +486,8 @@ jobs:
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
           CODE_MODE_GATE_EXECUTABLE="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));const executable=summary.evidence?.installation?.executable;if(!executable)throw new Error('Windows Squirrel evidence is missing the installed executable');process.stdout.write(executable);")"
+          CANDIDATE_RUN_ID="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));if(!summary.candidateRunId)throw new Error('Windows Squirrel evidence is missing candidateRunId');process.stdout.write(summary.candidateRunId);")"
+          export LIME_GATE_RUN_ID="$CANDIDATE_RUN_ID"
           node scripts/agent-runtime/code-mode-electron-gate-b.mjs \
             --electron-executable "$CODE_MODE_GATE_EXECUTABLE" \
             --output ".lime/qc/gui-evidence/code-mode-electron-gate-b-windows/code-mode-electron-gate-b-summary.json" \
@@ -477,10 +500,25 @@ jobs:
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
           NATIVE_HOST_GATE_EXECUTABLE="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));const executable=summary.evidence?.installation?.executable;if(!executable)throw new Error('Windows Squirrel evidence is missing the installed executable');process.stdout.write(executable);")"
+          CANDIDATE_RUN_ID="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));if(!summary.candidateRunId)throw new Error('Windows Squirrel evidence is missing candidateRunId');process.stdout.write(summary.candidateRunId);")"
+          export LIME_GATE_RUN_ID="$CANDIDATE_RUN_ID"
           node scripts/electron/windows-native-host-gate-b.mjs \
             --electron-executable "$NATIVE_HOST_GATE_EXECUTABLE" \
             --evidence-dir ".lime/qc/gui-evidence/windows-native-host-gate-b" \
             --timeout-ms 120000
+
+      - name: Validate Windows packaged Gate B evidence identity
+        if: ${{ always() && matrix.host_platform == 'win32' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          node scripts/electron/windows-packaged-evidence.mjs \
+            --version "$VERSION" \
+            --squirrel-summary ".lime/qc/windows-squirrel-rc/$VERSION/summary.json" \
+            --code-mode-summary ".lime/qc/gui-evidence/code-mode-electron-gate-b-windows/code-mode-electron-gate-b-summary.json" \
+            --native-host-summary ".lime/qc/gui-evidence/windows-native-host-gate-b/summary.json" \
+            --output ".lime/qc/gui-evidence/windows-packaged-evidence/$VERSION/summary.json"
 
       - name: Upload Windows Squirrel RC evidence
         if: ${{ always() && matrix.host_platform == 'win32' }}
@@ -506,6 +544,15 @@ jobs:
         with:
           name: windows-native-host-gate-b-evidence-${{ matrix.target }}
           path: .lime/qc/gui-evidence/windows-native-host-gate-b
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Windows packaged Gate B evidence identity
+        if: ${{ always() && matrix.host_platform == 'win32' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packaged-evidence-${{ matrix.target }}
+          path: .lime/qc/gui-evidence/windows-packaged-evidence
           if-no-files-found: warn
           retention-days: 7
 

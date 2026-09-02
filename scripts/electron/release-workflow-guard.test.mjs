@@ -132,6 +132,20 @@ describe("Electron release workflow guard", () => {
     );
   });
 
+  it("rejects release workflow without packaged macOS native host Gate B", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        /      - name: Run packaged macOS native host Gate B[\s\S]*?          retention-days: 7\n\n/,
+        "",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /macOS native host Gate B condition must include matrix\.host_platform == 'darwin'/,
+    );
+  });
+
   it("rejects release workflow without explicit desktop resource manifest gate", () => {
     const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
     const workflowPath = tempWorkflowPath(

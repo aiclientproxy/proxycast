@@ -147,11 +147,9 @@ function isCuratedTaskReferenceCategory(
 }
 
 function normalizeCuratedTaskReferenceSourceKind(
-  value: unknown,
+  _value: unknown,
 ): CuratedTaskReferenceEntry["sourceKind"] {
-  return value === "sceneapp_execution_summary"
-    ? "sceneapp_execution_summary"
-    : "memory";
+  return "memory";
 }
 
 function readCuratedTaskLaunchInputValues(

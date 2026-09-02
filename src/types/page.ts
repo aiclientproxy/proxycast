@@ -9,7 +9,6 @@
 
 import type { SettingsTabs } from "./settings";
 import type { SkillScaffoldTarget } from "@/lib/api/skills";
-import type { SceneAppExecutionSummaryViewModel } from "@/lib/agent/legacySceneAppExecutionSummary";
 import type { InputCapabilitySendRoute } from "@/components/agent/chat/skill-selection/inputCapabilitySelection";
 
 export type WorkspaceTheme = "general";
@@ -60,8 +59,6 @@ export interface AgentPageParams {
   contentId?: string;
   /** 进入 Agent 后优先恢复到指定会话 */
   initialSessionId?: string;
-  /** 从创作场景进入生成时透传的执行摘要 */
-  initialSceneAppExecutionSummary?: SceneAppExecutionSummaryViewModel;
   initialRequestMetadata?: Record<string, unknown>;
   initialAutoSendRequestMetadata?: Record<string, unknown>;
   autoRunInitialPromptOnMount?: boolean;

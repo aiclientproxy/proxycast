@@ -66,7 +66,7 @@
 
 验收：
 
-- 文档明确回链 `internal/roadmap/memory/make-next-generation-more-like-me.md`。
+- 文档明确回链 `internal/roadmap/memory/README.md`。
 - 文档使用 `current / compat / deprecated / dead` 分类语言。
 - 文档明确不新增平行事实源。
 

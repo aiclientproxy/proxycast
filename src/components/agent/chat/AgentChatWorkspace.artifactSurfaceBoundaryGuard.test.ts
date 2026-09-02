@@ -4,7 +4,7 @@ import process from "node:process";
 import { describe, expect, it } from "vitest";
 
 describe("AgentChatWorkspace artifact surface runtime boundary", () => {
-  it("scene app surface 必须由 artifact surface runtime 提供", () => {
+  it("artifact 交互必须由 artifact surface runtime 提供", () => {
     const workspaceSource = [
       "src/components/agent/chat/useAgentChatWorkspaceRuntime.tsx",
       "src/components/agent/chat/workspace/useAgentChatWorkspaceEntryRuntime.ts",
@@ -39,18 +39,10 @@ describe("AgentChatWorkspace artifact surface runtime boundary", () => {
       "useWorkspaceArtifactSurfaceRuntime({",
     );
     expect(ownerSource.split("\n").length).toBeLessThan(180);
-    for (const retiredWorkspaceArtifactSurfaceGlue of [
-      "useWorkspaceSceneAppExecutionSurfaceRuntime(",
-      "const handleJumpToTimelineItem = useCallback(",
-    ]) {
-      expect(workspaceSource).not.toContain(
-        retiredWorkspaceArtifactSurfaceGlue,
-      );
-      expect(interactionOwnerSource).not.toContain(
-        retiredWorkspaceArtifactSurfaceGlue,
-      );
-      expect(ownerSource).toContain(retiredWorkspaceArtifactSurfaceGlue);
-    }
+    const timelineJumpOwner = "const handleJumpToTimelineItem = useCallback(";
+    expect(workspaceSource).not.toContain(timelineJumpOwner);
+    expect(interactionOwnerSource).not.toContain(timelineJumpOwner);
+    expect(ownerSource).toContain(timelineJumpOwner);
     expect(workspaceSource).not.toContain(
       "useWorkspaceServiceSkillExecutionCardRuntime(",
     );

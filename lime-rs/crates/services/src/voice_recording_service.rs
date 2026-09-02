@@ -1,7 +1,7 @@
 //! 录音服务桥接层
 //!
 //! 录音核心逻辑已迁移到 `voice-core` 的 `threaded_recorder` 模块。
-//! 本模块保留 Tauri State 包装和向后兼容导出路径。
+//! 本模块提供共享状态包装与稳定导出路径。
 
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ pub fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>, String> {
     voice_core::list_audio_devices().map_err(|e| e.to_string())
 }
 
-/// 全局录音服务状态（Tauri State 包装）
+/// 全局录音服务共享状态
 pub struct RecordingServiceState(pub Arc<Mutex<RecordingService>>);
 
 impl RecordingServiceState {

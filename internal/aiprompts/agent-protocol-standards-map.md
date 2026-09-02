@@ -76,7 +76,7 @@ Codex 是 Lime Agent runtime 的唯一实现参考。本文列出的 Agent Evide
 | 候选标准 | 建议名称 | 为什么值得拆 | 当前 Lime 事实源 | 拆分状态 |
 | --- | --- | --- | --- | --- |
 | Evaluation / Benchmark | Agent Evaluation | acceptance scenarios、provider E2E、quality review、harness evals、rubric 与 evidence 可复用 | `../test/harness-evals.md`、`../roadmap/knowledge/completion-audit-20260508.md` | 候选，适合从 Evidence 扩展 |
-| Workflow / Scene | Agent Workflow | ServiceSkill scene、功能方案包、multi-step content workflow、browser-grounded scene 需要 portable workflow facts | `command-runtime.md`、`../roadmap/limenextv2/README.md` | 中期候选 |
+| Workflow / Scene | Agent Workflow | ServiceSkill scene、功能方案包、multi-step content workflow、browser-grounded scene 需要 portable workflow facts | `command-runtime.md`、`task-agent-taxonomy.md` | 中期候选 |
 | Model Routing / Economy | Agent Model Routing | provider registry、model profile、cost、quota、fallback、task profile 有通用标准价值 | `providers.md`、`credential-pool.md`、`../roadmap/task/model-routing.md` | 中期候选 |
 | Connector / Channel | Agent Channel | remote runtime、A2A peer、webhook、deep link、browser session、desktop bridge 都是跨系统通道 | `remote-runtime.md`、`../content/08.open-platform/4.connect.md` | 中期候选 |
 | UI Theme / Design Tokens | Agent Design Surface | Agent UI 定义语义，不定义视觉；但跨 Agent 产品可能需要 design token / accessibility / density 标准 | `design-language.md` | 低优先级，除非多端复用稳定 |

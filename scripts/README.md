@@ -131,6 +131,20 @@ npm run test:rust:layers:stats
 
 macOS 上统一 Rust runner 会在调用者未设置时为 Cargo test worker 提供 `RUST_MIN_STACK=8388608`，与 App Server 大型 async fixture 的仓库验证口径一致；调用者显式设置的非空值始终优先。
 
+### Codex sandboxed Rusty V8 资产
+
+启用 `v8_enable_sandbox` 的 Rust 构建必须使用 Codex 发布的
+`rusty-v8-v<version>` 资产。`scripts/lib/rusty-v8-artifacts.mjs` 从
+`lime-rs/Cargo.lock` 读取精确版本，下载匹配 target 的 archive、binding 和 checksum，
+校验 SHA-256 后注入成对的 `RUSTY_V8_ARCHIVE` / `RUSTY_V8_SRC_BINDING_PATH`。
+默认缓存使用 macOS `~/Library/Caches/Lime/rusty-v8`、Windows
+`%LOCALAPPDATA%\Lime\Cache\rusty-v8` 和 Linux `XDG_CACHE_HOME/lime/rusty-v8`，
+也可通过 `LIME_RUSTY_V8_CACHE_DIR` 覆盖。
+
+不要把 `RUSTY_V8_MIRROR` 指向 Codex release 根路径：`v8` crate 会拼接 Deno
+风格的 `/v<version>`，而 Codex 资产位于 `/rusty-v8-v<version>`。Rust 验证应使用
+`npm run test:rust:*` 或 `npm run verify:local`，只有显式使用已校验成对路径时才直接运行 Cargo。
+
 新增 Rust 测试治理脚本优先进入 `scripts/lib/` 或未来已登记的 `scripts/governance/` / Rust 领域目录；不要继续向 `scripts/` 根目录添加平级 runner。
 
 ### MCP 脚本
@@ -236,7 +250,7 @@ npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000
 
 ### Electron 脚本
 
-Electron release / updater 领域新增脚本进入 `scripts/electron/`。当前 `scripts/electron/update-feed-r2-upload-plan.mjs` 负责 R2 updater 上传计划，`scripts/electron/make-zip-local-feed.mjs` 负责用本地临时 feed 验证 Forge macOS ZIP / `RELEASES.json` 生成链路，`scripts/electron/windows-squirrel-rc-smoke.mjs` 负责 Windows N-1 Setup -> current updater -> candidate packaged `SHELL-01` 的 L8 证据，`scripts/electron/windows-native-host-gate-b.mjs` 负责从已安装 `Lime.exe` 启动 Windows native host，校验资源 digest，并验证 UI Automation、窗口/显示枚举、display watcher 和 Raw Input 启停；`scripts/electron/release-workflow-guard.mjs` 负责结构化校验 GitHub Actions release workflow 的 Forge maker、签名、公证、Windows Squirrel 与旧链路拒绝规则。N-1 的 CDP 与隔离 feed 驱动只属于 `scripts/electron/lib/windows-squirrel-n-minus-one.mjs` 测试 helper，不是 production updater API。
+ Electron release / updater 领域新增脚本进入 `scripts/electron/`。当前 `scripts/electron/update-feed-r2-upload-plan.mjs` 负责 R2 updater 上传计划，`scripts/electron/make-zip-local-feed.mjs` 负责用本地临时 feed 验证 Forge macOS ZIP / `RELEASES.json` 生成链路，`scripts/electron/windows-squirrel-rc-smoke.mjs` 负责 Windows N-1 Setup -> current updater -> candidate packaged `SHELL-01` 的 L8 证据，`scripts/electron/windows-native-host-gate-b.mjs` 负责从已安装 `Lime.exe` 启动 Windows native host，校验资源 digest，并验证 UI Automation、窗口/显示枚举、display watcher 和 Raw Input 启停，`scripts/electron/macos-native-host-gate-b.mjs` 负责从已安装 `Lime.app` 校验 helper bundle、协议握手、签名/digest、窗口/显示、真实 security-scoped bookmark create/resolve/start/stop、在临时 Cocoa fixture 上验证窗口 anchor/stack/hide-for-task lease、权限查询和 Launch Services（默认 observe；未授权时窗口编排为 skipped，`--strict-permissions` 才要求 Accessibility、Input Monitoring、Screen Recording 和选定 Apple Events target ready），并在同一候选 app 上启动真实 Electron，通过 preload/IPC 调用 `macos_native_host_invoke`、`app_server_handle_json_lines`，验证 App Server workspace identity、GUI shell 和截图；`scripts/electron/release-workflow-guard.mjs` 负责结构化校验 GitHub Actions release workflow 的 Forge maker、签名、公证、Windows Squirrel 与旧链路拒绝规则。N-1 的 CDP 与隔离 feed 驱动只属于 `scripts/electron/lib/windows-squirrel-n-minus-one.mjs` 测试 helper，不是 production updater API。
 
 `scripts/lib/windows-restricted-execution-evidence.mjs` 是 Windows restricted-token 安全矩阵的唯一证据采集入口。真实 clean Windows runner 必须显式传 `--provision`，由同一入口先在隔离 `LIME_AGENT_RUNTIME_ROOT` 执行 `windows-sandbox-setup`，再执行 `tool-runtime` 的 `windows_restricted_execution` integration test；未显式 provision、setup 失败或矩阵不完整都 fail-closed。schema `windows-restricted-execution-evidence-v3` 分别记录 setup/test 结果与 stdout/stderr artifact；矩阵覆盖 workspace/metadata denial、online/offline account 选择、offline Firewall loopback enforcement、bounded output、allowlisted stdin、ConPTY stdin/resize/combined-output、Everyone-write ACL audit 与 Job Object cleanup。setup 与 Cargo 各有固定超时，Windows ACL audit 对目录/总量/时限上限或 reparse 元数据错误会发出 `failedScan` warning。非 Windows 主机只输出 `evidence-pending` 并以非零退出，不能被当作平台通过。
 

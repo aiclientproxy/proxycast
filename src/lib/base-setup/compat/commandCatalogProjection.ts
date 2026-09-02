@@ -16,9 +16,7 @@ function resolveCommandExecutionKind(
 ): NonNullable<SkillCatalogCommandEntry["binding"]>["executionKind"] {
   const explicitExecutionKind = projection.commandBinding?.executionKind;
   if (explicitExecutionKind) {
-    return explicitExecutionKind === "cloud_scene"
-      ? "agent_turn"
-      : explicitExecutionKind;
+    return explicitExecutionKind;
   }
 
   switch (bindingProfile.bindingFamily) {
@@ -26,8 +24,6 @@ function resolveCommandExecutionKind(
       return "native_skill";
     case "automation_job":
       return "automation_job";
-    case "cloud_scene":
-      return "agent_turn";
     default:
       return "agent_turn";
   }
@@ -43,15 +39,6 @@ function resolveCommandRenderContract(
   if (projection.commandRenderContract) {
     return {
       ...projection.commandRenderContract,
-    };
-  }
-
-  if (bindingProfile.bindingFamily === "cloud_scene") {
-    return {
-      resultKind: "tool_timeline",
-      detailKind: "scene_detail",
-      supportsStreaming: true,
-      supportsTimeline: true,
     };
   }
 

@@ -12,10 +12,10 @@ import {
 } from "../utils/reviewFeedbackProjection";
 import type { CuratedTaskRecommendationSignal } from "../utils/curatedTaskRecommendationSignals";
 import {
-  buildSceneAppExecutionCuratedTaskFollowUpAction,
-  buildSceneAppExecutionReviewPrefillHighlights,
-  buildSceneAppExecutionReviewPrefillSnapshot,
-} from "../utils/sceneAppCuratedTaskReference";
+  buildCuratedTaskFollowUpActionFromReferences,
+  buildCuratedTaskResultBaselineHighlights,
+  buildCuratedTaskResultBaselineSnapshot,
+} from "../utils/curatedTaskResultBaseline";
 import type { GeneralWorkbenchFollowUpActionPayload } from "./generalWorkbenchSidebarContract";
 import type { GeneralWorkbenchRunMetadataSummary } from "./generalWorkbenchWorkflowData";
 import type {
@@ -302,13 +302,13 @@ export function buildReviewFeedbackFollowUpActionPayload(params: {
   const referenceEntries = params.curatedTask?.referenceEntries;
   const referenceMemoryIds = params.curatedTask?.referenceMemoryIds;
   const launchInputValues = params.curatedTask?.launchInputValues;
-  const sceneAppPayload = buildSceneAppExecutionCuratedTaskFollowUpAction({
+  const referencePayload = buildCuratedTaskFollowUpActionFromReferences({
     taskId: primarySuggestedTask.taskId,
     inputValues: launchInputValues,
     referenceEntries,
   });
-  if (sceneAppPayload) {
-    return sceneAppPayload;
+  if (referencePayload) {
+    return referencePayload;
   }
 
   const targetTask = findCuratedTaskTemplateById(primarySuggestedTask.taskId);
@@ -379,16 +379,15 @@ export function buildGeneralWorkbenchFollowUpProjection({
         t,
       })
     : null;
-  const sceneAppReviewBaselineSnapshot = runMetadataSummary.curatedTask?.taskId
-    ? buildSceneAppExecutionReviewPrefillSnapshot({
+  const resultBaselineSnapshot = runMetadataSummary.curatedTask?.taskId
+    ? buildCuratedTaskResultBaselineSnapshot({
         referenceEntries: runMetadataSummary.curatedTask.referenceEntries,
         taskId: runMetadataSummary.curatedTask.taskId,
       })
     : null;
-  const sceneAppReviewBaselineHighlights =
-    buildSceneAppExecutionReviewPrefillHighlights(
-      sceneAppReviewBaselineSnapshot,
-    );
+  const resultBaselineHighlights = buildCuratedTaskResultBaselineHighlights(
+    resultBaselineSnapshot,
+  );
   const curatedTaskFollowUpHintText = buildCuratedTaskFollowUpHintText(
     runMetadataSummary.curatedTask,
     t,
@@ -397,13 +396,13 @@ export function buildGeneralWorkbenchFollowUpProjection({
   return {
     reviewFeedbackProjection,
     reviewFeedbackFollowUpActionPayload,
-    sceneAppReviewBaselineSnapshot,
-    sceneAppReviewBaselineHighlights,
+    resultBaselineSnapshot,
+    resultBaselineHighlights,
     curatedTaskFollowUpHintText,
     shouldShowFollowUpHint: Boolean(
       reviewFeedbackProjection ||
       curatedTaskFollowUpHintText ||
-      sceneAppReviewBaselineSnapshot,
+      resultBaselineSnapshot,
     ),
   };
 }

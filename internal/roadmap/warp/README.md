@@ -34,7 +34,7 @@ Lime 现有事实源：
 2. [../task/README.md](../task/README.md)
 3. [../../aiprompts/harness-engine-governance.md](../../aiprompts/harness-engine-governance.md)
 4. [../../aiprompts/limecore-collaboration-entry.md](../../aiprompts/limecore-collaboration-entry.md)
-5. [../limenextv2/README.md](../limenextv2/README.md)
+5. 仓库根 `FEATURE-MAP.md` 与 `internal/aiprompts/architecture.md`
 
 ## 3. 固定结论
 

@@ -248,5 +248,4 @@ pub async fn error_handler(err: Error) -> Response {
 ## 相关文档
 
 - [converter.md](converter.md) - 协议转换
-- [flow-monitor.md](flow-monitor.md) - 流量监控
 - [providers.md](providers.md) - Provider 系统

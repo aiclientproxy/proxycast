@@ -69,6 +69,16 @@ private func framePayload(_ frame: CGRect) -> [String: Any] {
     ]
 }
 
+func setApplicationHidden(_ application: NSRunningApplication, hidden: Bool) -> Bool {
+    let element = AXUIElementCreateApplication(application.processIdentifier)
+    let value: CFBoolean = hidden ? kCFBooleanTrue : kCFBooleanFalse
+    return AXUIElementSetAttributeValue(
+        element,
+        kAXHiddenAttribute as CFString,
+        value
+    ) == .success
+}
+
 func accessibilityWindowMatching(ownerPID: pid_t, frame: CGRect) throws -> AXUIElement {
     guard AXIsProcessTrusted() else {
         throw HostError.notGranted("macOS Accessibility permission is required for window control.")
@@ -244,7 +254,9 @@ func startHideForTask(taskID: String, windowIDs: [UInt32]) throws -> [String: An
             if originalVisibility[ownerPID] == nil {
                 originalVisibility[ownerPID] = application.isHidden
                 if !application.isHidden {
-                    guard application.hide() else {
+                    _ = application.activate(options: [.activateIgnoringOtherApps])
+                    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+                    guard setApplicationHidden(application, hidden: true) else {
                         throw HostError.operationFailed("The macOS window owner could not be hidden for the task.")
                     }
                     changedApplications.append(application)
@@ -280,7 +292,7 @@ func stopHideForTask(taskID: String) throws -> [String: Any] {
         guard let application = NSRunningApplication(processIdentifier: ownerPID) else {
             continue
         }
-        let success = wasHidden ? application.hide() : application.unhide()
+        let success = setApplicationHidden(application, hidden: wasHidden)
         if success {
             restoredCount += 1
         }

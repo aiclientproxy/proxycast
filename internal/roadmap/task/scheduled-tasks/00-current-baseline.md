@@ -43,7 +43,7 @@ smoke 和 Agent UI projection 已物理删除并由负向守卫封口。
 
 - `automationJob/*`、`automationSchedule/*`、`automationScheduler/*` 公开协议和 typed clients。
 - `src/lib/api/automation.ts`、旧 Automation 一级页面、Settings 工作台和 2015 个五语种旧设置文案。
-- browser session automation、SceneApp automation context、renderer timer 和生产 mock fallback。
+- browser session automation、已退役应用编排 context、renderer timer 和生产 mock fallback。
 - `automation_job_projection`、Agent UI `runtimeEntity=automation_job` 与 `background_teammate` surface。
 - 旧 Automation 专项 smoke、fixture 和正向协议测试。
 

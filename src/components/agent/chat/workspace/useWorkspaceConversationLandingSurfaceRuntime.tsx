@@ -27,7 +27,6 @@ export interface WorkspaceConversationLandingSurfaceRuntime {
   entryBannerMessage?: string;
   onDismissEntryBanner: () => void;
   creationReplaySurface?: CreationReplaySurfaceModel | null;
-  sceneAppExecutionSummaryCard?: ReactNode;
   serviceSkillExecutionCard?: ReactNode;
   emptyStateProps: ComponentProps<typeof EmptyState>;
 }
@@ -166,7 +165,6 @@ interface UseWorkspaceConversationLandingSurfaceRuntimeParams {
   >["recentSessionSummary"];
   recentSessionTitle?: ComponentProps<typeof EmptyState>["recentSessionTitle"];
   resolvedCanvasState: CanvasStateUnion | null;
-  sceneAppExecutionSummaryCard?: ReactNode;
   serviceSkillExecutionCard?: ReactNode;
   serviceSkillGroups: NonNullable<
     ComponentProps<typeof EmptyState>["serviceSkillGroups"]
@@ -323,7 +321,6 @@ export function useWorkspaceConversationLandingSurfaceRuntime({
   recentSessionSummary,
   recentSessionTitle,
   resolvedCanvasState,
-  sceneAppExecutionSummaryCard,
   serviceSkillExecutionCard,
   serviceSkillGroups,
   serviceSkills,
@@ -548,7 +545,6 @@ export function useWorkspaceConversationLandingSurfaceRuntime({
       entryBannerMessage,
       onDismissEntryBanner,
       creationReplaySurface,
-      sceneAppExecutionSummaryCard,
       serviceSkillExecutionCard,
       emptyStateProps,
     }),
@@ -558,7 +554,6 @@ export function useWorkspaceConversationLandingSurfaceRuntime({
       entryBannerMessage,
       entryBannerVisible,
       onDismissEntryBanner,
-      sceneAppExecutionSummaryCard,
       serviceSkillExecutionCard,
     ],
   );

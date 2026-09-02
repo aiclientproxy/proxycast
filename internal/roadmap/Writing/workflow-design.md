@@ -1,7 +1,9 @@
 # Writing Workflow 设计
 
+> 状态：`legacy current reference`。本文的 v1 workflow 记录已由 `./v2/product-requirements.md` 与 `../../exec-plans/writing-v2-workflow-completion-plan.md` 替换；不得把 worker fast path 或 workflow step 列表恢复为 current UI。
+
 更新时间：2026-06-30
-状态：In Progress
+状态：`legacy current reference`；current workflow 以 `./v2/README.md` 与 `../../exec-plans/writing-v2-workflow-completion-plan.md` 为准
 
 ## 1. Workflow 定义
 

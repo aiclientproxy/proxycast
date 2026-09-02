@@ -19,8 +19,8 @@
 - [./flowcharts.md](./flowcharts.md)：入口分流、Layer Planner、mask 质量、clean plate、Canvas 状态机、导出决策流程图
 - [./diagrams.md](./diagrams.md)：早期总览图纸，后续具体实现优先引用上述拆分图纸
 - [./model-slot-http-json-executor-contract.md](./model-slot-http-json-executor-contract.md)：真实 matting / inpaint / OCR 服务接入 standard JSON executor 的 HTTP contract、样例与验收命令
-- [./evidence/completion-evidence.template.json](./evidence/completion-evidence.template.json)：完整目标最终外部事实索引模板，汇总真实 benchmark、人工复核、导出包和外部设计工具打开证据
-- [./evidence/design-tool-interoperability.template.json](./evidence/design-tool-interoperability.template.json)：Photoshop / Photopea / Figma 等外部工具打开 `trial.psd` 后的结构化记录模板；Photopea 自动化入口见 `scripts/verify-layered-design-photopea-open.mjs`
+- 完整目标外部事实索引由 `scripts/verify-layered-design-completion-evidence.mjs` 校验；输入位于本地忽略的 `evidence/completion-evidence.json`，不作为仓库导航目标
+- Photoshop / Photopea / Figma 互操作记录由 `scripts/verify-layered-design-photopea-open.mjs` 生成到本地 evidence 目录，不作为仓库内固定文档
 
 相关 Lime 事实源：
 

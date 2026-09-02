@@ -102,7 +102,7 @@ describe("generalWorkbenchWorkflowData", () => {
     });
   });
 
-  it("应解析非 memory 的 reference entry 且不污染 referenceMemoryIds", () => {
+  it("应把结果参考统一解析为 memory reference", () => {
     expect(
       parseGeneralWorkbenchRunMetadataSummary(
         JSON.stringify({
@@ -112,8 +112,8 @@ describe("generalWorkbenchWorkflowData", () => {
               task_title: "复盘这个账号/项目",
               reference_entries: [
                 {
-                  id: "sceneapp:content-pack:run:1",
-                  source_kind: "sceneapp_execution_summary",
+                  id: "memory:content-pack:run:1",
+                  source_kind: "memory",
                   title: "AI 内容周报",
                   summary: "当前已有一轮运行结果，可直接作为复盘基线。",
                   category: "experience",
@@ -135,8 +135,8 @@ describe("generalWorkbenchWorkflowData", () => {
         taskId: "account-project-review",
         referenceEntries: [
           {
-            id: "sceneapp:content-pack:run:1",
-            sourceKind: "sceneapp_execution_summary",
+            id: "memory:content-pack:run:1",
+            sourceKind: "memory",
             title: "AI 内容周报",
             category: "experience",
             taskPrefillByTaskId: {
@@ -157,8 +157,8 @@ describe("generalWorkbenchWorkflowData", () => {
               task_id: "account-project-review",
               reference_entries: [
                 {
-                  id: "sceneapp:content-pack:run:1",
-                  source_kind: "sceneapp_execution_summary",
+                  id: "memory:content-pack:run:1",
+                  source_kind: "memory",
                   title: "AI 内容周报",
                   summary: "当前已有一轮运行结果，可直接作为复盘基线。",
                   category: "experience",
@@ -169,7 +169,7 @@ describe("generalWorkbenchWorkflowData", () => {
           },
         }),
       ).curatedTask?.referenceMemoryIds,
-    ).toBeUndefined();
+    ).toEqual(["memory:content-pack:run:1"]);
   });
 
   it("应合并同一运行日志中的产物路径并保持规范化", () => {

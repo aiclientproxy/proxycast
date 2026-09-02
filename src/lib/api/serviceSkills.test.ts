@@ -124,7 +124,7 @@ function buildRemoteCatalog(): ServiceSkillCatalog {
   };
 }
 
-function buildLegacyCompatRemoteCatalog(): ServiceSkillCompatCatalog {
+function buildLegacyExecutionLocationRemoteCatalog(): ServiceSkillCompatCatalog {
   const seeded = getSeededServiceSkillCatalog();
   return {
     version: "tenant-2026-04-21-legacy-compat",
@@ -135,8 +135,8 @@ function buildLegacyCompatRemoteCatalog(): ServiceSkillCompatCatalog {
         ...seeded.items[0]!,
         id: "tenant-legacy-compat-skill",
         title: "租户旧版兼容技能",
-        summary: "历史目录仍把服务技能写成 cloud_scene / cloud_required。",
-        defaultExecutorBinding: "cloud_scene",
+        summary: "历史目录仍把服务技能写成 cloud_required。",
+        defaultExecutorBinding: "agent_turn",
         executionLocation: "cloud_required",
         version: "tenant-2026-04-21-legacy-compat",
       },
@@ -284,8 +284,8 @@ describe("serviceSkills API", () => {
     );
   });
 
-  it("旧版 compat 服务技能的派生 metadata 也应正规化为本地执行语义", async () => {
-    const remoteCatalog = buildLegacyCompatRemoteCatalog();
+  it("旧执行位置标记的派生 metadata 应正规化为本地执行语义", async () => {
+    const remoteCatalog = buildLegacyExecutionLocationRemoteCatalog();
     if (remoteCatalog.items[0]) {
       delete remoteCatalog.items[0].skillBundle;
     }
@@ -313,9 +313,7 @@ describe("serviceSkills API", () => {
     expect(stored).toContain('"executionLocation":"client_default"');
     expect(stored).toContain('"defaultExecutorBinding":"agent_turn"');
     expect(stored).not.toContain('"executionLocation":"cloud_required"');
-    expect(stored).not.toContain('"defaultExecutorBinding":"cloud_scene"');
     expect(stored).not.toContain('"Lime_execution_location":"cloud_required"');
-    expect(stored).not.toContain('"Lime_executor_binding":"cloud_scene"');
   });
 
   it("清空缓存后应恢复到 seeded catalog", async () => {

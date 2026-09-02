@@ -172,14 +172,14 @@ describe("buildCuratedTaskLaunchRequestMetadata", () => {
     });
   });
 
-  it("应只把 memory reference 写入 reference_memory_ids", () => {
+  it("应把 memory reference 写入 reference_memory_ids", () => {
     const result = buildCuratedTaskLaunchRequestMetadata({
       taskId: "account-project-review",
       taskTitle: "复盘这个账号/项目",
       referenceEntries: [
         {
-          id: "sceneapp:content-pack:run:1",
-          sourceKind: "sceneapp_execution_summary",
+          id: "memory:content-pack:run:1",
+          sourceKind: "memory",
           title: "AI 内容周报",
           summary: "当前已有一轮运行结果，可直接作为复盘基线。",
           category: "experience",
@@ -201,8 +201,8 @@ describe("buildCuratedTaskLaunchRequestMetadata", () => {
           task_id: "account-project-review",
           reference_entries: [
             expect.objectContaining({
-              id: "sceneapp:content-pack:run:1",
-              source_kind: "sceneapp_execution_summary",
+              id: "memory:content-pack:run:1",
+              source_kind: "memory",
             }),
           ],
         },
@@ -211,22 +211,19 @@ describe("buildCuratedTaskLaunchRequestMetadata", () => {
     expect(
       (result.harness as { curated_task: { reference_memory_ids?: string[] } })
         .curated_task.reference_memory_ids,
-    ).toBeUndefined();
-    expect(
-      (result.harness as { creation_replay?: unknown }).creation_replay,
-    ).toBeUndefined();
+    ).toEqual(["memory:content-pack:run:1"]);
   });
 });
 
 describe("buildCuratedTaskLaunchInputPrefillFromReferenceEntries", () => {
-  it("应把 sceneapp reference 的 task prefill 回填到 launcher 输入", () => {
+  it("应把 结果参考 的 task prefill 回填到 launcher 输入", () => {
     expect(
       buildCuratedTaskLaunchInputPrefillFromReferenceEntries({
         taskId: "account-project-review",
         referenceEntries: [
           {
-            id: "sceneapp:content-pack:run:1",
-            sourceKind: "sceneapp_execution_summary",
+            id: "memory:content-pack:run:1",
+            sourceKind: "memory",
             title: "AI 内容周报",
             summary: "当前已有一轮运行结果，可直接作为复盘基线。",
             category: "experience",

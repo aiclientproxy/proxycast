@@ -150,11 +150,8 @@ function renderWorkspaceChatContent({
       pendingA2UISource.kind === "service_skill" ||
       Boolean(a2uiSubmissionNotice));
   const leadingMessageContent =
-    landingSurface.sceneAppExecutionSummaryCard ||
-    stepProgressProps ||
-    landingSurface.serviceSkillExecutionCard ? (
+    stepProgressProps || landingSurface.serviceSkillExecutionCard ? (
       <>
-        {landingSurface.sceneAppExecutionSummaryCard}
         {stepProgressProps ? <StepProgress {...stepProgressProps} /> : null}
         {landingSurface.serviceSkillExecutionCard}
       </>

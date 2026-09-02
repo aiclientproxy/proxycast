@@ -10,7 +10,6 @@ import type {
   AgentProjectFileOpenTarget,
   AgentSiteSkillLaunchParams,
 } from "@/types/page";
-import type { SceneAppExecutionSummaryViewModel } from "@/lib/agent/legacySceneAppExecutionSummary";
 
 export interface WorkflowProgressSnapshot {
   steps: Array<{
@@ -36,7 +35,6 @@ export interface AgentChatWorkspaceProps {
   projectId?: string;
   contentId?: string;
   initialSessionId?: string;
-  initialSceneAppExecutionSummary?: SceneAppExecutionSummaryViewModel;
   initialRequestMetadata?: Record<string, unknown>;
   initialAutoSendRequestMetadata?: Record<string, unknown>;
   autoRunInitialPromptOnMount?: boolean;

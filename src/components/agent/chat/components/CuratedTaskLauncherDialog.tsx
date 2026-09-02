@@ -22,9 +22,7 @@ import {
 } from "@/components/agent/chat/utils/curatedTaskTemplates";
 import { formatNumber } from "@/i18n/format";
 import { cn } from "@/lib/utils";
-import {
-  listCuratedTaskRecommendationSignals,
-} from "@/components/agent/chat/utils/curatedTaskRecommendationSignals";
+import { listCuratedTaskRecommendationSignals } from "@/components/agent/chat/utils/curatedTaskRecommendationSignals";
 import {
   buildCuratedTaskLaunchInputPrefillFromReferenceEntries,
   extractCuratedTaskReferenceMemoryIds,
@@ -35,9 +33,9 @@ import {
   type CuratedTaskReferenceSelection,
 } from "@/components/agent/chat/utils/curatedTaskReferenceSelection";
 import {
-  buildSceneAppExecutionReviewPrefillHighlights,
-  buildSceneAppExecutionReviewPrefillSnapshot,
-} from "@/components/agent/chat/utils/sceneAppCuratedTaskReference";
+  buildCuratedTaskResultBaselineHighlights,
+  buildCuratedTaskResultBaselineSnapshot,
+} from "@/components/agent/chat/utils/curatedTaskResultBaseline";
 import type { AgentI18nResource } from "@/i18n/agentResources";
 import {
   buildActiveReviewBaselineModel,
@@ -214,9 +212,7 @@ export function CuratedTaskLauncherDialog({
       task,
       presentationCopy: curatedTaskPresentationCopy,
       copy: {
-        contractRequiredEmpty: t(
-          "curatedTask.launcher.contract.requiredEmpty",
-        ),
+        contractRequiredEmpty: t("curatedTask.launcher.contract.requiredEmpty"),
       },
     });
   }, [curatedTaskPresentationCopy, task, t]);
@@ -422,7 +418,7 @@ export function CuratedTaskLauncherDialog({
               {activeReviewBaselineSnapshot ? (
                 <section
                   className="rounded-[20px] border border-emerald-200 bg-emerald-50/80 px-4 py-4"
-                  data-testid="curated-task-launcher-sceneapp-baseline-card"
+                  data-testid="curated-task-launcher-result-baseline-card"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[10px] font-medium text-emerald-700">
@@ -553,13 +549,13 @@ export function CuratedTaskLauncherDialog({
                         selectedReferenceEntryIds.length >=
                           MAX_REFERENCE_SELECTION_COUNT;
                       const entryReviewSnapshot = task
-                        ? buildSceneAppExecutionReviewPrefillSnapshot({
+                        ? buildCuratedTaskResultBaselineSnapshot({
                             referenceEntries: [entry],
                             taskId: task.id,
                           })
                         : null;
                       const entryReviewHighlights =
-                        buildSceneAppExecutionReviewPrefillHighlights(
+                        buildCuratedTaskResultBaselineHighlights(
                           entryReviewSnapshot,
                         );
 

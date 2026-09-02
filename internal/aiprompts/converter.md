@@ -248,4 +248,3 @@ pub fn convert_error(provider_error: ProviderError) -> OpenAIError {
 
 - [providers.md](providers.md) - Provider 系统
 - [server.md](server.md) - HTTP 服务器
-- [streaming.md](streaming.md) - 流式处理

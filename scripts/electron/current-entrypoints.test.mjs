@@ -161,7 +161,11 @@ function currentElectronEntrypointFiles() {
     "scripts/electron/run-preview.mjs",
     "scripts/electron/stage-release-assets.mjs",
     "scripts/electron/verify-package-resources.mjs",
+    "scripts/electron/macos-native-host-gate-b.mjs",
+    "scripts/electron/lib/macos-native-host-electron-gate-b.mjs",
+    "scripts/electron/macos-window-fixture.swift",
     "scripts/electron/windows-native-host-gate-b.mjs",
+    "scripts/electron/windows-packaged-evidence.mjs",
     "scripts/lib/electron-desktop-resources.mjs",
     "electron/native/macos/macos-native-host.swift",
     "electron/native/macos/macos-screen-capture.swift",
@@ -360,6 +364,10 @@ describe("Electron current package entrypoints", () => {
       "claw workbench shell ready after reload",
     );
     expect(smokeChecksContent).toContain("collectRendererPageErrorCount");
+    expect(smokeChecksContent).toContain("collectElectronSmokeLayoutEvidence");
+    expect(smokeChecksContent).toContain("ELECTRON_SMOKE_LAYOUT_VIEWPORTS");
+    expect(smokeChecksContent).toContain("window.setSize");
+    expect(smokeChecksContent).toContain("window.getSize");
     expect(memorySmokeContent).toContain(
       '[data-testid="app-sidebar-account-model-settings"]',
     );
@@ -419,6 +427,12 @@ describe("Electron current package entrypoints", () => {
     expect(smokeEvidenceContent).toContain('proof: "gate-b-f"');
     expect(smokeEvidenceContent).toContain('complete: result === "pass"');
     expect(smokeEvidenceContent).toContain("workbenchReloadReady");
+    expect(smokeEvidenceContent).toContain("ELECTRON_SMOKE_LAYOUT_PROOF_LEVEL");
+    expect(smokeEvidenceContent).toContain(
+      '"electron-responsive-layout-contract"',
+    );
+    expect(smokeEvidenceContent).toContain("BrowserWindow setSize/getSize");
+    expect(smokeEvidenceContent).toContain("layoutGeometryStable");
     expect(smokeScript).toContain("mkdtempSync");
     expect(smokeScript).toContain("ELECTRON_E2E_USER_DATA_DIR");
     expect(smokeScript).toContain('LIME_ELECTRON_E2E: "1"');

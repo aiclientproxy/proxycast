@@ -207,7 +207,230 @@ fn turn_context_projects_selected_environments_into_typed_world_state() {
 }
 
 #[test]
-fn turn_context_derives_proactive_multi_agent_mode_from_ultra_effort() {
+fn turn_context_uses_model_catalog_multi_agent_mode_for_ultra_effort() {
+    let workspace = TempDir::new().expect("create workspace");
+    let request = request_for_test(
+        "delegate independent work",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-5.4".to_string()),
+            reasoning_effort: Some("ultra".to_string()),
+            working_dir: Some(workspace.path().to_string_lossy().into_owned()),
+            ..RuntimeRequest::default()
+        }),
+        None,
+    );
+    let host_request = runtime_request_from_request(&request).expect("host request");
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("model selection");
+
+    let turn_context = turn_context_from_request(
+        &request,
+        Some(&host_request),
+        &scope,
+        &selection,
+        Some(json!({
+            "modelRegistry": {
+                "multiAgentVersion": "v2",
+                "multiAgentReasoningEffort": "ultra",
+                "modelMessages": {
+                    "multiAgent": {
+                        "mode": {"proactive": "delegate independent work"}
+                    }
+                }
+            }
+        })),
+    )
+    .expect("turn context");
+    let world_state = turn_context
+        .metadata
+        .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)
+        .expect("world state metadata");
+
+    assert_eq!(
+        world_state["multiAgent"],
+        json!({"custom": "delegate independent work"})
+    );
+}
+
+#[test]
+fn turn_context_uses_builtin_proactive_mode_for_ultra_without_catalog_copy() {
+    let workspace = TempDir::new().expect("create workspace");
+    let request = request_for_test(
+        "delegate independent work",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-5.6-sol".to_string()),
+            reasoning_effort: Some("ultra".to_string()),
+            working_dir: Some(workspace.path().to_string_lossy().into_owned()),
+            ..RuntimeRequest::default()
+        }),
+        None,
+    );
+    let host_request = runtime_request_from_request(&request).expect("host request");
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("model selection");
+
+    let turn_context = turn_context_from_request(
+        &request,
+        Some(&host_request),
+        &scope,
+        &selection,
+        Some(json!({
+            "modelRegistry": {
+                "multiAgentVersion": "v2",
+                "modelMessages": {"multiAgent": {"mode": {}}}
+            }
+        })),
+    )
+    .expect("turn context");
+    let world_state = turn_context
+        .metadata
+        .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)
+        .expect("world state metadata");
+
+    assert_eq!(world_state["multiAgent"], "proactive");
+}
+
+#[test]
+fn turn_context_uses_explicit_catalog_copy_for_non_ultra_effort() {
+    let workspace = TempDir::new().expect("create workspace");
+    let request = request_for_test(
+        "delegate only when asked",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-5.6-sol".to_string()),
+            reasoning_effort: Some("high".to_string()),
+            working_dir: Some(workspace.path().to_string_lossy().into_owned()),
+            ..RuntimeRequest::default()
+        }),
+        None,
+    );
+    let host_request = runtime_request_from_request(&request).expect("host request");
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("model selection");
+
+    let turn_context = turn_context_from_request(
+        &request,
+        Some(&host_request),
+        &scope,
+        &selection,
+        Some(json!({
+            "modelRegistry": {
+                "multiAgentVersion": "v2",
+                "modelMessages": {
+                    "multiAgent": {
+                        "mode": {
+                            "explicit": "delegate only after an explicit request",
+                            "proactive": "must not be selected"
+                        }
+                    }
+                }
+            }
+        })),
+    )
+    .expect("turn context");
+    let world_state = turn_context
+        .metadata
+        .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)
+        .expect("world state metadata");
+
+    assert_eq!(
+        world_state["multiAgent"],
+        json!({"custom": "delegate only after an explicit request"})
+    );
+}
+
+#[test]
+fn turn_context_preserves_empty_multi_agent_catalog_copy() {
+    let workspace = TempDir::new().expect("create workspace");
+    for (effort, mode) in [("ultra", "proactive"), ("high", "explicit")] {
+        let request = request_for_test(
+            "delegate",
+            Some(RuntimeRequest {
+                provider_preference: Some("openai".to_string()),
+                model_preference: Some("gpt-5.6-sol".to_string()),
+                reasoning_effort: Some(effort.to_string()),
+                working_dir: Some(workspace.path().to_string_lossy().into_owned()),
+                ..RuntimeRequest::default()
+            }),
+            None,
+        );
+        let host_request = runtime_request_from_request(&request).expect("host request");
+        let scope = session_scope_from_request(&request).expect("session scope");
+        let selection = selection_from_explicit_preferences(&request).expect("model selection");
+        let mut mode_messages = serde_json::Map::new();
+        mode_messages.insert(mode.to_string(), json!(""));
+
+        let turn_context = turn_context_from_request(
+            &request,
+            Some(&host_request),
+            &scope,
+            &selection,
+            Some(json!({
+                "modelRegistry": {
+                    "multiAgentVersion": "v2",
+                    "modelMessages": {
+                        "multiAgent": {"mode": Value::Object(mode_messages)}
+                    }
+                }
+            })),
+        )
+        .expect("turn context");
+        let world_state = turn_context
+            .metadata
+            .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)
+            .expect("world state metadata");
+
+        assert_eq!(world_state["multiAgent"], json!({"custom": ""}));
+    }
+}
+
+#[test]
+fn turn_context_preserves_empty_multi_agent_hint_over_effort_mode() {
+    let workspace = TempDir::new().expect("create workspace");
+    let request = request_for_test(
+        "delegate",
+        Some(RuntimeRequest {
+            provider_preference: Some("openai".to_string()),
+            model_preference: Some("gpt-5.6-sol".to_string()),
+            reasoning_effort: Some("ultra".to_string()),
+            working_dir: Some(workspace.path().to_string_lossy().into_owned()),
+            ..RuntimeRequest::default()
+        }),
+        None,
+    );
+    let host_request = runtime_request_from_request(&request).expect("host request");
+    let scope = session_scope_from_request(&request).expect("session scope");
+    let selection = selection_from_explicit_preferences(&request).expect("model selection");
+
+    let turn_context = turn_context_from_request(
+        &request,
+        Some(&host_request),
+        &scope,
+        &selection,
+        Some(json!({
+            "modelRegistry": {
+                "multiAgentVersion": "v2",
+                "modelMessages": {
+                    "multiAgent": {
+                        "mode": {"hintText": "", "proactive": "must not be selected"}
+                    }
+                }
+            }
+        })),
+    )
+    .expect("turn context");
+    let world_state = turn_context
+        .metadata
+        .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)
+        .expect("world state metadata");
+
+    assert_eq!(world_state["multiAgent"], json!({"custom": ""}));
+}
+
+#[test]
+fn turn_context_does_not_infer_multi_agent_mode_from_effort_without_catalog_metadata() {
     let workspace = TempDir::new().expect("create workspace");
     let request = request_for_test(
         "delegate independent work",
@@ -232,7 +455,7 @@ fn turn_context_derives_proactive_multi_agent_mode_from_ultra_effort() {
         .get(agent_protocol::world_state::WORLD_STATE_TURN_METADATA_KEY)
         .expect("world state metadata");
 
-    assert_eq!(world_state["multiAgent"], "proactive");
+    assert_eq!(world_state["multiAgent"], "explicitRequestOnly");
 }
 
 #[test]

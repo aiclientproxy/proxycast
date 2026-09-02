@@ -956,7 +956,10 @@ mod tests {
 
     #[test]
     fn test_build_tool_inventory_marks_visibility_and_mappings() {
-        let expected_catalog = tool_catalog_entries_for_surface(WorkspaceToolSurface::core());
+        let expected_catalog = tool_catalog_entries_for_surface(WorkspaceToolSurface::core())
+            .into_iter()
+            .filter(|entry| entry.name != tool_runtime::update_plan::UPDATE_PLAN_NAME)
+            .collect::<Vec<_>>();
         let inventory = build_tool_inventory(AgentToolInventoryBuildInput {
             surface: WorkspaceToolSurface::core(),
             caller: "assistant".to_string(),
@@ -1410,7 +1413,10 @@ mod tests {
 
     #[test]
     fn test_build_tool_inventory_workbench_keeps_small_default_allowlist() {
-        let expected_catalog = tool_catalog_entries_for_surface(WorkspaceToolSurface::workbench());
+        let expected_catalog = tool_catalog_entries_for_surface(WorkspaceToolSurface::workbench())
+            .into_iter()
+            .filter(|entry| entry.name != tool_runtime::update_plan::UPDATE_PLAN_NAME)
+            .collect::<Vec<_>>();
         let inventory = build_tool_inventory(AgentToolInventoryBuildInput {
             surface: WorkspaceToolSurface::workbench(),
             caller: "assistant".to_string(),
@@ -1429,6 +1435,7 @@ mod tests {
         let expected_default_allowed =
             workspace_default_allowed_tool_names(WorkspaceToolSurface::workbench())
                 .into_iter()
+                .filter(|name| *name != tool_runtime::update_plan::UPDATE_PLAN_NAME)
                 .map(ToString::to_string)
                 .collect::<Vec<_>>();
 
@@ -1464,6 +1471,50 @@ mod tests {
         assert!(inventory
             .default_allowed_tools
             .contains(&"social_generate_cover_image".to_string()));
+        assert!(!inventory
+            .default_allowed_tools
+            .contains(&tool_runtime::update_plan::UPDATE_PLAN_NAME.to_string()));
+    }
+
+    #[test]
+    fn test_build_tool_inventory_includes_update_plan_when_explicitly_enabled() {
+        let inventory = build_tool_inventory(AgentToolInventoryBuildInput {
+            surface: WorkspaceToolSurface::core(),
+            caller: "assistant".to_string(),
+            agent_initialized: true,
+            warnings: Vec::new(),
+            persisted_execution_policy: None,
+            request_metadata: Some(json!({
+                "config": {
+                    "agent": {
+                        "toolExecution": { "update_plan_enabled": true }
+                    }
+                }
+            })),
+            mcp_server_names: Vec::new(),
+            mcp_tools: Vec::new(),
+            current_tool_definitions: vec![definition(
+                tool_runtime::update_plan::UPDATE_PLAN_NAME,
+                "update checklist",
+                json!({ "type": "object" }),
+            )],
+            resource_helpers_supported: false,
+            extension_configs: Vec::new(),
+            visible_extension_tools: Vec::new(),
+            searchable_extension_tools: Vec::new(),
+        });
+
+        assert!(inventory
+            .default_allowed_tools
+            .contains(&tool_runtime::update_plan::UPDATE_PLAN_NAME.to_string()));
+        assert!(inventory
+            .catalog_tools
+            .iter()
+            .any(|entry| entry.name == tool_runtime::update_plan::UPDATE_PLAN_NAME));
+        assert!(inventory
+            .native_tools
+            .iter()
+            .any(|entry| entry.name == tool_runtime::update_plan::UPDATE_PLAN_NAME));
     }
 
     #[test]

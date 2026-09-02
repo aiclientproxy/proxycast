@@ -1,6 +1,6 @@
 //! 应用启动前的配置校验逻辑
 //!
-//! 该模块仅包含与 Tauri 无关的纯配置处理。
+//! 该模块仅包含与桌面宿主无关的纯配置处理。
 
 use crate::app_utils::{generate_api_key, is_valid_bind_host};
 use crate::config::{self, Config};

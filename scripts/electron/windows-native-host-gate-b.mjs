@@ -317,9 +317,13 @@ export async function runWindowsNativeHostGateB(options) {
     evidenceLevel: "gate-b",
     platform: "win32",
     arch: "x64",
+    candidateRunId: process.env.LIME_GATE_RUN_ID?.trim() || null,
+    electronExecutable: path.resolve(options.electronExecutable),
     checks,
     ...(failure ? { failure: failure.message } : {}),
     helper: {
+      path: helper.helperPath,
+      resourcesRoot,
       manifestSha256: helper.manifest.resources.find(
         (resource) => resource.id === "windows-native-host",
       )?.sha256,

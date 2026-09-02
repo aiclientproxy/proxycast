@@ -1,14 +1,14 @@
 //! 配置事件发射器 Trait
 //!
-//! 抽象 Tauri AppHandle 的 emit 功能，
-//! 使 observer 模块不直接依赖 Tauri。
+//! 抽象宿主的事件发送能力，
+//! 使 observer 模块不直接依赖桌面宿主。
 
 use super::events::ConfigChangeEvent;
 
 /// 配置事件发射器 Trait
 ///
 /// 用于向前端发送配置变更事件。
-/// 主 crate 中通过 Tauri AppHandle 实现此 trait。
+/// App Server 或 Desktop Host 边界实现此 trait。
 pub trait ConfigEventEmit: Send + Sync {
     /// 发送配置变更事件
     fn emit_config_event(

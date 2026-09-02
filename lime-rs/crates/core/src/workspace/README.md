@@ -54,4 +54,4 @@ let list = manager.list()?;
 
 ## 相关文档
 
-- [Workspace 设计文档](../../../internal/aiprompts/workspace.md)
+- [Workspace 设计文档](../../../../../internal/aiprompts/workspace.md)

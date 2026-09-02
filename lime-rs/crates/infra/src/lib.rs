@@ -6,8 +6,6 @@
 //! - injection: 请求参数注入
 //! - telemetry: 遥测统计
 //!
-//! 注意：plugin 模块因依赖 Tauri 无法迁移，保留在主 crate
-
 pub mod injection;
 pub mod process;
 pub mod proxy;

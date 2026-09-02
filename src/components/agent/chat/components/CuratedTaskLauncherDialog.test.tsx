@@ -89,7 +89,7 @@ describe("CuratedTaskLauncherDialog", () => {
         <CuratedTaskLauncherDialog
           open
           task={task}
-          initialReferenceMemoryIds={["sceneapp:content-pack:run:1"]}
+          initialReferenceMemoryIds={["memory:content-pack:run:1"]}
           initialReferenceEntries={[
             {
               id: "memory-internal-error",
@@ -190,8 +190,8 @@ describe("CuratedTaskLauncherDialog", () => {
           task={task}
           initialReferenceEntries={[
             {
-              id: "sceneapp:content-pack:run:1",
-              sourceKind: "sceneapp_execution_summary",
+              id: "memory:content-pack:run:1",
+              sourceKind: "memory",
               title: "AI 内容周报",
               summary: "当前已有一轮项目结果，可直接作为复盘基线。",
               category: "experience",
@@ -215,7 +215,7 @@ describe("CuratedTaskLauncherDialog", () => {
     });
 
     const dialog = document.body.querySelector('[role="dialog"]');
-    expect(dialog?.textContent).toContain("项目结果 · 成果");
+    expect(dialog?.textContent).toContain("记忆参考 · 成果");
     expect(dialog?.textContent).toContain("记忆参考 · 风格");
     expect(dialog?.textContent).toContain("AI 内容周报");
     expect(dialog?.textContent).toContain("品牌风格样本");
@@ -397,7 +397,7 @@ describe("CuratedTaskLauncherDialog", () => {
     });
 
     const baselineCard = document.body.querySelector(
-      '[data-testid="curated-task-launcher-sceneapp-baseline-card"]',
+      '[data-testid="curated-task-launcher-result-baseline-card"]',
     );
     const themeField = document.body.querySelector(
       "#curated-task-daily-trend-briefing-theme_target",
@@ -465,8 +465,8 @@ describe("CuratedTaskLauncherDialog", () => {
           task={task}
           initialReferenceEntries={[
             {
-              id: "sceneapp:content-pack:run:1",
-              sourceKind: "sceneapp_execution_summary",
+              id: "memory:content-pack:run:1",
+              sourceKind: "memory",
               title: "AI 内容周报",
               summary: "当前已有一轮项目结果，可直接作为复盘基线。",
               category: "experience",
@@ -517,8 +517,8 @@ describe("CuratedTaskLauncherDialog", () => {
       expect.objectContaining({
         referenceEntries: [
           expect.objectContaining({
-            id: "sceneapp:content-pack:run:1",
-            sourceKind: "sceneapp_execution_summary",
+            id: "memory:content-pack:run:1",
+            sourceKind: "memory",
           }),
         ],
       }),
@@ -537,8 +537,8 @@ describe("CuratedTaskLauncherDialog", () => {
           task={task}
           initialReferenceEntries={[
             {
-              id: "sceneapp:content-pack:run:1",
-              sourceKind: "sceneapp_execution_summary",
+              id: "memory:content-pack:run:1",
+              sourceKind: "memory",
               title: "AI 内容周报",
               summary: "当前已有一轮项目结果，可直接作为复盘基线。",
               category: "experience",
@@ -608,8 +608,8 @@ describe("CuratedTaskLauncherDialog", () => {
       expect.objectContaining({
         referenceEntries: expect.arrayContaining([
           expect.objectContaining({
-            id: "sceneapp:content-pack:run:1",
-            sourceKind: "sceneapp_execution_summary",
+            id: "memory:content-pack:run:1",
+            sourceKind: "memory",
           }),
           expect.objectContaining({
             id: "memory-preference-2",

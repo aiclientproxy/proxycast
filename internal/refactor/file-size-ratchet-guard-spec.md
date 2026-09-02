@@ -1,8 +1,8 @@
 # 文件体量棘轮守卫规格
 
 > 状态：proposed（实现 R-60 时参考）
-> 创建时间：2026-06-11（v2 重排时定位降级：护栏/仪表，不是重构主线，见 `progressive-refactor-plan.md` 轴 F）
-> 对应计划：`progressive-refactor-plan.md` R-60（原 R-02）
+> 创建时间：2026-06-11（定位为护栏/仪表，不是重构主线）
+> 对应计划：`v2/IMPLEMENTATION-PLAN.md`
 > 参考实现：`scripts/check-scripts-governance.mjs` + `script-root-governance-baseline.json`
 > 注意：守卫脚本落点遵守 scripts 根目录冻结，放 `scripts/governance/`（下文示例路径按此理解）；R-10 的 `protocol.generated.ts` 等生成代码必须豁免
 

@@ -531,10 +531,6 @@
         "lines": 859
       },
       {
-        "path": "src/components/agent/chat/workspace/SceneAppExecutionSummaryCard.tsx",
-        "lines": 858
-      },
-      {
         "path": "src/lib/api/skills.ts",
         "lines": 857
       },

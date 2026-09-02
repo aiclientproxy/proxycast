@@ -610,7 +610,7 @@ fn model_from_catalog(provider_id: &str, metadata: EnhancedModelMetadata) -> Mod
         capability_snapshot,
         context_window: metadata.limits.context_length,
         max_output_tokens: metadata.limits.max_output_tokens,
-        supports_personality: false,
+        supports_personality: model_messages_support_personality(metadata.model_messages.as_ref()),
         multi_agent_version: metadata.multi_agent_version.map(|version| match version {
             ModelMultiAgentVersion::Disabled => MultiAgentVersion::Disabled,
             ModelMultiAgentVersion::V1 => MultiAgentVersion::V1,
@@ -621,6 +621,32 @@ fn model_from_catalog(provider_id: &str, metadata: EnhancedModelMetadata) -> Mod
         default_service_tier,
         is_default: false,
     }
+}
+
+fn model_messages_support_personality(model_messages: Option<&serde_json::Value>) -> bool {
+    let Some(model_messages) = model_messages else {
+        return false;
+    };
+    let template = ["instructions_template", "instructionsTemplate"]
+        .into_iter()
+        .find_map(|key| model_messages.get(key).and_then(serde_json::Value::as_str));
+    if !template.is_some_and(|template| template.contains("{{ personality }}")) {
+        return false;
+    }
+    let Some(variables) = ["instructions_variables", "instructionsVariables"]
+        .into_iter()
+        .find_map(|key| model_messages.get(key))
+    else {
+        return false;
+    };
+
+    [
+        "personality_default",
+        "personality_friendly",
+        "personality_pragmatic",
+    ]
+    .into_iter()
+    .all(|key| variables.get(key).is_some_and(serde_json::Value::is_string))
 }
 
 fn encode_model_route_selector(provider_id: &str, model_id: &str) -> String {
@@ -917,6 +943,40 @@ mod tests {
             model_from_catalog("openai", explicit).multi_agent_version,
             Some(MultiAgentVersion::V2)
         );
+    }
+
+    #[test]
+    fn model_list_derives_personality_support_from_complete_model_messages() {
+        let mut complete = model("openai", "complete", ModelVisibility::List);
+        complete.model_messages = Some(serde_json::json!({
+            "instructions_template": "before {{ personality }} after",
+            "instructions_variables": {
+                "personality_default": "",
+                "personality_friendly": "friendly",
+                "personality_pragmatic": "pragmatic"
+            }
+        }));
+        let mut missing_variable = complete.clone();
+        missing_variable.id = "missing-variable".to_string();
+        missing_variable
+            .model_messages
+            .as_mut()
+            .and_then(serde_json::Value::as_object_mut)
+            .and_then(|messages| messages.get_mut("instructions_variables"))
+            .and_then(serde_json::Value::as_object_mut)
+            .expect("instructions variables")
+            .remove("personality_pragmatic");
+        let mut missing_placeholder = complete.clone();
+        missing_placeholder.id = "missing-placeholder".to_string();
+        missing_placeholder
+            .model_messages
+            .as_mut()
+            .expect("model messages")["instructions_template"] =
+            serde_json::json!("literal instructions");
+
+        assert!(model_from_catalog("openai", complete).supports_personality);
+        assert!(!model_from_catalog("openai", missing_variable).supports_personality);
+        assert!(!model_from_catalog("openai", missing_placeholder).supports_personality);
     }
 
     #[test]

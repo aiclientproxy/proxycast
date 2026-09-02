@@ -439,7 +439,10 @@ function verifyDesktopResourceManifest(
           "desktop resource manifest Windows native helper must be read-only",
         );
       }
-      if (!Array.isArray(helperMetadata.api) || helperMetadata.api.length === 0) {
+      if (
+        !Array.isArray(helperMetadata.api) ||
+        helperMetadata.api.length === 0
+      ) {
         throw new Error(
           "desktop resource manifest Windows native helper API metadata is missing",
         );
@@ -464,6 +467,11 @@ function verifyDesktopResourceManifest(
     if (helperMetadata?.id !== "macos-native-host") {
       throw new Error(
         "desktop resource manifest is missing macOS native helper metadata",
+      );
+    }
+    if (helperMetadata.protocolVersion !== 1) {
+      throw new Error(
+        "desktop resource manifest macOS native helper protocol version is unsupported",
       );
     }
     if (
@@ -644,7 +652,9 @@ function expectedDesktopResourcePath(id, key, platform) {
         ? `app-server/${key}/windows-sandbox-runner.exe`
         : null;
     case "windows-native-host":
-      return platform === "win32" ? "native/windows/windows-native-host.exe" : null;
+      return platform === "win32"
+        ? "native/windows/windows-native-host.exe"
+        : null;
     default:
       return null;
   }

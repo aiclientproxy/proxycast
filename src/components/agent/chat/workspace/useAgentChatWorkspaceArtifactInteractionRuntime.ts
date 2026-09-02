@@ -12,10 +12,6 @@ type ArtifactSurfaceParams = UseWorkspaceArtifactSurfaceRuntimeParams;
 export type UseAgentChatWorkspaceArtifactInteractionRuntimeParams = {
   action: ArtifactActionParams;
   surface: {
-    sceneAppExecution: Omit<
-      ArtifactSurfaceParams["sceneAppExecution"],
-      "onOpenArtifact" | "onOpenTaskFile" | "onOpenWorkspaceFile"
-    >;
     setLayoutMode: ArtifactSurfaceParams["setLayoutMode"];
     workbenchRequests: ArtifactSurfaceParams["workbenchRequests"];
   };
@@ -28,12 +24,6 @@ export function useAgentChatWorkspaceArtifactInteractionRuntime({
 }: UseAgentChatWorkspaceArtifactInteractionRuntimeParams) {
   const artifactActionRuntime = useWorkspaceArtifactActionRuntime(action);
   const artifactSurfaceRuntime = useWorkspaceArtifactSurfaceRuntime({
-    sceneAppExecution: {
-      ...surface.sceneAppExecution,
-      onOpenArtifact: artifactActionRuntime.handleArtifactClick,
-      onOpenTaskFile: artifactActionRuntime.handleTaskFileClick,
-      onOpenWorkspaceFile: artifactActionRuntime.handleWorkspaceFileClick,
-    },
     setLayoutMode: surface.setLayoutMode,
     workbenchRequests: surface.workbenchRequests,
   });

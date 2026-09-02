@@ -23,6 +23,13 @@ Agent 产品主链固定为：
 model/capability/credential readiness 必须继续 fail closed，不能由 provider 名称、
 legacy alias 或默认值放行。
 
+已删除的 Rust 根宿主目录与 SceneApp 产品面已完成替换并物理删除，当前分类同样为
+`dead / deleted / forbidden-to-restore`。应用目录只允许由 Plugin 承接；任务执行只允许
+走 Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore / Agent Runtime；结果参考
+只允许走 Curated Task + Memory reference。旧目录、命令、类型、source kind、i18n key、
+脚本和文档入口只能出现在负向回流守卫或不可变历史 evidence 中，不得恢复为 compat、
+fallback 或 active 文档导航。
+
 Agent loop、状态机、Thread/Turn/Item、工具、MCP、Skills、Multi-Agent、历史恢复和 GUI 护栏按 `/Users/coso/Documents/dev/rust/codex` 收敛。多模型控制平面的 model catalog、model switch、provider capability、provider readiness 和 retry/circuit breaker 按 `/Users/coso/Documents/dev/rust/grok-build` 收敛；provider wire 的 endpoint、canonical content、媒体 lowering 和多协议 stream 可参考 `/Users/coso/Documents/dev/js/opencode`。grok-build/OpenCode 只提供 provider/model 机制参考，不成为 Lime runtime 或 GUI owner。
 
 ## 直接替换

@@ -1,40 +1,37 @@
-## Lime v1.138.0
+## Lime v1.139.0
 
 ### 新功能
 
-- 新增统一 Composer Controller，首页与会话输入栏共享结构化草稿、提交意图、历史召回以及 start、queue、steer、interrupt 路由语义。
-- 新增 App Server `promptHistory/read|append` 持久化历史，提供跨进程 JSONL 分页、文件锁、坏行容错和跨平台日志身份。
-- 新增 Desktop capability/readiness 合同、macOS 原生 helper 与 security-scoped bookmark 生命周期，覆盖权限、Launch Services、显示器、HID、设备密钥和打包资源状态。
-- 新增跨平台 desktop resource manifest，将 App Server、Code Mode、Windows sandbox helpers 和 macOS native host 纳入统一身份、架构及 SHA-256 校验。
+- 新增仓库级 `FEATURE-MAP.md`，按用户能力、稳定入口、current owner 与协议边界导航 Agent、Workspace、Provider、MCP、Skills、Plugins、Memory、Artifact、Scheduled Tasks 和 Desktop Host。
+- 扩展 macOS native host 与 Windows packaged evidence，覆盖窗口编排、权限、资源身份、Squirrel 安装态和真实 Electron/App Server Gate B 证据。
+- 补齐 model-provider reasoning effort 与 provider route 合同，让模型能力、默认选择、切换、readiness 和推理档位继续收敛到统一控制面。
 
 ### 修复
 
-- 修复首页预热阶段过早写入正式 local override，导致路由 owner 清空 active draft、Banner/皮肤 Hero 消失且发送无法复用预热 session 的问题；预热现在只准备 session，正式提交时才接管路由。
-- 修复 Agnes 官方 `agnes-2.5-pro` endpoint 被识别为不可执行自定义模型的问题，未知 endpoint 继续 fail closed。
-- 修复 Composer 压缩 bundle 的初始化时序、异步历史合并、失败草稿保留和大粘贴展开边界。
-- 修复线程排队操作、模型恢复、reasoning 状态投影以及窄窗口 Header/Timeline 布局中的漂移和可用性问题。
+- 修复资源管理器生产路径动态加载测试窗口夹具的问题，关闭行为直接使用当前窗口语义。
+- 移除服务端对 `tauri://localhost` 与 `tauri.localhost` 的 CORS 放行，只保留当前本地开发入口。
+- 修复 Curated Task 结果参考、Memory continuation、模型配置和 provider route 中的事实源漂移。
 
 ### 优化与重构
 
-- 将 Composer、prompt history、Desktop capability 和资源完整性分别收敛到唯一 current owner，不新增 Electron 业务后端或 Renderer 持久化事实源。
-- 对齐 Codex current reasoning policy，补齐 `persistent` effort、五语言选择器文案以及模型上下文和工具策略的事实源守卫。
-- 强化 Windows Squirrel 发布链，安装后执行 Code Mode Gate B 并验证 `Lime.exe -> app-server.exe -> code-mode-host.exe` 进程链。
-- 更新 DeepSWE adapter 契约与治理断言，避免测试清单和 current owner 版本漂移。
-
-### 测试与质量
-
-- 扩展 App Server protocol/schema/generated client、Composer、prompt history、Desktop Host、macOS native host、资源 manifest、Windows Squirrel 与 Code Mode Gate B 回归。
-- 发布门禁覆盖版本一致性、TypeScript、协议 contracts、受影响前端/Rust 测试、真实 Electron GUI smoke 和 release workflow guard。
-- Windows packaged Gate B 由 `windows-2022` release workflow 生成平台证据；本地静态测试不冒充 Windows platform pass。
+- SceneApp 与 `src-tauri` 全面退役：应用目录统一归 Plugin，业务调用统一进入 Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore / Agent Runtime，结果参考统一归 Curated Task 与 Memory。
+- 删除 Tauri capability/schema、SceneApp 专属组件、Hook、网关、文案和正向测试；旧名称只保留在负向回流守卫与历史 evidence。
+- 收敛 Rust current crate 的宿主边界表述，移除旧进程内桌面命令、Tauri 状态包装和历史主 crate 叙事。
 
 ### 文档
 
-- 更新全局架构、Codex GUI 对齐计划和 Desktop 平台对齐计划，记录 current owner、能力矩阵、证据等级与剩余平台缺口。
-- 新增 v1.138.0 发布执行计划，明确候选范围、排除的 Codex 构建参考文件、验证和发布收口步骤。
+- 以 Lime 自身产品和架构重写 Feature Map，不复制参考项目的能力结构。
+- 清理被 current owner 替代的历史发布计划、Plugin v1/v2、旧 refactor、iteration notes 和阶段性研究材料，并同步更新导航与架构文档。
+- 本次共删除 98 份 Markdown、1 份 HTML、4 份 JSON 和 16 份旧前端源码/测试；无消费者的旧 A2UI/Tauri 设计一并清退，仍有 current 价值的文档统一改写到 Electron Desktop Host 与 App Server 边界。Git history、Release Notes 与不可变 evidence 承接历史追溯。
+
+### 测试与质量
+
+- 扩展 App Server contracts、Desktop Host、macOS native host、Windows packaged evidence、model-provider、Curated Task、Memory 和治理回归。
+- 发布门禁覆盖版本一致性、TypeScript、i18n、协议 contracts、Rust 相关测试、文档边界、治理扫描、真实 Electron GUI smoke 与完整前端续跑。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.138.0`。
-- Codex Desktop 实时视觉基线仍受 macOS AppleEvent 权限阻塞；首页 Banner/皮肤 Hero 按产品裁决保留，不纳入对齐。
+- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.139.0`。
+- 不新增 compat 或 deprecated owner；SceneApp、`src-tauri`、Tauri capability 与测试窗口夹具均为 `dead / deleted / forbidden-to-restore`。
 
-**完整变更**: `v1.137.0` -> `v1.138.0`
+**完整变更**: `v1.138.0` -> `v1.139.0`

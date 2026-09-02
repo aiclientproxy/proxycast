@@ -1,17 +1,13 @@
 # Lime Skill Forge 对照开发路线图
 
 > 状态：P0-P10 第六刀完成；Read-Only HTTP API policy 已有 runtime evidence pack 端到端审计回归，并通过 GUI smoke
-> 更新时间：2026-05-07
+> 更新时间：2026-09-02
 > 目标：把 Skill Forge 访谈里的 “Coding Agent 编码 CLI / API / tools、成功任务固化为 Agent、组织 AI Native 反馈闭环” 收敛成 Lime 可执行路线图，补强 skills pipeline 的生成、验证、注册、rerun 和 evidence 闭环。
 
-配套研究：
+当前依据：
 
-- [../../research/skill-forge/README.md](../../research/skill-forge/README.md)
-- [../../research/skill-forge/pivot-and-org-harness.md](../../research/skill-forge/pivot-and-org-harness.md)
-- [../../research/skill-forge/agent-product-model.md](../../research/skill-forge/agent-product-model.md)
-- [../../research/skill-forge/architecture-breakdown.md](../../research/skill-forge/architecture-breakdown.md)
-- [../../research/skill-forge/tool-coding-orchestration.md](../../research/skill-forge/tool-coding-orchestration.md)
-- [../../research/skill-forge/lime-gap-analysis.md](../../research/skill-forge/lime-gap-analysis.md)
+- [../../aiprompts/skill-standard.md](../../aiprompts/skill-standard.md)
+- [../../aiprompts/query-loop.md](../../aiprompts/query-loop.md)
 - [../../research/pi-mono-coding-agent/README.md](../../research/pi-mono-coding-agent/README.md)
 - [../../research/codex-goal/README.md](../../research/codex-goal/README.md)
 - [../../exec-plans/skill-forge-completion-audit.md](../../exec-plans/skill-forge-completion-audit.md)
@@ -21,13 +17,6 @@
 - [../../exec-plans/skill-forge-readonly-http-api-p8-plan.md](../../exec-plans/skill-forge-readonly-http-api-p8-plan.md)
 - [../../exec-plans/skill-forge-readonly-http-api-p9-plan.md](../../exec-plans/skill-forge-readonly-http-api-p9-plan.md)
 - [../../exec-plans/skill-forge-readonly-http-api-p10-plan.md](../../exec-plans/skill-forge-readonly-http-api-p10-plan.md)
-
-配套图纸：
-
-- [./diagrams.md](./diagrams.md)
-- [./prototype.md](./prototype.md)
-- [./coding-agent-layer.md](./coding-agent-layer.md)
-- [./architecture-review.md](./architecture-review.md)
 
 相关路线图：
 
@@ -172,7 +161,7 @@ Level 6: policy-approved scheduled external write
 
 ### 5.1 Coding Agent / Agent Builder
 
-`Coding Agent` 是 Skill Forge 启发里最核心的一层，负责把用户讲清楚的业务目标变成可验证的能力草案。详细设计见 [./coding-agent-layer.md](./coding-agent-layer.md)。
+`Coding Agent` 是 Skill Forge 启发里最核心的一层，负责把用户讲清楚的业务目标变成可验证的能力草案。运行边界由 [../../aiprompts/skill-standard.md](../../aiprompts/skill-standard.md) 与 [../../aiprompts/query-loop.md](../../aiprompts/query-loop.md) 共同约束。
 
 本层可以参考 [../../research/pi-mono-coding-agent/README.md](../../research/pi-mono-coding-agent/README.md) 中对 `pi-mono` 的调研，但只参考 coding harness 的工程切面：会话分层、工具 allowlist、可插拔工具后端、事件生命周期和 deterministic test harness。Lime 不引入 pi-style 终端产品、JSONL session 事实源或全仓库 shell/write 权限。
 
@@ -278,7 +267,7 @@ Level 6: policy-approved scheduled external write
 
 交付：
 
-1. `internal/research/skill-forge/` 研究拆解。
+1. 本路线图记录能力生成、验证、注册与运行边界。
 2. `internal/roadmap/skill-forge/` 开发计划。
 3. 明确 `Skill Forge` 不新增 runtime。
 4. 明确 generated capability 必须进入 Skill / Adapter 标准。

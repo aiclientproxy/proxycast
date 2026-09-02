@@ -15,12 +15,12 @@ pub const UPDATE_PLAN_LEGACY_ALIASES: &[&str] =
 
 /// Resolves the per-turn checklist exposure switch.
 ///
-/// The absence of a switch preserves Lime's existing product default. Callers can
-/// explicitly disable the surface through trusted runtime/config metadata, matching
-/// Codex's opt-in semantics without allowing arbitrary prompt text to change tools.
+/// The feature is opt-in, matching Codex's `tools.update_plan.enabled` default.
+/// Callers can explicitly enable or disable the surface through trusted
+/// runtime/config metadata without allowing arbitrary prompt text to change tools.
 pub fn update_plan_enabled_from_metadata(metadata: Option<&serde_json::Value>) -> bool {
     let Some(metadata) = metadata else {
-        return true;
+        return false;
     };
     [
         "/harness/update_plan_enabled",
@@ -33,6 +33,8 @@ pub fn update_plan_enabled_from_metadata(metadata: Option<&serde_json::Value>) -
         "/runtime_request/features/updatePlan/enabled",
         "/config/agent/toolExecution/update_plan_enabled",
         "/config/agent/toolExecution/updatePlanEnabled",
+        "/config/agent/tool_execution/update_plan_enabled",
+        "/config/agent/tool_execution/updatePlanEnabled",
         "/config/experimental/update_plan/enabled",
         "/config/experimental/updatePlan/enabled",
     ]
@@ -42,7 +44,7 @@ pub fn update_plan_enabled_from_metadata(metadata: Option<&serde_json::Value>) -
             .pointer(pointer)
             .and_then(serde_json::Value::as_bool)
     })
-    .unwrap_or(true)
+    .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -61,11 +63,18 @@ mod feature_tests {
     }
 
     #[test]
-    fn missing_switch_keeps_lime_default() {
-        assert!(update_plan_enabled_from_metadata(None));
-        assert!(update_plan_enabled_from_metadata(Some(
+    fn missing_switch_is_opt_in_by_default() {
+        assert!(!update_plan_enabled_from_metadata(None));
+        assert!(!update_plan_enabled_from_metadata(Some(
             &json!({"harness": {}})
         )));
+    }
+
+    #[test]
+    fn config_snake_case_switch_is_honored() {
+        assert!(update_plan_enabled_from_metadata(Some(&json!({
+            "config": {"agent": {"tool_execution": {"update_plan_enabled": true}}}
+        }))));
     }
 }
 pub const PLAN_UPDATED_MESSAGE: &str = "Plan updated";

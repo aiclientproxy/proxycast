@@ -54,9 +54,7 @@ describe("electron desktop resource manifest", () => {
 
     expect(source).toContain("UIA_HWND nativeWindowHandle = nullptr;");
     expect(source).not.toContain("int nativeWindowHandle = 0;");
-    expect(source).not.toMatch(
-      /^\s*HWND nativeWindowHandle = nullptr;\s*$/mu,
-    );
+    expect(source).not.toMatch(/^\s*HWND nativeWindowHandle = nullptr;\s*$/mu);
   });
 
   it("按平台和架构生成稳定的资源清单", () => {
@@ -191,6 +189,7 @@ describe("electron desktop resource manifest", () => {
     );
     expect(result.manifest.native.helper).toMatchObject({
       id: "macos-native-host",
+      protocolVersion: 1,
       signedByForge: true,
       frameworks: expect.arrayContaining([
         "AVFoundation",

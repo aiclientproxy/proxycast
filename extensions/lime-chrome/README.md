@@ -96,4 +96,4 @@ npm run bridge:e2e -- --server ws://127.0.0.1:8787 --key proxy_cast --profile de
 - 扩展只负责浏览器侧采集与动作执行。
 - 当前主链仍然是 `API -> observer socket -> 扩展 -> 当前已登录 Chrome 标签页`，不会额外拉起新的托管 Chrome。
 - Agent 侧通过 `agent_cmd` 暴露的现役浏览器 MCP 工具访问。
-- 若你同时使用独立 Chrome Profile（Tauri `open_chrome_profile_window`），请在对应 Profile 内安装该扩展，并使用不同 `profileKey` 做隔离。
+- 若你同时使用多个 Chrome Profile，请分别安装并配置扩展，并使用不同的 `profileKey` 隔离连接。

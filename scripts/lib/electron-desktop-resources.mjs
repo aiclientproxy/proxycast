@@ -59,7 +59,8 @@ const WINDOWS_NATIVE_HOST_SOURCE = path.join(
 const MAC_NATIVE_HOST_BUNDLE_RELATIVE_PATH =
   "native/macos/macos-native-host.app";
 const MAC_NATIVE_HOST_RELATIVE_PATH = `${MAC_NATIVE_HOST_BUNDLE_RELATIVE_PATH}/Contents/MacOS/macos-native-host`;
-const WINDOWS_NATIVE_HOST_RELATIVE_PATH = "native/windows/windows-native-host.exe";
+const WINDOWS_NATIVE_HOST_RELATIVE_PATH =
+  "native/windows/windows-native-host.exe";
 
 export function desktopResourcePlatformKey(
   platform = process.platform,
@@ -277,6 +278,7 @@ function prepareDesktopResourcesFromRoot({
     native = {
       helper: {
         id: "macos-native-host",
+        protocolVersion: 1,
         path: MAC_NATIVE_HOST_RELATIVE_PATH,
         bundlePath: MAC_NATIVE_HOST_BUNDLE_RELATIVE_PATH,
         bundleIdentifier: `${applicationId}.native-host`,
@@ -299,7 +301,10 @@ function prepareDesktopResourcesFromRoot({
       },
     };
   } else if (platform === "win32") {
-    const helperPath = path.join(resourcesRoot, WINDOWS_NATIVE_HOST_RELATIVE_PATH);
+    const helperPath = path.join(
+      resourcesRoot,
+      WINDOWS_NATIVE_HOST_RELATIVE_PATH,
+    );
     mkdirSync(path.dirname(helperPath), { recursive: true });
     compileWindowsNativeHost({
       sourcePath: WINDOWS_NATIVE_HOST_SOURCE,

@@ -18,10 +18,15 @@ import path from "node:path";
 import type { BrowserWindow } from "./electronRuntime";
 import {
   buildElectronSmokeSummary,
+  ELECTRON_SMOKE_LAYOUT_CLAIM_BOUNDARY,
+  ELECTRON_SMOKE_LAYOUT_PROOF_LEVEL,
+  ELECTRON_SMOKE_LAYOUT_VIEWPORTS,
   isElectronSmokeStartupUrl,
   normalizeElectronSmokeRunId,
   sanitizeElectronSmokeLocation,
   type ElectronSmokeDiagnostics,
+  type ElectronSmokeLayoutEvidence,
+  type ElectronSmokeLayoutViewportEvidence,
   type ElectronSmokeRendererEvidence,
   type ElectronSmokeRouteSnapshot,
   type ElectronSmokeSummary,
@@ -74,6 +79,7 @@ interface ElectronSmokeRunner {
 const SUMMARY_FILE = "summary.json";
 const TRACE_FILE = "trace-summary.json";
 const SCREENSHOT_FILE = "settings-memory.png";
+const LAYOUT_SCREENSHOT_PREFIX = "layout";
 const LEGACY_SURFACE_CATALOG = "src/lib/governance/legacySurfaceCatalog.json";
 const EMPTY_RENDERER_EVIDENCE: ElectronSmokeRendererEvidence = {
   electron: false,
@@ -124,6 +130,7 @@ export function createElectronSmokeRunner(
     renderer: { ...EMPTY_RENDERER_EVIDENCE },
     traceFacts: [],
   };
+  let layoutEvidence: ElectronSmokeLayoutEvidence = emptyLayoutEvidence();
   let screenshotCaptured = false;
   let pageErrorsBeforeReload = 0;
   let lastSummary: ElectronSmokeSummary | null = null;
@@ -164,6 +171,7 @@ export function createElectronSmokeRunner(
       hostAppServerProtocol,
       routes: [...routes],
       renderer: rendererCollection.renderer,
+      layout: layoutEvidence,
       diagnostics: { ...diagnostics },
       artifacts: {
         summary: SUMMARY_FILE,
@@ -248,6 +256,15 @@ export function createElectronSmokeRunner(
           title: reloadedWorkbench.title ?? null,
         });
         console.log("[electron-smoke] claw workbench shell ready after reload");
+
+        stage = "layout-geometry";
+        layoutEvidence = await collectElectronSmokeLayoutEvidence(
+          options.window,
+          evidenceDir,
+        );
+        console.log(
+          `[electron-smoke] responsive layout ready viewports=${layoutEvidence.viewports.length}`,
+        );
 
         stage = "settings-memory-ready";
         const memory = await waitForElectronSmokeMemorySettingsReady(
@@ -512,6 +529,214 @@ async function collectRendererSmokeEvidence(
     })()`,
     true,
   )) as RendererSmokeCollection;
+}
+
+function emptyLayoutEvidence(): ElectronSmokeLayoutEvidence {
+  return {
+    proofLevel: ELECTRON_SMOKE_LAYOUT_PROOF_LEVEL,
+    claimBoundary: ELECTRON_SMOKE_LAYOUT_CLAIM_BOUNDARY,
+    viewports: [],
+    screenshots: [],
+    assertions: {
+      expectedViewportCount: ELECTRON_SMOKE_LAYOUT_VIEWPORTS.length,
+      capturedViewportCount: 0,
+      allViewportsPass: false,
+      composerHeightStable: false,
+      composerHeightRange: null,
+    },
+  };
+}
+
+async function collectElectronSmokeLayoutEvidence(
+  window: BrowserWindow,
+  evidenceDir: string,
+): Promise<ElectronSmokeLayoutEvidence> {
+  if (window.isDestroyed()) {
+    throw new Error("main window was destroyed before layout geometry");
+  }
+
+  const originalWindowSize = window.getSize();
+  const viewports: ElectronSmokeLayoutViewportEvidence[] = [];
+  const screenshots: string[] = [];
+  mkdirSync(evidenceDir, { recursive: true });
+
+  try {
+    for (const requested of ELECTRON_SMOKE_LAYOUT_VIEWPORTS) {
+      if (window.isDestroyed()) {
+        throw new Error("main window was destroyed during layout geometry");
+      }
+      window.setSize(requested.width, requested.height);
+      await waitForElectronSmokeResizeSettled(window);
+      const actualWindowSize = window.getSize();
+      const viewport = await readElectronSmokeLayoutViewport(
+        window,
+        requested,
+        {
+          width: actualWindowSize[0] ?? 0,
+          height: actualWindowSize[1] ?? 0,
+        },
+      );
+      viewports.push(viewport);
+
+      const screenshotName = `${LAYOUT_SCREENSHOT_PREFIX}-${requested.width}x${requested.height}.png`;
+      const screenshot = await window.webContents.capturePage();
+      if (screenshot.isEmpty()) {
+        throw new Error(
+          `electron smoke layout screenshot was empty: ${screenshotName}`,
+        );
+      }
+      writeFileSync(path.join(evidenceDir, screenshotName), screenshot.toPNG());
+      screenshots.push(screenshotName);
+    }
+  } finally {
+    if (!window.isDestroyed()) {
+      window.setSize(
+        originalWindowSize[0] ?? 1440,
+        originalWindowSize[1] ?? 920,
+      );
+    }
+  }
+
+  const composerHeights = viewports
+    .map((viewport) => viewport.nodes.inputbarCore?.rect?.height ?? null)
+    .filter(
+      (height): height is number => typeof height === "number" && height > 0,
+    );
+  const composerHeightRange =
+    composerHeights.length > 0
+      ? Math.max(...composerHeights) - Math.min(...composerHeights)
+      : null;
+  const composerHeightStable =
+    composerHeights.length === ELECTRON_SMOKE_LAYOUT_VIEWPORTS.length &&
+    (composerHeightRange ?? Number.POSITIVE_INFINITY) <= 64;
+  const allViewportsPass =
+    viewports.length === ELECTRON_SMOKE_LAYOUT_VIEWPORTS.length &&
+    viewports.every((viewport) =>
+      Object.values(viewport.assertions).every(Boolean),
+    );
+
+  return {
+    proofLevel: ELECTRON_SMOKE_LAYOUT_PROOF_LEVEL,
+    claimBoundary: ELECTRON_SMOKE_LAYOUT_CLAIM_BOUNDARY,
+    viewports,
+    screenshots,
+    assertions: {
+      expectedViewportCount: ELECTRON_SMOKE_LAYOUT_VIEWPORTS.length,
+      capturedViewportCount: viewports.length,
+      allViewportsPass,
+      composerHeightStable,
+      composerHeightRange,
+    },
+  };
+}
+
+async function waitForElectronSmokeResizeSettled(
+  window: BrowserWindow,
+): Promise<void> {
+  await window.webContents.executeJavaScript(
+    `new Promise((resolve) => {
+      let previous = "";
+      let stableTicks = 0;
+      const startedAt = Date.now();
+      const tick = () => {
+        const current = window.innerWidth + "x" + window.innerHeight;
+        stableTicks = current === previous ? stableTicks + 1 : 0;
+        previous = current;
+        if (stableTicks >= 2 || Date.now() - startedAt >= 5000) {
+          resolve(current);
+          return;
+        }
+        setTimeout(tick, 50);
+      };
+      tick();
+    })`,
+    true,
+  );
+}
+
+async function readElectronSmokeLayoutViewport(
+  window: BrowserWindow,
+  requested: { width: number; height: number },
+  actualWindowSize: { width: number; height: number },
+): Promise<ElectronSmokeLayoutViewportEvidence> {
+  return (await window.webContents.executeJavaScript(
+    `(() => {
+      const requested = ${JSON.stringify(requested)};
+      const windowSize = ${JSON.stringify(actualWindowSize)};
+      const viewport = { width: window.innerWidth, height: window.innerHeight };
+      const documentSize = {
+        scrollWidth: Math.max(document.documentElement?.scrollWidth || 0, document.body?.scrollWidth || 0),
+        scrollHeight: Math.max(document.documentElement?.scrollHeight || 0, document.body?.scrollHeight || 0),
+      };
+      const specs = [
+        { key: "workspaceShell", testId: "workspace-shell-scene", selector: '[data-testid="workspace-shell-scene"]', required: true },
+        { key: "workspaceMainArea", testId: "workspace-main-area", selector: '[data-testid="workspace-main-area"]', required: true },
+        { key: "inputbarCore", testId: "inputbar-core-container", selector: '[data-testid="inputbar-core-container"]', required: true },
+        { key: "composerInput", testId: "agent-chat-message", selector: 'textarea[name="agent-chat-message"]', required: true },
+        { key: "messageListColumn", testId: "message-list-column", selector: '[data-testid="message-list-column"]', required: false },
+        { key: "emptyStateFirstScreen", testId: "empty-state-first-screen", selector: '[data-testid="empty-state-first-screen"]', required: false },
+        { key: "threadHeader", testId: "thread-workspace-header", selector: '[data-testid="thread-workspace-header"]', required: false },
+        { key: "threadHeaderTitle", testId: "thread-workspace-header-title", selector: '[data-testid="thread-workspace-header-title"]', required: false },
+        { key: "threadHeaderActions", testId: "thread-workspace-header-actions", selector: '[data-testid="thread-workspace-header-actions"]', required: false },
+      ];
+      const visible = (element) => {
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      };
+      const nodeEvidence = (spec) => {
+        const element = document.querySelector(spec.selector);
+        const rect = element?.getBoundingClientRect();
+        const normalizedRect = rect ? {
+          x: Number(rect.x.toFixed(2)),
+          y: Number(rect.y.toFixed(2)),
+          width: Number(rect.width.toFixed(2)),
+          height: Number(rect.height.toFixed(2)),
+          right: Number(rect.right.toFixed(2)),
+          bottom: Number(rect.bottom.toFixed(2)),
+        } : null;
+        const isVisible = visible(element);
+        const withinViewport = Boolean(
+          normalizedRect &&
+          normalizedRect.x >= -1 &&
+          normalizedRect.y >= -1 &&
+          normalizedRect.right <= viewport.width + 1 &&
+          normalizedRect.bottom <= viewport.height + 1,
+        );
+        return {
+          testId: spec.testId,
+          present: Boolean(element),
+          visible: isVisible,
+          rect: normalizedRect,
+          withinViewport,
+          required: spec.required,
+        };
+      };
+      const nodes = Object.fromEntries(specs.map((spec) => [spec.key, nodeEvidence(spec)]));
+      const requiredNodes = specs.filter((spec) => spec.required).map((spec) => nodes[spec.key]);
+      const header = nodes.threadHeader;
+      const title = nodes.threadHeaderTitle;
+      const actions = nodes.threadHeaderActions;
+      const headerActionsDoNotOverlap = !header.present || !title.present || !actions.present ||
+        (title.rect && actions.rect ? title.rect.right <= actions.rect.left + 1 : false);
+      const contentSurfacePresent = Boolean(
+        (nodes.messageListColumn.present && nodes.messageListColumn.visible) ||
+        (nodes.emptyStateFirstScreen.present && nodes.emptyStateFirstScreen.visible),
+      );
+      const assertions = {
+        windowSizeMatchesRequest: Math.abs(windowSize.width - requested.width) <= 2 && Math.abs(windowSize.height - requested.height) <= 2,
+        requiredNodesVisible: requiredNodes.every((node) => node.present && node.visible),
+        requiredNodesWithinViewport: requiredNodes.every((node) => node.withinViewport),
+        contentSurfacePresent,
+        noHorizontalOverflow: documentSize.scrollWidth <= viewport.width + 1,
+        headerTitleVisible: !header.present || (title.present && title.visible),
+        headerActionsDoNotOverlap,
+      };
+      return { requested, window: windowSize, viewport, document: documentSize, nodes, assertions };
+    })()`,
+    true,
+  )) as ElectronSmokeLayoutViewportEvidence;
 }
 
 async function waitForElectronSmokeWorkbenchReady(

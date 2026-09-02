@@ -200,14 +200,12 @@ Agent UI `runtimeEntity=automation_job` 或 `background_teammate`；退出条件
 
 ### `deprecated`
 
-- `internal/develop/execution-tracker-technical-plan.md`
-- `internal/develop/execution-tracker-deprecation-plan.md`
-- `internal/develop/execution-tracker-p1-p2-roadmap.md`
+- Execution Tracker / heartbeat 旧 taxonomy（专项文档已删除，历史仅从 Git history 查阅）
 - 任何新增的 `heartbeat_executions` 写路径或读取依赖
 - 任何把 `heartbeat` 当成与 `chat / skill / automation` 并列 run source 的新设计
 - 任何把 `scheduler tick / cron / 心跳任务` 当成独立 task taxonomy 的新设计
 
-这些路径仍可作为历史实现说明或退场清单，但不再承担 current taxonomy 定义权。
+这些概念不再承担 current taxonomy 定义权，也不得恢复独立执行实体或公开协议。
 
 ### `dead`
 

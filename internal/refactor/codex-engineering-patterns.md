@@ -2,7 +2,7 @@
 
 > 状态：参考材料（v2，2026-06-11 基于 codex 仓库深扫重写）
 > 对比对象：/Users/coso/Documents/dev/rust/codex（codex-rs workspace，125 crates，~97 万行 Rust）
-> 用途：为 `progressive-refactor-plan.md` 各轴提供可抄的参考实现；为 `directory-architecture-blueprint.md` 提供目标拓扑佐证
+> 用途：为 `v2/IMPLEMENTATION-PLAN.md` 提供可复用的参考实现；为 `directory-architecture-blueprint.md` 提供目标拓扑佐证
 > 阅读方式：按 Lime 的轴 A-F 逐轴对照，每轴给出 codex 的做法、证据路径、Lime 的借鉴决策
 
 ---

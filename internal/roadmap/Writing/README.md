@@ -1,8 +1,12 @@
 # Writing 路线图
 
 更新时间：2026-06-30
-状态：In Progress
+状态：`legacy current reference`（已由 Writing v2 路线图替换）
 主线：Agent Plugins v1.0.0 标准包下的内容工厂写文章闭环
+
+当前路线图：`internal/roadmap/Writing/v2/README.md`
+
+> 版本替换说明：本文和同目录 v1 文档保留基础 UI 闭环、迁移证据与历史设计记录，不再定义 Writing 的 current 执行合同。普通 Agent turn 编排、workflow audit、段落级 artifact、JSONL 审计、真实 Electron/CDP 验收和生产 readiness 统一以 [Writing v2](./v2/README.md)、[v2 产品需求](./v2/product-requirements.md)、[内容工厂插件重新梳理](./v2/content-factory-plugin-reframe.md) 与 [v2 执行计划](../../exec-plans/writing-v2-workflow-completion-plan.md) 为准。
 
 ## 1. 目标
 
@@ -42,11 +46,14 @@ Writing 路线图只描述写文章闭环；运行时 workflow、evidence、Arti
 
 | 文档                                                                                     | 用途                                                                                                          |
 | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| [`product-requirements.md`](./product-requirements.md)                                   | 背景、目的、收益、用户故事、用户用例和验收标准。                                                              |
-| [`architecture.md`](./architecture.md)                                                   | Lime 插件包标准、宿主、内容工厂插件、workflow、runtime、`articleArtifacts` 和右侧 Article Editor 的架构边界。 |
-| [`workflow-design.md`](./workflow-design.md)                                             | 写文章 workflow、子 Agent、skills、CLI、hooks、工具和产物卡规则。                                             |
-| [`sequence-diagrams.md`](./sequence-diagrams.md)                                         | 触发、编排、产物物化、点击展开和历史恢复时序图。                                                              |
-| [`implementation-plan.md`](./implementation-plan.md)                                     | 实施切片、当前进展、验证入口和剩余缺口。                                                                      |
+| [`v2/product-requirements.md`](./v2/product-requirements.md)                             | current 背景、产品合同、流程、数据模型和验收标准。                                                           |
+| [`v2/content-factory-plugin-reframe.md`](./v2/content-factory-plugin-reframe.md)         | current 执行卡片、文章产物、右侧编辑器和后台审计边界。                                                       |
+| [`../../exec-plans/writing-v2-workflow-completion-plan.md`](../../exec-plans/writing-v2-workflow-completion-plan.md) | current 实施切片、验证入口和剩余缺口。                                      |
+| [`product-requirements.md`](./product-requirements.md)                                   | v1 历史产品需求，effective decisions 已迁入 v2。                                                            |
+| [`architecture.md`](./architecture.md)                                                   | v1 历史架构记录，effective decisions 已迁入 v2。                                                            |
+| [`workflow-design.md`](./workflow-design.md)                                             | v1 历史 workflow 记录，effective decisions 已迁入 v2。                                                      |
+| [`sequence-diagrams.md`](./sequence-diagrams.md)                                         | v1 历史时序记录，effective decisions 已迁入 v2。                                                            |
+| [`implementation-plan.md`](./implementation-plan.md)                                     | v1 历史实施记录，current 进度以 v2 执行计划为准。                                                           |
 | [`prototypes/article-artifacts-editor.html`](./prototypes/article-artifacts-editor.html) | 通用 `ArtifactFrame`、文章 renderer 和右侧 Article Editor 的静态交互原型。                                    |
 
 ## 5. 与 Plugin v3 的关系

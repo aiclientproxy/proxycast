@@ -34,7 +34,7 @@ import {
   formatReviewFeedbackTemplate,
   type ReviewFeedbackProjection,
 } from "../utils/reviewFeedbackProjection";
-import type { SceneAppExecutionReviewPrefillSnapshot } from "../utils/sceneAppCuratedTaskReference";
+import type { CuratedTaskResultBaselineSnapshot } from "../utils/curatedTaskResultBaseline";
 import type {
   GeneralWorkbenchActivityLogGroup,
   GeneralWorkbenchCreationTaskGroup,
@@ -483,13 +483,13 @@ function ReviewFeedbackProjectionCard({
   );
 }
 
-function SceneAppReviewBaselineCard({
+function ResultBaselineCard({
   snapshot,
   highlights,
   dataTestId,
   className,
 }: {
-  snapshot: SceneAppExecutionReviewPrefillSnapshot;
+  snapshot: CuratedTaskResultBaselineSnapshot;
   highlights: string[];
   dataTestId?: string;
   className?: string;
@@ -518,7 +518,7 @@ function SceneAppReviewBaselineCard({
       {highlights.length > 0 ? (
         <div className="mt-1 space-y-1 text-[11px] leading-5 text-emerald-900">
           {highlights.map((item) => (
-            <div key={`sceneapp-baseline-${item}`}>{item}</div>
+            <div key={`result-baseline-${item}`}>{item}</div>
           ))}
         </div>
       ) : null}
@@ -601,9 +601,7 @@ function renderActivityLogItem(
               </span>
             </ActivityLogStepHead>
             {step.summary ? (
-              <ActivityLogStepSummary>
-                {step.summary}
-              </ActivityLogStepSummary>
+              <ActivityLogStepSummary>{step.summary}</ActivityLogStepSummary>
             ) : null}
           </ActivityLogStepRow>
         ))}
@@ -895,11 +893,11 @@ function GeneralWorkbenchWorkflowPanelComponent({
                       </span>
                     ) : null}
                   </div>
-                  {followUpProjection.sceneAppReviewBaselineSnapshot ? (
-                    <SceneAppReviewBaselineCard
-                      snapshot={followUpProjection.sceneAppReviewBaselineSnapshot}
-                      highlights={followUpProjection.sceneAppReviewBaselineHighlights}
-                      dataTestId="workflow-sidebar-sceneapp-baseline-card"
+                  {followUpProjection.resultBaselineSnapshot ? (
+                    <ResultBaselineCard
+                      snapshot={followUpProjection.resultBaselineSnapshot}
+                      highlights={followUpProjection.resultBaselineHighlights}
+                      dataTestId="workflow-sidebar-result-baseline-card"
                     />
                   ) : null}
                   {followUpProjection.reviewFeedbackProjection ? (
@@ -1090,7 +1088,9 @@ function GeneralWorkbenchWorkflowPanelComponent({
         {showCreationTasks ? (
           <ActivityList className="custom-scrollbar">
             {creationTaskSectionProjection.groups.length === 0 ? (
-              <ActivityMeta>{creationTaskSectionProjection.emptyText}</ActivityMeta>
+              <ActivityMeta>
+                {creationTaskSectionProjection.emptyText}
+              </ActivityMeta>
             ) : (
               creationTaskSectionProjection.groups.map((projection) => (
                 <CreationTaskGroupCard key={`creation-task-${projection.key}`}>
@@ -1109,7 +1109,9 @@ function GeneralWorkbenchWorkflowPanelComponent({
                         <CreationTaskContent>
                           <CreationTaskTitleRow>
                             <CreationTaskTitle>{task.title}</CreationTaskTitle>
-                            <CreationTaskTime>{task.timeLabel}</CreationTaskTime>
+                            <CreationTaskTime>
+                              {task.timeLabel}
+                            </CreationTaskTime>
                           </CreationTaskTitleRow>
                           <CreationTaskPath>{task.path}</CreationTaskPath>
                         </CreationTaskContent>
@@ -1165,7 +1167,9 @@ function GeneralWorkbenchWorkflowPanelComponent({
           <>
             <ActivityList className="custom-scrollbar">
               {activitySectionProjection.logs.length === 0 ? (
-                <ActivityMeta>{activitySectionProjection.emptyText}</ActivityMeta>
+                <ActivityMeta>
+                  {activitySectionProjection.emptyText}
+                </ActivityMeta>
               ) : (
                 activitySectionProjection.logs.map((projection) =>
                   renderActivityLogItem(
@@ -1178,7 +1182,9 @@ function GeneralWorkbenchWorkflowPanelComponent({
               )}
             </ActivityList>
             {activeRunDetailLoading ? (
-              <ActivityMeta>{activitySectionProjection.loadingText}</ActivityMeta>
+              <ActivityMeta>
+                {activitySectionProjection.loadingText}
+              </ActivityMeta>
             ) : activeRunDetail && runDetailProjection ? (
               <RunDetailPanel>
                 <RunDetailHeader>
@@ -1202,7 +1208,9 @@ function GeneralWorkbenchWorkflowPanelComponent({
                     </RunDetailMetaRow>
                   </RunDetailTitleBlock>
                 </RunDetailHeader>
-                <RunDetailSummary>{runDetailProjection.summary}</RunDetailSummary>
+                <RunDetailSummary>
+                  {runDetailProjection.summary}
+                </RunDetailSummary>
                 {runDetailProjection.detailRows.length > 0 ? (
                   <div className="mt-2 flex flex-col gap-1.5">
                     {runDetailProjection.detailRows.map((row) => (
@@ -1212,11 +1220,11 @@ function GeneralWorkbenchWorkflowPanelComponent({
                     ))}
                   </div>
                 ) : null}
-                {followUpProjection.sceneAppReviewBaselineSnapshot ? (
-                  <SceneAppReviewBaselineCard
-                    snapshot={followUpProjection.sceneAppReviewBaselineSnapshot}
-                    highlights={followUpProjection.sceneAppReviewBaselineHighlights}
-                    dataTestId="workflow-run-detail-sceneapp-baseline-card"
+                {followUpProjection.resultBaselineSnapshot ? (
+                  <ResultBaselineCard
+                    snapshot={followUpProjection.resultBaselineSnapshot}
+                    highlights={followUpProjection.resultBaselineHighlights}
+                    dataTestId="workflow-run-detail-result-baseline-card"
                   />
                 ) : null}
                 {followUpProjection.reviewFeedbackProjection ? (

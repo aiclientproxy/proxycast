@@ -3,11 +3,13 @@
 更新时间：2026-07-05
 状态：Draft + ordinary Agent turn orchestration current-turn verified + Electron/CDP real desktop baseline verified + Electron/CDP Gate B product acceptance verified + live Provider current-turn verified + production preflight/readiness pipeline fail-closed verified + production signature cryptographic preflight verified + host tool evidence contract added + inline host command shortcode contract added
 
+> Plugin v3 对齐：portable 包只接受根 `plugin.json`、`mcp.json` 和 `skills/<skill>/SKILL.md`。本文早期记录的独立 package execution、旧发布后台和签名预检仅作为历史证据；current Writing 合同由 App Server typed activation snapshot、普通 Agent turn、`artifact.snapshot` 和 JSONL audit 承接。
+
 ## 1. 背景
 
-Writing v1 已经把内容工厂写文章链路的产品形态收敛到 Lime Plugin Package v1：用户可以通过 `@写文章` 激活内容工厂插件形态，最终目标是产出 `ArtifactFrame(articleArtifacts)`，并在右侧 Article Editor 中继续编辑文章。
+Writing v1 已经把内容工厂写文章链路的产品形态收敛到 Lime Plugin Package；在 Plugin v3 中，用户通过 `@写文章` 激活由 App Server 派生的内容工厂能力，最终产出 `ArtifactFrame(articleArtifacts)`，并在右侧 Article Editor 中继续编辑文章。
 
-截至 2026-07-05，Writing v2 已经有 Worker 接口规范、前端 Article Editor / Workspace UI、外部内容工厂包、App Server current-turn fixture 证据、Agnes live Provider current-turn 证据、host tool evidence 证据、真实 Electron/CDP baseline 证据、真实 Electron/CDP Gate B product acceptance 证据、production preflight fail-closed 证据和 canonical payload 密码学验签门禁；最新后端修复已让普通 `@写文章` current-turn smoke 从 `artifact.snapshot=0` 恢复到 `artifactSnapshotCount=7`，最终 CDP acceptance 也已证明 `agentSession/read` 经 `electron-ipc` 进入真实桌面、历史会话可恢复、右侧不自动打开、raw JSON / workflow step 不进入普通聊天、点击文章产物后 Article Editor 正确打开。production preflight 已证明真实 `.lapp` 可计算 `packageHash / manifestHash`，并会在缺 `app.signature.yaml`、trust root `publicKey`、production catalog 或签名未验证时 fail closed；远程安装签名闭环和 production resume lifecycle evidence 仍未完成。`src/features/plugin/testing/fixtures` 只能用于测试和审计证据，不能作为 production current 实现；真实产品完成不能依赖 mock worker、fixture provider 或右侧 worker fast path。
+截至 2026-07-05，Writing v2 已经有普通 Agent turn、Article Editor / Workspace UI、host tool evidence、真实 Electron/CDP baseline 与 product acceptance 证据；早期 package execution、`.lapp` 签名预检和发布后台证据已归档为历史材料，不再作为生产运行前提。最新后端修复已让普通 `@写文章` current-turn smoke 从 `artifact.snapshot=0` 恢复到 `artifactSnapshotCount=7`，最终 CDP acceptance 也已证明 `agentSession/read` 经 `electron-ipc` 进入真实桌面、历史会话可恢复、右侧不自动打开、raw JSON / workflow step 不进入普通聊天、点击文章产物后 Article Editor 正确打开。`src/features/plugin/testing/fixtures` 只能用于测试和审计证据，不能作为 production current 实现；真实产品完成不能依赖 mock、独立插件 runtime 或 fixture provider。
 
 当前最大缺口不在右侧栏宽度，而在流式产物、执行卡片和审计边界：用户发起写作后，界面不能只出现一个最终文章卡，也不能把内部 workflow 流程轨塞到右侧。用户面需要的是资料检索 / 网络搜索这类必要过程以可展开执行卡片出现，文章正文按段落持续进入同一个产物框；完整 workflow 步骤只作为后台 JSONL 审计记录留存。
 
@@ -15,11 +17,11 @@ v2 要解决的问题是：写文章这类长任务必须先保留普通 Agent �
 
 ## 1.1 2026-07-05 最新主线校正
 
-- `@写文章` 的首发回合必须走普通 `agentSession/turn/start`，不能由 Plugin worker 或右侧 pane/action fast path 接管。
+- `@写文章` 的首发回合必须走普通 `agentSession/turn/start`，不能由独立插件 runtime 或右侧 pane/action fast path 接管。
 - 内容工厂插件负责声明 `workflow_contract`、host tool request、artifact/workspace patch 合同和 shortcode 合同；普通 Agent turn 负责对话节奏、自然说明和编排执行。
 - 生成前必须有自然引导 / 思考 / 工具过程。占位框不能一闪而过，也不能在 artifact 未生成时把 turn 标记成完成。
 - App Server 必须在最终 `turn.completed` 前完成内容工厂 `artifact.snapshot` materialization；terminal 后再补 artifact 会被事件存储丢弃，历史恢复也会丢产物。
-- 当前实现策略是暂存普通 backend 的 `turn.completed`，在 terminal 前完成内容工厂 artifact / host tool timeline / JSONL audit 后再封口；这保持普通 Agent 对话主链，不新增右侧 worker 首发分支。
+- 当前实现策略是暂存普通 backend 的 `turn.completed`，在 terminal 前完成内容工厂 artifact / host tool timeline / JSONL audit 后再封口；这保持普通 Agent 对话主链，不新增右侧执行器首发分支。
 - 聊天区不得显示 raw JSON、`.lime/artifacts/content-factory/workspace-patch.json` 文件卡、内部 workflow step 列表或固定模板文案。
 - 右侧 Article Workspace 不自动打开；只有用户点击文章产物或显式打开动作才进入右侧。
 - 审计只写 `workflow-events.jsonl`，并保持 metadata-only 脱敏；未来审计读取 JSONL，不从 UI 偷读内部 payload。
@@ -28,17 +30,17 @@ v2 要解决的问题是：写文章这类长任务必须先保留普通 Agent �
 
 | 问题               | 现象                                                       | 根因                                                                             |
 | ------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 过程不可见         | 用户等待较久后看到一批输出同时出现。                       | worker stdout 以最终 JSON response 为主，App Server 等 worker 完成后才投影事件。 |
+| 过程不可见         | 用户等待较久后看到一批输出同时出现。                       | 旧 producer 以最终 JSON response 为主，App Server 等待外部执行完成后才投影事件。 |
 | 正文流式不真实     | 看起来像“流式”，但可能是最终正文完成后再切片回放。         | 增量不在 producer 侧产生，缺少稳定 artifact ref + sequence 的 partial snapshot。 |
 | workflow UI 过重   | 右侧编辑器展示步骤会挤占写作主体验。                       | workflow 被当成用户界面模型，而不是后台审计模型。                                |
-| 过程状态不可靠     | 有时能看到 hook / connector evidence，有时像最终结果摘要。 | 过程来自 workerEvidence 和 artifact patch 解析，不是统一审计事件。               |
+| 过程状态不可靠     | 有时能看到 hook / connector evidence，有时像最终结果摘要。 | 过程来自旧 evidence / artifact patch 解析，不是统一审计事件。                   |
 | 历史恢复缺审计语义 | 可恢复文章和编辑稿，但无法独立审计当时步骤、工具和失败点。 | 没有 append-only workflow JSONL audit log。                                      |
 
 ## 3. 目的
 
 1. 用户输入 `@写文章` 后，先看到普通 Agent 的自然引导和过程说明，再看到资料检索 / 网络搜索执行卡片和同一个文章产物框开始按段落增长，而不是等待最终长回复或假完成。
 2. 右侧 Article Editor 只承载文章编辑体验，不展示 workflow step / task card / 流程轨。
-3. App Server 和 worker 保持生成期增量事件合同：partial snapshot 由 producer 发出，最终 snapshot 只负责完成态和历史恢复。
+3. App Server 与 RuntimeCore 保持生成期增量事件合同：partial snapshot 由 current producer 发出，最终 snapshot 只负责完成态和历史恢复。
 4. workflow run / step / tool / connector / hook / evidence 事件进入 append-only JSONL，用于未来审计、排障和质量复盘。
 5. 最终文章仍进入独立 `ArtifactFrame(articleArtifacts)` 和右侧 Article Editor，不回退普通聊天长文，也不夹带 workflow 步骤 UI。
 
@@ -71,7 +73,7 @@ v2 要解决的问题是：写文章这类长任务必须先保留普通 Agent �
 | W2-US-04 | 作为用户，我从历史打开会话时，希望看到文章和编辑稿。                                 | 历史恢复包含最终文章、ArtifactFrame 和右侧 Article Editor，不恢复步骤列表。                   |
 | W2-US-05 | 作为用户，我希望失败时看到简洁失败状态。                                             | 用户面显示生成失败 / 可重试；详细 step、tool、失败码写入 JSONL。                              |
 | W2-US-06 | 作为平台维护者，我希望能定位慢在哪个步骤。                                           | workflow JSONL 记录每个步骤开始、完成、耗时、工具调用和 artifact refs。                       |
-| W2-US-07 | 作为插件开发者，我希望输出增量产物，不写宿主 UI。                                    | 插件 worker 输出稳定 artifact partial / final snapshot，宿主负责投影。                        |
+| W2-US-07 | 作为插件开发者，我希望输出增量产物，不写宿主 UI。                                    | 插件能力通过 App Server current producer 输出稳定 artifact partial / final snapshot，宿主负责投影。 |
 
 ## 7. 用户用例
 
@@ -160,7 +162,7 @@ stateDiagram-v2
 | `workflow.run.retrying`        | run 因可重试失败进入下一次尝试。               |
 | `workflow.step.retrying`       | 当前步骤因可重试失败进入下一次尝试。           |
 | `workflow.step.progress`       | 长步骤输出阶段性进展。                         |
-| `workflow.connector.requested` | worker 声明需要宿主 connector / 工具执行。     |
+| `workflow.connector.requested` | activation producer 声明需要宿主 connector / 工具执行。 |
 | `workflow.connector.completed` | 宿主 connector / 工具执行完成并产生 evidence。 |
 | `workflow.tool.started`        | 宿主工具 / connector 开始执行。                |
 | `workflow.tool.completed`      | 宿主工具 / connector 完成并产生 evidence。     |
@@ -176,7 +178,7 @@ stateDiagram-v2
 
 ### 8.4 Step executor 合同
 
-Agent / worker 接收的是 step execution request，而不是整个自由任务：
+Agent / activation producer 接收的是 step execution request，而不是整个自由任务：
 
 ```ts
 type WorkflowStepExecutionRequest = {
@@ -199,7 +201,7 @@ type WorkflowStepExecutionRequest = {
 };
 ```
 
-真实 worker 返回 step result：
+activation producer 返回 step result：
 
 ```ts
 type WorkflowStepExecutionResult = {
@@ -209,6 +211,7 @@ type WorkflowStepExecutionResult = {
   outputs: Record<string, unknown>;
   artifactDeltas?: Array<{
     artifactId: string;
+    // `workerEvidence` 是现有 Article Workspace read model 字段，不代表独立 Plugin worker。
     kind: "articleDraft" | "workspacePatch" | "workerEvidence";
     patch: unknown;
   }>;
@@ -239,7 +242,7 @@ type WorkflowStepExecutionResult = {
 
 ### 8.7 文章内联 Host Command Shortcode
 
-内容工厂插件可以在文章正文中输出结构化 host command shortcode，用来表达“这里需要宿主已有 `@` 命令补产物”。这不是裸正则替换，也不是 worker 直接执行命令；宿主必须先把 shortcode 解析为结构化 `hostCommandRequests[]`，再按命令目录和现有运行时授权执行。
+内容工厂插件可以在文章正文中输出结构化 host command shortcode，用来表达“这里需要宿主已有 `@` 命令补产物”。这不是裸正则替换，也不是插件能力直接执行命令；宿主必须先把 shortcode 解析为结构化 `hostCommandRequests[]`，再按命令目录和现有运行时授权执行。
 
 首批自动执行范围只开放 `@配图`：
 
@@ -272,7 +275,7 @@ type HostCommandRequest = {
 - 宿主把 shortcode 物化为 `<!-- lime:image-task-slot:<slotId> -->`，再通过既有 `image_command_intent.image_task` 进入 App Server `ImageCommandWorkflow`。
 - slotId 必须基于正文中已有 `lime:image-task-slot:*` 分配下一个可用值；同一篇文章后续新增 `[@配图 ...]` 不得重新使用已存在的 slotId。
 - 图片任务 running 时回填 `pending-image-task://...` 占位；completed 后按同一 `slotId` 替换为真实图片 URL。
-- worker 不允许直接创建 `.lime/tasks/image_generate/*.json`，也不允许伪造 `tool.started / tool.result`。
+- activation producer 不允许直接创建 `.lime/tasks/image_generate/*.json`，也不允许伪造 `tool.started / tool.result`。
 - 其他 `@` 命令可以先进入 `hostCommandRequests[]` 文档合同，但自动执行必须等对应 runtime contract、授权、结果卡和 viewer 都接入后再开启。
 
 ### 8.8 历史恢复
@@ -296,7 +299,7 @@ type HostCommandRequest = {
 | 持久化   | artifact refs / workspace patch 必须可被 `agentSession/read` 恢复；workflow 事件必须可从 JSONL 审计日志读取。 |
 | 可审计   | 每个 step 记录 executor、输入摘要、输出摘要、耗时、失败码和 retry attempt，并追加到 JSONL。                   |
 | 可扩展   | workflow orchestrator 不写死内容工厂，PPT / 网页 / 研报可复用。                                               |
-| 安全     | worker 不直接拿 provider key，不直接读写宿主文件，不绕过 connector 授权。                                     |
+| 安全     | 插件能力不直接拿 provider key，不直接读写宿主文件，不绕过 connector 授权。                                    |
 | 兼容     | v1 workspace patch 可继续只读恢复，但新运行必须写 artifact partial 和 workflow JSONL audit facts。            |
 
 ## 10. 架构图
@@ -310,12 +313,12 @@ flowchart LR
   Activation --> AppServer[App Server JSON-RPC]
   AppServer --> Audit[Workflow Audit Writer]
   AppServer --> Agent[Regular Agent Turn]
-  AppServer --> Worker[Content Factory Worker / Contract Runtime]
+  AppServer --> Producer[Content Factory activation producer / contract runtime]
   AppServer --> Tools[Host Tools / Connectors]
   Agent --> ArtifactStore[Artifact Store]
-  Worker --> ArtifactStore
+  Producer --> ArtifactStore
   Tools --> Evidence[Tool Evidence]
-  Worker --> Audit
+  Producer --> Audit
   Tools --> Audit
   Evidence --> Audit
   Audit --> Jsonl[workflow-events.jsonl]
@@ -328,13 +331,13 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  Manifest[plugin.json + app.runtime.yaml] --> Declaration[Workflow Declaration]
+  Manifest[plugin.json + mcp.json + skills/] --> Declaration[App Server typed activation projection]
   Declaration --> AuditWriter[Workflow Audit Writer]
   AuditWriter --> Jsonl[workflow-events.jsonl]
 
   Agent[Regular Agent Turn] --> Partial[paragraph artifact.snapshot partial]
-  Worker[Content Factory Worker / Contract Runtime] --> Partial
-  Worker --> AuditWriter
+  Producer[Content Factory activation producer / contract runtime] --> Partial
+  Producer --> AuditWriter
   ToolRuntime[Host Tool Runtime] --> EvidenceStore[Evidence Store]
   ToolRuntime --> AuditWriter
   EvidenceStore --> AuditWriter
@@ -375,7 +378,7 @@ flowchart TD
   C --> D[execute tool]
   D --> E[emit workflow.tool.completed]
   E --> F[merge evidence]
-  B -- 否 --> G[execute step worker]
+  B -- 否 --> G[execute step in RuntimeCore]
   F --> G
   G --> H{是否有 artifact delta?}
   H -- 是 --> I[emit workflow.artifact.delta]
@@ -399,15 +402,15 @@ sequenceDiagram
   participant API as Agent Runtime API
   participant Server as App Server
   participant Audit as Audit JSONL
-  participant Worker as Content Factory Worker
+  participant Producer as Content Factory activation producer
   participant Frame as ArtifactFrame
 
   User->>Composer: 输入 @写文章 ...
   Composer->>API: agentSession/turn/start + plugin_activation
   API->>Server: JSON-RPC turn/start
   Server->>Audit: append workflow.run.started
-  Server->>Worker: execute article generation
-  Worker-->>Server: artifact.snapshot partial(streamSequence=1)
+  Server->>Producer: execute article generation
+  Producer-->>Server: artifact.snapshot partial(streamSequence=1)
   Server-->>Frame: 更新同一文章产物框
 ```
 
@@ -439,17 +442,17 @@ sequenceDiagram
 sequenceDiagram
   autonumber
   participant Scheduler as Step Scheduler
-  participant Worker as Article Writer Executor
+  participant Producer as Article Writer Producer
   participant Artifact as Artifact Materializer
   participant Frame as ArtifactFrame
   participant Editor as Article Editor
 
-  Scheduler->>Worker: execute step draft(prior outputs)
-  Worker-->>Scheduler: artifact.snapshot partial(paragraph)
-  Scheduler->>Artifact: pass-through worker_delta
+  Scheduler->>Producer: execute step draft(prior outputs)
+  Producer-->>Scheduler: artifact.snapshot partial(paragraph)
+  Scheduler->>Artifact: pass-through producer_delta
   Artifact-->>Frame: 更新框内正文
   Artifact-->>Editor: 同步右侧草稿 read model
-  Worker-->>Scheduler: draft completed
+  Producer-->>Scheduler: draft completed
   Scheduler->>Artifact: finalize articleDraft
   Artifact-->>Frame: status ready
 ```
@@ -517,7 +520,7 @@ JSONL 约束：
 
 - 普通 Agent turn 在内容工厂 `workflow_contract` 约束下生成或触发段落级 `artifact.snapshot` partial。
 - partial 使用稳定 `artifactRef` / path 和递增 `streamSequence`。
-- App Server 对 worker 输出的 `artifact.snapshot` partial 做通用 pass-through，不再用最终正文二次切片。
+- App Server 对 activation producer 输出的 `artifact.snapshot` partial 做通用 pass-through，不再用最终正文二次切片。
 - 内容工厂正文生成、标题、大纲、引用组织等领域逻辑必须来自内容工厂 Plugin / workflow contract / host-managed generation 边界；宿主不能新增 `runtime_backend/content_factory_*` 模板模块。
 - final snapshot 标记 `complete=true`、`writePhase=persisted`、`contentStatus=complete`。
 
@@ -544,24 +547,24 @@ JSONL 约束：
 ## 15. 验收标准
 
 - `@写文章` 发送后，普通 Agent 先给出自然引导，同一个文章 `ArtifactFrame` 在 turn completed 前接收段落级 partial，而不是最终一次性出现。
-- App Server 不再对最终正文做二次切片；partial 必须来自内容工厂合同约束下的普通 turn / host-managed generation / worker 生成期事实。
+- App Server 不再对最终正文做二次切片；partial 必须来自内容工厂合同约束下的普通 turn / host-managed generation / activation producer 生成期事实。
 - `ArtifactFrame` 不显示普通 assistant 长文 fallback。
 - 右侧 Article Editor 只读取同一 articleDraft，不显示 workflow step、task card 或流程轨。
 - workflow run / step / tool / connector / hook / evidence 事件写入 JSONL，可用于内部审计回放。
 - production ready evidence 需要证明真实 GUI 路径通过 typed action response 或 `workflow/respond` 写入 `metadata.workflowResume`，并产生匹配的 `workflow.step.resuming` / `workflow.run.resuming` JSONL audit 事件；`thread/resume` 只负责 Thread rejoin/history hydrate，不承载 workflow resume metadata，不能只给 signed package、live Provider 和 `workflow-events.jsonl` 路径。
 - `agentSession/read` 普通历史恢复能恢复 artifact refs 和 Article Editor，不恢复 workflow timeline。
-- `hostToolRequests -> WebSearch tool event -> read model tool item/tool_call -> article artifact hostToolEvidence` 必须有稳定 smoke 证据，不能只靠插件 worker 本地输出证明。
+- `hostToolRequests -> WebSearch tool event -> read model tool item/tool_call -> article artifact hostToolEvidence` 必须有稳定 smoke 证据，不能只靠插件包本地输出证明。
 - GUI smoke 覆盖发送、段落流式、最终产物、右侧展开、历史恢复；审计测试覆盖 JSONL 行事件。
 
 ## 16. 风险与约束
 
 | 风险                          | 处理                                                                                                 |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------- |
-| 最终正文回切伪流式            | 验收明确 partial 必须来自内容工厂 Plugin worker 生成期。                                             |
-| worker / mock 抢跑普通对话    | `plugin_activation` 不触发 pane/action worker；fixture 只能用于测试，真实验收必须走普通 Agent turn。 |
+| 最终正文回切伪流式            | 验收明确 partial 必须来自内容工厂 activation producer 生成期。                                       |
+| 旧执行器 / mock 抢跑普通对话  | `plugin_activation` 不触发旧 pane/action 执行器；fixture 只能用于测试，真实验收必须走普通 Agent turn。 |
 | workflow 步骤挤占右侧写作体验 | 右侧 Article Editor 明确禁止展示 workflow step / task card / 流程轨。                                |
 | JSONL 被误当 UI read model    | `workflow-events.jsonl` 只供审计、排障和质量复盘读取。                                               |
-| 旧 worker 一次性输出继续存在  | 兼容只读恢复可以保留，新运行必须产生 artifact partial。                                              |
+| 旧一次性输出继续存在          | 兼容只读恢复可以保留，新运行必须产生 artifact partial。                                              |
 | 工具 evidence 与审计步骤脱节  | tool event 必须带 `auditRunId` 和 `stepId`。                                                         |
 | 历史恢复破坏现有文章编辑稿    | 普通历史恢复只增加 artifact / workspace patch，不加载 workflow UI。                                  |
 
@@ -570,7 +573,7 @@ JSONL 约束：
 1. JSONL retention、压缩、脱敏和导出策略已有当前实现；后续开放点是 product 运维默认值、观测告警和审计工具入口。
 2. `workflow.artifact.delta` 与现有 `artifact.snapshot` 的兼容投影边界如何命名？
 3. 用户取消 workflow 时，已完成的 articleDraft 是否保留为草稿？
-4. 插件 manifest 中 workflow step 的最小字段是否需要沉淀到 `internal/tech/plugin/` 标准文档？
+4. workflow step 的最小字段是否需要补充到 Plugin v3 的 App Server activation projection 合同？portable `plugin.json` 不承载 workflow step。
 
 ## 18. 2026-07-02 决策补充
 
@@ -579,7 +582,7 @@ JSONL 约束：
 - 右侧 Article Editor 不显示 workflow 步骤、任务卡或流程轨。
 - workflow run / step / tool / connector / hook / evidence 只写 JSONL，用于未来审计、排障和质量复盘。
 - 用户面以 `ArtifactFrame` 段落级流式和最终 Article Editor 为主。
-- App Server 不应通过最终正文回切来制造流式；真实 partial 必须由内容工厂 Plugin worker 在生成期发出。
+- App Server 不应通过最终正文回切来制造流式；真实 partial 必须由内容工厂 activation producer 在生成期发出。
 
 ## 19. 2026-07-05 决策补充
 
@@ -587,7 +590,7 @@ JSONL 约束：
 
 - `@写文章` 必须走普通 Agent turn，保留寒暄、思考、工具过程和自然总结。
 - `plugin_activation.workflow_contract` 约束本轮生成目标、工具请求、artifact kind、right surface 和 expected objects。
-- 右侧 worker fast path 只服务用户显式右侧动作，不服务 `@写文章` 首发。
+- 旧右侧执行器 fast path 不属于 `@写文章` 首发路径；显式右侧动作也必须委托 current App Server command。
 - 后端必须在 `turn.completed` 前补齐 `artifact.snapshot` 和 read model；该缺口曾在 `.lime/qc/content-factory-current-turn-debug/content-factory-current-turn-debug-host-generation-2026-07-05T03-29-33-481Z.failure.json` 中失败，错误 `expected paragraph-level artifact snapshots, got 0`，现已由 terminal deferring + plugin activation materialization 修复。
 - Electron/CDP Gate B product acceptance 已通过，确认聊天排版、右侧不自动打开、历史恢复和 raw JSON / 文件卡隐藏；App Server current-turn live Provider 已通过，下一刀转向远程 GUI production 安装签名闭环和 resume lifecycle production evidence。
 
@@ -612,7 +615,7 @@ JSONL 约束：
 
 ## 22. 2026-07-05 Resume Audit Contract
 
-本轮按 Codex 语义收紧 workflow audit 边界：`thread/resume` 只负责 Thread rejoin/history hydrate，不恢复 queued turn，也不代表插件 worker workflow resume。只有 `workflow/respond` / `agentSession/action/respond` 的 typed response 显式携带 `metadata.workflowResume`，才追加 `workflow.step.resuming` / `workflow.run.resuming`。这些事件保持 metadata-only 脱敏，不进入普通 session JSONL、聊天 UI、历史 read model 或右侧 Article Editor。
+本轮按 Codex 语义收紧 workflow audit 边界：`thread/resume` 只负责 Thread rejoin/history hydrate，不恢复 queued turn，也不代表插件 activation workflow resume。只有 `workflow/respond` / `agentSession/action/respond` 的 typed response 显式携带 `metadata.workflowResume`，才追加 `workflow.step.resuming` / `workflow.run.resuming`。这些事件保持 metadata-only 脱敏，不进入普通 session JSONL、聊天 UI、历史 read model 或右侧 Article Editor。
 
 `content-factory-signed-release-gate` 已把该 lifecycle 纳入 production ready 门槛：真实 GUI evidence 需要证明 `electron-ipc -> app_server_handle_json_lines -> agentSession/turn/start`，随后由 typed action response 或 `workflow/respond` 给出 `metadata.workflowResume`，并匹配同一 `workflowRunId / workflowKey / stepId / actionId / decision` 的 `workflow.step.resuming`、`workflow.run.resuming` audit 事件。只有签名包、live Provider、Article Workspace 和 `workflow-events.jsonl` 路径不足以关闭 production 缺口。
 
@@ -634,11 +637,11 @@ production evidence 不允许携带 Provider key、Bearer token、私钥或完�
 
 2026-07-05 22:37 追加 env 别名修正：发布输入接受 `LIMECORE_TENANT_ID / LIME_CLOUD_TENANT_ID`、`LIME_AGENT_APP_STUDIO_API_BASE / LIMECORE_API_BASE_URL / LIMECORE_API_BASE` 和 `CONTENT_FACTORY_PACKAGE_URL`，Studio CLI 与 Lime preflight 已统一。新证据 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-report-env-alias-continue-2026-07-05.json` 仍 blocked；这让产品验收结论更硬：不是变量名不一致导致的误阻塞，而是确实缺 production 签名、远程包、catalog/bootstrap/fetchCloud 和 GUI lifecycle。
 
-2026-07-05 22:53 追加 production readiness pipeline：新增 `plugin:content-factory-production-readiness-pipeline` 作为 operator current 入口，一次性生成 preflight、Studio dry-run、bundle、readiness report 和 pipeline manifest。真实本地复跑输出 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-pipeline-env-alias-continue-2026-07-05/`，`content-factory-production-readiness-pipeline.json` 为 `status=blocked`，preflight / Studio dry-run packageHash 与 manifestHash 对齐且无 drift；blocked codes 仍覆盖 production catalog/bootstrap/fetchCloud、GUI 非 `cloud_release`、signature 未 verified、workflow resume lifecycle 缺失，以及 packageUrl / tenantId / Studio token 缺失。随后补强 fetchCloud 自动化：preflight CLI 支持 `--fetch-cloud-output`，pipeline 在 `--fetch-cloud-from-catalog` 下会把 current App Server `pluginPackage/fetchCloud` 结果落成独立 evidence 并送入 bundle。最新无 catalog 复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-pipeline-fetchcloud-output-continue-2026-07-05/` 仍 blocked，且 fetchCloud 文件按预期不存在。产品验收口径不变：pipeline 是只读证据编排，不是新的执行 worker、不是 mock，也不能让 local_folder / fixture 证据升级为 production ready。
+2026-07-05 22:53 追加 production readiness pipeline：新增 `plugin:content-factory-production-readiness-pipeline` 作为 operator current 入口，一次性生成 preflight、Studio dry-run、bundle、readiness report 和 pipeline manifest。真实本地复跑输出 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-pipeline-env-alias-continue-2026-07-05/`，`content-factory-production-readiness-pipeline.json` 为 `status=blocked`，preflight / Studio dry-run packageHash 与 manifestHash 对齐且无 drift；blocked codes 仍覆盖 production catalog/bootstrap/fetchCloud、GUI 非 `cloud_release`、signature 未 verified、workflow resume lifecycle 缺失，以及 packageUrl / tenantId / Studio token 缺失。随后补强 fetchCloud 自动化：preflight CLI 支持 `--fetch-cloud-output`，pipeline 在 `--fetch-cloud-from-catalog` 下会把 current App Server `pluginPackage/fetchCloud` 结果落成独立 evidence 并送入 bundle。最新无 catalog 复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-pipeline-fetchcloud-output-continue-2026-07-05/` 仍 blocked，且 fetchCloud 文件按预期不存在。产品验收口径不变：pipeline 是只读证据编排，不是新的执行 runtime、不是 mock，也不能让 local_folder / fixture 证据升级为 production ready。
 
 2026-07-05 23:16 追加 production readiness phase plan：readiness report / pipeline 现在输出 `blockerPlan.nextPhase`，把 production blocker 分成签名 proof / trust、Studio 发布输入、catalog/bootstrap、fetchCloud verified 和真实 desktop `cloud_release` E2E 等阶段，避免把 GUI 复测缺口和 operator 输入缺口混在一起。无 production catalog 时，pipeline 只记录 `fetchCloudFromCatalog.skippedReason=catalog_missing`，仍保留 blocked preflight evidence，不再把缺 catalog 表现成 preflight 命令失败。最新真实复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-phase-plan-rerun-2026-07-05-2026-07-05T15-16-14-303Z/content-factory-production-readiness-pipeline.json` 显示 `nextPhase=release_signing_and_trust`；产品验收仍要求后续补真实签名 proof / trust root、Studio 发布输入、catalog/bootstrap、fetchCloud verified 和 GUI `cloud_release` signature verified / resume lifecycle。
 
-2026-07-05 23:36 追加 production 签名验真：preflight 会重建外部发布工具的 canonical payload v2，并用 trust root `publicKey` 验证 detached signature；signed gate 也要求 preflight `signatureCryptographicVerificationStatus=verified`、`signaturePayloadHashMatched=true`，以及 bootstrap 匹配 trust root 带 `publicKey`。最新只读复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-signature-verify-final2-2026-07-05-2026-07-05T15-48-09-615Z/content-factory-production-readiness-pipeline.json` 仍 blocked，原因仍是缺真实签名文件、可信根、catalog/bootstrap/fetchCloud 和 GUI `cloud_release` evidence；产品层继续禁止用 mock worker、hard-coded 模板或手写 evidence 关闭该缺口。
+2026-07-05 23:36 追加 production 签名验真：preflight 会重建外部发布工具的 canonical payload v2，并用 trust root `publicKey` 验证 detached signature；signed gate 也要求 preflight `signatureCryptographicVerificationStatus=verified`、`signaturePayloadHashMatched=true`，以及 bootstrap 匹配 trust root 带 `publicKey`。最新只读复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-signature-verify-final2-2026-07-05-2026-07-05T15-48-09-615Z/content-factory-production-readiness-pipeline.json` 仍 blocked，原因仍是缺真实签名文件、可信根、catalog/bootstrap/fetchCloud 和 GUI `cloud_release` evidence；产品层继续禁止用 mock execution、hard-coded 模板或手写 evidence 关闭该缺口。
 
 2026-07-05 23:56 追加 production catalog sourceKind 收紧复跑：signed release gate / readiness pipeline 现在只把 `sourceKind=cloud_release` 视为 production catalog ready，旧 `remote` 证据会以 `production_catalog_not_cloud_release` blocked。pipeline 同步补齐默认签名输入传递：当 `content-factory-app/app.signature.yaml` 和 `plugin-signature-trust-root.json` 已存在时，不需要重复传 `--app-signature / --trust-root`，preflight 与 Studio dry-run 会消费同一组文件。最新只读复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-signature-defaults-2026-07-05-2026-07-05T16-02-26-791Z/content-factory-production-readiness-pipeline.json` 仍 `status=blocked`，`fetchCloudFromCatalog.skippedReason=catalog_missing`，`blockerPlan.nextPhase=release_signing_and_trust`。产品验收不变：真实 ready 必须来自 signed `cloud_release` catalog、bootstrap trust root、fetchCloud verified、GUI signature verified 和 workflow resume lifecycle，不能用 `remote / local_folder / fixture / localhost` 或手写 JSON 替代。
 
@@ -676,9 +679,9 @@ production evidence 不允许携带 Provider key、Bearer token、私钥或完�
 
 2026-07-06 追加 release evidence summary 落盘状态修复：pipeline 在显式请求 release evidence 但缺 `tenantId / studioToken` 时会写出 blocked summary JSON，并且 `outputs.summary.present=true`，避免审计读者看到文件存在但 summary 自报未落盘。真实只读复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-summary-present-2026-07-06T0211/content-factory-production-release-evidence.json` 已确认 summary present 为 true，且该 release evidence 摘要无 secret-like 命中。
 
-2026-07-06 追加 production worker launch gate：App Server 启动 `cloud_release` Plugin worker 前必须 fail-closed 校验 installed state 的 release evidence，只有 `signaturePolicy=required`、`signatureVerificationStatus=verified`、`cloudReleaseEvidence.status=ready`、`packageVerificationStatus=verified`、`packageHashMatched=true`、`manifestHashMatched=true` 全部满足才允许运行。seeded 迁移生成的 `signaturePolicy=optional / signatureVerificationStatus=not_configured / status=warning` 仍可用于安装态诊断，但不能作为 production worker 启动证据。
+2026-07-06 追加 production activation readiness gate：App Server 派生 `cloud_release` activation snapshot 前必须 fail-closed 校验 installed state 的 release evidence，只有 `signaturePolicy=required`、`signatureVerificationStatus=verified`、`cloudReleaseEvidence.status=ready`、`packageVerificationStatus=verified`、`packageHashMatched=true`、`manifestHashMatched=true` 全部满足才允许进入普通 Agent turn。seeded 迁移生成的 `signaturePolicy=optional / signatureVerificationStatus=not_configured / status=warning` 仍可用于安装态诊断，但不能作为 production activation 证据。
 
-2026-07-06 追加 production evidence parity：signed release gate、fetchCloud evidence、production GUI evidence collector、readiness report 和 readiness pipeline 必须复用同一组 worker launch gate 事实。任何缺 `signaturePolicy=required`、`cloudReleaseEvidence.status=ready`、`packageVerificationStatus=verified`、`packageHashMatched=true` 或 `manifestHashMatched=true` 的 evidence，即使已经生成文章草稿，也只能作为 blocked 诊断，不能关闭 production signed `cloud_release` 验收。
+2026-07-06 追加 production evidence parity：signed release gate、fetchCloud evidence、production GUI evidence collector、readiness report 和 readiness pipeline 必须复用同一组 activation readiness gate 事实。任何缺 `signaturePolicy=required`、`cloudReleaseEvidence.status=ready`、`packageVerificationStatus=verified`、`packageHashMatched=true` 或 `manifestHashMatched=true` 的 evidence，即使已经生成文章草稿，也只能作为 blocked 诊断，不能关闭 production signed `cloud_release` 验收。
 
 2026-07-06 追加 operator readiness API base 默认：production release evidence fetch 与 Studio CLI 共享 Studio / LimeCore 官方默认 API base；operatorReadiness 必须记录 `apiBase.source=default` 与 `purpose=release-evidence-fetch`，只在 operator 需要覆盖默认地址时才要求 `--api-base` 或 `LIME_AGENT_APP_STUDIO_API_BASE / LIMECORE_API_BASE_URL / LIMECORE_API_BASE`。blockerPlan 和脱敏 operatorCommand 也不得把 `--api-base` 展示为必填参数。
 
@@ -700,6 +703,6 @@ production evidence 不允许携带 Provider key、Bearer token、私钥或完�
 
 验证要求：
 
-- 无 worker lifecycle metadata 的普通 resume 不新增任何 `workflow.*resum*` audit 事件。
+- 无 activation lifecycle metadata 的普通 resume 不新增任何 `workflow.*resum*` audit 事件。
 - 有 metadata 的 resume 只写 `workflow-events.jsonl`，并且 payload 不包含 decision `response` 原文。
 - `workflow.*.resuming` 在 read model 中投影为非终态 `running`，不能误清 active workflow。

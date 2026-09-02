@@ -151,7 +151,7 @@ describe("workspaceEntry", () => {
     });
   });
 
-  it("应透传做法执行摘要与自动发送 metadata", () => {
+  it("应透传自动发送 metadata", () => {
     expect(
       resolveWorkspaceEntry({
         projectId: "project-1",
@@ -160,46 +160,6 @@ describe("workspaceEntry", () => {
         defaultToolPreferences,
         payload: {
           prompt: "请继续完成短视频项目包",
-          initialSceneAppExecutionSummary: {
-            sceneappId: "story-video-suite",
-            title: "短视频编排",
-            summary: "把线框图、脚本与配乐压成同一条结果链。",
-            businessLabel: "内容闭环",
-            typeLabel: "多模态组合",
-            executionChainLabel: "做法 -> 生成 -> Project Pack",
-            deliveryContractLabel: "Project Pack",
-            planningStatusLabel: "已就绪",
-            planningSummary: "当前可直接进入生成。",
-            activeLayers: [{ key: "skill", label: "Skill" }],
-            referenceCount: 1,
-            referenceItems: [
-              {
-                key: "ref-1",
-                label: "品牌 KV",
-                sourceLabel: "记忆参考",
-                contentTypeLabel: "图片",
-                selected: true,
-              },
-            ],
-            tasteSummary: "偏好克制的科技蓝。",
-            feedbackSummary: "最近反馈要求减少文案堆叠。",
-            projectPackPlan: {
-              packKindLabel: "短视频项目包",
-              completionStrategyLabel: "按必含部件判断整包完成度",
-              viewerLabel: "结果包查看器",
-              primaryPart: "任务简报",
-              requiredParts: [{ key: "brief", label: "任务简报" }],
-              notes: ["完整度将按 1 个必含部件判断。"],
-            },
-            scorecardProfileRef: "story-video-scorecard",
-            scorecardMetricKeys: [
-              { key: "delivery_readiness", label: "交付就绪度" },
-            ],
-            scorecardFailureSignals: [
-              { key: "publish_stalled", label: "发布卡点" },
-            ],
-            notes: ["已装配 1 条参考素材。"],
-          },
           initialAutoSendRequestMetadata: {
             harness: {
               service_scene_launch: {
@@ -220,10 +180,6 @@ describe("workspaceEntry", () => {
         projectId: "project-1",
         theme: "general",
         initialUserPrompt: "请继续完成短视频项目包",
-        initialSceneAppExecutionSummary: expect.objectContaining({
-          sceneappId: "story-video-suite",
-          title: "短视频编排",
-        }),
         initialAutoSendRequestMetadata: {
           harness: {
             service_scene_launch: {
@@ -237,10 +193,6 @@ describe("workspaceEntry", () => {
       workspaceBootstrap: expect.objectContaining({
         projectId: "project-1",
         initialUserPrompt: "请继续完成短视频项目包",
-        initialSceneAppExecutionSummary: expect.objectContaining({
-          sceneappId: "story-video-suite",
-          title: "短视频编排",
-        }),
         initialAutoSendRequestMetadata: {
           harness: {
             service_scene_launch: {
@@ -372,7 +324,7 @@ describe("workspaceEntry", () => {
         defaultToolPreferences,
         payload: {
           initialPendingServiceSkillLaunch: {
-            skillId: "sceneapp-service-analysis",
+            skillId: "content-service-analysis",
             skillKey: "project-analysis",
             initialSlotValues: {
               focus: "架构",
@@ -397,7 +349,7 @@ describe("workspaceEntry", () => {
         initialUserImages: undefined,
         openBrowserAssistOnMount: undefined,
         initialPendingServiceSkillLaunch: {
-          skillId: "sceneapp-service-analysis",
+          skillId: "content-service-analysis",
           skillKey: "project-analysis",
           requestKey: 654,
           initialSlotValues: {
@@ -417,7 +369,7 @@ describe("workspaceEntry", () => {
         initialCreationMode: "guided",
         openBrowserAssistOnMount: undefined,
         initialPendingServiceSkillLaunch: {
-          skillId: "sceneapp-service-analysis",
+          skillId: "content-service-analysis",
           skillKey: "project-analysis",
           requestKey: 654,
           initialSlotValues: {

@@ -132,7 +132,7 @@ impl Default for UpdateCheckService {
         Self::new()
     }
 }
-/// 更新检查服务状态包装器（用于 Tauri 状态管理）
+/// 更新检查服务共享状态
 #[derive(Clone)]
 pub struct UpdateCheckServiceState(pub Arc<RwLock<UpdateCheckService>>);
 

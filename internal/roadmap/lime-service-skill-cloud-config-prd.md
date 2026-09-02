@@ -2,7 +2,7 @@
 
 > 状态：current supporting cross-repo plan  
 > 更新时间：2026-04-21  
-> 当前主规划：`internal/roadmap/limenextv2/README.md`
+> 当前导航：仓库根 `FEATURE-MAP.md`；运行时与命令边界以 `internal/aiprompts/` 为准
 > 目标：吸收同类服务型技能入口的方法，但保持 `limecore` 只做目录控制、`lime` 客户端负责全部执行
 > 作用域：本文只保留 `ServiceSkill` 在 `lime` / `limecore` 之间的产品对象、目录边界与本地执行原则，不替代 `internal/aiprompts/command-runtime.md`、`internal/aiprompts/limecore-collaboration-entry.md`
 

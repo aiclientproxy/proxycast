@@ -219,6 +219,8 @@ jobs:
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
           PLUGIN_GATE_EXECUTABLE="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));const executable=summary.evidence?.installation?.executable;if(!executable)throw new Error('Windows Squirrel evidence is missing the installed executable');process.stdout.write(executable);")"
+          CANDIDATE_RUN_ID="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));if(!summary.candidateRunId)throw new Error('Windows Squirrel evidence is missing candidateRunId');process.stdout.write(summary.candidateRunId);")"
+          export LIME_GATE_RUN_ID="$CANDIDATE_RUN_ID"
           npm run smoke:plugin-package-electron-gate-b -- \
             --electron-executable "$PLUGIN_GATE_EXECUTABLE" \
             --evidence-dir ".lime/qc/gui-evidence/plugin-package-electron-gate-b-windows" \
@@ -231,6 +233,8 @@ jobs:
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
           CODE_MODE_GATE_EXECUTABLE="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));const executable=summary.evidence?.installation?.executable;if(!executable)throw new Error('Windows Squirrel evidence is missing the installed executable');process.stdout.write(executable);")"
+          CANDIDATE_RUN_ID="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));if(!summary.candidateRunId)throw new Error('Windows Squirrel evidence is missing candidateRunId');process.stdout.write(summary.candidateRunId);")"
+          export LIME_GATE_RUN_ID="$CANDIDATE_RUN_ID"
           npm run smoke:code-mode-electron-gate-b -- \
             --electron-executable "$CODE_MODE_GATE_EXECUTABLE" \
             --output ".lime/qc/gui-evidence/code-mode-electron-gate-b-windows/code-mode-electron-gate-b-summary.json" \
@@ -242,10 +246,25 @@ jobs:
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
           NATIVE_HOST_GATE_EXECUTABLE="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));const executable=summary.evidence?.installation?.executable;if(!executable)throw new Error('Windows Squirrel evidence is missing the installed executable');process.stdout.write(executable);")"
+          CANDIDATE_RUN_ID="$(node -e "const fs=require('node:fs');const summary=JSON.parse(fs.readFileSync('.lime/qc/windows-squirrel-rc/$VERSION/summary.json','utf8'));if(!summary.candidateRunId)throw new Error('Windows Squirrel evidence is missing candidateRunId');process.stdout.write(summary.candidateRunId);")"
+          export LIME_GATE_RUN_ID="$CANDIDATE_RUN_ID"
           node scripts/electron/windows-native-host-gate-b.mjs \
             --electron-executable "$NATIVE_HOST_GATE_EXECUTABLE" \
             --evidence-dir ".lime/qc/gui-evidence/windows-native-host-gate-b" \
             --timeout-ms 120000
+
+      - name: Validate Windows packaged Gate B evidence identity
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          node scripts/electron/windows-packaged-evidence.mjs \
+            --version "$VERSION" \
+            --squirrel-summary ".lime/qc/windows-squirrel-rc/$VERSION/summary.json" \
+            --code-mode-summary ".lime/qc/gui-evidence/code-mode-electron-gate-b-windows/code-mode-electron-gate-b-summary.json" \
+            --native-host-summary ".lime/qc/gui-evidence/windows-native-host-gate-b/summary.json" \
+            --output ".lime/qc/gui-evidence/windows-packaged-evidence/$VERSION/summary.json"
 
       - name: Upload Windows Squirrel RC evidence
         if: ${{ always() }}
@@ -282,6 +301,15 @@ jobs:
           if-no-files-found: warn
           retention-days: ${{ github.event.inputs.retention_days || 7 }}
           path: .lime/qc/gui-evidence/windows-native-host-gate-b
+
+      - name: Upload Windows packaged Gate B evidence identity
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lime-windows-packaged-evidence
+          if-no-files-found: warn
+          retention-days: ${{ github.event.inputs.retention_days || 7 }}
+          path: .lime/qc/gui-evidence/windows-packaged-evidence
 
       - name: Upload Windows test package
         uses: actions/upload-artifact@v4

@@ -41,7 +41,7 @@ content-studio / other apps
 3. Git submodule / subtree 只允许作为临时审阅或迁移工具，不允许成为 content-studio 的 runtime 依赖主路径。
 4. content-studio 本地开发可以通过 `APP_SERVER_BIN` 指向 Lime debug binary，但生产包必须 pin 到 manifest 版本和 sha256。
 5. 独立 App 不应该把 Lime Rust workspace 拉进自己的构建图；否则依赖、锁文件、平台产物和安全修复都会分叉。
-6. 独立 App 不得调用、复制或依赖 `lime-rs/src/commands/**`；该目录只作为 Lime 内部旧 Tauri wrapper 清理区。需要 Agent 后端能力时消费 App Server JSON-RPC / client；需要窗口、shell、picker、托盘等桌面壳能力时由各 App 的 Desktop Host bridge 承接。
+6. 独立 App 不得调用、复制或依赖已物理删除的 `lime-rs/src/commands/**`。需要 Agent 后端能力时消费 App Server JSON-RPC / client；需要窗口、shell、picker、托盘等桌面壳能力时由各 App 的 Desktop Host bridge 承接。
 
 ## 3. 分发单元
 

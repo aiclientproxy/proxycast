@@ -171,20 +171,23 @@ pub(super) fn model_route_from_runtime(
 pub(super) fn provider_configuration_from_runtime(
     selection: &RuntimeModelSelection,
     resolved_route: &ResolvedModelRoute,
+    model_registry: Option<&Value>,
     direct_provider_config: Option<SessionProviderConfig>,
     service_tier: Option<String>,
 ) -> ModelRouteProviderConfiguration {
+    let provider_reasoning_effort =
+        provider_reasoning_effort(selection, resolved_route, model_registry);
     let mut direct_provider_config = direct_provider_config
         .or_else(|| no_auth_direct_provider_config_from_route(selection, resolved_route));
     if let Some(config) = direct_provider_config.as_mut() {
-        config.reasoning_effort = selection.reasoning_effort.clone();
+        config.reasoning_effort = provider_reasoning_effort.clone();
         config.service_tier = service_tier.clone();
     }
 
     ModelRouteProviderConfiguration {
         turn_provider: TurnProviderConfiguration {
             route: model_route_from_runtime(selection, resolved_route),
-            reasoning_effort: selection.reasoning_effort.clone(),
+            reasoning_effort: provider_reasoning_effort,
         },
         service_tier,
         route_protocol: Some(resolved_route.protocol.clone()),
@@ -193,6 +196,33 @@ pub(super) fn provider_configuration_from_runtime(
         auth: runtime_provider_auth(&resolved_route.auth.kind),
         api_version: resolved_route.endpoint.api_version.clone(),
     }
+}
+
+fn provider_reasoning_effort(
+    selection: &RuntimeModelSelection,
+    resolved_route: &ResolvedModelRoute,
+    model_registry: Option<&Value>,
+) -> Option<String> {
+    let capability = super::model_capability::resolve_model_capability(
+        super::model_capability::ModelRef::new(selection.provider.clone(), selection.model.clone()),
+        Some(&resolved_route.capability_snapshot),
+    );
+    let supported = capability.supported_reasoning_levels;
+    let catalog_override = model_registry.and_then(|registry| {
+        [
+            "/multiAgentReasoningEffort",
+            "/multi_agent_reasoning_effort",
+            "/model/multiAgentReasoningEffort",
+            "/model/multi_agent_reasoning_effort",
+        ]
+        .into_iter()
+        .find_map(|pointer| registry.pointer(pointer).and_then(Value::as_str))
+    });
+    model_provider::reasoning_effort::reasoning_effort_for_request(
+        selection.reasoning_effort.as_deref(),
+        catalog_override,
+        &supported,
+    )
 }
 
 fn runtime_provider_auth(auth: &AuthKind) -> RuntimeProviderAuth {
@@ -935,7 +965,7 @@ mod tests {
         );
 
         let configuration =
-            provider_configuration_from_runtime(&selection, &resolved_route, None, None);
+            provider_configuration_from_runtime(&selection, &resolved_route, None, None, None);
         let direct_config = configuration
             .direct_provider_config
             .expect("no-auth route should create direct provider config");
@@ -970,7 +1000,7 @@ mod tests {
         };
 
         let configuration =
-            provider_configuration_from_runtime(&selection, &resolved_route, None, None);
+            provider_configuration_from_runtime(&selection, &resolved_route, None, None, None);
 
         assert_eq!(
             configuration.credential_ref.as_deref(),
@@ -1004,7 +1034,7 @@ mod tests {
         };
 
         let configuration =
-            provider_configuration_from_runtime(&selection, &resolved_route, None, None);
+            provider_configuration_from_runtime(&selection, &resolved_route, None, None, None);
 
         assert_eq!(
             configuration.route_protocol,
@@ -1019,6 +1049,112 @@ mod tests {
             configuration.credential_ref.as_deref(),
             Some("runtime-api-key:azure-key")
         );
+    }
+
+    #[test]
+    fn provider_configuration_lowers_ultra_with_catalog_override() {
+        let selection = RuntimeModelSelection {
+            provider: "openai".to_string(),
+            model: "gpt-5.6-sol".to_string(),
+            source: "runtime_options",
+            reasoning_effort: Some("ultra".to_string()),
+        };
+        let resolved_route = reasoning_route(&["low", "medium", "high", "max", "ultra"]);
+        let model_registry = json!({"multiAgentReasoningEffort": "high"});
+
+        let configuration = provider_configuration_from_runtime(
+            &selection,
+            &resolved_route,
+            Some(&model_registry),
+            None,
+            None,
+        );
+
+        assert_eq!(selection.reasoning_effort.as_deref(), Some("ultra"));
+        assert_eq!(
+            configuration.turn_provider.reasoning_effort.as_deref(),
+            Some("high")
+        );
+    }
+
+    #[test]
+    fn provider_configuration_uses_codex_ultra_fallback_order() {
+        let selection = RuntimeModelSelection {
+            provider: "openai".to_string(),
+            model: "gpt-5.6-sol".to_string(),
+            source: "runtime_options",
+            reasoning_effort: Some("ultra".to_string()),
+        };
+        let invalid_override = json!({"multi_agent_reasoning_effort": "unsupported"});
+        let cases = [
+            (
+                reasoning_route(&["low", "max", "xhigh", "ultra"]),
+                Some(&invalid_override),
+                "max",
+            ),
+            (
+                reasoning_route(&["low", "xhigh", "ultra"]),
+                Some(&invalid_override),
+                "xhigh",
+            ),
+            (reasoning_route(&[]), None, "medium"),
+        ];
+
+        for (resolved_route, model_registry, expected) in cases {
+            let configuration = provider_configuration_from_runtime(
+                &selection,
+                &resolved_route,
+                model_registry,
+                None,
+                None,
+            );
+            assert_eq!(
+                configuration.turn_provider.reasoning_effort.as_deref(),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn provider_configuration_lowers_persistent_to_disabled() {
+        let selection = RuntimeModelSelection {
+            provider: "openai".to_string(),
+            model: "gpt-5.6-sol".to_string(),
+            source: "runtime_options",
+            reasoning_effort: Some("persistent".to_string()),
+        };
+
+        let configuration = provider_configuration_from_runtime(
+            &selection,
+            &reasoning_route(&["persistent"]),
+            None,
+            None,
+            None,
+        );
+
+        assert_eq!(
+            configuration.turn_provider.reasoning_effort.as_deref(),
+            Some("disabled")
+        );
+    }
+
+    fn reasoning_route(levels: &[&str]) -> ResolvedModelRoute {
+        ResolvedModelRoute {
+            capability_snapshot: CapabilitySnapshot {
+                runtime_features: vec!["reasoning".to_string()],
+                capabilities: app_server_protocol::ModelCapabilitiesInfo {
+                    reasoning: true,
+                    reasoning_effort: Some(app_server_protocol::ModelReasoningEffortSupportInfo {
+                        supported: true,
+                        levels: levels.iter().map(|level| (*level).to_string()).collect(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -1049,6 +1185,7 @@ mod tests {
         let configuration = provider_configuration_from_runtime(
             &selection,
             &ResolvedModelRoute::default(),
+            None,
             Some(direct_config),
             None,
         );

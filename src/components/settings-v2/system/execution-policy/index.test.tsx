@@ -390,4 +390,22 @@ describe("ExecutionPolicySettings", () => {
     ).not.toHaveProperty("Bash");
     expect(container.textContent).toContain("执行策略已保存");
   });
+
+  it("保存时应按 Codex opt-in 语义写入 update_plan 开关", async () => {
+    const container = renderComponent();
+    await waitForLoad();
+
+    await toggleSwitch(container, "启用 update_plan 计划工具");
+    await clickButton(findButton(container, "保存策略"));
+
+    expect(mockSaveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: expect.objectContaining({
+          tool_execution: expect.objectContaining({
+            update_plan_enabled: true,
+          }),
+        }),
+      }),
+    );
+  });
 });

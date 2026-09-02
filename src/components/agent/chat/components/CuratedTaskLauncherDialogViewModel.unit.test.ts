@@ -54,8 +54,8 @@ function referenceEntry(
   overrides: Partial<CuratedTaskReferenceEntry> = {},
 ): CuratedTaskReferenceEntry {
   return {
-    id: "sceneapp:content-pack:run:1",
-    sourceKind: "sceneapp_execution_summary",
+    id: "memory:content-pack:run:1",
+    sourceKind: "memory",
     title: "AI 内容周报",
     summary: "当前已有一轮项目结果，可直接作为复盘基线。",
     category: "experience",
@@ -199,7 +199,11 @@ describe("CuratedTaskLauncherDialogViewModel", () => {
       preferredTaskIds: ["account-project-review"],
     });
     const selected = selectLatestReviewTaskSignal([
-      reviewSignal({ title: "other", source: "memory_reference", createdAt: 500 }),
+      reviewSignal({
+        title: "other",
+        source: "memory_reference",
+        createdAt: 500,
+      }),
       reviewSignal({ title: "old", createdAt: 100 }),
       latest,
     ]);

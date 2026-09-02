@@ -1,6 +1,6 @@
 //! Lime Services Crate
 //!
-//! 业务服务层，包含所有不依赖 Tauri 的业务逻辑。
+//! 业务服务层，包含所有不依赖桌面宿主的业务逻辑。
 //!
 //! ## 模块结构
 //! - `context_memory_service` - 上下文记忆服务

@@ -1,8 +1,7 @@
 //! 全局配置管理器
 //!
 //! 整合配置主题、热重载和观察者管理。
-//! register_processor_observers 和 register_tauri_observer
-//! 保留在主 crate（依赖 Tauri / RequestProcessor）。
+//! 处理器观察者和宿主观察者由 App Server 边界注册。
 
 use super::emitter::ConfigEventEmit;
 use super::events::ConfigChangeSource;

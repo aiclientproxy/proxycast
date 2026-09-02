@@ -48,7 +48,7 @@ import {
   normalizeCuratedTaskReferenceMemoryIds,
   type CuratedTaskReferenceEntry,
 } from "../utils/curatedTaskReferenceSelection";
-import { buildSceneAppExecutionReviewPrefillSnapshot } from "../utils/sceneAppCuratedTaskReference";
+import { buildCuratedTaskResultBaselineSnapshot } from "../utils/curatedTaskResultBaseline";
 import { buildReviewFeedbackProjection } from "../utils/reviewFeedbackProjection";
 import type {
   InputbarPluginCapability,
@@ -784,12 +784,12 @@ function resolveCuratedTaskLaunchContext(params: {
   };
 }
 
-function buildCuratedTaskSceneAppBaselineSummary(params: {
+function buildCuratedTaskResultBaselineSummary(params: {
   task: CuratedTaskTemplateItem;
   referenceEntries?: CuratedTaskReferenceEntry[];
   copy: InputCapabilitySectionsCopy;
 }): string | null {
-  const snapshot = buildSceneAppExecutionReviewPrefillSnapshot({
+  const snapshot = buildCuratedTaskResultBaselineSnapshot({
     referenceEntries: params.referenceEntries,
     taskId: params.task.id,
   });
@@ -827,14 +827,14 @@ function buildCuratedTaskSlashDescription(params: {
   fallbackDescription?: string;
   copy: InputCapabilitySectionsCopy;
 }): string {
-  const sceneAppBaselineSummary = buildCuratedTaskSceneAppBaselineSummary({
+  const resultBaselineSummary = buildCuratedTaskResultBaselineSummary({
     task: params.task,
     referenceEntries: params.referenceEntries,
     copy: params.copy,
   });
 
   return [
-    sceneAppBaselineSummary,
+    resultBaselineSummary,
     params.reasonSummary,
     params.fallbackDescription,
   ]

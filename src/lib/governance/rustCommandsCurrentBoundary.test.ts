@@ -20,6 +20,7 @@ const REPO_ROOT = process.cwd();
 // - `AGENTS.md` 第 12、13 条精简为：`lime-rs/src/**` 已删除，新 Rust 代码进 crates。
 
 const FORBIDDEN_LEGACY_PATHS = [
+  "src-tauri",
   "lime-rs/src",
   "lime-rs/src/commands",
   "lime-rs/src/services",
@@ -42,7 +43,7 @@ const FORBIDDEN_LEGACY_PATHS = [
 ];
 
 describe("rust commands current boundary", () => {
-  it("`lime-rs/src/**` 旧 Tauri wrapper 目录及其子目录不应恢复", () => {
+  it("已退役 Rust wrapper 目录及其子目录不应恢复", () => {
     const restored = FORBIDDEN_LEGACY_PATHS.filter((relativePath) =>
       existsSync(join(REPO_ROOT, relativePath)),
     );

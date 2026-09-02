@@ -21,7 +21,7 @@ macOS 标准包真实 Agent turn/Right Surface Gate B 已通过。剩余工作�
 | `dead` | 旧 package API/发布链、renderer SDK/runtime、Electron worker/UI runtime | 已删除并由 contract/governance guard 阻止回流 |
 | `dead` | `lime-core::plugin`、processor Plugin hook、`installed_plugins` DAO/schema、孤立 Plugin errors | 已删除，不保留构建或存储双轨 |
 | `dead` | MCP smoke 私有 runtime inventory fixture 与 `agentChat.harness.pluginMcpTargets.*` 文案 | 已删除；current inventory 明确忽略私有 metadata 且不投影私有 targets |
-| `historical reference` | `internal/roadmap/plugin` 根部旧 PRD、v1/v2 历史证据 | 只读，不再作为实现依据；完成 v3 后可归档或删除 |
+| `replaced / historical` | 已删除的 `internal/roadmap/plugin` 根部旧 PRD、v1/v2 文档与旧证据 | 有效决策已迁入 v3 合同；追溯只使用 Git history，不恢复 active 文档双轨 |
 
 ## 关键证据
 

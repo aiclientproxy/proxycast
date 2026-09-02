@@ -1,7 +1,7 @@
 //! Lime Skills Crate
 //!
 //! 包含 Skills 系统的 trait 定义和纯逻辑部分。
-//! Tauri 相关实现（TauriExecutionCallback）保留在主 crate。
+//! 宿主相关实现由 App Server 或 Desktop Host 边界承接。
 
 #![allow(clippy::redundant_closure)]
 

@@ -110,7 +110,7 @@ describe("CuratedTaskBadge", () => {
     ).toBeNull();
   });
 
-  it("复盘模板带着 sceneapp 项目结果时，应在 badge 上显影经营摘要", async () => {
+  it("复盘模板带着 结果基线时，应在 badge 上显影经营摘要", async () => {
     const task = findCuratedTaskTemplateById("account-project-review");
     expect(task).not.toBeNull();
 
@@ -120,8 +120,8 @@ describe("CuratedTaskBadge", () => {
           task={task!}
           referenceEntries={[
             {
-              id: "sceneapp:content-pack:run:1",
-              sourceKind: "sceneapp_execution_summary",
+              id: "memory:content-pack:run:1",
+              sourceKind: "memory",
               title: "AI 内容周报",
               summary: "当前已有一轮项目结果，可直接作为复盘基线。",
               category: "experience",
@@ -142,10 +142,10 @@ describe("CuratedTaskBadge", () => {
     });
 
     const statusPill = container.querySelector(
-      '[data-testid="curated-task-badge-sceneapp-status"]',
+      '[data-testid="curated-task-badge-result-status"]',
     );
     const nextPill = container.querySelector(
-      '[data-testid="curated-task-badge-sceneapp-next"]',
+      '[data-testid="curated-task-badge-result-next"]',
     );
 
     expect(statusPill?.textContent).toContain("当前判断：先补复核与修复");
@@ -156,7 +156,7 @@ describe("CuratedTaskBadge", () => {
     expect(statusPill?.textContent).not.toContain("curatedTask.badge");
   });
 
-  it("切到下游结果模板后，badge 仍应显影同一份 sceneapp 基线", async () => {
+  it("切到下游结果模板后，badge 仍应显影同一份 结果基线", async () => {
     const task = findCuratedTaskTemplateById("daily-trend-briefing");
     expect(task).not.toBeNull();
 
@@ -166,8 +166,8 @@ describe("CuratedTaskBadge", () => {
           task={task!}
           referenceEntries={[
             {
-              id: "sceneapp:content-pack:run:1",
-              sourceKind: "sceneapp_execution_summary",
+              id: "memory:content-pack:run:1",
+              sourceKind: "memory",
               title: "AI 内容周报",
               summary: "当前已有一轮项目结果，可直接作为后续生成基线。",
               category: "experience",
@@ -188,10 +188,10 @@ describe("CuratedTaskBadge", () => {
     });
 
     const statusPill = container.querySelector(
-      '[data-testid="curated-task-badge-sceneapp-status"]',
+      '[data-testid="curated-task-badge-result-status"]',
     );
     const nextPill = container.querySelector(
-      '[data-testid="curated-task-badge-sceneapp-next"]',
+      '[data-testid="curated-task-badge-result-next"]',
     );
 
     expect(statusPill?.textContent).toContain("当前判断：先补复核与修复");

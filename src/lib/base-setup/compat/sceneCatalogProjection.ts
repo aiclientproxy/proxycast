@@ -18,8 +18,6 @@ function resolveSceneExecutionKind(
       return "native_skill";
     case "automation_job":
       return "automation_job";
-    case "cloud_scene":
-      return "agent_turn";
     default:
       return "agent_turn";
   }

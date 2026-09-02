@@ -274,12 +274,14 @@ describe("Agent migration boundary", () => {
   });
 
   it("架构文档必须明确 Codex 与 OpenCode 的裁决边界", () => {
-    const source = read(
-      "internal/research/refactor/v1/opencode-reference-comparison.md",
+    const source = read("internal/aiprompts/architecture.md");
+    expect(source).toContain(
+      "Agent loop、Thread/Turn/Item、App Server、状态机、工具生命周期、MCP、Skills、Multi-Agent",
     );
-    expect(source).toContain("Codex 更适合指导 Agent loop");
-    expect(source).toContain("Provider-specific lowering");
-    expect(source).toContain("Model capability");
-    expect(source).toContain("多模态 message part");
+    expect(source).toContain(
+      "provider wire 的 endpoint union、canonical content、媒体 lowering",
+    );
+    expect(source).toContain("capabilitySnapshot");
+    expect(source).toContain("provider-specific lowering");
   });
 });

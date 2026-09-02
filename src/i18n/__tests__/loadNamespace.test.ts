@@ -598,19 +598,10 @@ describe("i18n namespace loader", () => {
         "sceneGate.toast.launchFailed",
       );
       expect(resources[locale].agent).toHaveProperty(
-        "curatedTask.sceneAppReference.followUpBanner",
+        "curatedTask.resultReference.followUpBanner",
       );
       expect(resources[locale].agent).toHaveProperty(
-        "curatedTask.sceneAppReference.highlight.status",
-      );
-      expect(resources[locale].agent).toHaveProperty(
-        "curatedTask.sceneAppReference.resultSummaryFallback",
-      );
-      expect(resources[locale].agent).toHaveProperty(
-        "sceneAppExecutionSummary.title",
-      );
-      expect(resources[locale].agent).toHaveProperty(
-        "sceneAppExecutionSummary.overview.referenceCount",
+        "curatedTask.resultReference.highlight.status",
       );
       expect(resources[locale].agent).toHaveProperty(
         "generalWorkbench.workflow.current.title",
@@ -682,9 +673,6 @@ describe("i18n namespace loader", () => {
         "generalWorkbench.context.modal.text.placeholder",
       );
       expect(resources[locale].agent).toHaveProperty(
-        "sceneAppExecutionSummary.followup.action.saveAsSkill",
-      );
-      expect(resources[locale].agent).toHaveProperty(
         "skills.workspace.managedJob.created",
       );
       expect(resources[locale].agent).toHaveProperty(
@@ -694,7 +682,7 @@ describe("i18n namespace loader", () => {
         "curatedTask.badge.review.suggestedTask",
       );
       expect(resources[locale].agent).toHaveProperty(
-        "curatedTask.badge.sceneApp.failureSignal",
+        "curatedTask.badge.result.failureSignal",
       );
       expect(resources[locale].agent).toHaveProperty(
         "skills.scaffoldDialog.title",

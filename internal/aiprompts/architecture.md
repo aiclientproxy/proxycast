@@ -83,15 +83,15 @@ Renderer 可以临时保存输入框、选择态、展开态和 optimistic UI；
 
 ## 4. Electron Desktop Host 规范
 
-| 路径/模块                             | 职责                                                                                           |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `electron/main.ts`                    | Electron 生命周期与 host 组装入口。                                                            |
-| `electron/preload.ts`                 | `contextBridge`、最小暴露面和 IPC 调用入口。                                                   |
-| `electron/ipcChannels.ts`             | IPC channel 常量与协议白名单。                                                                 |
-| `electron/*Host.ts`                   | 一个桌面能力一个 owner，例如 App Server sidecar、文件/项目壳、窗口、通知、更新、浏览器、语音。 |
+| 路径/模块                              | 职责                                                                                                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `electron/main.ts`                     | Electron 生命周期与 host 组装入口。                                                                    |
+| `electron/preload.ts`                  | `contextBridge`、最小暴露面和 IPC 调用入口。                                                           |
+| `electron/ipcChannels.ts`              | IPC channel 常量与协议白名单。                                                                         |
+| `electron/*Host.ts`                    | 一个桌面能力一个 owner，例如 App Server sidecar、文件/项目壳、窗口、通知、更新、浏览器、语音。         |
 | `electron/desktopResourceReadiness.ts` | 运行时读取并校验 macOS/Windows desktop resource manifest 的身份与必需资源存在性；不替代发布 verifier。 |
-| `electron/appServerHost.ts`           | sidecar 生命周期与 `app_server_handle_json_lines` 的宿主边界。                                 |
-| `electron/forge/`、`forge.config.mjs` | Forge 打包、maker、签名和 release 事实源。                                                     |
+| `electron/appServerHost.ts`            | sidecar 生命周期与 `app_server_handle_json_lines` 的宿主边界。                                         |
+| `electron/forge/`、`forge.config.mjs`  | Forge 打包、maker、签名和 release 事实源。                                                             |
 
 Electron 负责窗口、托盘、Dock、系统文件选择、权限、外部链接、自动更新和 sidecar 生命周期。它不得保存业务 session、解释 provider response、执行模型工具、拼 Thread/Turn/Item 或提供业务 mock fallback。
 
@@ -115,7 +115,8 @@ Accessibility/Input Monitoring、Apple Events 授权查询/consent request、Scr
 Screen Recording 还支持在 helper 内生成受权限保护的全屏、显示器或窗口 PNG 快照；Chronicle/ScreenCaptureKit
 媒体管线、PIP 以及 Computer Use 控制注入仍保持 `not_configured`。helper 已提供受 Accessibility 授权保护的只读
 `accessibilityTree.read` 观察结果（有界深度、节点数和文本长度），以及 CoreGraphics `display.watch.start/stop` 拓扑事件，但不注入鼠标/键盘事件。窗口控制还支持 Accessibility AX raise、窗口所属应用
-hide/unhide、按锚点定位、显式堆叠顺序和带原始可见性恢复的 hide-for-task lease；这组接口不冒充私有 overlay
+hide/unhide、按锚点定位、显式堆叠顺序和带原始可见性恢复的 hide-for-task lease（通过 AX
+`kAXHiddenAttribute` 设置目标应用可见性）；这组接口不冒充私有 overlay
 或 Remote Hosted PIP。Application Group 仍不申请或复制 OpenAI Team ID，
 无 consumer 时返回 `not_configured`。Windows sandbox readiness 继续由 `tool-runtime` 和 packaged
 resource verifier 负责，Desktop Host 只返回 `unverified`，不得从平台名称推断安全后端已就绪。
@@ -134,6 +135,13 @@ identifier；helper 仅调用 `AEDeterminePermissionToAutomateTarget` 查询或�
 `desktopCapabilities.appleEvents` 只表示 helper
 调用面存在；缺少签名、目标授权和 Gate B 证据时保持 `unverified`，不得作为无边界 Computer Use
 注入通道。
+打包 manifest 的 macOS helper metadata 固定声明 `protocolVersion=1`；Electron
+`MacOSNativeHostClient` 在首次业务调用前必须完成 `capabilities.read` 握手，并校验协议版本、平台和
+`com.limecloud.lime.native-host` bundle identity。握手失败会终止 helper、拒绝 pending request，并返回
+`protocol_mismatch`，不能把“可执行文件存在”升级为 runtime ready。已安装签名包的
+`scripts/electron/macos-native-host-gate-b.mjs` 复核同一 helper 的 resources 路径、digest/签名和握手，
+再观察窗口/显示、临时 Cocoa fixture 上的 window anchor/stack/hide-for-task lease、security-scoped bookmark create/resolve/start/stop、权限查询、Launch Services 与 display watcher；默认 `observe` 只记录 TCC 状态，
+`--strict-permissions` 才要求 Accessibility、Input Monitoring、Screen Recording 和选定 Apple Events target 全部 `ready`。
 Windows 原生能力沿同一 Desktop Host 资源边界实现：`electron/native/windows/windows-native-host.cpp`
 使用系统 UI Automation COM API 提供有界、只读的 `windows.uiAutomation.read` 控件树观察，并使用
 `RegisterRawInputDevices` 仅监听修饰键按下/释放事件（`windows.bareModifierMonitor.start/stop`），不提供
@@ -148,14 +156,16 @@ helper 或 digest 漂移时返回 `unavailable`。`desktopCapabilities.uiAutomat
 `display.changed` 事件转发位深、分辨率和最新显示器快照；该观察接口同样不声明 display link、屏幕捕获或
 任何窗口控制能力，`desktopCapabilities.displayWatcher` 在资源存在时保持 `unverified`。
 security-scoped bookmark 的编码数据由 `SystemUtilityHost` 按稳定 ID 写入受管的
-`appDataRoot/macos/security-scoped-bookmarks`，支持冷启动 resolve/start 和显式 revoke；Renderer
+`appDataRoot/macos/security-scoped-bookmarks`，支持冷启动 resolve/start、活动 token stop 和显式
+revoke；当前进程内 revoke 会先停止同一稳定 ID 的 helper 访问，再删除受管记录。Renderer
 不得自行持有 bookmark 事实源或绕过 helper 生命周期。
 HID/bare modifier 的 unsolicited JSONL event 由 `MacOSNativeHostClient.onEvent` 接收，再经
 `SystemUtilityHost` 注入 Electron Host emitter 广播到 `evt:*`；订阅者异常不会破坏 response framing，
 `before-quit` 会先解除订阅并停止 helper。
 
-Architecture impact: major; cross-platform Host capability contract added. Responsible developer
-confirmation: root, 2026-09-01. Window orchestration owner/data flow updated: root, 2026-09-01.
+Architecture impact: major; cross-platform Host capability contract and native helper handshake added.
+Responsible developer confirmation: root, 2026-09-01. Window orchestration owner/data flow updated: root,
+2026-09-01. Native helper protocol/readiness owner/data flow updated: root, 2026-09-02.
 Apple Events authorization owner/data flow updated: root, 2026-09-01.
 
 ## 5. TypeScript Package 规范
@@ -1214,7 +1224,7 @@ Electron 只负责 JSONL 转发和系统通知宿主能力，不承接 scheduler
 terminal event 的 typed notification owner：任务 create/update/delete/enabled-set 发布 `scheduledTask/changed`，
 `turn.completed/failed/canceled` 经过 Agent Run 幂等终态写回后发布 `scheduledTask/run/updated`。Renderer 只按任务的
 `all_runs / failures / none` policy 决定是否调用 Desktop Host；`unsupported/failed` 必须进入可见错误通道，不能伪造发送成功。
-Renderer timer、生产 mock backend/fallback、browser session automation 与 SceneApp automation context 均禁止成为 current owner。旧
+Renderer timer、生产 mock backend/fallback、browser session automation 与已退役应用编排 context 均禁止成为 current owner。旧
 `automationJob/*`、`automationSchedule/*`、`automationScheduler/*`、Renderer automation gateway 及旧 Settings 工作台已物理删除，
 分类为 `dead / deleted / forbidden-to-restore`；旧 method 字符串只允许作为 contract、fixture 或治理扫描的负向回流守卫。Rust
 `AutomationJob` DAO、`automation_jobs` 表与内部 execution helper 是 Scheduled Tasks 的 current 存储映射，不是公开双轨。scheduler 原子 claim、
@@ -2907,7 +2917,9 @@ trace，证明 reducer 是生产 consumer 而不是 dead code。
 V8 build 输入固定从 `lime-rs/Cargo.lock` 读取精确 crate version，`scripts/lib/rusty-v8-artifacts.mjs` 只接受
 Codex `ptrcomp_sandbox_release` 的受支持 platform target，下载 archive/binding/checksum manifest 后逐项校验 SHA-256，
 再向 Rust test、local CI 和 App Server sidecar build 注入成对的 `RUSTY_V8_ARCHIVE` /
-`RUSTY_V8_SRC_BINDING_PATH`。V8 archive 编译期只静态链接进 `code-mode-host`，不复制进 Electron resources。
+`RUSTY_V8_SRC_BINDING_PATH`。默认缓存使用各平台稳定的用户缓存目录，并对 curl 下载设置有限重试和超时；
+`RUSTY_V8_MIRROR` 保持不使用，因为 v8 crate 的 `/v<version>` 路径与 Codex 的 `/rusty-v8-v<version>` release tag 不兼容。
+V8 archive 编译期只静态链接进 `code-mode-host`，不复制进 Electron resources。
 dev、Electron asset 与 Windows build 使用同一次 Cargo invocation 成组产出 `app-server` 和 `code-mode-host`；Electron
 release bundle 将二者放在同一平台目录，manifest 分别记录 `sha256` 与 `codeModeHostSha256`，packaged verifier 必须同时
 校验。`default_code_mode_host_path` 只解析 App Server/测试二进制同目录，不搜索 PATH 上的替代 runtime。

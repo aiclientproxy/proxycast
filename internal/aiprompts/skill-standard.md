@@ -334,7 +334,7 @@ Lime 技能能力必须明确区分四个对象：
 不是谁：
 
 - 不是原始 `SKILL.md`
-- 不等于 `SceneApp`
+- 不等于上层 Plugin 或 workflow
 - 更接近 `Scene / ServiceSkill` 背后的流程层与产品投影层
 
 固定规则：
@@ -405,7 +405,7 @@ Lime 技能能力必须明确区分四个对象：
 补充边界：
 
 - `patternPrimary / patternStack` 可以来自 Skill Bundle 编译结果
-- `infra_profile` 不属于原始 Skill Bundle 的强制字段，它属于上层 `SceneApp` 装配声明
+- `infra_profile` 不属于原始 Skill Bundle 的强制字段，它属于上层 Plugin workflow 装配声明
 - 不要把“这个 skill 是 `Pipeline` 型”误写成“这个场景就是云端 / 浏览器 / 本地 durable”
 
 必须遵守：

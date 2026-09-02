@@ -39,7 +39,9 @@ import {
 } from "./generalWorkbenchWorkflowPanelViewModel";
 import type { GeneralWorkbenchRunMetadataSummary } from "./generalWorkbenchWorkflowData";
 
-function activityLog(overrides: Partial<SidebarActivityLog>): SidebarActivityLog {
+function activityLog(
+  overrides: Partial<SidebarActivityLog>,
+): SidebarActivityLog {
   return {
     id: "log-1",
     name: "write_file",
@@ -97,14 +99,12 @@ const t = ((key: string, values?: Record<string, unknown>) => {
     "generalWorkbench.workflow.activity.status.failed": "失败",
     "generalWorkbench.workflow.activity.status.recorded": "已记录",
     "generalWorkbench.workflow.activity.status.running": "处理中",
-    "generalWorkbench.workflow.activity.summary.activeRun":
-      "当前查看 {{run}}",
+    "generalWorkbench.workflow.activity.summary.activeRun": "当前查看 {{run}}",
     "generalWorkbench.workflow.activity.summary.artifactBadge":
       "{{count}} 个产物",
     "generalWorkbench.workflow.activity.summary.artifactCount":
       "{{count}} 个产物",
-    "generalWorkbench.workflow.activity.summary.artifactPath":
-      "产物 {{path}}",
+    "generalWorkbench.workflow.activity.summary.artifactPath": "产物 {{path}}",
     "generalWorkbench.workflow.activity.summary.emptyMeta":
       "运行过程会记录在这里。",
     "generalWorkbench.workflow.activity.summary.emptyTitle": "暂无执行经过",
@@ -168,10 +168,12 @@ const t = ((key: string, values?: Record<string, unknown>) => {
       "切到当前焦点后再继续处理这一条记录",
     "generalWorkbench.workflow.branch.meta.candidate.draft": "候选草稿",
     "generalWorkbench.workflow.branch.meta.candidate.version": "候选版本",
-    "generalWorkbench.workflow.branch.meta.current.draft": "当前焦点落在这份草稿",
+    "generalWorkbench.workflow.branch.meta.current.draft":
+      "当前焦点落在这份草稿",
     "generalWorkbench.workflow.branch.meta.current.version": "当前焦点落在这版",
     "generalWorkbench.workflow.branch.meta.inProgress.draft": "正在推进的草稿",
-    "generalWorkbench.workflow.branch.meta.inProgress.version": "正在推进的版本",
+    "generalWorkbench.workflow.branch.meta.inProgress.version":
+      "正在推进的版本",
     "generalWorkbench.workflow.branch.meta.merged.draft": "已收进主稿",
     "generalWorkbench.workflow.branch.meta.merged.version": "已设为主稿",
     "generalWorkbench.workflow.branch.meta.pending": "待继续",
@@ -697,9 +699,9 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
       "继续展开其中一个选题",
       "生成首条内容主稿",
     ]);
-    expect(buildCuratedTaskFollowUpActionItems({ curatedTask: null, t })).toEqual(
-      [],
-    );
+    expect(
+      buildCuratedTaskFollowUpActionItems({ curatedTask: null, t }),
+    ).toEqual([]);
     expect(
       buildCuratedTaskFollowUpActionItems({
         curatedTask: currentTask,
@@ -708,8 +710,7 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
     ).toMatchObject([
       {
         action: "继续展开其中一个选题",
-        ariaLabel:
-          "generalWorkbench.workflow.followUp.applyAria",
+        ariaLabel: "generalWorkbench.workflow.followUp.applyAria",
         payload: {
           prompt: "请基于「每日趋势摘要」这轮结果继续：继续展开其中一个选题",
           capabilityRoute: {
@@ -720,8 +721,7 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
       },
       {
         action: "生成首条内容主稿",
-        ariaLabel:
-          "generalWorkbench.workflow.followUp.applyAria",
+        ariaLabel: "generalWorkbench.workflow.followUp.applyAria",
         payload: {
           prompt: "请基于「每日趋势摘要」这轮结果继续：生成首条内容主稿",
           capabilityRoute: {
@@ -809,7 +809,7 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
     );
   });
 
-  it("review feedback payload 应优先沿 sceneapp 基线切到下游任务", () => {
+  it("review feedback payload 应优先沿 结果基线切到下游任务", () => {
     const projection: ReviewFeedbackProjection = {
       signal: {
         source: "review_feedback",
@@ -838,8 +838,8 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
         taskTitle: "复盘这个账号/项目",
         referenceEntries: [
           {
-            id: "sceneapp:ai-weekly:run:1",
-            sourceKind: "sceneapp_execution_summary",
+            id: "memory:ai-weekly:run:1",
+            sourceKind: "memory",
             title: "AI 内容周报",
             summary: "当前已有一轮结果，可直接进入下游主稿。",
             category: "experience",
@@ -867,7 +867,7 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
         taskTitle: "内容主稿生成",
         referenceEntries: [
           expect.objectContaining({
-            sourceKind: "sceneapp_execution_summary",
+            sourceKind: "memory",
             title: "AI 内容周报",
           }),
         ],
@@ -922,8 +922,8 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
           taskTitle: "复盘这个账号/项目",
           referenceEntries: [
             {
-              id: "sceneapp:ai-weekly:run:1",
-              sourceKind: "sceneapp_execution_summary",
+              id: "memory:ai-weekly:run:1",
+              sourceKind: "memory",
               title: "AI 内容周报",
               summary: "当前已有一轮结果，可直接进入下游主稿。",
               category: "experience",
@@ -959,16 +959,14 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
         taskTitle: "内容主稿生成",
       },
     });
-    expect(projection.sceneAppReviewBaselineSnapshot).toMatchObject({
+    expect(projection.resultBaselineSnapshot).toMatchObject({
       sourceTitle: "AI 内容周报",
       statusLabel: "适合继续放量",
       failureSignalLabel: "封面信息过密",
       operatingAction: "保留品牌联名方向",
       destinationsLabel: "内容主稿生成",
     });
-    expect(projection.sceneAppReviewBaselineHighlights.length).toBeGreaterThan(
-      0,
-    );
+    expect(projection.resultBaselineHighlights.length).toBeGreaterThan(0);
     const downstreamProjection = buildGeneralWorkbenchFollowUpProjection({
       latestReviewSignal: null,
       runMetadataSummary: {
@@ -982,8 +980,8 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
           taskTitle: "每日趋势摘要",
           referenceEntries: [
             {
-              id: "sceneapp:ai-weekly:run:2",
-              sourceKind: "sceneapp_execution_summary",
+              id: "memory:ai-weekly:run:2",
+              sourceKind: "memory",
               title: "AI 内容周报",
               summary: "当前已有一轮结果，可直接进入下游摘要。",
               category: "experience",
@@ -1002,7 +1000,7 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
       },
       t,
     });
-    expect(downstreamProjection.sceneAppReviewBaselineSnapshot).toMatchObject({
+    expect(downstreamProjection.resultBaselineSnapshot).toMatchObject({
       sourceTitle: "AI 内容周报",
       statusLabel: "适合继续放量",
       operatingAction: "保留品牌联名方向",
@@ -1240,7 +1238,7 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
           taskTitle: "每日趋势摘要",
         }),
       },
-      runMetadataText: "{\"workflow\":\"social_content_pipeline_v1\"}",
+      runMetadataText: '{"workflow":"social_content_pipeline_v1"}',
       activeRunStagesLabel: "写作闸门",
       t,
     });
@@ -1270,7 +1268,7 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
           kind: "copy_raw",
           label: "复制原始记录",
           ariaLabel: "复制原始记录",
-          copyTarget: "{\"workflow\":\"social_content_pipeline_v1\"}",
+          copyTarget: '{"workflow":"social_content_pipeline_v1"}',
         },
       ],
       artifactPaths: ["content-posts/demo.md"],
@@ -1301,53 +1299,54 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
       ],
     });
 
-    const workflowRunDetailProjection = buildGeneralWorkbenchRunDetailProjection({
-      activeRunDetail: {
-        id: "workflow-run-1",
-        source: "automation",
-        status: "error",
-      },
-      runMetadataSummary: {
-        workflow: "content_article_workflow",
-        executionId: null,
-        versionId: null,
-        stages: [],
-        artifactPaths: [],
-        curatedTask: null,
-      },
-      runMetadataText: JSON.stringify({
-        source: "workflow/read",
-        workflow_read_model: {
-          workflowRunId: "workflow-run-1",
-          failure: {
-            reasonCode: "worker_output",
-          },
-          retry: {
-            sourceTurnId: "turn-source",
-            rescheduledTurnId: "turn-retry",
-            reasonCode: "manual_retry",
-          },
-          actions: [
-            {
-              actionType: "ask_user",
-              requestId: "request-1",
-              stepId: "approval",
-            },
-          ],
-          steps: [
-            {
-              id: "draft",
-              title: "起草正文",
-              status: "failed",
-              failure: {
-                message: "正文为空",
-              },
-            },
-          ],
+    const workflowRunDetailProjection =
+      buildGeneralWorkbenchRunDetailProjection({
+        activeRunDetail: {
+          id: "workflow-run-1",
+          source: "automation",
+          status: "error",
         },
-      }),
-      t,
-    });
+        runMetadataSummary: {
+          workflow: "content_article_workflow",
+          executionId: null,
+          versionId: null,
+          stages: [],
+          artifactPaths: [],
+          curatedTask: null,
+        },
+        runMetadataText: JSON.stringify({
+          source: "workflow/read",
+          workflow_read_model: {
+            workflowRunId: "workflow-run-1",
+            failure: {
+              reasonCode: "worker_output",
+            },
+            retry: {
+              sourceTurnId: "turn-source",
+              rescheduledTurnId: "turn-retry",
+              reasonCode: "manual_retry",
+            },
+            actions: [
+              {
+                actionType: "ask_user",
+                requestId: "request-1",
+                stepId: "approval",
+              },
+            ],
+            steps: [
+              {
+                id: "draft",
+                title: "起草正文",
+                status: "failed",
+                failure: {
+                  message: "正文为空",
+                },
+              },
+            ],
+          },
+        }),
+        t,
+      });
 
     expect(workflowRunDetailProjection.detailRows).toEqual([
       {
@@ -1369,45 +1368,46 @@ describe("generalWorkbenchWorkflowPanelViewModel", () => {
   });
 
   it("应优先用 agentActionType 展示 workflow waiting action 类型", () => {
-    const workflowRunDetailProjection = buildGeneralWorkbenchRunDetailProjection({
-      activeRunDetail: {
-        id: "workflow-run-1",
-        source: "automation",
-        status: "running",
-      },
-      runMetadataSummary: {
-        workflow: "content_article_workflow",
-        executionId: null,
-        versionId: null,
-        stages: [],
-        artifactPaths: [],
-        curatedTask: null,
-      },
-      runMetadataText: JSON.stringify({
-        source: "workflow/read",
-        workflow_read_model: {
-          workflowRunId: "workflow-run-1",
-          actions: [
-            {
-              actionType: "respond",
-              agentActionType: "tool_confirmation",
-              requestId: "request-tool-1",
-              stepId: "approve-tool",
-            },
-          ],
-          steps: [
-            {
-              id: "collect-input",
-              title: "补充信息",
-              status: "waiting_permission",
-              requestId: "request-elicitation-1",
-              agentActionType: "elicitation",
-            },
-          ],
+    const workflowRunDetailProjection =
+      buildGeneralWorkbenchRunDetailProjection({
+        activeRunDetail: {
+          id: "workflow-run-1",
+          source: "automation",
+          status: "running",
         },
-      }),
-      t,
-    });
+        runMetadataSummary: {
+          workflow: "content_article_workflow",
+          executionId: null,
+          versionId: null,
+          stages: [],
+          artifactPaths: [],
+          curatedTask: null,
+        },
+        runMetadataText: JSON.stringify({
+          source: "workflow/read",
+          workflow_read_model: {
+            workflowRunId: "workflow-run-1",
+            actions: [
+              {
+                actionType: "respond",
+                agentActionType: "tool_confirmation",
+                requestId: "request-tool-1",
+                stepId: "approve-tool",
+              },
+            ],
+            steps: [
+              {
+                id: "collect-input",
+                title: "补充信息",
+                status: "waiting_permission",
+                requestId: "request-elicitation-1",
+                agentActionType: "elicitation",
+              },
+            ],
+          },
+        }),
+        t,
+      });
 
     expect(workflowRunDetailProjection.detailRows).toEqual([
       {

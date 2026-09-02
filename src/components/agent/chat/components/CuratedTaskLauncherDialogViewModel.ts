@@ -12,9 +12,9 @@ import type { CuratedTaskRecommendationSignal } from "@/components/agent/chat/ut
 import { buildReviewFeedbackProjection } from "@/components/agent/chat/utils/reviewFeedbackProjection";
 import type { CuratedTaskReferenceEntry } from "@/components/agent/chat/utils/curatedTaskReferenceSelection";
 import {
-  buildSceneAppExecutionReviewPrefillHighlights,
-  buildSceneAppExecutionReviewPrefillSnapshot,
-} from "@/components/agent/chat/utils/sceneAppCuratedTaskReference";
+  buildCuratedTaskResultBaselineHighlights,
+  buildCuratedTaskResultBaselineSnapshot,
+} from "@/components/agent/chat/utils/curatedTaskResultBaseline";
 
 export const MAX_REFERENCE_SELECTION_COUNT = 3;
 
@@ -53,10 +53,7 @@ export function buildCuratedTaskLauncherReadiness({
 }: {
   task: CuratedTaskTemplateItem | null;
   inputValues: CuratedTaskInputValues;
-  copy: Pick<
-    CuratedTaskLauncherCopy,
-    "readinessReady" | "readinessMissing"
-  >;
+  copy: Pick<CuratedTaskLauncherCopy, "readinessReady" | "readinessMissing">;
 }): CuratedTaskLauncherReadiness {
   if (!task) {
     return {
@@ -142,10 +139,7 @@ export function buildLauncherOutcomeSummary({
   copy,
 }: {
   task: CuratedTaskTemplateItem | null;
-  copy: Pick<
-    CuratedTaskLauncherCopy,
-    "outcomeWithFollowUp" | "outcomeDefault"
-  >;
+  copy: Pick<CuratedTaskLauncherCopy, "outcomeWithFollowUp" | "outcomeDefault">;
 }): string {
   if (!task) {
     return "";
@@ -211,7 +205,9 @@ export function resolvePrimarySuggestedTask({
   latestReviewTaskSignal: CuratedTaskRecommendationSignal | null;
   curatedTaskTemplateCopy: Parameters<typeof findCuratedTaskTemplateById>[1];
 }): {
-  reviewFeedbackProjection: ReturnType<typeof buildReviewFeedbackProjection> | null;
+  reviewFeedbackProjection: ReturnType<
+    typeof buildReviewFeedbackProjection
+  > | null;
   primarySuggestedTask: CuratedTaskTemplateItem | null;
 } {
   if (!currentTask) {
@@ -226,7 +222,10 @@ export function resolvePrimarySuggestedTask({
     currentTaskId: currentTask.id,
     currentTaskTitle: currentTask.title,
   });
-  if (!reviewFeedbackProjection || reviewFeedbackProjection.matchedCurrentTask) {
+  if (
+    !reviewFeedbackProjection ||
+    reviewFeedbackProjection.matchedCurrentTask
+  ) {
     return {
       reviewFeedbackProjection,
       primarySuggestedTask: null,
@@ -259,7 +258,7 @@ export function buildActiveReviewBaselineModel({
   >;
 }): {
   activeReviewBaselineSnapshot: ReturnType<
-    typeof buildSceneAppExecutionReviewPrefillSnapshot
+    typeof buildCuratedTaskResultBaselineSnapshot
   > | null;
   activeReviewBaselineHighlights: string[];
   activeReviewBaselineCarryHint: string | null;
@@ -276,15 +275,12 @@ export function buildActiveReviewBaselineModel({
     selectedReferenceEntries.length > 0
       ? selectedReferenceEntries
       : seededReferenceEntries;
-  const activeReviewBaselineSnapshot =
-    buildSceneAppExecutionReviewPrefillSnapshot({
-      referenceEntries: activeReferenceEntries,
-      taskId: task.id,
-    });
+  const activeReviewBaselineSnapshot = buildCuratedTaskResultBaselineSnapshot({
+    referenceEntries: activeReferenceEntries,
+    taskId: task.id,
+  });
   const activeReviewBaselineHighlights =
-    buildSceneAppExecutionReviewPrefillHighlights(
-      activeReviewBaselineSnapshot,
-    );
+    buildCuratedTaskResultBaselineHighlights(activeReviewBaselineSnapshot);
 
   if (!activeReviewBaselineSnapshot) {
     return {

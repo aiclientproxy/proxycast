@@ -32,7 +32,7 @@ Codex runtime 与多模型/provider 的逐项对齐方案另见 [v1/README.md](v
 ## 文档索引
 
 - **架构债证据底座**（五轴实证，结论可复查）：`architecture-debt-analysis.md`
-- **执行计划**（按机制杠杆排序的 R-xx 队列）：`progressive-refactor-plan.md`
+- **执行计划**：`v2/IMPLEMENTATION-PLAN.md`
 - **未来代码结构指引**（北极星目标结构 + 新代码落点决策表 + T1/T2/T3 中长期规划）：`directory-architecture-blueprint.md`
 - **文件体量棘轮守卫规格**（轴 F 护栏的实现契约）：`file-size-ratchet-guard-spec.md`
 - **Codex 工程模式借鉴**（五轴对照：协议 ts-rs 生成链、domain processor、抗膨胀，含抄什么/避什么结论）：`codex-engineering-patterns.md`
@@ -57,7 +57,7 @@ Codex runtime 与多模型/provider 的逐项对齐方案另见 [v1/README.md](v
 
 ## 执行纪律
 
-1. 每刀对应 `progressive-refactor-plan.md` 一个 `R-xx`，动手前更新状态、收尾补进度日志。
+1. 每刀对应 `v2/IMPLEMENTATION-PLAN.md` 的 current 阶段；动手前更新状态，收尾只记录可复现验证和剩余 blocker。
 2. 排序按 `AGENTS.md` 执行规则 3：选对整体完成度提升最大的，不挑顺手的。
 3. 拆分前先抽纯逻辑到 `*.unit.test.ts` / 子模块单测兜底（硬规则 9/12），测试随代码迁移。
 4. 用户可见文案五语言同步（硬规则 10）；协议改动四侧同步 + `test:contracts`（硬规则 3）。

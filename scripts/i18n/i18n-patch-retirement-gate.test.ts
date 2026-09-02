@@ -138,17 +138,17 @@ describe("i18n patch retirement gate", () => {
     const legacyReportPath = writeJson(root, "legacy-report.json", {
       summary: {
         classificationDriftCandidates: [
-          "sceneapp-active-launch-surface -> dead / 受控",
+          "retired-active-launch-surface -> dead / 受控",
         ],
         runtimeSourceCount: 1,
         rustRuntimeSourceCount: 0,
         rustTestSourceCount: 0,
         testSourceCount: 0,
         violations: [
-          "sceneapp-active-launch-surface -> src/lib/sceneapp/launchBridge.ts",
+          "retired-active-launch-surface -> src/lib/retired-runtime/launchBridge.ts",
         ],
         zeroReferenceCandidates: [
-          "sceneapp-active-launch-surface (SceneApp active launch surface)",
+          "retired-active-launch-surface (retired active launch surface)",
         ],
       },
     });

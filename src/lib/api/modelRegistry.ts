@@ -585,7 +585,7 @@ function modelMatchesSearchQuery(
 
 function modelPreferenceMutationUnavailable(operation: string): never {
   throw new Error(
-    `${operation} 尚未接入 App Server model preference current 写链；旧 Tauri 模型注册表业务命令已退役。`,
+    `${operation} 尚未接入 App Server model preference current 写链；旧桌面宿主模型注册表命令已退役。`,
   );
 }
 

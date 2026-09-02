@@ -1,7 +1,9 @@
 # Writing 实施计划
 
+> 状态：`legacy current reference`。本文的 v1 实施切片已由 `../../exec-plans/writing-v2-workflow-completion-plan.md` 替换；current 退出条件、验证和 blocker 以 v2 执行计划为准。
+
 更新时间：2026-07-05
-状态：In Progress
+状态：`legacy current reference`；current 退出条件、验证和 blocker 以 `../../exec-plans/writing-v2-workflow-completion-plan.md` 为准
 
 ## 1. 当前主目标
 

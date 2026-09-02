@@ -1,7 +1,7 @@
 //! voice-core - 语音输入核心库
 //!
 //! 提供音频录制、语音识别、文字输出等功能。
-//! 不依赖 Tauri，可被任何 Rust 项目使用。
+//! 不依赖桌面宿主，可被任何 Rust 项目使用。
 
 pub mod asr_client;
 pub mod device;

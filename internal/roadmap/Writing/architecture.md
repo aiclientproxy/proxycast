@@ -1,7 +1,9 @@
 # Writing 架构设计
 
+> 状态：`legacy current reference`。本文的 v1 架构记录已由 `./v2/product-requirements.md` 与 `./v2/content-factory-plugin-reframe.md` 替换；新增或修改的 current 边界必须回写 v2 文档。
+
 更新时间：2026-06-30
-状态：In Progress
+状态：`legacy current reference`；current 架构以 `./v2/README.md`、`./v2/product-requirements.md` 与 `../../aiprompts/architecture.md` 为准
 
 ## 1. 一句话架构
 

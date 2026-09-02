@@ -10,9 +10,31 @@ const baseSummary = {
   result: "pass",
   assertions: { failed: [] },
   artifacts: { trace: "trace-summary.json", screenshot: "screen.png" },
+  layout: {
+    proofLevel: "electron-responsive-layout-contract",
+    screenshots: [
+      "layout-1536x960.png",
+      "layout-1280x800.png",
+      "layout-980x680.png",
+    ],
+    assertions: {
+      capturedViewportCount: 3,
+      allViewportsPass: true,
+      composerHeightStable: true,
+    },
+  },
 };
 
-function readSummary(summary, files = ["trace-summary.json", "screen.png"]) {
+function readSummary(
+  summary,
+  files = [
+    "trace-summary.json",
+    "screen.png",
+    "layout-1536x960.png",
+    "layout-1280x800.png",
+    "layout-980x680.png",
+  ],
+) {
   return readElectronSmokeSummary({
     evidenceDir: "C:/evidence",
     fileExists: (filePath) => files.includes(filePath.split(/[\\/]/).pop()),
@@ -59,6 +81,24 @@ describe("Electron smoke summary", () => {
     expect(readSummary(baseSummary, ["trace-summary.json"])).toMatchObject({
       valid: false,
       error: "screenshot",
+    });
+  });
+
+  it("rejects a pass without complete responsive layout evidence", () => {
+    const summary = readSummary({
+      ...baseSummary,
+      layout: {
+        ...baseSummary.layout,
+        assertions: {
+          ...baseSummary.layout.assertions,
+          allViewportsPass: false,
+        },
+      },
+    });
+
+    expect(summary).toMatchObject({
+      valid: false,
+      error: "layout-geometry",
     });
   });
 });

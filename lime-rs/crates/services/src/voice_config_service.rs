@@ -1,7 +1,7 @@
 //! 语音输入配置服务
 //!
 //! 管理语音输入配置、ASR 凭证与润色指令。
-//! 不依赖 Tauri，可被主 crate 以桥接方式复用。
+//! 不依赖桌面宿主，可被 App Server 复用。
 
 use lime_core::config::{
     load_config, save_config, AsrCredentialEntry, AsrProviderType, BaiduConfig, OpenAIAsrConfig,

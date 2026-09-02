@@ -9,7 +9,7 @@
 //! ## 设计原则
 //! - 使用 thiserror 派生 Error trait
 //! - 支持 From 转换以便错误传播
-//! - 实现 Serialize 以支持 Tauri 命令返回
+//! - 实现 Serialize 以支持 App Server 协议返回
 //!
 //! ## 相关需求
 //! - Requirements 2.4: 迁移错误处理

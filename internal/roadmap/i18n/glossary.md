@@ -12,7 +12,7 @@
 - Agent Chat：主对话工作区。
 - Workspace：承载任务、文稿、运行态和结果的主工作台。
 - Browser Runtime：浏览器协助运行时。
-- SceneApp：场景型应用与其运行投影。
+- Plugin：可安装、启停和发现的扩展包及其产品入口。
 - Skills Workspace：技能生成、浏览、安装与运行工作台。
 - Project Knowledge：项目资料中枢。
 - Memory：记忆与上下文沉淀页。
@@ -34,9 +34,9 @@
 - assistant / assist：浏览器协助，避免和 agent 混淆。
 - preview：预览，保留为运行前或结果前的可视草稿。
 
-## SceneApp 术语
+## Workflow 术语
 
-- scene app：场景应用。
+- workflow：由 Plugin、Skill 或 Agent Turn 提供的可执行流程。
 - run projection：运行投影。
 - follow-up：后续动作 / 续接，不翻译成一般意义上的 follow up 如果会失去流程语义。
 - result destination：结果去向。

@@ -144,8 +144,8 @@ describe("CharacterMention slash templates", () => {
     const container = renderHarness({
       defaultCuratedTaskReferenceEntries: [
         {
-          id: "sceneapp:ai-weekly:run:1",
-          sourceKind: "sceneapp_execution_summary",
+          id: "memory:ai-weekly:run:1",
+          sourceKind: "memory",
           title: "AI 内容周报",
           summary: "已有一轮可继续放量的结果。",
           category: "experience",
@@ -174,12 +174,12 @@ describe("CharacterMention slash templates", () => {
     );
   });
 
-  it("slash 面板里的下游结果模板也应继续显影 sceneapp 基线摘要", async () => {
+  it("slash 面板里的下游结果模板也应继续显影 结果基线摘要", async () => {
     const container = renderHarness({
       defaultCuratedTaskReferenceEntries: [
         {
-          id: "sceneapp:ai-weekly:run:1",
-          sourceKind: "sceneapp_execution_summary",
+          id: "memory:ai-weekly:run:1",
+          sourceKind: "memory",
           title: "AI 内容周报",
           summary: "已有一轮可继续放量的结果。",
           category: "experience",

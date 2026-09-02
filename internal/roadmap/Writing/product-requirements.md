@@ -1,7 +1,9 @@
 # Writing 产品需求
 
 更新时间：2026-06-30
-状态：In Progress
+状态：`legacy current reference`（已由 [Writing v2 产品需求](./v2/product-requirements.md) 替换）
+
+> 本文保留 v1 产品需求与迁移证据。current 的普通 Agent turn 主链、workflow audit、段落级 artifact、JSONL 审计和恢复合同以 `./v2/product-requirements.md` 为准。
 
 ## 1. 背景
 

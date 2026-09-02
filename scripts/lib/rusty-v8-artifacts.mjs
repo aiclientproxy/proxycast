@@ -16,6 +16,9 @@ export const RUSTY_V8_ARTIFACT_PROFILE = "ptrcomp_sandbox_release";
 export const RUSTY_V8_RELEASE_BASE_URL =
   "https://github.com/openai/codex/releases/download";
 
+const RUSTY_V8_DOWNLOAD_CONNECT_TIMEOUT_SECS = "15";
+const RUSTY_V8_DOWNLOAD_MAX_TIME_SECS = "120";
+
 const SUPPORTED_TARGETS = new Set([
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",
@@ -129,13 +132,36 @@ export function sha256File(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
+export function defaultRustyV8CacheRoot({
+  env = process.env,
+  platform = process.platform,
+  homeDirectory = os.homedir(),
+} = {}) {
+  const explicitCacheRoot = env.LIME_RUSTY_V8_CACHE_DIR?.trim();
+  const pathApi = platform === "win32" ? path.win32 : path.posix;
+  if (explicitCacheRoot) {
+    return pathApi.resolve(explicitCacheRoot);
+  }
+  if (platform === "darwin") {
+    return pathApi.join(homeDirectory, "Library", "Caches", "Lime", "rusty-v8");
+  }
+  if (platform === "win32") {
+    const localAppData =
+      env.LOCALAPPDATA?.trim() ||
+      pathApi.join(homeDirectory, "AppData", "Local");
+    return pathApi.join(localAppData, "Lime", "Cache", "rusty-v8");
+  }
+  const cacheHome =
+    env.XDG_CACHE_HOME?.trim() || pathApi.join(homeDirectory, ".cache");
+  return pathApi.join(cacheHome, "lime", "rusty-v8");
+}
+
 export function resolveRustyV8CargoEnv({
   env = process.env,
   repoRoot = process.cwd(),
   platform = process.platform,
   arch = process.arch,
-  cacheRoot = env.LIME_RUSTY_V8_CACHE_DIR?.trim() ||
-    path.join(os.tmpdir(), "lime-rusty-v8"),
+  cacheRoot,
   download = downloadFile,
 } = {}) {
   if (["1", "true", "yes"].includes(env.V8_FROM_SOURCE?.trim().toLowerCase())) {
@@ -156,8 +182,10 @@ export function resolveRustyV8CargoEnv({
   );
   const names = rustyV8ArtifactNames(target);
   const releaseUrl = `${RUSTY_V8_RELEASE_BASE_URL}/rusty-v8-v${version}`;
+  const resolvedCacheRoot =
+    cacheRoot || defaultRustyV8CacheRoot({ env, platform });
   const artifactDirectory = path.resolve(
-    cacheRoot,
+    resolvedCacheRoot,
     `rusty-v8-v${version}-${target}`,
   );
   mkdirSync(artifactDirectory, { recursive: true });
@@ -233,6 +261,14 @@ function downloadFile(url, destination) {
       "--silent",
       "--show-error",
       "--location",
+      "--retry",
+      "3",
+      "--retry-delay",
+      "1",
+      "--connect-timeout",
+      RUSTY_V8_DOWNLOAD_CONNECT_TIMEOUT_SECS,
+      "--max-time",
+      RUSTY_V8_DOWNLOAD_MAX_TIME_SECS,
       "--output",
       temporaryPath,
       url,

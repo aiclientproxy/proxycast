@@ -345,8 +345,6 @@ function renderScene(props?: RenderSceneProps) {
       propsRecord.creationReplaySurface === undefined
         ? null
         : (propsRecord.creationReplaySurface as never),
-    sceneAppExecutionSummaryCard:
-      propsRecord.sceneAppExecutionSummaryCard as React.ReactNode,
     serviceSkillExecutionCard:
       propsRecord.serviceSkillExecutionCard as React.ReactNode,
     emptyStateProps: {} as never,

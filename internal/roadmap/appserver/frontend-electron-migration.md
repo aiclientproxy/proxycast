@@ -37,7 +37,7 @@ Electron 只负责 Desktop Host bridge、preload / IPC 白名单、窗口、托�
 | `current`        | `src/lib/desktop-host/*`                                                                         | renderer-safe 桌面能力 API，生产走 Electron bridge，测试夹具显式注入                                                   |
 | `current`        | `src/lib/api/appServer.ts`、`packages/app-server-client/src/protocol.ts`                         | renderer 侧 App Server JSON-RPC gateway 与协议事实源                                                                   |
 | `current`        | `electron/updateHost.ts`、`forge.config.mjs`、`.github/workflows/release.yml`                    | updater、签名、公证和发布包事实源                                                                                      |
-| `compat cleanup` | `lime-rs/src/commands/**`                                                                        | 旧 Tauri command wrapper 清理区；只允许迁出核心逻辑、撤注册和删除；删不动登记 blocker，不保留 stub / compat wrapper    |
+| `dead / deleted` | `lime-rs/src/commands/**`                                                                        | 已物理删除；只允许负向回流守卫或不可变历史 evidence 引用，不得恢复 stub / compat wrapper                             |
 | `compat`         | legacy desktop facade                                                                            | 只允许迁移期委托和投影，不继续承接新业务逻辑                                                                           |
 | `deprecated`     | `lime-rs/` 下仍被 git 跟踪的旧宿主配置文件                                                       | 仅作为物理清理候选保留；不得作为 package scripts、Electron Forge、updater、CI 或版本同步输入                           |
 | `dead`           | 旧 builder 配置 / CLI、自定义 Windows installer maker、旧 YAML / blockmap updater metadata       | 不得作为 release、updater、签名、公证、CI、i18n app metadata 或版本同步输入                                            |
@@ -138,7 +138,7 @@ Electron Desktop Host bridge
 3. Agent session create / list / read、thread read model、turn start / cancel、action respond 已经迁到 App Server JSON-RPC 前端 gateway。
 4. `src/lib/desktop-host/*` 生产路径已按 Electron bridge 优先、无 bridge fail-closed、测试显式 mock 的规则收口。
 5. release / updater / signing / notarization 已由 Electron Forge 和 Electron updater 文档锁定。
-6. `lime-rs/src/commands/**` 已固定为旧 Tauri wrapper 清理区；新实现不得继续落入该目录。
+6. `lime-rs/src/commands/**` 已物理删除；新实现不得恢复该目录。
 
 仍需继续推进：
 

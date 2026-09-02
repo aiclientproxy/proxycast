@@ -3,7 +3,7 @@
 > 状态：proposed（v3，2026-06-11；应用户要求以**目标态**为主体重写，恢复中长期 T1/T2/T3 规划）
 > 上位规则：`AGENTS.md`、`internal/refactor/README.md`
 > 拓扑参照：codex 的"一个 App Server + 多客户端壳"已验证形态（`codex-engineering-patterns.md` § 顶层拓扑）
-> 定位：本文件描述**代码未来应该长什么样、新代码应该落在哪**；现状的烂账只在证据底座 `architecture-debt-analysis.md` 里，这里不再复述。执行排期一律走 `progressive-refactor-plan.md`
+> 定位：本文件描述**代码未来应该长什么样、新代码应该落在哪**；现状证据只在 `architecture-debt-analysis.md`，执行排期一律走 `v2/IMPLEMENTATION-PLAN.md`
 
 ---
 

@@ -8,10 +8,7 @@ import {
 } from "@/lib/api/fileSystem";
 import { openExternalUrlWithSystemBrowser } from "@/lib/api/externalUrl";
 import { readFilePreview } from "@/lib/api/fileBrowser";
-import {
-  hasDesktopHostEventCapability,
-  hasDesktopHostInvokeCapability,
-} from "@/lib/desktop-runtime";
+import { hasDesktopHostEventCapability } from "@/lib/desktop-runtime";
 import { DATA_RESOURCE_PREVIEW_MAX_SIZE } from "./DataResourceRenderer";
 import { useImageResourceViewControls } from "./imageResourceViewControls";
 import { getResourcePreviewTarget } from "./resourceFormatCatalog";
@@ -54,18 +51,7 @@ function readSessionIdFromLocation(): string | null {
   return new URLSearchParams(window.location.search).get("session");
 }
 
-async function closeCurrentResourceManagerWindow(): Promise<void> {
-  if (hasDesktopHostInvokeCapability()) {
-    try {
-      const { getCurrentWebviewWindow } =
-        await import("@/lib/desktop-host/webviewWindow");
-      await getCurrentWebviewWindow().close();
-      return;
-    } catch (error) {
-      console.warn("[资源管理器] 关闭 Desktop Host 窗口失败，尝试浏览器关闭:", error);
-    }
-  }
-
+function closeCurrentResourceManagerWindow(): void {
   window.close();
 }
 

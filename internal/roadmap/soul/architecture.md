@@ -345,7 +345,7 @@ lime-rs/src/commands/agent_cmd/runtime_turn/request_metadata.rs
 
 这些路径共同构成 current 主链：
 
-1. `internal/roadmap/memory/make-next-generation-more-like-me.md`
+1. `internal/roadmap/memory/README.md`
 2. `lime-rs/src/services/memory_profile_prompt_service.rs`
 3. `lime-rs/src/commands/agent_cmd/runtime_turn.rs`
 4. `src/lib/api/memoryRuntimeTypes.ts`

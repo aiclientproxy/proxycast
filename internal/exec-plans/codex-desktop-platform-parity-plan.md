@@ -124,12 +124,12 @@ Codex 开源仓库没有 Swift 源文件。Swift/Objective-C 原生层属于安�
 ### 5.2 明显缺口或证据未闭环
 
 - Swift 原生 helper 现已支持 IOHID topology 一次性读取与 `hidTopology.changed` 变化事件，以及 `bareModifierMonitor.start/stop`；权限、硬件和签名 Gate B 仍未闭环。
-- Swift 原生 helper 已支持 Accessibility/Input Monitoring、Apple Events 授权查询/consent request、Launch Services、security-scoped bookmark、CGWindow/NSScreen、IOHID、LocalAuthentication、Secure Enclave device-key 和 Application Group 查询；Dock Tile、PIP、ScreenCaptureKit 等更高阶闭环以及权限/硬件/签名 Gate B 仍未完成；
-- 无 Dock Tile plugin、Sky 风格原生窗口/PIP/overlay/窗口锚定和 display link host；
+- Swift 原生 helper 已支持 Accessibility/Input Monitoring、Apple Events 授权查询/consent request、Launch Services、security-scoped bookmark、CGWindow/NSScreen、IOHID、LocalAuthentication、Secure Enclave device-key 和 Application Group 查询；窗口编排已用 AX 应用级隐藏实现可恢复 lease 并有 packaged fixture 证据。Dock Tile、PIP、ScreenCaptureKit 等更高阶闭环以及权限/硬件/签名 Gate B 仍未完成；
+- 无 Dock Tile plugin、Sky 风格原生 PIP/overlay 和 display link host；窗口锚定、堆叠与 hide-for-task lease 已有原生实现和本地 packaged fixture 证据；
 - 无 Chronicle/ScreenCaptureKit 媒体管线的原生 helper；当前 helper 已支持受 Screen Recording 权限保护的全屏/显示器/窗口 PNG 快照，但媒体保留策略、签名包和 Gate B 仍缺；
 - `lime-rs/Info.plist` 现有 `http`/`https`/`lime`、Apple Events、摄像头和麦克风描述；
 - `lime-rs/entitlements.plist` 现有 JIT、unsigned memory、library validation、camera/audio-input、Apple Events automation、selected file、network client/server；
-- macOS security-scoped bookmark 已由 Desktop Host current owner 管理 helper 生命周期、稳定 ID 持久化、冷启动 resolve/start 和 revoke；真实权限授予/撤销恢复 Gate B 仍待补证。
+- macOS security-scoped bookmark 已由 Desktop Host current owner 管理 helper 生命周期、稳定 ID 持久化、冷启动 resolve/start、活动 token stop 和 revoke；packaged Gate B 已覆盖临时目录 create/resolve/start/stop，真实用户授权授予/撤销恢复仍待补证。
 - 原生窗口/显示/HID/Screen Recording snapshot/LocalAuthentication/设备密钥已进入同一 Swift helper 的结构化调用面；窗口控制覆盖 AX frame、raise 和所属应用 hide/unhide，状态合同保持 `unverified`，不把 API 可调用误报为授权或 Secure Enclave readiness。
 - LocalAuthentication/Keychain 的 Electron Host 专用桥未形成 owner；
 - Windows 源码安全矩阵已有真实 CI 证据，UI Automation/Raw Input helper 已进入资源组，但 packaged sidecar、Squirrel 安装后 runner/runtime 与 Electron Gate B 仍需独立证据；
@@ -143,36 +143,37 @@ Codex 开源仓库没有 Swift 源文件。Swift/Objective-C 原生层属于安�
 矩阵更新说明：Lime macOS 的 HID 行现已覆盖 `hidTopology.read` 与 `hidTopology.watch.start/stop` 的
 `hidTopology.changed` unsolicited event；bare modifier 行现已覆盖
 `bareModifierMonitor.start/stop`。文件访问/bookmark 行现已覆盖 Desktop Host 的稳定 ID 持久化、冷启动
-resolve/start 和 revoke；屏幕捕获行现已覆盖 Screen Recording 权限 query/request 与
-`screenCapture.snapshot` PNG 快照，但未实现 Chronicle 媒体管线。上述能力仍保持 `部分`，因为真实签名包、
+resolve/start、活动 token stop 和 revoke，以及 packaged Gate B 的真实
+`bookmark.create/resolve/start/stop`；屏幕捕获行现已覆盖 Screen Recording 权限 query/request 与
+`screenCapture.snapshot` PNG 快照，但未实现 Chronicle 媒体管线。窗口编排和 bookmark 生命周期已有本地 packaged helper 证据；上述能力仍保持 `部分`，因为真实签名包、
 权限授予/撤销、媒体保留策略和硬件条件的 Gate B 尚未完成。
 
-| 能力域                     | Codex Desktop macOS                                                       | Codex Desktop Windows                                                         | Lime macOS                                                        | Lime Windows                                      | 分类/下一步                                                |
-| -------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------- |
-| Electron/Chromium 宿主     | Electron + Codex Framework 原生层                                         | Electron + Windows native resources                                           | Electron current + Swift native helper；高阶原生层仍缺             | Electron current；Squirrel/sidecar 部分已有       | `current`；建立统一 capability/readiness contract          |
+| 能力域                     | Codex Desktop macOS                                                       | Codex Desktop Windows                                                         | Lime macOS                                                                                                                               | Lime Windows                                                        | 分类/下一步                                                |
+| -------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Electron/Chromium 宿主     | Electron + Codex Framework 原生层                                         | Electron + Windows native resources                                           | Electron current + Swift native helper；高阶原生层仍缺                                                                                   | Electron current；Squirrel/sidecar 部分已有                         | `current`；建立统一 capability/readiness contract          |
 | 原生窗口/句柄/overlay      | `sky.node`、NSWindow/CGWindow、anchor、stack、hide-for-task               | 私有实现未从安装包完全解出                                                    | CGWindow 查询、应用激活、Accessibility AX frame/raise、窗口所属应用 hide/unhide、anchor/stack/hide-for-task lease 已实现；overlay 未闭环 | `windows.window.read` 枚举 HWND、进程、标题、类名和边界；不控制窗口 | `部分`；P2 native window owner，先不在 Renderer 模拟       |
-| Remote Hosted PIP          | `RemoteHostedPIPContent`、presentation lifecycle                          | 需从 Windows 包和运行时补证据                                                 | 缺                                                                | 缺                                                | `缺口`；P2，必须有系统级 Gate B                            |
-| Input Monitoring           | 原生 `.node` 查询和 System Settings 跳转                                  | Windows Raw Input 注册和会话权限需另证                                        | Swift helper query/request/settings 已实现                         | `windows-native-host` 只读 Raw Input modifier watcher              | `部分`；P1 permission contract                             |
-| Accessibility/Apple Events | Accessibility、ApplicationServices、AppleScript、Apple Events entitlement | Windows UI Automation/相关能力需另证                                          | Swift helper Accessibility + `appleEvents.targets/read/request`，按目标 bundle 查询授权并跳转 Automation 设置 | `windows-native-host` 有界 UI Automation read-only tree | `部分`；P1 fail-closed readiness                      |
-| HID/Bluetooth              | `hid-topology-watcher.node`、IOHIDDevice                                  | Windows HID/Raw Input 需另证                                                  | IOHID topology 查询、watcher 启停和 `hidTopology.changed` 已实现；硬件 Gate B 未闭环 | Raw Input 只覆盖修饰键，不提供 HID topology | `部分`；P2，产品需求确认后实现                             |
-| Bare modifier monitor      | Swift helper，支持 request permission                                     | Windows hotkey/Raw Input 需另证                                               | Swift helper `bareModifierMonitor.start/stop` 和 down/up 事件已实现；权限/硬件 Gate B 未闭环 | `windows.bareModifierMonitor.start/stop` 只读 down/up 事件 | `部分`；P1，Windows Gate B 待补                       |
-| Secure Enclave/device key  | `remote-control-device-key.node`                                          | 硬件密钥/DPAPI 需另证                                                         | Swift helper Secure Enclave create/read/sign/delete 已实现；硬件/签名 Gate B 未闭环 | DPAPI 用于 sandbox setup，非同一 device-key owner | `部分`；P2 remote-control owner                            |
-| Browser pipe authorization | `browser-use-peer-authorization.node`                                     | native pipe/ACL 需另证                                                        | 缺                                                                | 普通 browser host，未有同等级 peer auth           | `缺口`；P2，绑定 connection/thread identity                |
-| 文件关联/Launch Services   | helper 查询 bundle/URL handler、按路径启动、下载完成通知                  | Shell association/URL handler 需另证                                          | URL scheme + Swift helper path/bundle/URL handler 已实现             | Squirrel startup 有；无统一 association helper    | `部分`；P1 Desktop Host owner                              |
-| 文件访问/bookmark          | user-selected read-write、Desktop 权限、security-scoped 生命周期          | ACL/path normalization/reparse point                                          | 普通选择文件 + Desktop Host security-scoped bookmark 稳定 ID、冷启动恢复、revoke；真实授权 Gate B 未闭环 | ACL/path normalization current                    | `部分`；P1 macOS bookmark，Windows 保持 tool-runtime owner |
-| 进程/沙箱                  | seatbelt、sandbox-exec、process hardening                                 | restricted token、ACL、deny-read、private desktop、Firewall/WFP、setup/runner | Rust seatbelt 检测/规划，需真实 macOS 执行证据                    | Rust backend + Windows CI 7/7，packaged 证据待补  | `current/部分`；P0/P1 platform evidence                    |
-| PTY/终端                   | Unix PTY/process group                                                    | ConPTY + Job Object                                                           | Rust PTY owner，需 macOS Gate B                                   | Rust ConPTY/Job Object 有 current                 | `current/部分`；补跨平台 packaged matrix                   |
-| 网络隔离/证书              | Security framework trust、proxy policy                                    | Schannel、WFP/network isolation                                               | network client entitlement；native cert/isolated execution 未闭环 | WFP/Firewall/readiness 已有 current               | `部分/current`；P1 packaged/readiness                      |
-| 摄像头/麦克风/音频         | AVFoundation/AVFAudio/AudioUnit/CoreAudio、权限声明                       | Windows media API 需另证                                                      | Swift helper `mediaPermissions.read/request` 查询/请求摄像头和麦克风；主包与 helper 均有 usage description | Electron media handling                           | `部分`；P2 native media/permission contract                |
-| 屏幕捕获/视觉              | ScreenCaptureKit、`codex_chronicle`、Vision/CoreML/Metal                  | Windows capture/vision 需另证                                                 | Swift helper 提供 Screen Recording 权限和 CGWindow/CGDisplay PNG 快照；Chronicle 管线未实现 | 无等价 Chronicle                                  | `部分`；P2，补媒体管线和系统证据                           |
-| Computer Use 光标/窗口     | `sky.node` + Accessibility/CGWindow                                       | Windows desktop/UI automation 需另证                                          | `accessibilityTree.read` 提供有界只读控件树；无 cursor/window 控制注入 | UI Automation、HWND 和显示器只读观察；无 cursor/window 控制注入 | `部分`；P2，控制注入仍需安全边界                             |
-| Code Mode/V8               | 独立 host；Darwin sandbox-enabled V8                                      | Windows GNU sandbox-enabled，MSVC 资产不同                                    | `code-mode-host` Rust binary，Darwin 资产配对待证                 | host/setup/runner binary，有 MSVC 资源风险        | `部分`；P0 resource manifest + P1 matrix                   |
-| MCP/Skills/Apps            | Desktop UI + App Server/Rust current chain                                | 同一协议，系统权限由 host 承接                                                | App Server/GUI current                                            | App Server/GUI current                            | `current`；不为平台复制第二套 catalog                      |
-| Thread/Turn/Item 恢复      | App Server/Rust current                                                   | App Server/Rust current + sidecar 状态                                        | current                                                           | current；需 packaged resume evidence              | `current/部分`；Gate B/packaged                            |
-| Sidecar/managed install    | `codex`、Code Mode host、Sparkle/托管生命周期                             | managed install、runner/setup、Windows executable naming                      | `app-server-daemon` current                                       | current；安装后资源组待证                         | `部分`；P0 资源和生命周期闭环                              |
-| 更新/签名/安装             | Sparkle、Developer ID、notarization、stapling、Sparkle feed               | Squirrel/MSIX/signing 分支                                                    | Forge DMG/ZIP、签名/公证配置                                      | Forge Squirrel current；MSIX 非主路径             | `部分/current`；P1 真实产物证据                            |
-| Dock/通知/登录项           | Dock Tile、UserNotifications、ServiceManagement                           | Toast/startup/taskbar 需另证                                                  | tray/notification 有；Dock Tile 缺                                | startup/tray 有                                   | `部分`；按产品范围实现                                     |
-| 诊断/遥测/设备完整性       | DeviceCheck、Chronicle 等私有能力                                         | Windows 诊断能力需另证                                                        | 未形成专属 owner                                                  | 未形成专属 owner                                  | `excluded/缺口`；没有明确需求不得猜测                      |
+| Remote Hosted PIP          | `RemoteHostedPIPContent`、presentation lifecycle                          | 需从 Windows 包和运行时补证据                                                 | 缺                                                                                                                                       | 缺                                                                  | `缺口`；P2，必须有系统级 Gate B                            |
+| Input Monitoring           | 原生 `.node` 查询和 System Settings 跳转                                  | Windows Raw Input 注册和会话权限需另证                                        | Swift helper query/request/settings 已实现                                                                                               | `windows-native-host` 只读 Raw Input modifier watcher               | `部分`；P1 permission contract                             |
+| Accessibility/Apple Events | Accessibility、ApplicationServices、AppleScript、Apple Events entitlement | Windows UI Automation/相关能力需另证                                          | Swift helper Accessibility + `appleEvents.targets/read/request`，按目标 bundle 查询授权并跳转 Automation 设置                            | `windows-native-host` 有界 UI Automation read-only tree             | `部分`；P1 fail-closed readiness                           |
+| HID/Bluetooth              | `hid-topology-watcher.node`、IOHIDDevice                                  | Windows HID/Raw Input 需另证                                                  | IOHID topology 查询、watcher 启停和 `hidTopology.changed` 已实现；硬件 Gate B 未闭环                                                     | Raw Input 只覆盖修饰键，不提供 HID topology                         | `部分`；P2，产品需求确认后实现                             |
+| Bare modifier monitor      | Swift helper，支持 request permission                                     | Windows hotkey/Raw Input 需另证                                               | Swift helper `bareModifierMonitor.start/stop` 和 down/up 事件已实现；权限/硬件 Gate B 未闭环                                             | `windows.bareModifierMonitor.start/stop` 只读 down/up 事件          | `部分`；P1，Windows Gate B 待补                            |
+| Secure Enclave/device key  | `remote-control-device-key.node`                                          | 硬件密钥/DPAPI 需另证                                                         | Swift helper Secure Enclave create/read/sign/delete 已实现；硬件/签名 Gate B 未闭环                                                      | DPAPI 用于 sandbox setup，非同一 device-key owner                   | `部分`；P2 remote-control owner                            |
+| Browser pipe authorization | `browser-use-peer-authorization.node`                                     | native pipe/ACL 需另证                                                        | 缺                                                                                                                                       | 普通 browser host，未有同等级 peer auth                             | `缺口`；P2，绑定 connection/thread identity                |
+| 文件关联/Launch Services   | helper 查询 bundle/URL handler、按路径启动、下载完成通知                  | Shell association/URL handler 需另证                                          | URL scheme + Swift helper path/bundle/URL handler 已实现                                                                                 | Squirrel startup 有；无统一 association helper                      | `部分`；P1 Desktop Host owner                              |
+| 文件访问/bookmark          | user-selected read-write、Desktop 权限、security-scoped 生命周期          | ACL/path normalization/reparse point                                          | 普通选择文件 + Desktop Host security-scoped bookmark 稳定 ID、冷启动恢复、revoke；真实授权 Gate B 未闭环                                 | ACL/path normalization current                                      | `部分`；P1 macOS bookmark，Windows 保持 tool-runtime owner |
+| 进程/沙箱                  | seatbelt、sandbox-exec、process hardening                                 | restricted token、ACL、deny-read、private desktop、Firewall/WFP、setup/runner | Rust seatbelt 检测/规划，需真实 macOS 执行证据                                                                                           | Rust backend + Windows CI 7/7，packaged 证据待补                    | `current/部分`；P0/P1 platform evidence                    |
+| PTY/终端                   | Unix PTY/process group                                                    | ConPTY + Job Object                                                           | Rust PTY owner，需 macOS Gate B                                                                                                          | Rust ConPTY/Job Object 有 current                                   | `current/部分`；补跨平台 packaged matrix                   |
+| 网络隔离/证书              | Security framework trust、proxy policy                                    | Schannel、WFP/network isolation                                               | network client entitlement；native cert/isolated execution 未闭环                                                                        | WFP/Firewall/readiness 已有 current                                 | `部分/current`；P1 packaged/readiness                      |
+| 摄像头/麦克风/音频         | AVFoundation/AVFAudio/AudioUnit/CoreAudio、权限声明                       | Windows media API 需另证                                                      | Swift helper `mediaPermissions.read/request` 查询/请求摄像头和麦克风；主包与 helper 均有 usage description                               | Electron media handling                                             | `部分`；P2 native media/permission contract                |
+| 屏幕捕获/视觉              | ScreenCaptureKit、`codex_chronicle`、Vision/CoreML/Metal                  | Windows capture/vision 需另证                                                 | Swift helper 提供 Screen Recording 权限和 CGWindow/CGDisplay PNG 快照；Chronicle 管线未实现                                              | 无等价 Chronicle                                                    | `部分`；P2，补媒体管线和系统证据                           |
+| Computer Use 光标/窗口     | `sky.node` + Accessibility/CGWindow                                       | Windows desktop/UI automation 需另证                                          | `accessibilityTree.read` 提供有界只读控件树；无 cursor/window 控制注入                                                                   | UI Automation、HWND 和显示器只读观察；无 cursor/window 控制注入     | `部分`；P2，控制注入仍需安全边界                           |
+| Code Mode/V8               | 独立 host；Darwin sandbox-enabled V8                                      | Windows GNU sandbox-enabled，MSVC 资产不同                                    | `code-mode-host` Rust binary，Darwin 资产配对待证                                                                                        | host/setup/runner binary，有 MSVC 资源风险                          | `部分`；P0 resource manifest + P1 matrix                   |
+| MCP/Skills/Apps            | Desktop UI + App Server/Rust current chain                                | 同一协议，系统权限由 host 承接                                                | App Server/GUI current                                                                                                                   | App Server/GUI current                                              | `current`；不为平台复制第二套 catalog                      |
+| Thread/Turn/Item 恢复      | App Server/Rust current                                                   | App Server/Rust current + sidecar 状态                                        | current                                                                                                                                  | current；需 packaged resume evidence                                | `current/部分`；Gate B/packaged                            |
+| Sidecar/managed install    | `codex`、Code Mode host、Sparkle/托管生命周期                             | managed install、runner/setup、Windows executable naming                      | `app-server-daemon` current                                                                                                              | current；安装后资源组待证                                           | `部分`；P0 资源和生命周期闭环                              |
+| 更新/签名/安装             | Sparkle、Developer ID、notarization、stapling、Sparkle feed               | Squirrel/MSIX/signing 分支                                                    | Forge DMG/ZIP、签名/公证配置                                                                                                             | Forge Squirrel current；MSIX 非主路径                               | `部分/current`；P1 真实产物证据                            |
+| Dock/通知/登录项           | Dock Tile、UserNotifications、ServiceManagement                           | Toast/startup/taskbar 需另证                                                  | tray/notification 有；Dock Tile 缺                                                                                                       | startup/tray 有                                                     | `部分`；按产品范围实现                                     |
+| 诊断/遥测/设备完整性       | DeviceCheck、Chronicle 等私有能力                                         | Windows 诊断能力需另证                                                        | 未形成专属 owner                                                                                                                         | 未形成专属 owner                                                    | `excluded/缺口`；没有明确需求不得猜测                      |
 
 ## 7. 当前/兼容/废弃/已删除裁决
 
@@ -269,7 +270,7 @@ owner：Desktop Host macOS native owner，Windows 等价能力另行裁决；App
 
 `scripts/lib/electron-desktop-resources.mjs` 为 Darwin、Windows 生成 `desktop-resources.manifest.json`，记录 platform/arch/version、sidecar/helper 路径、sha256、最小 macOS 版本和 entitlement/application-group 元数据；资源缺失、哈希漂移、路径越界和架构不匹配均 fail closed。
 
-Forge `afterCopyExtraResources` 在签名之前编译并写入 macOS `macos-native-host`；Windows 将 app-server、Code Mode、sandbox setup/runner 作为同一资源组登记。`electron/macosNativeHost.ts` 通过受管 JSONL 子进程协议接入 `macos_native_host_invoke`，只接受资源清单中哈希匹配，或在 macOS Forge 重签后通过严格 `codesign` 校验且身份/架构一致的 helper；`before-quit` 会终止 helper 并清理未完成请求。`SystemUtilityHost` 负责 bookmark 稳定 ID 持久化、冷启动恢复与 revoke。
+Forge `afterCopyExtraResources` 在签名之前编译并写入 macOS `macos-native-host`；Windows 将 app-server、Code Mode、sandbox setup/runner 作为同一资源组登记。`electron/macosNativeHost.ts` 通过受管 JSONL 子进程协议接入 `macos_native_host_invoke`，只接受资源清单中哈希匹配，或在 macOS Forge 重签后通过严格 `codesign` 校验且身份/架构一致的 helper；`before-quit` 会终止 helper 并清理未完成请求。`SystemUtilityHost` 负责 bookmark 稳定 ID 持久化、冷启动恢复、活动 token stop 与 revoke。
 
 Swift helper 当前不申请或声明 OpenAI Application Group；`applicationGroup.read` 仅查询 Lime 自有签名容器，默认返回 `not_configured`。当前 helper 还提供 `window.read/focus/raise/setFrame/setOwnerVisibility`、`window.anchor`、`window.stack`、`window.hideForTask.start/stop/read`、`display.read`、`hidTopology.read`、`hidTopology.watch.*`、`bareModifierMonitor.*`、`screenCapture.read/request/snapshot`、`appleEvents.targets/read/request/openSettings`、`localAuthentication.*` 和 `deviceKey.*`，但这些能力必须通过签名 entitlement、目标应用授权、硬件和平台 Gate B 才能升级状态。Apple Events 接口只查询目标 bundle 的自动化授权或触发系统 consent，不发送实际控制事件。hide-for-task 使用 helper 进程内 task lease 保存每个 owner 的原始隐藏状态，退出时自动恢复；anchor/stack 仅操作真实 CGWindow/Accessibility，不宣称私有 overlay 或 PIP。HID/bare modifier 事件经 `SystemUtilityHost` 转发到 Electron `evt:*` 广播，未连接 renderer 时不会创建第二事实源。本切片的 `lime-local` 证据已覆盖资源清单、Swift 编译、宿主分发、bookmark 持久化、事件通道和负向校验；真实签名包、权限授予/撤销、屏幕捕获媒体保留策略、Windows packaged Gate B 仍未完成，不能升级为 `platform-packaged`。
 
@@ -356,7 +357,7 @@ npm run smoke:agent-runtime-current-fixture
 
 ## 12. 下一刀与完成定义
 
-当前最直接推进主线的一刀是 **P1 Windows packaged/Squirrel 与 macOS 原生窗口编排 Gate B**：在同一候选产物中证明 sidecar/runner 安装生命周期，并在真实 macOS 授权窗口上验证 anchor、stack、hide-for-task lease 的可恢复性；Windows watcher 需要在同一候选上补显示器热插拔事件证据。Chronicle/PIP/Computer Use 仍需独立产品裁决和 owner，不得用本切片的窗口接口冒充完成。
+当前最直接推进主线的一刀是 **P1 Windows packaged/Squirrel 与 macOS 权限/bookmark 撤销恢复 Gate B**：在同一候选产物中证明 sidecar/runner 安装生命周期，并在真实 macOS 用户授权撤销后验证 bookmark/readiness 恢复语义；Windows watcher 需要在同一候选上补显示器热插拔事件证据。Chronicle/PIP/Computer Use 仍需独立产品裁决和 owner，不得用本切片的窗口接口冒充完成。
 
 本计划只有在以下条件全部满足后才能标记完成：
 
@@ -367,3 +368,111 @@ npm run smoke:agent-runtime-current-fixture
 5. 没有新的第二业务后端、生产 mock fallback、旧 runtime 恢复或无退出条件的 compat 层。
 
 路线图关系：本计划是对现有 Codex runtime/GUI 对齐计划的平台底座补充；完成 P0 后回到 `Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore/tool-runtime -> Thread/Turn/Item -> GUI` 主链推进，而不是继续扩展静态 Desktop 逆向清单。
+
+## 13. 2026-09-01 Codex 业务层 `update_plan` 对齐
+
+- 对比依据：Codex HEAD `d58d0e5841` 的 `tools.update_plan.enabled` 默认值为 `false`，只有显式配置开启时才把 `update_plan` 暴露给模型；Plan Mode 是独立的编排模式，不能用来推断工具是否注册。
+- Lime current 实现：`lime-core::ToolExecutionPolicyConfig.update_plan_enabled` 作为唯一持久化字段，支持 snake/camel 配置别名，默认关闭且默认值序列化为空；App Server `current_agent_runtime_config_metadata` 只投影非默认配置，`tool-runtime::update_plan_enabled_from_metadata` 只接受 trusted runtime/config metadata，Agent inventory 和 current provider tool surface 共用该 gate；设置页提供五语言开关并写回 `agent.tool_execution.update_plan_enabled`。
+- 回归证据：配置序列化/round-trip `3` 个 Rust 测试通过，设置页 `5` 个 Vitest 通过；Agent inventory `15/15`、current provider tool snapshot `6/6`、App Server provider metadata `3/3`、App Server inventory `3/3` 均通过，`test:rust:related` 全部受影响 Rust 包通过，另有 `lime-core` cargo check、Prettier、`git diff --check`。默认未注入缓存时 `rusty_v8 v150.4.0` Darwin arm64 下载地址返回 404；本轮使用仓库已有临时预编译缓存完成验证，未声称全新环境的 V8 下载可用。
+- 分类：`current` 为上述配置、trusted gate、Agent tool inventory/current provider 投影和设置页；`compat` 仅保留既有 `UpdatePlan`/`UpdatePlanTool`/`update_plan_tool` 历史别名；`deprecated` 不新增入口；`dead/forbidden-to-restore` 为 Renderer mock、第二套计划状态机及 OpenAI 私有 Application Group/`sky` 平级实现；Codex TUI/account/rate-limit、未确认的 model-owned token budget defaults、完整 Computer Use/Chronicle/PIP 标记为 `product-scope-excluded` 或 `gap / pending owner`。
+
+## 14. 2026-09-02 跨平台共用业务语义继续对齐
+
+- 本轮不新增 macOS Swift、Windows native host 或 Electron 业务后端；Desktop 两端共用同一条 `model catalog -> App Server route metadata -> session/turn context -> model-provider wire` current 链。平台 host 只继续承接系统能力。
+- 已实现 Codex 模型目录拥有的 instructions/personality、context/auto-compact、Multi-Agent v2 mode copy 和 Ultra reasoning lowering。`ultra` 留在 Thread/Turn World State 表达主动协作意图，真实 provider 请求使用 catalog 声明或合法 fallback；`persistent` wire 使用 `disabled`。
+- `model/list.supportsPersonality` 已改为模型目录事实，不按模型名或操作系统推断；空变量值仍表示显式支持。该行为在 macOS/Windows Composer 和 Thread 设置上共享，不产生平台分叉。
+- 当前分类：上述路径全部为 `current`；未新增 `compat`/`deprecated`；OpenAI 私有 Application Groups、`sky`/CUAService 和签名 entitlement 继续为 `dead/forbidden-to-copy`；model-owned approvals/permissions/auto-review、Guardian v2 与完整 token-budget 仍为 `gap / pending owner`。
+- 验证状态：`cargo check -p app-server`、目录/provider/session 定向回归和 `test:rust:related` 推导的 20 个反向依赖包全部通过；`test:contracts` 通过 protocol types、App Server client 299 checks 及 command/harness/docs 治理边界；`smoke:agent-runtime-current-fixture` 在 `liveProviderUsed=false` 下通过；`verify:gui-smoke` 通过真实 Electron Desktop Host、preload/IPC、App Server `appserver.v0`、Claw shell reload 和 memory settings Gate B；Rust fmt 与 `git diff --check` 通过。Codex release 的 Darwin arm64 archive/binding 均可下载并校验；历史 404 仅对应 Deno 默认 sandbox URL 或错误的 mirror 路径，本轮已将缓存固定到稳定 OS 用户缓存目录并增加下载重试/超时，不以 mock 或第二 backend 绕过。
+
+## 15. 2026-09-02 Codex Rusty V8 资产下载收口
+
+- 继续采用 Codex 的 `rusty-v8-v<version>` release 资产，不引入 Lime 自建镜像或关闭 `v8_enable_sandbox`。`RUSTY_V8_MIRROR` 不作为入口，因为 v8 crate 的 `/v<version>` 拼接规则与 Codex release tag 不兼容。
+- `scripts/lib/rusty-v8-artifacts.mjs` 现在使用 macOS/Windows/Linux 稳定用户缓存目录，并为 curl 下载增加有限重试、连接超时和总超时；显式 `LIME_RUSTY_V8_CACHE_DIR` 仍可用于隔离 CI 或维护者验证。
+- 验证：helper 真实解析 `v8=150.4.0` 并成功取得 Codex Darwin arm64 archive/binding；资产 supply-chain Vitest `6/6` 通过，输出路径位于 `~/Library/Caches/Lime/rusty-v8`。该切片不改变 Cargo.lock、V8 feature 或运行时资源打包边界。
+
+## 16. 2026-09-02 Windows packaged Gate B identity contract
+
+- Windows packaged 证据现在由 `scripts/electron/windows-packaged-evidence.mjs` 统一收口。它要求 Squirrel summary 的候选版本、`candidateRunId`、安装路径和 `Lime.exe` 版本目录一致，并从安装后的 `resources/desktop-resources.manifest.json` 校验 app-server、code-mode-host、Windows sandbox helpers 和 read-only native host 的路径与 SHA-256。
+- CodeMode 与 Windows native host Gate B 都接收同一个 `LIME_GATE_RUN_ID`，并记录 packaged executable、resources root 与 helper path；validator 要求三份证据都来自同一个 Squirrel-installed `Lime.exe`，拒绝旧版本路径、`target/debug`/开发 sidecar、缺失 summary 或未完成 Gate B。
+- `build-windows-test.yml` 与 `release.yml` 在安装后 Gate B 后执行 validator，并始终上传结构化 `windows-packaged-evidence` summary。工作流 guard 和 Vitest 覆盖参数、哈希、路径、候选 identity、缺失证据与执行顺序。
+- 证据边界：这只提升 Windows packaged 安装、sidecar、native host 和业务 Gate B 的候选一致性；当前工作树没有真实 `windows-2022` 运行结果，Windows 安装/升级/卸载、进程树和 GUI 视觉对照仍保持 `OPEN_REF`，不以 macOS 本地 smoke 替代。
+
+## 17. 2026-09-02 跨平台 GUI responsive layout contract
+
+- Lime 的 macOS/Windows Desktop Host 共用同一套 GUI 几何回归入口：真实 Electron `BrowserWindow.setSize/getSize` 在 `1536x960`、`1280x800`、`980x680` 三档采集 workspace shell、Composer、输入框和可选 Thread/timeline 节点；布局证据与 `SHELL-01` summary 绑定，三张截图和几何断言缺失时 fail closed。
+- 短窗口的 EmptyState Composer 已按最小 `980x680` 窗口收敛到视口内，未改变平台 host、App Server、RuntimeCore 或 provider 业务 owner。该 contract 只证明 Lime responsive layout 和真实 Electron 主链，不证明 Codex Desktop 像素级视觉一致性、Windows packaged 安装或 macOS 系统权限。
+- 当前验证：真实 macOS Electron smoke 24/24 assertions 通过；Windows 必须在 `windows-2022` 安装后使用同一候选 `Lime.exe` 重跑 GUI/CodeMode/native host Gate B，不能用本机结果替代。Codex Desktop 实时窗口因 AppleEvent 阻塞仍为 `OPEN_REF`。
+
+## 18. 2026-09-02 GUI responsive layout Gate B-F 复核
+
+- 真实 Electron smoke 重新构建并运行后，summary `.lime/qc/project-gates/standalone-shell-01-20260902105148-51228/shell-01-electron-smoke/summary.json` 通过 `24/24` assertions；三档 `1536x960`、`1280x800`、`980x680` 的窗口尺寸、viewport、必要 workspace/Composer/input 节点和无横向溢出均通过，三张布局截图存在。
+- `npm run test:contracts`、`npm run governance:scripts`、`npm run typecheck:electron` 与定向 26/26 回归通过；证据仍只覆盖 macOS 本地真实 Electron/preload/IPC/App Server shell 和 Lime responsive layout contract。
+- 统一 `npm test -- --resume` 的 119/119 批全部通过；i18n 设置文案保持来源中性，治理边界测试读取 current 架构事实源。
+- Windows packaged/Squirrel、sidecar/native host/CodeMode 以及 Codex Desktop 实时 accessibility/screenshot 没有新增平台运行证据，继续保持 `OPEN_REF`，不得用本机 smoke 替代。
+
+## 19. 2026-09-02 macOS native helper readiness handshake
+
+- macOS 资源 manifest 的 native helper metadata 现在固定声明 `protocolVersion=1`；Swift `capabilities.read`
+  同时返回 `protocolVersion`、`helperId`、`platform` 和 helper bundle identity。Electron
+  `MacOSNativeHostClient` 对声明协议版本的 packaged helper 在首次业务调用前执行一次握手；协议、平台或
+  `com.limecloud.lime.native-host` identity 不匹配时终止子进程并返回 `protocol_mismatch`，不会把可执行文件存在
+  当成 runtime ready。未声明版本的隔离测试 fixture 不进入生产资源清单。
+- 新增 `scripts/electron/macos-native-host-gate-b.mjs` 与 `npm run smoke:macos-native-host-gate-b`。该入口从
+  `Lime.app/Contents/MacOS/Lime` 解析 Resources，校验 manifest、helper bundle、SHA-256/严格 codesign 和握手，
+  再真实观察 `window.read`、`display.read`、display watcher、权限查询、Apple Events target 列表和
+  `launchServices.bundleIdentifier`。默认权限模式为 `observe` 并记录 TCC 状态；`--strict-permissions` 才要求
+  Accessibility、Input Monitoring、Screen Recording 全部为 `ready`。
+- release workflow 的 macOS arm64/x64 job 在资源 verifier 后执行该 Gate B 并上传 evidence；当前工作树只完成入口、
+  manifest/握手负向测试和本地 helper 运行，尚无 CI 签名包权限授予/撤销结果，不能将 observe 证据升级为完整 macOS
+  permission Gate B，也不能替代 Windows packaged 或 Codex Desktop 实时视觉证据。
+- 相关验证：待本轮执行 `macosNativeHost`、资源清单/verifier、Gate B 入口、current entrypoints、contracts、
+  Electron typecheck、GUI smoke 与 `git diff --check`；Windows packaged、真实签名权限和 Codex Desktop
+  accessibility/screenshot 继续为 `OPEN_REF`。
+
+## 20. 2026-09-02 本地 packaged macOS helper Gate B 证据
+
+- 重新执行 `npm run electron:build` 和 `electron-forge package --platform darwin --arch arm64`，使用生成的
+  `release-electron/Lime-darwin-arm64/Lime.app` 运行 `macos-native-host-gate-b.mjs`。Gate B 校验了顶层 Lime
+  app bundle identity/codesign、嵌套 helper bundle、manifest protocol/digest、`capabilities.read` 握手、窗口
+  枚举（46）、显示器枚举（2）、display watcher、security-scoped bookmark 的真实
+  `create/resolve/start/stop`、权限查询、Apple Events targets（89）和 Launch Services bundle ID。
+- observe 与 `--strict-permissions` 两种模式均通过；证据分别写入
+  `.lime/qc/gui-evidence/macos-native-host-gate-b-local/summary.json` 和
+  `.lime/qc/gui-evidence/macos-native-host-gate-b-local-strict/summary.json`。helper 在 ad-hoc/本地签名后
+  SHA-256 与 manifest 不同，但严格 `codesign` 通过，Gate 正确记录 `digestMatches=false`、`signed=true`，没有
+  绕过完整性校验。
+- 该结果属于本机 `lime-local/packaged`，不等同于 Developer ID/notarization、权限撤销后恢复或 Codex Desktop
+  实时 accessibility/screenshot 对照；macOS release runner、Windows `windows-2022` packaged 和上述撤销场景仍为
+  `OPEN_REF`。
+- 本轮最终验证：受影响 Gate B/资源/host 相关测试 `47/47`，完整资源 verifier 35 tests，Electron typecheck、
+  `npm run test:contracts`、`npm run governance:electron-release-workflow`、`npm run verify:gui-smoke` 和
+  `git diff --check` 通过。
+
+## 21. 2026-09-02 macOS window lease 与 bookmark lifecycle Gate B
+
+- `macos-window-fixture.swift` 提供仅用于 Gate B 的临时标准 Cocoa `.app`，运行时创建两个带稳定标题的窗口；Gate 脚本只匹配该 fixture 的 PID，不选择 Finder、Terminal 或其它用户窗口。
+- `macos-window-orchestration.swift` 的 hide-for-task lease 改为在 Accessibility 已授权时设置目标应用的 AX `kAXHiddenAttribute`，隐藏前激活目标并保留每个 owner 的原始状态；stop 和 helper 退出路径恢复原始状态。`window.anchor`、`window.stack` 与 lease 的 start/read/stop 在同一 fixture 上完成。
+- `SystemUtilityHost` 将按稳定 ID 启动的 bookmark token 保存在 current Host 内存中；`bookmark.stop` 支持稳定 ID，`bookmark.revoke` 会先调用 helper `bookmark.stop` 再删除受管记录，避免撤销后仍持有 active security-scoped resource。
+- 本机新 packaged arm64 证据：`.lime/qc/gui-evidence/macos-native-host-gate-b-final-observe/summary.json`（observe）和 `.lime/qc/gui-evidence/macos-native-host-gate-b-final-strict/summary.json`（strict）均通过；窗口编排与 bookmark lifecycle 均为 `passed`，TCC 三项为 `ready`。该证据仍是本机 `lime-local/packaged`，不升级为 Developer ID/notarization 或权限撤销后恢复证据。
+- 本轮定向验证：bookmark/system utility 与 Gate B/current entrypoint 测试 `24/24`，`npm run electron:build:host`、Swift arm64 编译、Forge packaged Gate B observe/strict 和 `git diff --check` 通过；Windows packaged、macOS release runner 和 Codex Desktop 实时 accessibility/screenshot 仍为 `OPEN_REF`。
+
+## 22. 2026-09-02 macOS native host 真实 Electron/preload/IPC 闭环
+
+- `scripts/electron/macos-native-host-gate-b.mjs` 在同一候选 `Lime.app` 上先完成 packaged helper 资源、协议、签名、窗口/显示、bookmark、权限和 Launch Services 检查，再启动真实 Electron fixture；不会切换到第二个 Electron 后端或 renderer mock。
+- Electron 阶段通过 preload `window.electronAPI.invoke` 调用 `macos_native_host_invoke`，校验 helper `capabilities.read` identity、`window.read`、`display.read`、三项 TCC 查询和 bookmark `create/resolve/start/stop`；同时从同一 preload 进入 `app_server_handle_json_lines`，执行 `initialize`、`workspace/default/ensure`，要求返回稳定 workspace identity。
+- 终态证据同时记录真实 Electron/preload 标记、App Server JSON-RPC 方法、native host IPC 方法、GUI 当前 shell 可见状态、invoke/console/page 错误和截图。`app_server_handle_json_lines` 必须在 renderer trace 中命中 `electron-ipc`，否则 fail closed。
+- 该改动只扩展 Gate B 证据与测试 helper，未新增业务 owner、Application Group、`sky`/`CUAService` 或 Swift 私有业务后端；native 系统能力仍归 Desktop Host，Thread/Turn/Item 业务仍归 App Server/runtime。
+- 本轮验证已完成：Gate B/current entrypoint 合同 `19/19`、`npm run typecheck:electron` 通过；使用同一 arm64 packaged `Lime.app` 的 observe 证据 `.lime/qc/gui-evidence/macos-native-host-gate-b-electron-observe/summary.json` 与 strict 证据 `.lime/qc/gui-evidence/macos-native-host-gate-b-electron-strict/summary.json` 均为 `result=passed`。两档均证明真实 Electron/preload、`app_server_handle_json_lines`（observe trace 13 次）、`macos_native_host_invoke` 10 个方法、workspace identity、GUI 设置页截图和零 console/page/invoke error；strict 还证明 Electron IPC 路径上的 Accessibility、Input Monitoring、Screen Recording 均为 `ready`。
+- 仍未覆盖：Windows `windows-2022` packaged/Squirrel、macOS release runner 权限撤销恢复及 Codex Desktop 实时 Accessibility/screenshot；这些继续保持 `OPEN_REF`，本机 packaged 证据不能替代跨平台或签名发布证据。
+
+## 23. 2026-09-02 macOS Electron Gate B owner 收口
+
+- Electron/preload/App Server/native host 闭环已从 `macos-native-host-gate-b.mjs` 抽取到
+  `scripts/electron/lib/macos-native-host-electron-gate-b.mjs`，主入口只保留已安装 helper 的资源、协议、权限、窗口和
+  Launch Services 校验，并委托唯一 helper 执行真实 Electron 阶段；主入口由 1059 行降至 779 行，避免继续堆叠跨职责业务逻辑。
+- current entrypoint 守卫已登记 helper，Gate B 合同测试直接读取 helper，保留 `launchElectronFixture`、
+  `window.electronAPI.invoke`、`app_server_handle_json_lines`、`macos_native_host_invoke`、trace fail-closed 和 GUI 终态断言。
+- 本轮抽取后验证：Gate B/current entrypoint `20/20`、Electron TypeScript、`test:contracts`、脚本治理、`verify:gui-smoke` 和
+  `git diff --check` 通过；重新使用同一 arm64 packaged `Lime.app` 的 observe/strict 两档 Gate B 均为 `passed`，
+  两档都命中 `app_server_handle_json_lines`、`macos_native_host_invoke`、workspace identity、设置页终态和零
+  console/page/invoke error。Electron helper 的业务 owner 未产生第二套后端或 mock fallback。

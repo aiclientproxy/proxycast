@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "vitest";
@@ -637,6 +637,57 @@ describe("legacySurfaceCatalog", () => {
     ]);
   });
 
+  it("应阻止 src-tauri 根目录和 SceneApp Agent Chat 执行面恢复", () => {
+    const rootMonitor = legacySurfaceCatalogJson.imports.find(
+      (entry) => entry.id === "retired-src-tauri-root-surface",
+    );
+    const executionMonitor = legacySurfaceCatalogJson.imports.find(
+      (entry) => entry.id === "sceneapp-agent-chat-execution-surface",
+    );
+    const symbolMonitor = legacySurfaceCatalogJson.frontendText.find(
+      (entry) => entry.id === "sceneapp-retired-symbol-and-schema-surface",
+    );
+
+    expect(rootMonitor?.classification).toBe("dead");
+    expect(rootMonitor?.targets).toEqual(["src-tauri"]);
+    expect(rootMonitor?.allowedPaths).toEqual([]);
+
+    expect(executionMonitor?.classification).toBe("dead");
+    expect(executionMonitor?.allowedPaths).toEqual([]);
+    expect(executionMonitor?.targets).toEqual(
+      expect.arrayContaining([
+        "src/components/agent/chat/utils/sceneAppCuratedTaskReference.ts",
+        "src/components/agent/chat/utils/sceneAppSkillScaffoldDraft.ts",
+        "src/components/agent/chat/workspace/SceneAppExecutionSummaryCard.tsx",
+        "src/components/agent/chat/workspace/sceneAppExecutionContentPosts.ts",
+        "src/components/agent/chat/workspace/useSceneAppExecutionSummaryRuntime.ts",
+        "src/components/agent/chat/workspace/useSceneAppReviewDecisionRuntime.ts",
+        "src/components/agent/chat/workspace/useWorkspaceSceneAppExecutionSurfaceRuntime.tsx",
+        "src/lib/agent/legacySceneAppExecutionSummary.ts",
+      ]),
+    );
+
+    const restoredPaths = [
+      ...(rootMonitor?.targets ?? []),
+      ...(executionMonitor?.targets ?? []),
+    ].filter((relativePath) => existsSync(join(REPO_ROOT, relativePath)));
+    expect(restoredPaths, "已退役目录或执行面不得恢复").toEqual([]);
+
+    expect(symbolMonitor?.classification).toBe("dead");
+    expect(symbolMonitor?.allowedPaths).toEqual([]);
+    expect(symbolMonitor?.patterns).toEqual(
+      expect.arrayContaining([
+        "initialSceneAppExecutionSummary",
+        "sceneapp_execution_summary",
+        "legacySceneAppExecutionSummary",
+        "curatedTask.sceneAppReference.",
+        "curatedTask.badge.sceneApp.",
+        "sceneAppExecutionSummary.",
+        "cloud_scene",
+      ]),
+    );
+  });
+
   it("应将旧 MemoryPage 灵感库混合视图标记为 dead surface", () => {
     const monitor = legacySurfaceCatalogJson.imports.find(
       (entry) => entry.id === "memory-page-inspiration-library-surface",
@@ -831,7 +882,7 @@ describe("legacySurfaceCatalog", () => {
     );
 
     expect(monitor).toBeTruthy();
-    expect(monitor?.classification).toBe("dead-candidate");
+    expect(monitor?.classification).toBe("dead");
     expect(monitor?.allowedPaths).toEqual([]);
     expect(monitor?.targets).toEqual([
       "src/components/sceneapps/SceneAppsWorkflowRail.tsx",
@@ -1186,14 +1237,14 @@ describe("legacySurfaceCatalog", () => {
     );
 
     expect(importMonitor).toBeTruthy();
-    expect(importMonitor?.classification).toBe("dead-candidate");
+    expect(importMonitor?.classification).toBe("dead");
     expect(importMonitor?.allowedPaths).toEqual([]);
     expect(importMonitor?.targets).toEqual([
       "src/components/agent/chat/components/EmptyStateSceneAppsPanel.tsx",
     ]);
 
     expect(textMonitor).toBeTruthy();
-    expect(textMonitor?.classification).toBe("dead-candidate");
+    expect(textMonitor?.classification).toBe("dead");
     expect(textMonitor?.allowedPaths).toEqual([]);
     expect(textMonitor?.patterns).toEqual([
       "EmptyStateSceneAppsPanel",

@@ -2,7 +2,7 @@
 
 > 状态：current PRD
 > 更新时间：2026-07-06
-> 关联路线图：[../memory/make-next-generation-more-like-me.md](../memory/make-next-generation-more-like-me.md)
+> 关联路线图：[../memory/README.md](../memory/README.md)
 > 产品口径：普通用户看到 `AI 个性 / 声线`；底层工程继续使用 `Personality Layer / memory profile / Generation Brief`。
 
 ## 1. 背景

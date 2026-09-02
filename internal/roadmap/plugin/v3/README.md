@@ -47,6 +47,20 @@ Electron Desktop Host
 当前下一刀是完成 Windows 路径矩阵与 V3-6 最终分层门禁，
 不再继续扩展任何旧 Plugin 命名或兼容入口。
 
+## 版本替换说明
+
+v3 是 v1/v2 的替换版本，不是与旧版本并行的另一套路线。旧文档中的有效决策已经按下面的边界写入 current owner：
+
+| 旧版本主题 | 当前替代文档 | 替换后的事实 |
+| --- | --- | --- |
+| 产品目标、插件中心与显式激活 | `01-target-contract.md`、`internal/roadmap/rightsurface/README.md` | Plugin 是标准包与激活对象；Renderer 只消费 App Server projection，Right Surface 由 Host 统一承载。 |
+| 包结构、Skills、MCP 与 Apps | `01-target-contract.md`、`05-codex-parity-matrix.md` | 根 `plugin.json`、`skills/` 直接子目录、根 `mcp.json` 和显式 Apps adapter 是唯一合同。 |
+| 安装、启用、卸载与恢复 | `00-current-baseline.md`、`03-execution-plan.md`、`04-verification.md` | App Server 持有 catalog/installed/activation，真实 Electron Gate B 证明 install、turn、reload/cold restore 与卸载后历史。 |
+| 旧命令、worker、manager 与存储清理 | `02-cleanup-ledger.md`、`internal/aiprompts/governance.md` | 旧私有协议、worker、PluginManager、DAO/schema 与 `plugin_runtime_*` 已删除，禁止回流。 |
+| 发布中心、旧 E2E 摘要和交互原型 | Git history、Release Notes、current Gate B evidence | 纯历史材料不再占用 active tree；新的验证只记录在 v3 verification/evidence 入口。 |
+
+需要保留的产品语义必须更新到 v3 合同；历史追溯使用 Git history，不恢复旧版本文档双轨。
+
 ## v3 包合同
 
 ```text

@@ -3,6 +3,8 @@
 更新时间：2026-07-05
 状态：Draft + ordinary Agent turn orchestration current-turn verified + Electron/CDP real desktop baseline verified + Electron/CDP Gate B product acceptance verified + App Server current-turn host tool evidence verified + live Provider current-turn verified + production preflight/readiness pipeline fail-closed verified + production signature cryptographic preflight verified + inline host command shortcode contract added
 
+> Plugin v3 对齐：portable 包只提供根 `plugin.json`、`mcp.json` 和 `skills/<skill>/SKILL.md`。本文早期记录中的独立 package execution、旧运行时 YAML 与旧本地包检查方法仅是历史验证材料，不属于 current Plugin owner；当前激活合同由 App Server typed activation snapshot 派生，普通 Agent turn 负责执行。
+
 ## 1. 结论
 
 当前 Image #1 的问题不是文章卡本身错误，也不只是右侧面板错误，而是内容工厂插件的优势没有进入用户可感知的普通 Agent 主链：用户只看到占位框一闪而过、假完成或 JSON / 文件卡，感受不到 Agent 正在寒暄、思考、检索、写作、审稿和规划配图。
@@ -18,7 +20,7 @@
 
 2026-07-05 主线校正：
 
-- `@写文章` 必须走普通 Agent 对话流程，不走右侧 worker fast path，也不能用 mock/fixture 抢跑生成。
+- `@写文章` 必须走普通 Agent 对话流程，不走旧右侧执行器 fast path，也不能用 mock/fixture 抢跑生成。
 - 内容工厂的作用是提供 `workflow_contract`、host tool / artifact / shortcode 合同和包内执行能力；首发回合由普通 Agent turn 编排并对用户自然说明。
 - 聊天区应包含自然引导文字、可展开执行卡片、同一文章产物框和完成后的自然总结；文案不能写死成模板，也不能出现特定品牌称呼。
 - 右侧 Article Workspace 不自动打开；只有点击文章产物或显式动作才打开。
@@ -33,7 +35,7 @@
 
 | 能力         | 用户可见形态                                            | 后台事实源                                                                                      |
 | ------------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 激活入口     | `@写文章` / `@写作`                                     | `app.runtime.yaml#activationEntries`                                                            |
+| 激活入口     | `@写文章` / `@写作`                                     | App Server typed activation snapshot（由 `plugin.json`、`mcp.json` 与 `skills/` 派生）          |
 | 资料检索     | 聊天主链可展开执行卡片                                  | `articleDraft.source.hostToolRequests` + App Server tool events                                 |
 | 正文生成     | 同一文章产物框段落级增长                                | `artifact.snapshot` streaming partial                                                           |
 | 正文内联命令 | 文章正文中的 `[@配图 ...]` 占位，宿主转为图片任务并回填 | `hostCommandRequests` / `image_command_intent.image_task` / `.lime/tasks/image_generate/*.json` |
@@ -57,22 +59,22 @@
 外部 `/Users/coso/Documents/dev/ai/limecloud/content-factory-app` 必须守住以下合同：
 
 - `plugin.json` 说明中明确“中间执行卡 + 右侧编辑器 + 后台审计”的产品结构。
-- `app.runtime.yaml#agentRuntime.conversationTimeline` 声明执行卡片来源是 `hostToolRequests`。
+- App Server activation snapshot 声明执行卡片来源是 `hostToolRequests`；该字段不进入 portable manifest。
 - `articleDraft.source.hostToolRequests[]` 是当前事实源，旧 `searchRequests[]` 只作为兼容输入保留。
 - `articleDraft.source.hostCommandRequests[]` 是更通用的宿主命令合同；当前 `hostToolRequests[]` 是其中 WebSearch 子集，首批正文 shortcode 只把 `[@配图 ...]` 自动执行为 `image_generate` document-inline 请求。
 - streaming partial 不能为了精简正文而剥掉 `hostToolRequests`，否则宿主无法把插件能力投影为中间执行卡。
 - shortcode 只能作为结构化命令占位输出，不能要求宿主用裸正则替换 Markdown；宿主会跳过代码块、inline code、链接和图片 alt，并为每篇文章最多自动处理 `3` 个 `@配图`。
 - `workflow.connector.requested` / `workflow.connector.completed` 仍是 audit-only，不能直接作为普通 UI 的流程轨。
 - `content.article.generate` / `content.factory.generate` 缺少宿主托管正文时必须 fail closed，不用模板正文伪造成功。
-- `plugin_activation` 不能直接触发右侧 pane/action worker；右侧 worker 只响应显式 pane action。
+- `plugin_activation` 不能直接触发独立插件 runtime；右侧 pane/action 只响应用户显式动作，并继续委托 App Server current command。
 - `workflow_contract` 由 manifest / workflow 派生，不能把参考图文案或固定文章模板硬编码到宿主。
 
 ## 5. 禁止项
 
 - 不把 workflow run / step 列表塞回右侧 Article Workspace。
 - 不在普通用户主界面显示 `Agent`、`Runtime`、`Artifact`、`manifest` 等工程词。
-- 不让插件 worker 直接输出 `tool.started` / `tool.result` 绕过宿主工具生命周期。
-- 不让插件 worker 直接创建图片任务、写 `.lime/tasks/image_generate/*.json` 或绕过 `@配图` current 主链。
+- 不让插件包直接输出 `tool.started` / `tool.result` 绕过宿主工具生命周期。
+- 不让插件包直接创建图片任务、写 `.lime/tasks/image_generate/*.json` 或绕过 `@配图` current 主链。
 - 不把最终正文拆成多张文章卡；必须更新同一个 article artifact。
 
 ## 6. 验收标准
@@ -83,7 +85,7 @@
 - 正文中的 `[@配图 ...]` 会物化为稳定 slot marker，通过 `image_command_intent.image_task` 生成 document-inline 图片任务，并在 running / completed 状态回填 pending 占位或真实图片。
 - Article Workspace 仍只恢复文章和后续产物，不恢复 workflow 流程轨。
 - `workflow-events.jsonl` 继续输出 metadata-only 审计摘要，不暴露 raw prompt / provider config / 正文结果。
-- App Server current-turn smoke 必须证明普通 Agent turn 里有 `message.delta`、host tool timeline、段落级 `artifact.snapshot` 和最终 read model；不能只证明 worker 包本地运行。
+- App Server current-turn smoke 必须证明普通 Agent turn 里有 `message.delta`、host tool timeline、段落级 `artifact.snapshot` 和最终 read model；不能只证明 package fixture 本地运行。
 
 ## 7. 已验证证据
 
@@ -98,9 +100,9 @@
 
 ## 8. 最新验证与下一刀
 
-App Server current 普通 turn 已修到：`plugin_activation -> 普通 Agent turn -> 内容工厂 artifact/materialization -> JSONL audit -> turn.completed`。真实 Electron/CDP Gate B product acceptance 已通过，证明自然引导、执行卡片、文章产物、右侧不自动打开和历史恢复都在真实桌面主链闭环。下一步不再继续证明 worker fixture，也不再把 baseline 当验收缺口；剩余主线转向 live Provider product flow 与远程 / GUI production 安装签名闭环。
+App Server current 普通 turn 已修到：`plugin_activation -> 普通 Agent turn -> 内容工厂 artifact/materialization -> JSONL audit -> turn.completed`。真实 Electron/CDP Gate B product acceptance 已通过，证明自然引导、执行卡片、文章产物、右侧不自动打开和历史恢复都在真实桌面主链闭环。下一步不再继续证明旧 package fixture，也不再把 baseline 当验收缺口；剩余主线转向 live Provider product flow 与远程 / GUI production 安装签名闭环。
 
-2026-07-05 更新：当前实现方向已经落到 RuntimeCore terminal 顺序修复，而不是新增一个内容工厂专用 UI 分支。普通 Agent backend 发出的 `turn.completed` 会被暂存，内容工厂 activation 后处理在 terminal 前补齐 article artifact、host tool timeline 和 JSONL audit；完成后再封口。验收仍以真实 current-turn smoke / Electron CDP 为准，不能把测试 fixture worker 或静态 mock 当成用户链路完成证据。
+2026-07-05 更新：当前实现方向已经落到 RuntimeCore terminal 顺序修复，而不是新增一个内容工厂专用 UI 分支。普通 Agent backend 发出的 `turn.completed` 会被暂存，内容工厂 activation producer 在 terminal 前补齐 article artifact、host tool timeline 和 JSONL audit；完成后再封口。验收仍以真实 current-turn smoke / Electron CDP 为准，不能把测试 fixture execution 或静态 mock 当成用户链路完成证据。
 
 2026-07-05 后端验证已通过：`content-factory-current-turn-debug-host-generation-2026-07-05T04-19-07-937Z.json` 显示普通 current turn 中有 `message.delta`、`7` 个 `artifact.snapshot`、`3` 组 `tool.started -> tool.args -> tool.result`，`workflow-events.jsonl` 有 `16` 条 metadata-only audit 事件，最终 `turn.completed` 位于 artifact / tool 事件之后。后续 Electron/CDP acceptance 已验证真实桌面 GUI 的聊天排版、右侧不自动打开、历史恢复和 raw JSON / 文件卡隐藏。
 
@@ -122,23 +124,23 @@ App Server current 普通 turn 已修到：`plugin_activation -> 普通 Agent tu
 
 2026-07-05 production preflight 已补：`plugin:content-factory-production-preflight` 读取真实 `.lapp` 并通过 App Server current `pluginLocalPackage/inspect` 取得 release manifestHash，当前包事实为 `packageHash=sha256:89aec20e637713c668f8bc34c303256ac83806c5d2e75486e6453bd638ac3f8c`、`manifestHash=sha256:c1d3aa37d4b2f6c3c4a006525a1bba4b4ee407f61fe9cff8192704b48a209248`。该 preflight 明确 blocked 于签名文件、可信根、production catalog、bootstrap 和 fetchCloud evidence，作为发布准备清单，不替代 production GUI evidence。
 
-2026-07-05 21:42 继续复核：Studio 发布入口已从旧 inspect 方法切到 current `pluginLocalPackage/inspect`，并用 dry-run `releaseReadiness` 将缺 packageUrl、app.signature、tenantId 和 developer token 前置暴露；证据为 `.lime/qc/gui-evidence/agent-apps/content-factory-studio-publish-dry-run-live-continue-2026-07-05.json`。最新 production preflight、bundle 和 readiness report 分别写入 `.lime/qc/gui-evidence/agent-apps/content-factory-production-preflight-studio-dry-run-continue-2026-07-05T13-42-15-968Z.json`、`.lime/qc/gui-evidence/agent-apps/content-factory-production-evidence-bundle-studio-dry-run-continue-2026-07-05/`、`.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-report-studio-dry-run-continue-2026-07-05.json`，均保持 blocked。该结果把剩余问题限定为 signed remote release 输入和真实 GUI `cloud_release` 安装运行：插件重构层不再增加新的右侧展示、worker fast path 或 hard-coded 写作模板来绕过 production gate。
+2026-07-05 21:42 继续复核：Studio 发布入口已从旧 inspect 方法切到 current `pluginLocalPackage/inspect`，并用 dry-run `releaseReadiness` 将缺 packageUrl、app.signature、tenantId 和 developer token 前置暴露；证据为 `.lime/qc/gui-evidence/agent-apps/content-factory-studio-publish-dry-run-live-continue-2026-07-05.json`。最新 production preflight、bundle 和 readiness report 分别写入 `.lime/qc/gui-evidence/agent-apps/content-factory-production-preflight-studio-dry-run-continue-2026-07-05T13-42-15-968Z.json`、`.lime/qc/gui-evidence/agent-apps/content-factory-production-evidence-bundle-studio-dry-run-continue-2026-07-05/`、`.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-report-studio-dry-run-continue-2026-07-05.json`，均保持 blocked。该结果把剩余问题限定为 signed remote release 输入和真实 GUI `cloud_release` 安装运行：插件重构层不再增加新的右侧展示、旧执行器 fast path 或 hard-coded 写作模板来绕过 production gate。
 
 2026-07-05 21:46 readiness report 已链接 Studio dry-run：`.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-report-studio-dry-run-linked-2026-07-05.json` 证明发布侧 dry-run 与 Lime preflight 读取同一 packageHash / manifestHash，且 drift 为空；blocked 原因只剩真实 production 输入与 GUI `cloud_release` lifecycle。插件重构口径因此保持收窄：不要在内容工厂插件或宿主 UI 中新增假详情页、弹窗、右侧自动展示或写死模板来补 production evidence。
 
-2026-07-05 22:23 继续收口 production 输入事实：`.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-report-env-missing-continue-2026-07-05.json` 证明在签名私钥、packageUrl、tenantId、token 和 production API base 均未配置时，当前工具链只能产出 blocked readiness。插件层下一步不应新增 mock worker、硬编码模板或本地 fixture 来“补齐”这个缺口；真正的下一刀是接入真实 signed remote release 输入并跑 GUI `cloud_release` 证据。
+2026-07-05 22:23 继续收口 production 输入事实：`.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-report-env-missing-continue-2026-07-05.json` 证明在签名私钥、packageUrl、tenantId、token 和 production API base 均未配置时，当前工具链只能产出 blocked readiness。插件层下一步不应新增 mock execution、硬编码模板或本地 fixture 来“补齐”这个缺口；真正的下一刀是接入真实 signed remote release 输入并跑 GUI `cloud_release` 证据。
 
 2026-07-05 22:37 env 别名收口：Studio CLI 与 Lime preflight 已统一 tenant/API base/packageUrl env 别名，新 report `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-report-env-alias-continue-2026-07-05.json` 仍 blocked。插件重构层继续不新增旁路；后续要么提供真实 production 输入跑通，要么保持 fail-closed。
 
-2026-07-05 22:53 production readiness pipeline 已补：`.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-pipeline-env-alias-continue-2026-07-05/content-factory-production-readiness-pipeline.json` 统一记录 preflight、Studio `publish --dry-run`、evidence bundle 和 readiness report；pipeline 不传 `--publish`，不签名、不上传、不安装、不调用 Provider 或 production publish API。随后补 `--fetch-cloud-output` 自动落盘，真实 production catalog 到位后 pipeline 可把 App Server `pluginPackage/fetchCloud` 结果直接送入 bundle，减少手工 JSON 搬运。最新无 catalog 复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-pipeline-fetchcloud-output-continue-2026-07-05/content-factory-production-readiness-pipeline.json` 仍 `status=blocked`，且 packageHash / manifestHash 在 preflight 与 Studio dry-run 间对齐。插件重构结论不变：内容工厂插件只承接 workflow contract 和 article artifact，不新增 mock worker、hard-coded 写作模板、弹窗详情或右侧自动展示来绕过 production gate。
+2026-07-05 22:53 production readiness pipeline 已补：`.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-pipeline-env-alias-continue-2026-07-05/content-factory-production-readiness-pipeline.json` 统一记录 preflight、Studio `publish --dry-run`、evidence bundle 和 readiness report；pipeline 不传 `--publish`，不签名、不上传、不安装、不调用 Provider 或 production publish API。随后补 `--fetch-cloud-output` 自动落盘，真实 production catalog 到位后 pipeline 可把 App Server `pluginPackage/fetchCloud` 结果直接送入 bundle，减少手工 JSON 搬运。最新无 catalog 复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-pipeline-fetchcloud-output-continue-2026-07-05/content-factory-production-readiness-pipeline.json` 仍 `status=blocked`，且 packageHash / manifestHash 在 preflight 与 Studio dry-run 间对齐。插件重构结论不变：内容工厂插件只承接 workflow contract 和 article artifact，不新增 mock execution、hard-coded 写作模板、弹窗详情或右侧自动展示来绕过 production gate。
 
 2026-07-05 23:16 production readiness phase plan 已补：readiness report / pipeline 现在输出 `blockerPlan.nextPhase`，把缺口分成签名 proof / trust、Studio 发布输入、catalog/bootstrap、fetchCloud 和真实 desktop `cloud_release` E2E；无 production catalog 时 pipeline 只记录 `fetchCloudFromCatalog.skippedReason=catalog_missing`，不再让 preflight 命令失败。最新复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-phase-plan-rerun-2026-07-05-2026-07-05T15-16-14-303Z/content-factory-production-readiness-pipeline.json` 仍 blocked，`nextPhase=release_signing_and_trust`。插件层继续不新增旁路：下一刀必须是真实签名和可信根，再进入 remote release / GUI 复测。
 
-2026-07-05 23:36 production 签名验真已补：preflight 不再停留在字段完整性检查，而是按外部发布工具 canonical payload v2 重建 payload 并用 trust root `publicKey` 验证 detached signature；signed gate 同步要求 preflight 已验证、payloadHash 匹配、bootstrap 匹配 trust root 带 `publicKey`。最新只读复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-signature-verify-final2-2026-07-05-2026-07-05T15-48-09-615Z/content-factory-production-readiness-pipeline.json` 仍 blocked，`nextPhase=release_signing_and_trust`。插件层仍不新增弹窗详情、右侧自动展示、mock worker 或 hard-coded 写作模板来绕过 production gate。
+2026-07-05 23:36 production 签名验真已补：preflight 不再停留在字段完整性检查，而是按外部发布工具 canonical payload v2 重建 payload 并用 trust root `publicKey` 验证 detached signature；signed gate 同步要求 preflight 已验证、payloadHash 匹配、bootstrap 匹配 trust root 带 `publicKey`。最新只读复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-signature-verify-final2-2026-07-05-2026-07-05T15-48-09-615Z/content-factory-production-readiness-pipeline.json` 仍 blocked，`nextPhase=release_signing_and_trust`。插件层仍不新增弹窗详情、右侧自动展示、mock execution 或 hard-coded 写作模板来绕过 production gate。
 
-2026-07-05 23:56 production catalog sourceKind 已收紧并复跑：signed gate / readiness pipeline 只接受 `cloud_release`，`remote` 不再是 production signed catalog ready。pipeline 也会默认消费内容工厂目录里的 `app.signature.yaml` 和 `plugin-signature-trust-root.json`，避免 preflight 与 Studio dry-run 使用两套签名输入。最新只读证据 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-signature-defaults-2026-07-05-2026-07-05T16-02-26-791Z/content-factory-production-readiness-pipeline.json` 仍 blocked，`fetchCloudFromCatalog.skippedReason=catalog_missing`，`nextPhase=release_signing_and_trust`。插件层继续只承接 workflow contract / article artifact / JSONL audit，不通过假详情页、弹窗、右侧自动展示、mock worker 或写死模板补 production evidence。
+2026-07-05 23:56 production catalog sourceKind 已收紧并复跑：signed gate / readiness pipeline 只接受 `cloud_release`，`remote` 不再是 production signed catalog ready。pipeline 也会默认消费内容工厂目录里的 `app.signature.yaml` 和 `plugin-signature-trust-root.json`，避免 preflight 与 Studio dry-run 使用两套签名输入。最新只读证据 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-signature-defaults-2026-07-05-2026-07-05T16-02-26-791Z/content-factory-production-readiness-pipeline.json` 仍 blocked，`fetchCloudFromCatalog.skippedReason=catalog_missing`，`nextPhase=release_signing_and_trust`。插件层继续只承接 workflow contract / article artifact / JSONL audit，不通过假详情页、弹窗、右侧自动展示、mock execution 或写死模板补 production evidence。
 
-2026-07-06 pipeline ready path 回归已补：完整 production evidence 组合在 test-only 层可以让 pipeline / readiness report / signed gate 变为 `ready`，但该绿色路径要求 GUI `cloud_release` signature verified、Electron IPC trace 和 workflow resume lifecycle 全部存在。插件重构口径不变：这不是 mock worker 或本地 fixture 的通行证，真实产品仍必须从 production catalog 安装 signed `cloud_release` 后跑 CDP 证据。
+2026-07-06 pipeline ready path 回归已补：完整 production evidence 组合在 test-only 层可以让 pipeline / readiness report / signed gate 变为 `ready`，但该绿色路径要求 GUI `cloud_release` signature verified、Electron IPC trace 和 workflow resume lifecycle 全部存在。插件重构口径不变：这不是 mock execution 或本地 fixture 的通行证，真实产品仍必须从 production catalog 安装 signed `cloud_release` 后跑 CDP 证据。
 
 2026-07-06 packageUrl operator 入口已补：readiness pipeline 可以显式接收 `--package-url <https-url>`，并以脱敏环境变量传给 preflight / Studio dry-run。最新只读复跑 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-operator-inputs-2026-07-06-2026-07-05T16-15-09-136Z/content-factory-production-readiness-pipeline.json` 仍 blocked。插件层仍不保存或展示原始 package URL，也不把 packageUrl 单独视为 ready；它只是 signed `cloud_release` 发布输入之一。
 
@@ -148,7 +150,7 @@ App Server current 普通 turn 已修到：`plugin_activation -> 普通 Agent tu
 
 2026-07-06 operator missingKeys 已补：`operatorReadiness` 增加 `ready / missingKeys`，当前真实复跑显示缺签名、releaseId/publicKeyId、trust root、packageUrl、租户/API/token、catalog/bootstrap、fetchCloud 和 GUI evidence。插件层不生成假签名、不上传包、不把 local_folder 伪装为 cloud_release；这些 missingKeys 只是下一步 operator 输入清单。
 
-2026-07-06 operator missingActions 已补：readiness evidence 会把 missingKeys 映射到安全 actions，例如显式运行 pipeline `--generate-signature-proof` 让同轮 Studio dry-run hash 驱动外部真实签名工具、提供 production HTTPS packageUrl、走 current bulk publish 后读取 catalog/bootstrap、再用 App Server fetchCloud 和真实 Electron CDP 采集证据。插件层仍不新增 worker fast path、mock release 或手写 ready JSON。
+2026-07-06 operator missingActions 已补：readiness evidence 会把 missingKeys 映射到安全 actions，例如显式运行 pipeline `--generate-signature-proof` 让同轮 Studio dry-run hash 驱动外部真实签名工具、提供 production HTTPS packageUrl、走 current bulk publish 后读取 catalog/bootstrap、再用 App Server fetchCloud 和真实 Electron CDP 采集证据。插件层仍不新增旧执行器 fast path、mock release 或手写 ready JSON。
 
 2026-07-06 signing command hint 已补：readiness evidence 会用当前 preflight 的真实 packageHash / manifestHash 生成签名命令提示，但 packageUrl、releaseId 和公钥 ID 都保持占位符，私钥只通过 `--private-key-env PLUGIN_SIGNING_PRIVATE_KEY_PEM` 引用本地环境变量。插件层仍不执行签名、不写 trust root、不上传包；真实签名与 catalog/bootstrap 仍由 production operator 链路完成。
 
@@ -162,7 +164,7 @@ App Server current 普通 turn 已修到：`plugin_activation -> 普通 Agent tu
 
 2026-07-06 Studio-first pipeline 已补：readiness pipeline 先跑 Studio dry-run 刷新 `.lapp`，再跑 preflight，避免同轮 preflight 读取旧 dist package。最新只读证据 `.lime/qc/gui-evidence/agent-apps/content-factory-production-readiness-studio-first-2026-07-06-2026-07-05T17-07-47-825Z/content-factory-production-readiness-pipeline.json` 仍 blocked，但 Studio/preflight packageHash drift 已消失。插件层仍只提供真实 signed release 的审计链，不新增 mock release 或手写 ready JSON。
 
-2026-07-06 optional signing proof generation 已补：readiness pipeline 新增显式 `--generate-signature-proof`，用于 operator 在本地具备真实 signing key、HTTPS packageUrl、releaseId 和 publicKeyId 时，复用外部 `content-factory-app/scripts/sign-release.mjs` 生成 `app.signature.yaml` / trust root。默认不签名；缺任一输入时 `production_signature_generation_inputs_missing` fail-closed；签名阶段 evidence 只写入脱敏状态、missingKeys、路径存在性和字节数，不写入 URL、私钥、公钥或签名值。该能力只减少手工签名串联错误，不新增插件 worker、mock release、硬编码模板、弹窗详情或右侧自动展示。
+2026-07-06 optional signing proof generation 已补：readiness pipeline 新增显式 `--generate-signature-proof`，用于 operator 在本地具备真实 signing key、HTTPS packageUrl、releaseId 和 publicKeyId 时，复用外部 `content-factory-app/scripts/sign-release.mjs` 生成 `app.signature.yaml` / trust root。默认不签名；缺任一输入时 `production_signature_generation_inputs_missing` fail-closed；签名阶段 evidence 只写入脱敏状态、missingKeys、路径存在性和字节数，不写入 URL、私钥、公钥或签名值。该能力只减少手工签名串联错误，不新增旧执行器、mock release、硬编码模板、弹窗详情或右侧自动展示。
 
 2026-07-06 preflight signingCommand hygiene 已补：preflight 输出层也不再保留 `PLUGIN_SIGNING_PRIVATE_KEY_PEM=$PRIVATE_KEY_PEM` 示例，统一指向 readiness pipeline 的 `--generate-signature-proof --signing-private-key-env PLUGIN_SIGNING_PRIVATE_KEY_PEM`；CLI help 也有回归守卫，防止重新提示粘贴 key/token 值，并明确 preflight 只通过 current `pluginLocalPackage/inspect` 做本地包事实和缺口检查，不签名、不上传、不安装、不调用 Provider、不写 passing `cloud_release` evidence。这只是 operator 审计提示收口，不改变插件运行形态；真实 ready 仍必须由 signed catalog/bootstrap、App Server fetchCloud verified 和真实 Electron/CDP `cloud_release` GUI evidence 同时关闭。
 
@@ -170,10 +172,10 @@ App Server current 普通 turn 已修到：`plugin_activation -> 普通 Agent tu
 
 2026-07-06 release evidence sourceKind 推断已收紧：`content-factory-production-release-evidence` 从 LimeCore marketplace 抓取 catalog 时不再因为存在 HTTPS `packageUrl` 就生成 `identity.sourceKind=cloud_release`；只有 package/source 明确声明 `cloud_release` 才能关闭 catalog sourceKind 要求。缺显式 sourceKind 时 summary 保持 `status=blocked` 并输出 `catalogSourceKindCloudRelease`，避免远程包 URL、fixture 或旧 marketplace 字段被误当 production signed release。最新只读 pipeline `.lime/qc/gui-evidence/agent-apps/content-factory-production-release-sourcekind-audit-2026-07-06-2026-07-06T01-13-12-511Z/content-factory-production-readiness-pipeline.json` 仍 `status=blocked`、missing codes `17` 个。
 
-2026-07-06 fetchCloud evidence 字段门禁已收紧：signed release gate 现在拒绝只写 `matched=true / verified / ready` 的 fetchCloud JSON，必须同时包含本次拉取的 `packageHash`、`manifestHash`、非 localhost HTTPS `packageUrl/sourceUri`、`signatureRef` 和 `signatureProof`，并继续与 catalog / preflight 比对。`content-factory-production-fetch-cloud-evidence` 会把 catalog proof 的非密钥审计字段写入本地 evidence；gate/report summary 不复制原始 package URL 或 detached signature 原文。该改动只提高 production 证据可信度，不新增 mock release 或 worker fast path。
+2026-07-06 fetchCloud evidence 字段门禁已收紧：signed release gate 现在拒绝只写 `matched=true / verified / ready` 的 fetchCloud JSON，必须同时包含本次拉取的 `packageHash`、`manifestHash`、非 localhost HTTPS `packageUrl/sourceUri`、`signatureRef` 和 `signatureProof`，并继续与 catalog / preflight 比对。`content-factory-production-fetch-cloud-evidence` 会把 catalog proof 的非密钥审计字段写入本地 evidence；gate/report summary 不复制原始 package URL 或 detached signature 原文。该改动只提高 production 证据可信度，不新增 mock release 或旧执行器 fast path。
 
 2026-07-06 GUI evidence provenance 门禁已收紧：signed release gate 不再接受只有 `status=passed`、`liveProviderUsed=true` 和 workflow JSONL 路径的手写 GUI JSON；必须带 production GUI collector schema、真实 Electron CDP attached/usedRealElectron、matched turn-start trace、current App Server `turn/start + read + evidence/export` method trace、workflow JSONL event count 和 `generatedArticleMarkerClean=true`。collector 同步写入 workflow JSONL event count/type 摘要。该改动不改变用户 UI，只防止 production GUI evidence 被 fixture 或手写 ready JSON 伪造。
 
 2026-07-06 workflow audit export 门禁已收紧：production GUI evidence 不能只证明 workflow JSONL 文件存在，还必须证明同一 session 经 current App Server `evidence/export` 产出 metadata-only `workflow_audit` 摘要。signed gate 要求 `status=exported`、`source=workflow-events.jsonl`、`eventCount>0`、`metadataOnly=true`、`rawContentIncluded=false`、`redactionPolicy=workflow_audit_metadata_only` 和 redaction 覆盖事件数。该改动继续保持 workflow facts 不进右侧 UI，只让审计链具备可导出的非原文摘要。
 
-2026-07-06 GUI installed release identity 门禁已收紧：production GUI evidence 的 `installedState` 不能只写 `signature verified`、`packageHashMatched=true` 或 `manifestHashMatched=true`；必须同时携带 `appVersion / packageHash / manifestHash / releaseId / signatureRef`，其中 hash 必须是 `sha256:<64 hex>`，并逐项与 production catalog、preflight 和 fetchCloud evidence 一致。缺字段、hash 非法、releaseId / signatureRef 漂移或 fixture / localhost marker 都会 blocked。该改动只提高 GUI evidence 与同一轮 release 的绑定强度，不新增 UI、worker fast path、mock release 或手写 ready JSON。
+2026-07-06 GUI installed release identity 门禁已收紧：production GUI evidence 的 `installedState` 不能只写 `signature verified`、`packageHashMatched=true` 或 `manifestHashMatched=true`；必须同时携带 `appVersion / packageHash / manifestHash / releaseId / signatureRef`，其中 hash 必须是 `sha256:<64 hex>`，并逐项与 production catalog、preflight 和 fetchCloud evidence 一致。缺字段、hash 非法、releaseId / signatureRef 漂移或 fixture / localhost marker 都会 blocked。该改动只提高 GUI evidence 与同一轮 release 的绑定强度，不新增 UI、旧执行器 fast path、mock release 或手写 ready JSON。

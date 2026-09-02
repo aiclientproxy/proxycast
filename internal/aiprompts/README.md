@@ -81,14 +81,14 @@
 - **改 turn 提交 / prompt 组包 / queue / compaction / evidence 主链**：先读 `query-loop.md`
 - **改 subagent / automation / execution tracker / scheduler taxonomy**：先读 `task-agent-taxonomy.md`
 - **讨论 `/goal`、ThreadGoal 或跨 turn 目标续跑**：先读 `architecture.md`、`task-agent-taxonomy.md` 与 `query-loop.md`，再读 `../research/codex-goal/README.md`
-- **讨论 Coding Agent、Skill Forge 或能力生成 draft**：先读 `query-loop.md` 与 `skill-standard.md`，再读 `../research/pi-mono-coding-agent/README.md` 与 `../roadmap/skill-forge/coding-agent-layer.md`
+- **讨论 Coding Agent、Skill Forge 或能力生成 draft**：先读 `query-loop.md` 与 `skill-standard.md`，再读 `../research/pi-mono-coding-agent/README.md` 与 `../roadmap/skill-forge/README.md`
 - **改 channels / browser connector / DevBridge remote runtime**：先读 `remote-runtime.md`
 - **改记忆来源链 / working memory / durable memory / Team Memory / compaction**：先读 `memory-compaction.md`
 - **改 FileArtifact / artifact sidecar / versions / file checkpoint / evidence 中的文件快照**：先读 `persistence-map.md`
 - **改 session detail / thread read / requestTelemetry / evidence / history-record**：先读 `state-history-telemetry.md`
 - **改 Electron IPC / App Server / Bridge / mock / legacy desktop facade**：先读 `commands.md`，再看 `quality-workflow.md`
 - **碰到 `lime-rs/src/**`**：先判断是否只是 bootstrap / runner 接线、compat facade 委托或撤注册机械修复；凡是业务逻辑、领域服务、runtime 分支、API adapter、数据访问或跨 App 复用能力，默认迁往 `lime-rs/crates/\*\*`或 Electron Desktop Host。先读`commands.md`、`governance.md`与`quality-workflow.md`
-- **碰到 `lime-rs/src/commands/**`**：默认只做旧 Tauri wrapper 删除清理、撤注册后的机械编译修复或 blocker 登记；不要在该目录新增实现、compat wrapper 或退场 stub。先读 `commands.md`、`governance.md`、`../exec-plans/tauri-wrapper-quick-cleanup-queue.md`和`../exec-plans/tauri-wrapper-command-inventory.md`
+- **碰到 `lime-rs/src/commands/**`**：该目录已删除且禁止恢复；只允许更新 retired guard 或在 `tech-debt-tracker.md` 登记阻塞，不得新增实现、compat wrapper 或退场 stub。先读 `commands.md`、`governance.md` 和 `../exec-plans/production-command-current-migration-plan.md`。
 - **碰到超过 `1000` 行的非生成代码文件**：优先按领域、职责、数据边界或协议边界拆分，不继续追加新业务逻辑；接近 `800` 行时也要优先拆新模块。无法本轮拆分时，把原因、风险、退出条件和下一次拆分入口登记到执行计划
 - **碰到 `src/lib/dev-bridge/**`**：先读 `commands.md`与`governance.md`；保留 current renderer bridge 传输，按命令组清 `commandPolicy`、`mockPriorityCommands`、旧 smoke、负向测试和 contract guard，把删不动的旧 policy 登记到对应执行计划；跨命令组长期 residual 必须同步回挂 `../exec-plans/tech-debt-tracker.md`的`CCD-012`
 - **改 `@` / `/` / 轻卡 / viewer / ServiceSkill 场景**：先读 `command-runtime.md`

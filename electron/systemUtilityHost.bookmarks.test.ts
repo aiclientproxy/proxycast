@@ -198,6 +198,74 @@ describe("SystemUtilityHost security-scoped bookmarks", () => {
     expect(invokeNativeHostMock).toHaveBeenCalledTimes(1);
   });
 
+  it("按稳定 ID start/stop 管理活动 token，revoke 先停止访问再删除记录", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "lime-bookmark-host-"));
+    tempRoots.push(root);
+    const host = createHost(root);
+    invokeNativeHostMock
+      .mockResolvedValueOnce({ bookmark: "bookmark" })
+      .mockResolvedValueOnce({
+        token: "token-1",
+        path: "/tmp/project",
+        isStale: false,
+        started: true,
+      })
+      .mockResolvedValueOnce({ token: "token-1", stopped: true })
+      .mockResolvedValueOnce({
+        token: "token-2",
+        path: "/tmp/project",
+        isStale: false,
+        started: true,
+      })
+      .mockResolvedValueOnce({ token: "token-2", stopped: true });
+
+    await host.invokeMacOSNativeHost({
+      method: "bookmark.create",
+      params: { path: "/tmp/project", persistId: "workspace" },
+    });
+    await expect(
+      host.invokeMacOSNativeHost({
+        method: "bookmark.start",
+        params: { bookmarkId: "workspace" },
+      }),
+    ).resolves.toMatchObject({ bookmarkId: "workspace", token: "token-1" });
+    await expect(
+      host.invokeMacOSNativeHost({
+        method: "bookmark.stop",
+        params: { bookmarkId: "workspace" },
+      }),
+    ).resolves.toEqual({ token: "token-1", stopped: true });
+    await host.invokeMacOSNativeHost({
+      method: "bookmark.start",
+      params: { bookmarkId: "workspace" },
+    });
+    await expect(
+      host.invokeMacOSNativeHost({
+        method: "bookmark.revoke",
+        params: { bookmarkId: "workspace" },
+      }),
+    ).resolves.toEqual({ bookmarkId: "workspace", revoked: true });
+
+    expect(invokeNativeHostMock).toHaveBeenNthCalledWith(2, {
+      method: "bookmark.start",
+      params: { bookmark: "bookmark" },
+    });
+    expect(invokeNativeHostMock).toHaveBeenNthCalledWith(3, {
+      method: "bookmark.stop",
+      params: { token: "token-1" },
+    });
+    expect(invokeNativeHostMock).toHaveBeenNthCalledWith(5, {
+      method: "bookmark.stop",
+      params: { token: "token-2" },
+    });
+    expect(
+      existsSync(
+        path.join(root, "macos/security-scoped-bookmarks/workspace.json"),
+      ),
+    ).toBe(false);
+    host.dispose();
+  });
+
   it("拒绝 bookmark ID 路径穿越和不存在的冷启动记录", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "lime-bookmark-host-"));
     tempRoots.push(root);

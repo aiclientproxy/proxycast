@@ -254,6 +254,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn read_tool_inventory_gates_update_plan_from_persisted_config() {
+        let disabled = read_snapshot(None, None).await;
+        assert!(disabled
+            .get("catalog_tools")
+            .and_then(Value::as_array)
+            .is_some_and(|entries| {
+                !entries
+                    .iter()
+                    .any(|entry| entry.get("name").and_then(Value::as_str) == Some("update_plan"))
+            }));
+
+        let enabled = read_snapshot(
+            None,
+            Some(json!({
+                "agent": {
+                    "toolExecution": {
+                        "update_plan_enabled": true
+                    }
+                }
+            })),
+        )
+        .await;
+
+        assert!(catalog_tool(&enabled, "update_plan").is_object());
+        assert!(enabled
+            .get("default_allowed_tools")
+            .and_then(Value::as_array)
+            .is_some_and(|tools| tools.iter().any(|name| name == "update_plan")));
+    }
+
+    #[tokio::test]
     async fn read_tool_inventory_runtime_metadata_overrides_persisted_config_metadata() {
         let inventory = read_snapshot(
             Some(json!({

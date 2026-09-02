@@ -47,7 +47,10 @@ function setResourcesPath(resourcesPath: string): void {
   });
 }
 
-function createNativeHostFixture(script: string): string {
+function createNativeHostFixture(
+  script: string,
+  protocolVersion?: number,
+): string {
   const root = mkdtempSync(path.join(tmpdir(), "lime-macos-native-host-"));
   tempRoots.push(root);
   const helperPath = path.join(root, "native", "macos-native-host");
@@ -80,6 +83,7 @@ function createNativeHostFixture(script: string): string {
         helper: {
           id: "macos-native-host",
           path: "native/macos-native-host",
+          ...(protocolVersion === undefined ? {} : { protocolVersion }),
           bundleIdentifier: "com.limecloud.lime.native-host",
           signedByForge: false,
         },
@@ -89,11 +93,14 @@ function createNativeHostFixture(script: string): string {
   return root;
 }
 
-function createClient(script: string): {
+function createClient(
+  script: string,
+  protocolVersion?: number,
+): {
   client: MacOSNativeHostClient;
   root: string;
 } {
-  const root = createNativeHostFixture(script);
+  const root = createNativeHostFixture(script, protocolVersion);
   setResourcesPath(root);
   return { client: new MacOSNativeHostClient(), root };
 }
@@ -184,6 +191,77 @@ describe("MacOSNativeHostClient", () => {
     client.dispose();
   });
 
+  it("打包 helper 声明协议版本时先完成身份握手且只握手一次", async () => {
+    const { client } = createClient(
+      `
+      const readline = require("node:readline");
+      const rl = readline.createInterface({ input: process.stdin });
+      let handshakes = 0;
+      rl.on("line", (line) => {
+        const request = JSON.parse(line);
+        if (request.method === "capabilities.read") {
+          handshakes += 1;
+          process.stdout.write(JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: {
+              protocolVersion: 1,
+              helperId: "macos-native-host",
+              platform: "darwin",
+              applicationId: "com.limecloud.lime.native-host",
+            },
+          }) + "\\n");
+          return;
+        }
+        process.stdout.write(JSON.stringify({
+          id: request.id,
+          ok: true,
+          result: { method: request.method, handshakes },
+        }) + "\\n");
+      });
+    `,
+      1,
+    );
+
+    await expect(client.invoke({ method: "test.echo" })).resolves.toEqual({
+      method: "test.echo",
+      handshakes: 1,
+    });
+    await expect(client.invoke({ method: "test.echo" })).resolves.toEqual({
+      method: "test.echo",
+      handshakes: 1,
+    });
+    client.dispose();
+  });
+
+  it("打包 helper 握手身份漂移时 fail closed", async () => {
+    const { client } = createClient(
+      `
+      const readline = require("node:readline");
+      const rl = readline.createInterface({ input: process.stdin });
+      rl.on("line", (line) => {
+        const request = JSON.parse(line);
+        process.stdout.write(JSON.stringify({
+          id: request.id,
+          ok: true,
+          result: {
+            protocolVersion: 99,
+            helperId: "foreign-helper",
+            platform: "darwin",
+            applicationId: "com.openai.codex.native-host",
+          },
+        }) + "\\n");
+      });
+    `,
+      1,
+    );
+
+    await expect(client.invoke({ method: "test.echo" })).rejects.toMatchObject({
+      code: "protocol_mismatch",
+    });
+    client.dispose();
+  });
+
   it("请求超时后清理 pending 状态", async () => {
     vi.useFakeTimers();
     const { client } = createClient(`
@@ -253,7 +331,10 @@ describe("MacOSNativeHostClient", () => {
     ).resolves.toEqual({ targets: [{ bundleId: "com.apple.finder" }] });
     await expect(
       client.invoke({ method: "appleEvents.openSettings" }),
-    ).resolves.toEqual({ method: "appleEvents.openSettings", askedUser: false });
+    ).resolves.toEqual({
+      method: "appleEvents.openSettings",
+      askedUser: false,
+    });
     client.dispose();
   });
 

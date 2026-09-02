@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   parseRustyV8Checksums,
+  defaultRustyV8CacheRoot,
   resolveRustyV8CargoEnv,
   resolveRustyV8Target,
   resolveV8CrateVersion,
@@ -27,6 +28,37 @@ afterEach(() => {
 });
 
 describe("rusty_v8 artifact supply chain", () => {
+  it("uses stable OS-native cache roots", () => {
+    expect(
+      defaultRustyV8CacheRoot({
+        env: {},
+        platform: "darwin",
+        homeDirectory: "/Users/tester",
+      }),
+    ).toBe("/Users/tester/Library/Caches/Lime/rusty-v8");
+    expect(
+      defaultRustyV8CacheRoot({
+        env: { LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local" },
+        platform: "win32",
+        homeDirectory: "C:\\Users\\tester",
+      }),
+    ).toBe("C:\\Users\\tester\\AppData\\Local\\Lime\\Cache\\rusty-v8");
+    expect(
+      defaultRustyV8CacheRoot({
+        env: { XDG_CACHE_HOME: "/tmp/cache" },
+        platform: "linux",
+        homeDirectory: "/home/tester",
+      }),
+    ).toBe("/tmp/cache/lime/rusty-v8");
+    expect(
+      defaultRustyV8CacheRoot({
+        env: { LIME_RUSTY_V8_CACHE_DIR: "/tmp/lime-v8" },
+        platform: "darwin",
+        homeDirectory: "/Users/tester",
+      }),
+    ).toBe("/tmp/lime-v8");
+  });
+
   it("maps supported desktop platforms to exact Rust targets", () => {
     expect(resolveRustyV8Target({ platform: "darwin", arch: "arm64" })).toBe(
       "aarch64-apple-darwin",
@@ -149,6 +181,7 @@ version = "150.4.0"
       [names.archive, archive],
       [names.binding, binding],
     ]);
+    const downloadUrls = [];
     const env = resolveRustyV8CargoEnv({
       env: {},
       repoRoot,
@@ -156,12 +189,18 @@ version = "150.4.0"
       arch: "arm64",
       cacheRoot,
       download(url, destination) {
+        downloadUrls.push(url);
         writeFileSync(destination, downloads.get(path.basename(url)));
       },
     });
 
     expect(readFileSync(env.RUSTY_V8_ARCHIVE)).toEqual(archive);
     expect(readFileSync(env.RUSTY_V8_SRC_BINDING_PATH)).toEqual(binding);
+    expect(downloadUrls).toEqual([
+      "https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/rusty_v8_ptrcomp_sandbox_release_aarch64-apple-darwin.sha256",
+      "https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/librusty_v8_ptrcomp_sandbox_release_aarch64-apple-darwin.a.gz",
+      "https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/src_binding_ptrcomp_sandbox_release_aarch64-apple-darwin.rs",
+    ]);
   });
 });
 

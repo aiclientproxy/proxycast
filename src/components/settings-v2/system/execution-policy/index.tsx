@@ -63,6 +63,7 @@ const DEFAULT_AGENT_CONFIG: NativeAgentConfig = {
   max_tokens: 4096,
   workspace_sandbox: DEFAULT_WORKSPACE_SANDBOX,
   tool_execution: {
+    update_plan_enabled: false,
     tool_overrides: {},
     shell_command_rules: [],
     network_rules: [],
@@ -93,6 +94,7 @@ function normalizeAgentConfig(config?: Config | null): NativeAgentConfig {
       ...(agent.workspace_sandbox ?? {}),
     },
     tool_execution: {
+      update_plan_enabled: toolExecution.update_plan_enabled ?? false,
       tool_overrides: {
         ...toolOverrides,
       },
@@ -636,6 +638,7 @@ export function ExecutionPolicySettings({
     () => agentConfig.tool_execution ?? {},
     [agentConfig.tool_execution],
   );
+  const updatePlanEnabled = toolExecution.update_plan_enabled ?? false;
   const shellRules = useMemo(
     () => toolExecution.shell_command_rules ?? [],
     [toolExecution.shell_command_rules],
@@ -669,11 +672,13 @@ export function ExecutionPolicySettings({
     () =>
       workspaceSandbox.enabled ||
       workspaceSandbox.strict ||
+      updatePlanEnabled ||
       bashWarningPolicy !== "shell_command_risk" ||
       hasToolExecutionPolicy(toolExecution),
     [
       bashWarningPolicy,
       toolExecution,
+      updatePlanEnabled,
       workspaceSandbox.enabled,
       workspaceSandbox.strict,
     ],
@@ -743,6 +748,16 @@ export function ExecutionPolicySettings({
     },
     [],
   );
+
+  const updatePlanExposure = useCallback((enabled: boolean) => {
+    setAgentConfig((current) => ({
+      ...current,
+      tool_execution: {
+        ...(current.tool_execution ?? {}),
+        update_plan_enabled: enabled,
+      },
+    }));
+  }, []);
 
   const updateBashWarningPolicy = useCallback((policy: WarningPolicy) => {
     setAgentConfig((current) => {
@@ -1033,6 +1048,30 @@ export function ExecutionPolicySettings({
           </section>
 
           <section className="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-950/5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Workflow className="h-4 w-4 text-sky-600" />
+              {t("settings.executionPolicy.plan.title")}
+              <WorkbenchInfoTip
+                ariaLabel={t("settings.executionPolicy.plan.tipAria")}
+                content={t("settings.executionPolicy.plan.description")}
+                tone="slate"
+              />
+            </div>
+            <div className="mt-5">
+              <ToggleRow
+                title={t("settings.executionPolicy.plan.enabled.title")}
+                description={t(
+                  "settings.executionPolicy.plan.enabled.description",
+                )}
+                ariaLabel={t("settings.executionPolicy.plan.enabled.aria")}
+                checked={updatePlanEnabled}
+                disabled={saving}
+                onCheckedChange={updatePlanExposure}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-950/5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -1124,6 +1163,16 @@ export function ExecutionPolicySettings({
                 </dt>
                 <dd className="font-medium text-slate-900">
                   {workspaceSandbox.enabled
+                    ? t("settings.executionPolicy.summary.enabled")
+                    : t("settings.executionPolicy.summary.disabled")}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-500">
+                  {t("settings.executionPolicy.summary.plan")}
+                </dt>
+                <dd className="font-medium text-slate-900">
+                  {updatePlanEnabled
                     ? t("settings.executionPolicy.summary.enabled")
                     : t("settings.executionPolicy.summary.disabled")}
                 </dd>
