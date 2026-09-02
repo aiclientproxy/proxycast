@@ -69,7 +69,7 @@ const ComposerGlowFrame = styled.div`
   isolation: isolate;
 
   @media (max-height: 780px) {
-    margin-top: clamp(-48px, calc(100vh - 720px), 0px);
+    margin-top: clamp(-112px, calc(100vh - 720px), 0px);
     z-index: 60;
   }
 
