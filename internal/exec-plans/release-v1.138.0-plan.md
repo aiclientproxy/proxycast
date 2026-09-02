@@ -1,6 +1,6 @@
 # Lime v1.138.0 发布执行计划
 
-状态：`fourth-follow-up-ready / clean CI Desktop Smoke verification pending`
+状态：`fifth-follow-up-ready / clean CI frontend verification pending`
 日期：2026-09-01
 目标版本：`1.138.0`
 目标 tag：`v1.138.0`
@@ -43,6 +43,7 @@
 - Quality run `33569587544` 的 Frontend Full 在第 32/119 批出现 5 个 DeepSWE 失败。根因不是 `PATH` 并发污染：默认测试直接依赖被 `.gitignore` 排除的 `.lime/benchmark/sources/deep-swe` 本地 cache，干净 CI 中 source cwd 不存在，Node 启动 `git` 因此报 `spawnSync git ENOENT`，其余断言随 task metadata 缺失级联失败。默认测试现改用临时自包含 source fixture，production preflight 仍默认执行真实 `git rev-parse` 并校验固定 commit；无 live 授权路径也在读取外部 task cache 前 fail closed。
 - 第三轮本地验证：Windows/sherpa/Electron 定向回归 `31/31`；DeepSWE adapter/benchmark `29/29`；对应 smart runner 完整并行批次 `108/108`；真实本地 DeepSWE Release 20 preflight `205/205`；受影响 ESLint、`npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version`、脚本治理和 `git diff --check` 全部通过。仍待 follow-up commit/tag 更新后由 `windows-2022` 证明 MSVC、Squirrel、安装态 CodeMode/native host Gate B，并由干净 Linux runner 复验 Frontend Full。
 - 第四轮 Desktop Smoke 夹具修复：首次定向复跑仍有 `12` 个桌面契约级联失败，原因是临时 source fixture 的根目录未遵循 `loadTaskDefinition` 的既有 `sourceRoot/tasks/<id>` 契约；桌面 preflight/evidence 读取路径统一补齐 `tasks`，production 默认仍指向真实 `.lime/benchmark/sources/deep-swe`。修复后 Desktop contract、Desktop benchmark、DeepSWE adapter 与 benchmark 定向测试 `46/46` 通过，受影响 ESLint 与 `git diff --check` 通过；仍待提交后由干净 CI 复验 Frontend Full。
+- Quality run `33574821717` 已证明 Desktop Smoke cache 修复通过原失败批次，但 Frontend Full 在第 `37/119` 批发现下一处干净工作区依赖：`packages/app-server-client/tests/apps.test.mjs` 保留对发布产物 `../dist/index.js` 的契约验证，而根测试入口未先构建该包。根 `pretest` 现统一执行 App Server client build，`test:frontend:all`、`test:resume`、`test:related` 与 `test:changed` 均委托唯一 `npm test` 入口；不把发布产物测试降级为源码直连。package 测试 `131/131`、根入口定向批次和参数透传已通过，仍待提交后由干净 CI 完成全部 Frontend Full。
 
 已通过：
 
