@@ -73,7 +73,7 @@
 ## 当前命令迁移边界
 
 - 生产命令 current 主链固定为 `Frontend -> Electron Desktop Host IPC -> App Server JSON-RPC -> RuntimeCore / services`。
-- `lime-rs/src/commands/**` 已物理删除，只允许出现在负向回流守卫或不可变历史 evidence 中。
+- `lime-rs/src/commands/**` 已物理删除，禁止恢复或新增业务逻辑；只允许出现在负向回流守卫或不可变历史 evidence 中。
 - 新增 Rust 后端能力进入 App Server crates / RuntimeCore / services；桌面壳能力进入 Electron Desktop Host。
 - 任何执行计划如果要求恢复 `lime-rs/src/commands/**` 的业务逻辑、API adapter、runtime 分支、compat wrapper、fail-closed stub、tombstone 或 thin facade，必须直接改到 current owner，不能把已删除目录当实施落点。
 - 前端 `src/lib/dev-bridge/**` 按职责治理：`safeInvoke`、HTTP client、`app_server_handle_json_lines`、bridge availability / event listener capability 是 current renderer bridge；旧命令 policy / no-mock fallback 是迁移期 `compat / deprecated`；已迁旧命令名只能作为 `dead` / `test-only` guard。后续计划清命令时必须同步检查 policy、mock、fallback、旧 smoke 和 contract guard，不得把整目录删除当作默认治理动作；删不动且跨命令组长期存在的 residual 必须回挂 `tech-debt-tracker.md` 的 `CCD-012`。
