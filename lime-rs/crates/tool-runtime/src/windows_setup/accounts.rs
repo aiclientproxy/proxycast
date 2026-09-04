@@ -275,7 +275,8 @@ pub(super) fn ensure_local_account(username: &str, password: &str) -> io::Result
 pub(super) fn ensure_local_group(name: &str, comment: &str) -> io::Result<()> {
     use windows_sys::Win32::Foundation::ERROR_ALIAS_EXISTS;
     use windows_sys::Win32::NetworkManagement::NetManagement::{
-        NERR_GroupExists, NERR_Success, NetLocalGroupAdd, LOCALGROUP_INFO_1,
+        NERR_GroupExists as NERR_GROUP_EXISTS, NERR_Success as NERR_SUCCESS, NetLocalGroupAdd,
+        LOCALGROUP_INFO_1,
     };
 
     let mut name_w = to_wide(name);
@@ -293,7 +294,10 @@ pub(super) fn ensure_local_group(name: &str, comment: &str) -> io::Result<()> {
             &mut parameter_error,
         )
     };
-    if matches!(result, NERR_Success | ERROR_ALIAS_EXISTS | NERR_GroupExists) {
+    if matches!(
+        result,
+        NERR_SUCCESS | ERROR_ALIAS_EXISTS | NERR_GROUP_EXISTS
+    ) {
         Ok(())
     } else {
         Err(io::Error::other(format!(
@@ -305,7 +309,7 @@ pub(super) fn ensure_local_group(name: &str, comment: &str) -> io::Result<()> {
 pub(super) fn ensure_local_group_member(group: &str, account: &str) -> io::Result<()> {
     use windows_sys::Win32::Foundation::ERROR_MEMBER_IN_ALIAS;
     use windows_sys::Win32::NetworkManagement::NetManagement::{
-        NERR_Success, NetLocalGroupAddMembers, LOCALGROUP_MEMBERS_INFO_3,
+        NERR_Success as NERR_SUCCESS, NetLocalGroupAddMembers, LOCALGROUP_MEMBERS_INFO_3,
     };
 
     let group_w = to_wide(group);
@@ -322,7 +326,7 @@ pub(super) fn ensure_local_group_member(group: &str, account: &str) -> io::Resul
             1,
         )
     };
-    if matches!(result, NERR_Success | ERROR_MEMBER_IN_ALIAS) {
+    if matches!(result, NERR_SUCCESS | ERROR_MEMBER_IN_ALIAS) {
         Ok(())
     } else {
         Err(io::Error::other(format!(

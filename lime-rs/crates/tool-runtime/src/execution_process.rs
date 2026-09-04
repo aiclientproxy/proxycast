@@ -776,11 +776,6 @@ fn start_local_execution_process_with_inherited_environment(
     })
 }
 
-#[cfg(any(test, target_os = "windows"))]
-fn should_preserve_windows_job(wait_failed: bool, process_status: ExecutionProcessStatus) -> bool {
-    !wait_failed && !process_status.is_terminal()
-}
-
 #[allow(clippy::too_many_arguments)]
 async fn supervise_local_process(
     mut child: Child,

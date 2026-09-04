@@ -428,26 +428,6 @@ fn explicit_environment_overrides_can_restore_filtered_values() {
     );
 }
 
-#[test]
-fn windows_job_preserves_only_after_normal_root_exit() {
-    assert!(should_preserve_windows_job(
-        false,
-        ExecutionProcessStatus::Running
-    ));
-    assert!(!should_preserve_windows_job(
-        true,
-        ExecutionProcessStatus::Running
-    ));
-    assert!(!should_preserve_windows_job(
-        false,
-        ExecutionProcessStatus::Interrupted
-    ));
-    assert!(!should_preserve_windows_job(
-        false,
-        ExecutionProcessStatus::Terminated
-    ));
-}
-
 #[cfg(not(target_os = "windows"))]
 #[test]
 fn windows_world_writable_audit_is_clean_without_platform_commands() {

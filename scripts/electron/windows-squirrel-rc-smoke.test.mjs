@@ -147,33 +147,63 @@ describe("Windows Squirrel RC smoke", () => {
   });
 
   it("卸载只操作候选 Update.exe，并等待安装目录与快捷方式消失", async () => {
+    const updateExecutable =
+      "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe";
+    const appDirectory = "C:\\Users\\runner\\AppData\\Local\\lime\\app-1.2.3";
+    const executable = `${appDirectory}\\Lime.exe`;
+    const shortcut = "C:\\Users\\runner\\Desktop\\Lime.lnk";
     const runProcessImpl = vi.fn().mockResolvedValue({ exitCode: 0 });
-    const exists = vi.fn().mockReturnValue(false);
+    const retainedPaths = new Set([updateExecutable, appDirectory]);
+    const exists = vi.fn((target) => retainedPaths.has(target));
     const waitForAbsentImpl = vi.fn().mockResolvedValue(undefined);
+    const waitForProcessExitImpl = vi.fn().mockResolvedValue({
+      executable: updateExecutable,
+      exitCode: 0,
+      timeoutMs: 60_000,
+    });
+    const removeResidualPathsImpl = vi.fn((paths) => {
+      retainedPaths.delete(paths.appDirectory);
+      retainedPaths.delete(paths.updateExecutable);
+    });
     const result = await uninstallInstalledSquirrel({
-      updateExecutable: "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe",
-      appDirectory: "C:\\Users\\runner\\AppData\\Local\\lime\\app-1.2.3",
-      executable:
-        "C:\\Users\\runner\\AppData\\Local\\lime\\app-1.2.3\\Lime.exe",
-      shortcutPaths: ["C:\\Users\\runner\\Desktop\\Lime.lnk"],
+      updateExecutable,
+      appDirectory,
+      executable,
+      shortcutPaths: [shortcut],
       runProcessImpl,
       existsImpl: exists,
+      removeResidualPathsImpl,
       waitForAbsentImpl,
+      waitForProcessExitImpl,
     });
 
     expect(runProcessImpl).toHaveBeenCalledWith(
-      "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe",
+      updateExecutable,
       ["--uninstall"],
       expect.objectContaining({ captureOutput: true, timeoutMs: 30_000 }),
     );
-    expect(waitForAbsentImpl).toHaveBeenCalledWith(
-      [
-        "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe",
-        "C:\\Users\\runner\\AppData\\Local\\lime\\app-1.2.3",
-        "C:\\Users\\runner\\AppData\\Local\\lime\\app-1.2.3\\Lime.exe",
-        "C:\\Users\\runner\\Desktop\\Lime.lnk",
-      ],
+    expect(waitForAbsentImpl).toHaveBeenNthCalledWith(
+      1,
+      [executable, shortcut],
       expect.objectContaining({ timeoutMs: 60_000 }),
+    );
+    expect(waitForProcessExitImpl).toHaveBeenCalledWith(updateExecutable, {
+      timeoutMs: 60_000,
+    });
+    expect(removeResidualPathsImpl).toHaveBeenCalledWith({
+      appDirectory,
+      updateExecutable,
+    });
+    expect(waitForAbsentImpl).toHaveBeenNthCalledWith(
+      2,
+      [updateExecutable, appDirectory, executable, shortcut],
+      expect.objectContaining({ timeoutMs: 60_000 }),
+    );
+    expect(waitForAbsentImpl.mock.invocationCallOrder[0]).toBeLessThan(
+      waitForProcessExitImpl.mock.invocationCallOrder[0],
+    );
+    expect(waitForProcessExitImpl.mock.invocationCallOrder[0]).toBeLessThan(
+      removeResidualPathsImpl.mock.invocationCallOrder[0],
     );
     expect(result).toMatchObject({
       commandAccepted: true,
@@ -182,6 +212,16 @@ describe("Windows Squirrel RC smoke", () => {
       executableAbsent: true,
       shortcutsAbsent: true,
       warning: null,
+      productRemoval: {
+        executableAbsent: true,
+        shortcutsAbsent: true,
+      },
+      retainedPathCleanup: {
+        retainedBeforeCleanup: {
+          appDirectory: true,
+          updateExecutable: true,
+        },
+      },
     });
   });
 
@@ -203,7 +243,9 @@ describe("Windows Squirrel RC smoke", () => {
           .fn()
           .mockResolvedValue({ exitCode: 1, stderr, stdout: "" }),
         existsImpl: vi.fn().mockReturnValue(false),
+        removeResidualPathsImpl: vi.fn(),
         waitForAbsentImpl,
+        waitForProcessExitImpl: vi.fn().mockResolvedValue({ exitCode: 0 }),
       }),
     ).resolves.toMatchObject({
       commandAccepted: true,
@@ -214,7 +256,46 @@ describe("Windows Squirrel RC smoke", () => {
       shortcutsAbsent: true,
       warning: "missing-registry-subkey",
     });
-    expect(waitForAbsentImpl).toHaveBeenCalledOnce();
+    expect(waitForAbsentImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("拒绝清理不属于同一 Squirrel 安装布局的路径", async () => {
+    const runProcessImpl = vi.fn();
+
+    await expect(
+      uninstallInstalledSquirrel({
+        updateExecutable: "C:\\runner\\lime\\Update.exe",
+        appDirectory: "C:\\runner\\other\\app-1.2.3",
+        executable: "C:\\runner\\other\\app-1.2.3\\Lime.exe",
+        runProcessImpl,
+      }),
+    ).rejects.toThrow(
+      "Squirrel uninstall paths must identify Lime.exe under one app-* directory beside Update.exe",
+    );
+    expect(runProcessImpl).not.toHaveBeenCalled();
+  });
+
+  it("产品文件未被 Squirrel 移除时不得用 runner 清理掩盖失败", async () => {
+    const removeResidualPathsImpl = vi.fn();
+
+    await expect(
+      uninstallInstalledSquirrel({
+        updateExecutable: "C:\\runner\\Update.exe",
+        appDirectory: "C:\\runner\\app-1.2.3",
+        executable: "C:\\runner\\app-1.2.3\\Lime.exe",
+        shortcutPaths: ["C:\\runner\\Desktop\\Lime.lnk"],
+        runProcessImpl: vi.fn().mockResolvedValue({ exitCode: 0 }),
+        removeResidualPathsImpl,
+        waitForAbsentImpl: vi
+          .fn()
+          .mockRejectedValue(
+            new Error(
+              "Squirrel uninstall did not remove paths: C:\\runner\\app-1.2.3\\Lime.exe",
+            ),
+          ),
+      }),
+    ).rejects.toThrow("Squirrel uninstall did not remove paths");
+    expect(removeResidualPathsImpl).not.toHaveBeenCalled();
   });
 
   it("卸载失败时 fail closed，不标记候选生命周期成功", async () => {

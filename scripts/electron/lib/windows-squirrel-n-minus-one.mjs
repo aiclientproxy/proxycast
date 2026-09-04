@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   statSync,
 } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
@@ -244,7 +245,9 @@ export async function uninstallInstalledSquirrel({
   timeoutMs = 60_000,
   runProcessImpl = runProcess,
   existsImpl = existsSync,
+  removeResidualPathsImpl = removeSquirrelResidualPaths,
   waitForAbsentImpl = waitForAbsent,
+  waitForProcessExitImpl = waitForWindowsProcessExit,
 } = {}) {
   const requiredPaths = [updateExecutable, appDirectory, executable].filter(
     (value) => typeof value === "string" && value.length > 0,
@@ -254,6 +257,11 @@ export async function uninstallInstalledSquirrel({
       "Squirrel uninstall requires updateExecutable, appDirectory, and executable",
     );
   }
+  assertSquirrelInstallPathLayout({
+    appDirectory,
+    executable,
+    updateExecutable,
+  });
   const result = await runProcessImpl(updateExecutable, ["--uninstall"], {
     captureOutput: true,
     env: process.env,
@@ -265,6 +273,20 @@ export async function uninstallInstalledSquirrel({
       `Squirrel uninstall exited with ${result.exitCode} at ${updateExecutable}`,
     );
   }
+  // Legacy Squirrel retains updater files by design. Prove product removal first,
+  // then clean only the validated candidate paths left on the CI runner.
+  const productPaths = [executable, ...shortcutPaths].filter(
+    (value) => typeof value === "string" && value.length > 0,
+  );
+  await waitForAbsentImpl(productPaths, { existsImpl, timeoutMs });
+  const updaterQuiescence = await waitForProcessExitImpl(updateExecutable, {
+    timeoutMs,
+  });
+  const retainedBeforeCleanup = {
+    appDirectory: existsImpl(appDirectory),
+    updateExecutable: existsImpl(updateExecutable),
+  };
+  await removeResidualPathsImpl({ appDirectory, updateExecutable });
   await waitForAbsentImpl(
     [...requiredPaths, ...shortcutPaths].filter(
       (value) => typeof value === "string" && value.length > 0,
@@ -279,11 +301,57 @@ export async function uninstallInstalledSquirrel({
     commandAccepted: classification.accepted,
     exitCode: result.exitCode,
     warning: classification.warning,
+    productRemoval: {
+      executableAbsent: !existsImpl(executable),
+      shortcutsAbsent: shortcutPaths.every((shortcut) => !existsImpl(shortcut)),
+    },
+    retainedPathCleanup: {
+      retainedBeforeCleanup,
+      updaterQuiescence,
+    },
     updateExecutableAbsent: !existsImpl(updateExecutable),
     appDirectoryAbsent: !existsImpl(appDirectory),
     executableAbsent: !existsImpl(executable),
     shortcutsAbsent: shortcutPaths.every((shortcut) => !existsImpl(shortcut)),
   };
+}
+
+function assertSquirrelInstallPathLayout({
+  appDirectory,
+  executable,
+  updateExecutable,
+}) {
+  const normalizedAppDirectory = path.win32.resolve(appDirectory);
+  const normalizedExecutable = path.win32.resolve(executable);
+  const normalizedUpdateExecutable = path.win32.resolve(updateExecutable);
+  const packageRoot = path.win32.dirname(normalizedUpdateExecutable);
+  const equalsPath = (left, right) =>
+    left.toLowerCase() === right.toLowerCase();
+  const valid =
+    path.win32.basename(normalizedUpdateExecutable).toLowerCase() ===
+      "update.exe" &&
+    /^app-/i.test(path.win32.basename(normalizedAppDirectory)) &&
+    equalsPath(path.win32.dirname(normalizedAppDirectory), packageRoot) &&
+    equalsPath(
+      path.win32.dirname(normalizedExecutable),
+      normalizedAppDirectory,
+    ) &&
+    path.win32.basename(normalizedExecutable).toLowerCase() === "lime.exe";
+  if (!valid) {
+    throw new Error(
+      "Squirrel uninstall paths must identify Lime.exe under one app-* directory beside Update.exe",
+    );
+  }
+}
+
+function removeSquirrelResidualPaths({ appDirectory, updateExecutable }) {
+  rmSync(appDirectory, {
+    force: true,
+    maxRetries: 10,
+    recursive: true,
+    retryDelay: 250,
+  });
+  rmSync(updateExecutable, { force: true });
 }
 
 async function waitForAbsent(
