@@ -188,7 +188,7 @@ export function buildSitePostSummary(metadata: unknown): string | null {
 const LIME_TASK_SUMMARY_LABELS: Partial<
   Record<string, { key: string; defaultValue: string }>
 > = {
-  limecreatevideogenerationtask: {
+  videogenerate: {
     key: "label.videoGeneration",
     defaultValue: "Video generation",
   },

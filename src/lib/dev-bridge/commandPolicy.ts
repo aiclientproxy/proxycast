@@ -40,6 +40,7 @@ const bridgeTruthCommands = new Set<string>([
 ]);
 
 const electronHostNoMockFallbackCommands = new Set([
+  "app_server_host_diagnostics",
   "open_file_preview_window",
   "open_resource_manager_window",
   "open_system_settings_url",

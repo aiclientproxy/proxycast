@@ -470,11 +470,9 @@ impl MediaRuntimeError {
         match self {
             Self::InvalidParams(_) => Some("请检查命令参数、路径和 JSON 字段是否完整。"),
             Self::Io(_) => Some("请检查工作目录、文件权限，或稍后重试。"),
-            Self::TaskNotFound { .. } => {
-                Some("可先运行 `lime task list` 或检查 `--artifact-dir`。")
-            }
+            Self::TaskNotFound { .. } => Some("请检查任务标识和当前项目目录。"),
             Self::Conflict(_) => Some("请更换 `--output`，或使用稳定的 `--idempotency-key` 重试。"),
-            Self::InvalidState(_) => Some("可先运行 `lime task status <task-id>` 查看当前状态。"),
+            Self::InvalidState(_) => Some("请先通过任务中心查看当前状态。"),
             Self::NotRetryable(_) => Some("只有 failed 或 cancelled 的任务可以重试。"),
         }
     }

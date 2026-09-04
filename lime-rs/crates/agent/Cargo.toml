@@ -5,6 +5,9 @@ edition.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 agent-protocol.workspace = true
 app-server-protocol.workspace = true

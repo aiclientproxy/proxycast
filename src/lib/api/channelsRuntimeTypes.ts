@@ -90,7 +90,6 @@ export interface DiscordThreadBindingsConfig {
   idle_hours?: number;
   max_age_hours?: number;
   spawn_subagent_sessions?: boolean;
-  spawn_acp_sessions?: boolean;
 }
 
 export interface DiscordAutoPresenceConfig {

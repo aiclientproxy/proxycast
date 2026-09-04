@@ -5,6 +5,9 @@ edition.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 lime-core.workspace = true
 tool-runtime.workspace = true

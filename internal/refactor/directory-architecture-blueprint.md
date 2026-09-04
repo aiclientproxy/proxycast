@@ -145,7 +145,7 @@ packages/
 ├── app-server-client/        # 协议生成物 + 薄客户端（R-10 后核心为 generated）
 ├── agent-ui-contracts/       # UI 类型契约（current）
 ├── agent-runtime-projection/ # 投影/selector 样板（current）
-├── lime-cli-npm/             # 外发 CLI
+├── cli/                      # 外发 CLI
 └── (T3) plugin-sdk/          # 插件生态打开后新增
 ```
 

@@ -169,6 +169,9 @@ Renderer 仍通过既有命令名进入更新体验，但实现 owner 已切到 
 6. `stage-electron-release-assets` 必须在 `release-electron` staging 阶段 fail-fast 拒绝旧 updater 资产，不能静默忽略 `*.app.tar.gz`、`*.sig`、旧 YAML metadata 或 blockmap。
 7. `stage-electron-release-assets` 必须拒绝 `RELEASES.json` 中的 `localhost` / `127.0.0.1` 更新 URL，防止本地临时 feed 验证产物进入正式发布。
 8. `prepare-github-release-assets` 与 release workflow 必须拒绝旧 updater 资产进入 Electron 发布物；current workflow 只发布 Electron installer、`RELEASES.json` / `RELEASES`、ZIP、nupkg 与 GitHub Release 归档资产。
+9. Packaged evidence 必须绑定实际 checkout 的完整 commit SHA、`candidateRunId`、version、platform 和 arch；Windows Squirrel、Code Mode、native host 与资源 manifest 必须交叉一致，macOS release Gate 必须验证 Developer ID、嵌套 helper 同 Team、Gatekeeper 和 stapling。
+10. 最终 `release-github-assets/*` 在上传前必须生成 SLSA build provenance；release 输入 ref 与 workflow commit 不一致、后续 job 未固定 checkout `github.sha`、attestation 权限或 subject 缺失时 fail closed。
+11. 新 GitHub Release 必须先创建为 draft；只有所有平台 build、packaged evidence、provenance 和资产上传成功后才能解除 draft。
 
 ## 7. 验证入口
 

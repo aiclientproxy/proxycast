@@ -7,14 +7,23 @@
 ## 唯一业务通道
 
 ```text
-Renderer typed gateway
+Desktop: Renderer typed gateway
   -> preload / Desktop Host（仅宿主能力或 JSONL 转发）
   -> app_server_handle_json_lines
+
+TUI/CLI: lime CLI / tui
+  -> Rust app-server-client session
+  -> local stdio transport
+
+Future Cloud: authenticated remote transport
+  -> Rust app-server-client session
+
+All surfaces
   -> App Server JSON-RPC method
   -> runtime/domain owner
 ```
 
-业务能力只通过 App Server JSON-RPC 进入 Rust runtime。Electron IPC 只用于窗口、文件/目录选择、系统权限、外链、托盘、自动更新、sidecar 生命周期等宿主能力，或转发 `app_server_handle_json_lines`。Renderer 不直接调用 provider、tool runtime、数据库或 Electron main 私有实现。
+业务能力只通过 App Server JSON-RPC 进入 Rust runtime。Electron IPC 只用于窗口、文件/目录选择、系统权限、外链、托盘、自动更新、sidecar 生命周期等宿主能力，或转发 `app_server_handle_json_lines`。CLI/TUI 只负责参数、TUI 生命周期、输入事件和 App Server transport。Renderer 与 TUI/CLI surface 都不直接调用 provider、tool runtime 或数据库。Cloud transport 尚未实现；未来实现必须在连接边界完成认证、租户隔离和限流，不能改变业务 method 语义。
 
 ## Owner 判定
 
@@ -25,8 +34,17 @@ Renderer typed gateway
 | 工具定义、审批、sandbox、dispatch、MCP                          | `tool-runtime`                                      |
 | 窗口、系统文件选择、通知、Dock、tray、updater、sidecar          | Electron Desktop Host                               |
 | UI request builder、response normalization、projection          | Renderer `src/lib/api/` 或 typed package            |
+| TUI composer、terminal lifecycle、terminal projection           | `tui`                                               |
+| CLI 参数、非交互输出、进程退出码                                | `cli`                                               |
+| 本地/未来远端 App Server 会话、请求并发和 reverse request       | `app-server-client`                                 |
 
-禁止为业务调用新增第二个 Electron 后端、renderer mock fallback、临时 DevBridge 命令或 legacy wrapper。生产失败必须显式失败；mock 仅在测试夹具中显式注入。
+禁止为业务调用新增第二个 Electron/CLI 后端、renderer mock fallback、临时 DevBridge 命令或 legacy wrapper。生产失败必须显式失败；mock 仅在测试夹具中显式注入。
+
+## TUI/CLI 与 Cloud transport 边界
+
+`app-server-client` 是所有非 Renderer Rust surface 的会话 owner。它负责 JSON-RPC request id、并发 pending request、notification、reverse server request、断线与关闭；`tui` 和 `cli` 只能消费其 typed facade。当前 production transport 只有本地 stdio App Server。transport trait 是实际本地实现所需的依赖倒置边界，同时也是未来 Cloud 接入点；在远端认证、租户、重连和协议版本策略明确前，不增加空 Cloud client、假 endpoint 或 fallback。
+
+CLI surface 使用 Codex 风格命名：`lime`（无子命令）和 `lime tui` 进入 TUI，`lime resume [thread-id]` 通过 `thread/resume` 恢复 canonical 历史；省略 id 时先用 `thread/list` 打开 TUI session picker，再复用同一 resume 流程。`lime exec` 执行一次非交互回合；`lime mcp list` 和 `lime skills list` 分别读取 current MCP/Skill catalog。TUI 的 `/model` 使用 `model/list` 可见 catalog，选择后统一写入 `thread/settings/update`；模型目录的 authority 仍在 App Server。这些入口都复用 `app-server-client` session owner，不得引入旧的 TUI 命名或平行历史/runtime 后端。TUI 连接断开时只允许 bounded reconnect + 原 Thread `thread/resume`，保留 composer draft，清理失效审批请求；重连失败必须显式退出。旧 `task`、`media`、单数 `skill` 与旧 `doctor` 命令已判定为 `dead / deleted / forbidden-to-restore`；媒体和诊断能力必须由 App Server current owner 承接，不得回填 CLI 直连入口。视频生成的 Agent surface 只允许使用 current typed `video_generate` 工具，经 `tool-runtime` gateway 委托 App Server `mediaTaskArtifact/video/create`；旧 `lime_create_video_generation_task` 不提供 alias 或 compat。
 
 ## Codex 能力边界
 

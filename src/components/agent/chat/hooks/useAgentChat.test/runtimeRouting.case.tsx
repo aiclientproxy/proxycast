@@ -855,11 +855,11 @@ describe("useAgentChat runtime routing", () => {
       act(() => {
         stream.emit({
           type: "tool_start",
-          tool_name: "Bash",
+          tool_name: "lime_create_modal_resource_search_task",
           tool_id: "tool-resource-task-1",
           arguments: JSON.stringify({
-            command:
-              "lime task create resource-search --json --resource-type image --query 'cozy coffee table'",
+            resource_type: "image",
+            query: "cozy coffee table",
           }),
         });
         stream.emit({

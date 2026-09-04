@@ -304,6 +304,16 @@ impl AgentRuntimeState {
         Ok(())
     }
 
+    pub async fn register_video_task_tools(
+        &self,
+        gateway: Arc<dyn tool_runtime::video_task::VideoTaskGateway>,
+    ) -> Result<(), String> {
+        for registration in crate::native_tools::create_video_tools(gateway) {
+            self.register_native_tool(registration).await?;
+        }
+        Ok(())
+    }
+
     pub async fn register_tool_search_tools(
         &self,
         gateway: Arc<dyn tool_runtime::tool_search::ToolSearchGateway>,

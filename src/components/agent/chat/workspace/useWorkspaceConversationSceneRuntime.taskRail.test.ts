@@ -190,7 +190,7 @@ describe("useWorkspaceConversationSceneRuntime task rail projection", () => {
           started_at: "2026-04-09T10:00:00.000Z",
           updated_at: "2026-04-09T10:00:01.000Z",
           type: "command_execution",
-          command: "lime task create url-parse --json",
+          command: "curl https://example.com/article",
           cwd: "/tmp/project-1",
         },
         {

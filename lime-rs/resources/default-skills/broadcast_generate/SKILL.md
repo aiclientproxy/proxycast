@@ -1,7 +1,7 @@
 ---
 name: broadcast_generate
 description: 将文章整理为可转播客音频的源文本（下游负责真实音频合成）。
-allowed-tools: Bash, lime_create_broadcast_generation_task
+allowed-tools: lime_create_broadcast_generation_task
 metadata:
   lime_argument_hint: 输入原文、目标听众、语气、预计时长、重点段落。
   lime_when_to_use: 用户希望把现有文稿转成播客内容，但不要求你直接写主持稿。
@@ -22,8 +22,7 @@ metadata:
 - 保留原文核心观点与证据，不随意新增事实。
 - 清理不利于朗读的内容（超长句、无意义链接堆叠、重复段）。
 - 输出的是“可播报文本材料”，不是完整主持人口播脚本。
-- 优先调用 `Bash` 执行 `lime task create broadcast --json` 创建任务。
-- 若当前环境暂时无法执行 `lime` CLI，再回退到 `lime_create_broadcast_generation_task`。
+- 调用 `lime_create_broadcast_generation_task` 创建任务；不得经 CLI 或 Bash 拼装第二条任务入口。
 - `payload` 中至少包含：`title`、`audience`、`tone`、`durationHintMinutes`、`content`。
 
 ## 输出格式（固定）

@@ -6,7 +6,7 @@ pub const UPDATE_PLAN_TOOL_NAME: &str = "update_plan";
 pub const LIST_MCP_RESOURCES_TOOL_NAME: &str = "list_mcp_resources";
 pub const READ_MCP_RESOURCE_TOOL_NAME: &str = "read_mcp_resource";
 pub const SOCIAL_IMAGE_TOOL_NAME: &str = "social_generate_cover_image";
-pub const LIME_CREATE_VIDEO_TASK_TOOL_NAME: &str = "lime_create_video_generation_task";
+pub const VIDEO_GENERATE_TOOL_NAME: &str = tool_runtime::video_task::VIDEO_TASK_TOOL_NAME;
 pub const LIME_CREATE_AUDIO_TASK_TOOL_NAME: &str = "lime_create_audio_generation_task";
 pub const LIME_CREATE_TRANSCRIPTION_TASK_TOOL_NAME: &str = "lime_create_transcription_task";
 pub const LIME_CREATE_BROADCAST_TASK_TOOL_NAME: &str = "lime_create_broadcast_generation_task";
@@ -336,13 +336,13 @@ static NATIVE_TOOL_CATALOG: &[ToolCatalogEntry] = &[
         workspace_default_allow: true,
     },
     ToolCatalogEntry {
-        name: LIME_CREATE_VIDEO_TASK_TOOL_NAME,
+        name: VIDEO_GENERATE_TOOL_NAME,
         profiles: WORKBENCH_PROFILES,
         capabilities: CONTENT_CAP,
-        lifecycle: ToolLifecycle::Deprecated,
+        lifecycle: ToolLifecycle::Current,
         source: ToolSourceKind::LimeInjected,
         permission_plane: ToolPermissionPlane::SessionAllowlist,
-        workspace_default_allow: false,
+        workspace_default_allow: true,
     },
     ToolCatalogEntry {
         name: LIME_CREATE_AUDIO_TASK_TOOL_NAME,
@@ -753,7 +753,7 @@ mod tests {
     fn test_workspace_default_allowed_tool_names_includes_workbench_surface() {
         let names = workspace_default_allowed_tool_names(WorkspaceToolSurface::workbench());
         assert!(names.contains(&SOCIAL_IMAGE_TOOL_NAME));
-        assert!(!names.contains(&LIME_CREATE_VIDEO_TASK_TOOL_NAME));
+        assert!(names.contains(&VIDEO_GENERATE_TOOL_NAME));
         assert!(names.contains(&LIME_CREATE_AUDIO_TASK_TOOL_NAME));
         assert!(names.contains(&LIME_CREATE_TRANSCRIPTION_TASK_TOOL_NAME));
     }
@@ -816,13 +816,14 @@ mod tests {
         let names = workbench_tool_names().into_iter().collect::<BTreeSet<_>>();
         assert_eq!(names.len(), 12);
         assert!(names.contains(SOCIAL_IMAGE_TOOL_NAME));
-        assert!(names.contains(LIME_CREATE_VIDEO_TASK_TOOL_NAME));
+        assert!(names.contains(VIDEO_GENERATE_TOOL_NAME));
         assert_eq!(
-            tool_catalog_entry(LIME_CREATE_VIDEO_TASK_TOOL_NAME)
-                .expect("retired video task tool should stay cataloged for guard visibility")
+            tool_catalog_entry(VIDEO_GENERATE_TOOL_NAME)
+                .expect("current video task tool should stay cataloged")
                 .lifecycle,
-            ToolLifecycle::Deprecated
+            ToolLifecycle::Current
         );
+        assert!(tool_catalog_entry("lime_create_video_generation_task").is_none());
         assert!(names.contains(LIME_CREATE_AUDIO_TASK_TOOL_NAME));
         assert!(names.contains(LIME_CREATE_TRANSCRIPTION_TASK_TOOL_NAME));
         assert!(names.contains(LIME_RUN_SERVICE_SKILL_TOOL_NAME));
@@ -851,7 +852,7 @@ mod tests {
         assert!(!names.contains(&"TeamDelete"));
         assert!(names.contains(&LIME_CREATE_TRANSCRIPTION_TASK_TOOL_NAME));
         assert!(names.contains(&LIME_CREATE_AUDIO_TASK_TOOL_NAME));
-        assert!(!names.contains(&LIME_CREATE_VIDEO_TASK_TOOL_NAME));
+        assert!(names.contains(&VIDEO_GENERATE_TOOL_NAME));
         assert!(names.contains(&LIME_SEARCH_WEB_IMAGES_TOOL_NAME));
         assert!(!names.contains(&LIME_RUN_SERVICE_SKILL_TOOL_NAME));
     }

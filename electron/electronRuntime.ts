@@ -17,6 +17,7 @@ export const {
   nativeImage,
   Notification,
   net,
+  powerMonitor,
   screen,
   session,
   shell,

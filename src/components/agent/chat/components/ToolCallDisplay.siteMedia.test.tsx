@@ -383,14 +383,14 @@ describe("ToolCallDisplay site and media results", () => {
   it("内容工作台任务失败结果面板不应展示内部协议错误", () => {
     const { container } = renderTool({
       id: "tool-video-generate-failed-1",
-      name: "lime_create_video_generation_task",
+      name: "video_generate",
       arguments: JSON.stringify({
         prompt: "生成一个产品演示视频",
       }),
       status: "failed",
       result: {
         success: false,
-        error: "-32603: -32002: lime_create_video_generation_task",
+        error: "-32603: -32002: video_generate",
         output: "",
       },
       startTime: new Date("2026-05-14T10:22:00.000Z"),
@@ -399,9 +399,7 @@ describe("ToolCallDisplay site and media results", () => {
 
     expect(container.textContent).toContain("视频生成失败");
     expect(container.textContent).not.toContain("-32603");
-    expect(container.textContent).not.toContain(
-      "lime_create_video_generation_task",
-    );
+    expect(container.textContent).not.toContain("video_generate");
 
     act(() => {
       const toggle = container.querySelector(
@@ -412,9 +410,7 @@ describe("ToolCallDisplay site and media results", () => {
 
     expect(container.textContent).toContain("视频生成失败");
     expect(container.textContent).not.toContain("-32002");
-    expect(container.textContent).not.toContain(
-      "lime_create_video_generation_task",
-    );
+    expect(container.textContent).not.toContain("video_generate");
   });
 
   it("站点能力工具失败时应展示未保存原因", () => {

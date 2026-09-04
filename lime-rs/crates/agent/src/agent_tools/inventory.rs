@@ -1322,7 +1322,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_tool_inventory_hides_deprecated_catalog_native_tools() {
+    fn test_build_tool_inventory_exposes_current_video_task_tool() {
         let inventory = build_tool_inventory(AgentToolInventoryBuildInput {
             surface: WorkspaceToolSurface::workbench(),
             caller: "assistant".to_string(),
@@ -1333,8 +1333,8 @@ mod tests {
             mcp_server_names: Vec::new(),
             mcp_tools: Vec::new(),
             current_tool_definitions: vec![definition(
-                "lime_create_video_generation_task",
-                "legacy video task facade",
+                "video_generate",
+                "current video task tool",
                 json!({ "type": "object" }),
             )],
             resource_helpers_supported: false,
@@ -1343,31 +1343,25 @@ mod tests {
             searchable_extension_tools: Vec::new(),
         });
 
-        assert!(!inventory
+        assert!(inventory
             .default_allowed_tools
-            .contains(&"lime_create_video_generation_task".to_string()));
+            .contains(&"video_generate".to_string()));
 
         let native_tool = inventory
             .native_tools
             .iter()
-            .find(|entry| entry.name == "lime_create_video_generation_task")
-            .expect("deprecated video tool should stay inventoried for governance");
-        assert_eq!(
-            native_tool.catalog_lifecycle,
-            Some(ToolLifecycle::Deprecated)
-        );
-        assert!(!native_tool.visible_in_context);
+            .find(|entry| entry.name == "video_generate")
+            .expect("current video tool should stay inventoried");
+        assert_eq!(native_tool.catalog_lifecycle, Some(ToolLifecycle::Current));
+        assert!(native_tool.visible_in_context);
 
         let runtime_tool = inventory
             .runtime_tools
             .iter()
-            .find(|entry| entry.name == "lime_create_video_generation_task")
-            .expect("deprecated video runtime tool should stay inventoried");
-        assert_eq!(
-            runtime_tool.catalog_lifecycle,
-            Some(ToolLifecycle::Deprecated)
-        );
-        assert!(!runtime_tool.visible_in_context);
+            .find(|entry| entry.name == "video_generate")
+            .expect("current video runtime tool should stay inventoried");
+        assert_eq!(runtime_tool.catalog_lifecycle, Some(ToolLifecycle::Current));
+        assert!(runtime_tool.visible_in_context);
     }
 
     #[test]

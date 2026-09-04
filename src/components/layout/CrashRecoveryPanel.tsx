@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { getConfig } from "@/lib/api/appConfig";
 import { getLogs, getPersistedLogsTail } from "@/lib/api/logs";
+import { getDesktopHostDiagnostics } from "@/lib/api/desktopHostDiagnostics";
 import {
   buildCrashDiagnosticPayload,
   clearCrashDiagnosticHistory,
@@ -98,31 +99,38 @@ export function CrashRecoveryPanel({
       notes.push(`boundary_component_stack: ${stackPreview}`);
     }
 
-    const [config, logs, persistedLogs, generalWorkbenchDocumentState] =
-      await Promise.all([
-        getConfig().catch(() => {
-          notes.push("get_config_failed");
-          return null;
-        }),
-        getLogs().catch(() => {
-          notes.push("get_logs_failed");
-          return [];
-        }),
-        getPersistedLogsTail(250).catch(() => {
-          notes.push("get_persisted_logs_tail_failed");
-          return [];
-        }),
-        collectGeneralWorkbenchDocumentStateForDiagnostic().catch(() => {
-          notes.push("get_general_workbench_document_state_failed");
-          return null;
-        }),
-      ]);
+    const [
+      config,
+      logs,
+      persistedLogs,
+      generalWorkbenchDocumentState,
+      desktopHostDiagnostics,
+    ] = await Promise.all([
+      getConfig().catch(() => {
+        notes.push("get_config_failed");
+        return null;
+      }),
+      getLogs().catch(() => {
+        notes.push("get_logs_failed");
+        return [];
+      }),
+      getPersistedLogsTail(250).catch(() => {
+        notes.push("get_persisted_logs_tail_failed");
+        return [];
+      }),
+      collectGeneralWorkbenchDocumentStateForDiagnostic().catch(() => {
+        notes.push("get_general_workbench_document_state_failed");
+        return null;
+      }),
+      getDesktopHostDiagnostics().catch(() => null),
+    ]);
 
     return buildCrashDiagnosticPayload({
       crashConfig: normalizeCrashReportingConfig(config?.crash_reporting),
       logs,
       persistedLogTail: persistedLogs,
       generalWorkbenchDocumentState,
+      desktopHostDiagnostics,
       appVersion: import.meta.env.VITE_APP_VERSION,
       platform: navigator.platform,
       userAgent: navigator.userAgent,

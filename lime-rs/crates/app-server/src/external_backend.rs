@@ -2,10 +2,12 @@ use crate::ActionRespondRequest;
 use crate::CancelExecutionRequest;
 use crate::ExecutionBackend;
 use crate::ExecutionRequest;
+use crate::ProviderTurnHistory;
 use crate::RuntimeCoreError;
 use crate::RuntimeEvent;
 use crate::RuntimeEventSink;
 use crate::RuntimeHostContext;
+use agent_runtime::session_loop::RuntimeSessionInputHandle;
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::json;
@@ -19,6 +21,7 @@ use tokio::process::Child;
 use tokio::process::Command;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
+use tokio_util::sync::CancellationToken;
 
 pub const DEFAULT_EXTERNAL_BACKEND_TIMEOUT_MS: u64 = 30_000;
 
@@ -65,7 +68,18 @@ impl ExternalBackend {
         request: serde_json::Value,
         sink: &mut dyn RuntimeEventSink,
     ) -> Result<(), RuntimeCoreError> {
-        invoke_external_backend(&self.config, kind, request, sink).await
+        self.invoke_with_cancellation(kind, request, sink, None)
+            .await
+    }
+
+    async fn invoke_with_cancellation(
+        &self,
+        kind: &str,
+        request: serde_json::Value,
+        sink: &mut dyn RuntimeEventSink,
+        cancellation_token: Option<CancellationToken>,
+    ) -> Result<(), RuntimeCoreError> {
+        invoke_external_backend(&self.config, kind, request, sink, cancellation_token).await
     }
 }
 
@@ -78,6 +92,23 @@ impl ExecutionBackend for ExternalBackend {
     ) -> Result<(), RuntimeCoreError> {
         self.invoke("turnStart", start_turn_request_value(request), sink)
             .await
+    }
+
+    async fn start_turn_with_provider_history_and_session_input(
+        &self,
+        request: ExecutionRequest,
+        _provider_history: ProviderTurnHistory,
+        _pending_input: Option<RuntimeSessionInputHandle>,
+        cancellation_token: Option<CancellationToken>,
+        sink: &mut dyn RuntimeEventSink,
+    ) -> Result<(), RuntimeCoreError> {
+        self.invoke_with_cancellation(
+            "turnStart",
+            start_turn_request_value(request),
+            sink,
+            cancellation_token,
+        )
+        .await
     }
 
     async fn cancel_turn(
@@ -120,6 +151,7 @@ async fn invoke_external_backend(
     kind: &str,
     request: serde_json::Value,
     sink: &mut dyn RuntimeEventSink,
+    cancellation_token: Option<CancellationToken>,
 ) -> Result<(), RuntimeCoreError> {
     if config.command.trim().is_empty() {
         return Err(RuntimeCoreError::Backend(
@@ -177,25 +209,55 @@ async fn invoke_external_backend(
 
     let mut line_count = 0usize;
     loop {
-        let next_line = match timeout(
-            Duration::from_millis(config.timeout_ms),
-            stdout_lines.next_line(),
-        )
-        .await
-        {
-            Ok(result) => result.map_err(|error| {
-                RuntimeCoreError::Backend(format!(
-                    "failed to read external app-server backend response: {error}"
-                ))
-            })?,
-            Err(_) => {
-                return Err(cleanup_external_backend_after_timeout(
-                    &mut child,
-                    stderr_task,
-                    config.timeout_ms,
-                    "reading stdout",
-                )
-                .await);
+        let next_line = if let Some(cancellation_token) = cancellation_token.as_ref() {
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {
+                    let _ = child.start_kill();
+                    let _ = child.wait().await;
+                    let _ = stderr_task.await;
+                    return Ok(());
+                }
+                result = timeout(
+                    Duration::from_millis(config.timeout_ms),
+                    stdout_lines.next_line(),
+                ) => match result {
+                    Ok(result) => result.map_err(|error| {
+                        RuntimeCoreError::Backend(format!(
+                            "failed to read external app-server backend response: {error}"
+                        ))
+                    })?,
+                    Err(_) => {
+                        return Err(cleanup_external_backend_after_timeout(
+                            &mut child,
+                            stderr_task,
+                            config.timeout_ms,
+                            "reading stdout",
+                        )
+                        .await);
+                    }
+                },
+            }
+        } else {
+            match timeout(
+                Duration::from_millis(config.timeout_ms),
+                stdout_lines.next_line(),
+            )
+            .await
+            {
+                Ok(result) => result.map_err(|error| {
+                    RuntimeCoreError::Backend(format!(
+                        "failed to read external app-server backend response: {error}"
+                    ))
+                })?,
+                Err(_) => {
+                    return Err(cleanup_external_backend_after_timeout(
+                        &mut child,
+                        stderr_task,
+                        config.timeout_ms,
+                        "reading stdout",
+                    )
+                    .await);
+                }
             }
         };
         let Some(line) = next_line else {
@@ -208,20 +270,47 @@ async fn invoke_external_backend(
         emit_external_backend_line(&line, sink)?;
     }
 
-    let status = match timeout(Duration::from_millis(config.timeout_ms), child.wait()).await {
-        Ok(result) => result.map_err(|error| {
-            RuntimeCoreError::Backend(format!(
-                "failed to wait for external app-server backend: {error}"
-            ))
-        })?,
-        Err(_) => {
-            return Err(cleanup_external_backend_after_timeout(
-                &mut child,
-                stderr_task,
-                config.timeout_ms,
-                "waiting for exit",
-            )
-            .await);
+    let status = if let Some(cancellation_token) = cancellation_token.as_ref() {
+        tokio::select! {
+            _ = cancellation_token.cancelled() => {
+                let _ = child.start_kill();
+                let _ = child.wait().await;
+                let _ = stderr_task.await;
+                return Ok(());
+            }
+            result = timeout(Duration::from_millis(config.timeout_ms), child.wait()) => match result {
+                Ok(result) => result.map_err(|error| {
+                    RuntimeCoreError::Backend(format!(
+                        "failed to wait for external app-server backend: {error}"
+                    ))
+                })?,
+                Err(_) => {
+                    return Err(cleanup_external_backend_after_timeout(
+                        &mut child,
+                        stderr_task,
+                        config.timeout_ms,
+                        "waiting for exit",
+                    )
+                    .await);
+                }
+            },
+        }
+    } else {
+        match timeout(Duration::from_millis(config.timeout_ms), child.wait()).await {
+            Ok(result) => result.map_err(|error| {
+                RuntimeCoreError::Backend(format!(
+                    "failed to wait for external app-server backend: {error}"
+                ))
+            })?,
+            Err(_) => {
+                return Err(cleanup_external_backend_after_timeout(
+                    &mut child,
+                    stderr_task,
+                    config.timeout_ms,
+                    "waiting for exit",
+                )
+                .await);
+            }
         }
     };
 
@@ -593,6 +682,44 @@ mod tests {
         assert!(error.contains("timed out after"), "{error}");
     }
 
+    #[tokio::test]
+    async fn external_backend_cancellation_kills_hanging_process() {
+        let Some(node) = node_binary() else {
+            return;
+        };
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let script_path = temp_dir.path().join("external-backend-cancel.mjs");
+        fs::write(
+            &script_path,
+            r#"
+              setInterval(() => {}, 1_000);
+              await new Promise(() => {});
+            "#,
+        )
+        .expect("write backend script");
+
+        let cancellation = CancellationToken::new();
+        let cancel_after_delay = cancellation.clone();
+        let cancel_task = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            cancel_after_delay.cancel();
+        });
+        let mut sink = RecordingRuntimeEventSink;
+        let result = invoke_external_backend(
+            &ExternalBackendConfig::new(node)
+                .with_args([script_path.to_string_lossy().to_string()])
+                .with_timeout_ms(5_000),
+            "turnStart",
+            json!({"request": "cancel"}),
+            &mut sink,
+            Some(cancellation),
+        )
+        .await;
+
+        cancel_task.await.expect("cancel task");
+        assert!(result.is_ok(), "canceled backend should complete cleanly");
+    }
+
     #[test]
     fn external_backend_config_keeps_command_and_args_separate() {
         let config = ExternalBackendConfig::new("/bin/backend")
@@ -602,6 +729,14 @@ mod tests {
         assert_eq!(config.command, "/bin/backend");
         assert_eq!(config.args, vec!["--mode".to_string(), "agent".to_string()]);
         assert_eq!(config.timeout_ms, 42);
+    }
+
+    struct RecordingRuntimeEventSink;
+
+    impl RuntimeEventSink for RecordingRuntimeEventSink {
+        fn emit(&mut self, _event: RuntimeEvent) -> Result<(), RuntimeCoreError> {
+            Ok(())
+        }
     }
 
     fn node_binary() -> Option<String> {

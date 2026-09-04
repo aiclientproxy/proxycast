@@ -259,9 +259,9 @@ describe("toolDisplayInfo", () => {
       resolveUserFacingToolDisplayLabel("mcp__playwright__browser_click"),
     ).toBe("页面点击");
     expect(resolveUserFacingToolDisplayLabel("ViewImageTool")).toBe("查看图片");
-    expect(
-      resolveUserFacingToolDisplayLabel("lime_create_video_generation_task"),
-    ).toBe("生成视频");
+    expect(resolveUserFacingToolDisplayLabel("video_generate")).toBe(
+      "生成视频",
+    );
     expect(
       resolveUserFacingToolDisplayLabel("lime_create_audio_generation_task"),
     ).toBe("生成配音");
@@ -608,7 +608,7 @@ describe("toolDisplayInfo", () => {
       buildToolGroupHeadline([
         {
           id: "tool-video-1",
-          name: "lime_create_video_generation_task",
+          name: "video_generate",
           arguments: JSON.stringify({ prompt: "产品演示短片" }),
           status: "completed",
           result: { success: true, output: "{}" },

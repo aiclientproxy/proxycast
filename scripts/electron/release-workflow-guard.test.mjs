@@ -118,6 +118,73 @@ describe("Electron release workflow guard", () => {
     );
   });
 
+  it("rejects release workflow without checkout-bound candidate identity", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        /      - name: Capture release candidate identity[\s\S]*?          echo "LIME_GATE_RUN_ID=\$CANDIDATE_RUN_ID" >> "\$GITHUB_ENV"\n\n/,
+        "",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /release candidate identity must include git rev-parse 'HEAD\^\{commit\}'/,
+    );
+  });
+
+  it("rejects release creation before source identity validation", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        /      - name: Validate release source identity[\s\S]*?            exit 1\n          fi\n\n/,
+        "",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /release source identity must include git rev-parse 'HEAD\^\{commit\}'/,
+    );
+  });
+
+  it("rejects publishing a newly prepared release before platform gates", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace("            --draft \\\n", ""),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /release preparation must include --draft/,
+    );
+  });
+
+  it("rejects release workflow that permits source/provenance SHA drift", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        '          if [ "$CANDIDATE_SHA" != "$WORKFLOW_SHA" ]; then\n',
+        "",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /release source identity must include CANDIDATE_SHA" != "\$WORKFLOW_SHA/,
+    );
+  });
+
+  it("rejects mutable checkout refs after candidate resolution", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        "          ref: ${{ github.sha }}\n",
+        "          ref: ${{ github.event.inputs.source_ref || github.ref }}\n",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /release job build must checkout immutable github\.sha/,
+    );
+  });
+
   it("rejects release workflow without installed Windows CodeMode Gate B", () => {
     const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
     const workflowPath = tempWorkflowPath(
@@ -143,6 +210,31 @@ describe("Electron release workflow guard", () => {
 
     expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
       /macOS native host Gate B condition must include matrix\.host_platform == 'darwin'/,
+    );
+  });
+
+  it("rejects macOS release Gate B without Developer ID trust verification", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace("            --release-trust \\\n", ""),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /macOS native host Gate B must include --release-trust/,
+    );
+  });
+
+  it("rejects release workflow without SLSA provenance attestation", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        /      - name: Attest Electron release provenance[\s\S]*?          subject-path: release-github-assets\/\*\n\n/,
+        "",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /Electron release provenance must use the pinned attest-build-provenance/,
     );
   });
 

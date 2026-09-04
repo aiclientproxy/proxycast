@@ -104,7 +104,7 @@
 | 动态 MCP / browser 工具卡没有 snapshot 回归 | MCP 工具会随环境变化，固定表无法证明真实可用 | 每次评测保存 `agentSession/toolInventory/read` snapshot；server 级 P0 见 `mcp.md` |
 | Progress 与 cancel 事件弱 | 长任务、browser、content generation 体验会像“卡住” | 对齐 AG-UI / AI SDK tool states 增加 progress/cancel rendering |
 | 大输出策略不统一 | MCP / WebFetch / command 可能刷屏或吞结果 | 统一 offload/ref/artifact/detail UI 与 token warning |
-| compat / deprecated 混在 current 表现里 | 容易误把历史能力当主线能力 | `lime_run_service_skill` 和 `lime_create_video_generation_task` 只按兼容/退场评测 |
+| compat 混在 current 表现里 | 容易误把历史能力当主线能力 | `lime_run_service_skill` 只按兼容评测；视频只评测 current `video_generate` typed tool |
 
 ## 8. 结论
 

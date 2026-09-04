@@ -22,8 +22,8 @@ sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$NEW_VERSION\"/" "$PROJECT_R
 echo "✓ package.json"
 
 # 更新 CLI npm package
-sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$NEW_VERSION\"/" "$PROJECT_ROOT/packages/lime-cli-npm/package.json"
-echo "✓ packages/lime-cli-npm/package.json"
+sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$NEW_VERSION\"/" "$PROJECT_ROOT/packages/cli/package.json"
+echo "✓ packages/cli/package.json"
 
 # 更新 Cargo.toml
 sed -i '' "s/^version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" "$PROJECT_ROOT/lime-rs/Cargo.toml"

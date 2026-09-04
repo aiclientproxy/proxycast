@@ -538,10 +538,11 @@ describe("useAgentChat 偏好持久化 - history normalization", () => {
             {
               type: "tool_request",
               id: "tool-image-task-preview-1",
-              tool_name: "bash",
+              tool_name: "lime_create_image_generation_task",
               arguments: {
-                command:
-                  'lime media image generate --prompt "珠江夜景封面" --size 1024x1024 --count 1',
+                prompt: "珠江夜景封面",
+                size: "1024x1024",
+                count: 1,
               },
             },
           ],

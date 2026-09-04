@@ -215,6 +215,67 @@ export async function stopInstalledApp(executable) {
   return { executable, exitCode: result.exitCode };
 }
 
+export async function uninstallInstalledSquirrel({
+  updateExecutable,
+  appDirectory,
+  executable,
+  shortcutPaths = [],
+  timeoutMs = 60_000,
+  runProcessImpl = runProcess,
+  existsImpl = existsSync,
+  waitForAbsentImpl = waitForAbsent,
+} = {}) {
+  const requiredPaths = [updateExecutable, appDirectory, executable].filter(
+    (value) => typeof value === "string" && value.length > 0,
+  );
+  if (requiredPaths.length !== 3) {
+    throw new Error(
+      "Squirrel uninstall requires updateExecutable, appDirectory, and executable",
+    );
+  }
+  const result = await runProcessImpl(updateExecutable, ["--uninstall"], {
+    env: process.env,
+    timeoutMs: 30_000,
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Squirrel uninstall exited with ${result.exitCode} at ${updateExecutable}`,
+    );
+  }
+  await waitForAbsentImpl(
+    [...requiredPaths, ...shortcutPaths].filter(
+      (value) => typeof value === "string" && value.length > 0,
+    ),
+    { existsImpl, timeoutMs },
+  );
+  return {
+    updateExecutable,
+    appDirectory,
+    executable,
+    shortcutPaths: [...shortcutPaths],
+    exitCode: result.exitCode,
+    updateExecutableAbsent: !existsImpl(updateExecutable),
+    appDirectoryAbsent: !existsImpl(appDirectory),
+    executableAbsent: !existsImpl(executable),
+    shortcutsAbsent: shortcutPaths.every((shortcut) => !existsImpl(shortcut)),
+  };
+}
+
+async function waitForAbsent(
+  paths,
+  { existsImpl = existsSync, timeoutMs = 60_000, intervalMs = 250 } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (paths.every((filePath) => !existsImpl(filePath))) return;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  const remaining = paths.filter((filePath) => existsImpl(filePath));
+  throw new Error(
+    `Squirrel uninstall did not remove paths: ${remaining.join(", ")}`,
+  );
+}
+
 export function buildWaitForWindowsProcessExitScript() {
   const matchingProcesses =
     "@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and [String]::Equals([System.IO.Path]::GetFullPath($_.ExecutablePath), $target, [StringComparison]::OrdinalIgnoreCase) })";

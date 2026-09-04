@@ -512,10 +512,11 @@ describe("agentChatHistory compaction and previews", () => {
             {
               type: "tool_request",
               id: "tool-image-history-1",
-              tool_name: "bash",
+              tool_name: "lime_create_image_generation_task",
               arguments: {
-                command:
-                  'lime media image generate --prompt "广州塔夜景海报" --size 1536x1024 --count 1',
+                prompt: "广州塔夜景海报",
+                size: "1536x1024",
+                count: 1,
               },
             } as never,
           ],
@@ -590,10 +591,12 @@ describe("agentChatHistory compaction and previews", () => {
             {
               type: "tool_request",
               id: "tool-video-history-1",
-              tool_name: "bash",
+              tool_name: "video_generate",
               arguments: {
-                command:
-                  'lime media video generate --prompt "广州塔城市短片" --duration 15 --aspect-ratio 16:9 --resolution 720p',
+                prompt: "广州塔城市短片",
+                duration: 15,
+                aspect_ratio: "16:9",
+                resolution: "720p",
               },
             } as never,
           ],

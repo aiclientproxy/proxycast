@@ -1,39 +1,38 @@
-## Lime v1.139.0
+## Lime v1.140.0
 
 ### 新功能
 
-- 新增仓库级 `FEATURE-MAP.md`，按用户能力、稳定入口、current owner 与协议边界导航 Agent、Workspace、Provider、MCP、Skills、Plugins、Memory、Artifact、Scheduled Tasks 和 Desktop Host。
-- 扩展 macOS native host 与 Windows packaged evidence，覆盖窗口编排、权限、资源身份、Squirrel 安装态和真实 Electron/App Server Gate B 证据。
-- 补齐 model-provider reasoning effort 与 provider route 合同，让模型能力、默认选择、切换、readiness 和推理档位继续收敛到统一控制面。
+- 新增 CLI/TUI 产品面：CLI 通过 stdio App Server 进入统一 RuntimeCore，TUI 提供真实 PTY、alternate screen、键盘输入和终端恢复能力。
+- CLI `exec` 新增单行 JSONL envelope 与 shell completion，便于脚本集成并保持与统一命令树一致。
+- 新增视频任务工具与媒体产物投影，统一任务生命周期、参数校验、执行结果和聊天预览。
+- 新增 Desktop Host 诊断与外部 backend 能力，补齐 App Server client 会话、传输和跨进程状态观测。
 
 ### 修复
 
-- 修复资源管理器生产路径动态加载测试窗口夹具的问题，关闭行为直接使用当前窗口语义。
-- 移除服务端对 `tauri://localhost` 与 `tauri.localhost` 的 CORS 放行，只保留当前本地开发入口。
-- 修复 Curated Task 结果参考、Memory continuation、模型配置和 provider route 中的事实源漂移。
-- 修复 Windows `980x680` 等低高度窗口中首页输入框被底部裁切的问题，同时保持常规高度窗口的原有布局。
-- 修复 GitHub Pages 文档部署与 lint guard，并恢复 Rust commands 清理守卫，防止已删除桌面命令回流。
+- 修复 Electron Desktop Host、App Server 和 Runtime 状态诊断中的边界与清理问题，避免会话或工具状态泄漏。
+- 修复 Agent 聊天中的任务协议噪声、媒体预览、工具摘要、历史压缩和运行时路由断言漂移。
+- 修复崩溃恢复面板、短窗口首页输入区及设置页运行时入口的用户可见行为。
 
 ### 优化与重构
 
-- SceneApp 与 `src-tauri` 全面退役：应用目录统一归 Plugin，业务调用统一进入 Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore / Agent Runtime，结果参考统一归 Curated Task 与 Memory。
-- 删除 Tauri capability/schema、SceneApp 专属组件、Hook、网关、文案和正向测试；旧名称只保留在负向回流守卫与历史 evidence。
-- 收敛 Rust current crate 的宿主边界表述，移除旧进程内桌面命令、Tauri 状态包装和历史主 crate 叙事。
-
-### 文档
-
-- 以 Lime 自身产品和架构重写 Feature Map，不复制参考项目的能力结构。
-- 清理被 current owner 替代的历史发布计划、Plugin v1/v2、旧 refactor、iteration notes 和阶段性研究材料，并同步更新导航与架构文档。
-- 本次共删除 98 份 Markdown、1 份 HTML、4 份 JSON 和 16 份旧前端源码/测试；无消费者的旧 A2UI/Tauri 设计一并清退，仍有 current 价值的文档统一改写到 Electron Desktop Host 与 App Server 边界。Git history、Release Notes 与不可变 evidence 承接历史追溯。
+- 将 CLI 从旧 `lime-cli-npm` 入口迁移到 `packages/cli`，Rust CLI/TUI crate 统一复用 App Server protocol、client 和 canonical Thread/Turn/Item 投影。
+- external editor 在 Windows 上支持 PATH 中的 `.cmd/.bat` shim，并在启动编辑器前关闭临时文件句柄。
+- 清理旧 CLI skill、工具文档和已退役入口，补充 CLI/TUI、Desktop Host、release candidate 与治理边界守卫。
+- 强化 macOS native host、Windows Squirrel、打包资源、发布身份和 Gate B 证据脚本，发布流程继续以 Electron Forge 为唯一打包事实源。
 
 ### 测试与质量
 
-- 扩展 App Server contracts、Desktop Host、macOS native host、Windows packaged evidence、model-provider、Curated Task、Memory 和治理回归。
-- 发布门禁覆盖版本一致性、TypeScript、i18n、协议 contracts、Rust 相关测试、文档边界、治理扫描、真实 Electron GUI smoke 与完整前端续跑。
+- 新增 CLI/TUI 真实 stdio/PTY Gate B fixture、视频工具测试、Desktop Host 诊断测试和边界治理回归。
+- 扩展 App Server client、命令合同、Electron release workflow、Windows packaged evidence 及 GUI 主路径回归覆盖。
+- 统一五语言文案边界、脚本治理、文档边界和版本一致性检查。
+
+### 文档
+
+- 更新架构、命令、治理、质量工作流、Feature Map、工具目录和 CLI/TUI 执行计划，明确 Product Surface 到 App Server JSON-RPC 的唯一业务主链。
 
 ### 其他
 
-- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.139.0`。
-- 不新增 compat 或 deprecated owner；SceneApp、`src-tauri`、Tauri capability 与测试窗口夹具均为 `dead / deleted / forbidden-to-restore`。
+- 将根应用、CLI npm 包、Rust workspace 与 Cargo.lock 版本统一提升到 `1.140.0`。
+- 本次发布候选排除 `undefined/data/*` 本地 SQLite/WAL 运行产物；不新增 compat 或 deprecated owner。
 
-**完整变更**: `v1.138.0` -> `v1.139.0`
+**完整变更**: `v1.139.0` -> `v1.140.0`

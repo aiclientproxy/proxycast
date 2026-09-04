@@ -1,6 +1,6 @@
 # Codex Desktop 跨平台底层对比与对齐计划
 
-> status: `active / P1-windows-packaged-and-macos-gate-b`
+> status: `active / P3-platform-evidence`
 > owner: Desktop Host + App Server + tool-runtime 各 current owner
 > started: 2026-09-01
 > upstream source: `/Users/coso/Documents/dev/rust/codex`
@@ -258,6 +258,17 @@ owner：Desktop Host macOS native owner，Windows 等价能力另行裁决；App
 
 退出条件：每个能力有平台 API、权限、失败语义、签名资源、Gate B 和隐私/数据保留说明；未满足时保持 fail closed 或 excluded。
 
+### P3：跨平台发布证据与签名闭环
+
+owner：Forge/CI + Desktop Host + `tool-runtime` 各平台 current owner。
+
+- 在 `windows-2022` runner 上对同一 Squirrel 候选完成安装、升级、卸载、sidecar/runner/native host、Code Mode、ConPTY/Job Object 和 Electron Gate B，并上传资源 digest 与候选 identity。
+- 在 macOS release runner 上验证 Developer ID、notarization/stapling、嵌套 helper 签名，以及 Accessibility/Input Monitoring/Screen Recording 授权撤销后 bookmark/readiness 恢复。
+- 所有证据绑定平台、架构、版本、候选 SHA 和 `candidateRunId`；缺失、路径漂移、digest 不匹配、未执行或权限拒绝均 fail closed，并继续标记 `OPEN_REF`。
+- 不把本机 macOS packaged smoke、源码安全矩阵或 fixture 结果升级为另一平台的发布证据，也不因 Codex Desktop 私有能力缺乏可观察证据而猜测实现。
+
+退出条件：Windows 与 macOS release runner 各有同一候选的真实 packaged Gate B；签名/资源/安装生命周期和权限撤销恢复均有结构化证据；未纳入产品范围的 P2 能力明确 `product-scope-excluded`。
+
 ## 9. P0 首个纵向切片（2026-09-01）
 
 已实现：
@@ -357,7 +368,7 @@ npm run smoke:agent-runtime-current-fixture
 
 ## 12. 下一刀与完成定义
 
-当前最直接推进主线的一刀是 **P1 Windows packaged/Squirrel 与 macOS 权限/bookmark 撤销恢复 Gate B**：在同一候选产物中证明 sidecar/runner 安装生命周期，并在真实 macOS 用户授权撤销后验证 bookmark/readiness 恢复语义；Windows watcher 需要在同一候选上补显示器热插拔事件证据。Chronicle/PIP/Computer Use 仍需独立产品裁决和 owner，不得用本切片的窗口接口冒充完成。
+当前最直接推进主线的一刀是 **P3 跨平台发布证据**：在 `windows-2022` runner 上完成同一 Squirrel 候选的安装后 sidecar/runner/native host/GUI Gate B，并在 macOS release runner 上补 Developer ID/notarization 与权限撤销后的 bookmark/readiness 恢复证据。本机 macOS packaged/strict Gate B 和 Desktop Host 恢复诊断已经完成，但不能替代上述发布 runner 证据。Chronicle/PIP/Computer Use 仍需独立产品裁决和 owner，不得用本切片的窗口接口冒充完成。
 
 本计划只有在以下条件全部满足后才能标记完成：
 
@@ -476,3 +487,46 @@ npm run smoke:agent-runtime-current-fixture
   `git diff --check` 通过；重新使用同一 arm64 packaged `Lime.app` 的 observe/strict 两档 Gate B 均为 `passed`，
   两档都命中 `app_server_handle_json_lines`、`macos_native_host_invoke`、workspace identity、设置页终态和零
   console/page/invoke error。Electron helper 的业务 owner 未产生第二套后端或 mock fallback。
+
+## 24. 2026-09-03 Desktop Host 恢复与诊断脱敏收口
+
+- `ElectronAppServerHost` 继续沿用现有 App Server JSON-RPC 主链：系统 `resume` 只重建 stdio connection，使用 connection generation 拒绝旧连接 notification/server-request 回写；并发恢复复用单个 Promise，sidecar 已在自动退避时等待既有 waiter，不重复拉起进程。
+- `packages/app-server-client` 的 sidecar owner 在运行期只保留 20 行 stderr tail，Host 诊断和生命周期错误路径不再因原始 stderr 无限增长而积累内存。
+- 新增的 `app_server_host_diagnostics` 只读 IPC 仍是 Desktop Host 旁路诊断，返回阶段、连接代际、sidecar 运行状态、退出码/signal 和有界失败上下文；Renderer gateway 先做 schema fail-closed，Host 侧对 credential、常见绝对路径、单行长度和 stderr 行数统一脱敏/限幅。
+- 本轮修正 Host 日志回调：`onExit`/`onRestartFailed` 不再把完整生命周期事件对象（可能含原始 stderr）写入主进程日志，只记录脱敏 message、退出信息和 stderr tail。该约束通过 `electron/appServerHost.test.ts` 的日志负向断言固定。
+- 采用判断未改变：Goose 的 `startupDiagnostics` journal 和 ACP recovery 只提供局部工程取舍参考；没有引入 ACP、`Session/Message`、Recipe runtime、第二 scheduler、第二 catalog、旧 runtime 或生产 mock fallback。
+- 本轮验证：`npx vitest run electron/appServerHost.test.ts`（31/31）、诊断/CrashRecovery/IPC 定向回归（69/69）、`npm run verify:local`（118/118 Vitest 批、contracts、治理、GUI smoke 均通过）。先前 macOS packaged/strict native-host Electron Gate B 证据仍有效；Windows `windows-2022` packaged/Squirrel、macOS release runner、权限撤销恢复和 Codex Desktop 实时 accessibility/screenshot 继续标记 `OPEN_REF`。
+
+## 25. 2026-09-03 release candidate identity 与 provenance 收口
+
+- 本轮对比采用 Codex release 的实际 commit peel，以及 Goose release 的 SLSA provenance；二者仅作为发布供应链机制参考。Lime 的产品语义、App Server、Thread/Turn/Item、权限和更新 owner 均未改变，也未引入 Goose ACP、Session/Message 或 Recipe runtime。
+- release prepare job 要求输入 ref 与 workflow commit 一致，后续 build/publish/updater/CLI job 固定 checkout 不可变 `github.sha`；matrix 再生成 `LIME_CANDIDATE_SHA` 和按 workflow run/platform/arch 唯一的 `LIME_GATE_RUN_ID`。完整 commit SHA、run ID、version、platform、arch 成为 packaged evidence 的强制 identity。独立 Windows test workflow 允许显式选择测试 ref，但证据固定绑定其实际 checkout commit。
+- Windows Squirrel summary、installed Code Mode Gate B 和 native host Gate B 都记录同一 SHA/run。`windows-packaged-evidence.mjs` 同时核对安装版本目录、`Lime.exe`、resources root、desktop resource manifest version 和五个必需资源 SHA-256，不再只靠 run ID 推定是同一候选。
+- macOS native host Gate B 记录同样的候选 identity，并要求 app version 与 resource manifest version 一致。release 模式额外校验 app/helper 的严格 codesign、Developer ID、相同 TeamIdentifier、`spctl --assess` 和 `xcrun stapler validate`；本地 ad-hoc smoke 不传 `--release-trust`，不能冒充 release 证据。
+- GitHub Release 上传前对最终 `release-github-assets/*` 运行固定 digest 的 SLSA build provenance action。release workflow guard 约束 OIDC/attestation 权限、候选 identity、macOS release trust、Windows summary 聚合和 provenance subject，缺项即失败。
+- prepare job 在创建 release 前先校验实际 checkout 与 workflow commit，一致后仅创建 draft；只有平台 build、packaged evidence、provenance 和资产上传全部成功，publish job 才解除 draft，避免失败候选提前成为公开 release。
+- macOS release trust、release candidate workflow guard 和 release matrix guard 已拆入 `scripts/electron/lib/` 的单一职责 owner；主 macOS Gate 降至 778 行，release guard 降至 955 行。
+- 定向回归 `83/83`、`npm run test:contracts`（App Server client 299 checks，command/scripts/release/docs 治理通过）、`npm run typecheck:electron`、`npm run verify:app-version` 和 `git diff --check` 已通过；这些只证明合同和 workflow wiring。真实 Windows `windows-2022`、macOS Developer ID/notarized/stapled runner、TCC 权限撤销恢复和 Codex Desktop 实时 accessibility/screenshot 仍为 `OPEN_REF`，必须使用后续真实 release run 证据关闭。
+
+## 26. 2026-09-03 macOS bookmark revoke/cold-restart Gate B
+
+- `macos-native-host-electron-gate-b.mjs` 不再只把 raw bookmark 直接交给 helper；它通过 production `SystemUtilityHost` stable ID owner，在同一隔离 `ELECTRON_E2E_USER_DATA_DIR` 上启动三次真实 Electron，验证 persist、cold resolve/start、active lease revoke、revoke 后冷启动拒绝以及同 ID regrant/start/stop。
+- 本地 packaged `1.138.0` 基线证据 `.lime/qc/gui-evidence/macos-native-host-gate-b-bookmark-recovery/summary.json` 为 `passed`：`bookmark_unavailable` 拒绝和 regrant 均成立，preload/IPC、`app_server_handle_json_lines`、workspace identity 和 GUI screenshot 同时成立，console/page/unexpected invoke error 为 0。该 run 绑定旧本地候选基线 `8413925fec62796e4fcdeecb75b5c380d6bf4495`，不冒充当前 release candidate。
+- 真实运行先发现 `macos-release-trust` 拆分后 `verifyCodeSignature` 没有导出，导致 Gate 在资源校验阶段直接失败；现已把严格签名校验恢复为共享导出并补定向测试。另确认 contextBridge 会保留领域错误 message 但不保证 Error 附加 code，Gate 对精确 `bookmark_unavailable` code/message 归一化，仍然 fail closed。
+- 本轮没有调用 `tccutil reset` 或修改用户 TCC。应用管理的 bookmark revoke/regrant 已有 Gate B；Accessibility/Input Monitoring/Screen Recording 的系统级撤销恢复、Developer ID/notarized/stapled release runner 和 Windows `windows-2022` 仍为 `OPEN_REF`。
+
+## 27. 2026-09-03 本地门禁收口与 P3 保留项
+
+- `npm run verify:local` 已完整通过：119/119 Vitest、`test:contracts`、治理检查、Rust workspace lib/tests 与 doctest、真实 Electron GUI smoke；`npm run typecheck:electron`、`npm run verify:app-version`、`npm run governance:scripts` 和 `git diff --check` 同样通过。
+- `lime-rs/crates/agent/Cargo.toml`、`lime-rs/crates/mcp/Cargo.toml` 仅补充 `[lib] doctest = false`，修复 workspace doctest 的内部模块编译误报，不改变 App Server、RuntimeCore、Thread/Turn/Item 或 Desktop Host 边界。
+- 本机 macOS packaged/strict Gate B 和 bookmark stable-ID cold-restart evidence 证明 Lime current Electron/preload/IPC/App Server/native-host 闭环，但证据等级仍为 `lime-local`/`gate-b`，不能替代 release runner 或另一平台。
+- 当前阶段明确保持 `active / P3-platform-evidence`。下一刀必须在同一候选 identity 上取得 Windows `windows-2022` packaged/Squirrel 安装生命周期与 Gate B、macOS Developer ID/notarization/stapling 与权限撤销恢复证据，并核对 SLSA provenance；缺失或未执行继续 fail closed 为 `OPEN_REF`。
+- Chronicle、PIP、Computer Use 等 Codex 私有能力仍需独立产品范围与系统证据，不由本地窗口/Accessibility helper smoke 推断完成。
+
+## 28. 2026-09-03 Windows 卸载合同与跨平台边界复核
+
+- `windows-squirrel-rc-smoke` 已把卸载纳入同一候选生命周期：使用安装目录自带 `Update.exe --uninstall`，并等待更新进程、版本目录、主 exe 和快捷方式全部消失；summary 缺少卸载断言时直接失败。
+- `windows-packaged-evidence` 现在将卸载字段作为 packaged evidence 的必需项，与 candidate SHA/run、版本、资源 manifest、安装 exe 一起校验；该校验只提升证据完整性，不把本机 fixture 当成 Windows runner 事实。
+- Windows 定向回归为 `24/24`；最新 `npm run verify:local` 为 `119/119 Vitest`、Rust workspace、contracts、治理和真实 Electron GUI smoke 全部通过。`cargo fmt --manifest-path lime-rs/Cargo.toml --all -- --check` 与 `git diff --check` 通过。
+- Codex Desktop 对齐裁决保持不变：Squirrel 仍是 Windows 当前 updater owner，MSIX 不作为第二 current owner；Goose 只参考生命周期断言与 cleanup 机制，不引入 Goose ACP、Recipe runtime、Session/Message 或第二 scheduler/catalog/backend。
+- 外部平台证据仍开放：必须在 `windows-2022` 运行真实安装/升级/卸载、sidecar/runner/native host/Code Mode、ConPTY/Job Object/WFP 和 Electron Gate B；macOS release trust、TCC 撤销恢复与 Codex Desktop 实时对照同样不能由本地 smoke 代替。

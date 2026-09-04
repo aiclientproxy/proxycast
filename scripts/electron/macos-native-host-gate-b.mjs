@@ -15,6 +15,15 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runMacOSNativeHostElectronGateB } from "./lib/macos-native-host-electron-gate-b.mjs";
+import {
+  normalizeCandidateRunId,
+  normalizeCandidateSha,
+} from "./lib/release-candidate-identity.mjs";
+import {
+  readMacOSAppIdentity,
+  verifyCodeSignature,
+  verifyMacOSReleaseTrust,
+} from "./lib/macos-release-trust.mjs";
 
 const LOG_PREFIX = "[smoke:macos-native-host-gate-b]";
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -31,6 +40,9 @@ export function parseArgs(argv) {
     intervalMs: 250,
     arch: process.arch === "arm64" ? "arm64" : "x64",
     strictPermissions: false,
+    releaseTrust: false,
+    candidateSha: process.env.LIME_CANDIDATE_SHA || null,
+    runId: process.env.LIME_GATE_RUN_ID || null,
     help: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -63,6 +75,18 @@ export function parseArgs(argv) {
       options.strictPermissions = true;
       continue;
     }
+    if (arg === "--release-trust") {
+      options.releaseTrust = true;
+      continue;
+    }
+    if (arg === "--candidate-sha" && argv[index + 1]) {
+      options.candidateSha = argv[++index];
+      continue;
+    }
+    if (arg === "--run-id" && argv[index + 1]) {
+      options.runId = argv[++index];
+      continue;
+    }
     throw new Error(`Unknown argument: ${arg}`);
   }
   if (options.help) return options;
@@ -86,6 +110,8 @@ export function parseArgs(argv) {
   if (!Number.isFinite(options.intervalMs) || options.intervalMs < 100) {
     throw new Error("--interval-ms must be >= 100");
   }
+  options.candidateSha = normalizeCandidateSha(options.candidateSha);
+  options.runId = normalizeCandidateRunId(options.runId);
   return options;
 }
 
@@ -107,58 +133,6 @@ export function resolveInstalledResourcesRoot(electronExecutable) {
 
 function sha256(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
-}
-
-function verifyCodeSignature(bundlePath) {
-  try {
-    execFileSync("codesign", ["--verify", "--strict", bundlePath], {
-      stdio: "ignore",
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function readPlistString(content, key) {
-  return (
-    content.match(
-      new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`, "u"),
-    )?.[1] ?? null
-  );
-}
-
-function readInstalledAppIdentity(electronExecutable) {
-  const executable = path.resolve(electronExecutable);
-  const appBundlePath = executable.match(
-    /^(.*\.app)[/\\]Contents[/\\]MacOS[/\\][^/\\]+$/u,
-  )?.[1];
-  if (!appBundlePath) {
-    throw new Error("Installed macOS executable is not inside a .app bundle");
-  }
-  const infoPlistPath = path.join(appBundlePath, "Contents", "Info.plist");
-  if (!existsSync(infoPlistPath)) {
-    throw new Error(
-      `Installed macOS app Info.plist is missing: ${infoPlistPath}`,
-    );
-  }
-  const infoPlist = readFileSync(infoPlistPath, "utf8");
-  const bundleIdentifier = readPlistString(infoPlist, "CFBundleIdentifier");
-  const executableName = readPlistString(infoPlist, "CFBundleExecutable");
-  if (bundleIdentifier !== APPLICATION_ID || executableName !== "Lime") {
-    throw new Error("Installed macOS app bundle identity is invalid");
-  }
-  const signed = verifyCodeSignature(appBundlePath);
-  if (!signed) {
-    throw new Error("Installed macOS app signature is invalid");
-  }
-  return {
-    appBundlePath,
-    infoPlistPath,
-    bundleIdentifier,
-    executableName,
-    signed,
-  };
 }
 
 function readInstalledHelper(resourcesRoot, arch) {
@@ -549,11 +523,20 @@ function permissionStatus(capabilities, key) {
 }
 
 export async function runMacOSNativeHostGateB(options) {
-  const appIdentity = readInstalledAppIdentity(options.electronExecutable);
+  const appIdentity = readMacOSAppIdentity(options.electronExecutable, {
+    applicationId: APPLICATION_ID,
+  });
   const resourcesRoot = resolveInstalledResourcesRoot(
     options.electronExecutable,
   );
   const helper = readInstalledHelper(resourcesRoot, options.arch);
+  assert(
+    helper.manifest.version === appIdentity.version,
+    "Installed app and desktop resource manifest versions do not match",
+  );
+  const releaseTrust = options.releaseTrust
+    ? verifyMacOSReleaseTrust(appIdentity.appBundlePath, helper.bundlePath)
+    : { status: "not-requested" };
   const client = new NativeHostClient(helper.helperPath, options.timeoutMs);
   const checks = [];
   const permissions = {};
@@ -738,9 +721,18 @@ export async function runMacOSNativeHostGateB(options) {
     platform: "darwin",
     arch: options.arch,
     permissionMode: options.strictPermissions ? "strict" : "observe",
-    candidateRunId: process.env.LIME_GATE_RUN_ID?.trim() || null,
+    candidateRunId: options.runId,
+    candidateSha: options.candidateSha,
+    candidate: {
+      platform: "darwin",
+      arch: options.arch,
+      version: helper.manifest.version,
+      sha: options.candidateSha,
+      runId: options.runId,
+    },
     electronExecutable: path.resolve(options.electronExecutable),
     application: appIdentity,
+    releaseTrust,
     checks,
     permissions,
     ...(failure ? { failure: failure.message } : {}),
@@ -771,7 +763,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   if (options.help) {
     console.log(
-      "Usage: node scripts/electron/macos-native-host-gate-b.mjs --electron-executable <path> [--arch <arm64|x64>] [--evidence-dir <path>] [--timeout-ms <ms>] [--interval-ms <ms>] [--strict-permissions]",
+      "Usage: node scripts/electron/macos-native-host-gate-b.mjs --electron-executable <path> --candidate-sha <sha> --run-id <id> [--arch <arm64|x64>] [--evidence-dir <path>] [--timeout-ms <ms>] [--interval-ms <ms>] [--strict-permissions] [--release-trust]",
     );
     return;
   }

@@ -6,6 +6,8 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import YAML from "yaml";
+import { validateReleaseCandidateWorkflow } from "./lib/release-workflow-candidate-guard.mjs";
+import { validateReleaseMatrix } from "./lib/release-workflow-matrix-guard.mjs";
 
 const DEFAULT_WORKFLOW_PATH = ".github/workflows/release.yml";
 const DEFAULT_FORGE_CONFIG_PATH = "forge.config.mjs";
@@ -39,10 +41,6 @@ const IGNORED_RETIRED_FILE_DIRS = new Set([
   "target",
 ]);
 
-function readWorkflow(workflowPath = DEFAULT_WORKFLOW_PATH) {
-  return YAML.parse(fs.readFileSync(workflowPath, "utf8"));
-}
-
 function stepByName(steps, name) {
   return steps.find((step) => step?.name === name);
 }
@@ -73,63 +71,6 @@ function assertNoLegacyUpdaterAssets(runScript, label) {
   }
 }
 
-function assertMatrix(buildJob) {
-  const matrix = buildJob?.strategy?.matrix?.include;
-  if (!Array.isArray(matrix)) {
-    throw new Error("release build job must define strategy.matrix.include");
-  }
-
-  const expected = new Map([
-    [
-      "macOS-arm64",
-      {
-        arch: "arm64",
-        feed: "darwin-arm64",
-        forge_targets: "dmg,zip",
-        host_platform: "darwin",
-        platform: "macos-15",
-        target: "aarch64-apple-darwin",
-      },
-    ],
-    [
-      "macOS-x64",
-      {
-        arch: "x64",
-        feed: "darwin-x64",
-        forge_targets: "dmg,zip",
-        host_platform: "darwin",
-        platform: "macos-15-intel",
-        target: "x86_64-apple-darwin",
-      },
-    ],
-    [
-      "Windows-x64",
-      {
-        arch: "x64",
-        feed: "win32-x64",
-        forge_targets: "squirrel",
-        host_platform: "win32",
-        platform: "windows-2022",
-        target: "x86_64-pc-windows-msvc",
-      },
-    ],
-  ]);
-
-  for (const [name, fields] of expected) {
-    const row = matrix.find((item) => item?.name === name);
-    if (!row) {
-      throw new Error(`release build matrix missing ${name}`);
-    }
-    for (const [key, value] of Object.entries(fields)) {
-      if (row[key] !== value) {
-        throw new Error(
-          `release build matrix ${name}.${key} expected ${value}, got ${row[key]}`,
-        );
-      }
-    }
-  }
-}
-
 function assertBuildSteps(buildJob) {
   const steps = buildJob?.steps;
   if (!Array.isArray(steps)) {
@@ -143,6 +84,7 @@ function assertBuildSteps(buildJob) {
     "LIME_UPDATES_BASE_URL",
     "release build job",
   );
+
   assertEnvValueIncludes(
     buildJobEnv,
     "LIME_ELECTRON_UPDATES_URL",
@@ -431,6 +373,9 @@ function assertBuildSteps(buildJob) {
     "scripts/electron/macos-native-host-gate-b.mjs",
     "--electron-executable",
     "--arch",
+    "--candidate-sha",
+    "--run-id",
+    "--release-trust",
     "macos-native-host-gate-b",
   ]) {
     assertIncludes(
@@ -510,6 +455,8 @@ function assertBuildSteps(buildJob) {
     "--n-minus-one-installer-dir",
     "--n-minus-one-version",
     "--version",
+    "--candidate-sha",
+    "--run-id",
   ]) {
     assertIncludes(
       windowsRcSmokeStep?.run,
@@ -653,6 +600,7 @@ function assertBuildSteps(buildJob) {
   );
   for (const required of [
     "scripts/electron/windows-packaged-evidence.mjs",
+    "--candidate-sha",
     "--squirrel-summary",
     "--code-mode-summary",
     "--native-host-summary",
@@ -976,7 +924,8 @@ function validateReleaseWorkflow({
     throw new Error("release workflow missing build job");
   }
 
-  assertMatrix(buildJob);
+  validateReleaseMatrix(buildJob);
+  validateReleaseCandidateWorkflow(workflow);
   assertBuildSteps(buildJob);
   assertPublishSteps(workflow);
   assertNoRetiredPackagingInputs(workflowText, "release workflow");

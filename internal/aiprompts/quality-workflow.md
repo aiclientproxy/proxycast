@@ -4,52 +4,57 @@
 
 本页定义 Lime 的最低交付门禁。测试策略与作者规则见 [../test/testing-strategy-2026.md](../test/testing-strategy-2026.md)，第二期覆盖计划见 [../roadmap/benchmark/README.md](../roadmap/benchmark/README.md)。
 
-## 唯一受测产品链
+## 唯一受测业务主链
 
 ```text
-Electron Desktop Host
+Desktop Host / CLI-TUI Host
   -> App Server JSON-RPC
   -> RuntimeCore
   -> Thread / Turn / Item projection
-  -> GUI
+  -> GUI / terminal projection
 ```
 
-测试必须说明覆盖了链路中的哪一段。旧命令、旧 runtime、生产 mock fallback、外部数据集 runner 或历史 release report 通过，均不能证明 current 产品链可交付。
+测试必须说明覆盖了链路中的哪一段。旧命令、旧 runtime、生产 mock fallback、外部数据集 runner 或历史 release report 通过，均不能证明 current 产品链可交付。Desktop 与 Terminal 可以有各自的 host/interaction 测试，但业务状态机、协议 fixture 和 canonical Thread/Turn/Item 断言必须复用同一事实源。
 
 ## 选择最低门禁
 
 先跑最贴风险的定向测试，再按跨层影响扩大。全量检查不能替代真实 GUI 或跨层证据；跨层证据还必须说明是否实际经过目标进程边界。
 
-| 改动 | 最低验证 |
-| --- | --- |
-| 纯 TypeScript selector/projection/parser | `npm run test:related -- <paths...>`；必要时 lint/typecheck |
-| React 组件/hook | related unit/component；用户可见变更补五语言与稳定 DOM 断言 |
-| Rust crate | `npm run test:rust:related -- <paths...>`；跨 crate 行为追加 integration layer |
-| App Server method/protocol/schema/generated client | `npm run test:contracts` + 公共 JSON-RPC 集成测试 |
-| Agent loop/queue/turn/item/read model | Rust related/integration + `npm run smoke:agent-runtime-current-fixture` |
-| tool/approval/sandbox/context | owner 集成测试 + current runtime fixture；命令边界追加 contracts |
-| MCP/Skills/Multi-Agent | owner 集成测试 + `npm run smoke:mcp-current` 或对应 current fixture |
-| Provider/lowering/multimodal | provider request capture + Rust related/integration + modality contracts |
-| GUI 壳/Workspace/主路径 | related tests + `npm run verify:gui-smoke` + 风险匹配的 Gate A |
-| Electron/preload/IPC/read model/恢复 | `npm run test:contracts` + 对应真实 Electron Gate B fixture |
-| 版本/Forge/workspace manifest | `npm run verify:app-version`；release 边界追加 Forge guard |
-| 脚本目录 | `npm run governance:scripts` |
-| legacy/dead surface 删除 | `npm run governance:legacy-report` + 相关负向回流守卫 |
+| 改动                                               | 最低验证                                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 纯 TypeScript selector/projection/parser           | `npm run test:related -- <paths...>`；必要时 lint/typecheck                    |
+| React 组件/hook                                    | related unit/component；用户可见变更补五语言与稳定 DOM 断言                    |
+| Rust crate                                         | `npm run test:rust:related -- <paths...>`；跨 crate 行为追加 integration layer |
+| App Server method/protocol/schema/generated client | `npm run test:contracts` + 公共 JSON-RPC 集成测试                              |
+| Agent loop/queue/turn/item/read model              | Rust related/integration + `npm run smoke:agent-runtime-current-fixture`       |
+| App Server Rust session/transport                  | `cargo test -p app-server-client` + 真实 stdio fixture                         |
+| TUI reducer/render/composer                        | `cargo test -p tui` + 稳定 TestBackend snapshot/结构断言                       |
+| CLI 参数/非交互 Agent 流程                         | `cargo test -p cli` + `lime exec` stdio fixture                                |
+| tool/approval/sandbox/context                      | owner 集成测试 + current runtime fixture；命令边界追加 contracts               |
+| MCP/Skills/Multi-Agent                             | owner 集成测试 + `npm run smoke:mcp-current` 或对应 current fixture            |
+| Provider/lowering/multimodal                       | provider request capture + Rust related/integration + modality contracts       |
+| GUI 壳/Workspace/主路径                            | related tests + `npm run verify:gui-smoke` + 风险匹配的 Gate A                 |
+| Electron/preload/IPC/read model/恢复               | `npm run test:contracts` + 对应真实 Electron Gate B fixture                    |
+| 版本/Forge/workspace manifest                      | `npm run verify:app-version`；release 边界追加 Forge guard                     |
+| 脚本目录                                           | `npm run governance:scripts`                                                   |
+| legacy/dead surface 删除                           | `npm run governance:legacy-report` + 相关负向回流守卫                          |
 
 默认本地入口是 `npm run verify:local`。需要完整本地门禁时使用 `npm run verify:local:full`。前端全量测试中断后使用 `npm run test:resume`，不要从第一批无差别重跑。
 
 ## 证据等级
 
-| 等级 | 证明内容 | 不能证明 |
-| --- | --- | --- |
-| Unit | 纯转换、状态转换、selector/projection 的确定性 | 跨模块接线、进程边界 |
-| Domain integration | current Rust/TS owner 与可控依赖的协作 | App Server 公共协议、Electron |
-| App Server integration | public JSON-RPC、notification、read model、恢复 | Renderer/Electron 可见状态 |
-| Current fixture | RuntimeCore/provider fixture/tool/event terminal 主链 | live provider 或真实桌面壳，除非 fixture 显式启动 Electron |
-| Gate A | browser/Renderer projection、DOM、交互、可见状态 | Electron main、preload、IPC |
-| Gate B | Electron、preload/IPC、`app_server_handle_json_lines`、App Server、runtime/read model、GUI | live provider，除非场景显式使用并记录 |
-| Live/eval | 指定 provider/model/config 下的能力与稳定性 | 其他 provider、地区或平台的普遍正确性 |
-| Platform/packaged | 实际 macOS/Windows 和打包产物 | 未运行平台 |
+| 等级                   | 证明内容                                                                                             | 不能证明                                                      |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Unit                   | 纯转换、状态转换、selector/projection 的确定性                                                       | 跨模块接线、进程边界                                          |
+| Domain integration     | current Rust/TS owner 与可控依赖的协作                                                               | App Server 公共协议、Electron                                 |
+| App Server integration | public JSON-RPC、notification、read model、恢复                                                      | Renderer/Electron 可见状态                                    |
+| Current fixture        | RuntimeCore/provider fixture/tool/event terminal 主链                                                | live provider 或真实桌面壳，除非 fixture 显式启动 Electron    |
+| Gate A                 | browser/Renderer projection、DOM、交互、可见状态                                                     | Electron main、preload、IPC                                   |
+| Gate B                 | Electron、preload/IPC、`app_server_handle_json_lines`、App Server、runtime/read model、GUI           | live provider，除非场景显式使用并记录                         |
+| CLI Gate B             | 真实 `lime exec`、stdio transport、App Server、runtime/read model、CLI 可见输出                      | TUI 交互、Desktop Host、live provider，除非场景显式使用并记录 |
+| TUI Gate B             | 真实 `lime`、PTY、alternate screen、键盘输入、App Server、runtime/read model、TUI 可见输出和终端恢复 | Desktop Host、live provider，除非场景显式使用并记录           |
+| Live/eval              | 指定 provider/model/config 下的能力与稳定性                                                          | 其他 provider、地区或平台的普遍正确性                         |
+| Platform/packaged      | 实际 macOS/Windows 和打包产物                                                                        | 未运行平台                                                    |
 
 `npm run test:e2e` 是 Vitest 的 e2e 分层入口，不等于 Electron Gate B。Gate A 不能替代 Gate B。
 
@@ -109,6 +114,8 @@ Gate B 必须同时证明：
 
 需要人工点击、截图或复用会话时继续阅读 [playwright-e2e.md](playwright-e2e.md)。
 
+CLI Gate B 必须同时证明：真实 `lime exec` 二进制、非 mock `app-server` 子进程或受控 daemon、initialize/initialized 握手、current v2 method、同一 thread/turn/item identity、CLI 完成输出和子进程回收。TUI Gate B 在此基础上还要覆盖真实 PTY、alternate screen、键盘输入、TUI 可见完成态和终端模式恢复。纯 reducer snapshot 只属于 Unit，CLI smoke 也不冒充 TUI Gate B。
+
 ## 生产与测试边界
 
 - 生产 Renderer、Electron、App Server 和 GUI smoke 不得回退 `defaultMocks`、`mockPriorityCommands`、`invokeMockOnly`、renderer mock 或 App Server mock backend。
@@ -118,13 +125,13 @@ Gate B 必须同时证明：
 
 ## 旧测试处理
 
-| 分类 | 处理 |
-| --- | --- |
-| current | 受测 owner 与 v2 一致，保留并赋稳定场景 ID |
-| rewrite | 风险仍有效但入口/fixture/断言过时，迁移后删除原测试 |
-| merge | 重复 boundary/source-string guard 合并到 owner 级测试或治理扫描 |
-| dead | 测静态值、旧命令正向行为、已删除 runtime 或脱离构建图，直接删除 |
-| live-only | 移出默认门禁，显式授权运行 |
+| 分类      | 处理                                                            |
+| --------- | --------------------------------------------------------------- |
+| current   | 受测 owner 与 v2 一致，保留并赋稳定场景 ID                      |
+| rewrite   | 风险仍有效但入口/fixture/断言过时，迁移后删除原测试             |
+| merge     | 重复 boundary/source-string guard 合并到 owner 级测试或治理扫描 |
+| dead      | 测静态值、旧命令正向行为、已删除 runtime 或脱离构建图，直接删除 |
+| live-only | 移出默认门禁，显式授权运行                                      |
 
 不要为了维持旧报告或旧命令可运行而恢复 wrapper、catalog、fixture 或 mock。
 

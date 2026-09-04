@@ -30,6 +30,7 @@ function createFixture() {
   );
   roots.push(root);
   const version = "1.2.3";
+  const candidateSha = "a".repeat(40);
   const packageRoot = path.join(root, "lime");
   const appDirectory = path.join(packageRoot, `app-${version}`);
   const executable = path.join(appDirectory, "Lime.exe");
@@ -70,6 +71,7 @@ function createFixture() {
     JSON.stringify({
       schemaVersion: 1,
       applicationId: "com.limecloud.lime",
+      version,
       platform: "win32",
       arch: "x64",
       platformKey: "win32-x64",
@@ -82,7 +84,16 @@ function createFixture() {
     scenarioId: "PLT-02-windows-squirrel-rc",
     result: "pass",
     candidateRunId,
+    candidateSha,
     platform: { os: "win32", arch: "x64", appVersion: version },
+    assertions: {
+      details: {
+        uninstallExitZero: true,
+        uninstalledAppDirectoryRemoved: true,
+        uninstalledExecutableAbsent: true,
+        shortcutsRemoved: true,
+      },
+    },
     evidence: {
       installation: {
         executable,
@@ -90,11 +101,18 @@ function createFixture() {
         packageRoot,
         updateExecutable: path.join(packageRoot, "Update.exe"),
       },
+      uninstall: {
+        exitCode: 0,
+        appDirectoryAbsent: true,
+        executableAbsent: true,
+        shortcutsAbsent: true,
+      },
     },
   };
   const codeModeSummary = {
     status: "pass",
     candidateRunId,
+    candidateSha,
     packagedExecutable: true,
     packagedExecutablePath: executable,
     processes: {
@@ -113,6 +131,7 @@ function createFixture() {
     platform: "win32",
     arch: "x64",
     candidateRunId,
+    candidateSha,
     electronExecutable: executable,
     helper: {
       path: path.join(resourcesRoot, "native/windows/windows-native-host.exe"),
@@ -123,6 +142,7 @@ function createFixture() {
   };
   return {
     version,
+    candidateSha,
     executable,
     resourcesRoot,
     squirrelSummary,
@@ -137,6 +157,8 @@ describe("Windows packaged evidence identity", () => {
       parseArgs([
         "--version",
         "v1.2.3",
+        "--candidate-sha",
+        "A".repeat(40),
         "--squirrel-summary",
         "squirrel.json",
         "--code-mode-summary",
@@ -148,13 +170,14 @@ describe("Windows packaged evidence identity", () => {
       ]),
     ).toMatchObject({
       version: "1.2.3",
+      candidateSha: "a".repeat(40),
       squirrelSummary: path.resolve("squirrel.json"),
       codeModeSummary: path.resolve("code.json"),
       nativeHostSummary: path.resolve("native.json"),
       output: path.resolve("result.json"),
     });
     expect(() => parseArgs(["--version", "1.2.3"])).toThrow(
-      "--squirrel-summary is required",
+      "--candidate-sha is required",
     );
   });
 
@@ -165,6 +188,7 @@ describe("Windows packaged evidence identity", () => {
     expect(summary.result).toBe("passed");
     expect(summary.candidate).toEqual({
       version: fixture.version,
+      sha: fixture.candidateSha,
       runId: "windows-run-1",
       executable: fixture.executable,
       resourcesRoot: fixture.resourcesRoot,
@@ -182,6 +206,7 @@ describe("Windows packaged evidence identity", () => {
     fixture.codeModeSummary = {
       ...fixture.codeModeSummary,
       candidateRunId: "stale-run",
+      candidateSha: "b".repeat(40),
       packagedExecutablePath: path.join(
         path.dirname(fixture.executable),
         "old-Lime.exe",
@@ -208,6 +233,7 @@ describe("Windows packaged evidence identity", () => {
     const fixture = createFixture();
     const summary = buildWindowsPackagedEvidenceSummary({
       version: fixture.version,
+      candidateSha: fixture.candidateSha,
       squirrelSummary: fixture.squirrelSummary,
       codeModeSummary: null,
       nativeHostSummary: null,

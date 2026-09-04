@@ -742,6 +742,7 @@ function addDeferredCommands(commands, reason) {
 const currentElectronHostRequiredCommands = new Set([
   "app_server_handle_json_lines",
   "app_server_drain_events",
+  "app_server_host_diagnostics",
   ...currentTrayDesktopHostShellCommands,
   ...currentHotkeyDesktopHostShellCommands,
   ...currentVoiceModelDesktopHostReadCommands,
@@ -3978,6 +3979,14 @@ function collectRetiredVideoGenerationPromptSourceFailures() {
 
   for (const source of restrictedSources) {
     const sourceCode = readProductionSourceForGuard(source.path);
+    if (!/^allowed-tools:\s*video_generate\s*$/mu.test(sourceCode)) {
+      failures.push({
+        file: source.path,
+        message:
+          "默认 video_generate skill 必须只暴露 current typed video_generate 工具",
+        token: "allowed-tools: video_generate",
+      });
+    }
     for (const token of retiredPromptTokens) {
       if (sourceCode.includes(token)) {
         failures.push({

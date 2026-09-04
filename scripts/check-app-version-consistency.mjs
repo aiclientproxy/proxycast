@@ -13,16 +13,11 @@ function readJson(filePath) {
 const repoRoot = path.resolve(process.cwd());
 const cargoTomlPath = path.join(repoRoot, "lime-rs", "Cargo.toml");
 const packageJsonPath = path.join(repoRoot, "package.json");
-const cliNpmPackageJsonPath = path.join(
-  repoRoot,
-  "packages",
-  "lime-cli-npm",
-  "package.json",
-);
+const cliPackageJsonPath = path.join(repoRoot, "packages", "cli", "package.json");
 
 const cargo = readCargoVersions(cargoTomlPath);
 const packageJson = readJson(packageJsonPath);
-const cliNpmPackageJson = readJson(cliNpmPackageJsonPath);
+const cliPackageJson = readJson(cliPackageJsonPath);
 
 const sourceVersion = cargo.workspaceVersion;
 const issues = [];
@@ -47,9 +42,9 @@ if ((packageJson.version ?? null) !== sourceVersion) {
   );
 }
 
-if ((cliNpmPackageJson.version ?? null) !== sourceVersion) {
+if ((cliPackageJson.version ?? null) !== sourceVersion) {
   issues.push(
-    `packages/lime-cli-npm/package.json version (${cliNpmPackageJson.version ?? "missing"}) 与 workspace.version (${sourceVersion ?? "missing"}) 不一致`,
+    `packages/cli/package.json version (${cliPackageJson.version ?? "missing"}) 与 workspace.version (${sourceVersion ?? "missing"}) 不一致`,
   );
 }
 

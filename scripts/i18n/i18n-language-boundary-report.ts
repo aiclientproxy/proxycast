@@ -258,7 +258,7 @@ function classifyLanguageMarker(
   }
 
   if (
-    normalizedFileLower.includes("/crates/lime-cli/src/main.rs") ||
+    normalizedFileLower.includes("/crates/cli/src/main.rs") ||
     normalizedFileLower.includes("/asrprovider") ||
     normalizedFileLower.includes("/agent/chat/types") ||
     normalizedFileLower.includes("/mediataskmocks") ||

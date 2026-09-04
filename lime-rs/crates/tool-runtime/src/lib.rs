@@ -56,6 +56,7 @@ pub mod turn_snapshot;
 pub mod turn_tool_surface;
 pub mod unified_exec;
 pub mod update_plan;
+pub mod video_task;
 pub mod view_image;
 pub mod web_fetch;
 pub mod web_search;

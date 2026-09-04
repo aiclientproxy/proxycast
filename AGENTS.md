@@ -7,7 +7,7 @@
 1. 代码仓库是唯一记录系统。影响实现的决策、计划和验证结果必须落在仓库内。
 2. 根文件只保留仓库级约束和导航；领域规则放在 `internal/aiprompts/`，执行进度放在 `internal/exec-plans/`。
 3. 每种能力只能有一个继续演进的 owner。`current` 可扩展；`compat` 只能委托；`deprecated` 只能迁出；`dead` 应删除并补回流守卫。
-4. Agent runtime 的唯一产品链是 `Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI`。Electron 不承接第二套业务后端。
+4. Agent runtime 的唯一业务主链是 `Product Surface -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection`。当前 Product Surface 包括 `Electron Desktop Host -> GUI` 与 `CLI/TUI Host -> tui`；两者共享协议、runtime、持久化与工具 owner，不建立第二套业务后端。未来 Cloud 只能通过认证 transport 接入同一 App Server 边界，不预建平行 runtime。
 5. Agent loop、状态机、Thread/Turn/Item、工具生命周期、MCP、Skills、Multi-Agent、历史恢复和 GUI 护栏对齐 `/Users/coso/Documents/dev/rust/codex`。多模型控制面的 catalog、默认选择、model switch、provider capability/readiness、retry/circuit breaker 与多模态 sampling 对齐 `/Users/coso/Documents/dev/rust/grok-build`；provider wire、canonical content 与媒体 lowering 可辅助参考 `/Users/coso/Documents/dev/js/opencode`。
 6. Rust 后端只能落在 `lime-rs/crates/**` 的既有领域 owner。
 7. Provider 网络边界归 `model-provider`；工具定义、权限和执行归 `tool-runtime`；会话/回合编排归 `agent-runtime` 与 App Server；投影和持久化归 App Server、`thread-store` 与对应 repository。
@@ -31,8 +31,8 @@
 
 1. 改 Electron/App Server 命令时，同步 Desktop Host/preload、JSON-RPC protocol/client、前端 gateway、catalog 与测试 fixture，并执行 `npm run test:contracts`。
 2. 普通改动优先运行受影响的定向测试；Rust 变更先用 `npm run test:rust:related -- <paths...>` 或对应 crate 测试，再按风险扩大。
-3. GUI、Bridge、Workspace 或 Agent 主路径改动至少运行 `npm run verify:gui-smoke`；Agent chat 当前 fixture 改动先运行 `npm run smoke:agent-runtime-current-fixture`。
-4. 真实交互证据分级：浏览器投影是 Gate A；Gate B 必须证明真实 Electron、preload/IPC、`app_server_handle_json_lines`、App Server JSON-RPC、runtime/read model 和用户可见状态。
+3. GUI、Bridge、Workspace 或 Desktop Agent 主路径改动至少运行 `npm run verify:gui-smoke`；Agent chat current fixture 改动先运行 `npm run smoke:agent-runtime-current-fixture`。CLI/TUI 改动先运行对应 Rust crate 测试，再补真实 stdio App Server fixture。
+4. 真实交互证据分级：浏览器投影是 Gate A；Desktop Gate B 必须证明真实 Electron、preload/IPC、`app_server_handle_json_lines`、App Server JSON-RPC、runtime/read model 和用户可见状态；CLI Gate B 必须证明真实 `lime exec`、stdio transport、App Server JSON-RPC 与同一 canonical Thread/Turn/Item 投影；TUI Gate B 还必须经过真实 PTY、alternate screen、键盘输入和终端恢复。
 5. 默认本地门禁为 `npm run verify:local`。全量前端测试优先用 `npm run test:resume` 续跑，避免无差别重跑。
 6. 更新版本、Forge、Electron 或 workspace manifest 时执行 `npm run verify:app-version`。
 

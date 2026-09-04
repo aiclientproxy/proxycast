@@ -2,6 +2,7 @@ use super::image_tools;
 use super::mcp_resource_tools;
 use super::memory_tools;
 use super::tool_search_tools;
+use super::video_tools;
 use crate::AppDataSource;
 use crate::RuntimeCoreError;
 use lime_agent::AgentRuntimeState;
@@ -40,6 +41,10 @@ pub(crate) async fn register_current_native_tools_if_available(
         .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
     agent_state
         .register_image_task_tools(image_tools::image_task_gateway(app_data_source.clone()))
+        .await
+        .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
+    agent_state
+        .register_video_task_tools(video_tools::video_task_gateway(app_data_source.clone()))
         .await
         .map_err(|error| RuntimeCoreError::Backend(error.to_string()))?;
     agent_state

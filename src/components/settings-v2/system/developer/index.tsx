@@ -29,6 +29,7 @@ import {
   getServerDiagnostics,
   getWindowsStartupDiagnostics,
 } from "@/lib/api/serverRuntime";
+import { getDesktopHostDiagnostics } from "@/lib/api/desktopHostDiagnostics";
 import {
   buildCrashDiagnosticPayload,
   clearCrashDiagnosticHistory,
@@ -289,6 +290,7 @@ export function DeveloperSettings({
       serverDiagnostics,
       logStorageDiagnostics,
       windowsStartupDiagnostics,
+      desktopHostDiagnostics,
       runtimeSnapshotResult,
     ] = await Promise.all([
       configPromise,
@@ -298,6 +300,7 @@ export function DeveloperSettings({
       getServerDiagnostics().catch(() => null),
       getLogStorageDiagnostics().catch(() => null),
       getWindowsStartupDiagnostics().catch(() => null),
+      getDesktopHostDiagnostics().catch(() => null),
       runtimeSnapshotPromise,
     ]);
     return buildCrashDiagnosticPayload({
@@ -310,6 +313,7 @@ export function DeveloperSettings({
       serverDiagnostics,
       logStorageDiagnostics,
       windowsStartupDiagnostics,
+      desktopHostDiagnostics,
       runtimeSnapshot: runtimeSnapshotResult.runtimeSnapshot,
       appVersion: import.meta.env.VITE_APP_VERSION,
       platform: navigator.platform,

@@ -1,12 +1,12 @@
 # Skills 异步图片任务与动态渲染 PRD
 
-> 说明：本文件已降级为历史背景文档，`@配图` current 主方案请以 [internal/prd/gongneng/peitu/prd.md](/Users/coso/Documents/dev/ai/aiclientproxy/lime/internal/prd/gongneng/peitu/prd.md) 与 [internal/aiprompts/command-runtime.md](/Users/coso/Documents/dev/ai/aiclientproxy/lime/internal/aiprompts/command-runtime.md) 为准。当前首发入口已经统一收敛到 `image_skill_launch -> Agent -> Skill(image_generate) -> task file` 主链，不再保留“前端快路径”作为 current 实现。
+> 说明：本文件已归档为历史背景文档，`@配图` current 主方案请以 [internal/prd/gongneng/peitu/prd.md](/Users/coso/Documents/dev/ai/aiclientproxy/lime/internal/prd/gongneng/peitu/prd.md) 与 [internal/aiprompts/command-runtime.md](/Users/coso/Documents/dev/ai/aiclientproxy/lime/internal/aiprompts/command-runtime.md) 为准。当前图片能力统一走 `Agent turn -> App Server -> typed image tool/workflow -> mediaTaskArtifact/image/create -> worker -> canonical Thread/Turn/Item projection`；旧 `lime media`、`lime task` 和 CLI 直连 task file 均为 `dead / deleted / forbidden-to-restore`。
 
 > 文档版本：v1.0
-> 状态：Draft
+> 状态：Archived / historical evidence
 > 更新时间：2026-04-06
-> 适用范围：`image_generate` skill、`lime-cli`、媒体任务协议、聊天区、图片工作台
-> 目标读者：产品、前端、Rust/CLI、测试
+> 适用范围：历史图片任务方案、媒体任务协议、聊天区、图片工作台
+> 目标读者：产品、前端、Rust、测试
 
 ---
 
@@ -30,7 +30,7 @@
 本 PRD 的目标是把图片生成正式收敛为一条异步、解耦、标准化的主链：
 
 - `skill` 只负责创建图片任务
-- `CLI / task file` 作为唯一状态真相源
+- `App Server + canonical Thread/Turn/Item projection` 作为产品状态真相源
 - `worker / 执行器` 异步消费任务并回写结果
 - `前端` 只观察任务状态，先渲染占位，再替换成真实图片
 
@@ -61,9 +61,9 @@
 
 `image_generate` 的职责是把用户意图转成高质量图片任务，而不是持有整个生成生命周期。
 
-### 3.2 Task File 是唯一真相源
+### 3.2 App Server read model 是产品真相源
 
-图片任务的状态、结果、错误、来源关系都必须落到标准 task file 或其等价协议存储中。聊天区、工作台、CLI、测试统一读取这一事实源。
+图片任务的状态、结果、错误、来源关系由 App Server current owner 写入 canonical Thread/Turn/Item 与 task preview。`.lime/tasks` 只作为媒体执行器内部恢复快照，不是 Desktop、CLI/TUI 或测试可以直接解析的公开产品协议。
 
 ### 3.3 前端是观察者，不是执行器
 
@@ -135,7 +135,7 @@
 
 ## 4.3 历史恢复
 
-用户刷新、重开会话、切换主题后，只要任务仍存在于 task file 中，前端应能够恢复：
+用户刷新、重开会话、切换主题后，前端应通过 App Server read model 恢复：
 
 - 未完成任务的占位态
 - 已完成任务的真实图片态
@@ -147,11 +147,13 @@
 
 ```mermaid
 graph TD
-    USER[用户 / 聊天区] --> SKILL[image_generate skill]
-    SKILL --> CLI[CLI / Task API]
-    CLI --> TASKFILE[Task File / 标准任务协议]
-    WORKER[图片执行器 / Worker] --> TASKFILE
-    TASKFILE --> FRONTEND[前端任务观察层]
+    USER[用户 / 聊天区] --> APP_SERVER[App Server ImageCommandWorkflow]
+    SKILL[image_generate skill] --> TOOL[typed image tool]
+    TOOL --> APP_SERVER
+    APP_SERVER --> ARTIFACT[mediaTaskArtifact/image/create]
+    ARTIFACT --> WORKER[图片执行器 / Worker]
+    WORKER --> PROJECTION[Thread / Turn / Item + task preview]
+    PROJECTION --> FRONTEND[前端任务观察层]
     FRONTEND --> CHAT[聊天区图片任务卡]
     FRONTEND --> DOC[正文占位块]
     FRONTEND --> CANVAS[图片工作台 / 画布]
@@ -166,7 +168,7 @@ graph TD
 - 创建标准图片任务
 - 返回结构化任务摘要
 
-#### CLI / Task API 层
+#### App Server / typed tool 层
 
 - 创建任务
 - 查询状态
@@ -175,7 +177,7 @@ graph TD
 - 重试任务
 - 取消任务
 
-#### Task File / 协议层
+#### 内部 task artifact 层
 
 - 保存任务元数据
 - 保存任务状态
@@ -291,25 +293,21 @@ skill 输出的语义是：
 2. 同一 `idempotency_key` 不应重复生成多条等价任务。
 3. 前端消息卡更新也必须以 `task_id` 幂等更新，避免重复插卡。
 
-## 6.5 CLI / Tauri 接口
+## 6.5 App Server / Surface 接口
 
-标准 CLI 主链：
+current 创建链：
 
-- `lime media image generate --json`
-- `lime task create image --json`（兼容入口，但必须复用同一条执行链）
-- `lime task status <task-ref>`
-- `lime task result <task-ref>`
-- `lime task retry <task-ref>`
-- `lime task cancel <task-ref>`
-- `lime task list`
+- Agent 图片命令：`ImageCommandWorkflow -> mediaTaskArtifact/image/create`
+- `image_generate` skill：typed image tool -> 同一 App Server artifact owner
+- Desktop 与 CLI/TUI：只消费 canonical Thread/Turn/Item/read model，不直接读取 `.lime/tasks`
 
-前端推荐通过统一网关暴露：
+前端只通过 typed App Server gateway 消费：
 
-- `lime_task_get_status`
-- `lime_task_get_result`
-- `lime_task_list_active`
+- canonical tool Item
+- image task preview/read model
+- worker 回写后的结果 projection
 
-前端不应在页面组件中散落裸 `invoke`。
+前端不应在页面组件中散落裸 `invoke`，也不得恢复旧 task CLI 或 Tauri 业务命令。
 
 ---
 
@@ -523,10 +521,10 @@ skill 输出的语义是：
 ### 11.2 协议验收
 
 1. `image_generate` skill 输出稳定任务字段。
-2. `lime media image generate --json` 与 `lime task create image --json` 都返回稳定 JSON，且共享同一条图片执行链。
-3. `lime task status` 能读到标准状态。
-4. `lime task result` 能读到标准结果结构。
-5. `retry / cancel / list` 行为符合任务协议。
+2. 图片命令与 typed image tool 都进入 App Server 的同一 artifact owner。
+3. Desktop 与 CLI/TUI 从 canonical read model 读取同一任务状态和结果。
+4. 失败、重试、取消与恢复均保留同一 Thread/Turn/Item identity。
+5. 旧 task/media CLI、Tauri 业务命令和直接 task file 解析无法回流。
 
 ### 11.3 工程验收
 

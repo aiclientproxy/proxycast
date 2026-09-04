@@ -12,6 +12,7 @@ export const IPC_DEEP_LINK_GET_CURRENT_CHANNEL = "app:deep-link:get-current";
 export const ELECTRON_HOST_COMMANDS = [
   "app_server_handle_json_lines",
   "app_server_drain_events",
+  "app_server_host_diagnostics",
   "get_runtime_provider_selection",
   "sync_tray_model_shortcuts",
   "take_pending_skill_package_open_requests",

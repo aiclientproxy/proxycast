@@ -28,8 +28,13 @@ import {
   resolveSquirrelFeed,
   selectNMinusOneVersion,
   stopInstalledApp,
+  uninstallInstalledSquirrel,
   waitForWindowsProcessExit,
 } from "./lib/windows-squirrel-n-minus-one.mjs";
+import {
+  normalizeCandidateRunId,
+  normalizeCandidateSha,
+} from "./lib/release-candidate-identity.mjs";
 
 export {
   buildNMinusOneLaunchEnv,
@@ -41,6 +46,7 @@ export {
   resolveInstalledSquirrelPaths,
   resolveSquirrelFeed,
   selectNMinusOneVersion,
+  uninstallInstalledSquirrel,
   waitForWindowsProcessExit,
 };
 
@@ -75,6 +81,7 @@ export function selectSquirrelInstaller({ installerDir, version }) {
 
 export function buildWindowsRcSummary({
   assertions,
+  candidateSha,
   completedAt,
   error = null,
   evidence,
@@ -84,6 +91,8 @@ export function buildWindowsRcSummary({
   startedAt,
   version,
 }) {
+  const normalizedCandidateSha = normalizeCandidateSha(candidateSha);
+  const normalizedRunId = normalizeCandidateRunId(runId);
   const failed = Object.entries(assertions)
     .filter(([, passed]) => passed !== true)
     .map(([name]) => name);
@@ -111,9 +120,10 @@ export function buildWindowsRcSummary({
     scenarioId: SCENARIO_ID,
     proofLevel: "L8 platform/packaged",
     claimBoundary: nMinusOneRequested
-      ? "Windows Squirrel N-1 Setup install, Electron autoUpdater download/install from an isolated candidate feed, candidate version path, shortcut/permissions, and installed candidate Lime.exe SHELL-01 Gate B. Long-duration soak is not exercised."
-      : "Windows Squirrel Setup.exe install, installed application path/permissions/shortcut, and installed Lime.exe SHELL-01 Gate B. N-1 to candidate update and long-duration soak are not exercised.",
-    candidateRunId: runId,
+      ? "Windows Squirrel N-1 Setup install, Electron autoUpdater download/install from an isolated candidate feed, candidate version path, shortcut/permissions, installed candidate Lime.exe SHELL-01 Gate B, and uninstall cleanup. Long-duration soak is not exercised."
+      : "Windows Squirrel Setup.exe install, installed application path/permissions/shortcut, installed Lime.exe SHELL-01 Gate B, and uninstall cleanup. N-1 to candidate update and long-duration soak are not exercised.",
+    candidateRunId: normalizedRunId,
+    candidateSha: normalizedCandidateSha,
     platform: { os: process.platform, arch: process.arch, appVersion: version },
     startedAt,
     completedAt,
@@ -126,7 +136,9 @@ export function buildWindowsRcSummary({
           : null,
     error,
     blockers: runnerUnavailable
-      ? ["PLT-02 requires a real Windows runner; no platform evidence was collected"]
+      ? [
+          "PLT-02 requires a real Windows runner; no platform evidence was collected",
+        ]
       : [],
     assertions: {
       total: Object.keys(assertions).length,
@@ -159,8 +171,9 @@ async function main() {
       path.join(".lime", "qc", "windows-squirrel-rc", version),
   );
   const summaryPath = path.join(evidenceDir, "summary.json");
-  const runId = normalizeRunId(
-    args["run-id"] || `windows-squirrel-rc-${version}-${Date.now()}`,
+  const runId = normalizeRunId(args["run-id"] || process.env.LIME_GATE_RUN_ID);
+  const candidateSha = normalizeCandidateSha(
+    args["candidate-sha"] || process.env.LIME_CANDIDATE_SHA,
   );
   const startedAt = new Date().toISOString();
   const assertions = {
@@ -174,6 +187,10 @@ async function main() {
     shortcutCreated: false,
     shell01Passed: false,
     shell01VersionMatched: false,
+    uninstallExitZero: false,
+    uninstalledAppDirectoryRemoved: false,
+    uninstalledExecutableAbsent: false,
+    shortcutsRemoved: false,
     ...(nMinusOneRequested
       ? {
           nMinusOneVersionOlder: false,
@@ -191,9 +208,12 @@ async function main() {
     installation: null,
     nMinusOneUpdate: null,
     shell01: null,
+    uninstall: null,
   };
   let failedStage = null;
   let errorMessage = null;
+  let installedForCleanup = null;
+  let shortcutPathsForCleanup = [];
 
   mkdirSync(evidenceDir, { recursive: true });
   try {
@@ -300,6 +320,7 @@ async function main() {
     );
     assertions.installedExecutablePresent = existsSync(installed.executable);
     assertions.updateExecutablePresent = existsSync(installed.updateExecutable);
+    installedForCleanup = installed;
 
     accessSync(installed.executable, constants.R_OK);
     assertions.installRootReadable = true;
@@ -319,6 +340,7 @@ async function main() {
       timeoutMs: 30_000,
     });
     assertions.shortcutCreated = shortcuts.length > 0;
+    shortcutPathsForCleanup = shortcuts;
     evidence.installation = {
       ...installed,
       baselineStop,
@@ -370,12 +392,59 @@ async function main() {
         "installed Lime.exe did not pass version-matched SHELL-01",
       );
     }
+
+    failedStage = "squirrel-uninstall";
+    const uninstallEvidence = await uninstallInstalledSquirrel({
+      updateExecutable: installed.updateExecutable,
+      appDirectory: installed.appDirectory,
+      executable: installed.executable,
+      shortcutPaths: shortcuts,
+      timeoutMs: 60_000,
+    });
+    evidence.uninstall = uninstallEvidence;
+    assertions.uninstallExitZero = uninstallEvidence.exitCode === 0;
+    assertions.uninstalledAppDirectoryRemoved =
+      uninstallEvidence.appDirectoryAbsent === true;
+    assertions.uninstalledExecutableAbsent =
+      uninstallEvidence.executableAbsent === true;
+    assertions.shortcutsRemoved = uninstallEvidence.shortcutsAbsent === true;
+    if (
+      !assertions.uninstallExitZero ||
+      !assertions.uninstalledAppDirectoryRemoved ||
+      !assertions.uninstalledExecutableAbsent ||
+      !assertions.shortcutsRemoved
+    ) {
+      throw new Error(
+        "Squirrel uninstall did not remove the candidate installation",
+      );
+    }
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : String(error);
   }
 
+  if (installedForCleanup && !assertions.uninstallExitZero) {
+    try {
+      await stopInstalledApp(installedForCleanup.executable).catch(
+        () => undefined,
+      );
+      evidence.uninstallCleanup = await uninstallInstalledSquirrel({
+        updateExecutable: installedForCleanup.updateExecutable,
+        appDirectory: installedForCleanup.appDirectory,
+        executable: installedForCleanup.executable,
+        shortcutPaths: shortcutPathsForCleanup,
+        timeoutMs: 30_000,
+      });
+    } catch (cleanupError) {
+      evidence.uninstallCleanupError =
+        cleanupError instanceof Error
+          ? cleanupError.message
+          : String(cleanupError);
+    }
+  }
+
   const summary = buildWindowsRcSummary({
     assertions,
+    candidateSha,
     completedAt: new Date().toISOString(),
     error: errorMessage,
     evidence,
@@ -507,10 +576,7 @@ function requiredEnv(name) {
 }
 
 function normalizeRunId(value) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) {
-    throw new Error("run id contains unsupported characters or is too long");
-  }
-  return value;
+  return normalizeCandidateRunId(value);
 }
 
 function writeJsonAtomic(filePath, value) {

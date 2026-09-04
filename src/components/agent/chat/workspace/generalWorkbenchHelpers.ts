@@ -119,6 +119,12 @@ function resolveThemeWorkbenchToolTaskTitle(toolCall: ToolCallState): string {
     const size = resolveThemeWorkbenchTextArg(args, ["size"]);
     return size ? `生成封面图（${size}）` : "生成封面图";
   }
+  if (normalized.includes("create_image_generation_task")) {
+    return "提交配图任务";
+  }
+  if (normalized === "video_generate") {
+    return "提交视频任务";
+  }
   if (normalized.includes("write_file") || normalized.includes("create_file")) {
     const pathValue = extractArtifactProtocolPathsFromValue(args)[0] ?? "";
     return pathValue
@@ -199,18 +205,6 @@ function resolveThemeWorkbenchToolTaskTitle(toolCall: ToolCallState): string {
   if (normalized.includes("bash") || normalized.includes("shell")) {
     const commandValue = resolveThemeWorkbenchTextArg(args, ["command", "cmd"]);
     const commandProbe = commandValue.toLowerCase();
-    if (
-      commandProbe.includes("lime media image generate") ||
-      commandProbe.includes("lime task create image")
-    ) {
-      return "提交配图任务";
-    }
-    if (commandProbe.includes("lime media cover generate")) {
-      return "提交封面任务";
-    }
-    if (commandProbe.includes("lime media video generate")) {
-      return "提交视频任务";
-    }
     if (commandProbe.includes("ffmpeg")) {
       return "处理音视频素材";
     }

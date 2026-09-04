@@ -97,7 +97,7 @@
 | 内容生产 | `broadcast_generate` | 3.2 | CLI/catalog 与 workbench task 存在 | 口播脚本、音频/字幕产物 |
 | 内容生产 | `cover_generate` | 3.2 | CLI/catalog 与 cover task 存在 | 图片 artifact、版权/提示词保护 |
 | 内容生产 | `image_generate` | 3.4 | CLI/catalog 与 image task 存在，UI 有图片 preview 基础 | prompt、任务状态、结果图、失败重试 |
-| 内容生产 | `video_generate` | 2.4 | default skill 存在，但对应 workbench tool 已 deprecated | 明确退场或迁到 current 视频能力 |
+| 内容生产 | `video_generate` | 2.4 | default skill 只允许 current typed `video_generate`，经 App Server 视频任务 owner 执行 | 保持 typed tool / worker / artifact 闭环 |
 | 内容生产 | `presentation_generate` | 3.1 | CLI/catalog 存在 | PPT artifact、可编辑性、渲染校验 |
 | 内容生产 | `form_generate` | 3.0 | CLI/catalog 存在 | 表单 schema、预览、导出 |
 | 内容生产 | `webpage_generate` | 3.0 | CLI/catalog 存在 | 页面 artifact、浏览器预览、响应式检查 |

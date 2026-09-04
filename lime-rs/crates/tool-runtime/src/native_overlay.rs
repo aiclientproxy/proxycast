@@ -18,6 +18,7 @@ use crate::tool_search::{check_runtime_tool_search_permissions, TOOL_SEARCH_TOOL
 use crate::update_plan::{
     check_plan_update_permissions, update_plan_definition, UPDATE_PLAN_LEGACY_ALIASES,
 };
+use crate::video_task::{check_runtime_video_task_permissions, VIDEO_TASK_TOOL_NAME};
 use crate::view_image::{
     check_runtime_view_image_permissions, view_image_tool_definition, VIEW_IMAGE_LEGACY_ALIASES,
 };
@@ -456,6 +457,14 @@ pub fn check_runtime_gateway_tool_permissions(
         ),
         IMAGE_TASK_TOOL_NAME => {
             permission_from_runtime_result(check_runtime_image_task_permissions(
+                params,
+                working_directory,
+                session_id,
+                turn_context,
+            ))
+        }
+        VIDEO_TASK_TOOL_NAME => {
+            permission_from_runtime_result(check_runtime_video_task_permissions(
                 params,
                 working_directory,
                 session_id,

@@ -190,6 +190,8 @@ export class ElectronHostCommands {
       case "report_frontend_debug_log":
         this.#reportFrontendDebugLog(args);
         return null;
+      case "app_server_host_diagnostics":
+        return this.#appServerHost.getDiagnostics();
       case "report_frontend_crash":
         this.#reportFrontendCrash(args);
         return { success: true };

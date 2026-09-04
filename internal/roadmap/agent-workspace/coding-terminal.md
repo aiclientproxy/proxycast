@@ -1,4 +1,4 @@
-# Agent Workspace Coding / Terminal 评分卡
+# Agent Workspace Coding / TUI 评分卡
 
 > 当前静态分：`2.5 / 5`  
 > 目标：验证 Agent Workspace 是否具备 Codex App / Claude Code 级别的真实 coding agent 闭环，而不是只会生成代码片段。
@@ -11,7 +11,7 @@
 | Patch 生成 | 以可审查 diff 形式修改文件，不只输出代码块 |
 | Diff UI | 多文件 diff、文件列表、行级变更、接受/拒绝/定位 |
 | Test loop | 自动运行定向测试，失败后诊断并修复 |
-| Terminal UI | 命令 stdout/stderr、exit code、PTY、resize、interrupt、stdin 可见 |
+| TUI | 命令 stdout/stderr、exit code、PTY、resize、interrupt、stdin 可见 |
 | Git 辅助 | status、diff、commit message、PR context 可作为结构化上下文 |
 | 外部 benchmark | 可跑 SWE-bench Lite / Terminal-Bench smoke 子集 |
 
@@ -34,7 +34,7 @@
 | Diff review UI | 2.5 | Agent Workspace 中可审查 diff，不只在 git 外部看 |
 | Test execution | 2.5 | 定向测试命令、exit code、失败摘要 |
 | Failure repair loop | 2.0 | 测试失败后自动修复并重跑 |
-| Terminal surface | 2.5 | 命令输出、interrupt、exit 可见 |
+| TUI surface | 2.5 | 命令输出、interrupt、exit 可见 |
 | SWE-bench compatibility | 1.5 | 至少接入一个 mini fixture |
 
 ## 4. P0 实测场景

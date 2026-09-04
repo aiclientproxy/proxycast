@@ -54,6 +54,7 @@ import {
   Menu,
   nativeImage,
   net,
+  powerMonitor,
   screen,
   session,
   type MenuItemConstructorOptions,
@@ -96,6 +97,16 @@ const browserTabHost = new ElectronBrowserTabHost(
 );
 browserTabHostRef.current = browserTabHost;
 const appServerHost = new ElectronAppServerHost(browserTabHost);
+powerMonitor.on("resume", () => {
+  void appServerHost.recoverAfterSystemResume().catch(() => {
+    const diagnostics = appServerHost.getDiagnostics();
+    console.warn("[electron-host] app-server resume recovery failed", {
+      stage: diagnostics.stage,
+      connection_generation: diagnostics.connection_generation,
+      last_failure: diagnostics.last_failure,
+    });
+  });
+});
 browserTabHost.setArtifactWriter((params) =>
   appServerHost.request("artifact/write", params),
 );

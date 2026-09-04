@@ -1,7 +1,7 @@
 ---
 name: url_parse
 description: 解析外部 URL 内容，并沉淀为可阅读的文本结果。
-allowed-tools: Bash, lime_create_url_parse_task
+allowed-tools: lime_create_url_parse_task
 metadata:
   lime_argument_hint: 输入 URL、抽取目标（摘要/要点/全文清洗）、输出格式要求。
   lime_when_to_use: 用户提供链接并希望抽取正文、要点或可引用信息时使用。
@@ -24,8 +24,7 @@ metadata:
 - 如果当前回合能快速抓取并整理网页内容，可以直接创建 `extractStatus=ready` 的任务，并写入 `summary` / `keyPoints`。
 - 如果当前回合无法稳定抓取正文，也必须创建真实任务，并把 `extractStatus` 设为 `pending_extract`；不要停留在纯聊天解释，更不要伪造“已解析完成”。
 - 提炼时区分“原文信息”与“你的归纳”，避免混淆。
-- 优先调用 `Bash` 执行 `lime task create url-parse --json` 创建任务。
-- 若当前环境暂时无法执行 `lime` CLI，再回退到 `lime_create_url_parse_task`。
+- 调用 `lime_create_url_parse_task` 创建任务；不得经 CLI 或 Bash 拼装第二条任务入口。
 - `payload` 中至少包含：`url`、`extractStatus`；若已经完成内容整理，再补 `summary`、`keyPoints`。
 
 ## 输出格式（固定）

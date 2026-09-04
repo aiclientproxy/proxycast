@@ -1,41 +1,40 @@
-## Lime v1.139.0
+## Lime v1.140.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- Added a repository-level `FEATURE-MAP.md` organized by user capability, stable entry point, current owner, and protocol boundary across Agent, Workspace, Provider, MCP, Skills, Plugins, Memory, Artifact, Scheduled Tasks, and Desktop Host.
-- Expanded the macOS native host and Windows packaged evidence for window orchestration, permissions, resource identity, Squirrel installed-state checks, and real Electron/App Server Gate B evidence.
-- Completed model-provider reasoning-effort and provider-route contracts so capability, defaults, switching, readiness, and reasoning levels share one control plane.
+- Added CLI/TUI product surfaces: the CLI enters the shared RuntimeCore through the stdio App Server, while TUI covers real PTY, alternate-screen, keyboard-input, and terminal-restoration flows.
+- Added a single-line JSONL envelope and shell completion to `lime exec`, keeping script integration aligned with the canonical command tree.
+- Added video task tools and media artifact projection with one lifecycle, parameter-validation, execution-result, and chat-preview model.
+- Added Desktop Host diagnostics and external-backend support, including App Server client sessions, transport, and cross-process state observation.
 
 ### Fixes
 
-- Fixed the Resource Manager production path dynamically loading a test-only window fixture; close now uses the current window semantics directly.
-- Removed CORS access for `tauri://localhost` and `tauri.localhost`, retaining only current local development origins.
-- Fixed source-of-truth drift across Curated Task references, Memory continuation, model configuration, and provider routing.
-- Fixed the home composer being clipped at the bottom of short Windows viewports such as `980x680`, while preserving the existing layout at normal window heights.
-- Repaired the GitHub Pages documentation workflow and lint guard, and restored the Rust commands cleanup guard to prevent retired desktop commands from returning.
+- Fixed boundary and cleanup issues across the Electron Desktop Host, App Server, and runtime diagnostics so session and tool state do not leak.
+- Fixed Agent chat task-protocol noise, media previews, tool summaries, compaction, and runtime-routing assertions.
+- Fixed crash-recovery panel behavior, short-window home composer visibility, and settings runtime entry points.
 
 ### Improvements and Refactoring
 
-- Fully retired SceneApp and `src-tauri`: the app directory now belongs to Plugin, business calls use Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore / Agent Runtime, and result references belong to Curated Task and Memory.
-- Removed Tauri capabilities/schemas plus SceneApp-specific components, hooks, gateways, copy, and positive tests; legacy names remain only in negative restoration guards and historical evidence.
-- Updated current Rust crates to use host-neutral or App Server/Desktop Host terminology instead of in-process desktop commands, Tauri state wrappers, and the former root-crate narrative.
-
-### Documentation
-
-- Added a Lime-specific Feature Map based on this product and architecture rather than copying the reference project's capability structure.
-- Removed superseded release plans, Plugin v1/v2 documents, old refactor material, iteration notes, and phase research while updating current navigation and architecture sources.
-- Removed 98 Markdown files, 1 HTML file, 4 JSON files, and 16 legacy frontend source/test files. The unowned A2UI/Tauri design was retired, while still-current documentation now points to Electron Desktop Host and App Server boundaries. Git history, Release Notes, and immutable evidence retain historical traceability.
+- Migrated the CLI from the retired `lime-cli-npm` entry point to `packages/cli`; Rust CLI/TUI crates now reuse the App Server protocol, client, and canonical Thread/Turn/Item projection.
+- External editor handling now supports PATH `.cmd/.bat` shims on Windows and closes the temporary-file handle before launch.
+- Removed retired CLI skills, tool documentation, and entry points, and added CLI/TUI, Desktop Host, release-candidate, and governance boundary guards.
+- Strengthened macOS native-host, Windows Squirrel, packaged-resource, release-identity, and Gate B evidence scripts; Electron Forge remains the sole packaging source of truth.
 
 ### Testing and Quality
 
-- Expanded App Server contract, Desktop Host, macOS native-host, Windows packaged-evidence, model-provider, Curated Task, Memory, and governance regressions.
-- Release gates cover version consistency, TypeScript, i18n, protocol contracts, related Rust tests, documentation boundaries, governance scans, real Electron GUI smoke, and resumable full frontend tests.
+- Added real stdio/PTY CLI/TUI Gate B fixtures, video-tool tests, Desktop Host diagnostics tests, and boundary governance regressions.
+- Expanded App Server client, command-contract, Electron release-workflow, Windows packaged-evidence, and GUI-main-path coverage.
+- Unified five-language copy-boundary, script-governance, documentation-boundary, and version-consistency checks.
+
+### Documentation
+
+- Updated architecture, command, governance, quality-workflow, Feature Map, tool inventory, and CLI/TUI execution-plan documentation to define the single Product Surface -> App Server JSON-RPC business path.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.139.0`.
-- Added no compat or deprecated owner; SceneApp, `src-tauri`, Tauri capabilities, and the test-only window fixture are `dead / deleted / forbidden-to-restore`.
+- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.140.0`.
+- Excluded local SQLite/WAL runtime artifacts under `undefined/data/*` from this release candidate; no compat or deprecated owner was added.
 
-**Full changes**: `v1.138.0` -> `v1.139.0`
+**Full changes**: `v1.139.0` -> `v1.140.0`

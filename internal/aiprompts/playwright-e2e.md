@@ -499,7 +499,7 @@ Runtime prompt 层的禁止证据：
 
 1. 在 `Claw` 对话框输入 `@链接解析 https://example.com/agent 提取要点 并整理成投资人可读摘要`
 2. 确认聊天区先进入 skill 执行态，并能看到 `url_parse` 相关工具轨迹，而不是前端静默退回普通总结
-3. 确认 `@链接解析` 命中了 `url_parse` 的 current binding；如当前 binding family 是 `typed local_cli`，确认工具标题与结果摘要对应 runtime 结构化组装的 `lime task create url-parse --json`；CLI 不可用时，才允许回退 `lime_create_url_parse_task`
+3. 确认 `@链接解析` 命中了 `url_parse` 的 current typed binding，并由 `lime_create_url_parse_task` 进入 App Server 任务主链；不得调用已删除的 CLI 任务入口
 4. 如果当前回合无法即时抓取正文，也必须看到真实 `url_parse` task file 被创建，且 `extractStatus` 为 `pending_extract`，而不是停留在口头解释
 5. 如果输入里没有 URL，确认 Agent 最多只追问 1 个关键问题请求补充链接，而不是直接创建空任务或伪造完成态
 6. 刷新页面或切换会话再返回原话题，确认最近链接解析任务仍可从 `.lime/tasks` 恢复
@@ -521,7 +521,7 @@ Runtime prompt 层的禁止证据：
 2. 输入一个已安装技能，例如 `/image_generate 画一张春日海报`
 3. 确认前端不会回退普通 `chat_stream`，而是进入 skill 执行态
 4. 打开控制台，确认当前 Electron Desktop Host / App Server JSON-RPC2 链路不再出现 `execute_skill`、`list_executable_skills` 或 `get_skill_detail` 的 unknown method / unknown command 报错
-5. 如当前 skill 的 executor kind 是 `typed local_cli`，继续确认最终反馈的是 runtime 组装后的任务提交摘要或任务状态，而不是前端本地伪造成功态；不要把“模型先写 Bash”当成通过条件
+5. 确认 skill 使用 current typed tool，最终反馈 runtime 任务提交摘要或任务状态，而不是前端本地伪造成功态；不得把“模型先写 Bash”当成通过条件
 
 ### 聊天结果保存为技能验证
 

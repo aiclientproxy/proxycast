@@ -17,6 +17,7 @@ import {
   resolveSquirrelFeed,
   selectNMinusOneVersion,
   selectSquirrelInstaller,
+  uninstallInstalledSquirrel,
   waitForWindowsProcessExit,
 } from "./windows-squirrel-rc-smoke.mjs";
 
@@ -144,6 +145,54 @@ describe("Windows Squirrel RC smoke", () => {
     );
   });
 
+  it("卸载只操作候选 Update.exe，并等待安装目录与快捷方式消失", async () => {
+    const runProcessImpl = vi.fn().mockResolvedValue({ exitCode: 0 });
+    const exists = vi.fn().mockReturnValue(false);
+    const waitForAbsentImpl = vi.fn().mockResolvedValue(undefined);
+    const result = await uninstallInstalledSquirrel({
+      updateExecutable: "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe",
+      appDirectory: "C:\\Users\\runner\\AppData\\Local\\lime\\app-1.2.3",
+      executable:
+        "C:\\Users\\runner\\AppData\\Local\\lime\\app-1.2.3\\Lime.exe",
+      shortcutPaths: ["C:\\Users\\runner\\Desktop\\Lime.lnk"],
+      runProcessImpl,
+      existsImpl: exists,
+      waitForAbsentImpl,
+    });
+
+    expect(runProcessImpl).toHaveBeenCalledWith(
+      "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe",
+      ["--uninstall"],
+      expect.objectContaining({ timeoutMs: 30_000 }),
+    );
+    expect(waitForAbsentImpl).toHaveBeenCalledWith(
+      [
+        "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe",
+        "C:\\Users\\runner\\AppData\\Local\\lime\\app-1.2.3",
+        "C:\\Users\\runner\\AppData\\Local\\lime\\app-1.2.3\\Lime.exe",
+        "C:\\Users\\runner\\Desktop\\Lime.lnk",
+      ],
+      expect.objectContaining({ timeoutMs: 60_000 }),
+    );
+    expect(result).toMatchObject({
+      exitCode: 0,
+      appDirectoryAbsent: true,
+      executableAbsent: true,
+      shortcutsAbsent: true,
+    });
+  });
+
+  it("卸载失败时 fail closed，不标记候选生命周期成功", async () => {
+    await expect(
+      uninstallInstalledSquirrel({
+        updateExecutable: "C:\\runner\\Update.exe",
+        appDirectory: "C:\\runner\\app-1.2.3",
+        executable: "C:\\runner\\app-1.2.3\\Lime.exe",
+        runProcessImpl: vi.fn().mockResolvedValue({ exitCode: 1 }),
+      }),
+    ).rejects.toThrow("Squirrel uninstall exited with 1");
+  });
+
   it("N-1 更新应观察应用自动检查且不得主动触发第二次 native check", () => {
     const source = fs.readFileSync(
       "scripts/electron/lib/windows-squirrel-n-minus-one.mjs",
@@ -243,6 +292,7 @@ describe("Windows Squirrel RC smoke", () => {
   it("L8 summary 不把单版本安装启动冒充 updater 或 soak", () => {
     const summary = buildWindowsRcSummary({
       assertions: { installerExitZero: true, shell01Passed: true },
+      candidateSha: "a".repeat(40),
       completedAt: "2026-07-17T02:00:00.000Z",
       evidence: {},
       runId: "windows-rc-1",
@@ -252,6 +302,7 @@ describe("Windows Squirrel RC smoke", () => {
 
     expect(summary.result).toBe("pass");
     expect(summary.proofLevel).toBe("L8 platform/packaged");
+    expect(summary.claimBoundary).toContain("uninstall cleanup");
     expect(summary.remainingClaims).toEqual({
       nMinusOneUpdate: "not-exercised",
       longDurationSoak: "not-exercised",
@@ -268,6 +319,7 @@ describe("Windows Squirrel RC smoke", () => {
         updateInstallRequested: true,
         candidateInstalledByUpdater: true,
       },
+      candidateSha: "a".repeat(40),
       completedAt: "2026-07-17T02:00:00.000Z",
       evidence: {},
       nMinusOneRequested: true,
@@ -284,6 +336,7 @@ describe("Windows Squirrel RC smoke", () => {
   it("非 Windows runner 明确标记 platform evidence pending，不伪造 fail 或 pass", () => {
     const summary = buildWindowsRcSummary({
       assertions: { windowsRunner: false },
+      candidateSha: "a".repeat(40),
       completedAt: "2026-07-17T02:00:00.000Z",
       error: "PLT-02-windows-squirrel-rc requires a real Windows runner",
       evidence: {},
@@ -326,6 +379,11 @@ describe("Windows Squirrel RC smoke", () => {
         (step) => step.name === "Resolve source ref",
       );
       const checkout = steps.find((step) => step.name === "Checkout");
+      const candidateIdentity = steps.find(
+        (step) =>
+          step.name === "Capture Windows test candidate identity" ||
+          step.name === "Capture release candidate identity",
+      );
       const installDependencies = steps.find(
         (step) => step.name === "Install dependencies",
       );
@@ -348,7 +406,8 @@ describe("Windows Squirrel RC smoke", () => {
         (step) => step.name === "Run installed Windows native host Gate B",
       );
       const packagedEvidence = steps.find(
-        (step) => step.name === "Validate Windows packaged Gate B evidence identity",
+        (step) =>
+          step.name === "Validate Windows packaged Gate B evidence identity",
       );
       const upload = steps.find(
         (step) => step.name === "Upload Windows Squirrel RC evidence",
@@ -366,7 +425,8 @@ describe("Windows Squirrel RC smoke", () => {
         (step) => step.name === "Upload Windows native host Gate B evidence",
       );
       const packagedEvidenceUpload = steps.find(
-        (step) => step.name === "Upload Windows packaged Gate B evidence identity",
+        (step) =>
+          step.name === "Upload Windows packaged Gate B evidence identity",
       );
 
       expect(download?.run).toContain("gh release download");
@@ -384,6 +444,11 @@ describe("Windows Squirrel RC smoke", () => {
           "repos/$env:GITHUB_REPOSITORY/commits/$encodedRef",
         );
         expect(checkout?.with?.ref).toBe("${{ steps.source.outputs.ref }}");
+        expect(candidateIdentity?.run).toContain(
+          "git rev-parse 'HEAD^{commit}'",
+        );
+        expect(candidateIdentity?.run).toContain("LIME_CANDIDATE_SHA");
+        expect(candidateIdentity?.run).toContain("LIME_GATE_RUN_ID");
         expect(pluginPathTests?.run).toContain("cargo test");
         expect(pluginPathTests?.run).toContain(
           '--manifest-path "lime-rs/Cargo.toml"',
@@ -398,6 +463,8 @@ describe("Windows Squirrel RC smoke", () => {
       expect(smoke?.run).toContain("--candidate-feed-dir");
       expect(smoke?.run).toContain("--n-minus-one-installer-dir");
       expect(smoke?.run).toContain("--n-minus-one-version");
+      expect(smoke?.run).toContain("--candidate-sha");
+      expect(smoke?.run).toContain("--run-id");
       expect(upload?.with?.path).toBe(".lime/qc/windows-squirrel-rc");
       if (entry.job === "build-windows-test") {
         expect(pluginGate?.run).toContain(
@@ -439,6 +506,7 @@ describe("Windows Squirrel RC smoke", () => {
       expect(packagedEvidence?.run).toContain(
         "scripts/electron/windows-packaged-evidence.mjs",
       );
+      expect(packagedEvidence?.run).toContain("--candidate-sha");
       expect(packagedEvidence?.run).toContain("--squirrel-summary");
       expect(packagedEvidence?.run).toContain("--code-mode-summary");
       expect(packagedEvidence?.run).toContain("--native-host-summary");
@@ -474,7 +542,8 @@ describe("Windows Squirrel RC smoke", () => {
       (step) => step.name === "Run installed Windows native host Gate B",
     );
     const packagedEvidence = steps.find(
-      (step) => step.name === "Validate Windows packaged Gate B evidence identity",
+      (step) =>
+        step.name === "Validate Windows packaged Gate B evidence identity",
     );
 
     expect(sherpa).toBeDefined();

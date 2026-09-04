@@ -7538,10 +7538,10 @@ const checks = [
     absentSnippets: ["dtolnay/rust-toolchain@stable"],
   },
   {
-    name: "Existing GitHub release is retargeted when a stable tag is rebuilt",
+    name: "Existing GitHub release is retargeted to the immutable workflow commit when rebuilt",
     file: ".github/workflows/release.yml",
     snippets: [
-      'TARGET_REF="${{ github.event.inputs.source_ref || github.sha }}"',
+      'TARGET_REF="${{ github.sha }}"',
       'gh release edit "$TAG"',
       '--target "$TARGET_REF"',
       '--notes-file "$NOTES_FILE"',

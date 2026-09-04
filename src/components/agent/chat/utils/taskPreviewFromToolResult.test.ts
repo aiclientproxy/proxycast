@@ -59,12 +59,12 @@ describe("buildImageTaskPreviewFromToolResult", () => {
     });
   });
 
-  it("应仅为 legacy Bash CLI transcript 恢复图片任务失败态摘要", () => {
+  it("应从 typed 图片工具恢复任务失败态摘要", () => {
     const preview = buildImageTaskPreviewFromToolResult({
       toolId: "tool-2",
-      toolName: "Bash",
+      toolName: "lime_create_image_generation_task",
       toolArguments: JSON.stringify({
-        command: 'lime media image generate --prompt "未来感青柠实验室"',
+        prompt: "未来感青柠实验室",
       }),
       toolResult: {
         metadata: {
@@ -359,8 +359,7 @@ describe("buildImageTaskPreviewFromToolResult", () => {
             model: "fal-ai/nano-banana-pro",
             presentation: {
               result_captions: {
-                complete:
-                  "完成了，花城汇望向广州塔的春日画面已经生成。",
+                complete: "完成了，花城汇望向广州塔的春日画面已经生成。",
               },
             },
           },
@@ -816,10 +815,12 @@ describe("buildTaskPreviewFromToolResult video", () => {
   it("视频任务完成但尚未带回结果地址时，应输出完成态同步文案", () => {
     const preview = buildTaskPreviewFromToolResult({
       toolId: "tool-video-1",
-      toolName: "Bash",
+      toolName: "video_generate",
       toolArguments: JSON.stringify({
-        command:
-          'lime media video generate --prompt "广州塔城市宣传片" --duration 15 --aspect-ratio 16:9 --resolution 720p',
+        prompt: "广州塔城市宣传片",
+        duration: 15,
+        aspect_ratio: "16:9",
+        resolution: "720p",
       }),
       toolResult: {
         metadata: {
@@ -844,10 +845,12 @@ describe("buildTaskPreviewFromToolResult video", () => {
   it("视频任务排队中时，应输出用户可理解的排队态文案", () => {
     const preview = buildTaskPreviewFromToolResult({
       toolId: "tool-video-2",
-      toolName: "Bash",
+      toolName: "video_generate",
       toolArguments: JSON.stringify({
-        command:
-          'lime media video generate --prompt "新品发布短视频" --duration 15 --aspect-ratio 16:9 --resolution 720p',
+        prompt: "新品发布短视频",
+        duration: 15,
+        aspect_ratio: "16:9",
+        resolution: "720p",
       }),
       toolResult: {
         metadata: {
@@ -873,10 +876,12 @@ describe("buildTaskPreviewFromToolResult video", () => {
     await changeLimeLocale("en-US");
     const preview = buildTaskPreviewFromToolResult({
       toolId: "tool-video-en",
-      toolName: "Bash",
+      toolName: "video_generate",
       toolArguments: JSON.stringify({
-        command:
-          'lime media video generate --prompt "launch film" --duration 15 --aspect-ratio 16:9 --resolution 720p',
+        prompt: "launch film",
+        duration: 15,
+        aspect_ratio: "16:9",
+        resolution: "720p",
       }),
       toolResult: {
         metadata: {

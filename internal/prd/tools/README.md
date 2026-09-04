@@ -249,7 +249,7 @@ Lime 实际已经具备这些能力：
 在 Core 之上额外增加 8 个：
 
 - `social_generate_cover_image`
-- `lime_create_video_generation_task`
+- `video_generate`
 - `lime_create_broadcast_generation_task`
 - `lime_create_cover_generation_task`
 - `lime_create_modal_resource_search_task`

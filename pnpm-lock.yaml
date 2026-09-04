@@ -418,7 +418,7 @@ importers:
 
   packages/app-server-client: {}
 
-  packages/lime-cli-npm: {}
+  packages/cli: {}
 
 packages:
 

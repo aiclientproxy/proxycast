@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-03",
+  "productTarget": "codex-desktop",
+  "productChain": "Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item -> GUI",
+  "planPath": "internal/exec-plans/codex-desktop-selective-goose-reference-plan.md",
+  "reference": {
+    "repository": "https://github.com/aaif-goose/goose",
+    "version": "1.49.0",
+    "commit": "794b04a0b1f4c58378ef3738dade297c13690b77",
+    "license": "Apache-2.0",
+    "role": "mechanism-reference-only",
+    "codeCopied": false,
+    "dependencyAdded": false
+  },
+  "forbiddenOwners": [
+    "goose-acp",
+    "goose-session-message",
+    "goose-recipe-runtime-storage",
+    "goose-autonomous-default",
+    "second-runtime",
+    "second-catalog"
+  ],
+  "entries": [
+    {
+      "id": "desktop-host-connection-recovery",
+      "decision": "adopted-mechanism",
+      "status": "verified-local",
+      "targetBasis": ["codex-rust", "lime-local"],
+      "referenceEvidence": "goose-static",
+      "referencePaths": ["ui/desktop/src/acp/acpConnection.ts"],
+      "evidenceLevels": ["goose-static", "lime-local"],
+      "limeOwner": "Electron Desktop Host and app-server-client transport",
+      "implementationPaths": [
+        "electron/appServerHost.ts",
+        "electron/appServerHost.test.ts",
+        "packages/app-server-client/src/sidecar-process.ts",
+        "packages/app-server-client/tests/client.test.mjs"
+      ],
+      "verificationCommands": [
+        "npx vitest run electron/appServerHost.test.ts",
+        "npx vitest run packages/app-server-client/tests/client.test.mjs",
+        "npm run typecheck:electron"
+      ],
+      "openRefs": [
+        "Real system sleep/resume remains a platform Electron observation, not a deterministic unit-test claim."
+      ]
+    },
+    {
+      "id": "bounded-redacted-host-diagnostics",
+      "decision": "adopted-mechanism",
+      "status": "verified-local",
+      "targetBasis": ["codex-rust", "lime-local"],
+      "referenceEvidence": "goose-static",
+      "referencePaths": [
+        "ui/desktop/src/startupDiagnostics.ts",
+        "ui/desktop/src/gooseServe.ts"
+      ],
+      "evidenceLevels": ["goose-static", "lime-local"],
+      "limeOwner": "Electron Desktop Host diagnostics and existing crash diagnostic bundle",
+      "implementationPaths": [
+        "electron/hostCommands.ts",
+        "src/lib/api/desktopHostDiagnostics.ts",
+        "src/lib/api/desktopHostDiagnostics.test.ts",
+        "src/lib/crashDiagnostic.ts"
+      ],
+      "verificationCommands": [
+        "npx vitest run src/lib/api/desktopHostDiagnostics.test.ts src/lib/crashDiagnostic.test.ts",
+        "npm run typecheck:electron"
+      ]
+    },
+    {
+      "id": "canonical-thread-tool-workflow-owners",
+      "decision": "existing-current-owner",
+      "status": "verified-gate-b",
+      "targetBasis": ["codex-rust", "lime-local"],
+      "referenceEvidence": "goose-static",
+      "referencePaths": ["ui/desktop/src/"],
+      "evidenceLevels": ["codex-rust", "lime-local", "gate-b"],
+      "limeOwner": "App Server RuntimeCore Thread/Turn/Item projection, Skills, Plugins and Scheduled Tasks",
+      "implementationPaths": [
+        "lime-rs/crates/app-server",
+        "lime-rs/crates/agent-runtime",
+        "lime-rs/crates/thread-store",
+        "src/components/agent"
+      ],
+      "verificationCommands": [
+        "npm run smoke:agent-runtime-current-fixture",
+        "npm run verify:gui-smoke"
+      ],
+      "openRefs": [
+        "The current fixture uses a controlled backend and does not claim live-provider coverage."
+      ]
+    },
+    {
+      "id": "macos-bookmark-revoke-cold-restart",
+      "decision": "adopted-mechanism",
+      "status": "verified-gate-b",
+      "targetBasis": ["codex-desktop-observed", "codex-rust"],
+      "referenceEvidence": "goose-static",
+      "referencePaths": ["ui/desktop/src/gooseServe.ts"],
+      "evidenceLevels": ["goose-static", "lime-local", "gate-b"],
+      "limeOwner": "Electron Desktop Host SystemUtilityHost and packaged macOS native host gate",
+      "implementationPaths": [
+        "electron/systemUtilityHost.ts",
+        "electron/systemUtilityHost.bookmarks.test.ts",
+        "scripts/electron/lib/macos-native-host-electron-gate-b.mjs",
+        "scripts/electron/macos-native-host-gate-b.mjs"
+      ],
+      "verificationCommands": [
+        "npx vitest run electron/systemUtilityHost.bookmarks.test.ts scripts/electron/macos-native-host-gate-b.test.mjs",
+        "npm run smoke:macos-native-host-gate-b -- --electron-executable <packaged-app-executable> --candidate-sha <sha> --run-id <run-id> --arch <arch>"
+      ],
+      "openRefs": [
+        "The passing local Gate B uses packaged 1.138.0 baseline 8413925fec62796e4fcdeecb75b5c380d6bf4495; it is not release-candidate evidence.",
+        "System-level TCC revocation remains restricted to a disposable or self-hosted runner."
+      ]
+    },
+    {
+      "id": "immutable-release-candidate-provenance",
+      "decision": "adopted-mechanism",
+      "status": "verified-local",
+      "targetBasis": ["codex-rust", "lime-local"],
+      "referenceEvidence": "goose-static",
+      "referencePaths": [".github/workflows/release.yml"],
+      "evidenceLevels": ["goose-static", "lime-local"],
+      "limeOwner": "Electron Forge release workflow and packaged evidence validators",
+      "implementationPaths": [
+        ".github/workflows/release.yml",
+        ".github/workflows/build-windows-test.yml",
+        "scripts/electron/release-workflow-guard.mjs",
+        "scripts/electron/lib/release-candidate-identity.mjs"
+      ],
+      "verificationCommands": [
+        "npm run governance:electron-release-workflow",
+        "npm run verify:app-version"
+      ]
+    },
+    {
+      "id": "packaged-platform-proof",
+      "decision": "existing-current-owner",
+      "status": "open-platform",
+      "targetBasis": ["codex-desktop-observed", "codex-rust"],
+      "evidenceLevels": ["lime-local"],
+      "limeOwner": "Electron packaged platform gates",
+      "implementationPaths": [
+        "scripts/electron/windows-squirrel-rc-smoke.mjs",
+        "scripts/electron/windows-native-host-gate-b.mjs",
+        "scripts/electron/macos-native-host-gate-b.mjs"
+      ],
+      "verificationCommands": ["npm run governance:electron-release-workflow"],
+      "openRefs": [
+        "Windows windows-2022 Squirrel install, N-1 upgrade, uninstall, Code Mode, native host, ConPTY, Job Object and restricted execution evidence is not yet collected.",
+        "macOS Developer ID, notarization, stapling and system-level TCC revocation recovery evidence is not yet collected.",
+        "Codex Desktop live Accessibility and screenshot comparison remains observational evidence."
+      ]
+    },
+    {
+      "id": "parallel-goose-owners",
+      "decision": "excluded",
+      "status": "excluded",
+      "targetBasis": ["codex-rust"],
+      "evidenceLevels": ["goose-static", "lime-local"],
+      "implementationPaths": [],
+      "guardIds": [
+        "goose-owned-symbol",
+        "acp-runtime-owner",
+        "recipe-runtime-owner",
+        "autonomous-default-owner",
+        "foreign-protocol-method",
+        "parallel-owner-path",
+        "foreign-runtime-dependency"
+      ]
+    }
+  ]
+}

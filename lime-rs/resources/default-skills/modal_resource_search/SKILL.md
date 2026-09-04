@@ -1,7 +1,7 @@
 ---
 name: modal_resource_search
 description: 检索图片、背景音乐、音效、视频等素材；图片优先直搜候选，其他资源走任务主链。
-allowed-tools: Bash, lime_search_web_images, lime_create_modal_resource_search_task
+allowed-tools: lime_search_web_images, lime_create_modal_resource_search_task
 metadata:
   lime_argument_hint: 输入资源类型、关键词、风格、用途、数量与限制条件。
   lime_when_to_use: 用户需要为当前内容补充外部素材资源时使用。
@@ -27,8 +27,7 @@ metadata:
   - 不要先调用 `ToolSearch`、`WebSearch`、`Grep` 之类去“找怎么搜图”，也不要把明显的配图需求拉成长链工具搜索。
   - 若 `lime_search_web_images` 返回候选，直接输出图片候选摘要，不要伪造“任务已创建”。
   - 若返回 `Pexels API Key` 未配置、无结果，或用户明确要求继续异步追踪，再回退到任务链。
-- 如果 `resourceType` 是 `bgm` / `sfx` / `video`，优先调用 `Bash` 执行 `lime task create resource-search --json` 创建任务。
-- 若当前环境暂时无法执行 `lime` CLI，再回退到 `lime_create_modal_resource_search_task`。
+- 如果 `resourceType` 是 `bgm` / `sfx` / `video`，调用 `lime_create_modal_resource_search_task` 创建任务；不得经 CLI 或 Bash 拼装第二条任务入口。
 - 创建任务时，`payload` 中至少包含：`resourceType`、`query`、`usage`、`count`。
 
 ## 输出格式

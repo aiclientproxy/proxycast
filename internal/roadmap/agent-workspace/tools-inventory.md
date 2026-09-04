@@ -77,7 +77,7 @@
 | 41 | `TeamDelete` | Core | Delegation+SessionControl | Current | SessionAllowlist | 是 | subagent | team delete 动作句测试 | 3.5 | 删除确认、残留任务处理 |
 | 42 | `ListPeers` | Core | Delegation+SessionControl | Current | SessionAllowlist | 是 | list | list peers 动作句测试 | 3.5 | peers 列表结构化、在线/忙碌/失败状态 |
 | 43 | `social_generate_cover_image` | Workbench | ContentCreation | Current | SessionAllowlist | 是 | task | 内容任务 copy、封面生成过程文案、图片结果基础 | 3.5 | 真实生成任务、图片 artifact、重试与失败诊断 |
-| 44 | `lime_create_video_generation_task` | Workbench | ContentCreation | Deprecated | SessionAllowlist | 否 | task | deprecated 但 failure UI 会隐藏协议噪声 | 1.5 | 不作为 current P0；需要退场或只保留历史回放 |
+| 44 | `video_generate` | Workbench | ContentCreation | Current | SessionAllowlist | 是 | task | typed gateway 委托 App Server `mediaTaskArtifact/video/create` | 1.5 | current 视频任务创建工具；旧 branded facade 禁止回流 |
 | 45 | `lime_create_audio_generation_task` | Workbench | ContentCreation | Current | SessionAllowlist | 是 | task | 配音生成 label 与过程文案测试 | 3.3 | 音频任务 id、进度、结果播放/下载、失败 |
 | 46 | `lime_create_transcription_task` | Workbench | ContentCreation | Current | SessionAllowlist | 是 | task | 转写 label、sourcePath 过程文案测试 | 3.3 | 转写结果预览、时间轴、导出 |
 | 47 | `lime_create_broadcast_generation_task` | Workbench | ContentCreation | Current | SessionAllowlist | 是 | task | 口播生成 label | 3.0 | 口播任务进度、结果预览、失败 |
@@ -115,7 +115,7 @@
 | P1 | `PowerShell`、`LSP`、`view_image`、`ListMcpResourcesTool`、`ReadMcpResourceTool`、`Agent`、`TeamCreate`、`ListPeers` | 跨平台、代码理解、MCP helper tool cards、团队协作关键能力；MCP 系统 P0 见 `mcp.md` |
 | P1 | `lime_create_image_generation_task`、`lime_create_audio_generation_task`、`lime_create_transcription_task`、`lime_create_modal_resource_search_task` | Workbench 内容生产的高频 current 工具 |
 | P2 | `Workflow`、`Sleep`、`Config`、`Cron*`、`StructuredOutput`、`NotebookEdit` | 需要补 UI 语义，但不应抢 P0 coding/search/browser 闭环 |
-| 退场 | `lime_create_video_generation_task`、`lime_run_service_skill` | 一个 deprecated，一个 compat，不能作为 current 标准能力宣传 |
+| 退场 | `lime_run_service_skill` | compat，不作为 current 标准能力宣传；旧 `lime_create_video_generation_task` 已从 catalog 删除并由 guard 禁止回流 |
 
 ## 6. 结论
 

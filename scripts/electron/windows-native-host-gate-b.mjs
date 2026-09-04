@@ -318,6 +318,7 @@ export async function runWindowsNativeHostGateB(options) {
     platform: "win32",
     arch: "x64",
     candidateRunId: process.env.LIME_GATE_RUN_ID?.trim() || null,
+    candidateSha: process.env.LIME_CANDIDATE_SHA?.trim().toLowerCase() || null,
     electronExecutable: path.resolve(options.electronExecutable),
     checks,
     ...(failure ? { failure: failure.message } : {}),

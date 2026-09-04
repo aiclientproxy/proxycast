@@ -2563,6 +2563,9 @@ impl RuntimeCore {
             .await?;
         if self.backend.has_live_session_responses() {
             let backend_events = sink.take_events();
+            let backend_completed_turn = backend_events
+                .iter()
+                .any(|event| runtime_event_is_turn_terminal(&event.event_type));
             precommitted_events.extend(self.append_runtime_events(
                 &session.session_id,
                 &session.thread_id,
@@ -2579,7 +2582,13 @@ impl RuntimeCore {
                     )?);
                 }
             }
-            if !decision.is_some_and(AgentSessionApprovalDecision::is_cancel) {
+            // External backends may resolve the action and finish the turn in
+            // the same response. In that case there is no internal session
+            // task waiting for an approval to resume, so routing the response
+            // again would fail closed and hide the backend's terminal events.
+            if !decision.is_some_and(AgentSessionApprovalDecision::is_cancel)
+                && !backend_completed_turn
+            {
                 self.dispatch_live_action_response(&action_response).await?;
             }
         }

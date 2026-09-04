@@ -5676,6 +5676,41 @@ test("spawns stdio sidecar and exchanges JSON-RPC lines", async () => {
   }
 });
 
+test("keeps only a bounded stderr tail while sidecar is running", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "app-server-client-stderr-tail-"));
+  const fakeSidecar = join(dir, "fake-stderr-tail-sidecar.mjs");
+
+  try {
+    await writeFile(
+      fakeSidecar,
+      `
+        for (let index = 0; index < 25; index += 1) {
+          console.error('stderr-' + index);
+        }
+        process.stdin.resume();
+      `,
+    );
+
+    const sidecar = await spawnAppServerSidecar(
+      stdioSidecar(process.execPath),
+      { args: [fakeSidecar] },
+    );
+    try {
+      await waitFor(
+        () => sidecar.stderrLines.length === 20,
+        SIDECAR_TEST_TIMEOUT_MS,
+      );
+      assert.deepEqual(sidecar.stderrLines, [
+        ...Array.from({ length: 20 }, (_, index) => `stderr-${index + 5}`),
+      ]);
+    } finally {
+      await sidecar.close();
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("connects sidecar with initialize and initialized handshake", async () => {
   const dir = await mkdtemp(join(tmpdir(), "app-server-client-connect-"));
   const fakeSidecar = join(dir, "fake-connect-sidecar.mjs");

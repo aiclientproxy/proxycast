@@ -124,4 +124,4 @@ import { buildInstalledAppPreview } from "@/features/plugin/install/installedApp
 | agent-runtime-client | 6 | 仅 `features/plugin/runtime` 用 |
 | agent-runtime-ui | 1 | 几乎未用 |
 | plugin-runtime | **0** | 零引用，候选下线 |
-| lime-cli-npm | 0（外发 CLI） | 保留 |
+| cli | 0（外发 CLI） | 保留 |

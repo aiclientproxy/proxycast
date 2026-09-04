@@ -101,7 +101,7 @@ Agent turn 必须把当前 OS、工作目录、shell 运行时和本机路径格
 对所有 skills 再补一条全局约束：
 
 - 是否走 `Bash CLI`，由 binding / executor / runtime 或显式操作者决定，不由模型在首刀自由写 shell。
-- 全局优先级固定为：原生结构化 binding > 类型化 `local_cli` binding > 自由形态 `Bash CLI` compat / ops 路线。
+- 全局优先级固定为原生结构化 binding；旧 `local_cli` 与自由形态 `Bash CLI` 任务入口均为 `dead / forbidden-to-restore`。
 - 第一判断维度不是 `key` 在本地还是 OEM 云端，而是“谁真正执行、正式真相源写到哪里、viewer 读谁”。
 - 如果只是凭证托管在 OEM 云端，但执行仍在客户端，本质上不等于“应该走本地 CLI”；它可能仍是 `server_api` 或 `hybrid`。
 - 如果执行本身就在 OEM / 服务端 runtime，当前应优先走 `server_api` 或 `hybrid`，而不是为了统一表面形式强行绕回 `Bash CLI`。
@@ -247,7 +247,7 @@ Agent turn 必须把当前 OS、工作目录、shell 运行时和本机路径格
 - 命令仍必须先进入 `Agent -> Skill(modal_resource_search)` 主链
 - 当 `resource_type=image` 且关键词明确时，skill 应优先调用 `lime_search_web_images`，直接复用现有 `Pexels API Key` 设置返回候选
 - `lime_search_web_images` 命中后，聊天区应直接展示真实 tool result 生成的素材轻卡与缩略图，点击后在右侧打开同回合 artifact document，而不是只留一段文本总结
-- 当资源类型是 `bgm / sfx / video`，或图片直搜失败时，再进入 `modal_resource_search` 的 task 型 binding；若该 binding family 是 `typed local_cli`，由 runtime 结构化组装 `lime task create resource-search --json`，CLI 不可用时再回退 `lime_create_modal_resource_search_task`
+- 当资源类型是 `bgm / sfx / video`，或图片直搜失败时，再通过 `lime_create_modal_resource_search_task` 进入 `modal_resource_search` 的 typed task binding；不得回退已删除的 CLI 任务入口。
 - 无论走直搜还是 task，都必须保留真实 `tool_timeline`，不能回到前端直连图库或隐藏底层 tools
 
 ### 2. `Agent + ServiceSkill`

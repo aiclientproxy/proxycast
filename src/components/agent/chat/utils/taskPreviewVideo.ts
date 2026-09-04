@@ -1,7 +1,6 @@
 import type { MessageVideoTaskPreview } from "../types";
 import {
   asRecord,
-  readCommandArgumentValue,
   readFirstArrayRecord,
   readMetadataPositiveNumber,
   readMetadataString,
@@ -14,10 +13,7 @@ import {
   resolveVideoTaskStatusMessage,
 } from "./taskPreviewCopy";
 
-function extractVideoTaskPromptFromToolArguments(
-  toolName: string,
-  toolArguments: string | undefined,
-): {
+function extractVideoTaskPromptFromToolArguments(toolArguments: string | undefined): {
   prompt?: string;
   durationSeconds?: number;
   aspectRatio?: string;
@@ -46,56 +42,17 @@ function extractVideoTaskPromptFromToolArguments(
       ["provider_id", "providerId"],
     );
     const model = readMetadataString([parsed], ["model"]);
-    const command =
-      typeof parsed.command === "string" ? parsed.command.trim() : undefined;
-
-    if (
-      prompt ||
-      durationSeconds ||
-      aspectRatio ||
-      resolution ||
-      providerId ||
-      model ||
-      !command
-    ) {
-      return {
-        prompt,
-        durationSeconds,
-        aspectRatio,
-        resolution,
-        providerId,
-        model,
-      };
-    }
-
-    if (
-      toolName.trim().toLowerCase() === "bash" &&
-      (command.includes("lime media video generate") ||
-        command.includes("lime task create video"))
-    ) {
-      return {
-        prompt: readCommandArgumentValue(command, "--prompt"),
-        durationSeconds: readCommandArgumentValue(command, "--duration")
-          ? Number.parseInt(
-              readCommandArgumentValue(command, "--duration") || "",
-              10,
-            )
-          : undefined,
-        aspectRatio:
-          readCommandArgumentValue(command, "--aspect-ratio") ||
-          readCommandArgumentValue(command, "--aspect_ratio"),
-        resolution: readCommandArgumentValue(command, "--resolution"),
-        providerId:
-          readCommandArgumentValue(command, "--provider-id") ||
-          readCommandArgumentValue(command, "--provider"),
-        model: readCommandArgumentValue(command, "--model"),
-      };
-    }
+    return {
+      prompt,
+      durationSeconds,
+      aspectRatio,
+      resolution,
+      providerId,
+      model,
+    };
   } catch {
     return {};
   }
-
-  return {};
 }
 
 export function buildVideoTaskPreviewFromToolResult(
@@ -127,7 +84,6 @@ export function buildVideoTaskPreviewFromToolResult(
   }
 
   const parsedArguments = extractVideoTaskPromptFromToolArguments(
-    params.toolName,
     params.toolArguments,
   );
   const status = readMetadataString(

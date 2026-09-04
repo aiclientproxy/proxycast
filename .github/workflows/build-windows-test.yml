@@ -70,6 +70,19 @@ jobs:
           fetch-depth: 0
           ref: ${{ steps.source.outputs.ref }}
 
+      - name: Capture Windows test candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="$(git rev-parse 'HEAD^{commit}')"
+          if [[ ! "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid Windows test candidate commit SHA: $CANDIDATE_SHA" >&2
+            exit 1
+          fi
+          CANDIDATE_RUN_ID="windows-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-win32-x64"
+          echo "LIME_CANDIDATE_SHA=$CANDIDATE_SHA" >> "$GITHUB_ENV"
+          echo "LIME_GATE_RUN_ID=$CANDIDATE_RUN_ID" >> "$GITHUB_ENV"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
@@ -211,7 +224,9 @@ jobs:
             --evidence-dir ".lime/qc/windows-squirrel-rc/$VERSION" \
             --n-minus-one-installer-dir windows-n-minus-one-package \
             --n-minus-one-version "$N_MINUS_ONE_VERSION" \
-            --version "$VERSION"
+            --version "$VERSION" \
+            --candidate-sha "$LIME_CANDIDATE_SHA" \
+            --run-id "$LIME_GATE_RUN_ID"
 
       - name: Run installed Windows Agent Plugin Gate B
         shell: bash
@@ -261,6 +276,7 @@ jobs:
           VERSION="$(node -p "require('./package.json').version")"
           node scripts/electron/windows-packaged-evidence.mjs \
             --version "$VERSION" \
+            --candidate-sha "$LIME_CANDIDATE_SHA" \
             --squirrel-summary ".lime/qc/windows-squirrel-rc/$VERSION/summary.json" \
             --code-mode-summary ".lime/qc/gui-evidence/code-mode-electron-gate-b-windows/code-mode-electron-gate-b-summary.json" \
             --native-host-summary ".lime/qc/gui-evidence/windows-native-host-gate-b/summary.json" \

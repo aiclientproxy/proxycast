@@ -89,6 +89,14 @@ npm run governance:file-size
 npm run governance:file-size:update
 ```
 
+Codex Desktop 外部桌面参考边界由 `scripts/governance/desktop-reference-boundary.mjs` 守住，对外使用：
+
+```bash
+npm run governance:desktop-reference-boundary
+```
+
+该入口扫描生产源码、JavaScript/Cargo manifest 与版本化 evidence index，拒绝 Goose/ACP 平行 transport、Session/Message owner、Recipe runtime/storage、Autonomous default、第二 runtime/catalog 命名和依赖回流。通用 `session` / `recipe` 业务字段不在粗粒度禁用范围内；守卫只拒绝能明确证明平行 owner 的结构信号。索引同时固定 Codex 目标依据、Goose Apache-2.0 参考版本、`codeCopied=false` 与 `dependencyAdded=false`，并已接入 `npm run test:contracts`。
+
 该脚本会重扫非测试、非生成的前端 / Rust 源文件，更新 `governance/file-size-baseline.json`，不进入 CI 自动链路。
 
 ### i18n 脚本
@@ -112,6 +120,18 @@ Knowledge release scope 审计入口已迁到 `scripts/knowledge/`。对外继�
 ### App Server 脚本
 
 App Server release manifest 与 sidecar smoke 脚本已迁到 `scripts/app-server/`。对外继续使用 `package.json` 里的 `app-server:*` 与 `smoke:app-server-*` npm scripts，不直接依赖根目录脚本路径。所有会创建 session/turn 的 stdio、external 与 packaged smoke 必须把 `dataDir` 指向本轮临时目录；固定 fixture identity 不得写入真实用户 App Server data root。
+
+`npm run smoke:cli-gate-b` 使用真实 `lime exec`、真实 App Server stdio 进程和测试专用 external backend，核对同一 canonical Thread/Turn identity、Item 事件序列与 CLI 完成输出；它不调用正式 Provider，也不允许 mock backend 或固定 timer 合成完成态。交互式 alternate-screen/PTY 证据归独立的 TUI Gate B，不用该 CLI smoke 冒充。
+
+`npm run smoke:tui-gate-b` 使用 `portable-pty` 启动真实 `lime tui` 与真实 App Server stdio 进程，在可见 ready 状态后输入 prompt，等待 canonical `turn.completed` 投影出的完成文本，再通过 Ctrl-C 退出；测试同时验证 alternate screen 的进入与恢复，不调用正式 Provider，也不使用 mock backend。
+
+`lime resume [thread-id]` 复用同一 TUI/session 主链；提供 id 时直接调用 current `thread/resume`，省略 id 时先调用 `thread/list` 打开 session picker，再用所选 id hydrate canonical Thread/Turn/Item 后进入交互界面。连接中断由同一 session owner 做 bounded reconnect，保留 draft 并重新 resume 原 Thread；它不创建第二套历史数据库或 runtime。
+
+`lime thread list|show|archive|unarchive|delete|fork` 是非交互 Thread 管理命令，统一通过 `app-server-client` 调用 v2 `thread/*`，返回 typed JSON；CLI 不直接访问 ThreadStore、数据库或 runtime。
+
+`lime mcp list` 和 `lime skills list` 是只读控制面命令，分别调用 v2 `mcpServerStatus/list` 与 `skills/list`；MCP status 自动消费 `nextCursor` 分页并对重复 cursor fail closed，Skill 查询支持多个 `--skill-cwd` 与 `--force-reload`。两者都通过 `app-server-client` 连接 App Server，不读取本地 MCP/Skill registry。
+
+`lime tui`、`lime exec` 和 `lime resume` 共享 `--model`、`--provider`、`--effort`、`--permissions` 连接参数；模型路由与会话设置统一由 App Server `thread/start` / `thread/settings/update` 处理。
 
 新增 App Server 脚本继续进入 `scripts/app-server/` 或复用现有 App Server npm scripts；涉及 Electron packaged sidecar / release asset 的脚本仍按 Electron / release 批次单独迁移。
 
@@ -250,7 +270,9 @@ npm run smoke:scheduled-tasks-electron-fixture -- --timeout-ms 180000
 
 ### Electron 脚本
 
- Electron release / updater 领域新增脚本进入 `scripts/electron/`。当前 `scripts/electron/update-feed-r2-upload-plan.mjs` 负责 R2 updater 上传计划，`scripts/electron/make-zip-local-feed.mjs` 负责用本地临时 feed 验证 Forge macOS ZIP / `RELEASES.json` 生成链路，`scripts/electron/windows-squirrel-rc-smoke.mjs` 负责 Windows N-1 Setup -> current updater -> candidate packaged `SHELL-01` 的 L8 证据，`scripts/electron/windows-native-host-gate-b.mjs` 负责从已安装 `Lime.exe` 启动 Windows native host，校验资源 digest，并验证 UI Automation、窗口/显示枚举、display watcher 和 Raw Input 启停，`scripts/electron/macos-native-host-gate-b.mjs` 负责从已安装 `Lime.app` 校验 helper bundle、协议握手、签名/digest、窗口/显示、真实 security-scoped bookmark create/resolve/start/stop、在临时 Cocoa fixture 上验证窗口 anchor/stack/hide-for-task lease、权限查询和 Launch Services（默认 observe；未授权时窗口编排为 skipped，`--strict-permissions` 才要求 Accessibility、Input Monitoring、Screen Recording 和选定 Apple Events target ready），并在同一候选 app 上启动真实 Electron，通过 preload/IPC 调用 `macos_native_host_invoke`、`app_server_handle_json_lines`，验证 App Server workspace identity、GUI shell 和截图；`scripts/electron/release-workflow-guard.mjs` 负责结构化校验 GitHub Actions release workflow 的 Forge maker、签名、公证、Windows Squirrel 与旧链路拒绝规则。N-1 的 CDP 与隔离 feed 驱动只属于 `scripts/electron/lib/windows-squirrel-n-minus-one.mjs` 测试 helper，不是 production updater API。
+Electron release / updater 领域新增脚本进入 `scripts/electron/`。当前 `scripts/electron/update-feed-r2-upload-plan.mjs` 负责 R2 updater 上传计划，`scripts/electron/make-zip-local-feed.mjs` 负责用本地临时 feed 验证 Forge macOS ZIP / `RELEASES.json` 生成链路，`scripts/electron/windows-squirrel-rc-smoke.mjs` 负责 Windows N-1 Setup -> current updater -> candidate packaged `SHELL-01` 的 L8 证据，`scripts/electron/windows-native-host-gate-b.mjs` 负责从已安装 `Lime.exe` 启动 Windows native host，校验资源 digest，并验证 UI Automation、窗口/显示枚举、display watcher 和 Raw Input 启停，`scripts/electron/macos-native-host-gate-b.mjs` 负责从已安装 `Lime.app` 校验 helper bundle、协议握手、签名/digest、窗口/显示、真实 security-scoped bookmark create/resolve/start/stop、在三次隔离 Electron 进程中验证 stable bookmark 持久化、冷启动恢复、active lease revoke、撤销后拒绝和 regrant、在临时 Cocoa fixture 上验证窗口 anchor/stack/hide-for-task lease、权限查询和 Launch Services（默认 observe；未授权时窗口编排为 skipped，`--strict-permissions` 才要求 Accessibility、Input Monitoring、Screen Recording 和选定 Apple Events target ready），并通过 preload/IPC 调用 `macos_native_host_invoke`、`app_server_handle_json_lines`，验证 App Server workspace identity、GUI shell 和截图；`scripts/electron/release-workflow-guard.mjs` 负责结构化校验 GitHub Actions release workflow 的 Forge maker、签名、公证、Windows Squirrel 与旧链路拒绝规则。N-1 的 CDP 与隔离 feed 驱动只属于 `scripts/electron/lib/windows-squirrel-n-minus-one.mjs` 测试 helper，不是 production updater API。
+
+Packaged 平台证据必须显式提供完整 Git commit SHA 和有界 `candidateRunId`（CLI 参数 `--candidate-sha` / `--run-id`，或环境变量 `LIME_CANDIDATE_SHA` / `LIME_GATE_RUN_ID`）。Windows 聚合器要求 Squirrel、Code Mode、native host、安装路径、版本与资源 manifest 属于同一 identity。macOS 的 `--release-trust` 只用于 Developer ID release 候选，并额外要求顶层 app、嵌套 helper、Gatekeeper 和 stapling 校验通过；本地 ad-hoc package 不得设置该标记或冒充 release 证据。
 
 `scripts/lib/windows-restricted-execution-evidence.mjs` 是 Windows restricted-token 安全矩阵的唯一证据采集入口。真实 clean Windows runner 必须显式传 `--provision`，由同一入口先在隔离 `LIME_AGENT_RUNTIME_ROOT` 执行 `windows-sandbox-setup`，再执行 `tool-runtime` 的 `windows_restricted_execution` integration test；未显式 provision、setup 失败或矩阵不完整都 fail-closed。schema `windows-restricted-execution-evidence-v3` 分别记录 setup/test 结果与 stdout/stderr artifact；矩阵覆盖 workspace/metadata denial、online/offline account 选择、offline Firewall loopback enforcement、bounded output、allowlisted stdin、ConPTY stdin/resize/combined-output、Everyone-write ACL audit 与 Job Object cleanup。setup 与 Cargo 各有固定超时，Windows ACL audit 对目录/总量/时限上限或 reparse 元数据错误会发出 `failedScan` warning。非 Windows 主机只输出 `evidence-pending` 并以非零退出，不能被当作平台通过。
 

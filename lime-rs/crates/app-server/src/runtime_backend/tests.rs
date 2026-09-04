@@ -40,6 +40,7 @@ mod tool_inventory;
 mod tool_policy_context;
 mod tool_surface;
 mod turn_flows;
+mod video_tools;
 mod workspace_scope_context;
 
 #[derive(Default)]

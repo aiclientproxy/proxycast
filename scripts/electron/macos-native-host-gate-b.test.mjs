@@ -36,9 +36,9 @@ describe("macos-native-host-gate-b", () => {
       "utf8",
     );
     expect(source).toContain("protocolVersion: PROTOCOL_VERSION");
-    expect(source).toContain(
-      "candidateRunId: process.env.LIME_GATE_RUN_ID?.trim() || null",
-    );
+    expect(source).toContain("candidateRunId: options.runId");
+    expect(source).toContain("candidateSha: options.candidateSha");
+    expect(source).toContain("version: helper.manifest.version");
     expect(source).toContain("permissionMode");
     expect(source).toContain("bookmark.create-resolve-start-stop");
     expect(source).toContain("window.anchor-stack-hideForTask");
@@ -46,6 +46,27 @@ describe("macos-native-host-gate-b", () => {
     expect(source).toContain(
       "electronExecutable: path.resolve(options.electronExecutable)",
     );
+  });
+
+  it("release runner 必须验证 Developer ID、Gatekeeper 和 stapling", () => {
+    const trustSource = readFileSync(
+      "scripts/electron/lib/macos-release-trust.mjs",
+      "utf8",
+    );
+    const gateSource = readFileSync(
+      "scripts/electron/macos-native-host-gate-b.mjs",
+      "utf8",
+    );
+    expect(trustSource).toContain(
+      'authority?.startsWith("Developer ID Application:")',
+    );
+    expect(trustSource).toContain('"spctl"');
+    expect(trustSource).toContain('["stapler", "validate", appBundlePath]');
+    expect(trustSource).toContain(
+      "application.teamIdentifier !== helper.teamIdentifier",
+    );
+    expect(gateSource).toContain("options.releaseTrust");
+    expect(gateSource).toContain("verifyMacOSReleaseTrust");
   });
 
   it("Gate B 必须经过真实 Electron preload/IPC，同时进入 App Server 和 native host", () => {
@@ -65,6 +86,11 @@ describe("macos-native-host-gate-b", () => {
       "Electron IPC trace did not record app_server_handle_json_lines",
     );
     expect(source).toContain("gui.visible-state");
+    expect(source).toContain("bookmark.persist-cold-restart-revoke-regrant");
+    expect(source).toContain("const revokedUnavailable =");
+    expect(source).toContain('rejectedCode: "bookmark_unavailable"');
+    expect(source).toContain("transportErrorCode: revokedRestart.error.code");
+    expect(source).toContain("persistId: bookmarkId");
   });
 
   it("主入口只负责 native 校验并委托 Electron Gate B helper", () => {

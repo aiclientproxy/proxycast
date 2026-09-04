@@ -6,7 +6,6 @@ import {
   asRecord,
   parseJsonRecordString,
   readArrayRecords,
-  readCommandArgumentValue,
   readMetadataPositiveNumber,
   readMetadataString,
   resolveTaskPreviewPhase,
@@ -21,10 +20,7 @@ import { findImageTaskRecord } from "./imageTaskToolResult";
 import { sanitizeImageWorkbenchPresentationText } from "./imageWorkbenchPresentation";
 import { readImageGenerationSoulMetadata } from "../workspace/imageTaskPreviewRuntimePayload";
 
-function extractImageTaskPromptFromToolArguments(
-  toolName: string,
-  toolArguments: string | undefined,
-): {
+function extractImageTaskPromptFromToolArguments(toolArguments: string | undefined): {
   prompt?: string;
   size?: string;
   imageCount?: number;
@@ -51,43 +47,10 @@ function extractImageTaskPromptFromToolArguments(
       [parsed],
       ["project_root_path", "projectRootPath"],
     );
-    const command =
-      typeof parsed.command === "string" ? parsed.command.trim() : undefined;
-
-    if (
-      prompt ||
-      size ||
-      imageCount ||
-      layoutHint ||
-      projectRootPath ||
-      !command
-    ) {
-      return { prompt, size, imageCount, layoutHint, projectRootPath };
-    }
-
-    if (
-      toolName.trim().toLowerCase() === "bash" &&
-      (command.includes("lime media image generate") ||
-        command.includes("lime task create image"))
-    ) {
-      return {
-        prompt: readCommandArgumentValue(command, "--prompt"),
-        size: readCommandArgumentValue(command, "--size"),
-        imageCount: readCommandArgumentValue(command, "--count")
-          ? Number.parseInt(
-              readCommandArgumentValue(command, "--count") || "",
-              10,
-            )
-          : undefined,
-        layoutHint: readCommandArgumentValue(command, "--layout-hint"),
-        projectRootPath,
-      };
-    }
+    return { prompt, size, imageCount, layoutHint, projectRootPath };
   } catch {
     return {};
   }
-
-  return {};
 }
 
 function isAbsoluteTaskPath(value?: string | null): boolean {
@@ -394,7 +357,6 @@ export function buildImageTaskPreviewFromToolResult(
   }
 
   const parsedArguments = extractImageTaskPromptFromToolArguments(
-    params.toolName,
     params.toolArguments,
   );
   const projectRootPath =

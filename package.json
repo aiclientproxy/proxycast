@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.139.0",
+  "version": "1.140.0",
   "description": "Open-source full-stack desktop AI agent for global users: coding, research, content, files, terminals, tools, multimodal work, and multi-agent workflows.",
   "keywords": [
     "ai",
@@ -50,6 +50,8 @@
     "governance:file-size": "node scripts/check-file-size-governance.mjs",
     "governance:file-size:update": "node scripts/governance/update-file-size-baseline.mjs",
     "governance:electron-release-workflow": "node scripts/electron/release-workflow-guard.mjs",
+    "governance:desktop-reference-boundary": "node scripts/governance/desktop-reference-boundary.mjs",
+    "governance:cli-boundary": "node scripts/governance/cli-boundary.mjs",
     "generate:protocol-types": "node scripts/generate-protocol-types.mjs",
     "check:protocol-types": "node scripts/generate-protocol-types.mjs --check",
     "governance:import-boundaries": "node scripts/check-import-boundaries.mjs",
@@ -95,7 +97,7 @@
     "test:watch": "node --max-old-space-size=8192 ./node_modules/vitest/vitest.mjs",
     "test:frontend": "npm run lint && npm run typecheck && npm test",
     "test:bridge": "npm test -- src/lib/dev-bridge/safeInvoke.test.ts src/lib/desktop-host/core.test.ts",
-    "test:contracts": "npm run check:protocol-types && node scripts/check-app-server-client-contract.mjs && node scripts/check-command-contracts.mjs && node scripts/check-harness-contracts.mjs && npm run governance:modality-contracts && npm run governance:scripts && npm run governance:electron-release-workflow && npm run harness:cleanup-report:check && npm run docs:boundary",
+    "test:contracts": "npm run check:protocol-types && node scripts/check-app-server-client-contract.mjs && node scripts/check-command-contracts.mjs && node scripts/check-harness-contracts.mjs && npm run governance:modality-contracts && npm run governance:scripts && npm run governance:electron-release-workflow && npm run governance:desktop-reference-boundary && npm run governance:cli-boundary && npm run harness:cleanup-report:check && npm run docs:boundary",
     "test:rust": "cargo test --manifest-path \"lime-rs/Cargo.toml\"",
     "test:rust:unit": "node scripts/run-rust-layer.mjs unit",
     "test:rust:changed": "node scripts/run-rust-layer.mjs unit --changed",
@@ -206,6 +208,8 @@
     "smoke:connect-open-deep-link-current": "node scripts/connect-open-deep-link-current-smoke.mjs",
     "smoke:connect-deep-link-save-current": "node scripts/connect-deep-link-save-current-smoke.mjs",
     "smoke:app-server-stdio": "npm --prefix \"packages/app-server-client\" run build && node scripts/app-server/stdio-smoke.mjs",
+    "smoke:cli-gate-b": "node scripts/app-server/cli-gate-b.mjs",
+    "smoke:tui-gate-b": "node scripts/app-server/tui-gate-b.mjs",
     "smoke:app-server-sidecar-lifecycle": "npm --prefix \"packages/app-server-client\" run build && node scripts/app-server/sidecar-lifecycle-smoke.mjs",
     "smoke:app-server-external-backend": "npm --prefix \"packages/app-server-client\" run build && node scripts/app-server/external-backend-smoke.mjs",
     "smoke:app-server-packaged-external-backend-failure": "npm --prefix \"packages/app-server-client\" run build && node scripts/app-server/packaged-external-backend-failure-smoke.mjs",

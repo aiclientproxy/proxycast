@@ -35,6 +35,7 @@ pub(crate) mod tool_process_metadata;
 mod tool_process_risk_metadata;
 mod tool_process_runtime_metadata;
 mod tool_search_tools;
+mod video_tools;
 
 use crate::execution_process::ExecutionProcessServer;
 use crate::AppDataSource;

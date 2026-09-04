@@ -53,7 +53,6 @@ const LIME_CREATE_TASK_FAILURE_LABELS: Record<
 };
 
 const NORMALIZED_LIME_CREATE_TASK_KINDS: Record<string, string> = {
-  limecreatevideogenerationtask: "video_generation",
   limecreateaudiogenerationtask: "audio_generation",
   limecreatetranscriptiontask: "transcription",
   limecreatebroadcastgenerationtask: "broadcast_generation",
@@ -69,6 +68,10 @@ const DIRECT_CONTENT_FAILURE_LABELS: Record<
   string,
   { key: string; defaultValue: string }
 > = {
+  videogenerate: {
+    key: "failure.videoGeneration",
+    defaultValue: "视频生成失败",
+  },
   generateimage: {
     key: "failure.imageGeneration",
     defaultValue: "生成失败",

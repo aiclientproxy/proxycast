@@ -27,7 +27,7 @@ description: 准备并执行 Lime 发版；覆盖版本号、发布说明、产�
    - `git status --short`
    - `git log --oneline --decorate --max-count=20`
    - `git tag --list "vX.Y.Z"`
-   - `rg -n '旧版本|目标版本'` 覆盖 `package.json`、存在的 npm/pnpm lockfile、`packages/lime-cli-npm/package.json`、`forge.config.mjs`、App Server manifest、`lime-rs/Cargo.toml`、`lime-rs/Cargo.lock`、`RELEASE_NOTES*.md`
+   - `rg -n '旧版本|目标版本'` 覆盖 `package.json`、存在的 npm/pnpm lockfile、`packages/cli/package.json`、`forge.config.mjs`、App Server manifest、`lime-rs/Cargo.toml`、`lime-rs/Cargo.lock`、`RELEASE_NOTES*.md`
 3. 如果发现上一轮发版命令仍在跑，只停止自己启动且已被用户中断的进程；不杀掉明显属于用户的 dev server / test / Electron 进程。
 
 ## Release Candidate 范围确认
@@ -50,7 +50,7 @@ description: 准备并执行 Lime 发版；覆盖版本号、发布说明、产�
 
 - `package.json`
 - 存在的 npm/pnpm lockfile
-- `packages/lime-cli-npm/package.json`
+- `packages/cli/package.json`
 - `forge.config.mjs`（仅当存在显式版本；当前通常从 `package.json` 读取）
 - App Server manifest / release manifest（仅当存在显式发布版本）
 - `lime-rs/Cargo.toml`

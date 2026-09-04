@@ -1,6 +1,9 @@
 # Lime 统一 Task File 协议 PRD
 
 更新时间：2026-04-03
+状态：Archived / historical evidence
+
+> 本文保留早期 task-file 方案用于历史追溯，不再定义 current 产品或 CLI 接口。当前业务主链是 `Desktop / CLI / TUI -> App Server JSON-RPC -> RuntimeCore -> canonical Thread/Turn/Item`；文中的 `lime task`、Tauri 业务命令、CLI 直读 `.lime/tasks` 与“Task File 是产品唯一真相源”等表述均已废弃，禁止据此恢复实现。
 
 ## 1. 背景
 

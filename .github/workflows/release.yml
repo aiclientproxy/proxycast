@@ -16,7 +16,7 @@ on:
         required: true
         default: "v0.1.0"
       source_ref:
-        description: "Git ref to build from (e.g., v0.96.0 or main)"
+        description: "Optional ref resolving to the same commit that triggered this workflow"
         required: false
         default: ""
 
@@ -24,6 +24,8 @@ permissions:
   contents: write
   packages: write
   actions: read
+  id-token: write
+  attestations: write
 
 env:
   CARGO_NET_RETRY: 10
@@ -42,6 +44,17 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.inputs.source_ref || github.ref }}
 
+      - name: Validate release source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="$(git rev-parse 'HEAD^{commit}')"
+          WORKFLOW_SHA="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          if [ "$CANDIDATE_SHA" != "$WORKFLOW_SHA" ]; then
+            echo "Checked-out source_ref must resolve to the workflow commit before a release can be created" >&2
+            exit 1
+          fi
+
       - name: Ensure GitHub release exists
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,7 +62,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ github.event.inputs.version || github.ref_name }}"
-          TARGET_REF="${{ github.event.inputs.source_ref || github.sha }}"
+          TARGET_REF="${{ github.sha }}"
           NOTES_FILE="$RUNNER_TEMP/release-notes.md"
 
           if [[ "$TAG" == *-* ]]; then
@@ -89,6 +102,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$TARGET_REF" \
             --title "Lime $TAG" \
+            --draft \
             --notes-file "$NOTES_FILE"
 
   build:
@@ -131,7 +145,25 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.source_ref || github.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Capture release candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA="$(git rev-parse 'HEAD^{commit}')"
+          WORKFLOW_SHA="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          if [[ ! "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid release candidate commit SHA: $CANDIDATE_SHA" >&2
+            exit 1
+          fi
+          if [ "$CANDIDATE_SHA" != "$WORKFLOW_SHA" ]; then
+            echo "Checked-out source_ref must resolve to the workflow commit before provenance can be attested" >&2
+            exit 1
+          fi
+          CANDIDATE_RUN_ID="release-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.host_platform }}-${{ matrix.arch }}"
+          echo "LIME_CANDIDATE_SHA=$CANDIDATE_SHA" >> "$GITHUB_ENV"
+          echo "LIME_GATE_RUN_ID=$CANDIDATE_RUN_ID" >> "$GITHUB_ENV"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -408,6 +440,9 @@ jobs:
           node scripts/electron/macos-native-host-gate-b.mjs \
             --electron-executable "$APP_EXECUTABLE" \
             --arch "${{ matrix.arch }}" \
+            --candidate-sha "$LIME_CANDIDATE_SHA" \
+            --run-id "$LIME_GATE_RUN_ID" \
+            --release-trust \
             --evidence-dir ".lime/qc/gui-evidence/macos-native-host-gate-b-${{ matrix.arch }}"
 
       - name: Upload packaged macOS native host Gate B evidence
@@ -477,7 +512,9 @@ jobs:
             --evidence-dir ".lime/qc/windows-squirrel-rc/$VERSION" \
             --n-minus-one-installer-dir windows-n-minus-one-package \
             --n-minus-one-version "$N_MINUS_ONE_VERSION" \
-            --version "$VERSION"
+            --version "$VERSION" \
+            --candidate-sha "$LIME_CANDIDATE_SHA" \
+            --run-id "$LIME_GATE_RUN_ID"
 
       - name: Run installed Windows CodeMode Gate B
         if: matrix.host_platform == 'win32'
@@ -515,6 +552,7 @@ jobs:
           VERSION="$(node -p "require('./package.json').version")"
           node scripts/electron/windows-packaged-evidence.mjs \
             --version "$VERSION" \
+            --candidate-sha "$LIME_CANDIDATE_SHA" \
             --squirrel-summary ".lime/qc/windows-squirrel-rc/$VERSION/summary.json" \
             --code-mode-summary ".lime/qc/gui-evidence/code-mode-electron-gate-b-windows/code-mode-electron-gate-b-summary.json" \
             --native-host-summary ".lime/qc/gui-evidence/windows-native-host-gate-b/summary.json" \
@@ -579,7 +617,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.source_ref || github.ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -624,6 +662,11 @@ jobs:
             --assets-dir release-assets \
             --out-dir release-github-assets \
             --version "$RELEASE_TAG"
+
+      - name: Attest Electron release provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: release-github-assets/*
 
       - name: Upload Electron assets to GitHub Release
         env:
@@ -670,7 +713,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.source_ref || github.ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -761,8 +804,8 @@ jobs:
             npx wrangler@latest r2 object delete "${BUCKET}/${key}" --remote
           done < "$RUNNER_TEMP/r2-delete-keys.txt"
 
-  publish_lime_cli_assets:
-    name: Publish lime-cli release assets
+  publish_cli_assets:
+    name: Publish CLI release assets
     needs: publish_release_assets
     if: needs.publish_release_assets.result == 'success'
     continue-on-error: true
@@ -790,7 +833,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.source_ref || github.ref }}
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -814,12 +857,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: lime-rs
-          shared-key: "lime-cli-${{ matrix.target }}"
+          shared-key: "cli-${{ matrix.target }}"
           cache-on-failure: true
           cache-all-crates: true
           save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
 
-      - name: Build lime-cli release binary
+      - name: Build CLI release binary
         shell: bash
         env:
           CARGO_PROFILE_RELEASE_LTO: "off"
@@ -830,10 +873,10 @@ jobs:
           RUSTC_WRAPPER: sccache
         run: |
           set -euxo pipefail
-          cargo build --manifest-path lime-rs/Cargo.toml -p lime-cli --release --target "${{ matrix.target }}"
+          cargo build --manifest-path lime-rs/Cargo.toml -p cli --release --target "${{ matrix.target }}"
 
-      - name: Package lime-cli release asset
-        id: package_lime_cli
+      - name: Package CLI release asset
+        id: package_cli
         shell: bash
         run: |
           set -euxo pipefail
@@ -841,10 +884,10 @@ jobs:
           VERSION="${VERSION#v}"
 
           metadata="$(
-            node packages/lime-cli-npm/scripts/build-release.js \
+            node packages/cli/scripts/build-release.js \
               --target-triple "${{ matrix.target }}" \
               --version "$VERSION" \
-              --out-dir "packages/lime-cli-npm/dist" \
+              --out-dir "packages/cli/dist" \
               --json
           )"
 
@@ -852,16 +895,16 @@ jobs:
           asset_path="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.archivePath);' "$metadata")"
           echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
 
-      - name: Upload lime-cli asset to GitHub Release
+      - name: Upload CLI asset to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
-          ASSET_PATH="${{ steps.package_lime_cli.outputs.asset_path }}"
+          ASSET_PATH="${{ steps.package_cli.outputs.asset_path }}"
           if [ -z "$ASSET_PATH" ] || [ ! -f "$ASSET_PATH" ]; then
-            echo "lime-cli asset missing: $ASSET_PATH" >&2
+            echo "CLI asset missing: $ASSET_PATH" >&2
             exit 1
           fi
 

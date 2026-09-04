@@ -269,7 +269,7 @@ describe("Electron current package entrypoints", () => {
     );
     expect(appVersionCheck).toContain("Cargo.toml");
     expect(appVersionCheck).toContain("packages");
-    expect(appVersionCheck).toContain("lime-cli-npm");
+    expect(appVersionCheck).toContain("packages/cli");
   });
 
   it("Electron current build, release, CI, and host files stay free of retired host runtime inputs", () => {

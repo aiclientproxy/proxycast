@@ -80,6 +80,8 @@ export async function connectAppServerSidecar(
   }
 }
 
+const SIDECAR_STDERR_TAIL_LIMIT = 20;
+
 function appendSidecarStderr(
   error: unknown,
   stderrLines: readonly string[],
@@ -87,7 +89,7 @@ function appendSidecarStderr(
   if (!(error instanceof Error) || stderrLines.length === 0) {
     return;
   }
-  const tail = stderrLines.slice(-20);
+  const tail = stderrLines.slice(-SIDECAR_STDERR_TAIL_LIMIT);
   error.message = `${error.message}; stderr=${tail.join("\n")}`;
   Object.assign(error, { stderrLines: tail });
 }
@@ -113,7 +115,15 @@ export class AppServerSidecar {
     this.#stderr = createInterface({ input: child.stderr });
 
     this.#stdout.on("line", (line) => this.#receiveLine(line));
-    this.#stderr.on("line", (line) => this.stderrLines.push(line));
+    this.#stderr.on("line", (line) => {
+      this.stderrLines.push(line);
+      if (this.stderrLines.length > SIDECAR_STDERR_TAIL_LIMIT) {
+        this.stderrLines.splice(
+          0,
+          this.stderrLines.length - SIDECAR_STDERR_TAIL_LIMIT,
+        );
+      }
+    });
     child.stdin.on("error", (error) =>
       this.#markClosedWithError(
         normalizeSidecarStdinError(error, "app-server sidecar stdin error"),

@@ -34,6 +34,44 @@ async function invokeNativeHostFromPage(page, method, params = {}) {
   );
 }
 
+async function invokeNativeHostOutcomeFromPage(page, method, params = {}) {
+  return await page.evaluate(
+    async ({ command, method: nativeMethod, params: nativeParams }) => {
+      const invoke = window.electronAPI?.invoke;
+      if (typeof invoke !== "function") {
+        return {
+          ok: false,
+          error: {
+            code: "bridge_unavailable",
+            message: "Electron preload invoke bridge is unavailable",
+          },
+        };
+      }
+      try {
+        return {
+          ok: true,
+          result: await invoke(command, {
+            request: { method: nativeMethod, params: nativeParams },
+          }),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: {
+            code:
+              typeof error?.code === "string" ? error.code : "invoke_failed",
+            message:
+              typeof error?.message === "string"
+                ? error.message
+                : String(error),
+          },
+        };
+      }
+    },
+    { command: NATIVE_HOST_COMMAND, method, params },
+  );
+}
+
 function readJsonArray(raw) {
   try {
     const parsed = JSON.parse(raw || "[]");
@@ -59,6 +97,7 @@ export async function runMacOSNativeHostElectronGateB(options) {
   const checks = [];
   let handle = null;
   let bookmarkRoot = null;
+  let bookmarkRecovery = null;
   try {
     handle = await launchElectronFixture({
       options,
@@ -68,7 +107,8 @@ export async function runMacOSNativeHostElectronGateB(options) {
       pageErrors: errors.page,
       backendMode: "unavailable",
     });
-    const { page, rendererSnapshot } = handle;
+    let page = handle.page;
+    const { rendererSnapshot } = handle;
     if (
       rendererSnapshot.electron !== true ||
       rendererSnapshot.hasInvokeBridge !== true ||
@@ -132,14 +172,23 @@ export async function runMacOSNativeHostElectronGateB(options) {
     bookmarkRoot = mkdtempSync(
       path.join(tmpdir(), "lime-macos-native-electron-gate-b-"),
     );
+    const bookmarkId = "gate-b-workspace";
     const created = await invokeNative("bookmark.create", {
       path: bookmarkRoot,
+      persistId: bookmarkId,
     });
-    if (typeof created?.bookmark !== "string" || !created.bookmark) {
-      throw new Error("Electron IPC bookmark.create returned no bookmark");
+    if (
+      typeof created?.bookmark !== "string" ||
+      !created.bookmark ||
+      created.bookmarkId !== bookmarkId ||
+      created.persisted !== true
+    ) {
+      throw new Error(
+        "Electron IPC bookmark.create did not persist a stable bookmark",
+      );
     }
     const resolved = await invokeNative("bookmark.resolve", {
-      bookmark: created.bookmark,
+      bookmarkId,
     });
     if (
       resolved?.isStale !== false ||
@@ -148,18 +197,6 @@ export async function runMacOSNativeHostElectronGateB(options) {
       throw new Error(
         "Electron IPC bookmark.resolve returned an unexpected path",
       );
-    }
-    const started = await invokeNative("bookmark.start", {
-      bookmark: created.bookmark,
-    });
-    if (started?.started !== true || typeof started.token !== "string") {
-      throw new Error("Electron IPC bookmark.start did not return a token");
-    }
-    const stopped = await invokeNative("bookmark.stop", {
-      token: started.token,
-    });
-    if (stopped?.stopped !== true) {
-      throw new Error("Electron IPC bookmark.stop did not stop the token");
     }
     checks.push({
       name: "native-host.electron-ipc",
@@ -212,15 +249,6 @@ export async function runMacOSNativeHostElectronGateB(options) {
         )}`,
       );
     }
-    if (
-      errors.console.length > 0 ||
-      errors.page.length > 0 ||
-      invokeErrors.length > 0
-    ) {
-      throw new Error(
-        "Electron native Gate B observed console, page, or invoke errors",
-      );
-    }
     const screenshotPath = path.join(
       options.evidenceDir,
       "electron-gate-b.png",
@@ -232,6 +260,117 @@ export async function runMacOSNativeHostElectronGateB(options) {
       status: "passed",
       screenshot: path.relative(process.cwd(), screenshotPath),
     });
+
+    await closeElectronFixture(handle);
+    handle = null;
+    handle = await launchElectronFixture({
+      options,
+      runtimeEnv,
+      appServerEnv: { APP_SERVER_BIN: "" },
+      consoleErrors: errors.console,
+      pageErrors: errors.page,
+      backendMode: "unavailable",
+    });
+    page = handle.page;
+    const coldResolved = await invokeNative("bookmark.resolve", {
+      bookmarkId,
+    });
+    if (
+      coldResolved?.isStale !== false ||
+      realpathSync(coldResolved.path) !== realpathSync(bookmarkRoot)
+    ) {
+      throw new Error(
+        "Cold-start bookmark recovery returned an unexpected path",
+      );
+    }
+    const coldStarted = await invokeNative("bookmark.start", {
+      bookmarkId,
+    });
+    if (
+      coldStarted?.started !== true ||
+      coldStarted.bookmarkId !== bookmarkId ||
+      typeof coldStarted.token !== "string"
+    ) {
+      throw new Error("Cold-start bookmark recovery did not start access");
+    }
+    const revoked = await invokeNative("bookmark.revoke", { bookmarkId });
+    if (revoked?.revoked !== true || revoked.bookmarkId !== bookmarkId) {
+      throw new Error("Active bookmark revoke did not remove the stable ID");
+    }
+
+    await closeElectronFixture(handle);
+    handle = null;
+    handle = await launchElectronFixture({
+      options,
+      runtimeEnv,
+      appServerEnv: { APP_SERVER_BIN: "" },
+      consoleErrors: errors.console,
+      pageErrors: errors.page,
+      backendMode: "unavailable",
+    });
+    page = handle.page;
+    nativeMethods.push("bookmark.start");
+    const revokedRestart = await invokeNativeHostOutcomeFromPage(
+      page,
+      "bookmark.start",
+      { bookmarkId },
+    );
+    const revokedUnavailable =
+      revokedRestart.error?.code === "bookmark_unavailable" ||
+      revokedRestart.error?.message ===
+        `Persisted macOS security-scoped bookmark is unavailable: ${bookmarkId}`;
+    if (revokedRestart.ok !== false || revokedUnavailable !== true) {
+      throw new Error(
+        `Revoked bookmark unexpectedly remained available after cold restart: ${JSON.stringify(revokedRestart)}`,
+      );
+    }
+    const regranted = await invokeNative("bookmark.create", {
+      path: bookmarkRoot,
+      persistId: bookmarkId,
+    });
+    if (regranted?.persisted !== true || regranted.bookmarkId !== bookmarkId) {
+      throw new Error("Bookmark regrant did not restore the stable ID");
+    }
+    const regrantedStarted = await invokeNative("bookmark.start", {
+      bookmarkId,
+    });
+    if (
+      regrantedStarted?.started !== true ||
+      regrantedStarted.bookmarkId !== bookmarkId
+    ) {
+      throw new Error("Regranted bookmark did not start access");
+    }
+    const regrantedStopped = await invokeNative("bookmark.stop", {
+      bookmarkId,
+    });
+    if (regrantedStopped?.stopped !== true) {
+      throw new Error("Regranted bookmark did not stop access");
+    }
+    bookmarkRecovery = {
+      bookmarkId,
+      initialPersisted: true,
+      coldRestartResolved: true,
+      activeLeaseRevoked: true,
+      revokedRestartRejected: true,
+      rejectedCode: "bookmark_unavailable",
+      transportErrorCode: revokedRestart.error.code,
+      regranted: true,
+    };
+    checks.push({
+      name: "bookmark.persist-cold-restart-revoke-regrant",
+      status: "passed",
+      ...bookmarkRecovery,
+    });
+
+    if (
+      errors.console.length > 0 ||
+      errors.page.length > 0 ||
+      invokeErrors.length > 0
+    ) {
+      throw new Error(
+        "Electron native Gate B observed console, page, or unexpected invoke errors",
+      );
+    }
     return {
       result: "passed",
       renderer: rendererSnapshot,
@@ -255,6 +394,7 @@ export async function runMacOSNativeHostElectronGateB(options) {
         windowCount: windows.windows.length,
         displayCount: displays.displays.length,
         permissions,
+        bookmarkRecovery,
       },
       gui: {
         url: gui.url,

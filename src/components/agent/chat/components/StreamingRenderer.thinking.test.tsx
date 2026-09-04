@@ -478,7 +478,7 @@ describe("StreamingRenderer thinking and status", () => {
           type: "tool_use",
           toolCall: {
             id: "tool-content-video-1",
-            name: "lime_create_video_generation_task",
+            name: "video_generate",
             arguments: JSON.stringify({ prompt: "产品演示短片" }),
             status: "completed",
             result: {
@@ -548,7 +548,7 @@ describe("StreamingRenderer thinking and status", () => {
     const text = container.textContent || "";
     expect(text).not.toContain(".lime/tasks");
     expect(text).not.toContain("artifact_path");
-    expect(text).not.toContain("lime_create_video_generation_task");
+    expect(text).not.toContain("video_generate");
   });
 
   it("流式思考块不应把被切碎的过程文本交给 Markdown 解析", () => {

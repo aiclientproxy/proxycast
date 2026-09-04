@@ -47,6 +47,7 @@ import {
   getServerDiagnostics,
   getWindowsStartupDiagnostics,
 } from "@/lib/api/serverRuntime";
+import { getDesktopHostDiagnostics } from "@/lib/api/desktopHostDiagnostics";
 import { applyCrashReportingSettings } from "@/lib/crashReporting";
 import {
   buildCrashDiagnosticPayload,
@@ -444,6 +445,7 @@ export function ExperimentalSettings({
       serverDiagnostics,
       logStorageDiagnostics,
       windowsStartupDiagnostics,
+      desktopHostDiagnostics,
       runtimeSnapshotResult,
     ] = await Promise.all([
       getLogs(),
@@ -452,6 +454,7 @@ export function ExperimentalSettings({
       getServerDiagnostics().catch(() => null),
       getLogStorageDiagnostics().catch(() => null),
       getWindowsStartupDiagnostics().catch(() => null),
+      getDesktopHostDiagnostics().catch(() => null),
       collectRuntimeSnapshotForDiagnostic(),
     ]);
     return buildCrashDiagnosticPayload({
@@ -463,6 +466,7 @@ export function ExperimentalSettings({
       serverDiagnostics,
       logStorageDiagnostics,
       windowsStartupDiagnostics,
+      desktopHostDiagnostics,
       runtimeSnapshot: runtimeSnapshotResult.runtimeSnapshot,
       appVersion: import.meta.env.VITE_APP_VERSION,
       platform: navigator.platform,

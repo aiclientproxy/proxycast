@@ -47,6 +47,7 @@ import {
   type WorkspaceRepairRecord,
 } from "@/lib/workspaceHealthTelemetry";
 import { hasDesktopHostInvokeCapability } from "@/lib/desktop-runtime";
+import type { DesktopHostDiagnostics } from "@/lib/api/desktopHostDiagnostics";
 import {
   buildAgentUiPerformanceDiagnosticSummary,
   type AgentUiPerformanceDiagnosticSummary,
@@ -70,6 +71,7 @@ export interface CrashDiagnosticPayload {
   server_diagnostics?: ServerDiagnostics | null;
   log_storage_diagnostics?: LogStorageDiagnostics | null;
   windows_startup_diagnostics?: WindowsStartupDiagnostics | null;
+  desktop_host_diagnostics?: DesktopHostDiagnostics | null;
   runtime_snapshot?: RuntimeDiagnosticSnapshot | null;
   agent_ui_performance_summary?: AgentUiPerformanceDiagnosticSummary | null;
   workspace_repair_history?: WorkspaceRepairRecord[];
@@ -258,6 +260,7 @@ interface BuildCrashDiagnosticPayloadParams {
   serverDiagnostics?: ServerDiagnostics | null;
   logStorageDiagnostics?: LogStorageDiagnostics | null;
   windowsStartupDiagnostics?: WindowsStartupDiagnostics | null;
+  desktopHostDiagnostics?: DesktopHostDiagnostics | null;
   runtimeSnapshot?: RuntimeDiagnosticSnapshot | null;
   agentUiPerformanceSnapshot?: AgentUiPerformanceSnapshot | null;
 }
@@ -588,6 +591,7 @@ export function buildCrashDiagnosticPayload(
     serverDiagnostics = null,
     logStorageDiagnostics = null,
     windowsStartupDiagnostics = null,
+    desktopHostDiagnostics = null,
     runtimeSnapshot = null,
     agentUiPerformanceSnapshot = summarizeAgentUiPerformanceMetrics(),
   } = params;
@@ -631,6 +635,7 @@ export function buildCrashDiagnosticPayload(
     server_diagnostics: serverDiagnostics,
     log_storage_diagnostics: logStorageDiagnostics,
     windows_startup_diagnostics: windowsStartupDiagnostics,
+    desktop_host_diagnostics: desktopHostDiagnostics,
     runtime_snapshot: runtimeSnapshot,
     agent_ui_performance_summary: buildAgentUiPerformanceDiagnosticSummary(
       agentUiPerformanceSnapshot,

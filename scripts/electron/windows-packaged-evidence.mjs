@@ -6,6 +6,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { normalizeVersion } from "./windows-squirrel-rc-smoke.mjs";
+import { normalizeCandidateSha } from "./lib/release-candidate-identity.mjs";
 
 const SCENARIO_ID = "PLT-02-windows-packaged-evidence";
 const RESOURCE_MANIFEST = "desktop-resources.manifest.json";
@@ -21,6 +22,7 @@ const REQUIRED_RESOURCES = {
 export function parseArgs(argv) {
   const options = {
     version: null,
+    candidateSha: null,
     squirrelSummary: null,
     codeModeSummary: null,
     nativeHostSummary: null,
@@ -38,13 +40,17 @@ export function parseArgs(argv) {
     const value = argv[index + 1];
     const optionKey = {
       "--version": "version",
+      "--candidate-sha": "candidateSha",
       "--squirrel-summary": "squirrelSummary",
       "--code-mode-summary": "codeModeSummary",
       "--native-host-summary": "nativeHostSummary",
       "--output": "output",
     }[arg];
     if (optionKey && value && !value.startsWith("--")) {
-      options[optionKey] = arg === "--version" ? value : path.resolve(value);
+      options[optionKey] =
+        arg === "--version" || arg === "--candidate-sha"
+          ? value
+          : path.resolve(value);
       index += 1;
       continue;
     }
@@ -52,6 +58,7 @@ export function parseArgs(argv) {
   }
   if (options.help) return options;
   if (!options.version) throw new Error("--version is required");
+  if (!options.candidateSha) throw new Error("--candidate-sha is required");
   if (!options.squirrelSummary) {
     throw new Error("--squirrel-summary is required");
   }
@@ -62,11 +69,13 @@ export function parseArgs(argv) {
     throw new Error("--native-host-summary is required");
   }
   options.version = normalizeVersion(options.version);
+  options.candidateSha = normalizeCandidateSha(options.candidateSha);
   return options;
 }
 
 export function buildWindowsPackagedEvidenceSummary({
   version,
+  candidateSha,
   squirrelSummary,
   codeModeSummary,
   nativeHostSummary,
@@ -75,6 +84,7 @@ export function buildWindowsPackagedEvidenceSummary({
   readFile = (filePath) => fs.readFileSync(filePath),
 }) {
   const candidateVersion = normalizeVersion(version);
+  const normalizedCandidateSha = normalizeCandidateSha(candidateSha);
   const checks = [];
   const failures = [];
   const check = (name, assertion) => {
@@ -110,9 +120,29 @@ export function buildWindowsPackagedEvidenceSummary({
       candidateVersion,
       "Squirrel platform.appVersion",
     );
+    requireEqual(
+      squirrelSummary.candidateSha,
+      normalizedCandidateSha,
+      "Squirrel candidateSha",
+      true,
+    );
     if (!String(squirrelSummary.candidateRunId || "").trim()) {
       throw new Error("Squirrel candidateRunId is missing");
     }
+    const squirrelAssertions = squirrelSummary.assertions?.details;
+    requireObject(squirrelAssertions, "Squirrel assertions.details");
+    for (const name of [
+      "uninstallExitZero",
+      "uninstalledAppDirectoryRemoved",
+      "uninstalledExecutableAbsent",
+      "shortcutsRemoved",
+    ]) {
+      requireEqual(squirrelAssertions[name], true, `Squirrel ${name}`);
+    }
+    requireObject(
+      squirrelSummary.evidence?.uninstall,
+      "Squirrel uninstall evidence",
+    );
     installation = squirrelSummary.evidence?.installation;
     requireObject(installation, "Squirrel installation evidence");
     requireAbsolutePath(installation.executable, "installed executable");
@@ -172,6 +202,11 @@ export function buildWindowsPackagedEvidenceSummary({
       "resource applicationId",
     );
     requireEqual(resourceManifest.platform, "win32", "resource platform");
+    requireEqual(
+      resourceManifest.version,
+      candidateVersion,
+      "resource version",
+    );
     requireEqual(resourceManifest.arch, "x64", "resource arch");
     requireEqual(
       resourceManifest.platformKey,
@@ -228,6 +263,12 @@ export function buildWindowsPackagedEvidenceSummary({
       "CodeMode candidateRunId",
     );
     requireEqual(
+      codeModeSummary.candidateSha,
+      normalizedCandidateSha,
+      "CodeMode candidateSha",
+      true,
+    );
+    requireEqual(
       normalizePortablePath(codeModeSummary.packagedExecutablePath),
       normalizePortablePath(installation?.executable),
       "CodeMode packaged executable",
@@ -263,6 +304,12 @@ export function buildWindowsPackagedEvidenceSummary({
       nativeHostSummary.candidateRunId,
       candidateRunId,
       "native host candidateRunId",
+    );
+    requireEqual(
+      nativeHostSummary.candidateSha,
+      normalizedCandidateSha,
+      "native host candidateSha",
+      true,
     );
     requireEqual(
       normalizePortablePath(nativeHostSummary.electronExecutable),
@@ -302,6 +349,7 @@ export function buildWindowsPackagedEvidenceSummary({
     result: failures.length === 0 ? "passed" : "failed",
     candidate: {
       version: candidateVersion,
+      sha: normalizedCandidateSha,
       runId: candidateRunId,
       executable: installation?.executable || null,
       resourcesRoot,
@@ -314,6 +362,7 @@ export function buildWindowsPackagedEvidenceSummary({
 
 export function validateWindowsPackagedEvidence({
   version,
+  candidateSha,
   squirrelSummary,
   codeModeSummary,
   nativeHostSummary,
@@ -323,6 +372,7 @@ export function validateWindowsPackagedEvidence({
 }) {
   return buildWindowsPackagedEvidenceSummary({
     version,
+    candidateSha,
     squirrelSummary,
     codeModeSummary,
     nativeHostSummary,
@@ -426,6 +476,7 @@ async function main() {
       result: "failed",
       candidate: {
         version: null,
+        sha: null,
         runId: null,
         executable: null,
         resourcesRoot: null,
@@ -449,7 +500,7 @@ async function main() {
   }
   if (options.help) {
     console.log(
-      "Usage: node scripts/electron/windows-packaged-evidence.mjs --version <version> --squirrel-summary <path> --code-mode-summary <path> --native-host-summary <path> --output <path>",
+      "Usage: node scripts/electron/windows-packaged-evidence.mjs --version <version> --candidate-sha <sha> --squirrel-summary <path> --code-mode-summary <path> --native-host-summary <path> --output <path>",
     );
     return;
   }
@@ -457,6 +508,7 @@ async function main() {
   try {
     summary = validateWindowsPackagedEvidence({
       version: options.version,
+      candidateSha: options.candidateSha,
       squirrelSummary: readJson(options.squirrelSummary),
       codeModeSummary: readJson(options.codeModeSummary),
       nativeHostSummary: readJson(options.nativeHostSummary),
@@ -474,6 +526,7 @@ async function main() {
       result: "failed",
       candidate: {
         version: options.version,
+        sha: options.candidateSha,
         runId: null,
         executable: null,
         resourcesRoot: null,

@@ -58,7 +58,7 @@ describe("generalWorkbenchHelpers", () => {
     );
   });
 
-  it("应仅为 legacy Bash CLI transcript 恢复明确的媒体任务标题", () => {
+  it("应为 typed 媒体工具恢复明确的任务标题", () => {
     const messages: Message[] = [
       {
         id: "user-1",
@@ -74,15 +74,24 @@ describe("generalWorkbenchHelpers", () => {
         isThinking: true,
         toolCalls: [
           {
-            id: "tool-bash-1",
-            name: "Bash",
+            id: "tool-image-1",
+            name: "lime_create_image_generation_task",
             arguments: JSON.stringify({
-              command:
-                "lime media image generate --prompt '未来城市插图' --json",
+              prompt: "未来城市插图",
             }),
             status: "completed",
             startTime: new Date("2026-04-03T10:00:01.500Z"),
             endTime: new Date("2026-04-03T10:00:02.000Z"),
+          },
+          {
+            id: "tool-video-1",
+            name: "video_generate",
+            arguments: JSON.stringify({
+              prompt: "未来城市短片",
+            }),
+            status: "completed",
+            startTime: new Date("2026-04-03T10:00:02.500Z"),
+            endTime: new Date("2026-04-03T10:00:03.000Z"),
           },
         ],
       },
@@ -99,6 +108,10 @@ describe("generalWorkbenchHelpers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           title: "提交配图任务",
+          status: "completed",
+        }),
+        expect.objectContaining({
+          title: "提交视频任务",
           status: "completed",
         }),
       ]),

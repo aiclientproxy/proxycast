@@ -28,13 +28,13 @@ Task automation
 
 ## 先按 App 类型选
 
-| 你的 App 类型 | 最小推荐组合 | 为什么 |
-| --- | --- | --- |
-| 独立 Electron / Node 宿主，需要自己启动 App Server sidecar | `@limecloud/app-server-client` + `@limecloud/agent-runtime-client` | 宿主拥有 sidecar 生命周期、JSON-RPC transport、`agentSession/*` 调用和事件分发。 |
-| 已有平台宿主 / bridge，只在 renderer 做业务 Agent 工作台 | `@limecloud/agent-runtime-client/sessionGateway` + `@limecloud/agent-workbench-adapter` + `@limecloud/agent-capability-catalog` | renderer 不应引入 sidecar / stdio；业务页只拼 intent、capability policy 和 turn payload。 |
-| 只想把 runtime events 渲染成标准 Agent UI | `@limecloud/agent-runtime-projection` + `@limecloud/agent-runtime-ui` | projection 把 facts 变成 `AgentUiProjectionState`，UI 包只渲染 controlled state。 |
-| 只需要统一 capability / tool policy 名称 | `@limecloud/agent-capability-catalog` | 把 `research`、`web_search`、`image_generation`、`pdf_extract` 等 alias 归一为稳定 capability id。 |
-| 只需要命令行任务自动化 | `@limecloud/lime-cli` | 使用 `lime media ...`、`lime task ...`、`lime skill ...` 等 CLI，不接入 React runtime。 |
+| 你的 App 类型                                              | 最小推荐组合                                                                                                                    | 为什么                                                                                             |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 独立 Electron / Node 宿主，需要自己启动 App Server sidecar | `@limecloud/app-server-client` + `@limecloud/agent-runtime-client`                                                              | 宿主拥有 sidecar 生命周期、JSON-RPC transport、`agentSession/*` 调用和事件分发。                   |
+| 已有平台宿主 / bridge，只在 renderer 做业务 Agent 工作台   | `@limecloud/agent-runtime-client/sessionGateway` + `@limecloud/agent-workbench-adapter` + `@limecloud/agent-capability-catalog` | renderer 不应引入 sidecar / stdio；业务页只拼 intent、capability policy 和 turn payload。          |
+| 只想把 runtime events 渲染成标准 Agent UI                  | `@limecloud/agent-runtime-projection` + `@limecloud/agent-runtime-ui`                                                           | projection 把 facts 变成 `AgentUiProjectionState`，UI 包只渲染 controlled state。                  |
+| 只需要统一 capability / tool policy 名称                   | `@limecloud/agent-capability-catalog`                                                                                           | 把 `research`、`web_search`、`image_generation`、`pdf_extract` 等 alias 归一为稳定 capability id。 |
+| 需要终端 Agent                                             | `@limecloud/lime`                                                                                                               | 使用交互式 TUI 或 `lime exec`，并与 Desktop 共享 App Server runtime。                              |
 
 ## 决策树
 
@@ -54,24 +54,24 @@ Task automation
 4. 你的页面是否有 composer、quick intent、任务类型或 capability allowlist？
    yes -> 用 @limecloud/agent-workbench-adapter + @limecloud/agent-capability-catalog。
 
-5. 你只是要脚本化创建图片 / 视频 / 任务？
-   yes -> 用 @limecloud/lime-cli。
+5. 你需要交互式或脚本化终端 Agent？
+   yes -> 用 @limecloud/lime。
 ```
 
 如果一个 App 同时满足多项，按层组合，不要把 transport、projection、React UI 和业务 intent 塞进同一个包。
 
 ## 包速查表
 
-| 包 | 安装 | 主要入口 | 典型 owner | 用在什么场景 | 不要用来做什么 | 关键导出 |
-| --- | --- | --- | --- | --- | --- | --- |
-| `@limecloud/app-server-client` | `npm install @limecloud/app-server-client` | `@limecloud/app-server-client` | Electron main / Node host / platform host | App Server JSON-RPC、stdio sidecar、manifest / sha256 / resources、`agentSession/*` transport、event router | React UI、renderer bundle、业务 session store、provider key 策略 | `AppServerClient`、`AppServerConnection`、`AppServerAgentEventRouter`、`startPackagedAppServerSidecar`、`createAgentRuntimeClient` |
-| `@limecloud/agent-runtime-client` | `npm install @limecloud/agent-runtime-client` | 根入口、`./sessionGateway` | runtime gateway owner / renderer adapter | 标准 Agent Runtime facade：`startTurn`、`readThread`、`respondAction`、`cancelTurn`、event subscription | 新 JSON-RPC 协议、Electron IPC、projection、React、mock fallback、Lime-only evidence export | `createAgentRuntimeClient`、`createAgentRuntimeClientFromSessionGateway`、event pipeline / verifier |
-| `@limecloud/agent-ui-contracts` | `npm install @limecloud/agent-ui-contracts` | `@limecloud/agent-ui-contracts` | contracts / adapter / tests | 共享 Agent UI event、runtime read model、message、timeline、graph、Subagents、fixtures、validation 类型 | 投影逻辑、React 组件、App Server client | `AgentRuntimeExecutionEvent`、`AgentUiProjectionState`、`agentUiConformanceFixtures`、`validateRuntimeEvent` |
-| `@limecloud/agent-runtime-projection` | `npm install @limecloud/agent-runtime-projection` | `@limecloud/agent-runtime-projection` | frontend adapter / store selector | `executionEvents` -> messages、timeline、graph、actions、tools、artifacts、evidence、summary、Subagents | transport、React 渲染、业务文案、session 持久化 | `projectAgentUiState`、`projectAgentRuntimeReadModel`、`replayAppServerFacts`、`projectAgentUiStateFromSessionSnapshot` |
-| `@limecloud/agent-runtime-ui` | `npm install @limecloud/agent-runtime-ui` | `@limecloud/agent-runtime-ui` | React App presentation layer | 渲染 `AgentUiProjectionState`、消息部件、过程时间线、执行图、action / artifact / evidence / subagents primitives | 调用 App Server、管理 store、打开业务页面、全局主题和产品文案 | `AgentUiProjectionView`、`UIMessagePartsView`、`ProcessTimelineView`、`ExecutionGraphView`、`RuntimeFactsPanel` |
-| `@limecloud/agent-capability-catalog` | `npm install @limecloud/agent-capability-catalog` | `@limecloud/agent-capability-catalog` | Product App / workbench adapter | 稳定 capability id、alias 归一、metadata contract、tool policy、allowlist 校验 | 启动 turn、订阅 events、渲染工作台、定义业务 Prompt | `resolveAgentCapabilityIds`、`buildAgentCapabilityPolicy`、`validateAgentCapabilities`、`AGENT_CAPABILITY_DEFINITIONS` |
-| `@limecloud/agent-workbench-adapter` | `npm install @limecloud/agent-workbench-adapter` | `@limecloud/agent-workbench-adapter` | Product App workbench controller | quick intent -> capability policy、composer submit mode、runtime facts summary、`lime.agent` turn payload 拼装 | React state、CSS、IPC、session store、provider key、业务文案 | `DEFAULT_AGENT_WORKBENCH_INTENTS`、`resolveWorkbenchIntentCapabilityPolicy`、`resolveWorkbenchSubmitMode`、`summarizeAgentRuntimeFacts`、`buildAgentTurnStartPayload` |
-| `@limecloud/lime-cli` | `npm install -g @limecloud/lime-cli` | `lime` binary | CLI / automation | `lime media image generate`、`lime media video generate`、`lime task ...`、`lime skill ...`、`lime doctor` | App runtime、React UI、业务应用状态 | `lime` 命令 |
+| 包                                    | 安装                                              | 主要入口                              | 典型 owner                                | 用在什么场景                                                                                                     | 不要用来做什么                                                                              | 关键导出                                                                                                                                                              |
+| ------------------------------------- | ------------------------------------------------- | ------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@limecloud/app-server-client`        | `npm install @limecloud/app-server-client`        | `@limecloud/app-server-client`        | Electron main / Node host / platform host | App Server JSON-RPC、stdio sidecar、manifest / sha256 / resources、`agentSession/*` transport、event router      | React UI、renderer bundle、业务 session store、provider key 策略                            | `AppServerClient`、`AppServerConnection`、`AppServerAgentEventRouter`、`startPackagedAppServerSidecar`、`createAgentRuntimeClient`                                    |
+| `@limecloud/agent-runtime-client`     | `npm install @limecloud/agent-runtime-client`     | 根入口、`./sessionGateway`            | runtime gateway owner / renderer adapter  | 标准 Agent Runtime facade：`startTurn`、`readThread`、`respondAction`、`cancelTurn`、event subscription          | 新 JSON-RPC 协议、Electron IPC、projection、React、mock fallback、Lime-only evidence export | `createAgentRuntimeClient`、`createAgentRuntimeClientFromSessionGateway`、event pipeline / verifier                                                                   |
+| `@limecloud/agent-ui-contracts`       | `npm install @limecloud/agent-ui-contracts`       | `@limecloud/agent-ui-contracts`       | contracts / adapter / tests               | 共享 Agent UI event、runtime read model、message、timeline、graph、Subagents、fixtures、validation 类型          | 投影逻辑、React 组件、App Server client                                                     | `AgentRuntimeExecutionEvent`、`AgentUiProjectionState`、`agentUiConformanceFixtures`、`validateRuntimeEvent`                                                          |
+| `@limecloud/agent-runtime-projection` | `npm install @limecloud/agent-runtime-projection` | `@limecloud/agent-runtime-projection` | frontend adapter / store selector         | `executionEvents` -> messages、timeline、graph、actions、tools、artifacts、evidence、summary、Subagents          | transport、React 渲染、业务文案、session 持久化                                             | `projectAgentUiState`、`projectAgentRuntimeReadModel`、`replayAppServerFacts`、`projectAgentUiStateFromSessionSnapshot`                                               |
+| `@limecloud/agent-runtime-ui`         | `npm install @limecloud/agent-runtime-ui`         | `@limecloud/agent-runtime-ui`         | React App presentation layer              | 渲染 `AgentUiProjectionState`、消息部件、过程时间线、执行图、action / artifact / evidence / subagents primitives | 调用 App Server、管理 store、打开业务页面、全局主题和产品文案                               | `AgentUiProjectionView`、`UIMessagePartsView`、`ProcessTimelineView`、`ExecutionGraphView`、`RuntimeFactsPanel`                                                       |
+| `@limecloud/agent-capability-catalog` | `npm install @limecloud/agent-capability-catalog` | `@limecloud/agent-capability-catalog` | Product App / workbench adapter           | 稳定 capability id、alias 归一、metadata contract、tool policy、allowlist 校验                                   | 启动 turn、订阅 events、渲染工作台、定义业务 Prompt                                         | `resolveAgentCapabilityIds`、`buildAgentCapabilityPolicy`、`validateAgentCapabilities`、`AGENT_CAPABILITY_DEFINITIONS`                                                |
+| `@limecloud/agent-workbench-adapter`  | `npm install @limecloud/agent-workbench-adapter`  | `@limecloud/agent-workbench-adapter`  | Product App workbench controller          | quick intent -> capability policy、composer submit mode、runtime facts summary、`lime.agent` turn payload 拼装   | React state、CSS、IPC、session store、provider key、业务文案                                | `DEFAULT_AGENT_WORKBENCH_INTENTS`、`resolveWorkbenchIntentCapabilityPolicy`、`resolveWorkbenchSubmitMode`、`summarizeAgentRuntimeFacts`、`buildAgentTurnStartPayload` |
+| `@limecloud/lime`                     | `npm install -g @limecloud/lime`                  | `lime` binary                         | CLI / TUI host                            | `lime`、`lime exec`、`lime resume`、`lime thread`、`lime mcp`、`lime skills`                                     | App runtime、React UI、独立任务状态机                                                       | `lime` 命令                                                                                                                                                           |
 
 ## 标准 Runtime 边界
 
@@ -143,9 +143,11 @@ import { createAgentRuntimeClientFromSessionGateway } from "@limecloud/agent-run
 
 const runtime = createAgentRuntimeClientFromSessionGateway({
   startTurn: (params, options) => appServerGateway.startTurn(params, options),
-  readSession: (params, options) => appServerGateway.readSession(params, options),
+  readSession: (params, options) =>
+    appServerGateway.readSession(params, options),
   cancelTurn: (params, options) => appServerGateway.cancelTurn(params, options),
-  respondAction: (params, options) => appServerGateway.respondAction(params, options),
+  respondAction: (params, options) =>
+    appServerGateway.respondAction(params, options),
   nextEvent: (timeoutMs) => appServerGateway.nextEvent(timeoutMs),
 });
 ```
@@ -271,14 +273,14 @@ const toolPolicy = buildAgentCapabilityPolicy({
 
 迁移 Claw / Plugin 前端实现时，不要把整页 React、store、CSS 或命令面板复制到每个 Product App。按下面的边界拆：
 
-| Claw 中的能力 | 应落到哪里 | Product App 还要自己保留什么 |
-| --- | --- | --- |
-| `@` 命令、quick intent、任务类型到 capability 的映射 | `@limecloud/agent-workbench-adapter` + `@limecloud/agent-capability-catalog` | 页面入口、文案、业务对象选择和默认 intent。 |
-| 历史 alias，例如 `web_search`、`image_generation`、`pdf_extract` | `@limecloud/agent-capability-catalog` | 自己页面允许哪些能力的 allowlist。 |
-| runtime events 到消息 / timeline / action / artifact 的解释 | `@limecloud/agent-runtime-projection` | 本地 session store、可见范围 selector、业务路由。 |
-| 标准 Agent runtime 展示组件 | `@limecloud/agent-runtime-ui` | 产品设计语言、i18n labels、页面布局、业务卡片。 |
-| sidecar、App Server JSON-RPC、`agentSession/*` | `@limecloud/app-server-client` 或平台宿主 | 资源准备、provider store、IPC / bridge、安全边界。 |
-| Product App 专属工作流，例如内容工厂草稿、素材库、审核交付 | Product App 自己 | 不下沉到共享包，除非多个 App 已经证明需要同一 contract。 |
+| Claw 中的能力                                                    | 应落到哪里                                                                   | Product App 还要自己保留什么                             |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `@` 命令、quick intent、任务类型到 capability 的映射             | `@limecloud/agent-workbench-adapter` + `@limecloud/agent-capability-catalog` | 页面入口、文案、业务对象选择和默认 intent。              |
+| 历史 alias，例如 `web_search`、`image_generation`、`pdf_extract` | `@limecloud/agent-capability-catalog`                                        | 自己页面允许哪些能力的 allowlist。                       |
+| runtime events 到消息 / timeline / action / artifact 的解释      | `@limecloud/agent-runtime-projection`                                        | 本地 session store、可见范围 selector、业务路由。        |
+| 标准 Agent runtime 展示组件                                      | `@limecloud/agent-runtime-ui`                                                | 产品设计语言、i18n labels、页面布局、业务卡片。          |
+| sidecar、App Server JSON-RPC、`agentSession/*`                   | `@limecloud/app-server-client` 或平台宿主                                    | 资源准备、provider store、IPC / bridge、安全边界。       |
+| Product App 专属工作流，例如内容工厂草稿、素材库、审核交付       | Product App 自己                                                             | 不下沉到共享包，除非多个 App 已经证明需要同一 contract。 |
 
 判断标准：如果代码依赖某个产品页面、路由、文案、素材结构或 CSS，它通常不该进入 `packages/`。如果代码只处理 runtime facts、capability id、intent policy 或纯 projection，它才适合进入共享包。
 

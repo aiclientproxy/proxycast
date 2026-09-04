@@ -14,6 +14,9 @@ const {
   lifecycleConfigs,
   lifecycleInitializeParams,
   lifecycleOptions,
+  lifecycleRestarts,
+  notificationObservers,
+  serverRequestHandlers,
   enqueueFakeNotifications,
   emitFakeNotification,
   recordedRequests,
@@ -31,6 +34,7 @@ const {
     dataDir?: string;
   }> = [];
   const lifecycleInitializeParams: unknown[] = [];
+  const lifecycleRestarts: number[] = [];
   const lifecycleOptions: Array<{
     env?: Record<string, string | undefined>;
     onExit?: (event: {
@@ -40,11 +44,21 @@ const {
       stderrLines: string[];
     }) => void;
     onRestarted?: (connected: unknown) => void;
+    onRestartFailed?: (event: {
+      attempt: number;
+      error: unknown;
+      stderrLines?: string[];
+    }) => void;
   }> = [];
   const mirroredNotifications: JsonRpcMessage[] = [];
-  let notificationObserver:
-    | ((message: JsonRpcNotification) => void)
-    | null = null;
+  const notificationObservers: Array<
+    ((message: JsonRpcNotification) => void) | null
+  > = [];
+  const serverRequestHandlers: Array<
+    ((message: JsonRpcRequest) => Promise<boolean> | boolean) | null
+  > = [];
+  let notificationObserver: ((message: JsonRpcNotification) => void) | null =
+    null;
   const delayedStaleErrorReadyResolvers: Array<() => void> = [];
   let systemProxyRules = "DIRECT";
   const resolveProxyMock = vi.fn(async () => systemProxyRules);
@@ -161,22 +175,24 @@ const {
       if (!message) {
         throw new Error("no server message");
       }
-      if (
-        "method" in message &&
-        !("id" in message) &&
-        notificationObserver
-      ) {
+      if ("method" in message && !("id" in message) && notificationObserver) {
         notificationObserver(message as JsonRpcNotification);
       }
       return message;
     }),
     setNotificationObserver: vi.fn(
+      (observer: ((message: JsonRpcNotification) => void) | null) => {
+        notificationObserver = observer;
+        notificationObservers.push(observer);
+      },
+    ),
+    setServerRequestHandler: vi.fn(
       (
-        observer:
-          | ((message: JsonRpcNotification) => void)
+        handler:
+          | ((message: JsonRpcRequest) => Promise<boolean> | boolean)
           | null,
       ) => {
-        notificationObserver = observer;
+        serverRequestHandlers.push(handler);
       },
     ),
   };
@@ -208,11 +224,7 @@ const {
   }
 
   function emitFakeNotification(message: JsonRpcMessage): void {
-    if (
-      "method" in message &&
-      !("id" in message) &&
-      notificationObserver
-    ) {
+    if ("method" in message && !("id" in message) && notificationObserver) {
       notificationObserver(message as JsonRpcNotification);
     }
   }
@@ -259,6 +271,12 @@ const {
       this.connected = undefined;
       return undefined;
     }
+
+    async restart() {
+      lifecycleRestarts.push(lifecycleRestarts.length + 1);
+      this.connected = createFakeConnected();
+      return this.connected;
+    }
   }
 
   return {
@@ -268,6 +286,9 @@ const {
     lifecycleConfigs,
     lifecycleInitializeParams,
     lifecycleOptions,
+    lifecycleRestarts,
+    notificationObservers,
+    serverRequestHandlers,
     enqueueFakeNotifications,
     emitFakeNotification,
     recordedRequests,
@@ -276,7 +297,10 @@ const {
       lifecycleConfigs.length = 0;
       lifecycleInitializeParams.length = 0;
       lifecycleOptions.length = 0;
+      lifecycleRestarts.length = 0;
       mirroredNotifications.length = 0;
+      notificationObservers.length = 0;
+      serverRequestHandlers.length = 0;
       delayedStaleErrorReadyResolvers.length = 0;
       systemProxyRules = "DIRECT";
       resolveProxyMock.mockClear();
@@ -289,6 +313,7 @@ const {
       fakeConnection.nextNotification.mockClear();
       fakeConnection.nextServerMessage.mockClear();
       fakeConnection.setNotificationObserver.mockClear();
+      fakeConnection.setServerRequestHandler.mockClear();
       notificationObserver = null;
       fakeSidecarChild.kill.mockClear();
     },
@@ -507,6 +532,156 @@ describe("ElectronAppServerHost", () => {
     await expect(drain).resolves.toEqual({ lines: [] });
     expect(lifecycleConfigs).toHaveLength(1);
     warnSpy.mockRestore();
+  });
+
+  it("系统恢复时只执行一次重连，并拒绝旧连接的通知回写", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    await host.warmup();
+
+    const oldObserver = notificationObservers[0];
+    const firstRecovery = host.recoverAfterSystemResume();
+    const secondRecovery = host.recoverAfterSystemResume();
+    await Promise.all([firstRecovery, secondRecovery]);
+
+    expect(lifecycleRestarts).toEqual([1]);
+    expect(notificationObservers).toHaveLength(2);
+    expect(serverRequestHandlers).toHaveLength(2);
+
+    await expect(
+      serverRequestHandlers[0]?.({
+        id: "stale-request",
+        method: "item/tool/requestUserInput",
+        params: {},
+      }),
+    ).resolves.toBe(false);
+
+    oldObserver?.({
+      method: "stale/notification",
+      params: { source: "old-connection" },
+    });
+    notificationObservers[1]?.({
+      method: "current/notification",
+      params: { source: "new-connection" },
+    });
+
+    const replayed = await host.drainEvents({
+      includeRecent: true,
+      limit: 10,
+    });
+    const methods = replayed.lines
+      .map((line) => decodeMessage(line))
+      .map((message) => ("method" in message ? message.method : ""));
+    expect(methods).toEqual(["current/notification"]);
+  });
+
+  it("Desktop Host 诊断应包含连接代际并脱敏 sidecar 失败上下文", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      expect(host.getDiagnostics()).toMatchObject({
+        schema_version: 1,
+        stage: "idle",
+        connected: false,
+        connection_generation: 0,
+        sidecar: null,
+      });
+
+      await host.warmup();
+      expect(host.getDiagnostics()).toMatchObject({
+        stage: "ready",
+        connected: true,
+        connection_generation: 1,
+        sidecar: {
+          pid: 4321,
+          running: true,
+        },
+      });
+
+      lifecycleOptions[0].onExit?.({
+        attempt: 1,
+        code: 17,
+        signal: null,
+        stderrLines: [
+          "token=super-secret-123456 /Users/coso/private/config.yaml",
+          ...Array.from({ length: 25 }, (_, index) => `line-${index}`),
+        ],
+      });
+
+      const diagnostics = host.getDiagnostics();
+      expect(diagnostics).toMatchObject({
+        stage: "restarting",
+        connected: false,
+        connection_generation: 1,
+        sidecar: null,
+        last_failure: {
+          stage: "restarting",
+          exit_code: 17,
+          signal: null,
+        },
+      });
+      expect(diagnostics.last_failure?.stderr_tail).toHaveLength(20);
+      expect(diagnostics.last_failure?.stderr_tail.join("\n")).not.toContain(
+        "super-secret-123456",
+      );
+      expect(diagnostics.last_failure?.stderr_tail.join("\n")).not.toContain(
+        "/Users/coso",
+      );
+      const [, loggedFailure] = warnSpy.mock.calls.at(-1) ?? [];
+      expect(loggedFailure).toMatchObject({
+        attempt: 1,
+        exit_code: 17,
+        stderr_tail: expect.any(Array),
+      });
+      expect(JSON.stringify(loggedFailure)).not.toContain(
+        "super-secret-123456",
+      );
+      expect(JSON.stringify(loggedFailure)).not.toContain("/Users/coso");
+
+      lifecycleOptions[0].onRestartFailed?.({
+        attempt: 2,
+        error: new Error(
+          "Bearer restart-secret-123456 /private/tmp/restart-config.yaml",
+        ),
+        stderrLines: ["api_key=restart-secret-123456"],
+      });
+      const [, loggedRestartFailure] = warnSpy.mock.calls.at(-1) ?? [];
+      expect(JSON.stringify(loggedRestartFailure)).not.toContain(
+        "restart-secret-123456",
+      );
+      expect(JSON.stringify(loggedRestartFailure)).not.toContain(
+        "/private/tmp",
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("系统恢复期间已有自动重启时应等待原有 waiter，不能重复拉起 sidecar", async () => {
+    const { ElectronAppServerHost } = await import("./appServerHost");
+    const host = new ElectronAppServerHost();
+    await host.warmup();
+
+    lifecycleOptions[0].onExit?.({
+      attempt: 1,
+      code: null,
+      signal: "SIGTERM",
+      stderrLines: [],
+    });
+    const recovery = host.recoverAfterSystemResume();
+    await expect(
+      Promise.race([
+        recovery.then(() => "resolved"),
+        Promise.resolve("pending"),
+      ]),
+    ).resolves.toBe("pending");
+    expect(lifecycleRestarts).toEqual([]);
+
+    lifecycleOptions[0].onRestarted?.(createFakeConnected());
+    await recovery;
+    expect(lifecycleRestarts).toEqual([]);
   });
 
   it("显式 AgentRoot override 时 App Server 不再写默认 userData root", async () => {

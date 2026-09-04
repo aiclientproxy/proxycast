@@ -9,11 +9,18 @@
 - `deprecated`：只允许迁出和删除。
 - `dead`：无入口或已被替代，删除并补回流守卫。
 
-Agent 产品主链固定为：
+Agent 业务主链固定为：
 
-`Electron Desktop Host -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection -> GUI`
+`Product Surface -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item projection`
 
-其中 provider request/lowering 归 `model-provider`，工具定义、权限和执行归 `tool-runtime`，回合编排归 `agent-runtime` 与 App Server，持久化/read model 归 App Server、`thread-store` 与 repository。Electron 只负责 desktop host，不成为第二套 runtime。
+当前 surface 有两条 current host 链，但没有两套业务后端：
+
+- `Electron Desktop Host -> Renderer GUI` 负责桌面宿主与图形交互。
+- `CLI/TUI Host -> tui` 负责终端参数、终端生命周期与文本交互。
+
+两条链必须共享 `app-server-protocol`、`app-server-client`、RuntimeCore、ThreadStore、provider、工具和 canonical projection。未来 Cloud 只能在 `app-server-client` transport 边界增加经过认证的远端连接，并继续消费同一 JSON-RPC 与 read model；不得复制 runtime、状态机、工具 registry 或持久化。
+
+其中 provider request/lowering 归 `model-provider`，工具定义、权限和执行归 `tool-runtime`，回合编排归 `agent-runtime` 与 App Server，持久化/read model 归 App Server、`thread-store` 与 repository。Electron 只负责 desktop host，CLI/TUI 只负责 terminal host，两者都不成为第二套 runtime。
 
 运行时项目指令的 current 入口是标准 `CODEX_HOME/AGENTS.md` 与项目层 `AGENTS.md` / `AGENTS.override.md`；`lime-rs/crates/agent/src/prompt/runtime_agents.rs` 可继续读取 `.lime/AGENTS.md` / `.lime/AGENTS.override.md` 作为只委托旧文件位置的 `compat` fallback。该 fallback 不得扩散到其它 owner，也不得承接新语义。
 

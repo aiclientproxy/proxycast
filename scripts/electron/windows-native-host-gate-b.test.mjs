@@ -38,6 +38,7 @@ describe("windows-native-host-gate-b", () => {
     expect(source).toContain(
       "candidateRunId: process.env.LIME_GATE_RUN_ID?.trim() || null",
     );
+    expect(source).toContain("process.env.LIME_CANDIDATE_SHA");
     expect(source).toContain(
       "electronExecutable: path.resolve(options.electronExecutable)",
     );

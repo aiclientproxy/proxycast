@@ -193,7 +193,7 @@ export const CONTENT_EXACT_TOOL_CONFIGS = [
     },
   ],
   [
-    "limecreatevideogenerationtask",
+    "videogenerate",
     {
       family: "task",
       label: "视频生成",
@@ -362,7 +362,7 @@ export const CONTENT_EXACT_TOOL_CONFIGS = [
 ] as const satisfies ReadonlyArray<readonly [string, ToolDisplayConfig]>;
 
 export const CONTENT_CREATE_TASK_TOOL_KEYS = new Set([
-  "limecreatevideogenerationtask",
+  "videogenerate",
   "limecreateaudiogenerationtask",
   "limecreatetranscriptiontask",
   "limecreatebroadcastgenerationtask",
@@ -390,7 +390,7 @@ export const CONTENT_TOOL_USER_FACING_COPY: Partial<
     key: "userFacing.coverImageGeneration",
     defaultValue: "Generate cover image",
   },
-  limecreatevideogenerationtask: {
+  videogenerate: {
     key: "userFacing.videoGeneration",
     defaultValue: "Generate video",
   },

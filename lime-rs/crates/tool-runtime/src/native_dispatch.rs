@@ -27,6 +27,9 @@ use crate::tool_search::{
 use crate::update_plan::{
     runtime_plan_update_executor_handle, update_plan_definition, UPDATE_PLAN_LEGACY_ALIASES,
 };
+use crate::video_task::{
+    runtime_video_task_executor_handle, video_task_tool_definition, VideoTaskGateway,
+};
 use crate::view_image::{
     runtime_view_image_executor_handle, view_image_tool_definition, VIEW_IMAGE_LEGACY_ALIASES,
 };
@@ -142,6 +145,14 @@ impl NativeDispatchBuilder {
         self.register(
             image_task_tool_definition(),
             runtime_image_task_executor_handle(gateway),
+            &[],
+        )
+    }
+
+    pub fn with_video_task_gateway(self, gateway: Arc<dyn VideoTaskGateway>) -> Self {
+        self.register(
+            video_task_tool_definition(),
+            runtime_video_task_executor_handle(gateway),
             &[],
         )
     }
@@ -309,15 +320,16 @@ mod tests {
     use crate::sleep::SLEEP_TOOL_NAME;
     use crate::tool_executor::{RuntimeToolExecutionContext, RuntimeToolExecutionContextInput};
     use crate::update_plan::UPDATE_PLAN_NAME;
+    use crate::video_task::VideoTaskGateway;
     use crate::view_image::VIEW_IMAGE_TOOL_NAME;
     use crate::web_fetch::WEB_FETCH_TOOL_NAME;
     use crate::web_search::WEB_SEARCH_TOOL_NAME;
     use app_server_protocol::{
         McpResourceListResponse, McpToolListResponse, McpToolSearchParams,
-        MediaTaskArtifactImageCreateParams, MediaTaskArtifactResponse, MemoryStoreAddNoteParams,
-        MemoryStoreAddNoteResponse, MemoryStoreCitation, MemoryStoreListParams,
-        MemoryStoreListResponse, MemoryStoreReadParams, MemoryStoreReadResponse,
-        MemoryStoreSearchParams, MemoryStoreSearchResponse,
+        MediaTaskArtifactImageCreateParams, MediaTaskArtifactResponse,
+        MediaTaskArtifactVideoCreateParams, MemoryStoreAddNoteParams, MemoryStoreAddNoteResponse,
+        MemoryStoreCitation, MemoryStoreListParams, MemoryStoreListResponse, MemoryStoreReadParams,
+        MemoryStoreReadResponse, MemoryStoreSearchParams, MemoryStoreSearchResponse,
     };
     use async_trait::async_trait;
     use serde_json::json;
@@ -424,6 +436,19 @@ mod tests {
     }
 
     #[derive(Default)]
+    struct DefinitionOnlyVideoGateway;
+
+    #[async_trait]
+    impl VideoTaskGateway for DefinitionOnlyVideoGateway {
+        async fn create_video_media_task_artifact(
+            &self,
+            _params: MediaTaskArtifactVideoCreateParams,
+        ) -> Result<MediaTaskArtifactResponse, String> {
+            Ok(MediaTaskArtifactResponse::default())
+        }
+    }
+
+    #[derive(Default)]
     struct DefinitionOnlyToolSearchGateway;
 
     #[async_trait]
@@ -507,6 +532,7 @@ mod tests {
         let dispatch = NativeDispatch::builder()
             .with_memory_store_gateway(Arc::new(DefinitionOnlyMemoryGateway))
             .with_image_task_gateway(Arc::new(DefinitionOnlyImageGateway))
+            .with_video_task_gateway(Arc::new(DefinitionOnlyVideoGateway))
             .with_tool_search_gateway(Arc::new(DefinitionOnlyToolSearchGateway))
             .with_mcp_resource_gateway(Arc::new(DefinitionOnlyMcpResourceGateway))
             .build();
@@ -523,6 +549,7 @@ mod tests {
                 crate::memory_store::MEMORY_SEARCH_TOOL_NAME,
                 crate::memory_store::MEMORY_ADD_NOTE_TOOL_NAME,
                 crate::image_task::IMAGE_TASK_TOOL_NAME,
+                crate::video_task::VIDEO_TASK_TOOL_NAME,
                 crate::tool_search::TOOL_SEARCH_TOOL_NAME,
                 crate::mcp_resource::LIST_MCP_RESOURCES_TOOL_NAME,
                 crate::mcp_resource::READ_MCP_RESOURCE_TOOL_NAME,
@@ -535,6 +562,10 @@ mod tests {
         assert_eq!(
             dispatch.canonical_name(crate::image_task::IMAGE_TASK_TOOL_NAME),
             Some(crate::image_task::IMAGE_TASK_TOOL_NAME)
+        );
+        assert_eq!(
+            dispatch.canonical_name(crate::video_task::VIDEO_TASK_TOOL_NAME),
+            Some(crate::video_task::VIDEO_TASK_TOOL_NAME)
         );
         assert_eq!(
             dispatch.canonical_name("ToolSearch"),
@@ -581,6 +612,7 @@ mod tests {
                     vec![]
                 ),
                 (crate::image_task::IMAGE_TASK_TOOL_NAME.to_string(), vec![]),
+                (crate::video_task::VIDEO_TASK_TOOL_NAME.to_string(), vec![]),
                 (
                     crate::tool_search::TOOL_SEARCH_TOOL_NAME.to_string(),
                     TOOL_SEARCH_LOOKUP_ALIASES.to_vec()

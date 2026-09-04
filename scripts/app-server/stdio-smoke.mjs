@@ -59,52 +59,25 @@ async function main() {
       },
     );
 
-    const sessionId = "appserver_stdio_smoke_session";
-    const threadId = "appserver_stdio_smoke_thread";
-    const sessionRequest = connected.client.startSession({
-      sessionId,
-      threadId,
-      appId: "content-studio",
-      workspaceId: "smoke",
+    const threadRequest = connected.client.startSession({
+      cwd: tempDir,
+      runtimeWorkspaceRoots: [tempDir],
     });
-    connected.sidecar.send(sessionRequest);
-    const sessionResponse = await nextResponseForRequest(
+    connected.sidecar.send(threadRequest);
+    const threadResponse = await nextResponseForRequest(
       connected.sidecar,
-      sessionRequest.id,
+      threadRequest.id,
       "thread/start",
-    );
-    const sessionResult = expectResponseResult(
-      sessionResponse,
-      sessionRequest.id,
-      "thread/start",
-    );
-    assertEqual(sessionResult.session.sessionId, sessionId, "session id");
-    assertEqual(sessionResult.session.threadId, threadId, "thread id");
-
-    const turnRequest = connected.client.startTurn({
-      sessionId,
-      input: {
-        text: "stdio smoke",
-      },
-      runtimeOptions: {
-        stream: true,
-      },
-    });
-    connected.sidecar.send(turnRequest);
-    const turnResponse = await nextResponseForRequest(
-      connected.sidecar,
-      turnRequest.id,
-      "turn/start",
     );
     expectResponseError(
-      turnResponse,
-      turnRequest.id,
-      "turn/start",
-      "standalone app-server backend is not configured",
+      threadResponse,
+      threadRequest.id,
+      "thread/start",
+      "runtime model route is not executable",
     );
 
     console.log(
-      `[smoke:app-server-stdio] ok binary=${binaryPath} source=${binaryResolution.source} protocol=${connected.initializeResponse.serverInfo.protocolVersion} session=${sessionId} backend=unavailable turn=fail-closed`,
+      `[smoke:app-server-stdio] ok binary=${binaryPath} source=${binaryResolution.source} protocol=${connected.initializeResponse.serverInfo.protocolVersion} backend=unavailable thread=fail-closed`,
     );
   } finally {
     await connected?.sidecar.close();
@@ -137,16 +110,6 @@ async function assertBinaryExists(targetPath) {
   }
 }
 
-function expectResponseResult(message, id, label) {
-  if (message?.error) {
-    throw new Error(`${label} failed: ${message.error.message}`);
-  }
-  if (!message || message.id !== id || !("result" in message)) {
-    throw new Error(`expected ${label} response for request ${String(id)}`);
-  }
-  return message.result;
-}
-
 function expectResponseError(message, id, label, expectedMessage) {
   if (!message || message.id !== id || !("error" in message)) {
     throw new Error(
@@ -160,12 +123,6 @@ function expectResponseError(message, id, label, expectedMessage) {
     );
   }
   return message.error;
-}
-
-function assertEqual(actual, expected, label) {
-  if (actual !== expected) {
-    throw new Error(`unexpected ${label}: expected ${expected}, got ${actual}`);
-  }
 }
 
 main().catch((error) => {

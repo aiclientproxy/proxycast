@@ -18,14 +18,14 @@ describe("limeTaskProtocolNoise", () => {
   it("应把内容工作台任务协议错误映射为具体失败文案", () => {
     expect(
       isLimeTaskProtocolFailure({
-        toolName: "lime_create_video_generation_task",
-        text: "-32603: -32002: lime_create_video_generation_task",
+        toolName: "video_generate",
+        text: "-32603: -32002: video_generate",
       }),
     ).toBe(true);
     expect(
       resolveLimeTaskProtocolFailureDisplayText({
-        toolName: "lime_create_video_generation_task",
-        text: "-32603: -32002: lime_create_video_generation_task",
+        toolName: "video_generate",
+        text: "-32603: -32002: video_generate",
       }),
     ).toBe("视频生成失败");
 
@@ -58,8 +58,8 @@ describe("limeTaskProtocolNoise", () => {
 
     expect(
       resolveLimeTaskProtocolFailureDisplayText({
-        toolName: "lime_create_video_generation_task",
-        text: "-32603: -32002: lime_create_video_generation_task",
+        toolName: "video_generate",
+        text: "-32603: -32002: video_generate",
       }),
     ).toBe("Video generation failed");
   });

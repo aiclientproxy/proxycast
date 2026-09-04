@@ -269,7 +269,7 @@ const HARNESS_CLEANUP_CONTRACT_FILES = new Set([
 
 const INTEGRITY_FILES = new Set([
   "package.json",
-  "packages/lime-cli-npm/package.json",
+  "packages/cli/package.json",
   "lime-rs/Cargo.toml",
   "forge.config.mjs",
   "scripts/check-app-version-consistency.mjs",

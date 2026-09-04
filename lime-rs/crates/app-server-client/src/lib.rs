@@ -17,6 +17,12 @@ pub use app_server_protocol::protocol::v2::METHOD_THREAD_DECREMENT_ELICITATION;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_INCREMENT_ELICITATION;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_INJECT_ITEMS;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_LOADED_LIST;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_ADD;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_DELETE;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_LIST;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_REORDER;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_START;
+pub use app_server_protocol::protocol::v2::METHOD_THREAD_QUEUE_UPDATE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_REVERT;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SEARCH_OCCURRENCES;
@@ -28,6 +34,7 @@ pub use app_server_protocol::protocol::v2::METHOD_THREAD_SECTION_UPDATE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_SHELL_COMMAND;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNARCHIVE;
 pub use app_server_protocol::protocol::v2::METHOD_THREAD_UNSUBSCRIBE;
+pub use app_server_protocol::protocol::v2::METHOD_TURN_STEER;
 use app_server_protocol::protocol::v2::NOTIFICATION_METHODS;
 pub use app_server_protocol::protocol::v2::{
     FsChangedNotification, FsCopyParams, FsCopyResponse, FsCreateDirectoryParams,
@@ -62,6 +69,14 @@ pub use app_server_protocol::protocol::v2::{
     METHOD_FS_GET_METADATA, METHOD_FS_READ_DIRECTORY, METHOD_FS_READ_FILE, METHOD_FS_REMOVE,
     METHOD_FS_UNWATCH, METHOD_FS_WATCH, METHOD_FS_WRITE_FILE, METHOD_PROCESS_KILL,
     METHOD_PROCESS_RESIZE_PTY, METHOD_PROCESS_SPAWN, METHOD_PROCESS_WRITE_STDIN,
+};
+pub use app_server_protocol::protocol::v2::{
+    QueuedSubmission, ThreadQueueAddParams, ThreadQueueAddResponse, ThreadQueueDeleteParams,
+    ThreadQueueDeleteResponse, ThreadQueueListParams, ThreadQueueListResponse,
+    ThreadQueueReorderParams, ThreadQueueReorderResponse, ThreadQueueStartParams,
+    ThreadQueueStartResponse, ThreadQueueUpdateParams, ThreadQueueUpdateResponse,
+    ThreadResumeParams, ThreadResumeResponse, ThreadStartParams, ThreadStartResponse,
+    TurnSteerParams, TurnSteerResponse,
 };
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportParams;
 pub use app_server_protocol::AgentSessionAnalysisHandoffExportResponse;
@@ -382,6 +397,12 @@ use app_server_transport::encode_message;
 use serde::Serialize;
 use thiserror::Error;
 
+mod session;
+mod transport;
+
+pub use session::{ClientSession, RequestHandle, SessionError, SessionEvent};
+pub use transport::{SessionTransport, StdioTransport, StdioTransportConfig};
+
 #[derive(Debug, Error)]
 pub enum ClientError {
     #[error("invalid request params: {0}")]
@@ -448,7 +469,7 @@ fn validate_mcp_prompt_target(server: &str, name: &str) -> Result<(), ClientErro
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClientEvent {
-    Lifecycle(ServerNotification),
+    Lifecycle(Box<ServerNotification>),
     AgentSession(JsonRpcNotification),
     Notification(JsonRpcNotification),
     Request(JsonRpcRequest),
@@ -481,6 +502,7 @@ impl TryFrom<JsonRpcMessage> for ClientEvent {
                 if NOTIFICATION_METHODS.contains(&notification.method.as_str()) =>
             {
                 ServerNotification::try_from(notification)
+                    .map(Box::new)
                     .map(Self::Lifecycle)
                     .map_err(ClientError::InvalidNotification)
             }

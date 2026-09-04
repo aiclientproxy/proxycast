@@ -528,10 +528,17 @@ describe("Electron current testing docs guard", () => {
     const workflowGuard = readFile(
       "scripts/electron/release-workflow-guard.mjs",
     );
+    const workflowMatrixGuard = readFile(
+      "scripts/electron/lib/release-workflow-matrix-guard.mjs",
+    );
     expect(workflowGuard).toContain("validateReleaseWorkflow");
-    expect(workflowGuard).toContain("macos-15");
-    expect(workflowGuard).toContain("macos-15-intel");
-    expect(workflowGuard).toContain("windows-2022");
+    expect(workflowGuard).toContain("validateReleaseMatrix");
+    expect(workflowGuard).toContain(
+      "./lib/release-workflow-matrix-guard.mjs",
+    );
+    expect(workflowMatrixGuard).toContain("macos-15");
+    expect(workflowMatrixGuard).toContain("macos-15-intel");
+    expect(workflowMatrixGuard).toContain("windows-2022");
     expect(workflowGuard).toContain("electron-forge make");
     expect(workflowGuard).toContain("APPLE_CERTIFICATE");
     expect(workflowGuard).toContain("WINDOWS_SIGNING_CERTIFICATE");

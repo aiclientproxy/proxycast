@@ -6,7 +6,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "1.139.0"
+version = "1.140.0"
 edition = "2021"
 authors = ["coso"]
 repository = "https://github.com/aiclientproxy/lime"
@@ -42,6 +42,7 @@ app-server-daemon = { path = "crates/app-server-daemon" }
 app-server-protocol = { path = "crates/app-server-protocol" }
 app-server-test-client = { path = "crates/app-server-test-client" }
 app-server-transport = { path = "crates/app-server-transport" }
+tui = { path = "crates/tui" }
 patch-apply = { path = "crates/patch-apply" }
 voice-core = { path = "crates/voice-core" }
 document-preview = { path = "crates/document-preview" }
@@ -58,6 +59,8 @@ futures = "0.3"
 async-stream = "0.3"
 async-trait = "0.1"
 clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4.5"
+crossterm = { version = "0.29", features = ["event-stream"] }
 deno_core_icudata = "0.77.0"
 v8 = { version = "=150.4.0", features = ["v8_enable_sandbox"] }
 
@@ -136,6 +139,9 @@ scopeguard = "1"
 sysinfo = "0.32"
 whoami = "1"
 jsonschema = "0.30.0"
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+unicode-segmentation = "1.12"
+unicode-width = "0.2"
 
 # 音频
 cpal = "0.15"

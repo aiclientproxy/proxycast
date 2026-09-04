@@ -105,6 +105,107 @@ type AppServerRestartWaiter = {
   resolve: (connected: ConnectedAppServerSidecar) => void;
 };
 
+type AppServerHostStage =
+  | "idle"
+  | "resolving"
+  | "starting"
+  | "initializing"
+  | "ready"
+  | "recovering"
+  | "restarting"
+  | "failed"
+  | "stopping"
+  | "stopped";
+
+type AppServerHostFailure = {
+  stage: AppServerHostStage;
+  message: string;
+  occurred_at: string;
+  exit_code: number | null;
+  signal: string | null;
+  stderr_tail: string[];
+};
+
+export type AppServerHostDiagnostics = {
+  schema_version: 1;
+  stage: AppServerHostStage;
+  connected: boolean;
+  connection_generation: number;
+  restart_pending: boolean;
+  resume_recovery_pending: boolean;
+  sidecar: {
+    pid: number | null;
+    running: boolean;
+    exit_code: number | null;
+    signal: string | null;
+    stderr_line_count: number;
+    stderr_tail: string[];
+  } | null;
+  last_failure: AppServerHostFailure | null;
+};
+
+const APP_SERVER_HOST_DIAGNOSTIC_SCHEMA_VERSION = 1 as const;
+const APP_SERVER_HOST_STDERR_TAIL_LIMIT = 20;
+const APP_SERVER_HOST_STDERR_LINE_LIMIT = 240;
+const APP_SERVER_HOST_ERROR_LIMIT = 320;
+const DIAGNOSTIC_SECRET_PATTERNS: Array<[RegExp, string]> = [
+  [/\bBearer\s+[A-Za-z0-9._-]+\b/gi, "Bearer ***"],
+  [
+    /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token)\s*[:=]\s*["']?[A-Za-z0-9._-]{6,}["']?/gi,
+    "credential=***",
+  ],
+  [/\bsk-[A-Za-z0-9]{12,}\b/g, "sk-***"],
+];
+const DIAGNOSTIC_ABSOLUTE_PATH_PATTERN =
+  /(?:[A-Za-z]:[\\/]|\/(?:Users|home|private|tmp|var|opt|workspace|Volumes|Applications|Library)(?:\/|\\))[^\s"'`),;]+/g;
+
+function redactDiagnosticText(value: unknown, limit: number): string {
+  let text = value instanceof Error ? value.message : String(value ?? "");
+  for (const [pattern, replacement] of DIAGNOSTIC_SECRET_PATTERNS) {
+    text = text.replace(pattern, replacement);
+  }
+  text = text.replace(DIAGNOSTIC_ABSOLUTE_PATH_PATTERN, "<path>");
+  text = text.replace(/\s+/g, " ").trim();
+  return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
+}
+
+function redactDiagnosticStderrTail(lines: readonly string[]): string[] {
+  return lines
+    .slice(-APP_SERVER_HOST_STDERR_TAIL_LIMIT)
+    .map((line) =>
+      redactDiagnosticText(line, APP_SERVER_HOST_STDERR_LINE_LIMIT),
+    )
+    .filter(Boolean);
+}
+
+function buildHostFailure(params: {
+  stage: AppServerHostStage;
+  error?: unknown;
+  exitCode?: number | null;
+  signal?: string | null;
+  stderrLines?: readonly string[];
+}): AppServerHostFailure {
+  const stderrTail = redactDiagnosticStderrTail(params.stderrLines ?? []);
+  return {
+    stage: params.stage,
+    message: redactDiagnosticText(params.error, APP_SERVER_HOST_ERROR_LIMIT),
+    occurred_at: new Date().toISOString(),
+    exit_code: params.exitCode ?? null,
+    signal: params.signal ?? null,
+    stderr_tail: stderrTail,
+  };
+}
+
+function readDiagnosticStderrLines(error: unknown): readonly string[] {
+  if (!error || typeof error !== "object") {
+    return [];
+  }
+  const lines = (error as { stderrLines?: unknown }).stderrLines;
+  return Array.isArray(lines)
+    ? lines.filter((line): line is string => typeof line === "string")
+    : [];
+}
+
 export class ElectronAppServerHost {
   #lifecycle: AppServerSidecarLifecycle | null = null;
   #connected: ConnectedAppServerSidecar | null = null;
@@ -116,6 +217,10 @@ export class ElectronAppServerHost {
   #restartWaiter: AppServerRestartWaiter | null = null;
   #serverRequestRawIdsByToken = new Map<string, RequestId>();
   #serverRequestTokensByRawId = new Map<string, string>();
+  #connectionGeneration = 0;
+  #resumeRecoveryPromise: Promise<void> | null = null;
+  #stage: AppServerHostStage = "idle";
+  #lastFailure: AppServerHostFailure | null = null;
   #stopping = false;
   readonly #dynamicToolHost: AppServerDynamicToolHost;
 
@@ -129,6 +234,60 @@ export class ElectronAppServerHost {
   async warmup(): Promise<InitializeResponse> {
     const connected = await this.#connect();
     return connected.initializeResponse;
+  }
+
+  getDiagnostics(): AppServerHostDiagnostics {
+    const connected = this.#connected;
+    const sidecar = connected?.sidecar;
+    const child = sidecar?.child;
+    const stderrLines = sidecar?.stderrLines ?? [];
+    const running = Boolean(
+      child && child.exitCode === null && child.signalCode === null,
+    );
+    return {
+      schema_version: APP_SERVER_HOST_DIAGNOSTIC_SCHEMA_VERSION,
+      stage: this.#stage,
+      connected: Boolean(connected && this.#lifecycle?.connected === connected),
+      connection_generation: this.#connectionGeneration,
+      restart_pending: this.#restartWaiter !== null,
+      resume_recovery_pending: this.#resumeRecoveryPromise !== null,
+      sidecar: connected
+        ? {
+            pid: child?.pid ?? null,
+            running,
+            exit_code: child?.exitCode ?? null,
+            signal: child?.signalCode ?? null,
+            stderr_line_count: stderrLines.length,
+            stderr_tail: redactDiagnosticStderrTail(stderrLines),
+          }
+        : null,
+      last_failure: this.#lastFailure,
+    };
+  }
+
+  /**
+   * Re-establish the stdio connection after the operating system resumes.
+   * The App Server owns durable Thread state, so a fresh connection is enough;
+   * no renderer-side transcript or session store is created here.
+   */
+  async recoverAfterSystemResume(): Promise<void> {
+    if (this.#stopping) {
+      return;
+    }
+    if (this.#resumeRecoveryPromise) {
+      await this.#resumeRecoveryPromise;
+      return;
+    }
+
+    const recoveryPromise = this.#recoverAfterSystemResume();
+    this.#resumeRecoveryPromise = recoveryPromise;
+    try {
+      await recoveryPromise;
+    } finally {
+      if (this.#resumeRecoveryPromise === recoveryPromise) {
+        this.#resumeRecoveryPromise = null;
+      }
+    }
   }
 
   async request<T>(method: string, params: unknown = {}): Promise<T> {
@@ -291,6 +450,7 @@ export class ElectronAppServerHost {
   }
 
   async stop(): Promise<void> {
+    this.#stage = "stopping";
     this.#stopping = true;
     this.#dynamicToolHost.connectionLost("app-server-stopped");
     this.#rejectRestartWaiter(this.#lifecycle, appServerHostStoppingError());
@@ -302,6 +462,7 @@ export class ElectronAppServerHost {
     this.#serverRequestRawIdsByToken.clear();
     this.#serverRequestTokensByRawId.clear();
     this.#dynamicToolHost.reset();
+    this.#stage = "stopped";
   }
 
   terminateSidecarForE2e(): AppServerSidecarTermination {
@@ -406,6 +567,9 @@ export class ElectronAppServerHost {
     if (this.#stopping) {
       throw appServerHostStoppingError();
     }
+    if (this.#resumeRecoveryPromise) {
+      await this.#resumeRecoveryPromise;
+    }
     if (this.#connected) {
       const lifecycleConnected = this.#lifecycle?.connected;
       if (lifecycleConnected && lifecycleConnected !== this.#connected) {
@@ -422,7 +586,15 @@ export class ElectronAppServerHost {
       return this.#connected;
     }
     if (!this.#connectPromise) {
-      this.#connectPromise = this.#start();
+      this.#connectPromise = this.#start().catch((error) => {
+        this.#stage = "failed";
+        this.#lastFailure = buildHostFailure({
+          stage: this.#stage,
+          error,
+          stderrLines: readDiagnosticStderrLines(error),
+        });
+        throw error;
+      });
     }
     const connectPromise = this.#connectPromise;
     try {
@@ -447,7 +619,9 @@ export class ElectronAppServerHost {
   }
 
   async #start(): Promise<ConnectedAppServerSidecar> {
+    this.#stage = "resolving";
     const launchConfig = await resolveLaunchConfig();
+    this.#stage = "starting";
     const sidecarEnv = await resolveAppServerSidecarEnv(
       launchConfig.config.binaryPath,
       launchConfig.config.dataDir ?? resolveAppServerDataDir(),
@@ -476,6 +650,7 @@ export class ElectronAppServerHost {
       },
     };
 
+    this.#stage = "initializing";
     let lifecycle: AppServerSidecarLifecycle;
     lifecycle = new AppServerSidecarLifecycle(
       launchConfig.config,
@@ -489,15 +664,31 @@ export class ElectronAppServerHost {
           maxDelayMs: 5_000,
         },
         onExit: (event) => {
+          const failure = buildHostFailure({
+            stage: "restarting",
+            error: `App Server sidecar exited${event.code === null ? "" : ` with code ${event.code}`}`,
+            exitCode: event.code,
+            signal: event.signal,
+            stderrLines: event.stderrLines,
+          });
           if (this.#lifecycle === lifecycle) {
+            this.#stage = "restarting";
+            this.#lastFailure = failure;
             this.#dynamicToolHost.connectionLost("app-server-disconnected");
             this.#connected = null;
             this.#waitForRestart(lifecycle);
           }
-          console.warn("[electron-host] app-server exited", event);
+          console.warn("[electron-host] app-server exited", {
+            attempt: event.attempt,
+            exit_code: failure.exit_code,
+            signal: failure.signal,
+            message: failure.message,
+            stderr_tail: failure.stderr_tail,
+          });
         },
         onRestarted: (connected) => {
           if (this.#lifecycle === lifecycle) {
+            this.#stage = "ready";
             this.#connected = connected;
             this.#installServerRequestHandler(connected);
             this.#resolveRestartWaiter(lifecycle, connected);
@@ -509,6 +700,7 @@ export class ElectronAppServerHost {
             this.#restartWaiter?.lifecycle === lifecycle &&
             event.attempt >= APP_SERVER_RESTART_MAX_ATTEMPTS
           ) {
+            this.#stage = "failed";
             this.#dynamicToolHost.connectionLost("app-server-restart-failed");
             this.#connected = null;
             this.#lifecycle = null;
@@ -516,8 +708,20 @@ export class ElectronAppServerHost {
               lifecycle,
               new Error("App Server sidecar restart attempts exhausted"),
             );
+          } else if (this.#lifecycle === lifecycle) {
+            this.#stage = "restarting";
           }
-          console.warn("[electron-host] app-server restart failed", event);
+          const failure = buildHostFailure({
+            stage: this.#stage,
+            error: event.error,
+            stderrLines: event.stderrLines,
+          });
+          this.#lastFailure = failure;
+          console.warn("[electron-host] app-server restart failed", {
+            attempt: event.attempt,
+            message: failure.message,
+            stderr_tail: failure.stderr_tail,
+          });
         },
       },
     );
@@ -525,6 +729,8 @@ export class ElectronAppServerHost {
     this.#lifecycle = lifecycle;
     const connected = await lifecycle.start();
     this.#installServerRequestHandler(connected);
+    this.#stage = "ready";
+    this.#lastFailure = null;
     return connected;
   }
 
@@ -572,7 +778,17 @@ export class ElectronAppServerHost {
   }
 
   #installServerRequestHandler(connected: ConnectedAppServerSidecar): void {
+    const connectionGeneration = ++this.#connectionGeneration;
+    const isCurrentConnection = (): boolean =>
+      !this.#stopping &&
+      this.#connected === connected &&
+      this.#lifecycle?.connected === connected &&
+      this.#connectionGeneration === connectionGeneration;
+
     connected.connection.setNotificationObserver((message) => {
+      if (!isCurrentConnection()) {
+        return;
+      }
       if (process.env.LIME_DEBUG_MCP_NOTIFICATIONS === "1") {
         appendDebugMcpNotification(
           `observed notification method=${message.method}`,
@@ -591,6 +807,9 @@ export class ElectronAppServerHost {
       return;
     }
     connected.connection.setServerRequestHandler(async (message) => {
+      if (!isCurrentConnection()) {
+        return false;
+      }
       if (tryHandleCurrentTimeRead(connected.connection, message)) {
         return true;
       }
@@ -600,6 +819,45 @@ export class ElectronAppServerHost {
         message,
       );
     });
+  }
+
+  async #recoverAfterSystemResume(): Promise<void> {
+    const lifecycle = this.#lifecycle;
+    if (!lifecycle || this.#stopping) {
+      return;
+    }
+
+    if (this.#restartWaiter?.lifecycle === lifecycle) {
+      await this.#restartWaiter.promise;
+      return;
+    }
+
+    this.#stage = "recovering";
+    this.#connected = null;
+    this.#dynamicToolHost.connectionLost("app-server-system-resume");
+    try {
+      const connected = await lifecycle.restart();
+      if (this.#stopping || this.#lifecycle !== lifecycle) {
+        await connected.sidecar.close().catch(() => undefined);
+        return;
+      }
+      this.#connected = connected;
+      this.#installServerRequestHandler(connected);
+      this.#stage = "ready";
+      this.#lastFailure = null;
+    } catch (error) {
+      this.#stage = "failed";
+      this.#lastFailure = buildHostFailure({
+        stage: this.#stage,
+        error,
+        stderrLines: readDiagnosticStderrLines(error),
+      });
+      if (this.#lifecycle === lifecycle) {
+        this.#lifecycle = null;
+        this.#connected = null;
+      }
+      throw error;
+    }
   }
 
   #proxyRequestMessage(message: JsonRpcRequest): {

@@ -850,7 +850,7 @@ describe("toolProcessSummary", () => {
   it("内容工作台任务失败不应泄露内部协议错误", () => {
     const cases = [
       {
-        name: "lime_create_video_generation_task",
+        name: "video_generate",
         expected: "视频生成失败",
       },
       {

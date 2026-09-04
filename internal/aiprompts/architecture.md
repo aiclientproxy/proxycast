@@ -14,7 +14,7 @@
 4. `internal/exec-plans/` 的已确认执行计划。
 5. 路线图、研究、历史 evidence 和 Git history。
 
-Agent loop、Thread/Turn/Item、App Server、状态机、工具生命周期、MCP、Skills、Multi-Agent、历史恢复、projection 和交付门禁以 `/Users/coso/Documents/dev/rust/codex` 的 current 结构为准。多模型控制平面的 catalog、model switch、capability、retry/circuit breaker 以 `/Users/coso/Documents/dev/rust/grok-build` 为 primary reference；provider wire 的 endpoint union、canonical content、媒体 lowering 和多协议 stream 可选择性参考 `/Users/coso/Documents/dev/js/opencode`。两者不一致时，runtime ownership 服从 Codex，model control 服从 grok-build，provider wire 机制由 Lime `model-provider` 结合 OpenCode 的协议边界实现；两者都不替代 Lime 的 App Server、ThreadStore 或 GUI owner。
+Agent loop、Thread/Turn/Item、App Server、状态机、工具生命周期、MCP、Skills、Multi-Agent、历史恢复、projection、CLI/TUI 和交付门禁以 `/Users/coso/Documents/dev/rust/codex` 的 current 结构为准。多模型控制平面的 catalog、model switch、capability、retry/circuit breaker 以 `/Users/coso/Documents/dev/rust/grok-build` 为 primary reference；provider wire 的 endpoint union、canonical content、媒体 lowering 和多协议 stream 可选择性参考 `/Users/coso/Documents/dev/js/opencode`。两者不一致时，runtime ownership 服从 Codex，model control 服从 grok-build，provider wire 机制由 Lime `model-provider` 结合 OpenCode 的协议边界实现；它们都不替代 Lime 的 App Server、ThreadStore 或产品 surface owner。
 
 ## 2. 仓库目录地图
 
@@ -22,7 +22,7 @@ Agent loop、Thread/Turn/Item、App Server、状态机、工具生命周期、MC
 | ------------------------------------- | ------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | `src/`                                | Renderer                  | React 产品 UI、view model、renderer gateway、i18n、局部显示状态          | Rust 业务实现、Electron main 逻辑、provider wire、生产 mock fallback |
 | `electron/`                           | Desktop Host              | main、preload、IPC 白名单、窗口/托盘/系统能力、sidecar 生命周期、updater | Agent 状态机、Thread/Turn/Item、模型调用、业务 read model            |
-| `lime-rs/crates/`                     | Rust workspace            | App Server、runtime、协议、provider、工具、持久化、领域服务              | 已删除的旧 Rust root 或 Tauri wrapper 的替代品                       |
+| `lime-rs/crates/`                     | Rust workspace            | App Server、runtime、协议、provider、工具、持久化、CLI/TUI、领域服务     | 已删除的旧 Rust root 或 Tauri wrapper 的替代品                       |
 | `packages/`                           | 可复用 TypeScript package | 跨 Renderer/Host 的 typed client、schema、projection、UI contract        | 仅单个页面使用的产品状态机、Electron main 实现                       |
 | `scripts/`                            | 校验与自动化              | 可复用质量入口、fixture smoke、发布/治理脚本                             | 产品业务逻辑、未登记的根级临时脚本                                   |
 | `resources/`、`lime-rs/resources/`    | 受版本控制资源            | 内置 skill、模板、静态运行时资源                                         | 运行时生成物、用户数据、机密                                         |
@@ -36,6 +36,23 @@ Agent loop、Thread/Turn/Item、App Server、状态机、工具生命周期、MC
 | `extensions/`                         | 独立扩展                  | Chrome extension 等独立宿主实现                                          | Renderer/Agent runtime 的共享业务 owner                              |
 
 根目录的 `package.json`、`forge.config.mjs`、`vite.config.*`、`tsconfig*.json`、`eslint.config.*` 和 `lime-rs/Cargo.toml` 是构建与发布边界。变更它们必须同步锁文件、相关验证和架构图中受影响的边界。
+
+### 2.1 多 Surface 主链
+
+```text
+Desktop Renderer -> Electron Desktop Host --\
+                                            \
+CLI / TUI -> app-server-client --------------> App Server JSON-RPC
+                                             -> RuntimeCore
+Future Cloud -> authenticated transport ----/ -> agent-runtime / model-provider / tool-runtime
+                                                -> ThreadStore + Thread/Turn/Item projection
+```
+
+`Product Surface`、`Host/Transport` 与业务 runtime 是三层边界。Desktop、TUI、CLI 可以拥有各自的窗口/终端生命周期、输入法、快捷键和展示投影，但不能拥有 provider loop、工具 registry、approval authority、Thread/Turn/Item 状态机或持久化副本。`app-server-protocol` 是跨 surface 合同，`app-server-client` 是 Rust surface 的连接/session owner；本地 stdio 是当前实现，未来 Cloud 通过同一 session facade 接入认证后的远端 transport。TUI 的 `resume` picker 只读取 App Server `thread/list`，选中后进入标准 `thread/resume`；连接中断只由 TUI session owner 做 bounded reconnect，并以原 Thread id hydrate canonical history，composer draft 保持在 surface 内存中，旧 connection 的 pending approval 丢弃且不得跨连接回放。TUI 的 effort/permission 快捷键只 lowering 到 `thread/settings/update`；`/model` picker 只消费 typed `model/list` 的可见 catalog，并在选择后 lowering 到同一 settings method，不复制 Codex 配置或 provider catalog。
+
+Cloud 在本阶段仅保留架构扩展点，不创建 production endpoint、认证 fallback、租户默认值或第二套 schema。进入实现前必须先定义身份、租户隔离、凭证存储、协议版本、断线恢复、限流和审计，并继续让 App Server/RuntimeCore 成为唯一业务 owner。
+
+Architecture impact: major; Desktop-only product chain expanded to shared Desktop + CLI/TUI surfaces with a transport boundary reserved for future Cloud. Responsible developer confirmation: root, 2026-09-03.
 
 ## 3. 前端目录规范
 
@@ -98,6 +115,10 @@ Electron 负责窗口、托盘、Dock、系统文件选择、权限、外部链�
 新增 Electron 命令前先判断是否只是已有 `app_server_handle_json_lines` 的转发。只有系统宿主能力才新增 IPC；业务能力一律优先新增 App Server JSON-RPC。
 
 App Server 发起的 reverse JSON-RPC request 仍复用同一 JSONL/stdio、`app_server_drain_events` 与 `app_server_handle_json_lines` 通道。Electron 只负责从 typed connection drain notification/request，并把 Renderer 的 Response/Error 原样写回 sidecar；不得解释 server request method、生成业务 decision、持有 pending waiter 或把 request 降级成 Electron IPC 业务命令。
+
+Desktop Host 的 sidecar 启动/恢复诊断属于宿主旁路，不是 App Server 业务 read model。`app_server_host_diagnostics` 是只读 Electron IPC 命令，由 `ElectronAppServerHost` 返回有界、脱敏的启动阶段、连接代际、sidecar 运行状态和最近失败上下文；Renderer 只能通过 `src/lib/api/desktopHostDiagnostics.ts` 做 schema 校验后把它并入现有 crash diagnostic bundle。该命令不得承载 Thread/Turn/Item、provider、工具或 session 状态，也不得替代 `app_server_handle_json_lines`。
+
+Architecture impact: major; Desktop Host diagnostic side-channel added without changing the App Server business chain. Responsible developer confirmation: root, 2026-09-03.
 
 ### 4.1 跨平台 Desktop capability/readiness contract
 
@@ -179,7 +200,7 @@ Apple Events authorization owner/data flow updated: root, 2026-09-01.
 | `packages/agent-ui-contracts`       | 跨 UI 的 schema、contract 和 generated/validated 类型。          |
 | `packages/agent-workbench-adapter`  | 工作台与 runtime 的明确 adapter 边界。                           |
 | `packages/agent-capability-catalog` | capability catalog 的稳定消费面。                                |
-| `packages/lime-cli-npm`             | 发布的 Node CLI package。                                        |
+| `packages/cli`                      | 发布的 Node CLI package。                                        |
 
 package 只在至少两个独立 consumer 需要稳定边界时创建。单一 Renderer feature、单个 Electron host 或单个 Rust domain 不得先抽 package。`dist/`、`node_modules/` 不是事实源。
 
@@ -852,7 +873,7 @@ Pending 必须在 canonical/projected/in-memory 的 Thread/session read/list、r
 | `gateway`、`websocket`、`server`、`server-utils` | 网络/服务边界。                                                                                                |
 | `providers` / `lime-providers`                   | `dead / deleted / forbidden-to-restore`；provider 网络、wire lowering、stream、catalog 只归 `model-provider`。 |
 | `scheduler`、`automation_execution` 对应 owner   | 调度与自动化领域，不承接 turn loop。                                                                           |
-| `lime-cli`                                       | Rust CLI 入口，不替代 App Server 产品协议。                                                                    |
+| `cli`                                            | Rust CLI 入口，只通过 `app-server-client` 消费 App Server 产品协议。                                           |
 
 新增 Rust crate 必须说明：现有 domain 为什么不适合、公开 contract 是什么、依赖方向是什么、如何避免落入 `core`/`services` 平铺层。
 
@@ -1861,6 +1882,8 @@ Video generation is a dedicated media task, not an Agent chat input or a chat pi
 semantics follow `grok-build`; provider body lowering remains in Lime's `model-provider` owner:
 
 ```text
+default video_generate Skill / Agent -> current typed video_generate tool
+  -> tool-runtime gateway -> RuntimeCore MediaAppDataSource
 provider model capability { taskFamilies: [video_generation], outputModalities: [video] }
   -> RuntimeCore ModelTaskRequest + route_capability_gap
   -> App Server ResolvedModelRoute + exact credentialRef/auth header/prefix

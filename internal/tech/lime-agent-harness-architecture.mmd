@@ -1,5 +1,5 @@
 %% Lime current architecture. Source of truth for the rendered SVG.
-%% Product chain: Renderer -> Desktop Host -> App Server -> RuntimeCore -> projection -> GUI.
+%% Product chain: Desktop / CLI / TUI / Future Cloud transport -> App Server -> RuntimeCore -> canonical projection.
 %%{init: {
   "theme": "base",
   "themeVariables": {
@@ -20,13 +20,13 @@
   }
 }}%%
 flowchart TB
-    TITLE["<div style='width:900px;text-align:center'>Lime Agent Harness 架构<br/><span style='font-size:14px;font-weight:500;color:#64748b'>Electron Desktop Host · App Server JSON-RPC · RuntimeCore 驱动 · Thread / Turn / Item 为事实源</span></div>"]
+    TITLE["<div style='width:900px;text-align:center'>Lime Agent Harness 架构<br/><span style='font-size:14px;font-weight:500;color:#64748b'>Desktop · CLI/TUI · App Server JSON-RPC · Thread / Turn / Item 为事实源</span></div>"]
 
     subgraph ENTRY["① 入口与宿主：所有产品入口都进入同一条 current 链"]
         direction LR
         GUI["Lime GUI<br/><span>React Renderer · Chat · Workbench · Settings</span>"]
         HOST["Electron Desktop Host<br/><span>preload · IPC 白名单 · sidecar 生命周期</span>"]
-        CLI["lime-cli / App Server Client<br/><span>JSONL / stdio · typed client</span>"]
+        CLI["cli + tui / App Server Client<br/><span>stdio · authenticated Cloud</span>"]
         EXT["Apps · Plugins · Skills · Hooks<br/><span>catalog · MCP · tool definitions</span>"]
         PROVIDERS["Model Providers<br/><span>OpenAI · Anthropic · Gemini · Grok · Kimi · DeepSeek</span>"]
     end

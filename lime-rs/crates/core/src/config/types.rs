@@ -4528,8 +4528,6 @@ pub struct DiscordThreadBindingsConfig {
     pub max_age_hours: u32,
     #[serde(default)]
     pub spawn_subagent_sessions: bool,
-    #[serde(default)]
-    pub spawn_acp_sessions: bool,
 }
 
 impl Default for DiscordThreadBindingsConfig {
@@ -4539,7 +4537,6 @@ impl Default for DiscordThreadBindingsConfig {
             idle_hours: default_discord_thread_idle_hours(),
             max_age_hours: 0,
             spawn_subagent_sessions: false,
-            spawn_acp_sessions: false,
         }
     }
 }

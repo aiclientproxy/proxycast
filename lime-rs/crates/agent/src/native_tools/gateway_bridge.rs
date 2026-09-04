@@ -8,6 +8,7 @@ use tool_runtime::memory_store::MemoryStoreGateway;
 use tool_runtime::native_dispatch::NativeDispatch;
 use tool_runtime::tool_executor::RuntimeToolExecutorHandle;
 use tool_runtime::tool_search::ToolSearchGateway;
+use tool_runtime::video_task::VideoTaskGateway;
 
 pub(crate) fn create_memory_tools(gateway: Arc<dyn MemoryStoreGateway>) -> Vec<NativeRegistration> {
     create_gateway_tools(
@@ -31,6 +32,14 @@ pub(crate) fn create_image_tools(gateway: Arc<dyn ImageTaskGateway>) -> Vec<Nati
     create_gateway_tools(
         NativeDispatch::builder()
             .with_image_task_gateway(gateway)
+            .build(),
+    )
+}
+
+pub(crate) fn create_video_tools(gateway: Arc<dyn VideoTaskGateway>) -> Vec<NativeRegistration> {
+    create_gateway_tools(
+        NativeDispatch::builder()
+            .with_video_task_gateway(gateway)
             .build(),
     )
 }
@@ -77,9 +86,10 @@ mod tests {
     use super::*;
     use app_server_protocol::{
         McpToolListResponse, McpToolSearchParams, MediaTaskArtifactImageCreateParams,
-        MediaTaskArtifactResponse, MemoryStoreAddNoteParams, MemoryStoreAddNoteResponse,
-        MemoryStoreCitation, MemoryStoreListParams, MemoryStoreListResponse, MemoryStoreReadParams,
-        MemoryStoreReadResponse, MemoryStoreSearchParams, MemoryStoreSearchResponse,
+        MediaTaskArtifactResponse, MediaTaskArtifactVideoCreateParams, MemoryStoreAddNoteParams,
+        MemoryStoreAddNoteResponse, MemoryStoreCitation, MemoryStoreListParams,
+        MemoryStoreListResponse, MemoryStoreReadParams, MemoryStoreReadResponse,
+        MemoryStoreSearchParams, MemoryStoreSearchResponse,
     };
     use async_trait::async_trait;
     use serde_json::json;
@@ -200,6 +210,31 @@ mod tests {
                         "runtime_contract": params.runtime_contract,
                     }
                 }),
+                ..MediaTaskArtifactResponse::default()
+            })
+        }
+    }
+
+    #[derive(Default)]
+    struct VideoToolTestGateway {
+        last_params: Mutex<Option<MediaTaskArtifactVideoCreateParams>>,
+    }
+
+    #[async_trait]
+    impl VideoTaskGateway for VideoToolTestGateway {
+        async fn create_video_media_task_artifact(
+            &self,
+            params: MediaTaskArtifactVideoCreateParams,
+        ) -> Result<MediaTaskArtifactResponse, String> {
+            *self.last_params.lock().await = Some(params);
+            Ok(MediaTaskArtifactResponse {
+                success: true,
+                task_id: "task-video-1".to_string(),
+                task_type: "video_generate".to_string(),
+                task_family: "video".to_string(),
+                status: "pending_submit".to_string(),
+                normalized_status: "pending".to_string(),
+                artifact_path: ".lime/tasks/video_generate/task-video-1.json".to_string(),
                 ..MediaTaskArtifactResponse::default()
             })
         }
@@ -358,6 +393,52 @@ mod tests {
         assert_eq!(params.session_id.as_deref(), Some("test-session"));
         assert_eq!(params.thread_id.as_deref(), Some("thread-image-1"));
         assert_eq!(params.turn_id.as_deref(), Some("turn-image-1"));
+    }
+
+    #[tokio::test]
+    async fn video_task_delegates_to_runtime_permissions_and_executor() {
+        let workspace = TempDir::new().expect("workspace");
+        let gateway = Arc::new(VideoToolTestGateway::default());
+        let registry = install_gateway_registrations(create_video_tools(gateway.clone()));
+        let params = json!({
+            "prompt": "生成一段产品演示视频",
+            "duration": 8,
+            "generate_audio": true,
+            "thread_id": "thread-video-1",
+            "turn_id": "turn-video-1"
+        });
+        let result = execute_runtime_gateway_dispatch_tool(
+            &registry,
+            RuntimeGatewayDispatchToolRequest {
+                tool_name: tool_runtime::video_task::VIDEO_TASK_TOOL_NAME,
+                params: &params,
+                working_directory: workspace.path().to_path_buf(),
+                session_id: "session-video-1".to_string(),
+                cancel_token: None,
+                turn_context: None,
+            },
+        )
+        .await
+        .expect("video registration")
+        .expect("video result");
+
+        assert_eq!(result.is_error, Some(false));
+        assert_eq!(
+            result
+                .structured_content
+                .as_ref()
+                .and_then(|metadata| metadata.get("task_type")),
+            Some(&json!("video_generate"))
+        );
+        let params = gateway
+            .last_params
+            .lock()
+            .await
+            .clone()
+            .expect("gateway params");
+        assert_eq!(params.session_id.as_deref(), Some("session-video-1"));
+        assert_eq!(params.thread_id.as_deref(), Some("thread-video-1"));
+        assert_eq!(params.turn_id.as_deref(), Some("turn-video-1"));
     }
 
     #[tokio::test]

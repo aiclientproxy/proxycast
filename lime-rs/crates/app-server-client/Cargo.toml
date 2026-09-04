@@ -11,11 +11,13 @@ path = "src/lib.rs"
 doctest = false
 
 [dependencies]
+async-trait.workspace = true
 app-server-protocol.workspace = true
 app-server-transport.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
