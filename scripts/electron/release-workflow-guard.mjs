@@ -613,6 +613,51 @@ function assertBuildSteps(buildJob) {
     );
   }
 
+  const windowsRcCleanupStep = stepByName(
+    steps,
+    "Uninstall Windows Squirrel candidate",
+  );
+  assertIncludes(
+    windowsRcCleanupStep?.if,
+    "always()",
+    "Windows Squirrel cleanup condition",
+  );
+  assertIncludes(
+    windowsRcCleanupStep?.if,
+    "matrix.host_platform == 'win32'",
+    "Windows Squirrel cleanup condition",
+  );
+  for (const required of [
+    "scripts/electron/windows-squirrel-rc-smoke.mjs",
+    "--cleanup-summary",
+    ".lime/qc/windows-squirrel-rc",
+  ]) {
+    assertIncludes(
+      windowsRcCleanupStep?.run,
+      required,
+      "Windows Squirrel cleanup",
+    );
+  }
+  const smokeIndex = steps.indexOf(windowsRcSmokeStep);
+  const codeModeIndex = steps.indexOf(windowsCodeModeStep);
+  const nativeHostIndex = steps.indexOf(windowsNativeHostStep);
+  const packagedEvidenceIndex = steps.indexOf(windowsPackagedEvidenceStep);
+  const cleanupIndex = steps.indexOf(windowsRcCleanupStep);
+  const evidenceUploadIndex = steps.indexOf(windowsRcEvidenceStep);
+  if (
+    !(
+      smokeIndex < codeModeIndex &&
+      codeModeIndex < nativeHostIndex &&
+      nativeHostIndex < packagedEvidenceIndex &&
+      packagedEvidenceIndex < cleanupIndex &&
+      cleanupIndex < evidenceUploadIndex
+    )
+  ) {
+    throw new Error(
+      "Windows Squirrel cleanup must run after installed packaged Gate B validation and before evidence upload",
+    );
+  }
+
   const windowsPackagedEvidenceUploadStep = stepByName(
     steps,
     "Upload Windows packaged Gate B evidence identity",

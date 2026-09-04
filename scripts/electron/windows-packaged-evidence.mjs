@@ -129,20 +129,6 @@ export function buildWindowsPackagedEvidenceSummary({
     if (!String(squirrelSummary.candidateRunId || "").trim()) {
       throw new Error("Squirrel candidateRunId is missing");
     }
-    const squirrelAssertions = squirrelSummary.assertions?.details;
-    requireObject(squirrelAssertions, "Squirrel assertions.details");
-    for (const name of [
-      "uninstallExitZero",
-      "uninstalledAppDirectoryRemoved",
-      "uninstalledExecutableAbsent",
-      "shortcutsRemoved",
-    ]) {
-      requireEqual(squirrelAssertions[name], true, `Squirrel ${name}`);
-    }
-    requireObject(
-      squirrelSummary.evidence?.uninstall,
-      "Squirrel uninstall evidence",
-    );
     installation = squirrelSummary.evidence?.installation;
     requireObject(installation, "Squirrel installation evidence");
     requireAbsolutePath(installation.executable, "installed executable");

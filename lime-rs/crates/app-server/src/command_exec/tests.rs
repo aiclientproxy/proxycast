@@ -1,7 +1,10 @@
 use super::*;
+#[cfg(unix)]
 use app_server_protocol::protocol::v2::CommandExecTerminalSize;
+#[cfg(unix)]
 use tokio::sync::mpsc;
 
+#[cfg(unix)]
 fn server_with_notifications() -> (
     CommandExecServer,
     mpsc::UnboundedReceiver<(ConnectionId, JsonRpcNotification)>,
@@ -312,7 +315,7 @@ async fn windows_timeout_returns_canonical_exit_code() {
         std::time::Duration::from_secs(5),
         CommandExecServer::default().exec(
             ConnectionId(9),
-            windows_exec_params("Start-Sleep -Seconds 10"),
+            windows_exec_params("[System.Threading.Thread]::Sleep(10000)"),
         ),
     )
     .await

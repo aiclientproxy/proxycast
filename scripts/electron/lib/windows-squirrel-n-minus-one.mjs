@@ -15,6 +15,8 @@ import { chromium } from "playwright";
 
 const PRODUCT_NAME = "Lime";
 const SQUIRREL_PACKAGE_NAME = "lime";
+const MISSING_REGISTRY_SUBKEY_MESSAGE =
+  "Cannot delete a subkey tree because the subkey does not exist.";
 
 export function normalizeVersion(value) {
   const version = String(value || "")
@@ -215,6 +217,25 @@ export async function stopInstalledApp(executable) {
   return { executable, exitCode: result.exitCode };
 }
 
+export function classifySquirrelUninstallResult({
+  exitCode,
+  stderr = "",
+  stdout = "",
+} = {}) {
+  if (exitCode === 0) {
+    return { accepted: true, warning: null };
+  }
+  const output = `${stdout}\n${stderr}`;
+  const missingRegistrySubkey =
+    output.includes(MISSING_REGISTRY_SUBKEY_MESSAGE) &&
+    output.includes("Microsoft.Win32.RegistryKey.DeleteSubKeyTree") &&
+    output.includes("Squirrel.Update.Program.<Uninstall>");
+  return {
+    accepted: missingRegistrySubkey,
+    warning: missingRegistrySubkey ? "missing-registry-subkey" : null,
+  };
+}
+
 export async function uninstallInstalledSquirrel({
   updateExecutable,
   appDirectory,
@@ -234,10 +255,12 @@ export async function uninstallInstalledSquirrel({
     );
   }
   const result = await runProcessImpl(updateExecutable, ["--uninstall"], {
+    captureOutput: true,
     env: process.env,
     timeoutMs: 30_000,
   });
-  if (result.exitCode !== 0) {
+  const classification = classifySquirrelUninstallResult(result);
+  if (!classification.accepted) {
     throw new Error(
       `Squirrel uninstall exited with ${result.exitCode} at ${updateExecutable}`,
     );
@@ -253,7 +276,9 @@ export async function uninstallInstalledSquirrel({
     appDirectory,
     executable,
     shortcutPaths: [...shortcutPaths],
+    commandAccepted: classification.accepted,
     exitCode: result.exitCode,
+    warning: classification.warning,
     updateExecutableAbsent: !existsImpl(updateExecutable),
     appDirectoryAbsent: !existsImpl(appDirectory),
     executableAbsent: !existsImpl(executable),
@@ -597,14 +622,26 @@ async function waitFor(
   throw new Error(`timed out waiting for ${label}`);
 }
 
-function runProcess(command, args, { env, timeoutMs }) {
+function runProcess(command, args, { captureOutput = false, env, timeoutMs }) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       env,
       shell: false,
-      stdio: "inherit",
+      stdio: captureOutput ? ["ignore", "pipe", "pipe"] : "inherit",
       windowsHide: true,
     });
+    let stdout = "";
+    let stderr = "";
+    if (captureOutput) {
+      child.stdout?.on("data", (chunk) => {
+        stdout += chunk.toString();
+        process.stdout.write(chunk);
+      });
+      child.stderr?.on("data", (chunk) => {
+        stderr += chunk.toString();
+        process.stderr.write(chunk);
+      });
+    }
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -614,7 +651,7 @@ function runProcess(command, args, { env, timeoutMs }) {
       clearTimeout(timeout);
       reject(error);
     });
-    child.once("exit", (code, signal) => {
+    child.once("close", (code, signal) => {
       clearTimeout(timeout);
       if (timedOut) {
         reject(
@@ -622,7 +659,11 @@ function runProcess(command, args, { env, timeoutMs }) {
         );
         return;
       }
-      resolve({ exitCode: code ?? 1, signal });
+      resolve({
+        exitCode: code ?? 1,
+        signal,
+        ...(captureOutput ? { stderr, stdout } : {}),
+      });
     });
   });
 }

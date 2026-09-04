@@ -1,6 +1,6 @@
 # Lime v1.140.0 发布执行计划
 
-状态：`ready_for_release`
+状态：`release_recovery_in_progress`
 日期：2026-09-04
 目标版本：`1.140.0`
 目标 tag：`v1.140.0`
@@ -40,7 +40,13 @@
 - `npm run i18n:check`：通过；5 locales、34,716/34,716 keys，missing/extra 均为 0。
 - `npm run governance:legacy-report`：通过；零引用候选、分类漂移、边界违规均为 0。
 - `git diff --check`：通过；目标 tag 在本地和远端均不存在。
-- 待执行：重新暂存并复核并发候选差异、release commit/tag、推送 `origin/main` 和 tag，以及远端状态复核。
+- Release commit `1fe2ad260bb080a94a8dbda9e0d954f6747091bf`、本地/远端 `main` 与 `v1.140.0` tag 已完成并复核一致。
+- Quality run `33820999125`：Bridge/Contracts、Frontend Full、GUI Smoke、Rust Full 与 Integrity 全绿；`Windows Shell Runtime` 的 timeout contract 使用 `Start-Sleep -Seconds 10`，在进入 20ms 进程超时路径前被生产长休眠策略正确拒绝，因此测试失败。远端 run 随后被移除，无法继续下载日志。
+- 首次 Release run `33821027658`：macOS x64/arm64 打包、签名、公证、资源校验与 packaged native-host Gate B 通过；Windows 安装、N-1 更新、候选 `1.140.0` App Server 初始化和 SHELL-01 GUI smoke 通过，随后在 `Update.exe --uninstall` 清理已不存在的注册表子键时退出 1，导致 Windows 后续 Gate B 与资产发布跳过。GitHub Release 已创建为 draft，尚无资产。
+- 失败复盘同时发现生命周期契约矛盾：Squirrel smoke 在 workflow 后续 CodeMode/native-host Gate B 前卸载候选，而 packaged evidence validator 又同时要求卸载成功和已安装 exe 存在。恢复补丁将卸载移动到全部 installed packaged Gate B 与身份校验之后；卸载仅容忍同时包含缺失子键文本、`RegistryKey.DeleteSubKeyTree` 与 `Squirrel.Update.Program.<Uninstall>` 的明确幂等错误，仍要求 Update.exe、候选目录、主程序与快捷方式全部消失，其他错误继续 fail closed。
+- 恢复补丁本地验证：Windows Squirrel/packaged evidence/release workflow guard 定向 Vitest 3 文件 `66/66`；`npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version`、`npm run governance:scripts`、release workflow guard、Prettier check 与 `git diff --check` 全部通过。
+- Windows timeout 恢复补丁将测试负载改为不触发 shell 策略但仍可由 timeout 终止的 `.NET Thread.Sleep`，并给 Unix-only imports/helper 补齐 `cfg(unix)`，消除日志中的 4 个 `app-server` Windows 编译警告。本机 `npm run test:rust:related -- lime-rs/crates/app-server/src/command_exec/tests.rs lime-rs/crates/app-server/src/process/tests.rs` 通过 `1759/1759`，`cargo fmt --check` 通过；Windows 专属分支待恢复后的 Quality run 验证。
+- 待执行：单独确认后提交并推送修复；通过 `workflow_dispatch version=v1.140.0` 从后续 `main` 修复提交重建资产，不移动已推送 tag；监控 GitHub Release 发布、CLI 资产与 R2 updater 完成。
 
 ## 收尾分类
 
@@ -49,4 +55,4 @@
 - `deprecated`：无新增。
 - `dead / deleted`：旧 `lime-cli-npm` 包、旧 CLI skill/工具文档与其专用入口。
 
-当前完成度：`80%`；版本 metadata、双语 release notes、质量门禁和候选范围已完成，待执行 git 写操作与远端发布复核。
+当前完成度：`85%`；版本 metadata、双语 release notes、原始 release commit/tag/push 已完成，正在修复 Windows 发布门禁并恢复远端资产发布。

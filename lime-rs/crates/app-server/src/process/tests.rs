@@ -1,7 +1,10 @@
 use super::*;
+#[cfg(unix)]
 use app_server_protocol::protocol::v2::ProcessTerminalSize;
+#[cfg(unix)]
 use tokio::sync::mpsc;
 
+#[cfg(unix)]
 fn server_with_notifications() -> (
     ProcessServer,
     mpsc::UnboundedReceiver<(ConnectionId, JsonRpcNotification)>,

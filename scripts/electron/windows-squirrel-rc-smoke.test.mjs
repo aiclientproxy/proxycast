@@ -10,6 +10,7 @@ import {
   buildWaitForWindowsProcessExitScript,
   buildWindowsRcSummary,
   compareVersions,
+  finalizeWindowsRcUninstallSummary,
   findReadyElectronUpdaterPage,
   isFinalElectronRendererUrl,
   normalizeVersion,
@@ -163,7 +164,7 @@ describe("Windows Squirrel RC smoke", () => {
     expect(runProcessImpl).toHaveBeenCalledWith(
       "C:\\Users\\runner\\AppData\\Local\\lime\\Update.exe",
       ["--uninstall"],
-      expect.objectContaining({ timeoutMs: 30_000 }),
+      expect.objectContaining({ captureOutput: true, timeoutMs: 30_000 }),
     );
     expect(waitForAbsentImpl).toHaveBeenCalledWith(
       [
@@ -175,11 +176,45 @@ describe("Windows Squirrel RC smoke", () => {
       expect.objectContaining({ timeoutMs: 60_000 }),
     );
     expect(result).toMatchObject({
+      commandAccepted: true,
       exitCode: 0,
       appDirectoryAbsent: true,
       executableAbsent: true,
       shortcutsAbsent: true,
+      warning: null,
     });
+  });
+
+  it("仅容忍 Squirrel 已缺失注册表子键的幂等卸载错误", async () => {
+    const stderr = [
+      "System.ArgumentException: Cannot delete a subkey tree because the subkey does not exist.",
+      "at Microsoft.Win32.RegistryKey.DeleteSubKeyTree(String subkey, Boolean throwOnMissingSubKey)",
+      "at Squirrel.Update.Program.<Uninstall>d__9.MoveNext()",
+    ].join("\n");
+    const waitForAbsentImpl = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      uninstallInstalledSquirrel({
+        updateExecutable: "C:\\runner\\Update.exe",
+        appDirectory: "C:\\runner\\app-1.2.3",
+        executable: "C:\\runner\\app-1.2.3\\Lime.exe",
+        shortcutPaths: ["C:\\runner\\Desktop\\Lime.lnk"],
+        runProcessImpl: vi
+          .fn()
+          .mockResolvedValue({ exitCode: 1, stderr, stdout: "" }),
+        existsImpl: vi.fn().mockReturnValue(false),
+        waitForAbsentImpl,
+      }),
+    ).resolves.toMatchObject({
+      commandAccepted: true,
+      exitCode: 1,
+      updateExecutableAbsent: true,
+      appDirectoryAbsent: true,
+      executableAbsent: true,
+      shortcutsAbsent: true,
+      warning: "missing-registry-subkey",
+    });
+    expect(waitForAbsentImpl).toHaveBeenCalledOnce();
   });
 
   it("卸载失败时 fail closed，不标记候选生命周期成功", async () => {
@@ -302,11 +337,80 @@ describe("Windows Squirrel RC smoke", () => {
 
     expect(summary.result).toBe("pass");
     expect(summary.proofLevel).toBe("L8 platform/packaged");
-    expect(summary.claimBoundary).toContain("uninstall cleanup");
+    expect(summary.claimBoundary).toContain("Uninstall cleanup");
     expect(summary.remainingClaims).toEqual({
       nMinusOneUpdate: "not-exercised",
       longDurationSoak: "not-exercised",
+      uninstallCleanup: "deferred",
     });
+  });
+
+  it("下游 packaged Gate B 完成后才把卸载证据并入同一 summary", () => {
+    const summary = buildWindowsRcSummary({
+      assertions: { installerExitZero: true, shell01Passed: true },
+      candidateSha: "a".repeat(40),
+      completedAt: "2026-07-17T02:00:00.000Z",
+      evidence: { installation: { executable: "C:\\runner\\Lime.exe" } },
+      runId: "windows-rc-1",
+      startedAt: "2026-07-17T01:00:00.000Z",
+      version: "1.2.3",
+    });
+    const finalized = finalizeWindowsRcUninstallSummary({
+      completedAt: "2026-07-17T03:00:00.000Z",
+      summary,
+      uninstallEvidence: {
+        commandAccepted: true,
+        exitCode: 1,
+        warning: "missing-registry-subkey",
+        updateExecutableAbsent: true,
+        appDirectoryAbsent: true,
+        executableAbsent: true,
+        shortcutsAbsent: true,
+      },
+    });
+
+    expect(finalized.result).toBe("pass");
+    expect(finalized.remainingClaims.uninstallCleanup).toBe("passed");
+    expect(finalized.assertions.details).toMatchObject({
+      uninstallCommandAccepted: true,
+      uninstalledUpdateExecutableAbsent: true,
+      uninstalledAppDirectoryRemoved: true,
+      uninstalledExecutableAbsent: true,
+      shortcutsRemoved: true,
+    });
+    expect(finalized.evidence.uninstall).toMatchObject({
+      exitCode: 1,
+      warning: "missing-registry-subkey",
+    });
+  });
+
+  it("卸载收尾不得把首阶段失败覆盖成成功", () => {
+    const summary = buildWindowsRcSummary({
+      assertions: { installerExitZero: true, shell01Passed: false },
+      candidateSha: "a".repeat(40),
+      completedAt: "2026-07-17T02:00:00.000Z",
+      error: "installed SHELL-01 failed",
+      evidence: { installation: { executable: "C:\\runner\\Lime.exe" } },
+      failedStage: "installed-shell-01",
+      runId: "windows-rc-1",
+      startedAt: "2026-07-17T01:00:00.000Z",
+      version: "1.2.3",
+    });
+    const finalized = finalizeWindowsRcUninstallSummary({
+      completedAt: "2026-07-17T03:00:00.000Z",
+      summary,
+      uninstallEvidence: {
+        commandAccepted: true,
+        updateExecutableAbsent: true,
+        appDirectoryAbsent: true,
+        executableAbsent: true,
+        shortcutsAbsent: true,
+      },
+    });
+
+    expect(finalized.result).toBe("fail");
+    expect(finalized.failedStage).toBe("installed-shell-01");
+    expect(finalized.error).toBe("installed SHELL-01 failed");
   });
 
   it("L8 summary 只有完整 N-1 观测才能声明 updater passed", () => {
@@ -409,6 +513,9 @@ describe("Windows Squirrel RC smoke", () => {
         (step) =>
           step.name === "Validate Windows packaged Gate B evidence identity",
       );
+      const cleanup = steps.find(
+        (step) => step.name === "Uninstall Windows Squirrel candidate",
+      );
       const upload = steps.find(
         (step) => step.name === "Upload Windows Squirrel RC evidence",
       );
@@ -465,6 +572,11 @@ describe("Windows Squirrel RC smoke", () => {
       expect(smoke?.run).toContain("--n-minus-one-version");
       expect(smoke?.run).toContain("--candidate-sha");
       expect(smoke?.run).toContain("--run-id");
+      expect(cleanup?.if).toContain("always()");
+      expect(cleanup?.run).toContain(
+        "scripts/electron/windows-squirrel-rc-smoke.mjs",
+      );
+      expect(cleanup?.run).toContain("--cleanup-summary");
       expect(upload?.with?.path).toBe(".lime/qc/windows-squirrel-rc");
       if (entry.job === "build-windows-test") {
         expect(pluginGate?.run).toContain(
@@ -513,6 +625,13 @@ describe("Windows Squirrel RC smoke", () => {
       expect(packagedEvidenceUpload?.with?.path).toContain(
         "windows-packaged-evidence",
       );
+      const orderedNames = steps.map((step) => step.name);
+      expect(orderedNames.indexOf(packagedEvidence.name)).toBeLessThan(
+        orderedNames.indexOf(cleanup.name),
+      );
+      expect(orderedNames.indexOf(cleanup.name)).toBeLessThan(
+        orderedNames.indexOf(upload.name),
+      );
     }
   });
 
@@ -545,6 +664,9 @@ describe("Windows Squirrel RC smoke", () => {
       (step) =>
         step.name === "Validate Windows packaged Gate B evidence identity",
     );
+    const cleanup = steps.find(
+      (step) => step.name === "Uninstall Windows Squirrel candidate",
+    );
 
     expect(sherpa).toBeDefined();
     expect(build).toBeDefined();
@@ -553,6 +675,7 @@ describe("Windows Squirrel RC smoke", () => {
     expect(codeModeGate).toBeDefined();
     expect(nativeHostGate).toBeDefined();
     expect(packagedEvidence).toBeDefined();
+    expect(cleanup).toBeDefined();
     expect(sherpa?.run).toContain("scripts/prepare-sherpa-onnx-runtime.mjs");
     expect(sherpa?.run).toContain("x86_64-pc-windows-msvc");
     expect(build?.run).toContain("electron-forge make --platform win32");
@@ -593,6 +716,9 @@ describe("Windows Squirrel RC smoke", () => {
     );
     expect(orderedNames.indexOf(nativeHostGate.name)).toBeLessThan(
       orderedNames.indexOf(packagedEvidence.name),
+    );
+    expect(orderedNames.indexOf(packagedEvidence.name)).toBeLessThan(
+      orderedNames.indexOf(cleanup.name),
     );
   });
 });

@@ -86,26 +86,12 @@ function createFixture() {
     candidateRunId,
     candidateSha,
     platform: { os: "win32", arch: "x64", appVersion: version },
-    assertions: {
-      details: {
-        uninstallExitZero: true,
-        uninstalledAppDirectoryRemoved: true,
-        uninstalledExecutableAbsent: true,
-        shortcutsRemoved: true,
-      },
-    },
     evidence: {
       installation: {
         executable,
         appDirectory,
         packageRoot,
         updateExecutable: path.join(packageRoot, "Update.exe"),
-      },
-      uninstall: {
-        exitCode: 0,
-        appDirectoryAbsent: true,
-        executableAbsent: true,
-        shortcutsAbsent: true,
       },
     },
   };

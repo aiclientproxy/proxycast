@@ -118,6 +118,20 @@ describe("Electron release workflow guard", () => {
     );
   });
 
+  it("rejects release workflow that omits deferred Windows Squirrel cleanup", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        /      - name: Uninstall Windows Squirrel candidate[\s\S]*?            --cleanup-summary .*?\n\n/,
+        "",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /Windows Squirrel cleanup condition must include always\(\)/,
+    );
+  });
+
   it("rejects release workflow without checkout-bound candidate identity", () => {
     const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
     const workflowPath = tempWorkflowPath(

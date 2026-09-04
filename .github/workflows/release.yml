@@ -558,6 +558,15 @@ jobs:
             --native-host-summary ".lime/qc/gui-evidence/windows-native-host-gate-b/summary.json" \
             --output ".lime/qc/gui-evidence/windows-packaged-evidence/$VERSION/summary.json"
 
+      - name: Uninstall Windows Squirrel candidate
+        if: ${{ always() && matrix.host_platform == 'win32' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          node scripts/electron/windows-squirrel-rc-smoke.mjs \
+            --cleanup-summary ".lime/qc/windows-squirrel-rc/$VERSION/summary.json"
+
       - name: Upload Windows Squirrel RC evidence
         if: ${{ always() && matrix.host_platform == 'win32' }}
         uses: actions/upload-artifact@v4
