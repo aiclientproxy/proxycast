@@ -63,6 +63,9 @@ internal/exec-plans/*
 !internal/exec-plans/tui-codex-snapshot-inventory.json
 !internal/exec-plans/tui-codex-snapshot-inventory.md
 !internal/exec-plans/tui-cli-surfaces-plan.md
+!internal/exec-plans/cli-codex-test-inventory.json
+!internal/exec-plans/cli-structure-inventory.json
+!internal/exec-plans/tui-structure-inventory.json
 !internal/exec-plans/documentation-convergence-plan.md
 !internal/exec-plans/scheduled-tasks-implementation.md
 !internal/exec-plans/release-v*-plan.md

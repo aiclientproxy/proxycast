@@ -9,6 +9,7 @@ import {
   buildNMinusOneLaunchEnv,
   buildWaitForWindowsProcessExitScript,
   buildWindowsRcSummary,
+  cleanupFromSummary,
   compareVersions,
   finalizeWindowsRcUninstallSummary,
   findReadyElectronUpdaterPage,
@@ -23,6 +24,19 @@ import {
 } from "./windows-squirrel-rc-smoke.mjs";
 
 describe("Windows Squirrel RC smoke", () => {
+  it("构建未产出 summary 时 cleanup 安全跳过", async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), "windows-squirrel-rc-cleanup-missing-"),
+    );
+    const summaryPath = path.join(root, "summary.json");
+
+    await expect(cleanupFromSummary(summaryPath)).resolves.toEqual({
+      skipped: true,
+      summaryPath,
+    });
+    expect(fs.existsSync(summaryPath)).toBe(false);
+  });
+
   it("等待最终 renderer，不能把带 preload 的临时启动页当成 updater 页面", () => {
     expect(
       isFinalElectronRendererUrl(

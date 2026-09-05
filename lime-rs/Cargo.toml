@@ -158,6 +158,7 @@ cpal = "0.15"
 prost = "0.13.5"
 tonic = { version = "0.12.3", features = ["transport"] }
 tonic-build = "0.12.3"
+protoc-bin-vendored = "3.2.0"
 
 # TLS
 rustls-pemfile = "2"

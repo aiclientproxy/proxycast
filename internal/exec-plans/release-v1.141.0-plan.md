@@ -93,3 +93,21 @@ V8 预构建 archive 在本机 Darwin/aarch64 若仍返回 404，改用仓库已
 - `dead / deleted`：旧 Code Mode process/V8 物理实现及已退役 CLI 入口。
 
 当前完成度：验证与候选整理 95%；待用户确认后执行 release commit、tag、推送及远端复核。
+
+## 2026-09-06 发布后 CI 修复
+
+v1.141.0 首次质量与 Electron 发布 workflow 暴露了三类问题：CLI/TUI inventory JSON
+被根 `.gitignore` 忽略而未进入 CI checkout；`code-mode-protocol` 的 `tonic-build`
+依赖系统 `protoc`，导致 Linux/macOS/Windows Rust、GUI 和 Electron 构建均在代码生成阶段
+失败；Windows 构建失败后仍执行 Squirrel cleanup，因 summary 尚未生成而产生二次 `ENOENT`
+失败。修复如下：
+
+- 将三份生成账本加入 `.gitignore` 例外，保留为静态治理事实源。
+- 在 workspace 中加入 `protoc-bin-vendored`，由 `code-mode-protocol/build.rs` 设置
+  `PROTOC`，消除平台工具链前置条件并同步 `Cargo.lock`。
+- 导出并保护 `cleanupFromSummary`：summary 不存在时记录明确 no-op，不覆盖原始构建错误；
+  增加缺失 summary 回归测试。
+
+本地修复验证：`cargo check -p code-mode-protocol`、inventory/Windows Squirrel/release
+workflow 共 75 项 Vitest、`npm run test:contracts` 均通过。待提交推送后复跑 Quality 与
+Release workflows，确认跨平台构建及 Windows restricted execution setup 通过。

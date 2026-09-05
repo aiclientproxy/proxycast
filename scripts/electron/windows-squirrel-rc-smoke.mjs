@@ -217,8 +217,14 @@ export function finalizeWindowsRcUninstallSummary({
   });
 }
 
-async function cleanupFromSummary(summaryPath) {
+export async function cleanupFromSummary(summaryPath) {
   const absoluteSummaryPath = path.resolve(summaryPath);
+  if (!existsSync(absoluteSummaryPath)) {
+    console.log(
+      `[windows-squirrel-rc-cleanup] summary missing; skipping cleanup summary=${absoluteSummaryPath}`,
+    );
+    return { skipped: true, summaryPath: absoluteSummaryPath };
+  }
   const initialSummary = JSON.parse(readFileSync(absoluteSummaryPath, "utf8"));
   let uninstallEvidence = null;
   let errorMessage = null;
