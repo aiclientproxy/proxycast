@@ -330,7 +330,7 @@ mod tests {
             system_prompt_override: Some(true),
             include_context_trace: Some(true),
             turn_context: None,
-            tool_mode: tool_runtime::code_mode::RuntimeToolMode::Direct,
+            tool_mode: code_mode::RuntimeToolMode::Direct,
             supports_custom_tools: false,
         };
 

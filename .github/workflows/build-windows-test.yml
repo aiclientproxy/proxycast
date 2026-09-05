@@ -142,6 +142,29 @@ jobs:
           node scripts/prepare-sherpa-onnx-runtime.mjs \
             --target "x86_64-pc-windows-msvc"
 
+      - name: Run Windows CLI and TUI current-path gates
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/lime-rs/target
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: sccache
+        run: |
+          set -euo pipefail
+          {
+            cargo test --manifest-path lime-rs/Cargo.toml -p cli -p tui
+            cargo build --manifest-path lime-rs/Cargo.toml -p cli -p app-server
+            npm run smoke:cli-gate-b
+            npm run smoke:tui-gate-b
+          } 2>&1 | tee "windows-cli-tui-gate-b.log"
+
+      - name: Upload Windows CLI and TUI Gate B evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lime-windows-cli-tui-gate-b-evidence
+          path: windows-cli-tui-gate-b.log
+          if-no-files-found: error
+
       - name: Build Electron Windows test package with app-server and code-mode-host sidecars
         shell: bash
         env:

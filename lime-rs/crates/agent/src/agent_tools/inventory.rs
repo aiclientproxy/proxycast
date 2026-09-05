@@ -11,6 +11,7 @@ use crate::agent_tools::execution::{
 };
 use crate::agent_tools::native_tool_policy_gate::NativeToolPolicyGate;
 use crate::mcp::McpToolDefinition;
+use code_mode_protocol::RuntimeToolDefinition;
 use lime_core::config::ToolExecutionPolicyConfig as ConfigToolExecutionPolicyConfig;
 use lime_core::tool_calling::{
     extract_tool_surface_metadata, tool_matches_caller, tool_visible_in_context,
@@ -18,7 +19,6 @@ use lime_core::tool_calling::{
 use lime_mcp::runtime_extension_name;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashSet};
-use tool_runtime::tool_definition::RuntimeToolDefinition;
 use tool_runtime::tool_extension::RuntimeExtensionConfig;
 
 fn resource_helper_visibility_allowed(tool_name: &str, resources_supported: bool) -> bool {

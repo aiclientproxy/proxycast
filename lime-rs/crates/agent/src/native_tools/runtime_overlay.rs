@@ -1,9 +1,9 @@
+use code_mode_protocol::RuntimeToolDefinition;
 use tool_runtime::gateway_dispatch_execution::RuntimeGatewayToolExecutionRegistration;
 use tool_runtime::native_overlay::{
     runtime_native_tool_definition, runtime_native_tool_install_plan,
     runtime_native_tool_registration_is_allowed,
 };
-use tool_runtime::tool_definition::RuntimeToolDefinition;
 
 pub(crate) struct NativeRegistration {
     definition: RuntimeToolDefinition,

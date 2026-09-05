@@ -6,7 +6,7 @@
 use super::tool_execution::ToolExecutionPolicyConfig;
 use crate::models::injection_types::{InjectionMode, InjectionRule};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 // ============ 已退役的旧凭证池配置类型 ============
@@ -384,6 +384,12 @@ pub struct Config {
     /// 当前默认 Provider
     #[serde(default = "default_provider")]
     pub default_provider: String,
+    /// Codex-compatible default named permission profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_permissions: Option<String>,
+    /// Codex-compatible named permission profiles loaded from YAML.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub permissions: BTreeMap<String, PermissionProfileConfig>,
     /// 路由辅助配置
     #[serde(default)]
     pub routing: RoutingConfig,
@@ -498,6 +504,38 @@ pub struct Config {
     pub channels: ChannelsConfig,
 }
 
+/// A named permission profile, matching the Codex profile vocabulary while
+/// remaining owned by Lime's YAML configuration source.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PermissionProfileConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extends: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(
+        default,
+        alias = "file_system",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub filesystem: Option<PermissionFilesystemConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<PermissionNetworkConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PermissionFilesystemConfig {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub entries: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glob_scan_max_depth: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PermissionNetworkConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+}
+
 // ============ Native Agent 配置类型 ============
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -568,6 +606,16 @@ pub struct WorkspaceSandboxConfig {
     /// 发生降级时是否提醒用户
     #[serde(default = "default_workspace_sandbox_notify_on_fallback")]
     pub notify_on_fallback: bool,
+    /// Windows sandbox execution mode selected by setup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<WindowsSandboxMode>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WindowsSandboxMode {
+    Elevated,
+    Unelevated,
 }
 
 impl WorkspaceSandboxConfig {
@@ -594,6 +642,7 @@ impl Default for WorkspaceSandboxConfig {
             enabled: default_workspace_sandbox_enabled(),
             strict: default_workspace_sandbox_strict(),
             notify_on_fallback: default_workspace_sandbox_notify_on_fallback(),
+            mode: None,
         }
     }
 }
@@ -2148,6 +2197,8 @@ impl Default for Config {
             server: ServerConfig::default(),
             providers: ProvidersConfig::default(),
             default_provider: default_provider(),
+            default_permissions: None,
+            permissions: BTreeMap::new(),
             routing: RoutingConfig::default(),
             retry: RetrySettings::default(),
             logging: LoggingConfig::default(),

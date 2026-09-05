@@ -318,7 +318,7 @@ impl ToolLifecycleEmitter for CurrentTurnToolLifecycleEmitter {
 
 fn code_cell_trace_events_for_lifecycle(event: &ToolLifecycleEvent) -> Vec<CodeCellTraceEvent> {
     let mut traces = Vec::new();
-    if event.tool_name == tool_runtime::code_mode::CODE_MODE_EXEC_TOOL_NAME
+    if event.tool_name == code_mode::CODE_MODE_EXEC_TOOL_NAME
         && matches!(event.phase, ToolLifecyclePhase::Started)
     {
         traces.push(CodeCellTraceEvent::SourceItemObserved {
@@ -327,7 +327,7 @@ fn code_cell_trace_events_for_lifecycle(event: &ToolLifecycleEvent) -> Vec<CodeC
             source_item_id: ItemId::new(event.call_id.clone()).to_string(),
         });
     }
-    if event.tool_name == tool_runtime::code_mode::CODE_MODE_EXEC_TOOL_NAME
+    if event.tool_name == code_mode::CODE_MODE_EXEC_TOOL_NAME
         && matches!(event.phase, ToolLifecyclePhase::Completed)
     {
         let runtime_cell_id = event

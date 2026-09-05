@@ -12,6 +12,7 @@ use app_server_protocol::protocol::v2::{
     AdditionalFileSystemPermissions, GrantedPermissionProfile, PermissionGrantScope,
     PermissionsRequestApprovalResponse,
 };
+use code_mode_protocol::RuntimeToolDefinition;
 use lime_core::database::DbConnection;
 use lime_mcp::{ElicitationRequestRouter, McpRuntimeServerSpec};
 pub(crate) use mcp_runtime::McpThreadRuntime;
@@ -25,7 +26,6 @@ use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tool_runtime::gateway_dispatch_execution::RuntimeGatewayToolExecutionRegistry;
-use tool_runtime::tool_definition::RuntimeToolDefinition;
 
 pub struct AgentRuntimeState {
     initialized: Arc<AtomicBool>,

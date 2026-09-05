@@ -1,7 +1,8 @@
 use super::{RuntimeCore, RuntimeCoreError, RuntimeCoreState};
 use crate::permission_profile::{
-    apply_permission_profile_to_metadata, permission_profile_policy,
-    resolve_allowed_permission_profile, PermissionProfilePolicy, ResolvedPermissionProfile,
+    apply_permission_profile_to_metadata, apply_resolved_permission_profile_to_metadata,
+    permission_profile_policy, resolve_allowed_permission_profile, PermissionProfilePolicy,
+    ResolvedPermissionProfile,
 };
 use agent_protocol::{CollaborationMode, CollaborationModeSettings, ModeKind};
 use agent_runtime::session_loop::{
@@ -22,7 +23,10 @@ mod model_defaults;
 
 #[derive(Clone)]
 enum SessionMetadataMutation {
-    ThreadSettings(ThreadSettingsUpdateParams),
+    ThreadSettings {
+        params: ThreadSettingsUpdateParams,
+        permission_profile: Option<ResolvedPermissionProfile>,
+    },
     MemoryMode(ThreadMemoryMode),
 }
 
@@ -157,12 +161,22 @@ impl RuntimeCore {
         if let Some(profile_id) = params.permissions.as_deref() {
             self.resolve_allowed_permission_profile(profile_id, params.cwd.as_deref())?;
         }
+        let permission_profile = params
+            .permissions
+            .as_deref()
+            .map(|profile_id| {
+                self.resolve_allowed_permission_profile(profile_id, params.cwd.as_deref())
+            })
+            .transpose()?;
         self.apply_target_model_defaults(&mut params).await?;
         let thread_id = params.thread_id.clone();
         let result = self
             .dispatch_session_metadata_mutation(
                 &thread_id,
-                SessionMetadataMutation::ThreadSettings(params),
+                SessionMetadataMutation::ThreadSettings {
+                    params,
+                    permission_profile,
+                },
             )
             .await?;
         match result {
@@ -279,7 +293,11 @@ impl RuntimeCore {
                 if context.session_id != session_id {
                     return Err("session actor identity changed during metadata update".to_string());
                 }
-                if let SessionMetadataMutation::ThreadSettings(params) = &mutation {
+                if let SessionMetadataMutation::ThreadSettings {
+                    params,
+                    permission_profile,
+                } = &mutation
+                {
                     if thread_settings_require_route_preflight(params) {
                         let (candidate_session, candidate_settings) =
                             preview_thread_settings_mutation(
@@ -287,6 +305,7 @@ impl RuntimeCore {
                                 &session_id,
                                 &thread_id,
                                 params.clone(),
+                                permission_profile.clone(),
                             )?;
                         if let Err(error) = backend
                             .preflight_thread_settings(&candidate_session, &candidate_settings)
@@ -315,7 +334,7 @@ impl RuntimeCore {
             })
         });
         let operation = match mutation {
-            SessionMetadataMutation::ThreadSettings(_) => {
+            SessionMetadataMutation::ThreadSettings { .. } => {
                 RuntimeSessionOperation::ThreadSettings { handler }
             }
             SessionMetadataMutation::MemoryMode(_) => {
@@ -371,6 +390,7 @@ fn preview_thread_settings_mutation(
     session_id: &str,
     thread_id: &str,
     params: ThreadSettingsUpdateParams,
+    permission_profile: Option<ResolvedPermissionProfile>,
 ) -> Result<(app_server_protocol::AgentSession, ThreadSettings), String> {
     let state = state
         .lock()
@@ -395,7 +415,7 @@ fn preview_thread_settings_mutation(
         .as_object()
         .cloned()
         .ok_or_else(|| "thread metadata must be a JSON object".to_string())?;
-    apply_thread_settings_patch(&mut metadata, params)?;
+    apply_thread_settings_patch(&mut metadata, params, permission_profile)?;
     let settings = thread_settings_from_metadata(&metadata)?;
     let reference = candidate_session
         .business_object_ref
@@ -449,8 +469,11 @@ fn apply_session_metadata_mutation(
         .cloned()
         .ok_or_else(|| "thread metadata must be a JSON object".to_string())?;
     let result = match mutation {
-        SessionMetadataMutation::ThreadSettings(params) => {
-            apply_thread_settings_patch(&mut metadata, params)?;
+        SessionMetadataMutation::ThreadSettings {
+            params,
+            permission_profile,
+        } => {
+            apply_thread_settings_patch(&mut metadata, params, permission_profile)?;
             SessionMetadataMutationResult::ThreadSettings(thread_settings_from_metadata(&metadata)?)
         }
         SessionMetadataMutation::MemoryMode(mode) => {
@@ -544,6 +567,7 @@ fn validate_thread_settings(params: &ThreadSettingsUpdateParams) -> Result<(), R
 fn apply_thread_settings_patch(
     metadata: &mut Map<String, Value>,
     params: ThreadSettingsUpdateParams,
+    resolved_permission_profile: Option<ResolvedPermissionProfile>,
 ) -> Result<(), String> {
     let current_model = metadata_string(metadata, &["modelName", "model"]);
     let current_provider = metadata_string(
@@ -578,7 +602,12 @@ fn apply_thread_settings_patch(
         metadata.remove("permissions");
         metadata.remove("activePermissionProfile");
     }
-    if let Some(profile_id) = permission_profile {
+    if let Some(profile) = resolved_permission_profile {
+        apply_resolved_permission_profile_to_metadata(metadata, profile)?;
+    } else if let Some(profile_id) = permission_profile {
+        // Direct unit callers may omit policy resolution; preserve the builtin
+        // profile fallback while public request paths always pass a resolved
+        // profile from RuntimeCore.
         apply_permission_profile_to_metadata(metadata, &profile_id)?;
     }
     insert_string(metadata, "modelName", params.model);
@@ -955,6 +984,7 @@ mod tests {
                 effort: Some("high".to_string()),
                 ..ThreadSettingsUpdateParams::default()
             },
+            None,
         )
         .expect("update metadata");
 
@@ -1000,6 +1030,7 @@ mod tests {
                 model_provider: Some("provider-b".to_string()),
                 ..ThreadSettingsUpdateParams::default()
             },
+            None,
         )
         .expect("update metadata");
 

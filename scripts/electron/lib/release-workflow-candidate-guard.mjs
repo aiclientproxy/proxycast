@@ -55,6 +55,7 @@ function assertImmutableReleaseCheckouts(workflow) {
     "publish_release_assets",
     "publish_updater_assets_r2",
     "publish_cli_assets",
+    "publish_cli_npm",
   ]) {
     const checkout = stepByName(
       workflow?.jobs?.[jobName]?.steps || [],

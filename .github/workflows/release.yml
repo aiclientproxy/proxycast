@@ -814,25 +814,32 @@ jobs:
           done < "$RUNNER_TEMP/r2-delete-keys.txt"
 
   publish_cli_assets:
-    name: Publish CLI release assets
+    name: Build CLI npm ${{ matrix.npm_tag }}
     needs: publish_release_assets
     if: needs.publish_release_assets.result == 'success'
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: macos-latest
             target: aarch64-apple-darwin
+            package: lime-darwin-arm64
+            npm_tag: darwin-arm64
             name: macOS-arm64-cli
           - platform: macos-15-intel
             target: x86_64-apple-darwin
+            package: lime-darwin-x64
+            npm_tag: darwin-x64
             name: macOS-x64-cli
           - platform: windows-2022
             target: x86_64-pc-windows-msvc
+            package: lime-win32-x64
+            npm_tag: win32-x64
             name: Windows-x64-cli
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            package: lime-linux-x64
+            npm_tag: linux-x64
             name: Linux-x64-cli
 
     runs-on: ${{ matrix.platform }}
@@ -848,6 +855,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Setup Python for npm packaging
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
@@ -871,7 +883,21 @@ jobs:
           cache-all-crates: true
           save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
 
-      - name: Build CLI release binary
+      - name: Refresh sandboxed rusty_v8 artifacts
+        shell: bash
+        run: |
+          node scripts/lib/rusty-v8-artifacts.mjs --github-env
+          cargo clean --manifest-path lime-rs/Cargo.toml -p v8
+
+      - name: Prepare CLI sherpa-onnx runtime
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-sherpa-onnx-runtime.mjs \
+            --target "${{ matrix.target }}"
+
+      - name: Build CLI runtime payload
         shell: bash
         env:
           CARGO_PROFILE_RELEASE_LTO: "off"
@@ -882,29 +908,72 @@ jobs:
           RUSTC_WRAPPER: sccache
         run: |
           set -euxo pipefail
-          cargo build --manifest-path lime-rs/Cargo.toml -p cli --release --target "${{ matrix.target }}"
+          cargo build --manifest-path lime-rs/Cargo.toml \
+            -p cli --bin lime --release --target "${{ matrix.target }}"
+          cargo build --manifest-path lime-rs/Cargo.toml \
+            -p app-server --bin app-server --release --target "${{ matrix.target }}"
+          cargo build --manifest-path lime-rs/Cargo.toml \
+            -p code-mode-host --bin code-mode-host --release --target "${{ matrix.target }}"
+          if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then
+            cargo build --manifest-path lime-rs/Cargo.toml \
+              -p tool-runtime \
+              --bin windows-sandbox-setup \
+              --bin windows-sandbox-runner \
+              --release \
+              --target "${{ matrix.target }}"
+          fi
 
-      - name: Package CLI release asset
+      - name: Finalize CLI runtime libraries
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-sherpa-onnx-runtime.mjs \
+            --target "${{ matrix.target }}"
+
+      - name: Package CLI npm platform tarball
         id: package_cli
         shell: bash
         run: |
           set -euxo pipefail
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
+          PROFILE_DIR="lime-rs/target/${{ matrix.target }}/release"
+          VENDOR_ROOT="$RUNNER_TEMP/lime-cli-vendor"
+          BIN_DIR="$VENDOR_ROOT/${{ matrix.target }}/bin"
+          mkdir -p "$BIN_DIR" "packages/cli/dist"
 
-          metadata="$(
-            node packages/cli/scripts/build-release.js \
-              --target-triple "${{ matrix.target }}" \
-              --version "$VERSION" \
-              --out-dir "packages/cli/dist" \
-              --json
-          )"
+          EXE_SUFFIX=""
+          if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then
+            EXE_SUFFIX=".exe"
+          fi
+          cp "$PROFILE_DIR/lime${EXE_SUFFIX}" "$BIN_DIR/"
+          cp "$PROFILE_DIR/app-server${EXE_SUFFIX}" "$BIN_DIR/"
+          cp "$PROFILE_DIR/code-mode-host${EXE_SUFFIX}" "$BIN_DIR/"
+          if [ -n "$EXE_SUFFIX" ]; then
+            cp "$PROFILE_DIR/windows-sandbox-setup.exe" "$BIN_DIR/"
+            cp "$PROFILE_DIR/windows-sandbox-runner.exe" "$BIN_DIR/"
+          fi
+          while IFS= read -r runtime_library; do
+            [ -n "$runtime_library" ] || continue
+            cp -L "$runtime_library" "$BIN_DIR/"
+          done < <(
+            find "$PROFILE_DIR" -maxdepth 1 \
+              \( -type f -o -type l \) \
+              \( -name '*.dylib' -o -name '*.dll' -o -name '*.so' -o -name '*.so.*' \) \
+              -print | sort
+          )
 
-          echo "$metadata"
-          asset_path="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.archivePath);' "$metadata")"
-          echo "asset_path=$asset_path" >> "$GITHUB_OUTPUT"
+          ASSET_PATH="packages/cli/dist/lime-npm-${{ matrix.npm_tag }}-${VERSION}.tgz"
+          python3 packages/cli/scripts/build_npm_package.py \
+            --package "${{ matrix.package }}" \
+            --release-version "$VERSION" \
+            --vendor-src "$VENDOR_ROOT" \
+            --pack-output "$ASSET_PATH"
+          test -f "$ASSET_PATH"
+          echo "asset_path=$ASSET_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Upload CLI asset to GitHub Release
+      - name: Upload CLI npm tarball to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
@@ -921,6 +990,113 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --clobber
 
+      - name: Upload CLI npm tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-npm-${{ matrix.npm_tag }}
+          path: ${{ steps.package_cli.outputs.asset_path }}
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Show sccache stats
         if: always()
         run: sccache --show-stats
+
+  publish_cli_npm:
+    name: Publish CLI npm packages
+    needs: publish_cli_assets
+    if: needs.publish_cli_assets.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js for npm trusted publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@limecloud"
+
+      - name: Setup Python for npm packaging
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download CLI npm platform tarballs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cli-npm-*
+          path: dist/npm
+          merge-multiple: true
+
+      - name: Stage CLI npm root package
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          ROOT_TARBALL="dist/npm/lime-npm-${VERSION}.tgz"
+          python3 packages/cli/scripts/build_npm_package.py \
+            --package lime \
+            --release-version "$VERSION" \
+            --pack-output "$ROOT_TARBALL"
+          test -f "$ROOT_TARBALL"
+          gh release upload "$RELEASE_TAG" "$ROOT_TARBALL" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+      - name: Publish CLI npm packages platform-first
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION#v}"
+          ROOT_TARBALL="dist/npm/lime-npm-${VERSION}.tgz"
+          PLATFORM_TARBALLS=(
+            "dist/npm/lime-npm-linux-x64-${VERSION}.tgz"
+            "dist/npm/lime-npm-darwin-x64-${VERSION}.tgz"
+            "dist/npm/lime-npm-darwin-arm64-${VERSION}.tgz"
+            "dist/npm/lime-npm-win32-x64-${VERSION}.tgz"
+          )
+
+          for required_tarball in "${PLATFORM_TARBALLS[@]}" "$ROOT_TARBALL"; do
+            if [ ! -f "$required_tarball" ]; then
+              echo "Missing npm tarball: $required_tarball" >&2
+              exit 1
+            fi
+          done
+
+          publish_tarball() {
+            local tarball="$1"
+            shift
+            set +e
+            output="$(npm publish "$tarball" --access public --provenance "$@" 2>&1)"
+            status=$?
+            set -e
+            echo "$output"
+            if [ "$status" -eq 0 ]; then
+              return
+            fi
+            if grep -qiE "previously published|cannot publish over|version already exists" <<< "$output"; then
+              echo "Skipping already-published package version: $tarball"
+              return
+            fi
+            return "$status"
+          }
+
+          publish_tarball "${PLATFORM_TARBALLS[0]}" --tag linux-x64
+          publish_tarball "${PLATFORM_TARBALLS[1]}" --tag darwin-x64
+          publish_tarball "${PLATFORM_TARBALLS[2]}" --tag darwin-arm64
+          publish_tarball "${PLATFORM_TARBALLS[3]}" --tag win32-x64
+          publish_tarball "$ROOT_TARBALL"

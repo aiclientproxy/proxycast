@@ -6,7 +6,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "1.140.0"
+version = "1.141.0"
 edition = "2021"
 authors = ["coso"]
 repository = "https://github.com/aiclientproxy/lime"
@@ -42,6 +42,11 @@ app-server-daemon = { path = "crates/app-server-daemon" }
 app-server-protocol = { path = "crates/app-server-protocol" }
 app-server-test-client = { path = "crates/app-server-test-client" }
 app-server-transport = { path = "crates/app-server-transport" }
+execpolicy = { path = "crates/execpolicy" }
+code-mode-protocol = { path = "crates/code-mode-protocol" }
+code-mode-runtime = { path = "crates/code-mode-runtime" }
+code-mode-host = { path = "crates/code-mode-host" }
+code-mode = { path = "crates/code-mode" }
 tui = { path = "crates/tui" }
 patch-apply = { path = "crates/patch-apply" }
 voice-core = { path = "crates/voice-core" }
@@ -49,12 +54,14 @@ document-preview = { path = "crates/document-preview" }
 # 序列化
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+pretty_assertions = "1"
 serde_yaml = "0.9"
 serde_urlencoded = "0.7"
 
 # 异步运行时
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
+tokio-stream = "0.1"
 futures = "0.3"
 async-stream = "0.3"
 async-trait = "0.1"
@@ -142,15 +149,24 @@ jsonschema = "0.30.0"
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 unicode-segmentation = "1.12"
 unicode-width = "0.2"
+textwrap = "0.16.2"
 
 # 音频
 cpal = "0.15"
+
+# Code Mode gRPC transport
+prost = "0.13.5"
+tonic = { version = "0.12.3", features = ["transport"] }
+tonic-build = "0.12.3"
 
 # TLS
 rustls-pemfile = "2"
 
 # 终端
 portable-pty = "0.8"
+
+# App Server remote client transport
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "native-tls"] }
 
 # SSH
 ssh2 = { version = "0.9", features = ["vendored-openssl"] }

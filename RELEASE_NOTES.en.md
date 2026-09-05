@@ -1,40 +1,41 @@
-## Lime v1.140.0
+## Lime v1.141.0
 
 Simplified Chinese release notes are the primary version.
 
 ### New Features
 
-- Added CLI/TUI product surfaces: the CLI enters the shared RuntimeCore through the stdio App Server, while TUI covers real PTY, alternate-screen, keyboard-input, and terminal-restoration flows.
-- Added a single-line JSONL envelope and shell completion to `lime exec`, keeping script integration aligned with the canonical command tree.
-- Added video task tools and media artifact projection with one lifecycle, parameter-validation, execution-result, and chat-preview model.
-- Added Desktop Host diagnostics and external-backend support, including App Server client sessions, transport, and cross-process state observation.
+- Added dedicated Code Mode protocol, runtime, host, and session-facade crates for stdio/gRPC, V8 execution, typed content, cancellation, reconnect, and session-lease lifecycles.
+- Extended the shared App Server CLI/TUI surface with thread resume and management, MCP/Skills/Plugin queries, model and permission controls, JSON/JSONL, prompt history, approvals, request-user-input, and queued-input editing.
+- Added authenticated remote WebSocket session transport with `ws/wss`, Bearer tokens, protocol identity checks, ping/pong, and fail-closed policy; CLI/TUI reuse the same session facade without duplicating runtime or persistence.
+- Added Codex-aligned TUI Markdown, diff, syntax highlighting, OSC 8 links, width-aware tables, clipboard/image paste, slash-command popup, static pager, transcript overlay, and queued follow-up preview.
 
 ### Fixes
 
-- Fixed boundary and cleanup issues across the Electron Desktop Host, App Server, and runtime diagnostics so session and tool state do not leak.
-- Fixed Agent chat task-protocol noise, media previews, tool summaries, compaction, and runtime-routing assertions.
-- Fixed crash-recovery panel behavior, short-window home composer visibility, and settings runtime entry points.
+- Tightened the App Server `command/exec` permission boundary to reject client-supplied grants and preserve fail-closed typed lowering.
+- Fixed Code Mode host/client disconnect, duplicate execution, stale-cell, pending-callback, and session-close cleanup so old-generation state cannot leak into reconnects.
+- Fixed CLI/TUI terminal lifecycle, external-editor handoff, Unicode cursor, narrow-terminal truncation, queue recovery, and failed-terminal projection boundaries.
+- Fixed regressions in file-system watching, Agent Runtime typed content, MCP notification projection, and tool-lifecycle summaries.
 
 ### Improvements and Refactoring
 
-- Migrated the CLI from the retired `lime-cli-npm` entry point to `packages/cli`; Rust CLI/TUI crates now reuse the App Server protocol, client, and canonical Thread/Turn/Item projection.
-- External editor handling now supports PATH `.cmd/.bat` shims on Windows and closes the temporary-file handle before launch.
-- Removed retired CLI skills, tool documentation, and entry points, and added CLI/TUI, Desktop Host, release-candidate, and governance boundary guards.
-- Strengthened macOS native-host, Windows Squirrel, packaged-resource, release-identity, and Gate B evidence scripts; Electron Forge remains the sole packaging source of truth.
+- Migrated Code Mode out of the old `tool-runtime` embedded process/V8 implementation; production calls now use the four current crates, with only explicit compatibility exports left at the old boundary.
+- Converged CLI Rust command owners and Codex-shaped modules, and aligned npm root/platform launchers, native payload staging, signal forwarding, and release ordering under `packages/cli`.
+- Migrated TUI interaction, rendering, and terminal algorithms by snapshot-inventory classification while keeping canonical Thread/Turn/Item as the only session source of truth.
+- Added CLI/TUI/Code Mode, remote transport, Windows restricted-execution, Electron release-workflow, and governance guards; Cloud remains only an authenticated-transport extension point, not a production path.
 
 ### Testing and Quality
 
-- Added real stdio/PTY CLI/TUI Gate B fixtures, video-tool tests, Desktop Host diagnostics tests, and boundary governance regressions.
-- Expanded App Server client, command-contract, Electron release-workflow, Windows packaged-evidence, and GUI-main-path coverage.
-- Unified five-language copy-boundary, script-governance, documentation-boundary, and version-consistency checks.
+- Added Code Mode protocol/runtime/host/facade lifecycle, typed-content, gRPC, reconnect, and cancellation tests, plus App Server permission-boundary regressions.
+- Expanded CLI Gate B, TUI Gate B, real stdio/PTY, npm packaged launcher, remote-auth, snapshot-inventory, terminal-rendering, and cross-platform release guards.
+- Kept five-language copy, protocol generation, script/CLI boundaries, Electron Forge, version consistency, and legacy-governance checks in the release gate.
 
 ### Documentation
 
-- Updated architecture, command, governance, quality-workflow, Feature Map, tool inventory, and CLI/TUI execution-plan documentation to define the single Product Surface -> App Server JSON-RPC business path.
+- Updated architecture, command, governance, quality-workflow, and CLI/TUI/Code Mode execution-plan documentation to record the single Product Surface -> App Server JSON-RPC -> RuntimeCore -> Thread/Turn/Item path and the Cloud transport boundary.
 
 ### Other
 
-- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.140.0`.
-- Excluded local SQLite/WAL runtime artifacts under `undefined/data/*` from this release candidate; no compat or deprecated owner was added.
+- Bumped the root app, CLI npm package, Rust workspace, and Cargo.lock versions to `1.141.0`.
+- Excluded local SQLite/WAL, runtime database, and `.DS_Store` artifacts under `undefined/` from this release candidate; the old Code Mode implementation is `dead/deleted`, with no parallel runtime, compat, or deprecated owner added.
 
-**Full changes**: `v1.139.0` -> `v1.140.0`
+**Full changes**: `v1.140.0` -> `v1.141.0`

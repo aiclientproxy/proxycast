@@ -121,15 +121,25 @@ Knowledge release scope 审计入口已迁到 `scripts/knowledge/`。对外继�
 
 App Server release manifest 与 sidecar smoke 脚本已迁到 `scripts/app-server/`。对外继续使用 `package.json` 里的 `app-server:*` 与 `smoke:app-server-*` npm scripts，不直接依赖根目录脚本路径。所有会创建 session/turn 的 stdio、external 与 packaged smoke 必须把 `dataDir` 指向本轮临时目录；固定 fixture identity 不得写入真实用户 App Server data root。
 
-`npm run smoke:cli-gate-b` 使用真实 `lime exec`、真实 App Server stdio 进程和测试专用 external backend，核对同一 canonical Thread/Turn identity、Item 事件序列与 CLI 完成输出；它不调用正式 Provider，也不允许 mock backend 或固定 timer 合成完成态。交互式 alternate-screen/PTY 证据归独立的 TUI Gate B，不用该 CLI smoke 冒充。
+`npm run smoke:cli-gate-b` 使用真实 `lime exec`、真实 App Server stdio 进程和测试专用 external backend，核对同一 canonical Thread/Turn identity、Item 事件序列、JSON/JSONL、pipe stdin、失败退出码与 shell completion；它不调用正式 Provider，也不允许 mock backend 或固定 timer 合成完成态。交互式 alternate-screen/PTY 证据归独立的 TUI Gate B，不用该 CLI smoke 冒充。
 
-`npm run smoke:tui-gate-b` 使用 `portable-pty` 启动真实 `lime tui` 与真实 App Server stdio 进程，在可见 ready 状态后输入 prompt，等待 canonical `turn.completed` 投影出的完成文本，再通过 Ctrl-C 退出；测试同时验证 alternate screen 的进入与恢复，不调用正式 Provider，也不使用 mock backend。
+`npm run smoke:tui-gate-b` 使用 `portable-pty` 启动真实 `lime tui` 与真实 App Server stdio 进程，在可见 ready 状态后输入 prompt，等待 canonical `turn.completed` 投影出的完成文本，再通过 Ctrl-C 退出；`complete` 场景还通过 Ctrl-G 启动继承前台 PTY 的 external editor，验证草稿回写、标准 DSR 恢复与 alternate screen 重新进入。该测试不调用正式 Provider，也不使用 mock backend。
+
+`npm run inventory:tui-codex` 从 `CODEX_TUI_REFERENCE`（默认本机 `/Users/coso/Documents/dev/rust/codex/codex-rs/tui`）读取上游 snapshot，刷新 `internal/exec-plans/tui-codex-snapshot-inventory.json`。账本为每个 snapshot 保存相对路径、SHA-256 和 `direct/merge/contract/defer/dead` 分类；CI 只校验已提交账本，不要求存在外部 Codex checkout。
+
+`npm run inventory:cli-codex` 从 `CODEX_CLI_REFERENCE`（默认本机 `/Users/coso/Documents/dev/rust/codex/codex-rs/cli`）读取全部 Rust unit/integration test，刷新 `internal/exec-plans/cli-codex-test-inventory.json`。账本逐测试保存相对路径、名称、行号、源文件 SHA-256、迁移分类、状态与 Lime owner；CI 只校验已提交账本，不要求存在外部 Codex checkout。
+
+`npm run inventory:cli-structure` 同时读取 `/Users/coso/Documents/dev/rust/codex/codex-rs/cli` 与 `/Users/coso/Documents/dev/rust/codex/codex-cli`，并与 `lime-rs/crates/cli`、`packages/cli` 做目录、模块、类型、函数和脚本符号对照，刷新 `internal/exec-plans/cli-structure-inventory.json`。账本明确记录缺失结构、产品专属排除、Cloud 延后和 Lime current owner；不得只复制行为而忽略 Codex 文件、函数和类型命名。
+
+`npm run inventory:tui-structure` 读取 `/Users/coso/Documents/dev/rust/codex/codex-rs/tui/src` 与 `lime-rs/crates/tui/src`，做 TUI 目录、模块、类型和函数符号的双向对照，刷新 `internal/exec-plans/tui-structure-inventory.json`。Codex 产品专属、Cloud 或运行时 owner 缺口必须记录为排除/延后，不得在 TUI 创建第二套状态机。
+
+`npm run smoke:cli-surface-gate-b` 使用真实 `lime`、真实 sibling App Server stdio 和隔离数据目录，验证 Codex 形状的 MCP `list/add/get/remove/start/stop`、`features list/enable/disable`、标准 plugin `add/list/read/search/enable/disable/remove`、`debug models --bundled`、`debug clear-memories`、queue `add/list` 与缺失 Thread fail-closed，以及 OAuth `logout` 的协议缺口 fail-closed。fixture backend 只用于 queue 的显式测试链，不调用正式 Provider；CLI 不直写 MCP 配置、不删除 OAuth 凭据文件。
 
 `lime resume [thread-id]` 复用同一 TUI/session 主链；提供 id 时直接调用 current `thread/resume`，省略 id 时先调用 `thread/list` 打开 session picker，再用所选 id hydrate canonical Thread/Turn/Item 后进入交互界面。连接中断由同一 session owner 做 bounded reconnect，保留 draft 并重新 resume 原 Thread；它不创建第二套历史数据库或 runtime。
 
 `lime thread list|show|archive|unarchive|delete|fork` 是非交互 Thread 管理命令，统一通过 `app-server-client` 调用 v2 `thread/*`，返回 typed JSON；CLI 不直接访问 ThreadStore、数据库或 runtime。
 
-`lime mcp list` 和 `lime skills list` 是只读控制面命令，分别调用 v2 `mcpServerStatus/list` 与 `skills/list`；MCP status 自动消费 `nextCursor` 分页并对重复 cursor fail closed，Skill 查询支持多个 `--skill-cwd` 与 `--force-reload`。两者都通过 `app-server-client` 连接 App Server，不读取本地 MCP/Skill registry。
+`lime mcp list` 和 `lime skills list` 是只读控制面命令，分别调用 v2 `mcpServer/list` 与 `skills/list`；MCP server 配置列表通过 current App Server owner 返回，Skill 查询支持多个 `--skill-cwd` 与 `--force-reload`。两者都通过 `app-server-client` 连接 App Server，不读取本地 MCP/Skill registry。`mcpServerStatus/list` 仅属于独立的 App Server/GUI 运行时状态控制面，不是 CLI `mcp list` 的事实源。
 
 `lime tui`、`lime exec` 和 `lime resume` 共享 `--model`、`--provider`、`--effort`、`--permissions` 连接参数；模型路由与会话设置统一由 App Server `thread/start` / `thread/settings/update` 处理。
 

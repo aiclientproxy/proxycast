@@ -13,6 +13,7 @@ import {
   openPathWithDefaultApp,
   revealPathInFinder,
 } from "@/lib/api/fileSystem";
+import { startFileSystemWatch } from "@/lib/api/fileSystemWatch";
 
 const APP_ICON_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
@@ -57,6 +58,10 @@ vi.mock("@/lib/api/fileBrowser", () => ({
 vi.mock("@/lib/api/fileSystem", () => ({
   openPathWithDefaultApp: vi.fn(),
   revealPathInFinder: vi.fn(),
+}));
+
+vi.mock("@/lib/api/fileSystemWatch", () => ({
+  startFileSystemWatch: vi.fn(),
 }));
 
 const mountedRoots: Array<{ root: Root; container: HTMLDivElement }> = [];
@@ -240,6 +245,7 @@ beforeEach(() => {
   );
   vi.mocked(openPathWithDefaultApp).mockResolvedValue(undefined);
   vi.mocked(revealPathInFinder).mockResolvedValue(undefined);
+  vi.mocked(startFileSystemWatch).mockResolvedValue(vi.fn());
   window.localStorage.clear();
 });
 
@@ -256,6 +262,53 @@ afterEach(() => {
 });
 
 describe("FileManagerSidebar", () => {
+  it("目录变化通知应刷新当前目录并在卸载时停止 watcher", async () => {
+    let onChanged:
+      | Parameters<typeof startFileSystemWatch>[1]
+      | undefined;
+    const stop = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    vi.mocked(startFileSystemWatch).mockImplementation(
+      async (_path, handler) => {
+        onChanged = handler;
+        return stop;
+      },
+    );
+
+    const { container } = await renderFileManagerSidebar();
+    expect(startFileSystemWatch).toHaveBeenCalledWith(
+      "/Users/demo",
+      expect.any(Function),
+    );
+    const listingCallsBeforeChange = vi.mocked(listDirectory).mock.calls.length;
+
+    await act(async () => {
+      onChanged?.({
+        changedPaths: ["/Users/demo/brief.txt"],
+        watchId: "file-manager-1",
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(vi.mocked(listDirectory).mock.calls.length).toBeGreaterThan(
+      listingCallsBeforeChange,
+    );
+    expect(container.textContent).toContain("brief.txt");
+
+    await act(async () => {
+      const mountedIndex = mountedRoots.findIndex(
+        (mounted) => mounted.container === container,
+      );
+      const mounted = mountedRoots[mountedIndex];
+      mounted?.root.unmount();
+      if (mountedIndex >= 0) {
+        mountedRoots.splice(mountedIndex, 1);
+      }
+      await Promise.resolve();
+    });
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
   it("默认隐藏点开头目录，并可通过眼睛按钮切换显示", async () => {
     const { container } = await renderFileManagerSidebar();
     const toggle = container.querySelector(

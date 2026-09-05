@@ -112,9 +112,21 @@ if (input.kind === "turnStart") {
         },
       },
     ];
-  } else if (${JSON.stringify(scenario)} === "interrupt") {
+  } else if (
+    ${JSON.stringify(scenario)} === "interrupt" ||
+    ${JSON.stringify(scenario)} === "queue-edit"
+  ) {
     events = [
-      { type: "message.delta", payload: { itemId: "terminal-assistant", text: "INTERRUPT_READY" } },
+      {
+        type: "message.delta",
+        payload: {
+          itemId: "terminal-assistant",
+          text:
+            ${JSON.stringify(scenario)} === "queue-edit"
+              ? "QUEUE_EDIT_READY"
+              : "INTERRUPT_READY",
+        },
+      },
     ];
   } else if (${JSON.stringify(scenario)} === "failure") {
     events = [
@@ -198,7 +210,11 @@ appendFileSync(
   }) + "\\n",
 );
 console.log(JSON.stringify({ events }));
-if (input.kind === "turnStart" && ${JSON.stringify(scenario)} === "interrupt") {
+if (
+  input.kind === "turnStart" &&
+  (${JSON.stringify(scenario)} === "interrupt" ||
+    ${JSON.stringify(scenario)} === "queue-edit")
+) {
   // An unresolved Promise alone does not keep Node's event loop alive. Keep
   // one active handle so the App Server can deliver a real turn/interrupt.
   setInterval(() => {}, 1000);

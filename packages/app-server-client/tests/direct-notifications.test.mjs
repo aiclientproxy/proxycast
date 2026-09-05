@@ -5,6 +5,7 @@ import {
   isCommandExecutionOutputDeltaNotification,
   isCommandExecutionTerminalInteractionNotification,
   isErrorNotification,
+  isFsChangedNotification,
   isGuardianReviewCompletedNotification,
   isGuardianReviewStartedNotification,
   isStrictReviewRequiredNotification,
@@ -31,6 +32,7 @@ import {
   mcpServerEventStreamServerNotification,
   mcpServerStatusUpdatedServerNotification,
   serverNotification,
+  fsChangedServerNotification,
   skillsChangedServerNotification,
   scheduledTaskChangedServerNotification,
   scheduledTaskRunUpdatedServerNotification,
@@ -51,6 +53,42 @@ test("recognizes strict skills/changed catalog invalidation", () => {
   ]) {
     assert.equal(skillsChangedServerNotification(malformed), undefined);
     assert.equal(isSkillsChangedNotification(malformed), false);
+  }
+});
+
+test("recognizes strict fs/changed watcher notifications", () => {
+  const notification = {
+    method: "fs/changed",
+    params: {
+      changedPaths: ["/workspace/README.md", "/workspace/src"],
+      watchId: "file-manager-1",
+    },
+  };
+  assert.deepEqual(fsChangedServerNotification(notification), notification);
+  assert.equal(isFsChangedNotification(notification), true);
+
+  for (const malformed of [
+    { method: "fs/changed" },
+    { method: "fs/changed", params: {} },
+    {
+      ...notification,
+      params: { ...notification.params, watchId: "" },
+    },
+    {
+      ...notification,
+      params: { ...notification.params, changedPaths: [] },
+    },
+    {
+      ...notification,
+      params: { ...notification.params, changedPaths: ["", 42] },
+    },
+    {
+      ...notification,
+      params: { ...notification.params, extra: true },
+    },
+  ]) {
+    assert.equal(fsChangedServerNotification(malformed), undefined);
+    assert.equal(isFsChangedNotification(malformed), false);
   }
 });
 

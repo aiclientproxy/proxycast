@@ -107,8 +107,26 @@ pub(super) fn start_windows_restricted_execution_process(
     }
 
     let sandbox_account = sandbox_account_for_permissions(sandbox.granted_permissions.as_ref());
-    verify_sandbox_account_network_policy(sandbox_account)?;
-    verify_windows_sandbox_group_membership(sandbox_account)?;
+    let mode = sandbox
+        .windows_mode
+        .unwrap_or(WindowsSandboxExecutionMode::Elevated);
+    if mode == WindowsSandboxExecutionMode::Unelevated
+        && sandbox
+            .granted_permissions
+            .as_ref()
+            .and_then(|permissions| permissions.network.as_ref())
+            .and_then(|network| network.enabled)
+            .unwrap_or(false)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "managed network access requires elevated Windows sandbox mode",
+        ));
+    }
+    if mode == WindowsSandboxExecutionMode::Elevated {
+        verify_sandbox_account_network_policy(sandbox_account)?;
+        verify_windows_sandbox_group_membership(sandbox_account)?;
+    }
     if request.tty {
         request
             .env
@@ -125,12 +143,21 @@ pub(super) fn start_windows_restricted_execution_process(
     let capability_sid = capability_sid();
     let acl_lease = AclLease::acquire(&sandbox_group_sid, &capability_sid, acl_plan)?;
     let null_device_lease = NullDeviceLease::acquire(&capability_sid)?;
-    let transport = windows_runner_host::spawn_runner_transport(
-        &request,
-        &cwd,
-        sandbox_account,
-        capability_sid,
-    )?;
+    let transport = match mode {
+        WindowsSandboxExecutionMode::Elevated => windows_runner_host::spawn_runner_transport(
+            &request,
+            &cwd,
+            sandbox_account,
+            capability_sid,
+        )?,
+        WindowsSandboxExecutionMode::Unelevated => {
+            windows_runner_host::spawn_current_user_runner_transport(
+                &request,
+                &cwd,
+                capability_sid,
+            )?
+        }
+    };
 
     let start = ExecutionProcessStart {
         process_id: request.process_id.clone(),
@@ -167,6 +194,13 @@ pub(super) fn start_windows_restricted_execution_process(
         final_rx: Some(final_rx),
         final_snapshot: None,
     })
+}
+
+pub(super) fn verify_windows_restricted_token_backend() -> io::Result<()> {
+    let capability_sid = capability_sid();
+    let token = create_restricted_token(&capability_sid)?;
+    drop(token);
+    Ok(())
 }
 
 fn sandbox_account_for_permissions(permissions: Option<&GrantedPermissionProfile>) -> &'static str {

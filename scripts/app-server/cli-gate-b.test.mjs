@@ -7,21 +7,22 @@ const source = readFileSync(
   "utf8",
 );
 const fixtureSource = readFileSync(
-  path.resolve(
-    process.cwd(),
-    "scripts/app-server/terminal-gate-fixture.mjs",
-  ),
+  path.resolve(process.cwd(), "scripts/app-server/terminal-gate-fixture.mjs"),
   "utf8",
 );
 
 describe("CLI Gate B", () => {
   it("runs the real CLI and App Server through the current stdio boundary", () => {
-    expect(source).toContain("execFileAsync(cliBinaryPath");
+    expect(source).toContain("spawn(cliBinaryPath");
     expect(source).toContain('"--app-server"');
     expect(source).toContain('"--app-server-arg=--backend"');
     expect(source).toContain('"--app-server-arg=external"');
     expect(fixtureSource).toContain('"turn.completed"');
     expect(source).toContain('envelope.result?.status, "ready"');
+    expect(source).toContain('argument === "--json" ? "--jsonl" : argument');
+    expect(source).toContain("input: `${prompt}\\n`");
+    expect(source).toContain('"empty prompt exit code"');
+    expect(source).toContain('["completion", "zsh"]');
     expect(source).toContain("canonical thread identity");
     expect(source).toContain("canonical turn identity");
   });
@@ -31,5 +32,6 @@ describe("CLI Gate B", () => {
     expect(source).not.toContain('APP_SERVER_BACKEND_MODE: "mock"');
     expect(source).not.toContain("setTimeout(");
     expect(source).not.toContain("turn.final_done");
+    expect(source).toContain("runCliResult");
   });
 });

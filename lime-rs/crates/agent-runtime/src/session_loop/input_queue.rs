@@ -357,9 +357,7 @@ impl RuntimeSessionTaskContext {
         self.resources.thread_id()
     }
 
-    pub fn code_mode_session(
-        &self,
-    ) -> Option<tool_runtime::code_mode::RuntimeCodeModeSessionHandle> {
+    pub fn code_mode_session(&self) -> Option<code_mode::RuntimeCodeModeSessionHandle> {
         self.resources.code_mode_session()
     }
 
@@ -497,9 +495,7 @@ impl RuntimeSessionInputHandle {
         self.resources.thread_id()
     }
 
-    pub fn code_mode_session(
-        &self,
-    ) -> Option<tool_runtime::code_mode::RuntimeCodeModeSessionHandle> {
+    pub fn code_mode_session(&self) -> Option<code_mode::RuntimeCodeModeSessionHandle> {
         self.resources.code_mode_session()
     }
 

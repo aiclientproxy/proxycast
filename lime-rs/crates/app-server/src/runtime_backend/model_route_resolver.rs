@@ -20,7 +20,7 @@ pub(super) struct ChatModelRouteResolution {
     pub(super) decision_payload: Value,
     pub(super) fallback_payload: Option<Value>,
     pub(super) not_possible_payload: Option<Value>,
-    pub(super) tool_mode: tool_runtime::code_mode::RuntimeToolMode,
+    pub(super) tool_mode: code_mode::RuntimeToolMode,
     pub(super) supports_custom_tools: bool,
 }
 

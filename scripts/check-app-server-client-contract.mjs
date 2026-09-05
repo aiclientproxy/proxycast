@@ -7518,10 +7518,10 @@ const checks = [
       "Prepare sherpa-onnx runtime",
       "node scripts/prepare-sherpa-onnx-runtime.mjs --target x86_64-pc-windows-msvc",
       "Build Windows app-server, code-mode-host, and sandbox sidecars",
-      "cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host --bin windows-sandbox-setup --bin windows-sandbox-runner",
+      "cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p code-mode-host --bin code-mode-host -p tool-runtime --bin windows-sandbox-setup --bin windows-sandbox-runner",
     ],
     absentSnippets: [
-      "cargo check --manifest-path lime-rs/Cargo.toml -p app-server --bin app-server -p tool-runtime --bin code-mode-host",
+      "cargo check --manifest-path lime-rs/Cargo.toml -p app-server --bin app-server -p code-mode-host --bin code-mode-host",
     ],
   },
   {
@@ -7556,7 +7556,7 @@ const checks = [
       "node scripts/lib/rusty-v8-artifacts.mjs --github-env",
       "cargo clean --manifest-path lime-rs/Cargo.toml -p v8",
       "Build standalone Code Mode host and Windows sandbox setup helper",
-      "cargo build --manifest-path lime-rs/Cargo.toml -p tool-runtime --bin code-mode-host --bin windows-sandbox-setup",
+      "cargo build --manifest-path lime-rs/Cargo.toml -p code-mode-host --bin code-mode-host -p tool-runtime --bin windows-sandbox-setup",
       "npm run test:rust",
     ],
   },

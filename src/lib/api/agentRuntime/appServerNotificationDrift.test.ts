@@ -167,6 +167,17 @@ describe("App Server notification drift", () => {
     expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
   });
 
+  it("classifies fs/changed as projected outside the thread timeline", () => {
+    const source = notification("fs/changed", {
+      changedPaths: ["/workspace/README.md"],
+      watchId: "file-manager-1",
+    });
+    expect(readAppServerNotificationDrift(source).disposition).toBe(
+      "known_projected",
+    );
+    expect(projectAppServerNotificationDriftPayload(source)).toBeNull();
+  });
+
   it("classifies turn moderation metadata as projected without logging values", () => {
     const source = notification("turn/moderationMetadata", {
       threadId: "thread-1",

@@ -1,4 +1,6 @@
+use crate::execution_process::ExecutionProcessServer;
 use app_server_protocol::error_codes;
+use app_server_protocol::protocol::v2::GrantedPermissionProfile;
 use app_server_protocol::protocol::v2::{
     CommandExecOutputDeltaNotification, CommandExecOutputStream, CommandExecParams,
     CommandExecResizeParams, CommandExecResizeResponse, CommandExecResponse,
@@ -31,6 +33,7 @@ pub(crate) type CommandExecNotificationHook =
 pub(crate) struct CommandExecServer {
     sessions: Arc<Mutex<HashMap<CommandExecKey, CommandExecSession>>>,
     notification_hook: Arc<Mutex<Option<CommandExecNotificationHook>>>,
+    process_server: ExecutionProcessServer,
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -41,6 +44,7 @@ struct CommandExecKey {
 
 #[derive(Clone)]
 struct CommandExecSession {
+    process_id: String,
     control: LocalExecutionProcessControlHandle,
     stream_stdin: bool,
     tty: bool,
@@ -48,6 +52,11 @@ struct CommandExecSession {
 }
 
 impl CommandExecServer {
+    pub(crate) fn with_process_server(mut self, process_server: ExecutionProcessServer) -> Self {
+        self.process_server = process_server;
+        self
+    }
+
     pub(crate) fn with_notification_hook(mut self, hook: CommandExecNotificationHook) -> Self {
         self.set_notification_hook(hook);
         self
@@ -64,6 +73,7 @@ impl CommandExecServer {
         &self,
         connection_id: ConnectionId,
         params: CommandExecParams,
+        granted_permissions: Option<GrantedPermissionProfile>,
     ) -> Result<CommandExecResponse, JsonRpcError> {
         validate_exec(&params)?;
         let process_id = params
@@ -99,7 +109,10 @@ impl CommandExecServer {
                     invalid_runtime("command/exec sandbox backend is unavailable")
                 })?,
                 requested_policy: sandbox_policy.clone(),
-                granted_permissions: None,
+                granted_permissions,
+                windows_mode: crate::execution_process::runtime_windows_sandbox_mode(
+                    crate::runtime_backend::current_agent_runtime_config_metadata().as_ref(),
+                ),
             })
         } else {
             None
@@ -149,6 +162,11 @@ impl CommandExecServer {
                 .resize(size.rows, size.cols)
                 .map_err(|error| invalid_runtime(error.to_string()))?;
         }
+        self.process_server
+            .register_process_handle(handle.control_handle(), handle.status())
+            .map_err(|error| {
+                invalid_runtime(format!("failed to register command/exec process: {error}"))
+            })?;
         {
             let mut sessions = self.sessions.lock().await;
             if sessions.contains_key(&key) {
@@ -160,6 +178,7 @@ impl CommandExecServer {
             sessions.insert(
                 key.clone(),
                 CommandExecSession {
+                    process_id: process_id.clone(),
                     control: handle.control_handle(),
                     stream_stdin,
                     tty: params.tty,
@@ -188,9 +207,24 @@ impl CommandExecServer {
                     };
                     match event {
                         LocalExecutionProcessEvent::Output(delta) => {
+                            if let Err(error) = self.process_server.record_process_output(delta.clone())
+                            {
+                                tracing::warn!(
+                                    process_id = %process_id,
+                                    %error,
+                                    "failed to record command/exec output in shared process owner"
+                                );
+                            }
                             self.handle_delta(connection_id, &process_id, delta, stream_output, &mut stdout, &mut stderr).await;
                         }
                         LocalExecutionProcessEvent::Exited(snapshot) => {
+                            if let Err(error) = self.process_server.finish_process(snapshot.clone()) {
+                                tracing::warn!(
+                                    process_id = %process_id,
+                                    %error,
+                                    "failed to finalize command/exec in shared process owner"
+                                );
+                            }
                             break CommandExecResponse {
                                 exit_code: if timed_out {
                                     COMMAND_EXEC_TIMEOUT_EXIT_CODE
@@ -205,7 +239,7 @@ impl CommandExecServer {
                 }
                 _ = async { if let Some(sleep) = timeout_sleep.as_mut() { sleep.await } }, if timeout_sleep.is_some() => {
                     timed_out = true;
-                    let _ = self.session(&key).await.map(|session| session.control.terminate());
+                    let _ = self.process_server.terminate(&process_id);
                     timeout_sleep = None;
                 }
             }
@@ -244,9 +278,8 @@ impl CommandExecServer {
             if !*open {
                 return Err(invalid_request("command/exec stdin is already closed"));
             }
-            session
-                .control
-                .write_stdin(bytes)
+            self.process_server
+                .write_stdin(&session.process_id, &bytes)
                 .map_err(|error| invalid_runtime(error.to_string()))?;
         }
         if params.close_stdin {
@@ -292,9 +325,8 @@ impl CommandExecServer {
         let session = self
             .session(&key(connection_id, &params.process_id))
             .await?;
-        session
-            .control
-            .terminate()
+        self.process_server
+            .terminate(&session.process_id)
             .map_err(|error| invalid_runtime(error.to_string()))?;
         Ok(CommandExecTerminateResponse {})
     }
@@ -312,7 +344,7 @@ impl CommandExecServer {
                 .collect::<Vec<_>>()
         };
         for session in sessions {
-            let _ = session.control.terminate();
+            let _ = self.process_server.terminate(&session.process_id);
         }
     }
 

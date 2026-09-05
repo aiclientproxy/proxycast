@@ -11,10 +11,6 @@ path = "src/lib.rs"
 doctest = false
 
 [[bin]]
-name = "code-mode-host"
-path = "src/bin/code-mode-host.rs"
-
-[[bin]]
 name = "windows-sandbox-setup"
 path = "src/bin/windows-sandbox-setup.rs"
 
@@ -27,8 +23,11 @@ agent-protocol.workspace = true
 app-server-protocol.workspace = true
 async-trait.workspace = true
 base64.workspace = true
+code-mode-protocol.workspace = true
+code-mode-runtime.workspace = true
+code-mode-host.workspace = true
+code-mode.workspace = true
 chrono.workspace = true
-deno_core_icudata.workspace = true
 dirs.workspace = true
 document-preview.workspace = true
 encoding_rs = "0.8"
@@ -55,7 +54,6 @@ tracing.workspace = true
 url.workspace = true
 urlencoding.workspace = true
 uuid.workspace = true
-v8.workspace = true
 which = "8.0.0"
 
 [dev-dependencies]

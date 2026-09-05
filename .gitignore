@@ -60,6 +60,8 @@ internal/exec-plans/*
 !internal/exec-plans/README.md
 !internal/exec-plans/codex-desktop-selective-goose-reference-plan.md
 !internal/exec-plans/codex-desktop-selective-goose-reference-evidence.json
+!internal/exec-plans/tui-codex-snapshot-inventory.json
+!internal/exec-plans/tui-codex-snapshot-inventory.md
 !internal/exec-plans/tui-cli-surfaces-plan.md
 !internal/exec-plans/documentation-convergence-plan.md
 !internal/exec-plans/scheduled-tasks-implementation.md
@@ -105,6 +107,7 @@ internal/exec-plans/*
 !internal/exec-plans/codex-app-gui-alignment-plan.md
 !internal/exec-plans/codex-lime-storage-alignment-plan.md
 !internal/exec-plans/dead-code-cleanup-2026-07-18.md
+!internal/exec-plans/code-mode-codex-alignment-plan.md
 internal/roadmap/**
 !internal/roadmap/
 !internal/roadmap/long-term/
@@ -348,5 +351,6 @@ benchmarks/*
 !benchmarks/lime-agent-runtime/
 !benchmarks/lime-agent-runtime/**
 .tmp-smoke/
-packages/cli/bin/
+packages/cli/bin/*
+!packages/cli/bin/lime.js
 .gstack/

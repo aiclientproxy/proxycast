@@ -97,6 +97,7 @@ async fn one_off_command_captures_stdout_stderr_and_exit_code() {
         .exec(
             ConnectionId(1),
             exec_params(None, "printf stdout; printf stderr >&2; exit 7"),
+            None,
         )
         .await
         .expect("execute command");
@@ -108,6 +109,26 @@ async fn one_off_command_captures_stdout_stderr_and_exit_code() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn explicit_read_only_policy_fails_closed_for_mutating_command() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let mut params = exec_params(None, "touch command-exec-must-not-exist");
+    params.cwd = Some(temp.path().to_path_buf());
+    params.sandbox_policy = Some(serde_json::json!("read-only"));
+
+    let error = CommandExecServer::default()
+        .exec(ConnectionId(10), params, None)
+        .await
+        .expect_err("read-only command/exec must reject a mutating command");
+
+    assert_eq!(error.code, error_codes::RUNTIME_ERROR);
+    assert!(error
+        .message
+        .contains("read_only_sandbox_blocks_shell_command"));
+    assert!(!temp.path().join("command-exec-must-not-exist").exists());
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn streaming_command_emits_output_before_the_final_response() {
     let (server, mut notifications) = server_with_notifications();
     let connection_id = ConnectionId(2);
@@ -115,7 +136,7 @@ async fn streaming_command_emits_output_before_the_final_response() {
     params.stream_stdout_stderr = true;
     let task = tokio::spawn({
         let server = server.clone();
-        async move { server.exec(connection_id, params).await }
+        async move { server.exec(connection_id, params, None).await }
     });
 
     let (actual_connection, notification) =
@@ -152,7 +173,7 @@ async fn stdin_write_and_close_are_connection_scoped_and_fail_closed() {
     params.stream_stdin = true;
     let task = tokio::spawn({
         let server = server.clone();
-        async move { server.exec(connection_id, params).await }
+        async move { server.exec(connection_id, params, None).await }
     });
     wait_for_session(&server, connection_id, "stdin").await;
 
@@ -209,7 +230,7 @@ async fn tty_resize_and_terminate_control_the_active_process() {
     params.size = Some(CommandExecTerminalSize { rows: 24, cols: 80 });
     let task = tokio::spawn({
         let server = server.clone();
-        async move { server.exec(connection_id, params).await }
+        async move { server.exec(connection_id, params, None).await }
     });
     wait_for_session(&server, connection_id, "pty").await;
 
@@ -253,7 +274,7 @@ async fn duplicate_process_ids_fail_only_within_the_same_connection() {
     first_params.timeout_ms = None;
     let first = tokio::spawn({
         let server = server.clone();
-        async move { server.exec(connection_id, first_params).await }
+        async move { server.exec(connection_id, first_params, None).await }
     });
     wait_for_session(&server, connection_id, "shared").await;
 
@@ -261,6 +282,7 @@ async fn duplicate_process_ids_fail_only_within_the_same_connection() {
         .exec(
             connection_id,
             exec_params(Some("shared"), "printf duplicate"),
+            None,
         )
         .await
         .expect_err("same-connection duplicate must fail");
@@ -271,6 +293,7 @@ async fn duplicate_process_ids_fail_only_within_the_same_connection() {
         .exec(
             other_connection,
             exec_params(Some("shared"), "printf other"),
+            None,
         )
         .await
         .expect("other connection may reuse process id");
@@ -291,7 +314,7 @@ async fn output_cap_and_timeout_apply_to_one_off_commands() {
     let mut capped = exec_params(None, "printf 12345");
     capped.output_bytes_cap = Some(3);
     let response = server
-        .exec(ConnectionId(8), capped)
+        .exec(ConnectionId(8), capped, None)
         .await
         .expect("capped command");
     assert_eq!(response.stdout, "123");
@@ -300,7 +323,7 @@ async fn output_cap_and_timeout_apply_to_one_off_commands() {
     timed.timeout_ms = Some(20);
     let response = tokio::time::timeout(
         std::time::Duration::from_secs(2),
-        server.exec(ConnectionId(8), timed),
+        server.exec(ConnectionId(8), timed, None),
     )
     .await
     .expect("timeout enforcement")
@@ -316,6 +339,7 @@ async fn windows_timeout_returns_canonical_exit_code() {
         CommandExecServer::default().exec(
             ConnectionId(9),
             windows_exec_params("[System.Threading.Thread]::Sleep(10000)"),
+            None,
         ),
     )
     .await

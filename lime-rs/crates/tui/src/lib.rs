@@ -1,18 +1,40 @@
 mod app;
 mod app_server_session;
 mod bottom_pane;
-mod composer;
+mod clipboard_copy;
+mod clipboard_paste;
+mod command_popup;
+mod diff_render;
 mod entry;
 mod external_editor;
+mod highlight;
 mod line_truncation;
+mod locale;
+mod markdown;
+mod markdown_render;
 mod model_picker;
+mod pager_overlay;
+mod pending_input_preview;
 mod projection;
 mod reconnect;
+mod resume_picker;
 mod runtime;
-mod session_picker;
+#[allow(dead_code)]
+mod selection_list;
 mod settings;
-mod terminal;
+mod slash_command;
+mod status_indicator;
+mod status_indicator_widget;
+mod table_detect;
+mod terminal_hyperlinks;
+mod terminal_palette;
+mod text_formatting;
+mod thread_transcript;
+#[allow(dead_code)]
+mod transcript_reflow;
+mod tui;
 mod view;
 mod width;
+mod wrapping;
 
-pub use runtime::{run_exec, run_resume, run_tui, ExecOptions, ExecResult, TuiOptions};
+pub use runtime::{ExecOptions, ExecResult, TuiOptions, run_exec, run_resume, run_tui};

@@ -24,8 +24,8 @@ use windows_sys::Win32::System::Pipes::{
     PIPE_TYPE_BYTE, PIPE_WAIT,
 };
 use windows_sys::Win32::System::Threading::{
-    CreateProcessWithLogonW, TerminateProcess, WaitForSingleObject, CREATE_NO_WINDOW,
-    CREATE_UNICODE_ENVIRONMENT, PROCESS_INFORMATION, STARTUPINFOW,
+    CreateProcessW, CreateProcessWithLogonW, TerminateProcess, WaitForSingleObject,
+    CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, PROCESS_INFORMATION, STARTUPINFOW,
 };
 
 const PIPE_ACCESS_OUTBOUND: u32 = 0x0000_0002;
@@ -48,6 +48,27 @@ pub(super) fn spawn_runner_transport(
 ) -> io::Result<RunnerTransport> {
     let account_sid = resolve_windows_account_sid(account).map_err(io::Error::other)?;
     let account_sid = sid_string(&account_sid)?;
+    spawn_runner_transport_inner(request, cwd, account_sid, capability_sid, Some(account))
+}
+
+pub(super) fn spawn_current_user_runner_transport(
+    request: &LocalExecutionRequest,
+    cwd: &Path,
+    capability_sid: String,
+) -> io::Result<RunnerTransport> {
+    let token = super::current_process_token_for_restriction()?;
+    let account_sid = unsafe { super::token_user_sid(token.raw())? };
+    let account_sid = sid_string(&account_sid)?;
+    spawn_runner_transport_inner(request, cwd, account_sid, capability_sid, None)
+}
+
+fn spawn_runner_transport_inner(
+    request: &LocalExecutionRequest,
+    cwd: &Path,
+    account_sid: String,
+    capability_sid: String,
+    account: Option<&str>,
+) -> io::Result<RunnerTransport> {
     let nonce = uuid::Uuid::new_v4().simple();
     let pipe_in_name = format!(r"\\.\pipe\lime-sandbox-runner-{nonce}-in");
     let pipe_out_name = format!(r"\\.\pipe\lime-sandbox-runner-{nonce}-out");
@@ -65,35 +86,54 @@ pub(super) fn spawn_runner_transport(
     let mut command_line = to_wide(argv_to_command_line(&runner_args));
     let runner_wide = to_wide(runner.as_os_str());
     let cwd_wide = to_wide(cwd.as_os_str());
-    let username = to_wide(account);
-    let domain = to_wide(".");
-    let password = to_wide(read_windows_sandbox_password(account)?);
     let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
     startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
     let mut process_info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     let previous_error_mode = unsafe { SetErrorMode(RUNNER_ERROR_MODE_FLAGS) };
-    let created = unsafe {
-        CreateProcessWithLogonW(
-            username.as_ptr(),
-            domain.as_ptr(),
-            password.as_ptr(),
-            0,
-            runner_wide.as_ptr(),
-            command_line.as_mut_ptr(),
-            CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
-            ptr::null(),
-            cwd_wide.as_ptr(),
-            &startup,
-            &mut process_info,
-        )
+    let created = if let Some(account) = account {
+        let username = to_wide(account);
+        let domain = to_wide(".");
+        let password = to_wide(read_windows_sandbox_password(account)?);
+        unsafe {
+            CreateProcessWithLogonW(
+                username.as_ptr(),
+                domain.as_ptr(),
+                password.as_ptr(),
+                0,
+                runner_wide.as_ptr(),
+                command_line.as_mut_ptr(),
+                CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+                ptr::null(),
+                cwd_wide.as_ptr(),
+                &startup,
+                &mut process_info,
+            )
+        }
+    } else {
+        unsafe {
+            CreateProcessW(
+                ptr::null(),
+                command_line.as_mut_ptr(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                0,
+                CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+                ptr::null(),
+                cwd_wide.as_ptr(),
+                &startup,
+                &mut process_info,
+            )
+        }
     };
     unsafe {
         SetErrorMode(previous_error_mode);
     }
     if created == 0 {
-        return Err(last_os_error(
-            "CreateProcessWithLogonW(windows-sandbox-runner)",
-        ));
+        return Err(last_os_error(if account.is_some() {
+            "CreateProcessWithLogonW(windows-sandbox-runner)"
+        } else {
+            "CreateProcessW(windows-sandbox-runner)"
+        }));
     }
     let process = OwnedHandle::new(process_info.hProcess, "windows sandbox runner process")?;
     drop(OwnedHandle::new(
@@ -193,12 +233,13 @@ fn resolve_runner_executable() -> io::Result<PathBuf> {
 fn create_named_pipe(name: &str, access: u32, account_sid: &str) -> io::Result<OwnedHandle> {
     let sddl = to_wide(format!("D:(A;;GA;;;{account_sid})"));
     let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+    let mut descriptor_size = 0;
     if unsafe {
         ConvertStringSecurityDescriptorToSecurityDescriptorW(
             sddl.as_ptr(),
             1,
             &mut descriptor,
-            ptr::null_mut(),
+            &mut descriptor_size,
         )
     } == 0
     {

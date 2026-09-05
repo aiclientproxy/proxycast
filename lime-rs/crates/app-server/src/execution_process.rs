@@ -29,6 +29,7 @@ use tool_runtime::execution_process::{
 };
 use tool_runtime::sandbox::{
     plan_sandbox_backend, SandboxBackendPlanInput, SandboxBackendPlatform,
+    WindowsSandboxExecutionMode,
 };
 use tool_runtime::shell::{is_shell_tool_name, shell_command_text_from_argv};
 use tool_runtime::shell_permission::{check_shell_command_permission, ShellPermissionDecision};
@@ -834,6 +835,7 @@ fn orchestrated_sandbox(
         backend: plan.backend,
         requested_policy: effective_policy.label().map(str::to_string),
         granted_permissions: Some(attempt.granted_permissions().clone()),
+        windows_mode: plan.config.windows_mode,
     }))
 }
 
@@ -897,7 +899,26 @@ fn legacy_execution_sandbox(
         })?,
         requested_policy: sandbox_policy.map(str::to_string),
         granted_permissions: None,
+        windows_mode: runtime_windows_sandbox_mode(runtime_metadata),
     }))
+}
+
+pub(crate) fn runtime_windows_sandbox_mode(
+    runtime_metadata: Option<&serde_json::Value>,
+) -> Option<WindowsSandboxExecutionMode> {
+    let value = runtime_metadata?
+        .pointer("/config/agent/workspaceSandbox/mode")
+        .or_else(|| runtime_metadata?.pointer("/config/agent/workspace_sandbox/mode"))
+        .or_else(|| runtime_metadata?.pointer("/agent/workspaceSandbox/mode"))
+        .or_else(|| runtime_metadata?.pointer("/agent/workspace_sandbox/mode"))
+        .or_else(|| runtime_metadata?.pointer("/workspaceSandbox/mode"))
+        .or_else(|| runtime_metadata?.pointer("/workspace_sandbox/mode"))
+        .and_then(serde_json::Value::as_str)?;
+    match value.trim().to_ascii_lowercase().as_str() {
+        "elevated" => Some(WindowsSandboxExecutionMode::Elevated),
+        "unelevated" => Some(WindowsSandboxExecutionMode::Unelevated),
+        _ => None,
+    }
 }
 
 pub(crate) fn decide_command_execution(
@@ -906,6 +927,15 @@ pub(crate) fn decide_command_execution(
     sandbox_policy: Option<&str>,
 ) -> Result<(bool, Option<tool_runtime::sandbox::SandboxBackend>), String> {
     let command_text = shell_command_text_from_argv(command);
+    let request_metadata = sandbox_policy.map(|_| {
+        json!({
+            "workspaceSandbox": {
+                "enabled": true,
+                "strict": true,
+                "notifyOnFallback": false,
+            }
+        })
+    });
     let decision = decide_tool_execution(
         ToolExecutionDecisionInput {
             tool_name: tool_runtime::unified_exec::EXEC_COMMAND_TOOL_NAME,
@@ -918,7 +948,7 @@ pub(crate) fn decide_command_execution(
             requested_sandbox_policy: sandbox_policy,
             resolver_input: ToolExecutionResolverInput {
                 persisted_policy: None,
-                request_metadata: None,
+                request_metadata: request_metadata.as_ref(),
             },
         },
         app_server_tool_execution_policy_options(),

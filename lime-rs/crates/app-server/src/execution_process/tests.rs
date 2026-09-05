@@ -892,6 +892,17 @@ fn remote_sandbox_context_lowers_codex_environment_wire() {
 }
 
 #[test]
+fn runtime_windows_sandbox_mode_reads_persisted_metadata() {
+    let metadata = json!({
+        "agent": { "workspaceSandbox": { "mode": "unelevated" } }
+    });
+    assert_eq!(
+        runtime_windows_sandbox_mode(Some(&metadata)),
+        Some(tool_runtime::sandbox::WindowsSandboxExecutionMode::Unelevated)
+    );
+}
+
+#[test]
 fn remote_sandbox_context_rejects_unknown_policy() {
     let cwd = app_server_protocol::protocol::v2::PathUri::from_host_path(current_directory())
         .expect("test cwd should be representable as file URI");

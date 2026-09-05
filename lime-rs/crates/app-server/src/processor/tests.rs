@@ -6,6 +6,7 @@ mod action_response;
 mod artifact;
 mod attestation;
 mod capability;
+mod command_exec;
 mod config_warning;
 mod conversation_import;
 mod event_notifications;

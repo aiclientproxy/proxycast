@@ -8,11 +8,9 @@ Lime 的官方命令行入口。CLI、TUI 和 Desktop 共用 App Server JSON-RPC
 npm install -g @limecloud/lime
 ```
 
-`postinstall` 会从 Lime GitHub Release 下载与当前平台匹配的预编译 `lime` 二进制。源码仓库内找不到预编译产物时，wrapper 可回退到：
+根 npm 包只包含 launcher，并通过 optional dependency 安装当前平台的原生载荷；安装阶段不执行网络下载脚本。平台载荷原子包含 `lime`、`app-server`、`code-mode-host`、Windows sandbox helpers 和所需动态库，保证默认 TUI 与 `exec` 都进入同一 App Server 产品链。
 
-- `LIME_CLI_BINARY_PATH` 指定的二进制
-- `lime-rs/target/release/lime`
-- `cargo run -p cli`
+当前发布目标为 macOS arm64/x64、Windows x64 与 Linux x64 GNU。尚无真实构建和运行证据的平台会明确拒绝启动，不发布空壳 optional package。
 
 ## 命令
 
@@ -27,6 +25,9 @@ lime tui
 lime exec "review this diff"
 lime exec --json "review this diff"
 lime exec --jsonl "review this diff"
+
+# 只读检查 execpolicy prefix rules
+lime execpolicy check --rules ./rules/policy.rules --pretty git push origin main
 
 # 生成 shell completion
 lime completion zsh > "${fpath[1]}/_lime"
@@ -44,16 +45,24 @@ lime skills list
 
 `--json` 输出可读的稳定 JSON；`--jsonl` 输出单行 JSON envelope，二者互斥。`completion` 从同一命令树生成 bash、zsh、fish、PowerShell 和 elvish 脚本。
 
-本地连接默认启动同目录或 `PATH` 中的 `app-server`。可用 `LIME_APP_SERVER_BIN` 或 `--app-server <PATH>` 覆盖。未来 Cloud 连接只允许在 `app-server-client` transport 边界增加认证远端 transport，不改变 CLI 命令或业务协议。
+交互式 TUI 支持 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`ko-KR`。可通过默认 `lime`、`lime tui` 或 `lime resume` 的 `--locale <LOCALE>` 指定；未指定时按 `LIME_LOCALE`、`LC_ALL`、`LANG` 解析，未知语言回退到 `en-US`。`exec` 与管理命令的 JSON 合同保持语言无关。
+
+本地连接默认启动同目录或 `PATH` 中的 `app-server`。可用 `LIME_APP_SERVER_BIN` 或 `--app-server <PATH>` 覆盖。需要连接远端 App Server 时使用 Codex 形状的参数：
+
+```bash
+lime exec --remote wss://cloud.example/rpc --remote-auth-token-env LIME_REMOTE_TOKEN "review this diff"
+lime tui --remote ws://127.0.0.1:4500
+```
+
+远端 token 只从环境变量读取；token 连接要求 `wss://` 或 loopback `ws://`。当前仅提供 transport foundation，不代表生产 Cloud endpoint、租户或账号能力已启用。
 
 ## 发布
 
 ```bash
-cargo build --manifest-path "../../lime-rs/Cargo.toml" -p cli --release
-
-npm run build:release -- \
-  --binary "../../lime-rs/target/release/lime" \
-  --out-dir "./dist"
+python3 scripts/build_npm_package.py \
+  --package lime \
+  --release-version 1.140.0 \
+  --pack-output dist/lime-npm-1.140.0.tgz
 ```
 
-Release asset 命名保持 `lime-<version>-<platform>-<arch>.<archive>`，覆盖当前支持的 macOS、Windows 与 Linux 目标。
+平台包使用 `--package lime-<platform>-<arch> --vendor-src <vendor-root>` staging。`vendor-root` 必须使用 `vendor/<target-triple>/bin` 布局并包含完整 runtime payload。发布工作流先串行发布四个平台版本，最后发布 `@limecloud/lime` 根版本。

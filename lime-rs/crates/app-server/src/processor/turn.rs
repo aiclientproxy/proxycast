@@ -20,7 +20,11 @@ use app_server_protocol::{
 };
 use serde_json::{Map, Value};
 
-use super::permission_profile::resolve_permission_profile;
+use crate::permission_profile::{
+    apply_resolved_permission_profile_to_metadata,
+    resolve_permission_profile as resolve_builtin_permission_profile,
+    resolve_permission_profile_for_request, PermissionProfilePolicy,
+};
 
 const DIRECT_INPUT_TO_PARENT_OWNED_THREAD_ERROR: &str =
     "direct app-server input is not allowed for parent-owned threads";
@@ -51,7 +55,12 @@ impl RequestProcessor {
         let environment_world_state = self
             .environment_world_state_snapshot(params.environments.as_deref())
             .await;
-        let mut runtime_params = lower_turn_start_params(&params, session_id)?;
+        let permission_policy = self
+            .runtime
+            .current_permission_profile_policy(params.cwd.as_deref())
+            .map_err(to_jsonrpc_error)?;
+        let mut runtime_params =
+            lower_turn_start_params_with_policy(&params, session_id, Some(&permission_policy))?;
         if !environment_world_state.is_empty() {
             insert_runtime_metadata(
                 &mut runtime_params,
@@ -170,17 +179,32 @@ fn lower_turn_start_params(
     params: &TurnStartParams,
     session_id: String,
 ) -> Result<crate::runtime::TurnStartRequest, JsonRpcError> {
+    lower_turn_start_params_with_policy(params, session_id, None)
+}
+
+fn lower_turn_start_params_with_policy(
+    params: &TurnStartParams,
+    session_id: String,
+    permission_policy: Option<&PermissionProfilePolicy>,
+) -> Result<crate::runtime::TurnStartRequest, JsonRpcError> {
     Ok(crate::runtime::TurnStartRequest {
         session_id,
         turn_id: None,
         input: lower_user_input(params.input.clone())?,
-        runtime_options: lower_runtime_options(params)?,
+        runtime_options: lower_runtime_options_with_policy(params, permission_policy)?,
         queue_if_busy: false,
         skip_pre_submit_resume: false,
     })
 }
 
 fn lower_runtime_options(params: &TurnStartParams) -> Result<Option<RuntimeOptions>, JsonRpcError> {
+    lower_runtime_options_with_policy(params, None)
+}
+
+fn lower_runtime_options_with_policy(
+    params: &TurnStartParams,
+    permission_policy: Option<&PermissionProfilePolicy>,
+) -> Result<Option<RuntimeOptions>, JsonRpcError> {
     if params.permissions.is_some() && params.sandbox_policy.is_some() {
         return Err(invalid_params(
             "permissions cannot be combined with sandboxPolicy",
@@ -252,17 +276,23 @@ fn lower_runtime_options(params: &TurnStartParams) -> Result<Option<RuntimeOptio
             metadata.insert("sandboxPolicy".to_string(), policy.clone());
         }
     }
-    if let Some(value) = params.permissions.as_ref() {
-        let profile = resolve_permission_profile(value)?;
-        request.sandbox_policy = Some(profile.sandbox_policy.to_string());
-        metadata.insert(
-            "permissions".to_string(),
-            Value::String(profile.id.to_string()),
-        );
-        metadata.insert(
-            "activePermissionProfile".to_string(),
-            serde_json::json!({"id": profile.id}),
-        );
+    let requested_profile = params.permissions.as_deref();
+    let selected_profile = match permission_policy {
+        Some(policy) => resolve_permission_profile_for_request(policy, requested_profile)
+            .map_err(invalid_params)?,
+        None => requested_profile
+            .map(|value| resolve_builtin_permission_profile(value).map_err(invalid_params))
+            .transpose()?,
+    };
+    if let Some(profile) = selected_profile {
+        if params.sandbox_policy.is_some() {
+            return Err(invalid_params(
+                "permissions cannot be combined with sandboxPolicy",
+            ));
+        }
+        request.sandbox_policy = Some(profile.sandbox_policy.clone());
+        apply_resolved_permission_profile_to_metadata(&mut metadata, profile)
+            .map_err(invalid_params)?;
     }
     if let Some(value) = params
         .client_user_message_id

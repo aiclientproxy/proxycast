@@ -20,9 +20,9 @@
       "clientNotification": 1
     },
     "byStatus": {
-      "implemented": 168,
+      "implemented": 171,
       "product-scope-excluded": 74,
-      "planned": 3
+      "planned": 0
     }
   },
   "groups": [
@@ -982,20 +982,20 @@
       "methods": ["windowsSandbox/readiness"]
     },
     {
-      "id": "windows-sandbox-setup-planned",
+      "id": "windows-sandbox-setup-current",
       "direction": "clientRequest",
       "productArea": "sandbox",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "tool-runtime sandbox + Desktop Host",
-      "counterpartRule": "none",
-      "gap": "Exact protocol, App Server handler, typed client and Settings consumer exist; Windows setup must still execute real backend enforcement and be validated on a Windows runner, including setup lifecycle and Gate B evidence. Readiness must not be upgraded before enforcement exists.",
+      "counterpartRule": "same-name",
       "evidence": [
         "internal/refactor/v1/08-third-audit-gap-register.md",
         "lime-rs/crates/app-server-protocol/src/protocol/v2/windows_sandbox.rs",
         "lime-rs/crates/app-server/src/processor/windows_sandbox.rs",
         "src/lib/api/windowsSandbox.ts",
-        "src/components/settings-v2/system/execution-policy/WindowsSandboxReadinessStatus.tsx"
+        "src/components/settings-v2/system/execution-policy/WindowsSandboxReadinessStatus.tsx",
+        ".lime/qc/windows-restricted-execution/summary.json"
       ],
       "methods": ["windowsSandbox/setupStart"]
     },
@@ -1171,7 +1171,10 @@
         "lime-rs/crates/app-server-protocol/src/protocol/v2/fs.rs",
         "lime-rs/crates/app-server/src/fs.rs",
         "lime-rs/crates/app-server/src/fs/tests.rs",
-        "lime-rs/crates/app-server/tests/fs_jsonrpc.rs"
+        "lime-rs/crates/app-server/tests/fs_jsonrpc.rs",
+        "packages/app-server-client/src/server-notifications.ts",
+        "src/lib/api/fileSystemWatch.ts",
+        "src/components/agent/chat/components/FileManager/FileManagerSidebar.tsx"
       ],
       "methods": ["fs/changed"]
     },
@@ -1486,20 +1489,20 @@
       "methods": ["turn/plan/updated"]
     },
     {
-      "id": "windows-sandbox-notification-planned",
+      "id": "windows-sandbox-notification-current",
       "direction": "serverNotification",
       "productArea": "sandbox",
-      "status": "planned",
+      "status": "implemented",
       "priority": "P1",
       "owner": "tool-runtime sandbox + Desktop Host",
-      "counterpartRule": "none",
-      "gap": "Exact cross-platform notification contract and typed Settings consumer exist; real world-writable scan, setup completion producer and Windows platform evidence remain required before these notifications can move to implemented.",
+      "counterpartRule": "same-name",
       "evidence": [
         "internal/refactor/v1/08-third-audit-gap-register.md",
         "lime-rs/crates/app-server-protocol/src/protocol/v2/windows_sandbox.rs",
         "src/lib/api/windowsSandbox.ts",
         "src/components/settings-v2/system/execution-policy/WindowsSandboxReadinessStatus.tsx",
-        "scripts/lib/windows-restricted-execution-evidence.mjs"
+        "scripts/lib/windows-restricted-execution-evidence.mjs",
+        ".lime/qc/windows-restricted-execution/summary.json"
       ],
       "methods": [
         "windows/worldWritableWarning",

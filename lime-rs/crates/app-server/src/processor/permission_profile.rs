@@ -1,6 +1,7 @@
 use super::{dispatch_result, parse_params, to_jsonrpc_error, RequestProcessor, RpcDispatch};
 use crate::permission_profile::{
-    builtin_permission_profiles, permission_profile_is_allowed, PermissionProfilePolicy,
+    permission_profile_catalog as resolved_permission_profile_catalog,
+    permission_profile_is_allowed, PermissionProfilePolicy,
 };
 use app_server_protocol::protocol::v2::{
     PermissionProfileListParams, PermissionProfileListResponse, PermissionProfileSummary,
@@ -44,20 +45,16 @@ impl RequestProcessor {
     }
 }
 
-pub(super) fn resolve_permission_profile(
-    id: &str,
-) -> Result<crate::permission_profile::ResolvedPermissionProfile, JsonRpcError> {
-    crate::permission_profile::resolve_permission_profile(id)
-        .map_err(|message| JsonRpcError::new(error_codes::INVALID_PARAMS, message))
-}
-
 fn permission_profile_catalog(policy: &PermissionProfilePolicy) -> Vec<PermissionProfileSummary> {
-    builtin_permission_profiles()
+    resolved_permission_profile_catalog(policy)
         .into_iter()
-        .map(|profile| PermissionProfileSummary {
-            id: profile.id.to_string(),
-            description: None,
-            allowed: permission_profile_is_allowed(policy, profile),
+        .map(|profile| {
+            let allowed = permission_profile_is_allowed(policy, profile.clone());
+            PermissionProfileSummary {
+                id: profile.id,
+                description: profile.description,
+                allowed,
+            }
         })
         .collect()
 }
@@ -110,11 +107,21 @@ mod tests {
         );
         assert!(catalog.iter().all(|profile| profile.allowed));
         assert_eq!(
-            resolve_permission_profile(WORKSPACE_PROFILE_ID)
-                .unwrap()
-                .sandbox_policy,
+            crate::permission_profile::resolve_permission_profile_for_request(
+                &policy,
+                Some(WORKSPACE_PROFILE_ID),
+            )
+            .unwrap()
+            .unwrap()
+            .sandbox_policy,
             "workspace-write"
         );
-        assert!(resolve_permission_profile("custom").is_err());
+        assert!(
+            crate::permission_profile::resolve_permission_profile_for_request(
+                &policy,
+                Some("custom"),
+            )
+            .is_err()
+        );
     }
 }

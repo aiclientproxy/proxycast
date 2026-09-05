@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/*"
   ],
-  "version": "1.140.0",
+  "version": "1.141.0",
   "description": "Open-source full-stack desktop AI agent for global users: coding, research, content, files, terminals, tools, multimodal work, and multi-agent workflows.",
   "keywords": [
     "ai",
@@ -52,6 +52,10 @@
     "governance:electron-release-workflow": "node scripts/electron/release-workflow-guard.mjs",
     "governance:desktop-reference-boundary": "node scripts/governance/desktop-reference-boundary.mjs",
     "governance:cli-boundary": "node scripts/governance/cli-boundary.mjs",
+    "inventory:tui-codex": "node scripts/app-server/tui-snapshot-inventory.mjs",
+    "inventory:tui-structure": "node scripts/app-server/tui-structure-inventory.mjs",
+    "inventory:cli-codex": "node scripts/app-server/cli-test-inventory.mjs",
+    "inventory:cli-structure": "node scripts/app-server/cli-structure-inventory.mjs",
     "generate:protocol-types": "node scripts/generate-protocol-types.mjs",
     "check:protocol-types": "node scripts/generate-protocol-types.mjs --check",
     "governance:import-boundaries": "node scripts/check-import-boundaries.mjs",
@@ -209,6 +213,8 @@
     "smoke:connect-deep-link-save-current": "node scripts/connect-deep-link-save-current-smoke.mjs",
     "smoke:app-server-stdio": "npm --prefix \"packages/app-server-client\" run build && node scripts/app-server/stdio-smoke.mjs",
     "smoke:cli-gate-b": "node scripts/app-server/cli-gate-b.mjs",
+    "smoke:cli-surface-gate-b": "node scripts/app-server/cli-surface-gate-b.mjs",
+    "smoke:cli-npm-gate-b": "node scripts/app-server/cli-npm-gate-b.mjs",
     "smoke:tui-gate-b": "node scripts/app-server/tui-gate-b.mjs",
     "smoke:app-server-sidecar-lifecycle": "npm --prefix \"packages/app-server-client\" run build && node scripts/app-server/sidecar-lifecycle-smoke.mjs",
     "smoke:app-server-external-backend": "npm --prefix \"packages/app-server-client\" run build && node scripts/app-server/external-backend-smoke.mjs",

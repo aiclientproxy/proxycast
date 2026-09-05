@@ -30,6 +30,7 @@ Desktop Host / CLI-TUI Host
 | App Server Rust session/transport                  | `cargo test -p app-server-client` + 真实 stdio fixture                         |
 | TUI reducer/render/composer                        | `cargo test -p tui` + 稳定 TestBackend snapshot/结构断言                       |
 | CLI 参数/非交互 Agent 流程                         | `cargo test -p cli` + `lime exec` stdio fixture                                |
+| CLI npm launcher/平台包/发布顺序                   | `npm --prefix packages/cli test` + `smoke:cli-npm-gate-b` + release/CLI guard  |
 | tool/approval/sandbox/context                      | owner 集成测试 + current runtime fixture；命令边界追加 contracts               |
 | MCP/Skills/Multi-Agent                             | owner 集成测试 + `npm run smoke:mcp-current` 或对应 current fixture            |
 | Provider/lowering/multimodal                       | provider request capture + Rust related/integration + modality contracts       |
@@ -115,6 +116,8 @@ Gate B 必须同时证明：
 需要人工点击、截图或复用会话时继续阅读 [playwright-e2e.md](playwright-e2e.md)。
 
 CLI Gate B 必须同时证明：真实 `lime exec` 二进制、非 mock `app-server` 子进程或受控 daemon、initialize/initialized 握手、current v2 method、同一 thread/turn/item identity、CLI 完成输出和子进程回收。TUI Gate B 在此基础上还要覆盖真实 PTY、alternate screen、键盘输入、TUI 可见完成态和终端模式恢复。纯 reducer snapshot 只属于 Unit，CLI smoke 也不冒充 TUI Gate B。
+
+CLI npm packaged evidence 还必须通过 `npm run smoke:cli-npm-gate-b` 从实际根包 launcher 解析 optional platform package，并证明 sibling App Server、参数/stdin/stdout、退出码与 signal 语义；平台 tarball 内容检查必须覆盖 `lime`、`app-server`、`code-mode-host`、Windows sandbox helpers 和动态库。source-string guard 或单独运行 Rust target 不证明 npm 安装可用。未在对应 OS/arch 实跑的包只能算 staging/结构证据，不得提升为 Platform/packaged 通过。
 
 ## 生产与测试边界
 

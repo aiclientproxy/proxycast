@@ -1,4 +1,5 @@
 use super::request_context::RuntimeModelSelection;
+use code_mode::RuntimeToolMode;
 use lime_agent::SessionProviderConfig;
 use lime_core::database::DbConnection;
 use lime_core::models::model_registry::{
@@ -12,7 +13,7 @@ use serde_json::{json, Value};
 #[derive(Debug, Clone)]
 pub(super) struct RuntimeModelRegistryMetadata {
     payload: Value,
-    tool_mode: tool_runtime::code_mode::RuntimeToolMode,
+    tool_mode: RuntimeToolMode,
     supports_custom_tools: bool,
 }
 
@@ -32,7 +33,7 @@ impl RuntimeModelRegistryMetadata {
         &self.payload
     }
 
-    pub(super) fn tool_mode(&self) -> tool_runtime::code_mode::RuntimeToolMode {
+    pub(super) fn tool_mode(&self) -> RuntimeToolMode {
         self.tool_mode
     }
 
@@ -41,16 +42,16 @@ impl RuntimeModelRegistryMetadata {
     }
 }
 
-fn runtime_tool_mode(value: Option<&str>) -> tool_runtime::code_mode::RuntimeToolMode {
+fn runtime_tool_mode(value: Option<&str>) -> RuntimeToolMode {
     match value.map(str::trim) {
-        Some("code_mode") => tool_runtime::code_mode::RuntimeToolMode::CodeMode,
-        Some("code_mode_only") => tool_runtime::code_mode::RuntimeToolMode::CodeModeOnly,
-        _ => tool_runtime::code_mode::RuntimeToolMode::Direct,
+        Some("code_mode") => RuntimeToolMode::CodeMode,
+        Some("code_mode_only") => RuntimeToolMode::CodeModeOnly,
+        _ => RuntimeToolMode::Direct,
     }
 }
 
 #[cfg(test)]
-fn runtime_tool_mode_from_payload(payload: &Value) -> tool_runtime::code_mode::RuntimeToolMode {
+fn runtime_tool_mode_from_payload(payload: &Value) -> RuntimeToolMode {
     runtime_tool_mode(
         payload
             .pointer("/model/tool_mode")
@@ -143,9 +144,9 @@ pub(super) async fn resolve_runtime_model_registry_metadata(
                 "model_alias": null,
                 "reasoning": null,
                 "toolMode": match tool_mode {
-                    tool_runtime::code_mode::RuntimeToolMode::Direct => "direct",
-                    tool_runtime::code_mode::RuntimeToolMode::CodeMode => "code_mode",
-                    tool_runtime::code_mode::RuntimeToolMode::CodeModeOnly => "code_mode_only",
+                    RuntimeToolMode::Direct => "direct",
+                    RuntimeToolMode::CodeMode => "code_mode",
+                    RuntimeToolMode::CodeModeOnly => "code_mode_only",
                 },
             }),
             tool_mode,
@@ -398,10 +399,7 @@ mod tests {
                 "runtimeFeatures": ["streaming", "custom_tools"]
             }
         }));
-        assert_eq!(
-            executable.tool_mode(),
-            tool_runtime::code_mode::RuntimeToolMode::CodeModeOnly
-        );
+        assert_eq!(executable.tool_mode(), RuntimeToolMode::CodeModeOnly);
         assert!(executable.supports_custom_tools());
 
         let unknown_mode = RuntimeModelRegistryMetadata::from_payload(json!({
@@ -410,10 +408,7 @@ mod tests {
                 "runtime_features": ["custom_tools"]
             }
         }));
-        assert_eq!(
-            unknown_mode.tool_mode(),
-            tool_runtime::code_mode::RuntimeToolMode::Direct
-        );
+        assert_eq!(unknown_mode.tool_mode(), RuntimeToolMode::Direct);
         assert!(unknown_mode.supports_custom_tools());
 
         let missing_capability = RuntimeModelRegistryMetadata::from_payload(json!({
@@ -422,10 +417,7 @@ mod tests {
                 "runtime_features": ["tool_calling"]
             }
         }));
-        assert_eq!(
-            missing_capability.tool_mode(),
-            tool_runtime::code_mode::RuntimeToolMode::CodeMode
-        );
+        assert_eq!(missing_capability.tool_mode(), RuntimeToolMode::CodeMode);
         assert!(!missing_capability.supports_custom_tools());
     }
 
@@ -590,10 +582,7 @@ mod tests {
         );
         assert_eq!(metadata.payload()["multiAgentVersion"], "v2");
         assert_eq!(metadata.payload()["multiAgentReasoningEffort"], "high");
-        assert_eq!(
-            metadata.tool_mode(),
-            tool_runtime::code_mode::RuntimeToolMode::Direct
-        );
+        assert_eq!(metadata.tool_mode(), RuntimeToolMode::Direct);
         assert!(!metadata.supports_custom_tools());
         let encoded = metadata.payload().to_string();
         assert!(!encoded.contains("must-not-persist"));

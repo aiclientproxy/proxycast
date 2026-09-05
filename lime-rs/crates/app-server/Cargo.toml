@@ -29,6 +29,7 @@ agent-protocol.workspace = true
 agent-runtime.workspace = true
 app-server-protocol.workspace = true
 app-server-transport.workspace = true
+code-mode.workspace = true
 lime-core.workspace = true
 lime-gateway.workspace = true
 lime-infra.workspace = true

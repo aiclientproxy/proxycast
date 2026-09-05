@@ -1,12 +1,13 @@
 use app_server_protocol::protocol::v2::Model;
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph};
-use ratatui::Frame;
 
 use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
+use crate::locale::Locale;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ModelSelection {
@@ -126,7 +127,17 @@ impl ModelPicker {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, picker: &ModelPicker) {
+    render_with_locale(frame, area, picker, Locale::default());
+}
+
+pub(crate) fn render_with_locale(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    picker: &ModelPicker,
+    locale: Locale,
+) {
     let width = area.width.saturating_mul(4).saturating_div(5).clamp(28, 72);
     let height = area.height.saturating_mul(3).saturating_div(4).clamp(7, 18);
     let x = area.x.saturating_add(area.width.saturating_sub(width) / 2);
@@ -145,10 +156,13 @@ pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, picker: &ModelPicker) {
         ])
         .split(popup);
     let title = Line::from(vec![
-        Span::styled(" Model ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!(" {} ", locale.model_label()),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
         Span::styled(
             if picker.query().is_empty() {
-                "Choose a model".to_string()
+                locale.picker_title().to_string()
             } else {
                 picker.query().to_string()
             },
@@ -192,9 +206,9 @@ pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, picker: &ModelPicker) {
         &mut state,
     );
     let footer = if picker.visible_models().is_empty() {
-        "No matching models. Esc cancel"
+        locale.picker_empty()
     } else {
-        "Up/Down move  Enter select  Esc cancel"
+        locale.picker_footer()
     };
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
@@ -209,11 +223,11 @@ pub(crate) fn render(frame: &mut Frame<'_>, area: Rect, picker: &ModelPicker) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use app_server_protocol::protocol::v2::{InputModality, Model};
     use app_server_protocol::CapabilitySnapshot;
+    use app_server_protocol::protocol::v2::{InputModality, Model};
     use crossterm::event::{KeyEvent, KeyModifiers};
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
 
     fn model(id: &str, provider: &str, hidden: bool, is_default: bool) -> Model {
         Model {

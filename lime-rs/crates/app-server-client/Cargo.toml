@@ -14,10 +14,13 @@ doctest = false
 async-trait.workspace = true
 app-server-protocol.workspace = true
 app-server-transport.workspace = true
+futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-tungstenite.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

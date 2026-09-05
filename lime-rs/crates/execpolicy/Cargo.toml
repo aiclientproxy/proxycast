@@ -1,0 +1,31 @@
+[package]
+name = "execpolicy"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Prefix-based execution policy parsing and command reporting."
+
+[lib]
+name = "execpolicy"
+path = "src/lib.rs"
+doctest = false
+
+[[bin]]
+name = "execpolicy"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+multimap = "0.10.1"
+serde.workspace = true
+serde_json.workspace = true
+shlex = "1"
+starlark = "0.14.2"
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true

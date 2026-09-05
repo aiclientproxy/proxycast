@@ -1,9 +1,10 @@
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::Stdio;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
+use tokio::process::Command;
 
 /// Open the user's configured editor and return the edited draft.
 ///
@@ -11,7 +12,7 @@ use anyhow::{bail, Context, Result};
 /// conventions. The editor command is intentionally split only on shell
 /// whitespace; the file path is appended as a separate argument so user input
 /// cannot be interpreted as editor flags.
-pub(crate) fn edit_draft(initial: &str, cwd: &Path) -> Result<Option<String>> {
+pub(crate) async fn edit_draft(initial: &str, cwd: &Path) -> Result<Option<String>> {
     let command = env::var("VISUAL")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -21,10 +22,14 @@ pub(crate) fn edit_draft(initial: &str, cwd: &Path) -> Result<Option<String>> {
                 .filter(|value| !value.trim().is_empty())
         })
         .ok_or_else(|| anyhow::anyhow!("cannot open external editor: set $VISUAL or $EDITOR"))?;
-    edit_draft_with_command(initial, cwd, &command)
+    edit_draft_with_command(initial, cwd, &command).await
 }
 
-fn edit_draft_with_command(initial: &str, cwd: &Path, command: &str) -> Result<Option<String>> {
+async fn edit_draft_with_command(
+    initial: &str,
+    cwd: &Path,
+    command: &str,
+) -> Result<Option<String>> {
     let parts = command_parts(command)?;
     let executable = parts
         .first()
@@ -43,9 +48,15 @@ fn edit_draft_with_command(initial: &str, cwd: &Path, command: &str) -> Result<O
     // Close the temporary file before launching the editor so Windows shims can open it.
     fs::write(&temporary, initial).context("failed to write external editor draft")?;
     let mut editor = Command::new(resolve_editor_executable(executable));
-    editor.args(&parts[1..]).arg(&temporary);
+    editor
+        .args(&parts[1..])
+        .arg(&temporary)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
     let status = editor
         .status()
+        .await
         .with_context(|| format!("failed to start external editor {executable:?}"))?;
     if !status.success() {
         bail!("external editor exited with status {status}");
@@ -121,9 +132,9 @@ mod tests {
         assert!(command_parts("vim '").is_err());
     }
 
-    #[test]
+    #[tokio::test]
     #[cfg(unix)]
-    fn edits_draft_after_closing_the_tempfile_handle() {
+    async fn edits_draft_after_closing_the_tempfile_handle() {
         let directory = tempfile::tempdir().expect("temp directory");
         let script = directory.path().join("editor.sh");
         fs::write(&script, "#!/bin/sh\nprintf 'edited' > \"$1\"\n").expect("script");
@@ -138,8 +149,40 @@ mod tests {
             directory.path(),
             script.to_str().expect("script path"),
         )
+        .await
         .expect("editor");
 
         assert_eq!(edited.as_deref(), Some("edited"));
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn editor_failure_is_returned_without_leaking_the_tempfile() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempfile::tempdir().expect("temp directory");
+        let script = directory.path().join("editor-fails.sh");
+        fs::write(&script, "#!/bin/sh\nexit 7\n").expect("script");
+        let mut permissions = fs::metadata(&script)
+            .expect("script metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&script, permissions).expect("script permissions");
+
+        let error = edit_draft_with_command(
+            "seed",
+            directory.path(),
+            script.to_str().expect("script path"),
+        )
+        .await
+        .expect_err("non-zero editor must fail");
+
+        assert!(error.to_string().contains("exited with status"));
+        assert!(
+            fs::read_dir(directory.path())
+                .expect("directory listing")
+                .filter_map(Result::ok)
+                .all(|entry| !entry.file_name().to_string_lossy().starts_with("lime-tui-"))
+        );
     }
 }

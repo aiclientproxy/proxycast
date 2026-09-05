@@ -28,12 +28,17 @@
 - 路线图主线：`internal/roadmap/`
 - Runtime 当前对齐入口：`internal/aiprompts/architecture.md` 与 `internal/exec-plans/codex-alignment-v1-coordination-plan.md`
 - Refactor v2 全项目 Gate A/B 验收计划：`internal/exec-plans/project-gate-a-b-acceptance-plan.md`
-- 当前发布执行计划：`internal/exec-plans/release-v1.140.0-plan.md`
+- 当前发布执行计划：`internal/exec-plans/release-v1.141.0-plan.md`
 - 已结束版本的发布过程不保留在 active tree；结果以 Git tag、GitHub Release、Release Notes 与 Git history 为准。
 - Codex App GUI 对齐执行计划：`internal/exec-plans/codex-app-gui-alignment-plan.md`
 - Codex Desktop 跨平台底层对比与对齐计划：`internal/exec-plans/codex-desktop-platform-parity-plan.md`
 - Codex Desktop 选择性 Goose 参考执行计划：`internal/exec-plans/codex-desktop-selective-goose-reference-plan.md`
 - Desktop + CLI/TUI 多 Surface 执行计划：`internal/exec-plans/tui-cli-surfaces-plan.md`
+- Codex TUI snapshot 逐项分类账本：`internal/exec-plans/tui-codex-snapshot-inventory.json`
+- Codex `fs/changed` Renderer 消费链对齐计划：`internal/exec-plans/fs-changed-codex-alignment-plan.md`
+- Codex CLI Rust 测试逐项分类账本：`internal/exec-plans/cli-codex-test-inventory.json`
+- Codex CLI 与 npm CLI 目录/符号对齐账本：`internal/exec-plans/cli-structure-inventory.json`
+- Codex TUI 目录/模块/符号双向对齐账本：`internal/exec-plans/tui-structure-inventory.json`
 - Codex reasoning 投影与通知漂移修复：`internal/exec-plans/codex-reasoning-projection-and-notification-drift-fix.md`
 - Codex 对话兼容重构：`internal/exec-plans/codex-conversation-compat-refactor-plan.md`
 - Codex 对齐 v1 并行协调：`internal/exec-plans/codex-alignment-v1-coordination-plan.md`

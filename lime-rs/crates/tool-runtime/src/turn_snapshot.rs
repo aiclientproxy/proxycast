@@ -1,66 +1,14 @@
-use crate::tool_definition::{RuntimeToolDefinition, RuntimeToolExposure};
+use crate::tool_definition::RuntimeToolExposure;
 pub use agent_protocol::hook::{
     HookEventName as RuntimeHookEventName, HookExecutionMode as RuntimeHookExecutionMode,
     HookHandlerType as RuntimeHookHandlerType, HookScope as RuntimeHookScope,
     HookSnapshot as RuntimeHookSnapshot, HookSource as RuntimeHookSource,
     HookTrustStatus as RuntimeHookTrustStatus,
 };
+pub use code_mode_protocol::{RuntimeToolIdentity, RuntimeToolSnapshot};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct RuntimeToolIdentity {
-    pub namespace: Option<String>,
-    pub name: String,
-}
-
-impl RuntimeToolIdentity {
-    pub fn plain(name: impl Into<String>) -> Self {
-        Self {
-            namespace: None,
-            name: name.into(),
-        }
-    }
-
-    pub fn namespaced(namespace: impl Into<String>, name: impl Into<String>) -> Self {
-        Self {
-            namespace: Some(namespace.into()),
-            name: name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RuntimeToolSnapshot {
-    pub identity: RuntimeToolIdentity,
-    pub definition: RuntimeToolDefinition,
-    pub exposure: RuntimeToolExposure,
-    pub supports_parallel: bool,
-    /// Final model-visible selection for this sampling step.
-    ///
-    /// Exposure alone is insufficient because code mode, feature gates, and hosted
-    /// specs can change the tool surface before the step snapshot is captured.
-    pub model_visible: bool,
-}
-
-impl RuntimeToolSnapshot {
-    pub fn new(
-        identity: RuntimeToolIdentity,
-        definition: RuntimeToolDefinition,
-        exposure: RuntimeToolExposure,
-        supports_parallel: bool,
-        model_visible: bool,
-    ) -> Self {
-        Self {
-            identity,
-            definition,
-            exposure,
-            supports_parallel,
-            model_visible,
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RuntimeTurnSnapshot {
@@ -224,7 +172,7 @@ mod tests {
     ) -> RuntimeToolSnapshot {
         RuntimeToolSnapshot::new(
             identity.clone(),
-            RuntimeToolDefinition::new(
+            code_mode_protocol::RuntimeToolDefinition::new(
                 &identity.name,
                 format!("{} description", identity.name),
                 json!({ "type": "object" }),

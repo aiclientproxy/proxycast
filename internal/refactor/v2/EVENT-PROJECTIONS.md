@@ -77,7 +77,7 @@ Guardian warning 当前已完成独立 producer：同一 turn 内连续 3 次 Gu
 |  44 | remoteControl/status/changed         | GN       | product-scope-excluded | 不进入 Thread                             |
 |  45 | externalAgentConfig/import/progress  | GN       | product-scope-excluded | 仅设置页导入任务                          |
 |  46 | externalAgentConfig/import/completed | GN       | product-scope-excluded | 同上                                      |
-|  47 | fs/changed                           | GN/DX    | planned                | 只路由给对应 watch consumer               |
+|  47 | fs/changed                           | GN/DX    | current                | typed `fileSystemWatch` 只路由给 owning FileManager，按 changedPaths 刷新当前目录；不进入 Thread timeline |
 |  48 | item/reasoning/summaryTextDelta      | TL       | current                | 按 summaryIndex 更新分段                  |
 |  49 | item/reasoning/summaryPartAdded      | TL       | current                | 创建指定 summary 分段                     |
 |  50 | item/reasoning/textDelta             | TL       | current                | 按 contentIndex 更新受控原始推理          |
@@ -110,8 +110,8 @@ Guardian warning 当前已完成独立 producer：同一 turn 内连续 3 次 Gu
 |  67 | thread/realtime/sdp               | DX       | product-scope-excluded | 不恢复 WebRTC/SDP 通道                      |
 |  68 | thread/realtime/error             | DX       | product-scope-excluded | 只记录脱敏 method/field 诊断                |
 |  69 | thread/realtime/closed            | DX       | product-scope-excluded | 只记录脱敏 method/field 诊断                |
-|  70 | windows/worldWritableWarning      | GN       | planned                | exact notification、bounded ACL audit producer、typed Settings consumer 已存在；Windows API 执行与 evidence 待补 |
-|  71 | windowsSandbox/setupCompleted     | GN/PI    | planned                | exact notification、setup lifecycle consumer 已存在；真实 setup/enforcement 与 Gate B 待补          |
+|  70 | windows/worldWritableWarning      | GN       | current                | exact notification、bounded ACL audit producer、typed Settings consumer 与 Windows runner evidence 已接通 |
+|  71 | windowsSandbox/setupCompleted     | GN/PI    | current                | exact notification、setup lifecycle、mode persistence/readiness read-back 与 Windows runner evidence 已接通 |
 |  72 | account/login/completed           | GN/PI    | product-scope-excluded | credential 流程不进入对话                   |
 
 v2 的实现门槛不是把所有 planned method 同时实现，而是首先将这张表固化为类型检查的 coverage map。新增 Codex method 时，CI 必须要求它先获得裁决，不能落入 default silent return。standalone `process/outputDelta`、`process/exited`、两个 experimental fuzzy search session notification 与全部 `thread/realtime/*` 通知虽保留在 upstream method inventory 和 drift recorder 中，但明确为 `product-scope-excluded`：不得进入 Lime current protocol、Renderer projector、时间线、pending interaction 或用户级通知；对应 standalone `process/spawn`、fuzzy session registry 与 Codex realtime/WebRTC 控制面不能借 planned 名义回流。Composer 只消费 one-shot `fuzzyFileSearch` request，并以请求取消/陈旧响应拒绝终结本地 loading。Lime exact `turn/diff/updated` 已由 `apply_patch -> durable fact -> v2 projector -> canonical Turn/Changes` current owner 承接，不等同于 Codex TUI 的 raw diff surface。音频、语音和媒体能力继续由 Grok-aligned `model-provider` 与 `voice-core` / `media-runtime` 承接。

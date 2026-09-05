@@ -56,6 +56,11 @@ export type SkillsChangedServerNotification = Extract<
   { method: "skills/changed" }
 >;
 
+export type FsChangedServerNotification = Extract<
+  ServerNotification,
+  { method: "fs/changed" }
+>;
+
 export type AppListUpdatedServerNotification = Extract<
   ServerNotification,
   { method: "app/list/updated" }
@@ -367,6 +372,34 @@ export function isSkillsChangedNotification(
   message: JsonRpcMessage,
 ): message is SkillsChangedServerNotification {
   return skillsChangedServerNotification(message) !== undefined;
+}
+
+export function fsChangedServerNotification(
+  message: JsonRpcMessage,
+): FsChangedServerNotification | undefined {
+  if (!isJsonRpcNotification(message) || message.method !== "fs/changed") {
+    return undefined;
+  }
+  const params = record(message.params);
+  if (
+    !params ||
+    !hasOnlyKeys(params, ["changedPaths", "watchId"]) ||
+    !hasString(params, "watchId") ||
+    !Array.isArray(params.changedPaths) ||
+    params.changedPaths.length === 0 ||
+    !params.changedPaths.every(
+      (path) => typeof path === "string" && path.trim().length > 0,
+    )
+  ) {
+    return undefined;
+  }
+  return message as FsChangedServerNotification;
+}
+
+export function isFsChangedNotification(
+  message: JsonRpcMessage,
+): message is FsChangedServerNotification {
+  return fsChangedServerNotification(message) !== undefined;
 }
 
 export function appListUpdatedServerNotification(

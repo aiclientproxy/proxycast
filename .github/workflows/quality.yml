@@ -316,7 +316,7 @@ jobs:
           node scripts/prepare-sherpa-onnx-runtime.mjs --target "$TARGET"
 
       - name: Build standalone Code Mode host and Windows sandbox setup helper
-        run: cargo build --manifest-path lime-rs/Cargo.toml -p tool-runtime --bin code-mode-host --bin windows-sandbox-setup
+        run: cargo build --manifest-path lime-rs/Cargo.toml -p code-mode-host --bin code-mode-host -p tool-runtime --bin windows-sandbox-setup
 
       - name: Test Rust workspace
         env:
@@ -376,7 +376,7 @@ jobs:
         run: node scripts/prepare-sherpa-onnx-runtime.mjs --target x86_64-pc-windows-msvc
 
       - name: Build Windows app-server, code-mode-host, and sandbox sidecars
-        run: cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p tool-runtime --bin code-mode-host --bin windows-sandbox-setup --bin windows-sandbox-runner
+        run: cargo build --manifest-path lime-rs/Cargo.toml --target x86_64-pc-windows-msvc -p app-server --bin app-server -p code-mode-host --bin code-mode-host -p tool-runtime --bin windows-sandbox-setup --bin windows-sandbox-runner
 
       - name: Test Windows shell runtime fallback
         run: cargo test --manifest-path lime-rs/Cargo.toml -p lime-agent --test windows_shell_runtime -- --test-threads=1

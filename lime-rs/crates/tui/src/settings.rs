@@ -1,8 +1,10 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
+
+use crate::slash_command::{SlashCommand, command_from_prompt};
 
 pub(crate) const EFFORTS: [&str; 3] = ["low", "medium", "high"];
 pub(crate) const PERMISSION_PROFILES: [&str; 3] =
-    ["read-only", "workspace-write", "danger-full-access"];
+    [":read-only", ":workspace", ":danger-full-access"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SettingsCommand {
@@ -17,30 +19,39 @@ pub(crate) enum SettingsCommand {
 
 pub(crate) fn parse_settings_command(prompt: &str) -> Option<Result<SettingsCommand>> {
     let mut parts = prompt.split_whitespace();
-    let command = parts.next()?;
+    let command = command_from_prompt(prompt)?;
+    let _ = parts.next();
     let value = parts.next().filter(|value| !value.is_empty());
     match command {
-        "/model" => Some(value.map_or(Ok(SettingsCommand::ModelPicker), |model| {
+        SlashCommand::Model => Some(value.map_or(Ok(SettingsCommand::ModelPicker), |model| {
             Ok(SettingsCommand::Model {
                 model: model.to_string(),
                 provider: parts.next().map(ToString::to_string),
             })
         })),
-        "/effort" => Some(value.map_or_else(
+        SlashCommand::Effort => Some(value.map_or_else(
             || Err(anyhow!("usage: /effort <low|medium|high>")),
             |effort| Ok(SettingsCommand::Effort(effort.to_string())),
         )),
-        "/permissions" => Some(value.map_or_else(
+        SlashCommand::Permissions => Some(value.map_or_else(
             || Err(anyhow!("usage: /permissions <profile>")),
             |permissions| Ok(SettingsCommand::Permissions(permissions.to_string())),
         )),
-        _ => None,
+        SlashCommand::Status | SlashCommand::Copy => None,
     }
 }
 
-pub(crate) fn cycle_setting(values: &[&str], current: Option<&str>, direction: i8) -> String {
+pub(crate) fn cycle_setting<T: AsRef<str>>(
+    values: &[T],
+    current: Option<&str>,
+    direction: i8,
+) -> String {
     let current_index = current
-        .and_then(|value| values.iter().position(|candidate| *candidate == value))
+        .and_then(|value| {
+            values
+                .iter()
+                .position(|candidate| candidate.as_ref() == value)
+        })
         .unwrap_or(0);
     let next_index = if direction < 0 {
         if current_index == 0 {
@@ -51,7 +62,7 @@ pub(crate) fn cycle_setting(values: &[&str], current: Option<&str>, direction: i
     } else {
         (current_index + 1) % values.len()
     };
-    values[next_index].to_string()
+    values[next_index].as_ref().to_string()
 }
 
 #[cfg(test)]
@@ -64,7 +75,7 @@ mod tests {
         assert_eq!(cycle_setting(&EFFORTS, Some("low"), -1), "high");
         assert_eq!(
             cycle_setting(&PERMISSION_PROFILES, Some("unknown"), 1),
-            "workspace-write"
+            ":workspace"
         );
     }
 
@@ -84,8 +95,8 @@ mod tests {
             Some(Ok(SettingsCommand::Effort(effort))) if effort == "high"
         ));
         assert!(matches!(
-            parse_settings_command("/permissions workspace-write"),
-            Some(Ok(SettingsCommand::Permissions(permissions))) if permissions == "workspace-write"
+            parse_settings_command("/permissions :workspace"),
+            Some(Ok(SettingsCommand::Permissions(permissions))) if permissions == ":workspace"
         ));
         assert!(parse_settings_command("ordinary question").is_none());
         assert!(parse_settings_command("/effort").is_some_and(|value| value.is_err()));

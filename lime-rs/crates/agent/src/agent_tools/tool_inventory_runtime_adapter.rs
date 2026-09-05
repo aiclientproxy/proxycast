@@ -1,6 +1,6 @@
 use super::inventory::ExtensionToolInventorySeed;
 use crate::AgentRuntimeState;
-use tool_runtime::tool_definition::RuntimeToolDefinition;
+use code_mode_protocol::RuntimeToolDefinition;
 use tool_runtime::tool_extension::RuntimeExtensionConfig;
 
 pub(super) struct AgentToolInventoryRuntimeSeed {

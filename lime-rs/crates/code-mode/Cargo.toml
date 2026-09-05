@@ -1,0 +1,28 @@
+[package]
+name = "code-mode"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "code_mode"
+path = "src/lib.rs"
+doctest = false
+
+[dependencies]
+code-mode-protocol.workspace = true
+code-mode-runtime.workspace = true
+prost.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+code-mode-host.workspace = true
+tokio-stream = { workspace = true, features = ["net"] }
+tokio = { workspace = true, features = ["test-util"] }

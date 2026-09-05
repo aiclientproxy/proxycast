@@ -1,23 +1,16 @@
 {
   "name": "@limecloud/lime",
-  "version": "1.140.0",
+  "version": "1.141.0",
+  "packageManager": "pnpm@9.15.9",
   "description": "Lime CLI is an agent that runs in your terminal.",
   "bin": {
-    "lime": "scripts/run.js"
+    "lime": "bin/lime.js"
   },
+  "type": "module",
   "scripts": {
-    "postinstall": "node scripts/install.js",
-    "build:release": "node scripts/build-release.js"
+    "build:npm": "python3 scripts/build_npm_package.py",
+    "test": "node --test tests/*.test.mjs"
   },
-  "os": [
-    "darwin",
-    "linux",
-    "win32"
-  ],
-  "cpu": [
-    "x64",
-    "arm64"
-  ],
   "engines": {
     "node": ">=18"
   },
@@ -28,9 +21,6 @@
   },
   "license": "MIT",
   "files": [
-    "README.md",
-    "scripts/install.js",
-    "scripts/release-meta.js",
-    "scripts/run.js"
+    "bin/lime.js"
   ]
 }

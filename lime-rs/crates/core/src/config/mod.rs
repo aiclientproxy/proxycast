@@ -45,7 +45,8 @@ pub use types::{
     MemorySoulImportSource, MemorySoulStyleProfileId, MemorySourcesConfig, ModelInfo, ModelsConfig,
     MultiSearchConfig, MultiSearchEngineEntryConfig, NativeAgentConfig, NavigationConfig,
     OpenAIAsrConfig, OrchestratorConfig, OrchestratorFeatureConfig, PairingSettings,
-    ProviderConfig, ProviderModelsConfig, ProvidersConfig, QuotaExceededConfig, RateLimitSettings,
+    PermissionFilesystemConfig, PermissionNetworkConfig, PermissionProfileConfig, ProviderConfig,
+    ProviderModelsConfig, ProvidersConfig, QuotaExceededConfig, RateLimitSettings,
     RemoteManagementConfig, ResponseCacheSettings, RetrySettings, RolloutBudgetConfig,
     RoutingConfig, SearchEngine, SenseVoiceLocalConfig, ServerConfig, ShellEnvironmentImportConfig,
     SkillConfig, SkillsConfig, TaskSchedule, TelegramAccountConfig, TelegramBotConfig,
@@ -53,6 +54,7 @@ pub use types::{
     UserProfile, VertexApiKeyEntry, VertexModelAlias, VoiceInputConfig, VoiceInstruction,
     VoiceOutputConfig, VoiceOutputMode, VoiceProcessorConfig, WebSearchConfig, WebSearchProvider,
     WechatAccountConfig, WechatBotConfig, WechatGroupConfig, WhisperLocalConfig, WhisperModelSize,
-    WorkspacePreferencesConfig, WorkspaceSandboxConfig, XunfeiConfig, DEFAULT_API_KEY,
+    WindowsSandboxMode, WorkspacePreferencesConfig, WorkspaceSandboxConfig, XunfeiConfig,
+    DEFAULT_API_KEY,
 };
 pub use yaml::{load_config, save_config, ConfigError, ConfigManager, YamlService};

@@ -55,8 +55,28 @@ fn restricted_request(root: &Path, command: Vec<String>) -> LocalExecutionReques
             }),
             file_system: None,
         }),
+        windows_mode: None,
     });
     request
+}
+
+#[test]
+fn unelevated_mode_rejects_managed_network_before_setup() {
+    let fixture = workspace_fixture();
+    let mut request = restricted_request(
+        &fixture.path().join("workspace"),
+        powershell_script("exit 0"),
+    );
+    request
+        .sandbox
+        .as_mut()
+        .expect("sandbox config")
+        .windows_mode = Some(tool_runtime::sandbox::WindowsSandboxExecutionMode::Unelevated);
+
+    let error = start_local_execution_process(request)
+        .expect_err("unelevated managed network must fail closed before runner setup");
+    assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+    assert!(error.to_string().contains("managed network access"));
 }
 
 async fn run_to_terminal(

@@ -13,6 +13,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::transport::{SessionTransport, StdioTransport, StdioTransportConfig};
+use crate::{RemoteTransport, RemoteTransportConfig};
 
 #[derive(Debug, Error)]
 pub enum SessionError {
@@ -34,6 +35,8 @@ pub enum SessionError {
         method: String,
         source: serde_json::Error,
     },
+    #[error("unsupported App Server protocol version `{actual}`; supported versions: {supported}")]
+    UnsupportedProtocolVersion { actual: String, supported: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -170,7 +173,7 @@ impl ClientSession {
         let worker = tokio::spawn(run_session(transport, command_rx, event_tx));
         let request_handle = RequestHandle { command_tx };
 
-        let initialize_response = match request_handle
+        let initialize_response: InitializeResponse = match request_handle
             .request(app_server_protocol::METHOD_INITIALIZE, initialize)
             .await
         {
@@ -180,6 +183,14 @@ impl ClientSession {
                 return Err(error);
             }
         };
+        if !is_supported_protocol_version(&initialize_response.server_info.protocol_version) {
+            let error = SessionError::UnsupportedProtocolVersion {
+                actual: initialize_response.server_info.protocol_version.clone(),
+                supported: app_server_protocol::PROTOCOL_VERSION.to_string(),
+            };
+            stop_worker(&request_handle, worker).await;
+            return Err(error);
+        }
         if let Err(error) = request_handle
             .notify(JsonRpcNotification::new(
                 app_server_protocol::METHOD_INITIALIZED,
@@ -204,6 +215,13 @@ impl ClientSession {
         initialize: InitializeParams,
     ) -> Result<Self, SessionError> {
         Self::start(StdioTransport::spawn(config).await?, initialize).await
+    }
+
+    pub async fn start_remote(
+        config: RemoteTransportConfig,
+        initialize: InitializeParams,
+    ) -> Result<Self, SessionError> {
+        Self::start(RemoteTransport::connect(config).await?, initialize).await
     }
 
     pub fn request_handle(&self) -> RequestHandle {
@@ -233,6 +251,10 @@ impl ClientSession {
         let _ = self.worker.await;
         result?
     }
+}
+
+fn is_supported_protocol_version(protocol_version: &str) -> bool {
+    protocol_version == app_server_protocol::PROTOCOL_VERSION
 }
 
 async fn stop_worker(request_handle: &RequestHandle, worker: tokio::task::JoinHandle<()>) {
@@ -330,7 +352,22 @@ async fn run_session<T: SessionTransport>(
             }
             incoming = transport.receive() => {
                 match incoming {
-                    Ok(Some(message)) => handle_message(message, &event_tx, &mut pending),
+                    Ok(Some(message)) => {
+                        if let Err((id, error)) =
+                            validate_initialize_response(&transport, &message, &pending)
+                        {
+                            let message = error.to_string();
+                            if let Some(pending_request) = pending.remove(&id) {
+                                let _ = pending_request
+                                    .response_tx
+                                    .send(Err(SessionError::Transport(error)));
+                            }
+                            disconnect(&event_tx, &mut pending, message);
+                            let _ = transport.close().await;
+                            break;
+                        }
+                        handle_message(message, &event_tx, &mut pending)
+                    }
                     Ok(None) => {
                         disconnect(&event_tx, &mut pending, "app-server transport closed".to_string());
                         break;
@@ -343,6 +380,35 @@ async fn run_session<T: SessionTransport>(
             }
         }
     }
+}
+
+fn validate_initialize_response<T: SessionTransport>(
+    transport: &T,
+    message: &JsonRpcMessage,
+    pending: &HashMap<RequestId, PendingRequest>,
+) -> Result<(), (RequestId, io::Error)> {
+    let JsonRpcMessage::Response(response) = message else {
+        return Ok(());
+    };
+    let Some(pending_request) = pending.get(&response.id) else {
+        return Ok(());
+    };
+    if pending_request.method != app_server_protocol::METHOD_INITIALIZE {
+        return Ok(());
+    }
+    let initialize_response = serde_json::from_value::<InitializeResponse>(response.result.clone())
+        .map_err(|error| {
+            (
+                response.id.clone(),
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("failed to decode initialize response: {error}"),
+                ),
+            )
+        })?;
+    transport
+        .validate_initialize_response(&initialize_response)
+        .map_err(|error| (response.id.clone(), error))
 }
 
 fn handle_message(
@@ -489,7 +555,7 @@ mod tests {
                         server_info: app_server_protocol::ServerInfo {
                             name: "test-server".to_string(),
                             version: "1".to_string(),
-                            protocol_version: "2".to_string(),
+                            protocol_version: app_server_protocol::PROTOCOL_VERSION.to_string(),
                         },
                         platform: app_server_protocol::PlatformInfo {
                             family: "unix".to_string(),
@@ -675,6 +741,53 @@ mod tests {
             SessionError::Server { method, error }
                 if method == app_server_protocol::METHOD_INITIALIZE
                     && error.message == "initialize failed"
+        ));
+        close_rx.await.expect("transport close");
+        server.await.expect("server task");
+    }
+
+    #[tokio::test]
+    async fn unsupported_protocol_version_closes_transport_before_initialized() {
+        let (transport, mut server_rx, server_tx, close_rx) = transport_pair();
+        let server = tokio::spawn(async move {
+            let JsonRpcMessage::Request(initialize) = server_rx.recv().await.expect("initialize")
+            else {
+                panic!("expected initialize request");
+            };
+            let response = app_server_protocol::InitializeResponse {
+                server_info: app_server_protocol::ServerInfo {
+                    name: "test-server".to_string(),
+                    version: "1".to_string(),
+                    protocol_version: "appserver.unsupported".to_string(),
+                },
+                platform: app_server_protocol::PlatformInfo {
+                    family: "unix".to_string(),
+                    os: "test".to_string(),
+                },
+                capabilities: app_server_protocol::ServerCapabilities {
+                    agent_session: true,
+                    capability_discovery: true,
+                    artifact: false,
+                    workspace: false,
+                },
+            };
+            server_tx
+                .send(JsonRpcMessage::Response(
+                    JsonRpcResponse::new(initialize.id, response).expect("response"),
+                ))
+                .expect("send initialize response");
+            assert!(server_rx.recv().await.is_none());
+        });
+
+        let error = match ClientSession::start(transport, initialize_params()).await {
+            Ok(_) => panic!("unsupported protocol must fail"),
+            Err(error) => error,
+        };
+        assert!(matches!(
+            error,
+            SessionError::UnsupportedProtocolVersion { actual, supported }
+                if actual == "appserver.unsupported"
+                    && supported == app_server_protocol::PROTOCOL_VERSION
         ));
         close_rx.await.expect("transport close");
         server.await.expect("server task");

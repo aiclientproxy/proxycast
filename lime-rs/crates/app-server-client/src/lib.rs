@@ -397,9 +397,11 @@ use app_server_transport::encode_message;
 use serde::Serialize;
 use thiserror::Error;
 
+mod remote;
 mod session;
 mod transport;
 
+pub use remote::{RemoteTransport, RemoteTransportConfig};
 pub use session::{ClientSession, RequestHandle, SessionError, SessionEvent};
 pub use transport::{SessionTransport, StdioTransport, StdioTransportConfig};
 

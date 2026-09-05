@@ -109,6 +109,7 @@ const DIAGNOSTIC_ONLY_NOTIFICATION_METHODS = new Set([
   ...CODEX_REALTIME_NOTIFICATION_METHODS,
 ]);
 const PROJECTED_NOTIFICATION_METHODS = new Set([
+  "fs/changed",
   "hook/started",
   "hook/completed",
   "item/autoApprovalReview/started",

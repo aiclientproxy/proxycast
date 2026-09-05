@@ -7,6 +7,9 @@ use super::{
     dispatch_result, parse_params, to_jsonrpc_error, ConnectionRequestId, RequestProcessor,
     RpcDispatch,
 };
+use crate::permission_profile::{
+    apply_resolved_permission_profile_to_metadata, resolve_permission_profile_for_request,
+};
 use app_server_protocol::protocol::v2::{
     DynamicToolNamespaceTool, DynamicToolSpec, ServerNotification, SortDirection, Thread,
     ThreadArchiveParams, ThreadArchiveResponse, ThreadArchivedNotification,
@@ -376,11 +379,25 @@ impl RequestProcessor {
         let environment_world_state = self
             .environment_world_state_snapshot(environments.as_deref())
             .await;
-        let active_permission_profile = params
-            .permissions
-            .as_deref()
-            .map(|id| self.resolve_allowed_permission_profile(id, params.cwd.as_deref()))
-            .transpose()?;
+        let permission_policy = self
+            .runtime
+            .current_permission_profile_policy(params.cwd.as_deref())
+            .map_err(to_jsonrpc_error)?;
+        let active_permission_profile = resolve_permission_profile_for_request(
+            &permission_policy,
+            params.permissions.as_deref(),
+        )
+        .map_err(invalid_params)?
+        .map(|profile| {
+            if params.sandbox.is_some() {
+                Err(invalid_params(
+                    "permissions cannot be combined with sandbox",
+                ))
+            } else {
+                Ok(profile)
+            }
+        })
+        .transpose()?;
         let source = "appServer";
         let thread_id = Uuid::now_v7().to_string();
         let session_id = thread_id.clone();
@@ -401,13 +418,13 @@ impl RequestProcessor {
             "sandbox": params.sandbox,
             "permissions": active_permission_profile
                 .as_ref()
-                .map(|profile| profile.id),
+                .map(|profile| profile.id.clone()),
             "activePermissionProfile": active_permission_profile
                 .as_ref()
                 .map(|profile| json!({ "id": profile.id })),
             "sandboxPolicy": active_permission_profile
                 .as_ref()
-                .map(|profile| profile.sandbox_policy),
+                .map(|profile| profile.sandbox_policy.clone()),
             "config": params.config,
             "baseInstructions": params.base_instructions,
             "developerInstructions": params.developer_instructions,
@@ -420,6 +437,15 @@ impl RequestProcessor {
             "experimentalRawEvents": params.experimental_raw_events,
             "cliVersion": env!("CARGO_PKG_VERSION"),
         });
+        if let Some(profile) = active_permission_profile.clone() {
+            apply_resolved_permission_profile_to_metadata(
+                metadata
+                    .as_object_mut()
+                    .expect("thread/start metadata object"),
+                profile,
+            )
+            .map_err(invalid_params)?;
+        }
         if !environment_world_state.is_empty() {
             metadata["environmentWorldState"] = serde_json::to_value(&environment_world_state)
                 .map_err(|error| {

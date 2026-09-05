@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
   access,
   mkdir,
@@ -12,12 +12,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { localAppServerBinaryPath } from "../lib/electron-dev-sidecar.mjs";
 import { writeTerminalExternalBackend } from "./terminal-gate-fixture.mjs";
 
-const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "../..");
@@ -37,7 +35,8 @@ async function main() {
     process.env.LIME_CLI_BIN || defaultCliBinaryPath,
   );
   const appServerBinaryPath = path.resolve(
-    process.env.APP_SERVER_BIN || localAppServerBinaryPath({ repoRoot: rootDir }),
+    process.env.APP_SERVER_BIN ||
+      localAppServerBinaryPath({ repoRoot: rootDir }),
   );
   await Promise.all([
     assertBinaryExists(cliBinaryPath, "lime"),
@@ -76,8 +75,6 @@ async function main() {
       "fixture-model",
       "--provider",
       "fixture-provider",
-      "--app-server",
-      appServerBinaryPath,
       "--app-server-arg=--backend",
       "--app-server-arg=external",
       "--app-server-arg=--backend-command",
@@ -93,6 +90,9 @@ async function main() {
       "--app-server-arg=--app-data-dir",
       `--app-server-arg=${appDataDir}`,
     ];
+    if (process.env.LIME_CLI_GATE_B_USE_SIBLING_APP_SERVER !== "1") {
+      args.splice(9, 0, "--app-server", appServerBinaryPath);
+    }
     const { stdout, stderr } = await runCli(cliBinaryPath, args, tempDir);
     if (stderr.trim()) {
       throw new Error(`lime wrote unexpected stderr: ${stderr.trim()}`);
@@ -127,6 +127,57 @@ async function main() {
       "runtime event sequence",
     );
 
+    const jsonlArgs = args.map((argument) =>
+      argument === "--json" ? "--jsonl" : argument,
+    );
+    const jsonl = await runCli(cliBinaryPath, jsonlArgs, tempDir);
+    if (jsonl.stderr.trim()) {
+      throw new Error(
+        `jsonl exec wrote unexpected stderr: ${jsonl.stderr.trim()}`,
+      );
+    }
+    assertEqual(
+      jsonl.stdout.trim().split(/\r?\n/u).length,
+      1,
+      "single-line JSONL envelope",
+    );
+    const jsonlEnvelope = JSON.parse(jsonl.stdout);
+    assertEqual(jsonlEnvelope.ok, true, "JSONL envelope ok");
+    assertEqual(jsonlEnvelope.result?.output, completedText, "JSONL output");
+
+    const stdinArgs = ["exec", ...args.slice(2)];
+    const stdin = await runCli(cliBinaryPath, stdinArgs, tempDir, {
+      input: `${prompt}\n`,
+    });
+    assertEqual(
+      JSON.parse(stdin.stdout).result?.output,
+      completedText,
+      "stdin output",
+    );
+
+    const invalid = await runCliResult(
+      cliBinaryPath,
+      ["exec", "", "--json"],
+      tempDir,
+    );
+    assertEqual(invalid.code, 1, "empty prompt exit code");
+    assertEqual(JSON.parse(invalid.stdout).ok, false, "error envelope");
+    assertEqual(invalid.stderr.trim(), "", "error envelope stderr");
+
+    const completion = await runCli(
+      cliBinaryPath,
+      ["completion", "zsh"],
+      tempDir,
+    );
+    if (
+      !completion.stdout.includes("_lime") ||
+      !completion.stdout.includes("completion")
+    ) {
+      throw new Error(
+        "zsh completion did not describe the canonical lime command tree",
+      );
+    }
+
     console.log(
       [
         "[smoke:cli-gate-b] ok",
@@ -136,6 +187,10 @@ async function main() {
         `turn=${envelope.result.turn_id}`,
         `status=${envelope.result.status}`,
         `events=${turnStart.eventTypes.join(",")}`,
+        "jsonl=ok",
+        "stdin=ok",
+        "error-exit=1",
+        "completion=zsh",
       ].join(" "),
     );
   } finally {
@@ -143,28 +198,55 @@ async function main() {
   }
 }
 
-async function runCli(cliBinaryPath, args, tempDir) {
-  const environment = await isolatedEnvironment(tempDir);
-  try {
-    return await execFileAsync(cliBinaryPath, args, {
-      cwd: rootDir,
-      encoding: "utf8",
-      env: environment,
-      maxBuffer: 1024 * 1024,
-      timeout: 20_000,
-      windowsHide: true,
-    });
-  } catch (error) {
-    const stdout = String(error?.stdout ?? "").trim();
-    const stderr = String(error?.stderr ?? "").trim();
+async function runCli(cliBinaryPath, args, tempDir, options = {}) {
+  const result = await runCliResult(cliBinaryPath, args, tempDir, options);
+  if (result.code !== 0) {
     throw new Error(
       [
-        error instanceof Error ? error.message : String(error),
-        stdout ? `stdout: ${stdout}` : "stdout: <empty>",
-        stderr ? `stderr: ${stderr}` : "stderr: <empty>",
+        `lime exited with code ${result.code}`,
+        result.stdout ? `stdout: ${result.stdout.trim()}` : "stdout: <empty>",
+        result.stderr ? `stderr: ${result.stderr.trim()}` : "stderr: <empty>",
       ].join("\n"),
     );
   }
+  return result;
+}
+
+async function runCliResult(cliBinaryPath, args, tempDir, options = {}) {
+  const environment = await isolatedEnvironment(tempDir);
+  return new Promise((resolve, reject) => {
+    const child = spawn(cliBinaryPath, args, {
+      cwd: rootDir,
+      env: environment,
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"],
+      signal: AbortSignal.timeout(options.timeoutMs ?? 20_000),
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      resolve({
+        code: typeof code === "number" ? code : 1,
+        signal,
+        stdout,
+        stderr,
+      });
+    });
+    if (options.input != null) {
+      child.stdin.end(options.input);
+    } else {
+      child.stdin.end();
+    }
+  });
 }
 
 async function isolatedEnvironment(tempDir) {

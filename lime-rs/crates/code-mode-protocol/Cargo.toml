@@ -1,0 +1,22 @@
+[package]
+name = "code-mode-protocol"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "code_mode_protocol"
+path = "src/lib.rs"
+doctest = false
+
+[dependencies]
+prost.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tonic.workspace = true
+
+[build-dependencies]
+tonic-build.workspace = true

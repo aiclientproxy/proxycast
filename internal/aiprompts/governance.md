@@ -22,6 +22,8 @@ Agent 业务主链固定为：
 
 其中 provider request/lowering 归 `model-provider`，工具定义、权限和执行归 `tool-runtime`，回合编排归 `agent-runtime` 与 App Server，持久化/read model 归 App Server、`thread-store` 与 repository。Electron 只负责 desktop host，CLI/TUI 只负责 terminal host，两者都不成为第二套 runtime。
 
+CLI/TUI 当前 owner 分为 Rust 产品面与 npm 分发面：`lime-rs/crates/cli`、`lime-rs/crates/tui`、`app-server-client` 负责 current 产品行为，`packages/cli/bin/lime.js` 与 `packages/cli/scripts/build_npm_package.py` 只负责 Codex 风格平台选择和交付。旧 `lime-cli`、`terminal-ui` 命名、npm `postinstall` 下载、同步 Node wrapper、源码 `cargo run` fallback 和只携带 `lime` 的 release asset 均为 `dead / deleted / forbidden-to-restore`；对应的 `packages/cli/scripts/{install,run,release-meta,build-release}.js` 已物理删除并由 CLI 边界守卫禁止恢复。平台包不允许裁掉 `app-server`、`code-mode-host`、Windows sandbox helper 或必需动态库后宣称 CLI/TUI 可交付。
+
 运行时项目指令的 current 入口是标准 `CODEX_HOME/AGENTS.md` 与项目层 `AGENTS.md` / `AGENTS.override.md`；`lime-rs/crates/agent/src/prompt/runtime_agents.rs` 可继续读取 `.lime/AGENTS.md` / `.lime/AGENTS.override.md` 作为只委托旧文件位置的 `compat` fallback。该 fallback 不得扩散到其它 owner，也不得承接新语义。
 
 `lime-providers`（原 workspace crate `crates/providers`）已完成消费者迁移并物理删除，

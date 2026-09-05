@@ -216,6 +216,12 @@ impl ConfigManager {
         if other.default_provider != Config::default().default_provider {
             self.config.default_provider = other.default_provider;
         }
+        if other.default_permissions.is_some() {
+            self.config.default_permissions = other.default_permissions;
+        }
+        if !other.permissions.is_empty() {
+            self.config.permissions.extend(other.permissions);
+        }
 
         // 合并路由辅助配置
         if !other.routing.model_aliases.is_empty() {
@@ -873,6 +879,78 @@ logging:
     }
 
     #[test]
+    fn yaml_roundtrip_preserves_codex_permission_profile_shape() {
+        let yaml = r#"
+default_permissions: locked-down
+permissions:
+  locked-down:
+    extends: ":workspace"
+    description: Read selected documentation
+    filesystem:
+      entries:
+        /docs: read
+        /docs/private: none
+      glob_scan_max_depth: 4
+    network:
+      enabled: true
+"#;
+
+        let config = ConfigManager::parse_yaml(yaml).expect("permission profile YAML");
+        assert_eq!(config.default_permissions.as_deref(), Some("locked-down"));
+        let profile = config
+            .permissions
+            .get("locked-down")
+            .expect("named permission profile");
+        assert_eq!(profile.extends.as_deref(), Some(":workspace"));
+        assert_eq!(
+            profile.description.as_deref(),
+            Some("Read selected documentation")
+        );
+        assert_eq!(
+            profile
+                .filesystem
+                .as_ref()
+                .and_then(|filesystem| filesystem.entries.get("/docs"))
+                .map(String::as_str),
+            Some("read")
+        );
+        assert_eq!(
+            profile.network.as_ref().and_then(|network| network.enabled),
+            Some(true)
+        );
+
+        let serialized =
+            ConfigManager::to_yaml(&config).expect("serialize permission profile YAML");
+        let reparsed =
+            ConfigManager::parse_yaml(&serialized).expect("reparse permission profile YAML");
+        assert_eq!(reparsed.default_permissions, config.default_permissions);
+        assert_eq!(reparsed.permissions, config.permissions);
+    }
+
+    #[test]
+    fn yaml_roundtrip_preserves_windows_sandbox_mode() {
+        let yaml = r#"
+agent:
+  workspace_sandbox:
+    enabled: true
+    strict: true
+    mode: unelevated
+"#;
+        let config = ConfigManager::parse_yaml(yaml).expect("Windows sandbox mode YAML");
+        assert_eq!(
+            config.agent.workspace_sandbox.mode,
+            Some(crate::config::WindowsSandboxMode::Unelevated)
+        );
+        let serialized = ConfigManager::to_yaml(&config).expect("serialize Windows sandbox YAML");
+        let reparsed =
+            ConfigManager::parse_yaml(&serialized).expect("reparse Windows sandbox YAML");
+        assert_eq!(
+            reparsed.agent.workspace_sandbox.mode,
+            config.agent.workspace_sandbox.mode
+        );
+    }
+
+    #[test]
     fn test_parse_yaml_migrates_retired_nested_default_provider() {
         let config = ConfigManager::parse_yaml(
             r#"
@@ -1121,6 +1199,30 @@ server:
 "#;
         manager.import(yaml, false).unwrap();
         assert_eq!(manager.config.server.port, 5678);
+    }
+
+    #[test]
+    fn yaml_import_merge_preserves_existing_and_imported_permission_profiles() {
+        let mut manager = ConfigManager::with_config(Config::default(), "config.yaml".into());
+        manager
+            .import(
+                "permissions:\n  existing:\n    description: Existing\n",
+                false,
+            )
+            .expect("seed permission profile");
+        manager
+            .import(
+                "default_permissions: imported\npermissions:\n  imported:\n    description: Imported\n",
+                true,
+            )
+            .expect("merge permission profile");
+
+        assert_eq!(
+            manager.config().default_permissions.as_deref(),
+            Some("imported")
+        );
+        assert!(manager.config().permissions.contains_key("existing"));
+        assert!(manager.config().permissions.contains_key("imported"));
     }
 
     #[test]

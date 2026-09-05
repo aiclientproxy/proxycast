@@ -288,6 +288,7 @@ fn restricted_token_sandbox_fails_closed_off_windows() {
         backend: SandboxBackend::RestrictedToken,
         requested_policy: Some("workspace-write".to_string()),
         granted_permissions: None,
+        windows_mode: None,
     });
 
     let error =
@@ -450,6 +451,17 @@ fn shell_command(script: &str) -> Vec<String> {
     } else {
         vec!["sh".to_string(), "-c".to_string(), script.to_string()]
     }
+}
+
+#[test]
+fn local_sandbox_defaults_to_elevated_windows_mode() {
+    let sandbox = LocalExecutionSandbox {
+        backend: SandboxBackend::RestrictedToken,
+        requested_policy: Some("workspace-write".to_string()),
+        granted_permissions: None,
+        windows_mode: None,
+    };
+    assert_eq!(sandbox.windows_mode, None);
 }
 
 fn interactive_shell_command() -> Vec<String> {

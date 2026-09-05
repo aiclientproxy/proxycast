@@ -5,10 +5,10 @@ use crate::agent_tools::inventory::{
 use crate::agent_tools::tool_inventory_runtime_adapter::read_agent_tool_inventory_runtime_seed;
 use crate::mcp::McpToolDefinition;
 use crate::AgentRuntimeState;
+use code_mode_protocol::RuntimeToolDefinition;
 use lime_core::config::ToolExecutionPolicyConfig as ConfigToolExecutionPolicyConfig;
 use lime_mcp::{build_runtime_extension_surface, runtime_extension_name};
 use std::collections::{BTreeMap, HashSet};
-use tool_runtime::tool_definition::RuntimeToolDefinition;
 use tool_runtime::tool_extension::RuntimeExtensionConfig;
 
 #[derive(Debug, Clone)]

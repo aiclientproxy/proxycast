@@ -1,0 +1,22 @@
+[package]
+name = "code-mode-runtime"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "code_mode_runtime"
+path = "src/lib.rs"
+doctest = false
+
+[dependencies]
+base64.workspace = true
+deno_core_icudata.workspace = true
+code-mode-protocol.workspace = true
+futures.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
+tracing.workspace = true
+v8.workspace = true

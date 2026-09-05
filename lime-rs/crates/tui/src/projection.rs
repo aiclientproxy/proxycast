@@ -117,6 +117,11 @@ impl ConversationProjection {
             }
             ServerNotification::TurnCompleted(params) => {
                 self.active_turn_id = None;
+                // The terminal client may miss an item delta or item/completed
+                // notification while the transport is reconnecting. The
+                // completed turn is the canonical repair point for those
+                // transcript entries.
+                self.merge_canonical_items(&params.turn.items);
                 self.settle_running_entries(params.turn.status);
                 self.status = turn_status(params.turn.status).to_string();
             }
@@ -225,6 +230,42 @@ impl ConversationProjection {
         }
     }
 
+    fn merge_canonical_items(&mut self, items: &[ThreadItem]) {
+        let projected = items
+            .iter()
+            .filter_map(|item| project_item(item, false))
+            .collect::<Vec<_>>();
+
+        for (index, entry) in projected.into_iter().enumerate() {
+            if let Some(current) = self
+                .entries
+                .iter_mut()
+                .find(|current| current.id == entry.id)
+            {
+                *current = entry;
+                continue;
+            }
+
+            // Place a repaired item next to the nearest canonical neighbor so
+            // a missing user message cannot appear after its assistant reply.
+            let next_index = items
+                .iter()
+                .skip(index + 1)
+                .filter_map(projected_item_id)
+                .find_map(|id| self.entries.iter().position(|current| current.id == id));
+            let previous_index = items
+                .iter()
+                .take(index)
+                .filter_map(projected_item_id)
+                .rev()
+                .find_map(|id| self.entries.iter().position(|current| current.id == id));
+            let insert_at = next_index
+                .or_else(|| previous_index.map(|position| position + 1))
+                .unwrap_or(self.entries.len());
+            self.entries.insert(insert_at, entry);
+        }
+    }
+
     fn push_system(&mut self, text: String) {
         self.entries.push(TranscriptEntry {
             id: format!("system-{}", self.entries.len()),
@@ -252,6 +293,10 @@ impl ConversationProjection {
             }
         }
     }
+}
+
+fn projected_item_id(item: &ThreadItem) -> Option<String> {
+    project_item(item, false).map(|entry| entry.id)
 }
 
 fn turn_status(status: TurnStatus) -> &'static str {
@@ -338,7 +383,7 @@ fn project_item(item: &ThreadItem, streaming: bool) -> Option<TranscriptEntry> {
             (
                 id.clone(),
                 EntryKind::Command,
-                command_summary(command, aggregated_output.as_deref()),
+                command_text(command, aggregated_output.as_deref(), streaming),
                 Some(command_entry_status(*status)),
                 summary,
             )
@@ -390,6 +435,9 @@ fn project_item(item: &ThreadItem, streaming: bool) -> Option<TranscriptEntry> {
             id,
             tool,
             status,
+            prompt,
+            model,
+            reasoning_effort,
             agents_states,
             ..
         } => (
@@ -397,7 +445,12 @@ fn project_item(item: &ThreadItem, streaming: bool) -> Option<TranscriptEntry> {
             EntryKind::MultiAgent,
             format!("{tool:?}"),
             Some(collab_entry_status(*status)),
-            collab_summary(agents_states),
+            collab_summary(
+                agents_states,
+                prompt.as_deref(),
+                model.as_deref(),
+                reasoning_effort.as_ref(),
+            ),
         ),
         ThreadItem::SubAgentActivity {
             id,
@@ -493,13 +546,17 @@ fn project_item(item: &ThreadItem, streaming: bool) -> Option<TranscriptEntry> {
     })
 }
 
-fn command_summary(command: &str, output: Option<&str>) -> String {
-    let mut summary = command.to_string();
+fn command_text(command: &str, output: Option<&str>, streaming: bool) -> String {
+    let mut text = command.to_string();
     if let Some(output) = output.filter(|output| !output.is_empty()) {
-        summary.push('\n');
-        summary.push_str(output);
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str(output);
+    } else if streaming && !text.ends_with('\n') {
+        text.push('\n');
     }
-    summary
+    text
 }
 
 fn patch_summary(changes: &[app_server_protocol::protocol::v2::FileUpdateChange]) -> Vec<String> {
@@ -567,6 +624,9 @@ fn collab_summary(
         String,
         app_server_protocol::protocol::v2::CollabAgentState,
     >,
+    prompt: Option<&str>,
+    model: Option<&str>,
+    reasoning_effort: Option<&app_server_protocol::protocol::v2::ReasoningEffort>,
 ) -> Vec<String> {
     let mut details = vec![format!("agents: {}", agents_states.len())];
     let mut counts = std::collections::BTreeMap::<&'static str, usize>::new();
@@ -580,6 +640,15 @@ fn collab_summary(
             .into_iter()
             .map(|(label, count)| format!("{label}: {count}")),
     );
+    if let Some(model) = model.filter(|model| !model.trim().is_empty()) {
+        details.push(format!("model: {}", compact_text(model)));
+    }
+    if let Some(reasoning_effort) = reasoning_effort {
+        details.push(format!("effort: {}", reasoning_effort.as_str()));
+    }
+    if let Some(prompt) = prompt.filter(|prompt| !prompt.trim().is_empty()) {
+        details.push(format!("prompt: {}", compact_text(prompt)));
+    }
     details
 }
 
@@ -673,15 +742,21 @@ fn format_patch(changes: &[app_server_protocol::protocol::v2::FileUpdateChange])
     changes
         .iter()
         .map(|change| {
-            let kind = match &change.kind {
-                app_server_protocol::protocol::v2::PatchChangeKind::Add => "added",
-                app_server_protocol::protocol::v2::PatchChangeKind::Delete => "deleted",
-                app_server_protocol::protocol::v2::PatchChangeKind::Update { .. } => "updated",
+            let (kind, move_path) = match &change.kind {
+                app_server_protocol::protocol::v2::PatchChangeKind::Add => ("added", None),
+                app_server_protocol::protocol::v2::PatchChangeKind::Delete => ("deleted", None),
+                app_server_protocol::protocol::v2::PatchChangeKind::Update { move_path } => {
+                    ("updated", move_path.as_deref())
+                }
             };
+            let path = move_path
+                .filter(|path| !path.trim().is_empty())
+                .map(|path| format!("{} → {path}", change.path))
+                .unwrap_or_else(|| change.path.clone());
             if change.diff.trim().is_empty() {
-                format!("{kind} {}", change.path)
+                format!("{kind} {path}")
             } else {
-                format!("{kind} {}\n{}", change.path, change.diff)
+                format!("{kind} {path}\n{}", change.diff)
             }
         })
         .collect::<Vec<_>>()

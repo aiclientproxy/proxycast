@@ -1,6 +1,6 @@
 use crate::code_mode::{RuntimeCodeModeService, RuntimeCodeModeServiceFactory};
+use ::code_mode::RuntimeCodeModeSessionHandle;
 use std::sync::Arc;
-use tool_runtime::code_mode::RuntimeCodeModeSessionHandle;
 
 pub(super) struct RuntimeSessionResources {
     thread_id: Arc<str>,

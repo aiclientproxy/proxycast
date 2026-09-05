@@ -1,6 +1,6 @@
 # Lime v1.140.0 发布执行计划
 
-状态：`release_recovery_in_progress`
+状态：`completed`
 日期：2026-09-04
 目标版本：`1.140.0`
 目标 tag：`v1.140.0`
@@ -46,12 +46,15 @@
 - 失败复盘同时发现生命周期契约矛盾：Squirrel smoke 在 workflow 后续 CodeMode/native-host Gate B 前卸载候选，而 packaged evidence validator 又同时要求卸载成功和已安装 exe 存在。恢复补丁将卸载移动到全部 installed packaged Gate B 与身份校验之后；卸载仅容忍同时包含缺失子键文本、`RegistryKey.DeleteSubKeyTree` 与 `Squirrel.Update.Program.<Uninstall>` 的明确幂等错误，仍要求 Update.exe、候选目录、主程序与快捷方式全部消失，其他错误继续 fail closed。
 - 恢复补丁本地验证：Windows Squirrel/packaged evidence/release workflow guard 定向 Vitest 3 文件 `66/66`；`npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version`、`npm run governance:scripts`、release workflow guard、Prettier check 与 `git diff --check` 全部通过。
 - Windows timeout 恢复补丁将测试负载改为不触发 shell 策略但仍可由 timeout 终止的 `.NET Thread.Sleep`，并给 Unix-only imports/helper 补齐 `cfg(unix)`，消除日志中的 4 个 `app-server` Windows 编译警告。本机 `npm run test:rust:related -- lime-rs/crates/app-server/src/command_exec/tests.rs lime-rs/crates/app-server/src/process/tests.rs` 通过 `1759/1759`，`cargo fmt --check` 通过；Windows 专属分支待恢复后的 Quality run 验证。
-- 恢复提交 `9341eb297e6baecdf453eccf2aed2465bad99e4f6747091bf` 已推送到 `origin/main`；`v1.140.0` tag 仍固定在原始 release commit `1fe2ad260bb080a94a8dbda9e0d954f6747091bf`，未改写。
+- 恢复提交 `9341eb297e6baecdf453eccf2aed2465bad99e4f` 已推送到 `origin/main`；`v1.140.0` tag 仍固定在原始 release commit `1fe2ad260bb080a94a8dbda9e0d954f6747091bf`，未改写。
 - 第二次 Release run `33826403443`：macOS x64/arm64 构建通过；Windows Electron 构建、Squirrel 安装、N-1 更新、SHELL-01、CodeMode Gate B、native-host Gate B 与 packaged evidence identity 全部通过。最后的卸载步骤失败，artifact `windows-squirrel-rc-evidence-x86_64-pc-windows-msvc` 显示主程序和快捷方式已移除，但 `C:\Users\runneradmin\AppData\Local\lime\Update.exe` 与 `app-1.140.0` 在 60 秒后仍存在，因此 Electron/CLI 资产和 R2 发布被跳过。
 - 第二次失败根因是门禁把 Squirrel.Windows 的有意保留行为误判成卸载失败：其 `FullUninstall` 删除产品文件后会重建带 `.dead` 的安装根，并保留正在参与卸载钩子的 `Update.exe`。本轮修复先 fail-closed 验证候选 `Lime.exe` 与快捷方式已由 Squirrel 移除，再等待同路径 updater 进程退出，最后仅清理经过安装布局校验的候选 app 目录与 `Update.exe`；证据分别记录产品卸载和 runner 残留清理结果，未知卸载错误仍不容忍。路径/顺序/fail-closed 定向 Vitest 与 packaged/release guard 共 `68/68` 通过。
 - 第二次 Windows 日志同时暴露 `tool-runtime` 的 4 条告警：删除从未进入生产调用图的 `should_preserve_windows_job` 及其自证测试；将 Windows SDK 的 `NERR_Success` / `NERR_GroupExists` 仅在模式匹配处导入为 Rust 风格大写别名。使用仓库校验后的 sandboxed rusty_v8 资产后，`npm run test:rust:unit -- -p tool-runtime` 通过 `382/382`，`cargo fmt -p tool-runtime --check` 通过；`cargo clippy -D warnings` 完成依赖构建后被仓库内 23 条既有 Rust 1.95 lint 阻断，不属于本轮 Windows rustc 告警。Windows 无告警编译待下一次 CI 给出平台证据。
 - 第二轮恢复补丁发布门禁：`npm run typecheck`、`npm run test:contracts`、`npm run verify:app-version`、`npm run governance:scripts`、Prettier 与 `git diff --check` 均通过。
-- 待执行：复核发布门禁后单独确认、提交并推送第二轮修复；通过 `workflow_dispatch version=v1.140.0` 从后续 `main` 修复提交重建资产，不移动已推送 tag；监控 Windows/macOS 构建、GitHub Release、CLI 资产与 R2 updater 完成。
+- 第二轮恢复提交 `81ba705fa52434334d33453a07fa8faed798b3d8` 已推送到 `origin/main`；Release run `33833713575` 以该 SHA 作为 candidate 构建，不移动已推送的 `v1.140.0` tag。
+- Release run `33833713575` 首次尝试中 Windows x64 和 macOS arm64 成功；macOS x64 在 `Setup sccache` 遭遇 `getaddrinfo ENOTFOUND api.github.com` 的临时基础设施故障。仅重跑失败任务的第二次尝试通过，最终 workflow 结论为 `success`。
+- Windows Squirrel RC 证据指向 candidate SHA `81ba705fa52434334d33453a07fa8faed798b3d8`，21/21 断言通过，`result=pass`、`remainingClaims.nMinusOneUpdate=passed`、`remainingClaims.uninstallCleanup=passed`；Windows 完整构建日志中未再出现本轮修复的 4 条 `tool-runtime` 告警。
+- GitHub Release `v1.140.0` 已于 2026-09-04 12:22:15 +08:00 正式发布，不是 draft/prerelease；9 个 Electron 产物与 4 个 CLI 产物共 13 个资产全部上传，Electron 产物生成了 GitHub build provenance attestation。Cloudflare R2 updater 资产上传和旧资产清理均成功。
 
 ## 收尾分类
 
@@ -60,4 +63,4 @@
 - `deprecated`：无新增。
 - `dead / deleted`：旧 `lime-cli-npm` 包、旧 CLI skill/工具文档与其专用入口。
 
-当前完成度：`88%`；版本 metadata、双语 release notes、原始 release commit/tag/push 与第二轮 Windows 根因修复已完成，等待提交推送后重新验证并发布远端资产。
+当前完成度：`100%`；版本 metadata、双语 release notes、release commit/tag/push、Windows 根因修复、三平台 Electron 产物、四平台 CLI 产物、GitHub Release 与 Cloudflare R2 updater 发布均已完成。

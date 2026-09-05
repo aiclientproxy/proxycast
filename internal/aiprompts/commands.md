@@ -13,7 +13,7 @@ Desktop: Renderer typed gateway
 
 TUI/CLI: lime CLI / tui
   -> Rust app-server-client session
-  -> local stdio transport
+  -> local stdio or authenticated WebSocket transport
 
 Future Cloud: authenticated remote transport
   -> Rust app-server-client session
@@ -23,7 +23,7 @@ All surfaces
   -> runtime/domain owner
 ```
 
-业务能力只通过 App Server JSON-RPC 进入 Rust runtime。Electron IPC 只用于窗口、文件/目录选择、系统权限、外链、托盘、自动更新、sidecar 生命周期等宿主能力，或转发 `app_server_handle_json_lines`。CLI/TUI 只负责参数、TUI 生命周期、输入事件和 App Server transport。Renderer 与 TUI/CLI surface 都不直接调用 provider、tool runtime 或数据库。Cloud transport 尚未实现；未来实现必须在连接边界完成认证、租户隔离和限流，不能改变业务 method 语义。
+业务能力只通过 App Server JSON-RPC 进入 Rust runtime。Electron IPC 只用于窗口、文件/目录选择、系统权限、外链、托盘、自动更新、sidecar 生命周期等宿主能力，或转发 `app_server_handle_json_lines`。CLI/TUI 只负责参数、TUI 生命周期、输入事件和 App Server transport。Renderer 与 TUI/CLI surface 都不直接调用 provider、tool runtime 或数据库。`app-server-client` 已提供 authenticated WebSocket transport foundation；握手在发送 `initialized` 前校验 `app-server` 服务端身份和 `appserver.v0` 协议版本，但生产 Cloud 仍未启动，后续必须补齐租户隔离、凭证、跨网络恢复、限流和审计，且不能改变业务 method 语义。
 
 ## Owner 判定
 
@@ -42,9 +42,13 @@ All surfaces
 
 ## TUI/CLI 与 Cloud transport 边界
 
-`app-server-client` 是所有非 Renderer Rust surface 的会话 owner。它负责 JSON-RPC request id、并发 pending request、notification、reverse server request、断线与关闭；`tui` 和 `cli` 只能消费其 typed facade。当前 production transport 只有本地 stdio App Server。transport trait 是实际本地实现所需的依赖倒置边界，同时也是未来 Cloud 接入点；在远端认证、租户、重连和协议版本策略明确前，不增加空 Cloud client、假 endpoint 或 fallback。
+`app-server-client` 是所有非 Renderer Rust surface 的会话 owner。它负责 JSON-RPC request id、并发 pending request、notification、reverse server request、断线与关闭；`tui` 和 `cli` 只能消费其 typed facade。当前 production transport 支持本地 stdio 与受控 authenticated WebSocket foundation。transport trait 是两种实现共用的依赖倒置边界；远端 token 仅允许 `wss://` 或 loopback `ws://`，remote 默认固定 `app-server` 身份和 `appserver.v0` 协议版本，生产 Cloud endpoint 仍需在租户、重连和审计策略明确后单独启用，不增加假 endpoint 或 fallback。
 
-CLI surface 使用 Codex 风格命名：`lime`（无子命令）和 `lime tui` 进入 TUI，`lime resume [thread-id]` 通过 `thread/resume` 恢复 canonical 历史；省略 id 时先用 `thread/list` 打开 TUI session picker，再复用同一 resume 流程。`lime exec` 执行一次非交互回合；`lime mcp list` 和 `lime skills list` 分别读取 current MCP/Skill catalog。TUI 的 `/model` 使用 `model/list` 可见 catalog，选择后统一写入 `thread/settings/update`；模型目录的 authority 仍在 App Server。这些入口都复用 `app-server-client` session owner，不得引入旧的 TUI 命名或平行历史/runtime 后端。TUI 连接断开时只允许 bounded reconnect + 原 Thread `thread/resume`，保留 composer draft，清理失效审批请求；重连失败必须显式退出。旧 `task`、`media`、单数 `skill` 与旧 `doctor` 命令已判定为 `dead / deleted / forbidden-to-restore`；媒体和诊断能力必须由 App Server current owner 承接，不得回填 CLI 直连入口。视频生成的 Agent surface 只允许使用 current typed `video_generate` 工具，经 `tool-runtime` gateway 委托 App Server `mediaTaskArtifact/video/create`；旧 `lime_create_video_generation_task` 不提供 alias 或 compat。
+CLI surface 使用 Codex 风格命名：`lime`（无子命令）和 `lime tui` 进入 TUI，`lime resume [thread-id]` 通过 `thread/resume` 恢复 canonical 历史；省略 id 时先用 `thread/list` 打开 TUI session picker，再复用同一 resume 流程。`lime exec` 执行一次非交互回合；`lime execpolicy check --rules <path> <command...>` 由 CLI 的 `ExecpolicyCommand` / `ExecPolicyCheckCommand` 读取 prefix-rule 文件并输出 Codex 形状的 `matchedRules` 与最严格 `decision`，不参与实际执行和权限 lowering；`lime mcp list` 和 `lime skills list` 分别读取 current MCP/Skill catalog。TUI 的 `/model` 使用 `model/list` 可见 catalog，选择后统一写入 `thread/settings/update`；模型目录的 authority 仍在 App Server。这些入口都复用 `app-server-client` session owner，不得引入旧的 TUI 命名或平行历史/runtime 后端。TUI 连接断开时只允许 bounded reconnect + 原 Thread `thread/resume`，保留 composer draft，清理失效审批请求；重连失败必须显式退出。旧 `task`、`media`、单数 `skill` 与旧 `doctor` 命令已判定为 `dead / deleted / forbidden-to-restore`；媒体和诊断能力必须由 App Server current owner 承接，不得回填 CLI 直连入口。视频生成的 Agent surface 只允许使用 current typed `video_generate` 工具，经 `tool-runtime` gateway 委托 App Server `mediaTaskArtifact/video/create`；旧 `lime_create_video_generation_task` 不提供 alias 或 compat。
+
+`@limecloud/lime` 的 npm 根包只暴露 `bin/lime.js`。它按当前 host 解析 optional platform package，启动 `vendor/<target-triple>/bin/lime[.exe]`，继承 stdio，转发 `SIGINT`/`SIGTERM`/`SIGHUP` 并镜像原生进程的退出码或 signal。平台载荷必须把 `lime`、`app-server`、`code-mode-host`、Windows sandbox helpers 和动态运行库放在同一 `bin` 目录，使 Rust CLI 的 sibling lookup 继续命中唯一 App Server 产品链。禁止恢复 npm `postinstall` 网络下载、生产 `LIME_CLI_BINARY_PATH`、源码 target 搜索或 `cargo run` fallback；开发 staging 仅允许从根包本地 `vendor` 读取与平台包相同的目录合同。
+
+CLI/TUI 可使用 Codex 形状的 `--remote <URL>` 连接 WebSocket App Server；Bearer token 只从 `--remote-auth-token-env <ENV_VAR>` 指定的环境变量读取。未提供 remote endpoint、环境变量缺失或 token 为空时，连接在 initialize 前失败；token 不写入配置 Debug 或 URL，remote URL 中的 userinfo/fragment 也会被拒绝；不安全的公网 `ws://` token 连接由 `app-server-client` fail closed。
 
 ## Codex 能力边界
 
@@ -398,25 +402,26 @@ Codex requirements method 或把 Renderer metadata 当 policy。`config/mcpServe
 
 ## Permission Profile 主链
 
-Desktop 新回合的权限选择只允许走：
+Desktop、CLI/TUI 新回合和 standalone `command/exec` 的权限选择只允许走：
 
-`Desktop access mode -> src/lib/api/permissionProfiles.ts -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server permissionProfile/list -> turn/start { approvalPolicy, permissions } -> RuntimeRequest sandbox policy -> tool-runtime`
+`Desktop/CLI/TUI -> AppServerClient.request(...) -> app_server_handle_json_lines -> App Server permissionProfile/list | thread/start | turn/start | thread/settings/update | command/exec -> permission profile resolver -> RuntimeRequest/CommandExecServer -> tool-runtime`
 
-catalog 只公开 `:read-only`、`:workspace`、`:danger-full-access` 三个 Lime Desktop 内建 profile。Renderer 提交前必须
-解析唯一且 `allowed=true` 的目标 profile；catalog 缺失、重复、禁止或形状非法时 fail closed。App Server 将 profile id
-映射为 `read-only`、`workspace-write`、`danger-full-access` runtime sandbox policy，并在 Turn metadata 写入
-`permissions` 与 `activePermissionProfile` provenance。`thread/start` 与 `thread/settings/update.permissions` 使用同一 resolver；
-settings mutation 原子持久化 profile、active provenance 和 lowering 后的 sandbox policy，再通过
-`thread/settings/updated` 与 canonical `thread/read` 回流 GUI。`permissions + sandboxPolicy` 双传和未知 profile 必须拒绝；
-legacy `sandboxPolicy` settings mutation 必须清除旧 profile provenance，不能保留互相矛盾的状态。
+catalog 按 Codex 顺序返回三个内建 profile，再返回 YAML `permissions` named profiles。`default_permissions` 在未显式选择
+时生效；显式 profile 覆盖 default。每个 named profile 支持 `extends`、filesystem `entries`（read/write/none/deny）和
+network enabled。App Server 根据当前 cwd、平台 backend 和 strict readiness 计算 `allowed`，并把 profile lowering 为
+runtime `read-only`、`workspace-write`、`danger-full-access` 与内部 `grantedPermissions`。客户端 wire 只允许传
+`permissionProfile`，`grantedPermissions` 为服务端派生字段，直接注入必须拒绝。`thread/start`、`turn/start`、
+`thread/settings/update.permissions` 与 `command/exec.permissionProfile` 使用同一 resolver；settings mutation 原子
+持久化 profile provenance 和 lowering 后的 sandbox policy，再通过 `thread/settings/updated` 与 canonical `thread/read`
+回流 GUI。profile 与显式 `sandboxPolicy` 双传、未知 profile、继承环和非法 grants 必须拒绝。
 
 `permissionProfile/list`、`thread/start`、`turn/start` 与 `thread/settings/update` 共用同一个动态 policy producer。它从 Lime
 全局 `agent.workspace_sandbox`、物化后的请求 cwd、当前平台 sandbox backend 和 Windows setup artifact readiness 计算
 `allowed`；strict 模式要求受限 backend 但 backend 不可用时，`:read-only` 与 `:workspace` 必须禁止，
 `:danger-full-access` 保持显式逃生选项。Renderer 在提交 Turn 前用当前 Thread cwd 查询 catalog，不能只依赖启动时快照。
 
-Electron 不新增权限业务命令或本地 catalog；Renderer 不再从新回合 wire 发送 legacy `sandboxPolicy`。Lime Desktop
-不复制 Codex TUI picker，也不读取 project-local `.codex/config.toml` 自定义 profile。custom profile、deny-read、
-MDM/managed requirements、cwd 对应的 project-local policy layer 与真实 Windows packaged enforcement 仍未实现；cwd
-物化和 setup readiness 不能冒充这些未纳入产品范围的策略层。多模型 catalog、model switch、provider
-capability/readiness、retry/circuit breaker 与多模态 sampling/media lowering 继续归 Grok-aligned `model-provider`。
+Electron 不新增权限业务命令或本地 catalog；Renderer/TUI 不复制 Codex picker 或读取 project-local `.codex/config.toml`。
+Cloud managed config、MDM/managed requirements、cwd 对应的 project-local policy layer 与真实 Windows packaged enforcement
+仍属于 deferred/fail-closed；Cloud profile 只能由 authenticated remote transport 提供，不能在 CLI 伪造。多模型 catalog、
+model switch、provider capability/readiness、retry/circuit breaker 与多模态 sampling/media lowering 继续归
+Grok-aligned `model-provider`。

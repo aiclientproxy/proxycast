@@ -14,18 +14,34 @@ doctest = false
 anyhow.workspace = true
 app-server-client.workspace = true
 app-server-protocol.workspace = true
+arboard.workspace = true
+base64.workspace = true
 crossterm.workspace = true
 futures.workspace = true
+image = { version = "0.25.9", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 ratatui = { workspace = true, features = ["unstable-rendered-line-info"] }
+pulldown-cmark.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
+syntect = "5"
 tokio.workspace = true
+tokio-stream = { workspace = true, features = ["sync"] }
+tokio-util = { workspace = true, features = ["time"] }
 tempfile.workspace = true
+two-face = { version = "0.5", default-features = false, features = ["syntect-default-onig"] }
 unicode-segmentation.workspace = true
 unicode-width.workspace = true
+textwrap.workspace = true
+url.workspace = true
+urlencoding.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 portable-pty.workspace = true
+pretty_assertions.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 
 [target.'cfg(windows)'.dependencies]
 which.workspace = true

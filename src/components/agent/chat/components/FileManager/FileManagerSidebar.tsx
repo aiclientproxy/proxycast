@@ -35,6 +35,7 @@ import {
   type FileEntry,
   type FileManagerLocation,
 } from "@/lib/api/fileBrowser";
+import { startFileSystemWatch } from "@/lib/api/fileSystemWatch";
 import { getKnowledgeUnsupportedSourceMessage } from "@/features/knowledge/import/knowledgeSourceSupport";
 import {
   openPathWithDefaultApp,
@@ -303,6 +304,40 @@ export const FileManagerSidebar: React.FC<FileManagerSidebarProps> = ({
   useEffect(() => {
     void loadActiveDirectory();
   }, [loadActiveDirectory]);
+
+  useEffect(() => {
+    if (!activePath.trim()) {
+      return;
+    }
+
+    let cancelled = false;
+    let stopWatching: (() => Promise<void>) | undefined;
+
+    const startWatching = async () => {
+      try {
+        const stop = await startFileSystemWatch(activePath, () => {
+          if (!cancelled) {
+            void loadActiveDirectory();
+          }
+        });
+        if (cancelled) {
+          await stop();
+        } else {
+          stopWatching = stop;
+        }
+      } catch (watchError) {
+        if (!cancelled) {
+          console.warn("[文件管理] 目录 watcher 启动失败:", watchError);
+        }
+      }
+    };
+
+    void startWatching();
+    return () => {
+      cancelled = true;
+      void stopWatching?.().catch(() => undefined);
+    };
+  }, [activePath, loadActiveDirectory]);
 
   useEffect(() => {
     const currentEntries = entriesRef.current;

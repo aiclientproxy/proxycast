@@ -13,8 +13,15 @@ use crate::reply_loop::{
 };
 use crate::session_config::AgentSessionConfig;
 use crate::session_loop::RuntimeSessionInputHandle;
+use ::code_mode::{
+    RuntimeCodeModeSessionHandle, RuntimeCodeModeTool, CODE_MODE_EXEC_TOOL_NAME,
+    CODE_MODE_WAIT_TOOL_NAME,
+};
 use agent_protocol::provider_trace::{ProviderTraceEvent, ProviderTraceFailure};
 use agent_protocol::world_state::{RuntimeWorldState, WORLD_STATE_TURN_METADATA_KEY};
+use code_mode_protocol::{
+    RuntimeToolDefinition, RuntimeToolExposure, RuntimeToolIdentity, RuntimeToolSnapshot,
+};
 use futures::future::join_all;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -35,23 +42,18 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tool_runtime::code_mode::{
-    RuntimeCodeModeSessionHandle, RuntimeCodeModeTool, CODE_MODE_EXEC_TOOL_NAME,
-    CODE_MODE_WAIT_TOOL_NAME,
-};
 use tool_runtime::hook_lifecycle::RuntimeHookReporter;
 use tool_runtime::tool_call::{ToolCall, ToolEnvironment};
 use tool_runtime::tool_call_surface::{
     repair_tool_call, runtime_tool_call_canonical_name, ToolCallRepairOutcome,
 };
-use tool_runtime::tool_definition::{RuntimeToolDefinition, RuntimeToolExposure};
 use tool_runtime::tool_executor::{
     RuntimeToolExecutionContext, RuntimeToolExecutionContextInput, RuntimeToolExecutionError,
     RuntimeToolExecutionFuture, RuntimeToolExecutionRequest, RuntimeToolExecutor,
     RuntimeToolExecutorHandle, RuntimeToolPolicyErrorKind,
 };
 use tool_runtime::tool_lifecycle::ToolLifecycleEmitter;
-use tool_runtime::turn_snapshot::{RuntimeHookSnapshot, RuntimeToolIdentity, RuntimeToolSnapshot};
+use tool_runtime::turn_snapshot::{RuntimeHookSnapshot, RuntimeTurnSnapshot};
 
 mod code_mode;
 mod input;
@@ -501,10 +503,7 @@ where
                         })
                         .collect();
                     if let Ok(turn_snapshot) =
-                        tool_runtime::turn_snapshot::RuntimeTurnSnapshot::try_new(
-                            tool_snapshots,
-                            hook_step_snapshot.hooks,
-                        )
+                        RuntimeTurnSnapshot::try_new(tool_snapshots, hook_step_snapshot.hooks)
                     {
                         use tool_runtime::hook_gated_executor::hook_gated_executor;
                         use tool_runtime::tool_executor::RuntimeToolExecutorHandle;

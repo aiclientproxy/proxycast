@@ -1,35 +1,38 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context, Result};
-use app_server_client::{SessionEvent, StdioTransportConfig};
-use app_server_protocol::protocol::v2::{ServerNotification, ServerRequest};
-use crossterm::event::EventStream;
+use anyhow::{Context, Result, anyhow, bail};
+use app_server_client::{RemoteTransportConfig, SessionEvent, StdioTransportConfig};
+use app_server_protocol::protocol::v2::{ServerNotification, ServerRequest, UserInput};
 use futures::StreamExt;
 use serde::Serialize;
 
 use crate::app::{App, AppAction};
 use crate::app_server_session::AppServerSession;
 use crate::bottom_pane::AppServerResponse;
+use crate::clipboard_copy::copy_to_clipboard;
+use crate::clipboard_paste::paste_image_to_temp_png;
 use crate::external_editor::edit_draft;
+use crate::locale::Locale;
 use crate::projection::ConversationProjection;
 use crate::reconnect::reconnect_session;
-use crate::session_picker::pick_session;
-use crate::settings::{
-    cycle_setting, parse_settings_command, SettingsCommand, EFFORTS, PERMISSION_PROFILES,
-};
-use crate::terminal::TerminalGuard;
+use crate::resume_picker::run_resume_picker_with_app_server;
+use crate::settings::{EFFORTS, SettingsCommand, cycle_setting, parse_settings_command};
+use crate::tui::{TerminalGuard, TuiEvent};
 use crate::view;
 
 #[derive(Debug, Clone)]
 pub struct TuiOptions {
     pub app_server_bin: PathBuf,
     pub app_server_args: Vec<OsString>,
+    pub remote: Option<RemoteTransportConfig>,
     pub cwd: PathBuf,
     pub model: Option<String>,
     pub model_provider: Option<String>,
     pub reasoning_effort: Option<String>,
     pub permissions: Option<String>,
+    pub locale: Option<String>,
     pub resume_thread: Option<String>,
 }
 
@@ -60,21 +63,25 @@ fn validate_model_route(options: &TuiOptions) -> Result<()> {
 }
 
 pub async fn run_tui(options: TuiOptions) -> Result<()> {
-    let config = stdio_config(&options)?;
-    let mut session = Some(AppServerSession::connect(config.clone()).await?);
+    validate_model_route(&options)?;
+    let mut session = Some(connect_session(&options).await?);
     let mut app = App::default();
+    app.set_cwd(options.cwd.clone());
+    app.set_locale(Locale::resolve(options.locale.as_deref()));
     let mut model = options.model.clone();
     let mut model_provider = options.model_provider.clone();
     let mut effort = options.reasoning_effort.clone();
     let mut permissions = options.permissions.clone();
     let setup_result: Result<()> = async {
+        let mut permission_cwd = options.cwd.to_string_lossy().into_owned();
         if let Some(thread_id) = options.resume_thread.clone() {
             let response = session
                 .as_mut()
                 .expect("session available during setup")
                 .resume_thread(thread_id)
                 .await?;
-            app.projection.hydrate_thread(response.thread);
+            permission_cwd = response.cwd.clone();
+            app.hydrate_thread(response.thread);
             if model.is_none() {
                 model = Some(response.model);
             }
@@ -91,6 +98,32 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                 .start_thread(options.cwd.clone(), model.clone(), model_provider.clone())
                 .await?;
         }
+        let permission_profiles = session
+            .as_ref()
+            .expect("session available during setup")
+            .list_permission_profiles(Some(permission_cwd))
+            .await?;
+        app.set_permission_profiles(
+            permission_profiles
+                .data
+                .into_iter()
+                .filter(|profile| profile.allowed)
+                .map(|profile| profile.id),
+        );
+        if permissions.is_none() {
+            permissions = session
+                .as_ref()
+                .expect("session available during setup")
+                .active_permission_profile()
+                .map(str::to_string);
+        }
+        app.set_thread_id(
+            session
+                .as_ref()
+                .expect("session available during setup")
+                .thread_id()?
+                .to_string(),
+        );
         session
             .as_ref()
             .expect("session available during setup")
@@ -120,6 +153,11 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                 .projection
                 .set_status(format!("prompt history unavailable: {error}")),
         }
+        refresh_queued_submissions(
+            session.as_ref().expect("session available during setup"),
+            &mut app,
+        )
+        .await;
         Ok(())
     }
     .await;
@@ -142,8 +180,11 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
             return Err(error);
         }
     };
-    let mut input = EventStream::new();
-
+    let mut input = terminal.event_stream();
+    let frame_requester = terminal.frame_requester();
+    frame_requester.schedule_frame();
+    let mut status_tick = tokio::time::interval(Duration::from_secs(1));
+    status_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let run_result: Result<()> = async {
         loop {
             terminal
@@ -152,11 +193,30 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                 .context("failed to render terminal")?;
 
             tokio::select! {
+                _ = status_tick.tick(), if app.projection.active_turn_id().is_some() => {
+                    frame_requester.schedule_frame();
+                }
                 event = input.next() => {
                     let Some(event) = event else {
                         break;
                     };
-                    match app.handle_terminal_event(event.context("failed to read terminal event")?) {
+                    let event = match event {
+                        TuiEvent::Draw => {
+                            if app.projection.active_turn_id().is_some() {
+                                frame_requester.schedule_frame_in(Duration::from_secs(1));
+                            }
+                            continue;
+                        }
+                        TuiEvent::Key(key) => crossterm::event::Event::Key(key),
+                        TuiEvent::Paste(text) => crossterm::event::Event::Paste(text),
+                        TuiEvent::Resize(size) => {
+                            crossterm::event::Event::Resize(size.width, size.height)
+                        }
+                        TuiEvent::Resume => continue,
+                        TuiEvent::FocusGained => crossterm::event::Event::FocusGained,
+                        TuiEvent::FocusLost => crossterm::event::Event::FocusLost,
+                    };
+                    match app.handle_terminal_event(event) {
                         AppAction::Submit(prompt) => {
                             if let Some(command) = parse_settings_command(&prompt) {
                                 match command {
@@ -249,11 +309,13 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                 }
                                 continue;
                             }
+                            let images = app.take_pending_images();
+                            let turn_input = submission_input(prompt.clone(), &images);
                             if let Some(turn_id) = app.projection.active_turn_id().map(str::to_owned) {
                                 match session
                                     .as_ref()
                                     .expect("session available during TUI")
-                                    .steer_turn(&turn_id, prompt.clone())
+                                    .steer_turn_input(&turn_id, turn_input.clone())
                                     .await
                                 {
                                     Ok(_) => {
@@ -268,11 +330,12 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                     Err(steer_error) => match session
                                         .as_ref()
                                         .expect("session available during TUI")
-                                        .queue_prompt(prompt.clone())
+                                        .queue_input(turn_input)
                                         .await
                                     {
-                                        Ok(_) => {
-                                            app.projection.set_status("queued");
+                                    Ok(submission) => {
+                                        app.upsert_queued_submission(submission);
+                                        app.projection.set_status("queued");
                                             persist_prompt(
                                                 session.as_ref().expect("session available during TUI"),
                                                 &mut app,
@@ -280,20 +343,23 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                             )
                                             .await;
                                         }
-                                        Err(queue_error) => app.projection.set_status(format!(
-                                            "{steer_error}; queue failed: {queue_error}"
-                                        )),
+                                        Err(queue_error) => {
+                                            app.restore_pending_images(images);
+                                            app.projection.set_status(format!(
+                                                "{steer_error}; queue failed: {queue_error}"
+                                            ));
+                                        }
                                     },
                                 }
                             } else {
                                 match session
                                     .as_ref()
                                     .expect("session available during TUI")
-                                    .start_turn(prompt.clone())
+                                    .start_turn_input(turn_input)
                                     .await
                                 {
                                     Ok(turn_id) => {
-                                        app.projection.start_turn(turn_id);
+                                        app.start_turn(turn_id);
                                         persist_prompt(
                                             session.as_ref().expect("session available during TUI"),
                                             &mut app,
@@ -301,18 +367,24 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                         )
                                         .await;
                                     }
-                                    Err(error) => app.projection.set_status(error.to_string()),
+                                    Err(error) => {
+                                        app.restore_pending_images(images);
+                                        app.projection.set_status(error.to_string());
+                                    }
                                 }
                             }
                         }
                         AppAction::Queue(prompt) => {
+                            let images = app.take_pending_images();
+                            let input = submission_input(prompt.clone(), &images);
                             match session
                                 .as_ref()
                                 .expect("session available during TUI")
-                                .queue_prompt(prompt.clone())
+                                .queue_input(input)
                                 .await
                             {
-                                Ok(_) => {
+                                Ok(submission) => {
+                                    app.upsert_queued_submission(submission);
                                     app.projection.set_status("queued");
                                     persist_prompt(
                                         session.as_ref().expect("session available during TUI"),
@@ -321,7 +393,41 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                     )
                                     .await;
                                 }
-                                Err(error) => app.projection.set_status(error.to_string()),
+                                Err(error) => {
+                                    app.restore_pending_images(images);
+                                    app.projection.set_status(error.to_string());
+                                }
+                            }
+                        }
+                        AppAction::EditQueuedSubmission(submission) => {
+                            match session
+                                .as_ref()
+                                .expect("session available during TUI")
+                                .delete_queued_submission(submission.id.clone())
+                                .await
+                            {
+                                Ok(true) if app.restore_queued_submission_for_edit(submission) => {
+                                    app.projection.set_status("queued input editing");
+                                }
+                                Ok(true) => {
+                                    refresh_queued_submissions(
+                                        session.as_ref().expect("session available during TUI"),
+                                        &mut app,
+                                    )
+                                    .await;
+                                    app.projection.set_status("queued input unavailable");
+                                }
+                                Ok(false) => {
+                                    refresh_queued_submissions(
+                                        session.as_ref().expect("session available during TUI"),
+                                        &mut app,
+                                    )
+                                    .await;
+                                    app.projection.set_status("queued input unavailable");
+                                }
+                                Err(error) => app
+                                    .projection
+                                    .set_status(format!("queue edit failed: {error}")),
                             }
                         }
                         action @ (AppAction::DecreaseEffort | AppAction::IncreaseEffort) => {
@@ -356,11 +462,8 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                             } else {
                                 1
                             };
-                            let next = cycle_setting(
-                                &PERMISSION_PROFILES,
-                                permissions.as_deref(),
-                                direction,
-                            );
+                            let next = app
+                                .cycle_permission_profile(permissions.as_deref(), direction);
                             match session
                                 .as_ref()
                                 .expect("session available during TUI")
@@ -380,6 +483,21 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                 Err(error) => app.projection.set_status(error.to_string()),
                             }
                         }
+                        AppAction::CopyLastResponse => {
+                            copy_last_response_with(&mut app, copy_to_clipboard);
+                        }
+                        AppAction::PasteImage => match paste_image_to_temp_png() {
+                            Ok((path, info)) => {
+                                app.attach_image(path);
+                                app.projection.set_status(format!(
+                                    "image attached: {}x{}",
+                                    info.width, info.height
+                                ));
+                            }
+                            Err(error) => app
+                                .projection
+                                .set_status(format!("image paste failed: {error}")),
+                        },
                         AppAction::Interrupt => {
                             if let Some(turn_id) = app.projection.active_turn_id() {
                                 let turn_id = turn_id.to_string();
@@ -403,10 +521,10 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                 app.projection.set_status(format!("editor unavailable: {error}"));
                                 continue;
                             }
-                            let edited = edit_draft(&draft, &options.cwd);
+                            let edited = edit_draft(&draft, &options.cwd).await;
                             let resume_result = terminal.resume();
                             match (edited, resume_result) {
-                                (Ok(Some(text)), Ok(())) => app.composer.replace(text),
+                                (Ok(Some(text)), Ok(())) => app.replace_composer(text),
                                 (Ok(None), Ok(())) => app.projection.set_status("editor draft empty"),
                                 (Err(error), Ok(())) => app.projection.set_status(error.to_string()),
                                 (_, Err(error)) => return Err(anyhow!("failed to resume terminal after editor: {error}")),
@@ -470,7 +588,21 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                         message: "app-server event stream closed".to_string(),
                     });
                     match event {
-                        SessionEvent::Notification(notification) => app.projection.apply(*notification),
+                        SessionEvent::Notification(notification) => {
+                            let queue_changed = matches!(
+                                notification.as_ref(),
+                                ServerNotification::ThreadQueueChanged(params)
+                                    if app.thread_id.as_deref() == Some(params.thread_id.as_str())
+                            );
+                            app.apply_notification(*notification);
+                            if queue_changed {
+                                refresh_queued_submissions(
+                                    session.as_ref().expect("session available during TUI"),
+                                    &mut app,
+                                )
+                                .await;
+                            }
+                        }
                         SessionEvent::ServerRequest(request) => {
                             match *request {
                                 ServerRequest::CurrentTimeRead { id, .. } => {
@@ -484,14 +616,17 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                     }
                                 }
                                 request => {
-                                    if let Err(request) = app.bottom_pane.enqueue(request) {
-                                        if let Err(error) = session
-                                            .as_ref()
-                                            .expect("session available during TUI")
-                                            .reject_server_request(request)
-                                            .await
-                                        {
-                                            app.projection.set_status(error.to_string());
+                                    match app.bottom_pane.enqueue(request) {
+                                        Ok(()) => app.pager_overlay = None,
+                                        Err(request) => {
+                                            if let Err(error) = session
+                                                .as_ref()
+                                                .expect("session available during TUI")
+                                                .reject_server_request(request)
+                                                .await
+                                            {
+                                                app.projection.set_status(error.to_string());
+                                            }
                                         }
                                     }
                                 }
@@ -515,6 +650,7 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                             .to_string();
                             app.bottom_pane.clear();
                             app.model_picker = None;
+                            app.pager_overlay = None;
                             app.projection.set_status(format!("reconnecting: {message}"));
                             terminal
                                 .terminal_mut()
@@ -524,8 +660,8 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                 .take()
                                 .expect("session available during reconnect");
                             let _ = old_session.shutdown().await;
-                            session = Some(reconnect_session(
-                                &config,
+                            let reconnected = reconnect_session(
+                                &options,
                                 &mut app,
                                 &thread_id,
                                 model.clone(),
@@ -533,7 +669,22 @@ pub async fn run_tui(options: TuiOptions) -> Result<()> {
                                 effort.clone(),
                                 permissions.clone(),
                             )
-                            .await?);
+                            .await?;
+                            if options.permissions.is_none() {
+                                if let Some(active_profile) =
+                                    reconnected.active_permission_profile()
+                                {
+                                    permissions = Some(active_profile.to_string());
+                                    app.set_settings(
+                                        model.clone(),
+                                        model_provider.clone(),
+                                        effort.clone(),
+                                        permissions.clone(),
+                                    );
+                                }
+                            }
+                            refresh_queued_submissions(&reconnected, &mut app).await;
+                            session = Some(reconnected);
                         }
                         SessionEvent::RawNotification(_) => {}
                     }
@@ -574,7 +725,7 @@ fn current_transcript_page_size(terminal: &mut TerminalGuard, app: &App) -> Resu
 /// normal TUI runtime so there is only one conversation owner.
 pub async fn run_resume(mut options: TuiOptions) -> Result<()> {
     if options.resume_thread.is_none() {
-        let selected = pick_session(&options).await?;
+        let selected = run_resume_picker_with_app_server(&options).await?;
         let Some(thread_id) = selected else {
             return Ok(());
         };
@@ -584,15 +735,78 @@ pub async fn run_resume(mut options: TuiOptions) -> Result<()> {
 }
 
 async fn persist_prompt(session: &AppServerSession, app: &mut App, prompt: String) {
+    if prompt.trim().is_empty() {
+        return;
+    }
     if let Err(error) = session.append_prompt_history(prompt).await {
         app.projection
             .set_status(format!("prompt history unavailable: {error}"));
     }
 }
 
+async fn refresh_queued_submissions(session: &AppServerSession, app: &mut App) {
+    match session.list_queued_submissions(100).await {
+        Ok(submissions) => app.set_queued_submissions(submissions),
+        Err(error) => {
+            app.set_queued_submissions(Vec::new());
+            app.projection
+                .set_status(format!("queue unavailable: {error}"));
+        }
+    }
+}
+
+fn submission_input(prompt: String, images: &[PathBuf]) -> Vec<UserInput> {
+    let mut input = images
+        .iter()
+        .map(|path| UserInput::LocalImage {
+            detail: None,
+            path: path.to_string_lossy().into_owned(),
+        })
+        .collect::<Vec<_>>();
+    if !prompt.is_empty() {
+        input.push(UserInput::Text {
+            text: prompt,
+            text_elements: Vec::new(),
+        });
+    }
+    input
+}
+
+fn copy_last_response_with(
+    app: &mut App,
+    copy: impl FnOnce(&str) -> Result<Option<crate::clipboard_copy::ClipboardLease>, String>,
+) {
+    let response = app.projection.final_answer();
+    if response.is_empty() {
+        app.projection.set_status("no agent response to copy");
+        return;
+    }
+    match copy(&response) {
+        Ok(lease) => {
+            app.clipboard_lease = lease;
+            app.projection.set_status("copied last response");
+        }
+        Err(error) => app.projection.set_status(format!("copy failed: {error}")),
+    }
+}
+
 pub async fn run_exec(options: ExecOptions) -> Result<ExecResult> {
-    let config = stdio_config(&options.tui)?;
-    run_exec_with_config(options, config).await
+    validate_model_route(&options.tui)?;
+    if let Some(remote) = options.tui.remote.clone() {
+        let session = AppServerSession::connect_remote(remote).await?;
+        run_exec_with_session(options, session).await
+    } else {
+        let config = stdio_config(&options.tui)?;
+        run_exec_with_config(options, config).await
+    }
+}
+
+pub(crate) async fn connect_session(options: &TuiOptions) -> Result<AppServerSession> {
+    if let Some(remote) = options.remote.clone() {
+        AppServerSession::connect_remote(remote).await
+    } else {
+        AppServerSession::connect(stdio_config(options)?).await
+    }
 }
 
 pub(crate) fn stdio_config(options: &TuiOptions) -> Result<StdioTransportConfig> {
@@ -606,10 +820,17 @@ async fn run_exec_with_config(
     options: ExecOptions,
     config: StdioTransportConfig,
 ) -> Result<ExecResult> {
+    let session = AppServerSession::connect(config).await?;
+    run_exec_with_session(options, session).await
+}
+
+async fn run_exec_with_session(
+    options: ExecOptions,
+    mut session: AppServerSession,
+) -> Result<ExecResult> {
     if options.prompt.trim().is_empty() {
         bail!("prompt must not be empty");
     }
-    let mut session = AppServerSession::connect(config).await?;
     let execution = async {
         let thread_id = if let Some(thread_id) = options.tui.resume_thread.clone() {
             let response = session.resume_thread(thread_id).await?;
@@ -696,7 +917,42 @@ mod pty_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use app_server_protocol::protocol::v2::AgentMessageDeltaNotification;
+    use std::cell::RefCell;
     use std::ffi::OsString;
+
+    #[test]
+    fn submission_input_keeps_codex_image_then_text_order() {
+        let input = submission_input(
+            "describe these".to_string(),
+            &[PathBuf::from("one.png"), PathBuf::from("two.png")],
+        );
+
+        assert_eq!(
+            input,
+            vec![
+                UserInput::LocalImage {
+                    detail: None,
+                    path: "one.png".to_string(),
+                },
+                UserInput::LocalImage {
+                    detail: None,
+                    path: "two.png".to_string(),
+                },
+                UserInput::Text {
+                    text: "describe these".to_string(),
+                    text_elements: Vec::new(),
+                },
+            ]
+        );
+        assert_eq!(
+            submission_input(String::new(), &[PathBuf::from("only.png")]),
+            vec![UserInput::LocalImage {
+                detail: None,
+                path: "only.png".to_string(),
+            }]
+        );
+    }
 
     #[tokio::test]
     async fn real_stdio_unavailable_backend_fails_closed_without_provider() {
@@ -707,11 +963,13 @@ mod tests {
         let tui = TuiOptions {
             app_server_bin: PathBuf::from(&app_server_bin),
             app_server_args: Vec::new(),
+            remote: None,
             cwd: temp_dir.path().to_path_buf(),
             model: None,
             model_provider: None,
             reasoning_effort: None,
             permissions: None,
+            locale: None,
             resume_thread: None,
         };
         let config = StdioTransportConfig {
@@ -748,11 +1006,13 @@ mod tests {
         let options = TuiOptions {
             app_server_bin: PathBuf::from("app-server"),
             app_server_args: Vec::new(),
+            remote: None,
             cwd: PathBuf::from("."),
             model: Some("gpt-test".to_string()),
             model_provider: None,
             reasoning_effort: None,
             permissions: None,
+            locale: None,
             resume_thread: None,
         };
 
@@ -769,11 +1029,13 @@ mod tests {
         let options = TuiOptions {
             app_server_bin: PathBuf::from("custom-app-server"),
             app_server_args: vec![OsString::from("--backend"), OsString::from("external")],
+            remote: None,
             cwd: PathBuf::from("."),
             model: Some("fixture-model".to_string()),
             model_provider: Some("fixture-provider".to_string()),
             reasoning_effort: None,
             permissions: None,
+            locale: None,
             resume_thread: None,
         };
 
@@ -788,5 +1050,32 @@ mod tests {
                 OsString::from("external"),
             ]
         );
+    }
+
+    #[test]
+    fn copy_uses_last_canonical_agent_markdown_and_reports_outcome() {
+        let mut app = App::default();
+        app.projection.apply(ServerNotification::AgentMessageDelta(
+            AgentMessageDeltaNotification {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                item_id: "message-1".to_string(),
+                delta: "**answer** with `code`".to_string(),
+            },
+        ));
+        let copied = RefCell::new(String::new());
+
+        copy_last_response_with(&mut app, |text| {
+            copied.replace(text.to_string());
+            Ok(Some(crate::clipboard_copy::ClipboardLease::test()))
+        });
+
+        assert_eq!(copied.into_inner(), "**answer** with `code`");
+        assert_eq!(app.projection.status(), "copied last response");
+        assert!(app.clipboard_lease.is_some());
+
+        let mut empty = App::default();
+        copy_last_response_with(&mut empty, |_| panic!("clipboard must not be called"));
+        assert_eq!(empty.projection.status(), "no agent response to copy");
     }
 }

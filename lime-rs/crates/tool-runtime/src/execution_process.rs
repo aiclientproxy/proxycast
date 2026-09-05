@@ -1,4 +1,6 @@
-use crate::sandbox::{prepare_sandbox_command, SandboxBackend, SandboxCommandRequest};
+use crate::sandbox::{
+    prepare_sandbox_command, SandboxBackend, SandboxCommandRequest, WindowsSandboxExecutionMode,
+};
 use app_server_protocol::protocol::v2::GrantedPermissionProfile;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -33,6 +35,33 @@ pub fn run_windows_sandbox_runner() -> io::Result<()> {
         io::ErrorKind::Unsupported,
         "Windows sandbox runner is only available on Windows",
     ))
+}
+
+/// Checks that the current process can create the restricted-token backend.
+///
+/// This is the Codex unelevated setup preflight. It intentionally does not
+/// provision sandbox accounts or claim elevated setup artifacts.
+#[cfg(target_os = "windows")]
+pub fn verify_windows_restricted_token_backend() -> io::Result<()> {
+    windows::verify_windows_restricted_token_backend()
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn verify_windows_restricted_token_backend() -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Windows restricted-token preflight is only available on Windows",
+    ))
+}
+
+#[cfg(target_os = "windows")]
+pub fn windows_restricted_token_backend_available() -> bool {
+    verify_windows_restricted_token_backend().is_ok()
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn windows_restricted_token_backend_available() -> bool {
+    false
 }
 
 /// Bounded Windows ACL audit result used by the App Server setup warning.
@@ -432,6 +461,7 @@ pub struct LocalExecutionSandbox {
     pub backend: SandboxBackend,
     pub requested_policy: Option<String>,
     pub granted_permissions: Option<GrantedPermissionProfile>,
+    pub windows_mode: Option<WindowsSandboxExecutionMode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

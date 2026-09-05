@@ -199,6 +199,20 @@ describe("Electron release workflow guard", () => {
     );
   });
 
+  it("rejects a mutable CLI npm publish checkout", () => {
+    const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    const workflowPath = tempWorkflowPath(
+      current.replace(
+        /(  publish_cli_npm:[\s\S]*?          ref: )\$\{\{ github\.sha \}\}/u,
+        "$1${{ github.ref }}",
+      ),
+    );
+
+    expect(() => validateReleaseWorkflow({ workflowPath })).toThrow(
+      /release job publish_cli_npm must checkout immutable github\.sha/,
+    );
+  });
+
   it("rejects release workflow without installed Windows CodeMode Gate B", () => {
     const current = fs.readFileSync(".github/workflows/release.yml", "utf8");
     const workflowPath = tempWorkflowPath(

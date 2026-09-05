@@ -1,15 +1,15 @@
-use futures::future::join_all;
-use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use tokio::sync::{watch, OnceCell};
-use tool_runtime::code_mode::{
+use ::code_mode::{
     NoopRuntimeCodeModeSessionDelegate, ProcessCodeModeSessionProvider, RuntimeCodeModeCellId,
     RuntimeCodeModeExecuteRequest, RuntimeCodeModeFuture, RuntimeCodeModeSession,
     RuntimeCodeModeSessionDelegate, RuntimeCodeModeSessionHandle, RuntimeCodeModeSessionLimits,
     RuntimeCodeModeSessionProvider, RuntimeCodeModeStartedCell, RuntimeCodeModeWaitOutcome,
     RuntimeCodeModeWaitRequest,
 };
+use futures::future::join_all;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use tokio::sync::{watch, OnceCell};
 
 type DelegateFactory =
     dyn Fn(&str) -> Result<Arc<dyn RuntimeCodeModeSessionDelegate>, String> + Send + Sync;
@@ -424,7 +424,7 @@ async fn wait_for_dispatch_route(
 impl RuntimeCodeModeSessionDelegate for RuntimeCodeModeDispatchDelegate {
     fn invoke_tool<'a>(
         &'a self,
-        invocation: tool_runtime::code_mode::RuntimeCodeModeNestedToolCall,
+        invocation: code_mode::RuntimeCodeModeNestedToolCall,
         cancellation_token: tokio_util::sync::CancellationToken,
     ) -> RuntimeCodeModeFuture<'a, serde_json::Value> {
         Box::pin(async move {

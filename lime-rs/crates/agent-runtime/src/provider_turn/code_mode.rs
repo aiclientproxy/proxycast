@@ -1,4 +1,16 @@
 use super::RuntimeToolStepSnapshot;
+// 测试夹具仍通过 provider_turn::code_mode 路径构造 nested call。
+#[allow(unused_imports)]
+pub(crate) use ::code_mode::CodeModeToolKind;
+use ::code_mode::{
+    code_mode_exec_tool_description, code_mode_wait_tool_definition, parse_code_mode_exec_source,
+    RuntimeCodeModeCellId, RuntimeCodeModeExecuteRequest, RuntimeCodeModeFuture,
+    RuntimeCodeModeNestedToolCall, RuntimeCodeModeSessionDelegate, RuntimeCodeModeSessionHandle,
+    RuntimeCodeModeTool, RuntimeCodeModeToolResult, RuntimeCodeModeWaitOutcome,
+    RuntimeCodeModeWaitRequest, CODE_MODE_EXEC_FREEFORM_GRAMMAR, CODE_MODE_EXEC_TOOL_NAME,
+    DEFAULT_CODE_MODE_MAX_OUTPUT_TOKENS, DEFAULT_CODE_MODE_WAIT_YIELD_TIME_MS,
+};
+use code_mode_protocol::RuntimeToolExposure;
 use futures::future::join_all;
 use model_provider::current_client::{
     CurrentProviderCustomToolCall, CurrentProviderTool, CurrentProviderToolCall,
@@ -11,16 +23,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio_util::sync::CancellationToken;
-use tool_runtime::code_mode::{
-    code_mode_exec_tool_description, code_mode_wait_tool_definition, parse_code_mode_exec_source,
-    RuntimeCodeModeCellId, RuntimeCodeModeExecuteRequest, RuntimeCodeModeFuture,
-    RuntimeCodeModeNestedToolCall, RuntimeCodeModeSessionDelegate, RuntimeCodeModeSessionHandle,
-    RuntimeCodeModeTool, RuntimeCodeModeToolResult, RuntimeCodeModeWaitOutcome,
-    RuntimeCodeModeWaitRequest, CODE_MODE_EXEC_FREEFORM_GRAMMAR, CODE_MODE_EXEC_TOOL_NAME,
-    DEFAULT_CODE_MODE_MAX_OUTPUT_TOKENS, DEFAULT_CODE_MODE_WAIT_YIELD_TIME_MS,
-};
 use tool_runtime::tool_call::{ToolCall, ToolEnvironment};
-use tool_runtime::tool_definition::RuntimeToolExposure;
 use tool_runtime::tool_executor::{
     RuntimeToolExecutionContext, RuntimeToolExecutionContextInput, RuntimeToolExecutorHandle,
 };
@@ -415,16 +418,14 @@ async fn execute_call(
 }
 
 fn code_cell_response_status(
-    response: &tool_runtime::code_mode::RuntimeCodeModeResponse,
+    response: &::code_mode::RuntimeCodeModeResponse,
 ) -> CodeCellRuntimeStatus {
     match response {
-        tool_runtime::code_mode::RuntimeCodeModeResponse::Yielded { .. } => {
-            CodeCellRuntimeStatus::Yielded
-        }
-        tool_runtime::code_mode::RuntimeCodeModeResponse::Terminated { .. } => {
+        ::code_mode::RuntimeCodeModeResponse::Yielded { .. } => CodeCellRuntimeStatus::Yielded,
+        ::code_mode::RuntimeCodeModeResponse::Terminated { .. } => {
             CodeCellRuntimeStatus::Terminated
         }
-        tool_runtime::code_mode::RuntimeCodeModeResponse::Result { error_text, .. } => {
+        ::code_mode::RuntimeCodeModeResponse::Result { error_text, .. } => {
             if error_text.is_some() {
                 CodeCellRuntimeStatus::Failed
             } else {
@@ -434,13 +435,24 @@ fn code_cell_response_status(
     }
 }
 
-fn code_cell_response_chars(response: &tool_runtime::code_mode::RuntimeCodeModeResponse) -> usize {
+fn code_cell_response_chars(response: &::code_mode::RuntimeCodeModeResponse) -> usize {
     match response {
-        tool_runtime::code_mode::RuntimeCodeModeResponse::Yielded { output, .. }
-        | tool_runtime::code_mode::RuntimeCodeModeResponse::Terminated { output, .. }
-        | tool_runtime::code_mode::RuntimeCodeModeResponse::Result { output, .. } => {
-            output.chars().count()
-        }
+        ::code_mode::RuntimeCodeModeResponse::Yielded { content_items, .. }
+        | ::code_mode::RuntimeCodeModeResponse::Terminated { content_items, .. }
+        | ::code_mode::RuntimeCodeModeResponse::Result { content_items, .. } => content_items
+            .iter()
+            .map(|item| match item {
+                ::code_mode::FunctionCallOutputContentItem::InputText { text } => {
+                    text.chars().count()
+                }
+                ::code_mode::FunctionCallOutputContentItem::InputImage { image_url, .. } => {
+                    image_url.chars().count()
+                }
+                ::code_mode::FunctionCallOutputContentItem::InputAudio { audio_url } => {
+                    audio_url.chars().count()
+                }
+            })
+            .sum(),
     }
 }
 
@@ -505,7 +517,7 @@ impl RuntimeCodeModeSessionDelegate for RuntimeCodeModeNestedToolDelegate {
             }
             if matches!(
                 invocation.tool_name.as_str(),
-                CODE_MODE_EXEC_TOOL_NAME | tool_runtime::code_mode::CODE_MODE_WAIT_TOOL_NAME
+                CODE_MODE_EXEC_TOOL_NAME | ::code_mode::CODE_MODE_WAIT_TOOL_NAME
             ) {
                 return Err("CodeMode cannot invoke its control tools as nested tools".to_string());
             }

@@ -7,7 +7,9 @@ use app_server_protocol::protocol::v2::{
     WindowsWorldWritableWarningNotification,
 };
 use app_server_protocol::{error_codes, JsonRpcError};
-use lime_core::config::{load_config, Config};
+use lime_core::config::{
+    load_config, save_config, Config, WindowsSandboxMode as ConfigWindowsSandboxMode,
+};
 use serde_json::Value;
 use std::path::PathBuf;
 #[cfg(windows)]
@@ -140,21 +142,42 @@ fn windows_sandbox_setup_for_request(
         return Some("workspace sandbox is disabled".to_string());
     }
 
-    let agent_root = match lime_core::app_paths::preferred_agent_root() {
-        Ok(root) => root,
-        Err(error) => return Some(format!("failed to resolve the sandbox data root: {error}")),
+    let mut persisted = config.clone();
+    persisted.agent.workspace_sandbox.mode = Some(match mode {
+        WindowsSandboxSetupMode::Elevated => ConfigWindowsSandboxMode::Elevated,
+        WindowsSandboxSetupMode::Unelevated => ConfigWindowsSandboxMode::Unelevated,
+    });
+
+    let result = match mode {
+        WindowsSandboxSetupMode::Unelevated => {
+            tool_runtime::execution_process::verify_windows_restricted_token_backend()
+                .map_err(|error| format!("Windows restricted-token preflight failed: {error}"))
+        }
+        WindowsSandboxSetupMode::Elevated => {
+            let agent_root = match lime_core::app_paths::preferred_agent_root() {
+                Ok(root) => root,
+                Err(error) => {
+                    return Some(format!("failed to resolve the sandbox data root: {error}"))
+                }
+            };
+            run_windows_sandbox_setup_helper(&agent_root)
+                .map_err(|error| format!("Windows sandbox setup helper failed: {error}"))
+        }
     };
-    if let Err(error) = run_windows_sandbox_setup_helper(&agent_root, mode) {
-        return Some(format!("Windows sandbox setup helper failed: {error}"));
+    if let Err(error) = result {
+        return Some(error);
     }
-    windows_sandbox_setup_error(config, None)
+
+    if let Some(error) = windows_sandbox_setup_error(&persisted, None) {
+        return Some(error);
+    }
+    save_config(&persisted)
+        .err()
+        .map(|error| format!("failed to persist Windows sandbox mode: {error}"))
 }
 
 #[cfg(not(windows))]
-fn run_windows_sandbox_setup_helper(
-    _agent_root: &std::path::Path,
-    _mode: WindowsSandboxSetupMode,
-) -> std::io::Result<()> {
+fn run_windows_sandbox_setup_helper(_agent_root: &std::path::Path) -> std::io::Result<()> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "Windows sandbox setup helper is only available on Windows",
@@ -162,10 +185,7 @@ fn run_windows_sandbox_setup_helper(
 }
 
 #[cfg(windows)]
-fn run_windows_sandbox_setup_helper(
-    agent_root: &std::path::Path,
-    mode: WindowsSandboxSetupMode,
-) -> std::io::Result<()> {
+fn run_windows_sandbox_setup_helper(agent_root: &std::path::Path) -> std::io::Result<()> {
     let current_exe = std::env::current_exe()?;
     let helper_name = "windows-sandbox-setup.exe";
     let helper = current_exe
@@ -199,46 +219,33 @@ fn run_windows_sandbox_setup_helper(
         .map(|domain| format!(r"{domain}\{username}"))
         .unwrap_or(username);
 
-    let mut child = match mode {
-        WindowsSandboxSetupMode::Unelevated => Command::new(&helper)
-            .arg("--agent-root")
-            .arg(agent_root)
-            .arg("--owner")
-            .arg(&owner)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?,
-        WindowsSandboxSetupMode::Elevated => {
-            let powershell = std::env::var_os("SystemRoot")
-                .map(PathBuf::from)
-                .map(|root| root.join("System32/WindowsPowerShell/v1.0/powershell.exe"))
-                .filter(|path| path.is_file())
-                .ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::NotFound, "PowerShell is missing")
-                })?;
-            let script = format!(
-                "$p = Start-Process -FilePath '{}' -ArgumentList @('--agent-root','{}','--owner','{}') -Verb RunAs -Wait -PassThru; exit $p.ExitCode",
-                powershell_escape(&helper.to_string_lossy()),
-                powershell_escape(&agent_root.to_string_lossy()),
-                powershell_escape(&owner),
-            );
-            let encoded = encode_powershell_command(&script);
-            Command::new(powershell)
-                .args([
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-EncodedCommand",
-                    &encoded,
-                ])
-                .stdin(Stdio::null())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()?
-        }
-    };
+    let powershell = std::env::var_os("SystemRoot")
+        .map(PathBuf::from)
+        .map(|root| root.join("System32/WindowsPowerShell/v1.0/powershell.exe"))
+        .filter(|path| path.is_file())
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "PowerShell is missing")
+        })?;
+    let script = format!(
+        "$p = Start-Process -FilePath '{}' -ArgumentList @('--agent-root','{}','--owner','{}') -Verb RunAs -Wait -PassThru; exit $p.ExitCode",
+        powershell_escape(&helper.to_string_lossy()),
+        powershell_escape(&agent_root.to_string_lossy()),
+        powershell_escape(&owner),
+    );
+    let encoded = encode_powershell_command(&script);
+    let mut child = Command::new(powershell)
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            &encoded,
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
     let stdout = child
         .stdout
         .take()
@@ -349,7 +356,9 @@ fn windows_sandbox_setup_error_for_platform(
     if !config.agent.workspace_sandbox.enabled {
         return Some("workspace sandbox is disabled".to_string());
     }
-    if platform == SandboxBackendPlatform::current() {
+    if platform == SandboxBackendPlatform::current()
+        && config.agent.workspace_sandbox.mode != Some(ConfigWindowsSandboxMode::Unelevated)
+    {
         let inspection = inspect_default_windows_sandbox_setup();
         if !inspection.is_valid() {
             return Some(format!(
@@ -387,10 +396,14 @@ fn windows_sandbox_readiness(
     if platform != SandboxBackendPlatform::Windows || !config.agent.workspace_sandbox.enabled {
         return WindowsSandboxReadiness::NotConfigured;
     }
-    if platform == SandboxBackendPlatform::current()
-        && !inspect_default_windows_sandbox_setup().is_valid()
-    {
-        return WindowsSandboxReadiness::UpdateRequired;
+    if platform == SandboxBackendPlatform::current() {
+        if config.agent.workspace_sandbox.mode == Some(ConfigWindowsSandboxMode::Unelevated) {
+            if !tool_runtime::execution_process::windows_restricted_token_backend_available() {
+                return WindowsSandboxReadiness::UpdateRequired;
+            }
+        } else if !inspect_default_windows_sandbox_setup().is_valid() {
+            return WindowsSandboxReadiness::UpdateRequired;
+        }
     }
 
     let metadata = serde_json::to_value(config).unwrap_or(Value::Null);
@@ -442,6 +455,19 @@ mod tests {
             windows_sandbox_readiness(&config, SandboxBackendPlatform::Windows),
             WindowsSandboxReadiness::Ready
         );
+    }
+
+    #[test]
+    fn unelevated_setup_does_not_require_elevated_artifacts() {
+        let mut config = Config::default();
+        config.agent.workspace_sandbox.enabled = true;
+        config.agent.workspace_sandbox.mode = Some(ConfigWindowsSandboxMode::Unelevated);
+        assert!(windows_sandbox_setup_error_for_platform(
+            &config,
+            None,
+            SandboxBackendPlatform::Windows
+        )
+        .is_none());
     }
 
     #[cfg(not(windows))]

@@ -1,4 +1,4 @@
-use app_server_protocol::JsonRpcMessage;
+use app_server_protocol::{InitializeResponse, JsonRpcMessage};
 use async_trait::async_trait;
 use std::ffi::OsString;
 use std::io;
@@ -19,6 +19,13 @@ pub trait SessionTransport: Send + 'static {
     async fn send(&mut self, message: JsonRpcMessage) -> io::Result<()>;
     async fn receive(&mut self) -> io::Result<Option<JsonRpcMessage>>;
     async fn close(&mut self) -> io::Result<()>;
+
+    /// 在发送 `initialized` 前校验 transport 专属的身份元数据。
+    ///
+    /// 本地 stdio 使用隐含的进程身份；经过认证的远程 transport 可以固定握手得到的服务端身份。
+    fn validate_initialize_response(&self, _response: &InitializeResponse) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -3,15 +3,15 @@ use crate::session_loop::{
     RuntimeSessionClosureTask, RuntimeSessionRegistry, RuntimeSessionTaskFailure,
     RuntimeSessionTaskOutcome,
 };
+use code_mode::{
+    FunctionCallOutputContentItem, NoopRuntimeCodeModeSessionDelegate,
+    RuntimeCodeModeNestedToolCall, RuntimeCodeModeResponse, RuntimeCodeModeSessionProviderFuture,
+};
 use std::future::pending;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::oneshot;
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
-use tool_runtime::code_mode::{
-    NoopRuntimeCodeModeSessionDelegate, RuntimeCodeModeNestedToolCall, RuntimeCodeModeResponse,
-    RuntimeCodeModeSessionProviderFuture,
-};
 
 #[derive(Default)]
 struct RecordingSession {
@@ -53,7 +53,10 @@ impl RuntimeCodeModeSession for RecordingSession {
             Ok(RuntimeCodeModeWaitOutcome::LiveCell(
                 RuntimeCodeModeResponse::Yielded {
                     cell_id: request.cell_id,
-                    output: "pending".to_string(),
+                    content_items: vec![FunctionCallOutputContentItem::InputText {
+                        text: "pending".to_string(),
+                    }],
+                    code_mode_host_duration: None,
                 },
             ))
         })
@@ -71,7 +74,8 @@ impl RuntimeCodeModeSession for RecordingSession {
             Ok(RuntimeCodeModeWaitOutcome::LiveCell(
                 RuntimeCodeModeResponse::Terminated {
                     cell_id,
-                    output: String::new(),
+                    content_items: Vec::new(),
+                    code_mode_host_duration: None,
                 },
             ))
         })
@@ -160,6 +164,7 @@ impl RuntimeCodeModeSession for DelegatingSession {
                                 cell_id: cell_id.clone(),
                                 runtime_tool_call_id: "nested-call-1".to_string(),
                                 tool_name: "read".to_string(),
+                                kind: code_mode::CodeModeToolKind::Function,
                                 input: Some(serde_json::json!({"path": "README.md"})),
                             },
                             CancellationToken::new(),
@@ -167,7 +172,10 @@ impl RuntimeCodeModeSession for DelegatingSession {
                         .await?;
                     Ok(RuntimeCodeModeResponse::Result {
                         cell_id,
-                        output: nested.to_string(),
+                        content_items: vec![FunctionCallOutputContentItem::InputText {
+                            text: nested.to_string(),
+                        }],
+                        code_mode_host_duration: None,
                         error_text: None,
                     })
                 }),
@@ -183,7 +191,8 @@ impl RuntimeCodeModeSession for DelegatingSession {
             Ok(RuntimeCodeModeWaitOutcome::MissingCell(
                 RuntimeCodeModeResponse::Result {
                     cell_id: request.cell_id,
-                    output: String::new(),
+                    content_items: Vec::new(),
+                    code_mode_host_duration: None,
                     error_text: Some("cell not found".to_string()),
                 },
             ))
@@ -198,7 +207,8 @@ impl RuntimeCodeModeSession for DelegatingSession {
             Ok(RuntimeCodeModeWaitOutcome::MissingCell(
                 RuntimeCodeModeResponse::Result {
                     cell_id,
-                    output: String::new(),
+                    content_items: Vec::new(),
+                    code_mode_host_duration: None,
                     error_text: Some("cell not found".to_string()),
                 },
             ))

@@ -180,7 +180,7 @@ pub fn repair_tool_call(
             schema_errors,
         );
     }
-    let argument_changes = arguments
+    let mut argument_changes = arguments
         .iter()
         .filter_map(|(key, after)| {
             let before = original_arguments.get(key);
@@ -190,7 +190,8 @@ pub fn repair_tool_call(
                 after: after.clone(),
             })
         })
-        .collect();
+        .collect::<Vec<_>>();
+    argument_changes.sort_by(|left, right| left.key.cmp(&right.key));
 
     ToolCallRepairOutcome::Ready(ToolCallRepair {
         requested_name: requested_name.to_string(),

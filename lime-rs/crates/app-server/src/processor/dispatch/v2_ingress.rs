@@ -1,6 +1,7 @@
 use app_server_protocol::error_codes;
 use app_server_protocol::protocol::v2::{
-    ClientRequest, Method, METHOD_MEMORY_RESET, METHOD_WINDOWS_SANDBOX_SETUP_START,
+    ClientRequest, Method, METHOD_COMMAND_EXEC, METHOD_MEMORY_RESET,
+    METHOD_WINDOWS_SANDBOX_SETUP_START,
 };
 use app_server_protocol::{JsonRpcError, JsonRpcRequest, RequestId};
 
@@ -17,6 +18,18 @@ pub(super) fn decode(request: &JsonRpcRequest) -> Result<Option<ClientRequest>, 
         return Err(JsonRpcError::new(
             error_codes::INVALID_PARAMS,
             "v2 requests must use threadId; sessionId is not a supported field",
+        ));
+    }
+    if request.method == METHOD_COMMAND_EXEC
+        && request
+            .params
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .is_some_and(|params| params.contains_key("grantedPermissions"))
+    {
+        return Err(JsonRpcError::new(
+            error_codes::INVALID_PARAMS,
+            "grantedPermissions is managed by permissionProfile",
         ));
     }
     let memory_reset_params_valid = match request.params.as_ref() {
@@ -331,6 +344,21 @@ mod tests {
 
         let error = decode(&request).expect_err("invalid v2 params must fail closed");
         assert_eq!(error.code, error_codes::INVALID_PARAMS);
+    }
+
+    #[test]
+    fn command_exec_rejects_client_granted_permissions_before_typed_lowering() {
+        let error = decode(&request(
+            app_server_protocol::protocol::v2::METHOD_COMMAND_EXEC,
+            json!({
+                "command": ["printf", "ok"],
+                "grantedPermissions": {"network": {"enabled": true}},
+            }),
+        ))
+        .expect_err("client grants must fail at v2 ingress");
+
+        assert_eq!(error.code, error_codes::INVALID_PARAMS);
+        assert!(error.message.contains("managed by permissionProfile"));
     }
 
     #[test]

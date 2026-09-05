@@ -1,6 +1,12 @@
 use super::*;
 use crate::reply_input::RuntimeReplyInput;
 use crate::session_loop::{RuntimeSessionClosureTask, RuntimeSessionInput, RuntimeSessionRegistry};
+use ::code_mode::{
+    FunctionCallOutputContentItem, RuntimeCodeModeCellId, RuntimeCodeModeExecuteRequest,
+    RuntimeCodeModeFuture, RuntimeCodeModeNestedToolCall, RuntimeCodeModeResponse,
+    RuntimeCodeModeSession, RuntimeCodeModeSessionDelegate, RuntimeCodeModeSessionHandle,
+    RuntimeCodeModeStartedCell, RuntimeCodeModeWaitOutcome, RuntimeCodeModeWaitRequest,
+};
 use agent_protocol::provider_trace::ProviderTraceStage;
 use agent_protocol::world_state::{
     RuntimeWorldEnvironment, RuntimeWorldMode, RuntimeWorldPermissions, RuntimeWorldState,
@@ -18,12 +24,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::sync::oneshot;
-use tool_runtime::code_mode::{
-    RuntimeCodeModeCellId, RuntimeCodeModeExecuteRequest, RuntimeCodeModeFuture,
-    RuntimeCodeModeNestedToolCall, RuntimeCodeModeResponse, RuntimeCodeModeSession,
-    RuntimeCodeModeSessionDelegate, RuntimeCodeModeSessionHandle, RuntimeCodeModeStartedCell,
-    RuntimeCodeModeWaitOutcome, RuntimeCodeModeWaitRequest,
-};
 use tool_runtime::tool_executor::{
     RuntimeToolExecutionFuture, RuntimeToolExecutionRequest, RuntimeToolExecutionResult,
     RuntimeToolExecutor,
@@ -635,7 +635,8 @@ impl RuntimeCodeModeSession for RecordingCodeModeSession {
             Ok(RuntimeCodeModeWaitOutcome::LiveCell(
                 RuntimeCodeModeResponse::Terminated {
                     cell_id,
-                    output: String::new(),
+                    content_items: Vec::new(),
+                    code_mode_host_duration: None,
                 },
             ))
         })
@@ -660,7 +661,10 @@ impl RuntimeCodeModeSession for NestedDispatchCodeModeSession {
                 Box::pin(async move {
                     Ok(RuntimeCodeModeResponse::Result {
                         cell_id,
-                        output: "unused".to_string(),
+                        content_items: vec![FunctionCallOutputContentItem::InputText {
+                            text: "unused".to_string(),
+                        }],
+                        code_mode_host_duration: None,
                         error_text: None,
                     })
                 }),
@@ -694,6 +698,7 @@ impl RuntimeCodeModeSession for NestedDispatchCodeModeSession {
                                 cell_id: cell_id.clone(),
                                 runtime_tool_call_id: "nested-read-1".to_string(),
                                 tool_name: "read".to_string(),
+                                kind: code_mode::CodeModeToolKind::Function,
                                 input: Some(serde_json::json!({"path": "README.md"})),
                             },
                             tokio_util::sync::CancellationToken::new(),
@@ -701,7 +706,10 @@ impl RuntimeCodeModeSession for NestedDispatchCodeModeSession {
                         .await?;
                     Ok(RuntimeCodeModeResponse::Result {
                         cell_id,
-                        output: nested.to_string(),
+                        content_items: vec![FunctionCallOutputContentItem::InputText {
+                            text: nested.to_string(),
+                        }],
+                        code_mode_host_duration: None,
                         error_text: None,
                     })
                 }),
@@ -717,7 +725,8 @@ impl RuntimeCodeModeSession for NestedDispatchCodeModeSession {
             Ok(RuntimeCodeModeWaitOutcome::MissingCell(
                 RuntimeCodeModeResponse::Result {
                     cell_id: request.cell_id,
-                    output: String::new(),
+                    content_items: Vec::new(),
+                    code_mode_host_duration: None,
                     error_text: Some("cell not found".to_string()),
                 },
             ))
@@ -732,7 +741,8 @@ impl RuntimeCodeModeSession for NestedDispatchCodeModeSession {
             Ok(RuntimeCodeModeWaitOutcome::MissingCell(
                 RuntimeCodeModeResponse::Result {
                     cell_id,
-                    output: String::new(),
+                    content_items: Vec::new(),
+                    code_mode_host_duration: None,
                     error_text: Some("cell not found".to_string()),
                 },
             ))
@@ -784,7 +794,8 @@ impl RuntimeCodeModeSession for HangingCodeModeSession {
             Ok(RuntimeCodeModeWaitOutcome::LiveCell(
                 RuntimeCodeModeResponse::Terminated {
                     cell_id,
-                    output: String::new(),
+                    content_items: Vec::new(),
+                    code_mode_host_duration: None,
                 },
             ))
         })
@@ -3094,7 +3105,10 @@ async fn custom_exec_uses_code_mode_session_and_resamples_with_typed_result() {
     let code_mode = Arc::new(RecordingCodeModeSession::new(vec![Ok(
         RuntimeCodeModeResponse::Result {
             cell_id: RuntimeCodeModeCellId::new("1"),
-            output: "42".to_string(),
+            content_items: vec![FunctionCallOutputContentItem::InputText {
+                text: "42".to_string(),
+            }],
+            code_mode_host_duration: None,
             error_text: None,
         },
     )]));
@@ -3245,6 +3259,7 @@ async fn custom_exec_nested_tool_reuses_the_frozen_executor_and_lifecycle() {
     let nested_tool = RuntimeCodeModeTool {
         identity: RuntimeToolIdentity::plain("read"),
         definition: nested_definition.clone(),
+        kind: code_mode::CodeModeToolKind::Function,
         code_name: "read".to_string(),
         global_name: "read".to_string(),
     };
@@ -3387,7 +3402,10 @@ async fn wait_function_uses_the_same_code_mode_session_and_resamples() {
         RecordingCodeModeSession::new(Vec::new()).with_wait_responses(vec![Ok(
             RuntimeCodeModeWaitOutcome::LiveCell(RuntimeCodeModeResponse::Result {
                 cell_id: RuntimeCodeModeCellId::new("cell-running"),
-                output: "finished".to_string(),
+                content_items: vec![FunctionCallOutputContentItem::InputText {
+                    text: "finished".to_string(),
+                }],
+                code_mode_host_duration: None,
                 error_text: None,
             }),
         )]),
@@ -3588,11 +3606,17 @@ async fn mixed_function_and_custom_results_preserve_provider_call_order() {
     let code_mode = Arc::new(RecordingCodeModeSession::new(vec![
         Ok(RuntimeCodeModeResponse::Yielded {
             cell_id: RuntimeCodeModeCellId::new("cell-yielded"),
-            output: "partial".to_string(),
+            content_items: vec![FunctionCallOutputContentItem::InputText {
+                text: "partial".to_string(),
+            }],
+            code_mode_host_duration: None,
         }),
         Ok(RuntimeCodeModeResponse::Result {
             cell_id: RuntimeCodeModeCellId::new("cell-completed"),
-            output: "done".to_string(),
+            content_items: vec![FunctionCallOutputContentItem::InputText {
+                text: "done".to_string(),
+            }],
+            code_mode_host_duration: None,
             error_text: None,
         }),
     ]));

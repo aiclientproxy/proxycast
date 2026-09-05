@@ -6,10 +6,10 @@
 
 ## 结论
 
-Lime 的 coding 骨架已经不是缺“能不能改文件”的问题；P1-P4 current 主链、Workbench projection、policy metadata、output refs、patch/file/command/test facts、Windows sandbox readiness 控制面、P2-A 执行端有界输出捕获，以及 P2-B no-sandbox shell live process 都已落地。Windows restricted-token runner 已有 target-gated current foundation，但缺 Windows toolchain、真机 enforcement 与 Desktop Gate B 证据。继续对比后，真正高价值遗漏集中在两条骨干和一个策略体验增强：
+Lime 的 coding 骨架已经不是缺“能不能改文件”的问题；P1-P4 current 主链、Workbench projection、policy metadata、output refs、patch/file/command/test facts、Windows sandbox setup/readiness、双 mode restricted-token runner、P2-A 执行端有界输出捕获，以及 P2-B no-sandbox shell live process 都已落地。Windows runner schema v3 `7/7` 与复验 run 已形成平台 evidence。继续对比后，真正高价值遗漏集中在两条骨干和一个策略体验增强：
 
 1. **统一进程生命周期 owner**：上游有可 write / interrupt / terminate / stream / poll 的 unified exec process；Lime 已有 process owner、本地 runner、App Server `executionProcess/*` 控制面与 no-sandbox shell live process，但 command/test 默认执行尚未切到 sandbox-aware control owner。
-2. **Windows sandbox 完整性**：Lime 已有 backend plan/readiness contract，以及 restricted token、短生命周期 ACL lease、TokenDefaultDacl、Job Object、显式 handle allowlist 和有界 pipe reader foundation；由于仍没有 Windows/MSVC 编译、真机 enforcement 或 Desktop Gate B 证据，plan 必须保持 `Planned/enforced=false`。后续再补持久 capability SID、private desktop、read deny、网络强制与 elevated setup。
+2. **Windows sandbox 完整性**：Lime 已有 backend plan/readiness contract，以及 elevated sandbox-account、unelevated current-user restricted-token runner、短生命周期 ACL lease、TokenDefaultDacl、Job Object、ConPTY、显式 handle allowlist、Firewall/WFP 和有界 pipe reader；Windows runner schema v3 `7/7` 与复验 run 已完成当前平台 evidence。后续仅在 token/ACL/network 改动时回归。
 3. **审批缓存与重试体验**：Lime 已有 `action.required` 和多来源策略，但缺 session-scope approval key、sandbox denied 后安全升级重试和规则草案沉淀。
 
 这些不是 UI polish，也不是旧路清理；它们直接决定 coding turn 在长命令、大输出、Windows 和审批重跑场景下是否可持续。
@@ -72,7 +72,7 @@ Lime 的 coding 骨架已经不是缺“能不能改文件”的问题；P1-P4 c
 
 ### P2-C：Windows restricted token 完整性补齐
 
-目标：把 target-gated runner foundation 从 `Planned/enforced=false` 的 fail-closed backend plan推进到“Windows coding 日常可信”。
+目标：维护已由 Windows runner evidence 证明的 current restricted-token backend，并确保 `elevated/unelevated` setup mode 与实际执行路径一致。
 
 落点：
 
@@ -129,4 +129,4 @@ Lime 的 coding 骨架已经不是缺“能不能改文件”的问题；P1-P4 c
 
 ## 下一刀建议
 
-最值得继续做 **P2-C Windows restricted-token runner 基线**。readiness 已进入 Desktop current 控制面，但 runner 仍为 `Planned/enforced=false`；下一步必须先在 `tool-runtime` 建立真实执行边界，再用 Windows 真机证明 workspace write、外部路径拒绝、ACL 恢复、timeout 终止进程树和大输出不死锁。P2-B 默认 command/test sandbox-aware process owner 随后继续，不得用 no-sandbox process 绕过该 blocker。
+**P2-C Windows restricted-token runner 基线已完成。** readiness、setup mode、elevated sandbox-account、unelevated current-user restricted-token runner、ACL/Job/ConPTY、Firewall/WFP、warning lifecycle 和 readiness read-back 已收敛到 `tool-runtime` current owner；Windows runner schema v3 `7/7`、quality run 与 readiness 复验 run 是平台 evidence，不能用 macOS 结果替代。下一刀回到 P2-B 默认 command/test sandbox-aware process owner，不得用 no-sandbox process 绕过 sandbox。

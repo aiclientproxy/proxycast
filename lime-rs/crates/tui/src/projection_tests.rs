@@ -1,11 +1,12 @@
 use super::*;
 use app_server_protocol::protocol::v2::{
     AgentMessageDeltaNotification, CollabAgentState, CollabAgentStatus, CollabAgentTool,
-    CommandExecutionSource, DynamicToolCallOutputContentItem, FileChangePatchUpdatedNotification,
-    FileUpdateChange, ImageGenerationItem, ItemCompletedNotification, ItemStartedNotification,
-    McpToolCallError, McpToolCallResult, PatchChangeKind, SessionSource, Thread, ThreadActiveFlag,
-    ThreadItem, ThreadStatus, Turn, TurnCompletedNotification, TurnDiffUpdatedNotification,
-    TurnItemsView, TurnPlanStep, TurnPlanStepStatus, TurnPlanUpdatedNotification,
+    CommandExecutionOutputDeltaNotification, CommandExecutionSource,
+    DynamicToolCallOutputContentItem, FileChangePatchUpdatedNotification, FileUpdateChange,
+    ImageGenerationItem, ItemCompletedNotification, ItemStartedNotification, McpToolCallError,
+    McpToolCallResult, PatchChangeKind, SessionSource, Thread, ThreadActiveFlag, ThreadItem,
+    ThreadStatus, Turn, TurnCompletedNotification, TurnDiffUpdatedNotification, TurnItemsView,
+    TurnPlanStep, TurnPlanStepStatus, TurnPlanUpdatedNotification,
 };
 use serde_json::json;
 use std::collections::HashMap;
@@ -158,6 +159,19 @@ fn plan_and_diff_notifications_replace_stable_projection_entries() {
     assert_eq!(projection.entries()[1].kind, EntryKind::Patch);
     assert!(projection.entries()[2].text.contains("src/lib.rs"));
     assert_eq!(projection.entries()[2].kind, EntryKind::Patch);
+}
+
+#[test]
+fn patch_format_preserves_rename_destination() {
+    let text = format_patch(&[FileUpdateChange {
+        path: "/workspace/src/old.rs".to_string(),
+        kind: PatchChangeKind::Update {
+            move_path: Some("/workspace/src/new.rs".to_string()),
+        },
+        diff: "@@ -1 +1 @@\n-old\n+new".to_string(),
+    }]);
+
+    assert!(text.starts_with("updated /workspace/src/old.rs → /workspace/src/new.rs\n"));
 }
 
 #[test]
@@ -326,6 +340,139 @@ fn item_result_fields_become_structured_display_summaries() {
 }
 
 #[test]
+fn command_output_deltas_follow_the_command_without_splitting_chunks() {
+    let mut projection = ConversationProjection::default();
+    projection.apply(ServerNotification::ItemStarted(ItemStartedNotification {
+        item: command_item(
+            "command-1",
+            "printf 'stdout\\nstderr\\n'",
+            CommandExecutionStatus::InProgress,
+            None,
+        ),
+        thread_id: "thread-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        started_at_ms: 1,
+    }));
+    for delta in ["std", "out\nstderr\n"] {
+        projection.apply(ServerNotification::CommandExecutionOutputDelta(
+            CommandExecutionOutputDeltaNotification {
+                thread_id: "thread-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                item_id: "command-1".to_string(),
+                delta: delta.to_string(),
+            },
+        ));
+    }
+
+    assert_eq!(
+        projection.entries()[0].text,
+        "printf 'stdout\\nstderr\\n'\nstdout\nstderr\n"
+    );
+    assert!(projection.entries()[0].streaming);
+    assert_eq!(projection.entries()[0].status, Some(EntryStatus::Running));
+}
+
+#[test]
+fn completed_command_item_replaces_live_output_with_canonical_output() {
+    let mut projection = ConversationProjection::default();
+    projection.apply(ServerNotification::ItemStarted(ItemStartedNotification {
+        item: command_item(
+            "command-1",
+            "printf data",
+            CommandExecutionStatus::InProgress,
+            None,
+        ),
+        thread_id: "thread-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        started_at_ms: 1,
+    }));
+    projection.apply(ServerNotification::CommandExecutionOutputDelta(
+        CommandExecutionOutputDeltaNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            item_id: "command-1".to_string(),
+            delta: "partial".to_string(),
+        },
+    ));
+    projection.apply(ServerNotification::ItemCompleted(
+        ItemCompletedNotification {
+            item: command_item(
+                "command-1",
+                "printf data",
+                CommandExecutionStatus::Completed,
+                Some("canonical output"),
+            ),
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            completed_at_ms: 2,
+        },
+    ));
+
+    assert_eq!(
+        projection.entries()[0].text,
+        "printf data\ncanonical output"
+    );
+    assert!(!projection.entries()[0].streaming);
+    assert_eq!(projection.entries()[0].status, Some(EntryStatus::Completed));
+}
+
+fn command_item(
+    id: &str,
+    command: &str,
+    status: CommandExecutionStatus,
+    aggregated_output: Option<&str>,
+) -> ThreadItem {
+    ThreadItem::CommandExecution {
+        id: id.to_string(),
+        metadata: None,
+        plugin_id: None,
+        script_path: None,
+        command: command.to_string(),
+        cwd: "/workspace".to_string(),
+        process_id: None,
+        source: CommandExecutionSource::Agent,
+        status,
+        command_actions: Vec::new(),
+        aggregated_output: aggregated_output.map(str::to_string),
+        exit_code: (status == CommandExecutionStatus::Completed).then_some(0),
+        duration_ms: None,
+        terminal_interactions: Vec::new(),
+    }
+}
+
+#[test]
+fn collab_agent_summary_keeps_requested_model_effort_and_prompt() {
+    let collab = project_item(
+        &ThreadItem::CollabAgentToolCall {
+            id: "collab-1".to_string(),
+            metadata: None,
+            tool: CollabAgentTool::SpawnAgent,
+            status: CollabAgentToolCallStatus::Completed,
+            sender_thread_id: "thread-1".to_string(),
+            receiver_thread_ids: vec!["agent-1".to_string()],
+            prompt: Some("Inspect the repository structure".to_string()),
+            model: Some("fixture-model".to_string()),
+            reasoning_effort: Some(
+                app_server_protocol::protocol::v2::ReasoningEffort::new("high").expect("effort"),
+            ),
+            agents_states: HashMap::new(),
+        },
+        false,
+    )
+    .expect("collab projection");
+
+    assert_eq!(
+        collab.summary,
+        vec![
+            "agents: 0",
+            "model: fixture-model",
+            "effort: high",
+            "prompt: Inspect the repository structure",
+        ]
+    );
+}
+
+#[test]
 fn turn_terminal_status_settles_in_progress_items() {
     let mut projection = ConversationProjection::default();
     projection.apply(ServerNotification::ItemStarted(ItemStartedNotification {
@@ -369,5 +516,134 @@ fn turn_terminal_status_settles_in_progress_items() {
     assert_eq!(
         projection.entries()[0].status,
         Some(EntryStatus::Interrupted)
+    );
+}
+
+#[test]
+fn turn_completion_repairs_missing_streamed_items_from_canonical_turn() {
+    let mut projection = ConversationProjection::default();
+    projection.start_turn("turn-1".to_string());
+
+    projection.apply(ServerNotification::TurnCompleted(
+        TurnCompletedNotification {
+            thread_id: "thread-1".to_string(),
+            turn: Turn {
+                id: "turn-1".to_string(),
+                items: vec![ThreadItem::AgentMessage {
+                    id: "answer-1".to_string(),
+                    metadata: None,
+                    text: "最终回答".to_string(),
+                    phase: None,
+                    memory_citation: None,
+                    delivery: None,
+                }],
+                items_view: TurnItemsView::Full,
+                status: TurnStatus::Completed,
+                error: None,
+                started_at: Some(1),
+                completed_at: Some(2),
+                duration_ms: Some(1),
+            },
+        },
+    ));
+
+    assert_eq!(projection.final_answer(), "最终回答");
+    assert_eq!(projection.entries().len(), 1);
+    assert!(!projection.entries()[0].streaming);
+}
+
+#[test]
+fn turn_completion_replaces_streaming_item_with_canonical_text() {
+    let mut projection = ConversationProjection::default();
+    projection.apply(ServerNotification::AgentMessageDelta(
+        AgentMessageDeltaNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            item_id: "answer-1".to_string(),
+            delta: "部分".to_string(),
+        },
+    ));
+
+    projection.apply(ServerNotification::TurnCompleted(
+        TurnCompletedNotification {
+            thread_id: "thread-1".to_string(),
+            turn: Turn {
+                id: "turn-1".to_string(),
+                items: vec![ThreadItem::AgentMessage {
+                    id: "answer-1".to_string(),
+                    metadata: None,
+                    text: "完整最终回答".to_string(),
+                    phase: None,
+                    memory_citation: None,
+                    delivery: None,
+                }],
+                items_view: TurnItemsView::Full,
+                status: TurnStatus::Completed,
+                error: None,
+                started_at: Some(1),
+                completed_at: Some(2),
+                duration_ms: Some(1),
+            },
+        },
+    ));
+
+    assert_eq!(projection.entries().len(), 1);
+    assert_eq!(projection.entries()[0].text, "完整最终回答");
+    assert!(!projection.entries()[0].streaming);
+}
+
+#[test]
+fn turn_completion_inserts_missing_canonical_items_before_known_following_items() {
+    let mut projection = ConversationProjection::default();
+    projection.apply(ServerNotification::AgentMessageDelta(
+        AgentMessageDeltaNotification {
+            thread_id: "thread-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            item_id: "answer-1".to_string(),
+            delta: "回答".to_string(),
+        },
+    ));
+
+    projection.apply(ServerNotification::TurnCompleted(
+        TurnCompletedNotification {
+            thread_id: "thread-1".to_string(),
+            turn: Turn {
+                id: "turn-1".to_string(),
+                items: vec![
+                    ThreadItem::UserMessage {
+                        id: "user-1".to_string(),
+                        metadata: None,
+                        client_id: Some("client-1".to_string()),
+                        content: vec![app_server_protocol::protocol::v2::UserInput::Text {
+                            text: "请求".to_string(),
+                            text_elements: Vec::new(),
+                        }],
+                    },
+                    ThreadItem::AgentMessage {
+                        id: "answer-1".to_string(),
+                        metadata: None,
+                        text: "完整回答".to_string(),
+                        phase: None,
+                        memory_citation: None,
+                        delivery: None,
+                    },
+                ],
+                items_view: TurnItemsView::Full,
+                status: TurnStatus::Completed,
+                error: None,
+                started_at: Some(1),
+                completed_at: Some(2),
+                duration_ms: Some(1),
+            },
+        },
+    ));
+
+    assert_eq!(
+        projection
+            .entries()
+            .iter()
+            .map(|entry| entry.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["请求", "完整回答"]
     );
 }

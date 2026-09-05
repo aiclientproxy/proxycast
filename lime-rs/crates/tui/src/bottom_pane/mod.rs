@@ -1,22 +1,24 @@
-mod approval;
+mod approval_overlay;
+mod chat_composer;
 mod render;
 mod request_user_input;
 
 use std::collections::VecDeque;
 
+use app_server_protocol::RequestId;
 use app_server_protocol::protocol::v2::{
     CommandExecutionApprovalDecision, CommandExecutionRequestApprovalResponse,
     FileChangeApprovalDecision, FileChangeRequestApprovalResponse, GrantedPermissionProfile,
     PermissionGrantScope, PermissionsRequestApprovalResponse, ServerRequest,
     ToolRequestUserInputResponse,
 };
-use app_server_protocol::RequestId;
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyEvent};
 
-use approval::Approval;
-use request_user_input::RequestUserInput;
+use approval_overlay::ApprovalOverlay;
+pub(crate) use chat_composer::{ChatComposer, InputResult};
+use request_user_input::RequestUserInputOverlay;
 
-pub(crate) use render::{desired_height, render};
+pub(crate) use render::{desired_height_with_locale, render_with_locale};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum AppServerResponse {
@@ -74,8 +76,8 @@ impl AppServerResponse {
 
 #[derive(Debug)]
 enum PendingInteraction {
-    Approval(Approval),
-    UserInput(RequestUserInput),
+    Approval(ApprovalOverlay),
+    UserInput(RequestUserInputOverlay),
 }
 
 impl PendingInteraction {
@@ -83,20 +85,20 @@ impl PendingInteraction {
         match request {
             request @ (ServerRequest::ItemCommandExecutionRequestApproval { .. }
             | ServerRequest::ItemFileChangeRequestApproval { .. }
-            | ServerRequest::ItemPermissionsRequestApproval { .. }) => {
-                Ok(Self::Approval(Approval::from_server_request(request)))
-            }
+            | ServerRequest::ItemPermissionsRequestApproval { .. }) => Ok(Self::Approval(
+                ApprovalOverlay::from_server_request(request),
+            )),
             ServerRequest::ItemToolRequestUserInput { id, params } => {
-                Ok(Self::UserInput(RequestUserInput::new(id, params)))
+                Ok(Self::UserInput(RequestUserInputOverlay::new(id, params)))
             }
             request => Err(Box::new(request)),
         }
     }
 
-    fn handle_event(&mut self, event: Event) -> Option<AppServerResponse> {
+    fn handle_key_event(&mut self, key: KeyEvent) -> Option<AppServerResponse> {
         match self {
-            Self::Approval(approval) => approval.handle_event(event),
-            Self::UserInput(request) => request.handle_event(event),
+            Self::Approval(approval) => approval.handle_key_event(key),
+            Self::UserInput(request) => request.handle_key_event(key),
         }
     }
 }
@@ -126,7 +128,22 @@ impl BottomPane {
     }
 
     pub(crate) fn handle_event(&mut self, event: Event) -> Option<AppServerResponse> {
-        let response = self.queue.front_mut()?.handle_event(event)?;
+        match event {
+            Event::Key(key) => self.handle_key_event(key),
+            Event::Paste(text) => {
+                let Some(PendingInteraction::UserInput(request)) = self.queue.front_mut() else {
+                    return None;
+                };
+                request.editing = true;
+                request.composer.insert(&text);
+                None
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn handle_key_event(&mut self, key: KeyEvent) -> Option<AppServerResponse> {
+        let response = self.queue.front_mut()?.handle_key_event(key)?;
         self.queue.pop_front();
         Some(response)
     }

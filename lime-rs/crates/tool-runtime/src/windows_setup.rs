@@ -416,6 +416,35 @@ pub fn inspect_windows_sandbox_setup_at(
     }
 }
 
+/// Verifies the complete setup required by the restricted-token runner.
+///
+/// Unlike `inspect_windows_sandbox_setup_at`, this probe performs the native
+/// Windows checks (DPAPI, account logon, group/read/NUL ACLs and network
+/// policy). It is intentionally unavailable off Windows so an unelevated
+/// setup request can never claim readiness on another platform.
+#[cfg(not(windows))]
+pub fn verify_windows_sandbox_setup_at(_agent_root: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Windows sandbox setup verification is only available on Windows",
+    ))
+}
+
+#[cfg(windows)]
+pub fn verify_windows_sandbox_setup_at(agent_root: &Path) -> io::Result<()> {
+    let artifacts = load_validated_setup_artifacts(agent_root).map_err(|error| {
+        let inspection = inspection_from_error(error);
+        let kind = match inspection.status {
+            WindowsSandboxSetupArtifactStatus::Missing => io::ErrorKind::NotFound,
+            WindowsSandboxSetupArtifactStatus::Invalid => io::ErrorKind::PermissionDenied,
+            WindowsSandboxSetupArtifactStatus::Valid => io::ErrorKind::Other,
+        };
+        io::Error::new(kind, inspection.reason)
+    })?;
+    validate_windows_runtime_artifacts(&artifacts)
+        .map_err(|reason| io::Error::new(io::ErrorKind::PermissionDenied, reason))
+}
+
 struct ValidatedSetupArtifacts {
     #[cfg(windows)]
     users: WindowsSandboxUsersFile,
@@ -686,6 +715,15 @@ mod tests {
         let root = tempfile::tempdir().expect("tempdir");
         let error = run_windows_sandbox_setup(root.path(), "owner")
             .expect_err("non-Windows setup must not run");
+        assert_eq!(error.kind(), io::ErrorKind::Unsupported);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn unelevated_preflight_is_fail_closed_off_windows() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let error = verify_windows_sandbox_setup_at(root.path())
+            .expect_err("non-Windows setup verification must not claim readiness");
         assert_eq!(error.kind(), io::ErrorKind::Unsupported);
     }
 

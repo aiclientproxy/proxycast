@@ -40,7 +40,7 @@ Renderer typed gateway
 
 - Lime 已推送 HEAD：`438e8e4eb16a3ebf39d2eec40db04fc9111aa20b`
 - Codex HEAD：`99660ab3c7b861c916e467581fa9b8723504d66b`
-- method product-scope matrix 已锁定当前 Codex HEAD：245 个方向化 identity，`168 implemented / 3 planned / 74 product-scope-excluded`；method 分类不等于字段、GUI、恢复或平台全面完成。
+- method product-scope matrix 已锁定当前 Codex HEAD：245 个方向化 identity，`171 implemented / 0 planned / 74 product-scope-excluded`；method 分类不等于字段、GUI、恢复或平台全面完成。Windows setup/warning lifecycle 已收敛为 current，但仍只由真实 Windows runner evidence 支撑。
 - 当前工作树已有浏览器/Electron/benchmark 并行改动。本计划首轮只写本计划、协议事实源和协议 owner 文件，避让这些热区。
 
 ### 当前上游漂移收口（2026-08-25）
@@ -429,6 +429,8 @@ Renderer typed gateway
 - 2026-08-27：同一 run 的 Pier `0.3.1`/Colima prerequisite 为 pass，但 verifier environment setup 立即失败：Pier 子进程执行 `docker compose --project-name ...` 时没有发现仓库隔离的 Compose plugin，Docker CLI 返回 `unknown flag: --project-name`；`pier-stdout.txt` 和 `pier-jobs/**/result.json` 已保存 RuntimeError，未生成 `reward.json`、`ctrf.json` 或 `test-stdout.txt`。这不是 verifier test failure，不能推导 reward。按用户要求结束多日续跑；本轮 harness/npm/node/临时 App Server 已自然退出，保留用户级既有 App Server，不再重跑 Pier、GUI smoke 或正式发布。状态改为 `stopped-with-known-gaps`，进度保持 `45/46 (97.8%)`。
 
 ## 7. 阻塞与避让
+
+- 2026-09-05：Windows setup mode 语义完成闭环。`WorkspaceSandboxConfig.mode` 进入持久化配置与 runtime metadata；`LocalExecutionSandbox` 携带 `elevated/unelevated`，Windows tool-runtime 对两者共享 restricted-token runner。elevated 由 sandbox account + Firewall/WFP artifact 启动，unelevated 由当前用户启动 runner、在 runner 内基于当前用户 token 创建 restricted token，并拒绝 managed network，避免“unelevated 名义 + elevated 实际执行”。补充 config YAML、sandbox mode 解析与 App Server setup/readiness 定向测试；Windows 真机证据继续引用 `32975574520` 与 readiness 复验 `32978840712`，本机不宣称 Windows 执行通过。
 
 - 当前工作树的浏览器/Electron/benchmark 文件存在未知并行改动，本计划不覆盖、不回滚、不删除。
 - live provider/current chain、连续直接工具调用和非空 patch 已由 `20260827T060242Z-oxvg-structural-selector-preservation` 关闭。当前 verifier blocker 是 Pier 子进程没有继承/发现仓库隔离的 Docker Compose plugin，导致 environment setup 在测试前以 `unknown flag: --project-name` 失败；此外覆盖当前 SHA 的 notarized/正式 package 尚未执行。若未来恢复本计划，第一刀只需修复 Pier subprocess 的 Compose plugin 可见性并对现有 run 执行 verifier-only；只有 artifacts 完整且 `reward=1`，并补齐当前 SHA 正式分发后，才能标记 `46/46`。本轮按用户要求停止，不继续消耗 provider、Docker 或发布资源。

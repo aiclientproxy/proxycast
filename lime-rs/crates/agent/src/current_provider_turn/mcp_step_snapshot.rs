@@ -14,17 +14,17 @@ use agent_runtime::session_loop::RuntimeSessionInputHandle;
 use app_server_protocol::protocol::v2::{
     DynamicToolFunctionSpec, DynamicToolNamespaceTool, DynamicToolSpec,
 };
+use code_mode_protocol::RuntimeToolDefinition;
+use code_mode_protocol::RuntimeToolExposure;
+use code_mode_protocol::{RuntimeToolIdentity, RuntimeToolSnapshot};
 use rmcp::model::CallToolResult;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
-use tool_runtime::tool_definition::RuntimeToolDefinition;
-use tool_runtime::tool_definition::RuntimeToolExposure;
 use tool_runtime::tool_executor::RuntimeToolExecutorHandle;
 use tool_runtime::tool_extension::RuntimeToolCaller;
-use tool_runtime::turn_snapshot::{RuntimeToolIdentity, RuntimeToolSnapshot};
 use tool_runtime::turn_tool_surface::{
     runtime_turn_tool_scope_from_metadata, runtime_turn_tool_surface_allows_tool_name,
     runtime_turn_tool_surface_mode_from_metadata,
@@ -151,7 +151,7 @@ pub(super) fn current_tool_step_snapshot_source(
     pending_input: Option<RuntimeSessionInputHandle>,
     mcp_tool_routes: McpToolRoutes,
     dynamic_tool_routes: DynamicToolRoutes,
-    tool_mode: tool_runtime::code_mode::RuntimeToolMode,
+    tool_mode: code_mode::RuntimeToolMode,
     supports_custom_tools: bool,
 ) -> RuntimeToolStepSnapshotSourceHandle {
     let deferred_tools = DeferredToolSelections::default();
@@ -404,31 +404,31 @@ struct CurrentTurnToolStepSnapshotSource {
     deferred_tools: DeferredToolSelections,
     mcp_tool_routes: McpToolRoutes,
     dynamic_tool_routes: DynamicToolRoutes,
-    tool_mode: tool_runtime::code_mode::RuntimeToolMode,
+    tool_mode: code_mode::RuntimeToolMode,
     supports_custom_tools: bool,
 }
 
 struct CodeModeStepPlan {
-    tool_plan: tool_runtime::code_mode::RuntimeCodeModeToolPlan,
+    tool_plan: code_mode::RuntimeCodeModeToolPlan,
     attach_session: bool,
 }
 
 fn code_mode_step_plan(
     runtime_tools: &[RuntimeToolSnapshot],
-    requested: tool_runtime::code_mode::RuntimeToolMode,
+    requested: code_mode::RuntimeToolMode,
     supports_custom_tools: bool,
     has_session: bool,
 ) -> Result<CodeModeStepPlan, String> {
     let code_mode_available = supports_custom_tools && has_session;
-    let tool_plan = tool_runtime::code_mode::plan_runtime_code_mode_tools(
+    let tool_plan = code_mode::plan_runtime_code_mode_tools(
         runtime_tools,
         requested,
         code_mode_available,
         false,
     )
     .map_err(|error| error.to_string())?;
-    let attach_session = code_mode_available
-        && tool_plan.resolution.effective != tool_runtime::code_mode::RuntimeToolMode::Direct;
+    let attach_session =
+        code_mode_available && tool_plan.resolution.effective != code_mode::RuntimeToolMode::Direct;
     Ok(CodeModeStepPlan {
         tool_plan,
         attach_session,
@@ -861,49 +861,36 @@ mod tests {
             true,
         )];
 
-        let direct = code_mode_step_plan(
-            &tools,
-            tool_runtime::code_mode::RuntimeToolMode::Direct,
-            true,
-            true,
-        )
-        .expect("direct mode");
+        let direct = code_mode_step_plan(&tools, code_mode::RuntimeToolMode::Direct, true, true)
+            .expect("direct mode");
         assert_eq!(
             direct.tool_plan.resolution.effective,
-            tool_runtime::code_mode::RuntimeToolMode::Direct
+            code_mode::RuntimeToolMode::Direct
         );
         assert!(!direct.attach_session);
 
-        let missing_capability = code_mode_step_plan(
-            &tools,
-            tool_runtime::code_mode::RuntimeToolMode::CodeMode,
-            false,
-            true,
-        )
-        .expect("regular CodeMode falls back to direct");
+        let missing_capability =
+            code_mode_step_plan(&tools, code_mode::RuntimeToolMode::CodeMode, false, true)
+                .expect("regular CodeMode falls back to direct");
         assert_eq!(
             missing_capability.tool_plan.resolution.effective,
-            tool_runtime::code_mode::RuntimeToolMode::Direct
+            code_mode::RuntimeToolMode::Direct
         );
         assert!(!missing_capability.attach_session);
 
-        let executable = code_mode_step_plan(
-            &tools,
-            tool_runtime::code_mode::RuntimeToolMode::CodeMode,
-            true,
-            true,
-        )
-        .expect("executable CodeMode");
+        let executable =
+            code_mode_step_plan(&tools, code_mode::RuntimeToolMode::CodeMode, true, true)
+                .expect("executable CodeMode");
         assert_eq!(
             executable.tool_plan.resolution.effective,
-            tool_runtime::code_mode::RuntimeToolMode::CodeMode
+            code_mode::RuntimeToolMode::CodeMode
         );
         assert!(executable.attach_session);
         assert_eq!(executable.tool_plan.nested_tools[0].global_name, "read");
 
         assert!(code_mode_step_plan(
             &tools,
-            tool_runtime::code_mode::RuntimeToolMode::CodeModeOnly,
+            code_mode::RuntimeToolMode::CodeModeOnly,
             true,
             false,
         )

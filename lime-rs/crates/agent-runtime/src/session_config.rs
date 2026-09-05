@@ -1,7 +1,7 @@
+use ::code_mode::RuntimeToolMode;
 use agent_protocol::turn_context::TurnContextOverride as AgentTurnContext;
 use std::fmt;
 use std::sync::Arc;
-use tool_runtime::code_mode::RuntimeToolMode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RolloutBudgetReminder {

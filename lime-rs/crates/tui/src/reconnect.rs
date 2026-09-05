@@ -1,10 +1,9 @@
 use std::time::Duration;
 
-use anyhow::{bail, Result};
-use app_server_client::StdioTransportConfig;
-
 use crate::app::App;
 use crate::app_server_session::AppServerSession;
+use crate::runtime::{TuiOptions, connect_session};
+use anyhow::{Result, bail};
 
 const RECONNECT_DELAYS: [Duration; 4] = [
     Duration::ZERO,
@@ -14,7 +13,7 @@ const RECONNECT_DELAYS: [Duration; 4] = [
 ];
 
 pub(crate) async fn reconnect_session(
-    config: &StdioTransportConfig,
+    options: &TuiOptions,
     app: &mut App,
     thread_id: &str,
     model: Option<String>,
@@ -27,7 +26,7 @@ pub(crate) async fn reconnect_session(
         if !delay.is_zero() {
             tokio::time::sleep(delay).await;
         }
-        let mut candidate = match AppServerSession::connect(config.clone()).await {
+        let mut candidate = match connect_session(options).await {
             Ok(session) => session,
             Err(error) => {
                 last_error = Some(error);
@@ -36,6 +35,17 @@ pub(crate) async fn reconnect_session(
         };
         match candidate.resume_thread(thread_id.to_string()).await {
             Ok(response) => {
+                let permission_profiles = candidate
+                    .list_permission_profiles(Some(response.cwd.clone()))
+                    .await;
+                let permission_profiles = match permission_profiles {
+                    Ok(response) => response,
+                    Err(error) => {
+                        let _ = candidate.shutdown().await;
+                        last_error = Some(error);
+                        continue;
+                    }
+                };
                 if let Err(error) = candidate
                     .update_settings(
                         model.clone(),
@@ -49,7 +59,14 @@ pub(crate) async fn reconnect_session(
                     last_error = Some(error);
                     continue;
                 }
-                app.projection.hydrate_thread(response.thread);
+                app.hydrate_thread(response.thread);
+                app.set_permission_profiles(
+                    permission_profiles
+                        .data
+                        .into_iter()
+                        .filter(|profile| profile.allowed)
+                        .map(|profile| profile.id),
+                );
                 return Ok(candidate);
             }
             Err(error) => {

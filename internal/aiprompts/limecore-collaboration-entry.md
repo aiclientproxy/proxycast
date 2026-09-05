@@ -4,8 +4,8 @@
 
 跨仓库协作主文档放在：
 
-- 绝对路径：`/Users/coso/Documents/dev/ai/limecloud/limecore/internal/aiprompts/lime-limecore-collaboration.md`
-- 在 `limecore` 仓库内的相对路径：`internal/aiprompts/lime-limecore-collaboration.md`
+- 绝对路径：`/Users/coso/Documents/dev/ai/limecloud/limecore/docs/aiprompts/lime-limecore-collaboration.md`
+- 在 `limecore` 仓库内位于根目录 `docs/` 下的 `aiprompts/lime-limecore-collaboration.md`
 
 已确认的服务端真实落点：
 
@@ -29,6 +29,7 @@
 - `client/bootstrap`、`client/session`、`client/profile`
 - `client/skills`、`skillCatalog.entries`、`client/service-skills`
 - Gateway、命令目录、Service Skill 配置同步
+- Codex Desktop 对齐的 App Server WebSocket transport、租户 runtime 路由和 Cloud readiness
 - 任何“客户端要不要本地维护一份服务端数据”的判断
 
 ## 为什么主文档放在 `limecore`
@@ -39,8 +40,8 @@
 - 客户端 bootstrap
 - `client/skills` 统一命令目录
 - 用户资料与账户能力
-- Provider Offer / 服务目录 / Scene Catalog
-- Gateway 与目录/配置策略
+- Provider Offer / 服务目录
+- Gateway、App Server transport 与目录/配置策略
 
 客户端仓库更适合作为实现消费方，而不是这些能力的唯一背景事实源。
 
@@ -54,6 +55,7 @@
 - `src/components/settings-v2/`
 - `src/components/agent/`
 - `lime-rs/`
+- `lime-rs/crates/app-server-client/`
 
 ## 默认工作原则
 
@@ -61,7 +63,8 @@
 - 云事实源不要在客户端长期维护第二份
 - `@` / 产品型 `/` 的统一目录优先看 `client/skills.entries`
 - Lime 客户端必须保留 seeded / fallback 韧性兜底，不能只靠服务端在线返回
-- `limecore` 只提供目录与配置，不承担 `@` / `/scene` / service skill 的执行
+- `limecore` 提供目录、配置和认证后的 App Server transport edge，不承担 `@` / `/scene` / service skill 的执行，也不拥有 Agent runtime
 - 能走运行时配置和 `bootstrap.features` 的，不要写死在前端
 - 用户界面不要直接暴露 “OEM” 技术概念
-- `scene` 目录项要稳定提供 `sceneKey` 与 `linkedSkillId`。Lime 当前会用它把 `/scene-key` 解析到现有 `ServiceSkill` 本地启动链；不要把目录命中误写成服务端 run
+- 旧 `client/scenes`、`bootstrap.sceneCatalog` 和 `/scene-api` 已退役；统一命令目录只看 `client/skills.entries` 与插件 Marketplace，不要恢复旧 Scene Runtime 或把目录命中误写成服务端 run
+- App Server 会话只走 Lime `app-server-client` -> LimeCore `gateway-svc /v1/app-server` -> control-plane 解析的 tenant-owned Rust App Server；Gateway 不拥有 Thread/Turn/Item 或 Agent loop

@@ -121,7 +121,14 @@ pub struct WorkspaceSandboxRuntimeConfig {
     pub enabled: bool,
     pub strict: bool,
     pub notify_on_fallback: bool,
+    pub windows_mode: Option<WindowsSandboxExecutionMode>,
     pub source: SandboxBackendConfigSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowsSandboxExecutionMode {
+    Elevated,
+    Unelevated,
 }
 
 impl Default for WorkspaceSandboxRuntimeConfig {
@@ -130,6 +137,7 @@ impl Default for WorkspaceSandboxRuntimeConfig {
             enabled: false,
             strict: false,
             notify_on_fallback: true,
+            windows_mode: None,
             source: SandboxBackendConfigSource::Default,
         }
     }
@@ -490,8 +498,22 @@ fn apply_workspace_sandbox_config_layer(
     let enabled = bool_field(object, &["enabled"]);
     let strict = bool_field(object, &["strict"]);
     let notify_on_fallback = bool_field(object, &["notifyOnFallback", "notify_on_fallback"]);
+    let windows_mode = object
+        .get("mode")
+        .or_else(|| object.get("windowsMode"))
+        .or_else(|| object.get("windows_mode"))
+        .and_then(JsonValue::as_str)
+        .and_then(|value| match value.trim().to_ascii_lowercase().as_str() {
+            "elevated" => Some(WindowsSandboxExecutionMode::Elevated),
+            "unelevated" => Some(WindowsSandboxExecutionMode::Unelevated),
+            _ => None,
+        });
 
-    if enabled.is_none() && strict.is_none() && notify_on_fallback.is_none() {
+    if enabled.is_none()
+        && strict.is_none()
+        && notify_on_fallback.is_none()
+        && windows_mode.is_none()
+    {
         return;
     }
 
@@ -503,6 +525,9 @@ fn apply_workspace_sandbox_config_layer(
     }
     if let Some(notify_on_fallback) = notify_on_fallback {
         config.notify_on_fallback = notify_on_fallback;
+    }
+    if windows_mode.is_some() {
+        config.windows_mode = windows_mode;
     }
     config.source = source;
 }
@@ -627,5 +652,29 @@ mod tests {
     fn command_text_uses_first_non_empty_command_alias() {
         let params = json!({ "command": " ", "cmd": " cargo test ", "script": "ignored" });
         assert_eq!(command_text(&params), Some("cargo test".to_string()));
+    }
+
+    #[test]
+    fn sandbox_plan_preserves_windows_execution_mode() {
+        let metadata = json!({
+            "agent": {
+                "workspaceSandbox": {
+                    "enabled": true,
+                    "strict": true,
+                    "mode": "unelevated"
+                }
+            }
+        });
+        let plan = plan_sandbox_backend(SandboxBackendPlanInput {
+            sandbox_profile: ToolExecutionSandboxProfile::WorkspaceCommand,
+            requested_policy: Some("workspace-write"),
+            request_metadata: Some(&metadata),
+            bypass_restrictions: false,
+            platform: SandboxBackendPlatform::Windows,
+        });
+        assert_eq!(
+            plan.config.windows_mode,
+            Some(WindowsSandboxExecutionMode::Unelevated)
+        );
     }
 }

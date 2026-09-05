@@ -44,15 +44,22 @@ Desktop Renderer -> Electron Desktop Host --\
                                             \
 CLI / TUI -> app-server-client --------------> App Server JSON-RPC
                                              -> RuntimeCore
-Future Cloud -> authenticated transport ----/ -> agent-runtime / model-provider / tool-runtime
+Future Cloud -> authenticated transport ----> LimeCore gateway
+                                                -> control-plane tenant runtime registry
+                                                -> tenant App Server JSON-RPC
+                                             -> agent-runtime / model-provider / tool-runtime
                                                 -> ThreadStore + Thread/Turn/Item projection
 ```
 
 `Product Surface`、`Host/Transport` 与业务 runtime 是三层边界。Desktop、TUI、CLI 可以拥有各自的窗口/终端生命周期、输入法、快捷键和展示投影，但不能拥有 provider loop、工具 registry、approval authority、Thread/Turn/Item 状态机或持久化副本。`app-server-protocol` 是跨 surface 合同，`app-server-client` 是 Rust surface 的连接/session owner；本地 stdio 是当前实现，未来 Cloud 通过同一 session facade 接入认证后的远端 transport。TUI 的 `resume` picker 只读取 App Server `thread/list`，选中后进入标准 `thread/resume`；连接中断只由 TUI session owner 做 bounded reconnect，并以原 Thread id hydrate canonical history，composer draft 保持在 surface 内存中，旧 connection 的 pending approval 丢弃且不得跨连接回放。TUI 的 effort/permission 快捷键只 lowering 到 `thread/settings/update`；`/model` picker 只消费 typed `model/list` 的可见 catalog，并在选择后 lowering 到同一 settings method，不复制 Codex 配置或 provider catalog。
 
-Cloud 在本阶段仅保留架构扩展点，不创建 production endpoint、认证 fallback、租户默认值或第二套 schema。进入实现前必须先定义身份、租户隔离、凭证存储、协议版本、断线恢复、限流和审计，并继续让 App Server/RuntimeCore 成为唯一业务 owner。
+TUI 的终端输入与绘制调度 owner 对齐 Codex `tui`：`tui::EventBroker` 统一持有可暂停/恢复的 crossterm 输入源，`tui::TuiEventStream` 将 key、paste、resize、focus 和 draw 归一化后交给 runtime；`tui::FrameRequester` 与 `frame_rate_limiter` 合并异步重绘并限制频率。`TerminalGuard` 只负责 terminal mode 生命周期，并在外部编辑器或恢复流程中暂停 broker，确保 stdin 不被后台 reader 占用。该层不得承接 App Server 请求、Thread 状态或第二套业务事件总线。
 
-Architecture impact: major; Desktop-only product chain expanded to shared Desktop + CLI/TUI surfaces with a transport boundary reserved for future Cloud. Responsible developer confirmation: root, 2026-09-03.
+CLI 的 npm 分发边界对齐 `/Users/coso/Documents/dev/rust/codex/codex-cli`：`@limecloud/lime` 根包只发布 ESM launcher，并通过 optional dependency alias 选择平台包；平台包在 `vendor/<target-triple>/bin` 原子携带 `lime`、`app-server`、`code-mode-host`、Windows sandbox helpers 与 App Server 所需动态运行库。launcher 只负责平台解析、包管理器归属、参数/stdin/stdout 转发、signal forwarding 和退出原因镜像，不下载 release asset、不回退 `cargo run`，也不承接 App Server 业务。平台包必须先于根包串行发布，避免根包引用尚不存在的载荷版本；尚无真实构建/运行证据的平台不进入 optional dependency catalog。
+
+Cloud 当前落地 `app-server-client` 的 authenticated transport foundation，以及 LimeCore gateway 到 control-plane 租户 runtime registry 的受管 endpoint 解析；默认仍不启用 production endpoint，不创建认证 fallback、共享租户默认值或第二套 schema。foundation 在发送 `initialized` 前校验 `app-server` 服务端身份和 `appserver.v0` 协议版本；Bearer token 只进入 `Authorization` 请求头，配置 Debug 和 remote URL 均不得暴露凭证。gateway 只消费 control-plane 返回的已激活租户 `ws/wss` endpoint，静态模板不能作为生产隔离事实源。这些检查仍不等价于 Cloud 租户实例/数据根隔离；进入 production Cloud 前必须补齐 tenant-owned runtime 编排、凭证轮换、协议恢复、限流和审计，并继续让 App Server/RuntimeCore 成为唯一业务 owner。
+
+Architecture impact: major; Desktop-only product chain expanded to shared Desktop + CLI/TUI surfaces with a controlled Cloud transport boundary and tenant runtime endpoint registry. Responsible developer confirmation: root, 2026-09-05.
 
 ## 3. 前端目录规范
 
@@ -119,6 +126,36 @@ App Server 发起的 reverse JSON-RPC request 仍复用同一 JSONL/stdio、`app
 Desktop Host 的 sidecar 启动/恢复诊断属于宿主旁路，不是 App Server 业务 read model。`app_server_host_diagnostics` 是只读 Electron IPC 命令，由 `ElectronAppServerHost` 返回有界、脱敏的启动阶段、连接代际、sidecar 运行状态和最近失败上下文；Renderer 只能通过 `src/lib/api/desktopHostDiagnostics.ts` 做 schema 校验后把它并入现有 crash diagnostic bundle。该命令不得承载 Thread/Turn/Item、provider、工具或 session 状态，也不得替代 `app_server_handle_json_lines`。
 
 Architecture impact: major; Desktop Host diagnostic side-channel added without changing the App Server business chain. Responsible developer confirmation: root, 2026-09-03.
+
+### 4.2 Code Mode crate boundary
+
+Code Mode 对齐 `/Users/coso/Documents/dev/rust/codex/codex-rs` 的四层 crate 结构：
+
+```text
+agent-runtime / App Server
+        -> code-mode (session facade: process-owned / remote provider)
+        -> code-mode-host (stdio / gRPC host transport)
+        -> code-mode-runtime (V8 cell/session runtime)
+        -> code-mode-protocol (session/runtime/host wire contract)
+```
+
+`code-mode-protocol` 是协议和稳定类型的唯一 owner；`code-mode-runtime` 只拥有 V8
+cell actor、session runtime 和资源限制；`code-mode-host` 只拥有 host transport、握手、
+请求路由和 delegate 回调；`code-mode` 只拥有进程生命周期、连接复用、重连和 session
+provider facade。Agent Runtime 的 `provider_turn` 只负责 execute/wait handler、工具
+delegate 和 Thread/Turn/Item projection，不直接依赖 host 私有实现。
+
+gRPC host/client 的 session、execution、wait、invocation 和 notification identity 使用 UUID，
+并在 host 边界统一执行 256-byte identifier、tool filter、schema 和 tool-kind 校验；关闭会话
+必须先失败 pending delegate callback/notification、取消 active wait，再 shutdown runtime。
+执行、等待和终止的 `code_mode_host_duration_ns` 从 RPC 接收时开始计时，并对 `u64` wire 上限
+饱和。任一 gRPC stream 断开会取消 binding 上的 pending callbacks；reconnect coordinator 在
+发布新 generation 前 best-effort 退休旧 binding，generation-scoped cell ID 拒绝迟到的旧 cell。
+
+迁移期间 `tool-runtime::code_mode` 只作为显式兼容导出，生产调用必须向四个 current
+crate 收敛；完成迁移并取得删除确认后，旧嵌入式路径标记为 `dead / deleted / forbidden-to-restore`。
+
+Architecture impact: major; Code Mode ownership split into protocol/runtime/host/facade crates while preserving the App Server JSON-RPC runtime chain. Responsible developer confirmation: root, 2026-09-04.
 
 ### 4.1 跨平台 Desktop capability/readiness contract
 
@@ -191,16 +228,16 @@ Apple Events authorization owner/data flow updated: root, 2026-09-01.
 
 ## 5. TypeScript Package 规范
 
-| Package                             | 职责                                                             |
-| ----------------------------------- | ---------------------------------------------------------------- |
-| `packages/app-server-client`        | App Server JSON-RPC typed client 与生成协议工件。                |
-| `packages/agent-runtime-client`     | 可复用的 Agent runtime client facade，不拥有 Renderer 状态。     |
-| `packages/agent-runtime-projection` | 纯事件/read model projection、tool/display schema 等可测试逻辑。 |
-| `packages/agent-runtime-ui`         | 可复用的 runtime UI primitives，不拥有 App Server transport。    |
-| `packages/agent-ui-contracts`       | 跨 UI 的 schema、contract 和 generated/validated 类型。          |
-| `packages/agent-workbench-adapter`  | 工作台与 runtime 的明确 adapter 边界。                           |
-| `packages/agent-capability-catalog` | capability catalog 的稳定消费面。                                |
-| `packages/cli`                      | 发布的 Node CLI package。                                        |
+| Package                             | 职责                                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------- |
+| `packages/app-server-client`        | App Server JSON-RPC typed client 与生成协议工件。                                |
+| `packages/agent-runtime-client`     | 可复用的 Agent runtime client facade，不拥有 Renderer 状态。                     |
+| `packages/agent-runtime-projection` | 纯事件/read model projection、tool/display schema 等可测试逻辑。                 |
+| `packages/agent-runtime-ui`         | 可复用的 runtime UI primitives，不拥有 App Server transport。                    |
+| `packages/agent-ui-contracts`       | 跨 UI 的 schema、contract 和 generated/validated 类型。                          |
+| `packages/agent-workbench-adapter`  | 工作台与 runtime 的明确 adapter 边界。                                           |
+| `packages/agent-capability-catalog` | capability catalog 的稳定消费面。                                                |
+| `packages/cli`                      | Codex 风格 Node launcher、平台 npm 载荷 staging 与发布测试；不拥有业务 runtime。 |
 
 package 只在至少两个独立 consumer 需要稳定边界时创建。单一 Renderer feature、单个 Electron host 或单个 Rust domain 不得先抽 package。`dist/`、`node_modules/` 不是事实源。
 
@@ -873,7 +910,7 @@ Pending 必须在 canonical/projected/in-memory 的 Thread/session read/list、r
 | `gateway`、`websocket`、`server`、`server-utils` | 网络/服务边界。                                                                                                |
 | `providers` / `lime-providers`                   | `dead / deleted / forbidden-to-restore`；provider 网络、wire lowering、stream、catalog 只归 `model-provider`。 |
 | `scheduler`、`automation_execution` 对应 owner   | 调度与自动化领域，不承接 turn loop。                                                                           |
-| `cli`                                            | Rust CLI 入口，只通过 `app-server-client` 消费 App Server 产品协议。                                           |
+| `cli`                                            | Rust CLI 入口，只通过 `app-server-client` 消费 App Server 产品协议；`execpolicy check` 只读取规则文件并输出匹配结果，不承接执行或 sandbox authority。 |
 
 新增 Rust crate 必须说明：现有 domain 为什么不适合、公开 contract 是什么、依赖方向是什么、如何避免落入 `core`/`services` 平铺层。
 
@@ -2337,8 +2374,8 @@ confirmation: root, 2026-08-08. Confirmation content: 已核对 connection/Threa
 
 ### 33.1 Exact Command Exec Owner
 
-Codex standalone `command/exec` 是 Desktop coding terminal 的唯一 current owner；它与 Thread-owned command Item、
-Codex TUI 的 `process/*` 控制面分开，但共享 `tool-runtime` 本地进程 supervisor：
+Codex standalone `command/exec` 是 Desktop coding terminal 与 CLI sandbox 的唯一 current owner；它与 Thread-owned
+command Item、Codex TUI 的 `process/*` 控制面分开，但共享 `tool-runtime` 本地进程 supervisor：
 
 ```text
 Renderer commandExec gateway
@@ -2352,6 +2389,11 @@ command/exec/write|resize|terminate
 command/exec/outputDelta
   -> same owner connection, raw bytes as deltaBase64
 ```
+
+`permissionProfile` 是唯一允许的 profile 选择入口。App Server 在 `command/exec` ingress 根据当前 YAML
+`default_permissions`、named profile inheritance、请求 cwd 和平台 sandbox readiness 解析 profile，再把
+`sandboxPolicy` 与内部 `GrantedPermissionProfile` lowering 给 `tool-runtime`；`grantedPermissions` 不属于
+v2 客户端协议，客户端直接注入该字段必须被拒绝。CLI/TUI 与 Desktop 共用这条 resolver，不在 surface 层复制权限策略。
 
 一次性命令 response 保留 UTF-8 聚合 stdout/stderr；开启流式输出时，所有 delta 在最终 response 前按顺序投影，
 response 的 stdout/stderr 为空。`command/exec` 的 `outputBytesCap` 和 `timeoutMs` 使用 Codex exact 三态字段，默认
@@ -2387,6 +2429,8 @@ fs/watch { watchId, absolute path }
   -> filesystem watcher
   -> fs/changed { watchId, changedPaths[] }
   -> owning connection only
+  -> `src/lib/api/fileSystemWatch.ts`
+  -> FileManager current-directory refresh
 ```
 
 协议路径必须为绝对路径，raw bytes 始终以 base64 传输。`readFile` 有 512 MiB 上限并在越界时 fail closed；
@@ -2654,16 +2698,20 @@ Desktop access mode
   -> tool-runtime
 ```
 
-catalog 只公开 `:read-only`、`:workspace`、`:danger-full-access` 三个 Desktop 内建 profile，并按 Codex 内建顺序返回。
-Renderer 在每次新 Turn 提交前解析唯一且 `allowed=true` 的目标；App Server 分别 lowering 为 `read-only`、
-`workspace-write`、`danger-full-access`，同时在 Turn metadata 保留 `permissions` 和 `activePermissionProfile` provenance。
-未知/禁止/重复 profile、无效 catalog 以及 `permissions + sandboxPolicy` 组合均 fail closed。
+catalog 先按 Codex 内建顺序返回 `:read-only`、`:workspace`、`:danger-full-access`，再返回 YAML named profiles
+（按 id 排序）。每个 profile 由 App Server 根据 inheritance、filesystem/network grants 和当前平台 readiness
+解析；Renderer/TUI 在每次新 Turn 或命令提交前只选择 `allowed=true` 的目标。App Server lowering 为 runtime
+`sandboxPolicy`，并在 Thread/Turn metadata 保留 `permissions`、`activePermissionProfile` 和可选
+`grantedPermissions` provenance。未知/禁止/重复 profile、继承环、无效 catalog 以及 profile 与显式
+`sandboxPolicy` 组合均 fail closed。
 
-Electron 仍只负责通用 App Server JSONL 转发，不新增权限 IPC 或第二份 catalog。Lime Desktop 不复制 Codex TUI picker，
-也不读取 project-local `.codex/config.toml` 自定义 profile；`thread/settings/update.permissions` 尚未进入同一 resolver，
-保持 planned/fail-closed。旧 Renderer 新回合 `sandboxPolicy` wire 为 `dead / deleted / forbidden-to-restore`；历史导入、
-read model/evidence 中的 canonical sandbox fact 不属于兼容入口。多模型 catalog、默认选择、model switch、provider
-capability/readiness、retry/circuit breaker 与多模态 sampling/media lowering 仍由 Grok-aligned `model-provider` 承接。
+Electron 仍只负责通用 App Server JSONL 转发，不新增权限 IPC 或第二份 catalog。YAML 是 Lime 本地配置事实源；不读取
+project-local `.codex/config.toml`，也不复制 Codex Cloud managed requirements。`thread/start`、`turn/start`、
+`thread/settings/update.permissions` 和 `command/exec.permissionProfile` 共用同一 resolver；Cloud profile 只能
+未来由 authenticated `app-server-client` transport 提供，不能进入本地 CLI/TUI 配置。旧 Renderer 新回合 `sandboxPolicy`
+wire 为 `dead / deleted / forbidden-to-restore`；历史导入、read model/evidence 中的 canonical sandbox fact 不属于兼容入口。
+多模型 catalog、默认选择、model switch、provider capability/readiness、retry/circuit breaker 与多模态
+sampling/media lowering 仍由 Grok-aligned `model-provider` 承接。
 
 Architecture impact: major；本节新增 Desktop access mode 经 exact catalog 到 runtime sandbox owner 的跨层数据流，并固定
 fail-closed、Desktop/TUI 分界和 settings mutation blocker。Responsible developer confirmation: root, 2026-08-10。
@@ -2893,6 +2941,20 @@ cell 在 fresh sandbox-enabled V8 isolate 中执行 async module。host 仅暴�
 text/image/audio/generatedImage、store/load、notify、timer、yield 与 exit，不提供 Node、filesystem、network 或
 console。session store 只在同一 thread-owned host session 内共享，cell terminate 使用 V8 isolate handle；host
 缺失、握手不兼容、崩溃或资源上限不支持均 fail closed，production 不回退 App Server 进程内 V8。
+`code-mode-host` 同时提供 `stdio://` 与 `grpc://IP:PORT` transport；`code-mode` facade 的
+`ProcessCodeModeSessionProvider` 承接本地 sidecar，`GrpcCodeModeSessionProvider` 承接远端
+host，二者共享同一 `code-mode-protocol` 和 RuntimeCodeModeSession contract，不复制 V8
+runtime 或 delegate 语义。gRPC 主链覆盖 session lease、tool subscription/completion、execute
+stream、wait、terminate 与 close；OpenSession stream 丢弃和显式 CloseSession 都会终止 runtime、
+释放 active-cell permit、取消 pending callback 并关闭事件 stream；execution ID 在 runtime
+执行前先做有界 reservation/去重，避免重复请求覆盖 active cell；notification 通过 typed
+pending/ack/cancel 与 tool callback 使用同一生命周期边界。facade 已按 Codex 拆分
+callbacks/conversion/operations/reconnect/state/transport owner，stream 断开会退休 binding
+并在下一次操作单飞重建。Runtime response 使用 typed text/image/audio content item 作为
+canonical contract，stdio 与 gRPC 只做 wire lowering，Agent Runtime 仅在模型工具结果边界
+投影文本。generation cell-id 映射与旧 generation 拒绝已有 unit/owner coverage；真实 host
+重启 integration 受 tonic 已建立 HTTP/2 连接无法被 graceful shutdown 立即切断的测试夹具
+限制，不能将强制 listener abort 当作稳定断流证据。
 CodeMode model surface 必须同时满足模型 `tool_mode` 请求、resolved provider `custom_tools` capability 和当前
 `RuntimeSessionInputHandle` 持有 executable session，随后才附着 session 并由 provider turn 成组广告 `exec/wait`。
 普通 `CodeMode` 缺任一条件回落 Direct，`CodeModeOnly` 缺任一条件 fail closed，`Direct` 即使持有 session 也不广告。
@@ -2969,9 +3031,10 @@ authoritative model declaration 与 resolved provider route 交集、provider cu
 已核对 Codex `ToolMode`/`ToolExposure`、`StartedCell`、session provider/delegate、sandbox V8、freeform `exec`、function
 `wait`、yield/terminate/cancel 与 mixed-call transcript 顺序；确认 Lime 当前完成 transport-neutral contract、
 canonical thread-owned lazy service、process-owned sandbox V8 host、production factory、三重门禁、per-cell nested
-dispatch、outer Tool lifecycle、notify Desktop event/provider-transcript projection、双 sidecar 构建供应链与专项 Electron
-Gate B、CodeCell trace/replay 唯一 owner。未把受控 fixture 等同于 live provider，也未把 macOS dev Gate B 等同于
-Windows/packaged parity。
+dispatch、outer Tool lifecycle、notify Desktop event/provider-transcript projection、双 sidecar 构建供应链、gRPC session
+lease/execute reservation、notification ack/cancel、专项 Electron Gate B 与 CodeCell trace/replay 唯一 owner。未把受控 fixture 等同于 live provider，
+也未把 macOS dev Gate B 等同于 Windows/packaged parity；真实 host 重启 generation integration 仍受 tonic 测试夹具断流
+限制，未被计入完成证据。
 
 Responsible developer confirmation: root, 2026-08-18. Confirmation content: 已复核 `TraceEventWriter` JSONL、CodeCell
 reducer、`diagnostics/trace/read` 生产消费和真实 Electron Gate B evidence；确认 CodeCell trace 属于 `current` App Server

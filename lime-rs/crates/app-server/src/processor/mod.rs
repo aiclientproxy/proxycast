@@ -195,12 +195,14 @@ impl RequestProcessor {
                     .with_file_name("prompt_history.jsonl"),
             ))
         });
+        let execution_process_server = runtime.execution_process_server().unwrap_or_default();
         Self {
             state: Arc::new(Mutex::new(ProcessorState::default())),
             runtime: Arc::new(runtime),
             thread_states,
             process: ProcessServer::default(),
-            command_exec: CommandExecServer::default(),
+            command_exec: CommandExecServer::default()
+                .with_process_server(execution_process_server),
             fs: FsServer::default(),
             fuzzy_file_search: FuzzyFileSearchServer::default(),
             config_warning_provider: config_warning::default_config_warning_provider(),
