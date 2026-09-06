@@ -153,14 +153,35 @@ fn read_snapshot() -> Result<ConfigSnapshot, JsonRpcError> {
 
 fn snapshot_from_config(config: Config) -> Result<ConfigSnapshot, JsonRpcError> {
     let config = serde_json::to_value(config).map_err(config_runtime_error)?;
-    let bytes = serde_json::to_vec(&config).map_err(config_runtime_error)?;
-    let version = hex::encode(Sha256::digest(bytes));
+    let version = config_version(&config)?;
     let file_path = ConfigManager::default_config_path();
     Ok(ConfigSnapshot {
         config,
         version,
         file_path,
     })
+}
+
+fn config_version(config: &Value) -> Result<String, JsonRpcError> {
+    let canonical = canonicalize_json(config);
+    let bytes = serde_json::to_vec(&canonical).map_err(config_runtime_error)?;
+    Ok(hex::encode(Sha256::digest(bytes)))
+}
+
+fn canonicalize_json(value: &Value) -> Value {
+    match value {
+        Value::Object(object) => {
+            let mut keys = object.keys().collect::<Vec<_>>();
+            keys.sort();
+            let mut sorted = Map::with_capacity(object.len());
+            for key in keys {
+                sorted.insert(key.clone(), canonicalize_json(&object[key]));
+            }
+            Value::Object(sorted)
+        }
+        Value::Array(array) => Value::Array(array.iter().map(canonicalize_json).collect()),
+        other => other.clone(),
+    }
 }
 
 fn write_edits(
@@ -380,6 +401,29 @@ fn config_write_error(code: ConfigWriteErrorCode, message: impl Into<String>) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_version_is_independent_of_object_insertion_order() {
+        let mut reversed_nested = Map::new();
+        reversed_nested.insert("beta".to_string(), json!(2));
+        reversed_nested.insert("alpha".to_string(), json!(1));
+        let mut reversed = Map::new();
+        reversed.insert("zeta".to_string(), json!(3));
+        reversed.insert("nested".to_string(), Value::Object(reversed_nested));
+
+        let canonical = json!({
+            "nested": {
+                "alpha": 1,
+                "beta": 2
+            },
+            "zeta": 3
+        });
+
+        assert_eq!(
+            config_version(&Value::Object(reversed)).expect("reversed config version"),
+            config_version(&canonical).expect("canonical config version")
+        );
+    }
 
     #[test]
     fn orchestrator_config_is_writable_through_current_control_plane() {

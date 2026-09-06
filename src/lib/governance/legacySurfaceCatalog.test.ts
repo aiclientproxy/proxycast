@@ -4763,10 +4763,10 @@ describe("legacySurfaceCatalog", () => {
 
     expect(offenders).toEqual([]);
     expect(readmeSource).toContain(
-      "P1/P2/P3/P4/P5/P7/P8 的骨架闭环已经具备 current facts、projection、GUI smoke、evidence export 与生产 mock / legacy command 防回流守卫",
+      "P8 骨架阶段已经收口，不再重复做旧字符串 inventory",
     );
     expect(readmeSource).toContain(
-      "Windows 机器上先在 `tool-runtime` current owner 实现 restricted-token runner",
+      "unelevated current-user restricted-token runner",
     );
     expect(implementationSource).toContain(
       "P8 residual 盘点结论：生产 `src / packages / electron` 主路径未发现 `agent_runtime_*` 直接命令调用",

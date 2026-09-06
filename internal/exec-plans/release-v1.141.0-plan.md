@@ -137,3 +137,34 @@ process owner 后才检查同连接重复 `processId`，因此先返回 `RUNTIME
 直接执行 typecheck 只被未跟踪的并行 remote WebSocket 实现缺少 `ws` 类型声明阻断，该文件不
 进入本轮修复提交。退出条件仍为 Quality 跨平台全绿；Windows 平台必须取得 current 八项矩阵
 `8/8`，不能用历史 `7/7` 或本机非 Windows 测试替代。
+
+### 第三轮 Quality 修复
+
+Quality run `34009678395` 已确认 Windows restricted execution `8/8`、GUI Smoke、Integrity、
+Frontend lint/typecheck/test-layer budget 通过；Frontend Full 在批次 57 命中治理测试的过期
+路线图文案，Rust Full 在 `config_jsonrpc` 命中无外部写入的 `configVersionConflict`。修复批次
+57 后继续续跑，又在批次 118 暴露 File Manager watcher 的默认 mock 返回同步 `void`，违反
+`FileSystemWatchStop = () => Promise<void>` 契约并在卸载时触发 `.catch` 读取错误。
+
+本轮修复口径：
+
+- 治理测试改断言当前 README 中仍受保护的 P8 收口与 Windows unelevated runner 事实，不恢复
+  已删除的旧路线图文案。
+- File Manager 测试 fixture 返回真实异步 stop 函数，生产 watcher 契约和清理实现不降级。
+- 配置版本摘要先递归规范化 JSON 对象键顺序再做 SHA-256；数组顺序、配置响应、持久化格式和
+  乐观锁冲突语义保持不变。该修复消除 workspace 中 TUI 启用 `serde_json/preserve_order` 后，
+  `Config` 内 `HashMap` 迭代顺序导致等价配置产生不同摘要的问题。
+
+验证证据：Frontend 批次 57-117 在隔离候选中通过，修复 watcher fixture 后批次 118-119
+`145/145` 通过；两个改动测试文件合并定向验证 `241/241` 通过，隔离候选的
+`npm run typecheck` 通过，相关 ESLint、rustfmt 与 `git diff --check` 通过。Rust 已用同一
+`cargo test --workspace` 场景在未修复隔离候选中精确复现 CI 冲突；修复后新增配置版本单测
+`1/1` 通过，同一 workspace 特性统一场景中的
+`config_control_plane_uses_the_single_desktop_yaml_layer` 通过且命令退出码为 `0`。共享工作树的
+workspace 复验曾被并行 TUI 未完成模块写入阻断，因此不把该结果归因到本轮修复。Quality run
+`34009678395` 的 Windows Shell Runtime 已最终通过，包括 restricted execution `8/8`、command
+timeout、目录创建与 Agent Plugin MCP parity；该 run 仍因修复前的 Frontend Full 与 Rust Full
+失败而保持失败结论。
+
+现有 `v1.141.0` 本地与远端 tag 均继续指向 `5a7fe5af9`；本轮只追加 main 修复，不删除、覆盖
+或重建既有 tag。退出条件仍为新修复提交推送后 Quality 全绿，并完成远端 main 状态复核。

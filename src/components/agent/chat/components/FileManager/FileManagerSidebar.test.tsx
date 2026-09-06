@@ -245,7 +245,9 @@ beforeEach(() => {
   );
   vi.mocked(openPathWithDefaultApp).mockResolvedValue(undefined);
   vi.mocked(revealPathInFinder).mockResolvedValue(undefined);
-  vi.mocked(startFileSystemWatch).mockResolvedValue(vi.fn());
+  vi.mocked(startFileSystemWatch).mockResolvedValue(
+    vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  );
   window.localStorage.clear();
 });
 
