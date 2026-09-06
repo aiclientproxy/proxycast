@@ -98,7 +98,7 @@ npm run test:rust:integration -- -p <crate> --test <target>
 
 Agent/runtime 核心行为需要跨 owner 时，不把所有 case 堆进实现文件的 inline unit tests；使用专用测试模块或 integration target。`cargo nextest` 只在工具链、archive 和 CI shard 稳定后作为执行加速器，不改变本地 related-first 规则。
 
-Windows restricted execution 改动必须把 `windows-sandbox-runner.exe` 与 `app-server.exe`、`code-mode-host.exe`、`windows-sandbox-setup.exe` 成组构建。Electron Windows resources 和 `app-server.release.json` 必须包含 runner 及其 `windowsSandboxRunnerSha256`，`verify-package-resources` 对缺失或 digest 漂移 fail closed。源码/静态门禁不替代 `windows-restricted-execution-evidence-v3` 七项真实 Windows/MSVC 矩阵；Quality run `32975574520` 已在 SHA `19e08daa2` 取得 `7/7`，后续 Windows sandbox 改动必须保持该矩阵和 packaged resource 守卫全绿，否则 readiness 回退为 fail closed。
+Windows restricted execution 改动必须把 `windows-sandbox-runner.exe` 与 `app-server.exe`、`code-mode-host.exe`、`windows-sandbox-setup.exe` 成组构建。Electron Windows resources 和 `app-server.release.json` 必须包含 runner 及其 `windowsSandboxRunnerSha256`，`verify-package-resources` 对缺失或 digest 漂移 fail closed。源码/静态门禁不替代 `windows-restricted-execution-evidence-v3` 八项真实 Windows/MSVC 矩阵；Quality run `32975574520` 已在 SHA `19e08daa2` 取得当时七项矩阵的 `7/7` 历史基线，当前矩阵另含 unelevated managed-network preflight 拒绝，后续 Windows sandbox 改动必须保持 current matrix 和 packaged resource 守卫全绿，否则 readiness 回退为 fail closed。
 
 ## Gate A 与 Gate B
 

@@ -1,8 +1,12 @@
 use super::*;
 #[cfg(unix)]
+use crate::execution_process::ExecutionProcessServer;
+#[cfg(unix)]
 use app_server_protocol::protocol::v2::CommandExecTerminalSize;
 #[cfg(unix)]
 use tokio::sync::mpsc;
+#[cfg(unix)]
+use tool_runtime::execution_process::live::LiveExecutionOutputQuery;
 
 #[cfg(unix)]
 fn server_with_notifications() -> (
@@ -105,6 +109,69 @@ async fn one_off_command_captures_stdout_stderr_and_exit_code() {
     assert_eq!(response.exit_code, 7);
     assert_eq!(response.stdout, "stdout");
     assert_eq!(response.stderr, "stderr");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn command_exec_registers_output_and_terminal_status_with_shared_owner() {
+    let process_server = ExecutionProcessServer::default();
+    let server = CommandExecServer::default().with_process_server(process_server.clone());
+    let connection_id = ConnectionId(11);
+    let public_process_id = "shared-owner";
+    let response = server
+        .exec(
+            connection_id,
+            exec_params(Some(public_process_id), "printf shared-owner-output"),
+            None,
+        )
+        .await
+        .expect("execute command");
+
+    assert_eq!(response.exit_code, 0);
+    let owner_id = owner_process_id(connection_id, public_process_id);
+    let status = process_server.status(&owner_id).expect("shared status");
+    assert!(status.status.is_terminal());
+    assert_eq!(status.exit_code, Some(0));
+    assert_eq!(status.process_id, owner_id);
+
+    let output = process_server
+        .drain_output(LiveExecutionOutputQuery {
+            process_id: Some(owner_id),
+            ..LiveExecutionOutputQuery::default()
+        })
+        .expect("shared output");
+    assert!(output
+        .deltas
+        .iter()
+        .any(|delta| delta.delta.contains("shared-owner-output")));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn completed_process_id_can_be_reused_after_terminal_cleanup() {
+    let process_server = ExecutionProcessServer::default();
+    let server = CommandExecServer::default().with_process_server(process_server);
+    let connection_id = ConnectionId(12);
+
+    let first = server
+        .exec(
+            connection_id,
+            exec_params(Some("reusable"), "printf first"),
+            None,
+        )
+        .await
+        .expect("first command");
+    assert_eq!(first.stdout, "first");
+
+    let second = server
+        .exec(
+            connection_id,
+            exec_params(Some("reusable"), "printf second"),
+            None,
+        )
+        .await
+        .expect("terminal process id should be reusable");
+    assert_eq!(second.stdout, "second");
 }
 
 #[cfg(unix)]

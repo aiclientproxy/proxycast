@@ -15,6 +15,23 @@ import {
 } from "./windows-restricted-execution-evidence.mjs";
 
 describe("Windows restricted execution evidence runner", () => {
+  it("required matrix 与 Rust Windows 集成测试清单保持一致", () => {
+    const source = fs.readFileSync(
+      path.join(
+        process.cwd(),
+        "lime-rs/crates/tool-runtime/tests/windows_restricted_execution.rs",
+      ),
+      "utf8",
+    );
+    const declaredTests = [
+      ...source.matchAll(
+        /#\[(?:tokio::)?test\]\s*(?:async\s+)?fn\s+([a-zA-Z0-9_]+)/gu,
+      ),
+    ].map((match) => match[1]);
+
+    expect([...REQUIRED_TESTS].sort()).toEqual(declaredTests.sort());
+  });
+
   it("在非 Windows 主机 fail-closed 并写出 evidence-pending", () => {
     const root = fs.mkdtempSync(
       path.join(os.tmpdir(), "lime-windows-evidence-test-"),
@@ -124,6 +141,7 @@ describe("Windows restricted execution evidence runner", () => {
   it("解析每个 case 并拒绝缺失、重复或未知场景", () => {
     const cases = parseTestCases(
       [
+        "test unelevated_mode_rejects_managed_network_before_setup ... ok",
         "test workspace_write_allows_workspace_and_denies_metadata_and_external_paths ... ok",
         "test restricted_execution_uses_offline_account_and_blocks_network ... ok",
         "test restricted_execution_bounds_large_output ... ok",

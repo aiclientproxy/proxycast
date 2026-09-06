@@ -84,6 +84,7 @@ impl CommandExecServer {
             connection_id,
             process_id: process_id.clone(),
         };
+        let owner_base_id = owner_process_id(connection_id, &process_id);
         let cwd = params
             .cwd
             .clone()
@@ -142,9 +143,20 @@ impl CommandExecServer {
         } else {
             parse_timeout(params.timeout_ms)?
         };
+        let mut sessions = self.sessions.lock().await;
+        if sessions.contains_key(&key) {
+            return Err(invalid_request(format!(
+                "duplicate active command/exec process id: {process_id}"
+            )));
+        }
+        let owner_id = if self.process_server.status(&owner_base_id).is_ok() {
+            format!("{owner_base_id}-{}", uuid::Uuid::new_v4())
+        } else {
+            owner_base_id
+        };
         let request = LocalExecutionRequest {
-            process_id: process_id.clone(),
-            tool_id: process_id.clone(),
+            process_id: owner_id.clone(),
+            tool_id: owner_id.clone(),
             tool_name: "command/exec".to_string(),
             command: params.command.clone(),
             cwd: Some(cwd),
@@ -158,34 +170,31 @@ impl CommandExecServer {
         let mut handle = start_local_execution_process(request)
             .map_err(|error| invalid_runtime(format!("failed to spawn command/exec: {error}")))?;
         if let Some(size) = params.size {
-            handle
-                .resize(size.rows, size.cols)
-                .map_err(|error| invalid_runtime(error.to_string()))?;
-        }
-        self.process_server
-            .register_process_handle(handle.control_handle(), handle.status())
-            .map_err(|error| {
-                invalid_runtime(format!("failed to register command/exec process: {error}"))
-            })?;
-        {
-            let mut sessions = self.sessions.lock().await;
-            if sessions.contains_key(&key) {
+            if let Err(error) = handle.resize(size.rows, size.cols) {
                 let _ = handle.terminate();
-                return Err(invalid_request(format!(
-                    "duplicate active command/exec process id: {process_id}"
-                )));
+                return Err(invalid_runtime(error.to_string()));
             }
-            sessions.insert(
-                key.clone(),
-                CommandExecSession {
-                    process_id: process_id.clone(),
-                    control: handle.control_handle(),
-                    stream_stdin,
-                    tty: params.tty,
-                    stdin_open: Arc::new(Mutex::new(stream_stdin)),
-                },
-            );
         }
+        if let Err(error) = self
+            .process_server
+            .register_process_handle(handle.control_handle(), handle.status())
+        {
+            let _ = handle.terminate();
+            return Err(invalid_runtime(format!(
+                "failed to register command/exec process: {error}"
+            )));
+        }
+        sessions.insert(
+            key.clone(),
+            CommandExecSession {
+                process_id: owner_id.clone(),
+                control: handle.control_handle(),
+                stream_stdin,
+                tty: params.tty,
+                stdin_open: Arc::new(Mutex::new(stream_stdin)),
+            },
+        );
+        drop(sessions);
 
         let mut stdout = Capture::new(output_cap);
         let mut stderr = Capture::new(output_cap);
@@ -239,7 +248,7 @@ impl CommandExecServer {
                 }
                 _ = async { if let Some(sleep) = timeout_sleep.as_mut() { sleep.await } }, if timeout_sleep.is_some() => {
                     timed_out = true;
-                    let _ = self.process_server.terminate(&process_id);
+                    let _ = self.process_server.terminate(&owner_id);
                     timeout_sleep = None;
                 }
             }
@@ -509,6 +518,10 @@ fn key(connection_id: ConnectionId, process_id: &str) -> CommandExecKey {
         connection_id,
         process_id: process_id.to_string(),
     }
+}
+
+fn owner_process_id(connection_id: ConnectionId, process_id: &str) -> String {
+    format!("command-exec-{}-{process_id}", connection_id.0)
 }
 
 fn invalid_request(message: impl Into<String>) -> JsonRpcError {

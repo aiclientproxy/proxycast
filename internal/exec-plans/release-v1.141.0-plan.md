@@ -111,3 +111,29 @@ v1.141.0 首次质量与 Electron 发布 workflow 暴露了三类问题：CLI/TU
 本地修复验证：`cargo check -p code-mode-protocol`、inventory/Windows Squirrel/release
 workflow 共 75 项 Vitest、`npm run test:contracts` 均通过。待提交推送后复跑 Quality 与
 Release workflows，确认跨平台构建及 Windows restricted execution setup 通过。
+
+### 第二轮 Quality 修复
+
+Quality run `33999878194` 在首轮修复后继续暴露三个独立问题：Windows restricted
+execution 已执行 8 个测试，但 evidence collector 的 required matrix 仍只有 7 项；
+Codex method product-scope fixture 引用了只在 Windows job 运行时生成、不会进入前端独立
+checkout 的 `.lime/qc/windows-restricted-execution/summary.json`；App Server 在注册共享
+process owner 后才检查同连接重复 `processId`，因此先返回 `RUNTIME_ERROR`，而不是协议要求的
+`INVALID_REQUEST`。
+
+当前修复口径：
+
+- 将 `unelevated_mode_rejects_managed_network_before_setup` 纳入八项 required matrix，并由脚本
+  单测自动比对 Rust integration target 的全部 `#[test]` / `#[tokio::test]`，防止测试清单再次
+  漂移。
+- 静态 product-scope fixture 只引用仓库内可追踪的 collector 与 Rust integration test；真实
+  `.lime/qc/**` 继续只作为平台运行 artifact，不伪造、不提交。
+- App Server 以 connection-scoped owner id 注册共享进程，在 spawn 前拒绝同连接 active 重复，
+  并允许不同连接或同连接终态后复用公开 `processId`。
+
+本地定向验证已通过：Windows evidence 与 Codex product-scope Vitest `19/19`；App Server
+`command_exec` 相关 Rust 单测 `12/12`；真实工作树 `npm run test:contracts` 通过；只叠加本轮
+候选文件的隔离 `HEAD` 快照中，`npm run typecheck` 与同一组 App Server 单测通过。当前工作树
+直接执行 typecheck 只被未跟踪的并行 remote WebSocket 实现缺少 `ws` 类型声明阻断，该文件不
+进入本轮修复提交。退出条件仍为 Quality 跨平台全绿；Windows 平台必须取得 current 八项矩阵
+`8/8`，不能用历史 `7/7` 或本机非 Windows 测试替代。

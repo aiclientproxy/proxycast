@@ -995,7 +995,8 @@
         "lime-rs/crates/app-server/src/processor/windows_sandbox.rs",
         "src/lib/api/windowsSandbox.ts",
         "src/components/settings-v2/system/execution-policy/WindowsSandboxReadinessStatus.tsx",
-        ".lime/qc/windows-restricted-execution/summary.json"
+        "scripts/lib/windows-restricted-execution-evidence.mjs",
+        "lime-rs/crates/tool-runtime/tests/windows_restricted_execution.rs"
       ],
       "methods": ["windowsSandbox/setupStart"]
     },
@@ -1502,7 +1503,7 @@
         "src/lib/api/windowsSandbox.ts",
         "src/components/settings-v2/system/execution-policy/WindowsSandboxReadinessStatus.tsx",
         "scripts/lib/windows-restricted-execution-evidence.mjs",
-        ".lime/qc/windows-restricted-execution/summary.json"
+        "lime-rs/crates/tool-runtime/tests/windows_restricted_execution.rs"
       ],
       "methods": [
         "windows/worldWritableWarning",

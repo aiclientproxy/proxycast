@@ -29,6 +29,7 @@ const TEST_COMMAND = [
   "--test-threads=1",
 ];
 export const REQUIRED_TESTS = Object.freeze([
+  "unelevated_mode_rejects_managed_network_before_setup",
   "workspace_write_allows_workspace_and_denies_metadata_and_external_paths",
   "restricted_execution_uses_offline_account_and_blocks_network",
   "restricted_execution_bounds_large_output",
@@ -147,7 +148,12 @@ export function buildEvidenceSummary({
   failedStage = null,
   tests = { passed: null, failed: null, ignored: null },
   matrix = buildMatrixResult([]),
-  setup = { requested: false, result: "not-requested", exitCode: null, error: null },
+  setup = {
+    requested: false,
+    result: "not-requested",
+    exitCode: null,
+    error: null,
+  },
   stdoutPath = null,
   stderrPath = null,
   setupStdoutPath = null,
