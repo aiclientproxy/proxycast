@@ -280,7 +280,7 @@ jobs:
   rust_full:
     name: Rust Full
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     needs: changed
     if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changed.outputs.docs_only != 'true') || github.event_name == 'workflow_dispatch' }}
     steps:

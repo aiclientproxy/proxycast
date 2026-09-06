@@ -168,3 +168,18 @@ timeout、目录创建与 Agent Plugin MCP parity；该 run 仍因修复前的 F
 
 现有 `v1.141.0` 本地与远端 tag 均继续指向 `5a7fe5af9`；本轮只追加 main 修复，不删除、覆盖
 或重建既有 tag。退出条件仍为新修复提交推送后 Quality 全绿，并完成远端 main 状态复核。
+
+### 第四轮 Quality 门禁超时修复
+
+修复提交 `9714bb18d` 推送后，延迟触发的 push run `34014522753` 与手动 dispatch run
+`34014175236` 均确认 Frontend Full、GUI Smoke 和 Integrity 通过，手动 run 还确认 Bridge &
+Contracts 通过。两个独立 runner 的 Rust Full 都没有测试失败，而是在 job 启动满 `30m` 时由
+GitHub Actions 取消 `Test Rust workspace`，annotation 明确为
+`The job has exceeded the maximum execution time of 30m0s`。这说明 workspace 全量规模已超过旧
+超时预算，继续重跑同一配置无法得到真实测试终态。
+
+本轮将 Rust Full job 上限从 `30m` 调整为 `60m`，与 Windows Shell Runtime 的完整矩阵预算
+一致；不改变测试命令、测试选择或失败语义。现有 workflow contract 已保护 Rust Full 的 V8
+artifact 准备顺序，本次无需扩展协议或 bridge surface。退出条件仍是新提交触发的 Rust Full
+取得真实成功终态，并与 Frontend Full、GUI Smoke、Integrity、Windows Shell Runtime 汇总为
+Quality 全绿。
